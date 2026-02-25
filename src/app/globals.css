@@ -989,3 +989,49 @@ body {
     padding: 12px 14px;
   }
 }
+
+/* ============================================= */
+/* Smart Inventory & Costing                     */
+/* ============================================= */
+
+/* Glassmorphism panels */
+.inv-glass {
+  background: rgba(24, 24, 27, .7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 140, 0, .08);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.inv-glass:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 140, 0, .06);
+}
+
+/* Low-stock pulse animation */
+.inv-low-pulse {
+  animation: lowStockPulse 2.5s ease-in-out infinite;
+  border-color: rgba(239, 68, 68, .3) !important;
+}
+
+@keyframes lowStockPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 16px 2px rgba(239, 68, 68, .15);
+  }
+}
+
+/* Low-stock table row */
+.inv-low-row {
+  background: rgba(239, 68, 68, .04) !important;
+  border-left: 3px solid var(--red);
+}
+
+.inv-low-row:hover {
+  background: rgba(239, 68, 68, .08) !important;
+}

@@ -5,6 +5,7 @@ import { useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function Facturen() {
     var { data: facturen, insert, update, remove } = useSupabase('facturen', []);
@@ -27,12 +28,41 @@ export default function Facturen() {
 
     function saveFactuur() {
         if (!form.client_naam) { showToast('Vul een klantnaam in', 'error'); return; }
+        // Check if status changed to verzonden/betaald for inventory drain
+        var oldFactuur = facturen.find(function (f) { return f.id === editing; });
+        var statusChanged = oldFactuur && oldFactuur.status !== form.status && (form.status === 'verzonden' || form.status === 'betaald');
         if (editing === 'new') {
             insert(form).then(function () { showToast('Factuur aangemaakt', 'success'); setEditing(null); setForm(null); });
         } else {
             var { id, created_at, ...rest } = form;
-            update(editing, rest).then(function () { showToast('Factuur bijgewerkt', 'success'); setEditing(null); setForm(null); });
+            update(editing, rest).then(function () {
+                showToast('Factuur bijgewerkt', 'success');
+                // Inventory Drain: auto-deduct when status → verzonden/betaald
+                if (statusChanged) { drainInventory(form); }
+                setEditing(null); setForm(null);
+            });
         }
+    }
+
+    function drainInventory(factuur) {
+        supabase.from('inventory').select('*').then(function (res) {
+            var items = res.data || [];
+            if (items.length === 0) return;
+            var deducted = [];
+            (factuur.items || []).forEach(function (lineItem) {
+                var desc = (lineItem.desc || '').toLowerCase();
+                items.forEach(function (inv) {
+                    if (desc.indexOf(inv.naam.toLowerCase()) >= 0) {
+                        var newStock = Math.max(0, (inv.current_stock || 0) - (lineItem.qty || 0));
+                        supabase.from('inventory').update({ current_stock: newStock }).eq('id', inv.id).then(function () { });
+                        deducted.push(inv.naam + ' -' + lineItem.qty);
+                    }
+                });
+            });
+            if (deducted.length > 0) {
+                showToast('📉 Voorraad afgetrokken: ' + deducted.join(', '), 'info');
+            }
+        });
     }
 
     function deleteFactuur() {

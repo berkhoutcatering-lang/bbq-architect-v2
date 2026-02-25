@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 
 export default function Recepten() {
     var { data: recepten, insert, update, remove } = useSupabase('recepten', []);
+    var { data: inventory } = useSupabase('inventory', []);
     var showToast = useToast();
     var showConfirm = useConfirm();
     var [editing, setEditing] = useState(null); // null | 'new' | id
@@ -145,6 +146,22 @@ export default function Recepten() {
         );
     }
 
+    // Calculate recipe cost from inventory
+    function calcRecipeCost(recipe) {
+        var total = 0;
+        (recipe.ingredienten || []).forEach(function (ing) {
+            var match = inventory.find(function (inv) { return ing.naam && inv.naam && inv.naam.toLowerCase().indexOf(ing.naam.toLowerCase()) >= 0; });
+            if (match) {
+                var qty = parseFloat(ing.hoeveelheid) || 0;
+                var unitFactor = 1;
+                if (ing.eenheid === 'gram' && match.unit === 'kg') unitFactor = 0.001;
+                if (ing.eenheid === 'ml' && match.unit === 'L') unitFactor = 0.001;
+                total += qty * unitFactor * (match.purchase_price || 0);
+            }
+        });
+        return total;
+    }
+
     // List view
     var filtered = filter === 'Alles' ? recepten : recepten.filter(function (r) { return r.categorie === filter; });
 
@@ -180,6 +197,12 @@ export default function Recepten() {
                                 <span><i className="fa-solid fa-clock"></i> {r.preptime} min</span>
                                 <span><i className="fa-solid fa-list"></i> {(r.ingredienten || []).length} ingr.</span>
                             </div>
+                            {calcRecipeCost(r) > 0 && (
+                                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                    <span style={{ fontSize: 11, color: 'var(--purple)', fontWeight: 700 }}><i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i> Kostprijs</span>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--brand)' }}>{(calcRecipeCost(r) / (r.porties || 1)).toFixed(2)} /portie</span>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

@@ -13,6 +13,7 @@ var NAV_ITEMS = [
     { id: '/logistiek', label: 'Logistiek', icon: 'fa-truck' },
     { id: '/haccp', label: 'HACCP', icon: 'fa-shield-halved' },
     { id: '/inkoop', label: 'Inkoop', icon: 'fa-boxes-stacked' },
+    { id: '/voorraad', label: 'Voorraad', icon: 'fa-warehouse' },
     { id: '/materieel', label: 'Materieel', icon: 'fa-wrench' },
     { id: '/boekhouding', label: 'Boekhouding', icon: 'fa-chart-line' },
     { id: '/instellingen', label: 'Instellingen', icon: 'fa-gear' },
