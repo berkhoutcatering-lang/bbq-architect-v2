@@ -39,6 +39,7 @@ export default function Events() {
             supabase.from('events').select('status').eq('id', editing).single().then(function (freshRes) {
                 var freshStatus = (freshRes.data && freshRes.data.status) || 'pending';
                 var justCompleted = freshStatus !== 'completed' && form.status === 'completed';
+                console.log('[SAVE] Fresh DB status:', freshStatus, 'Form status:', form.status, 'justCompleted:', justCompleted, 'menu:', JSON.stringify(form.menu));
                 var { id, created_at, ...rest } = form;
                 update(editing, rest).then(function () {
                     showToast('Event bijgewerkt', 'success');
@@ -66,23 +67,34 @@ export default function Events() {
     // DATA CENTER: Inventory drain when event completed
     function drainInventoryForEvent(event) {
         var menuIds = event.menu || [];
+        console.log('[DRAIN] Starting drain for event:', event.name, 'menu:', JSON.stringify(menuIds), 'guests:', event.guests);
         if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
         var guests = event.guests || 1;
         supabase.from('inventory').select('*').then(function (invRes) {
-            if (invRes.error) { console.error('Inventory fetch error:', invRes.error); return; }
+            if (invRes.error) { console.error('[DRAIN] Inventory fetch error:', invRes.error); return; }
             var inventory = invRes.data || [];
-            if (inventory.length === 0) return;
+            console.log('[DRAIN] Inventory items:', inventory.length);
+            if (inventory.length === 0) { console.log('[DRAIN] No inventory items found'); return; }
             var deducted = [];
             var lowStockItems = [];
             menuIds.forEach(function (receptId) {
-                var recept = recepten.find(function (r) { return r.id === receptId; });
+                // Match by ID with type coercion (string/int)
+                var recept = recepten.find(function (r) { return String(r.id) === String(receptId); });
+                console.log('[DRAIN] Looking for recipe ID:', receptId, 'Found:', recept ? recept.naam : 'NOT FOUND');
                 if (!recept) return;
+                // Parse ingredienten if it's a string
+                var ingredienten = recept.ingredienten || [];
+                if (typeof ingredienten === 'string') {
+                    try { ingredienten = JSON.parse(ingredienten); } catch (e) { ingredienten = []; }
+                }
                 var porties = recept.porties || 1;
                 var multiplier = guests / porties;
-                (recept.ingredienten || []).forEach(function (ing) {
+                console.log('[DRAIN] Recipe:', recept.naam, 'porties:', porties, 'multiplier:', multiplier, 'ingredients:', ingredienten.length);
+                ingredienten.forEach(function (ing) {
                     var match = inventory.find(function (inv) {
                         return ing.naam && inv.naam && inv.naam.toLowerCase().indexOf(ing.naam.toLowerCase()) >= 0;
                     });
+                    console.log('[DRAIN] Ingredient:', ing.naam, ing.hoeveelheid, ing.eenheid, 'Match:', match ? match.naam + ' (' + match.current_stock + match.unit + ')' : 'NONE');
                     if (match) {
                         var qty = (parseFloat(ing.hoeveelheid) || 0) * multiplier;
                         var unitFactor = 1;
@@ -90,6 +102,7 @@ export default function Events() {
                         if (ing.eenheid === 'ml' && match.unit === 'L') unitFactor = 0.001;
                         var deductAmount = qty * unitFactor;
                         var newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
+                        console.log('[DRAIN] Deducting:', deductAmount.toFixed(2), match.unit, 'New stock:', newStock.toFixed(2));
                         supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id).then(function () { });
                         match.current_stock = newStock;
                         deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
