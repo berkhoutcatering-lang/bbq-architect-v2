@@ -17,6 +17,28 @@ export function useSupabase(table, defaultVal) {
 
     useEffect(function () { fetchData(); }, [fetchData]);
 
+    // =============================================
+    // SUPABASE REALTIME — auto-refresh on DB changes
+    // This makes the Agenda/Events/Dashboard update
+    // live when data changes from another device.
+    // =============================================
+    useEffect(function () {
+        if (!supabase) return;
+        var channel = supabase
+            .channel('realtime_' + table)
+            .on('postgres_changes', { event: '*', schema: 'public', table: table }, function (payload) {
+                console.log('[REALTIME] ' + table + ' changed:', payload.eventType, payload.new || payload.old);
+                fetchData(); // Re-fetch all data for this table
+            })
+            .subscribe(function (status) {
+                console.log('[REALTIME] ' + table + ' subscription:', status);
+            });
+
+        return function () {
+            supabase.removeChannel(channel);
+        };
+    }, [table, fetchData]);
+
     var insert = useCallback(function (row) {
         if (!supabase) return Promise.resolve(null);
         return supabase.from(table).insert(row).select().single().then(function (res) {
