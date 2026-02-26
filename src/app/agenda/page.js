@@ -7,6 +7,7 @@ import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
 export default function Agenda() {
     var { data: events, insert: insertEvent } = useSupabase('events', []);
     var { data: prepTasks, insert: insertPrep, update: updatePrep, remove: removePrep } = useSupabase('prep_tasks', []);
+    var { data: suggestions, remove: removeSuggestion } = useSupabase('prep_suggestions', []);
     var showToast = useToast();
     var [year, setYear] = useState(new Date().getFullYear());
     var [month, setMonth] = useState(new Date().getMonth());
@@ -275,6 +276,63 @@ export default function Agenda() {
                             </div>
                         </div>
                     )}
+
+                    {/* Smart Prep Suggestions from Data Center */}
+                    {suggestions.filter(function (s) { return s.status === 'pending'; }).length > 0 && (
+                        <div className="panel" style={{ marginBottom: 16 }}>
+                            <div className="panel-head">
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <i className="fa-solid fa-robot" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Smart Suggesties
+                                </h3>
+                                <span className="pill pill-amber" style={{ fontSize: 9 }}>
+                                    {suggestions.filter(function (s) { return s.status === 'pending'; }).length} actief
+                                </span>
+                            </div>
+                            <div className="panel-body" style={{ padding: 10 }}>
+                                {suggestions.filter(function (s) { return s.status === 'pending'; }).map(function (sug) {
+                                    return (
+                                        <div key={sug.id} className="prep-suggestion">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                <i className="fa-solid fa-lightbulb" style={{ color: '#FFBF00', fontSize: 11 }}></i>
+                                                <span style={{ fontWeight: 800, fontSize: 12 }}>{sug.task_name}</span>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8 }}>
+                                                Tekort: <span style={{ color: 'var(--red)', fontWeight: 700 }}>{sug.tekort} {sug.unit}</span> · {sug.ingredient_naam}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <button className="btn btn-brand btn-sm" style={{ fontSize: 10, padding: '3px 10px' }}
+                                                    onClick={function () {
+                                                        // Find next empty day
+                                                        var tomorrow = new Date();
+                                                        tomorrow.setDate(tomorrow.getDate() + 1);
+                                                        var sugDate = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+                                                        // Find any event to link to, or use first event
+                                                        var firstEvent = events[0];
+                                                        if (firstEvent) {
+                                                            insertPrep({ event_id: firstEvent.id, text: sug.task_name, dagen: 0, done: false })
+                                                                .then(function () {
+                                                                    removeSuggestion(sug.id);
+                                                                    showToast('✅ Prep-taak ingepland', 'success');
+                                                                });
+                                                        } else {
+                                                            removeSuggestion(sug.id);
+                                                            showToast('Geen event om aan te koppelen', 'info');
+                                                        }
+                                                    }}>
+                                                    <i className="fa-solid fa-check" style={{ fontSize: 8 }}></i> Accepteer
+                                                </button>
+                                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '3px 10px' }}
+                                                    onClick={function () { removeSuggestion(sug.id); }}>
+                                                    <i className="fa-solid fa-xmark" style={{ fontSize: 8 }}></i> Negeer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
 
                     {/* Prep Tasks Overview */}
                     <div className="panel">

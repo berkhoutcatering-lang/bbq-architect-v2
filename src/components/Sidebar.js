@@ -14,6 +14,7 @@ var NAV_ITEMS = [
     { id: '/haccp', label: 'HACCP', icon: 'fa-shield-halved' },
     { id: '/inkoop', label: 'Inkoop', icon: 'fa-boxes-stacked' },
     { id: '/voorraad', label: 'Voorraad', icon: 'fa-warehouse' },
+    { id: '/uren', label: 'Uren', icon: 'fa-clock' },
     { id: '/materieel', label: 'Materieel', icon: 'fa-wrench' },
     { id: '/boekhouding', label: 'Boekhouding', icon: 'fa-chart-line' },
     { id: '/instellingen', label: 'Instellingen', icon: 'fa-gear' },

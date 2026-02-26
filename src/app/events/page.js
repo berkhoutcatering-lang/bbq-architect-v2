@@ -4,9 +4,11 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, today, addDays, genNummer } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function Events() {
     var { data: events, insert, update, remove } = useSupabase('events', []);
+    var { data: recepten } = useSupabase('recepten', []);
     var offertes = useSupabase('offertes', []);
     var { settings } = useSettings();
     var showToast = useToast();
@@ -16,7 +18,7 @@ export default function Events() {
 
     function newEvent() {
         setEditing('new');
-        setForm({ name: '', date: today(), guests: 50, location: '', ppp: 45, status: 'pending', client_naam: '', client_adres: '', client_tel: '', client_email: '', type: 'Particulier', notitie: '' });
+        setForm({ name: '', date: today(), guests: 50, location: '', ppp: 45, status: 'pending', client_naam: '', client_adres: '', client_tel: '', client_email: '', type: 'Particulier', notitie: '', menu: [] });
     }
 
     function editEvent(ev) { setEditing(ev.id); setForm(JSON.parse(JSON.stringify(ev))); }
@@ -24,11 +26,76 @@ export default function Events() {
 
     function saveEvent() {
         if (!form.name) { showToast('Vul een naam in', 'error'); return; }
+        var oldEvent = events.find(function (e) { return e.id === editing; });
+        var justCompleted = oldEvent && oldEvent.status !== 'completed' && form.status === 'completed';
         if (editing === 'new') {
             insert(form).then(function () { showToast('Event aangemaakt', 'success'); setEditing(null); setForm(null); });
         } else {
             var { id, created_at, ...rest } = form;
-            update(editing, rest).then(function () { showToast('Event bijgewerkt', 'success'); setEditing(null); setForm(null); });
+            update(editing, rest).then(function () {
+                showToast('Event bijgewerkt', 'success');
+                if (justCompleted) { drainInventoryForEvent(form); }
+                setEditing(null); setForm(null);
+            });
+        }
+    }
+
+    // DATA CENTER: Inventory drain when event completed
+    function drainInventoryForEvent(event) {
+        var menuIds = event.menu || [];
+        if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
+        var guests = event.guests || 1;
+        supabase.from('inventory').select('*').then(function (invRes) {
+            var inventory = invRes.data || [];
+            if (inventory.length === 0) return;
+            var deducted = [];
+            menuIds.forEach(function (receptId) {
+                var recept = recepten.find(function (r) { return r.id === receptId; });
+                if (!recept) return;
+                var porties = recept.porties || 1;
+                var multiplier = guests / porties;
+                (recept.ingredienten || []).forEach(function (ing) {
+                    var match = inventory.find(function (inv) {
+                        return ing.naam && inv.naam && inv.naam.toLowerCase().indexOf(ing.naam.toLowerCase()) >= 0;
+                    });
+                    if (match) {
+                        var qty = (parseFloat(ing.hoeveelheid) || 0) * multiplier;
+                        var unitFactor = 1;
+                        if (ing.eenheid === 'gram' && match.unit === 'kg') unitFactor = 0.001;
+                        if (ing.eenheid === 'ml' && match.unit === 'L') unitFactor = 0.001;
+                        var deductAmount = qty * unitFactor;
+                        var newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
+                        supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id).then(function () { });
+                        match.current_stock = newStock; // update local ref
+                        deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
+                        // Auto-generate prep suggestion if below par-level
+                        if (newStock < (match.min_stock || 0)) {
+                            var tekort = (match.min_stock || 0) - newStock;
+                            supabase.from('prep_suggestions').insert({
+                                task_name: 'Prep ' + tekort.toFixed(1) + match.unit + ' ' + match.naam,
+                                ingredient_naam: match.naam,
+                                tekort: tekort,
+                                unit: match.unit,
+                                scheduled_at: new Date(new Date().getTime() + 86400000).toISOString(),
+                                status: 'pending'
+                            }).then(function () { });
+                        }
+                    }
+                });
+            });
+            if (deducted.length > 0) {
+                showToast('📉 Voorraad afgetrokken: ' + deducted.slice(0, 3).join(', ') + (deducted.length > 3 ? ' +' + (deducted.length - 3) + ' meer' : ''), 'success');
+            }
+        });
+    }
+
+    function toggleMenu(receptId) {
+        var current = form.menu || [];
+        var idx = current.indexOf(receptId);
+        if (idx >= 0) {
+            setField('menu', current.filter(function (id) { return id !== receptId; }));
+        } else {
+            setField('menu', current.concat([receptId]));
         }
     }
 
@@ -83,6 +150,7 @@ export default function Events() {
                             <select value={form.status} onChange={function (e) { setField('status', e.target.value); }}>
                                 <option value="pending">In afwachting</option>
                                 <option value="confirmed">Bevestigd</option>
+                                <option value="completed">Voltooid ✓</option>
                             </select>
                         </div>
                     </div>
@@ -95,6 +163,29 @@ export default function Events() {
                         <div className="field"><label>Telefoon</label><input value={form.client_tel} onChange={function (e) { setField('client_tel', e.target.value); }} /></div>
                         <div className="field"><label>Email</label><input type="email" value={form.client_email} onChange={function (e) { setField('client_email', e.target.value); }} /></div>
                     </div>
+
+                    {/* Menu / Recepten Koppeling */}
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
+                        <i className="fa-solid fa-utensils" style={{ marginRight: 6 }}></i>Menu (Recepten Koppelen)
+                    </h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {recepten.length === 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Geen recepten gevonden — maak eerst recepten aan</span>}
+                        {recepten.map(function (r) {
+                            var isSelected = (form.menu || []).indexOf(r.id) >= 0;
+                            return (
+                                <button key={r.id} className={'btn btn-sm ' + (isSelected ? 'btn-brand' : 'btn-ghost')}
+                                    onClick={function () { toggleMenu(r.id); }} style={{ fontSize: 11, padding: '5px 12px' }}>
+                                    {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 9, marginRight: 4 }}></i>}
+                                    {r.naam}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {(form.menu || []).length > 0 && (
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
+                            {(form.menu || []).length} recept(en) gekoppeld — ingrediënten worden bij "Voltooid" automatisch van voorraad afgetrokken
+                        </div>
+                    )}
 
                     {/* Notes */}
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>Notitie</h4>
@@ -149,8 +240,8 @@ export default function Events() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
-                                <span className={'pill ' + (ev.status === 'confirmed' ? 'pill-green' : 'pill-amber')}>
-                                    {ev.status === 'confirmed' ? 'Bevestigd' : 'In afwachting'}
+                                <span className={'pill ' + (ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : 'pill-amber')}>
+                                    {ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? 'Bevestigd' : 'In afwachting'}
                                 </span>
                             </div>
                         </div>
