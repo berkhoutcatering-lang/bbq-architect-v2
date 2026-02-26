@@ -112,6 +112,28 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ========================================== */}
+      {/* OFFERTE OPTIE NOTIFICATIONS                */}
+      {/* ========================================== */}
+      {events.filter(function (e) { return e.status === 'optie' && e.offerte_id; }).length > 0 && (
+        <div style={{ padding: '14px 18px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 14, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <i className="fa-solid fa-file-signature" style={{ fontSize: 16, color: 'var(--brand)' }}></i>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>
+                {events.filter(function (e) { return e.status === 'optie' && e.offerte_id; }).length} Offerte-Optie{events.filter(function (e) { return e.status === 'optie' && e.offerte_id; }).length > 1 ? 's' : ''} in Agenda
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                {events.filter(function (e) { return e.status === 'optie' && e.offerte_id; }).map(function (e) { return e.name; }).join(' · ')}
+              </div>
+            </div>
+          </div>
+          <Link href="/events" className="btn btn-brand btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>
+            <i className="fa-solid fa-eye"></i> Bekijk Events
+          </Link>
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="quick-grid">
         <Link href="/events" className="quick-btn">
@@ -192,14 +214,20 @@ export default function Dashboard() {
             var monthNames = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
             var month = parts[1] ? monthNames[parseInt(parts[1], 10) - 1] : '';
             var day = parts[2] || '';
+            var rowGlow = ev.status === 'optie' ? ' ev-row-optie' : ev.status === 'confirmed' ? ' ev-row-confirmed' : '';
+            var pillClass = ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : ev.status === 'optie' ? 'pill-optie' : 'pill-amber';
+            var pillLabel = ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? '✅ Bevestigd' : ev.status === 'optie' ? '🟠 Optie' : 'In afwachting';
             return (
-              <Link href="/events" key={ev.id} className="ev-row" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <Link href="/events" key={ev.id} className={'ev-row' + rowGlow} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className="ev-date-block">
                   <span className="ev-month">{month}</span>
                   <span className="ev-day">{day}</span>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                    {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 9, color: 'var(--brand)', marginRight: 6 }}></i>}
+                    {ev.name}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     <i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}
                     <span style={{ marginLeft: 12 }}>
@@ -209,9 +237,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 600 }}>{fmt((ev.guests || 0) * (ev.ppp || 0))}</div>
-                  <span className={'pill ' + (ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : 'pill-amber')}>
-                    {ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? 'Bevestigd' : 'In afwachting'}
-                  </span>
+                  <span className={'pill ' + pillClass}>{pillLabel}</span>
                 </div>
               </Link>
             );

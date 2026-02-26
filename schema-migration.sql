@@ -6,6 +6,9 @@
 -- 1. Add 'menu' column to events (JSONB array of recipe IDs)
 ALTER TABLE events ADD COLUMN IF NOT EXISTS menu JSONB DEFAULT '[]';
 
+-- 1b. Add 'offerte_id' column to events (links to source offerte)
+ALTER TABLE events ADD COLUMN IF NOT EXISTS offerte_id integer;
+
 -- 2. Inventory (Voorraad)
 CREATE TABLE IF NOT EXISTS inventory (
   id SERIAL PRIMARY KEY,

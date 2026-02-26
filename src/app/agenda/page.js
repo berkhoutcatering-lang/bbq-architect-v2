@@ -143,8 +143,10 @@ export default function Agenda() {
                                     <div key={idx} className={cls} onClick={function () { setSelected(cell.date); }}>
                                         <div className="cal-num">{cell.day}</div>
                                         {dayEvts.map(function (ev) {
-                                            return <div key={ev.id} className="cal-dot cal-dot-event" title={ev.name}>
-                                                <i className="fa-solid fa-fire" style={{ fontSize: 7, marginRight: 3 }}></i>
+                                            var dotClass = ev.status === 'optie' ? 'cal-dot-optie' : ev.status === 'confirmed' ? 'cal-dot-confirmed' : 'cal-dot-event';
+                                            var icon = ev.status === 'optie' ? 'fa-file-signature' : 'fa-fire';
+                                            return <div key={ev.id} className={'cal-dot ' + dotClass} title={ev.name}>
+                                                <i className={'fa-solid ' + icon} style={{ fontSize: 7, marginRight: 3 }}></i>
                                                 {ev.name.split(' ').slice(0, 2).join(' ')}
                                             </div>;
                                         })}
@@ -181,19 +183,30 @@ export default function Agenda() {
 
                             {/* Events on this day */}
                             {selEvents.map(function (ev) {
+                                var isOptie = ev.status === 'optie';
+                                var isConfirmed = ev.status === 'confirmed';
+                                var bgColor = isOptie ? 'rgba(255,191,0,.06)' : isConfirmed ? 'rgba(34,197,94,.06)' : 'rgba(255,140,0,.06)';
+                                var borderColor = isOptie ? 'rgba(255,191,0,.2)' : isConfirmed ? 'rgba(34,197,94,.2)' : 'rgba(255,140,0,.2)';
+                                var iconBg = isOptie ? 'rgba(255,191,0,.15)' : isConfirmed ? 'rgba(34,197,94,.15)' : 'rgba(255,140,0,.15)';
+                                var iconColor = isConfirmed ? 'var(--green)' : 'var(--brand)';
+                                var icon = isOptie ? 'fa-file-signature' : 'fa-fire';
+                                var pillInfo = isOptie ? { cls: 'pill-optie', txt: '🟠' } : isConfirmed ? { cls: 'pill-green', txt: '✅' } : ev.status === 'completed' ? { cls: 'pill-green', txt: '✓' } : { cls: 'pill-amber', txt: '⏳' };
                                 return (
-                                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: 'rgba(255,140,0,.06)', border: '1px solid rgba(255,140,0,.2)', borderRadius: 10, marginBottom: 8 }}>
-                                        <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(255,140,0,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            <i className="fa-solid fa-fire" style={{ color: 'var(--brand)', fontSize: 12 }}></i>
+                                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: bgColor, border: '1px solid ' + borderColor, borderRadius: 10, marginBottom: 8, transition: 'border-color .5s ease, background .5s ease' }}>
+                                        <div style={{ width: 32, height: 32, borderRadius: 10, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <i className={'fa-solid ' + icon} style={{ color: iconColor, fontSize: 12 }}></i>
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 12 }}>{ev.name}</div>
+                                            <div style={{ fontWeight: 800, fontSize: 12 }}>
+                                                {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 8, color: 'var(--brand)', marginRight: 4 }}></i>}
+                                                {ev.name}
+                                            </div>
                                             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
                                                 {ev.guests} gasten · {ev.location || '—'} · {fmt((ev.guests || 0) * (ev.ppp || 0))}
                                             </div>
                                         </div>
-                                        <span className={'pill ' + (ev.status === 'confirmed' ? 'pill-green' : 'pill-amber')} style={{ fontSize: 9, padding: '3px 8px' }}>
-                                            {ev.status === 'confirmed' ? '✓' : '⏳'}
+                                        <span className={'pill ' + pillInfo.cls} style={{ fontSize: 9, padding: '3px 8px' }}>
+                                            {pillInfo.txt}
                                         </span>
                                     </div>
                                 );

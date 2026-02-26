@@ -196,6 +196,7 @@ export default function Events() {
                         </div>
                         <div className="field"><label>Status</label>
                             <select value={form.status} onChange={function (e) { setField('status', e.target.value); }}>
+                                <option value="optie">Optie (Offerte)</option>
                                 <option value="pending">In afwachting</option>
                                 <option value="confirmed">Bevestigd</option>
                                 <option value="completed">Voltooid ✓</option>
@@ -213,6 +214,14 @@ export default function Events() {
                     </div>
 
                     {/* Menu / Recepten Koppeling */}
+                    {/* Offerte link indicator */}
+                    {form.offerte_id && (
+                        <div style={{ margin: '16px 0 8px', padding: '10px 14px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <i className="fa-solid fa-link" style={{ color: 'var(--brand)', fontSize: 11 }}></i>
+                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>🔗 Gekoppeld aan Offerte — data wordt automatisch gesynchroniseerd</span>
+                        </div>
+                    )}
+
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
                         <i className="fa-solid fa-utensils" style={{ marginRight: 6 }}></i>Menu (Recepten Koppelen)
                     </h4>
@@ -273,14 +282,20 @@ export default function Events() {
                     var month = parts[1] ? monthNames[parseInt(parts[1], 10) - 1] : '';
                     var day = parts[2] || '';
                     var omzet = (ev.guests || 0) * (ev.ppp || 0);
+                    var rowGlow = ev.status === 'optie' ? ' ev-row-optie' : ev.status === 'confirmed' ? ' ev-row-confirmed' : '';
+                    var pillClass = ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : ev.status === 'optie' ? 'pill-optie' : 'pill-amber';
+                    var pillLabel = ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? '✅ Bevestigd' : ev.status === 'optie' ? '🟠 Optie' : 'In afwachting';
                     return (
-                        <div key={ev.id} className="ev-row" onClick={function () { editEvent(ev); }}>
+                        <div key={ev.id} className={'ev-row' + rowGlow} onClick={function () { editEvent(ev); }}>
                             <div className="ev-date-block">
                                 <span className="ev-month">{month}</span>
                                 <span className="ev-day">{day}</span>
                             </div>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
+                                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                                    {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 9, color: 'var(--brand)', marginRight: 6 }}></i>}
+                                    {ev.name}
+                                </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                                     <i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}
                                     <span style={{ marginLeft: 12 }}><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
@@ -288,9 +303,7 @@ export default function Events() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
-                                <span className={'pill ' + (ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : 'pill-amber')}>
-                                    {ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? 'Bevestigd' : 'In afwachting'}
-                                </span>
+                                <span className={'pill ' + pillClass}>{pillLabel}</span>
                             </div>
                         </div>
                     );

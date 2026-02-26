@@ -4,6 +4,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function Offertes() {
     var { data: offertes, insert, update, remove } = useSupabase('offertes', []);
@@ -24,18 +25,118 @@ export default function Offertes() {
     function editOfferte(o) { setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
     function setField(key, val) { setForm(Object.assign({}, form, { [key]: val })); }
 
+    // ==========================================
+    // INTELLIGENT SYNC: Offerte → Event Koppeling
+    // ==========================================
+    function syncOfferteToEvent(offerteId, offerteData, oldStatus) {
+        var newStatus = offerteData.status;
+
+        // Calculate estimated guests and ppp from items
+        var totalBedrag = 0;
+        var estimatedGuests = 0;
+        (offerteData.items || []).forEach(function (item) {
+            totalBedrag += (item.qty || 0) * (item.prijs || 0);
+            if (item.qty > estimatedGuests) estimatedGuests = item.qty;
+        });
+        var ppp = estimatedGuests > 0 ? totalBedrag / estimatedGuests : 45;
+
+        // TRIGGER 1: New offerte or status is concept/verzonden → create/update 'optie' event
+        if (newStatus === 'concept' || newStatus === 'verzonden') {
+            supabase.from('events').select('id').eq('offerte_id', offerteId).then(function (res) {
+                if (res.data && res.data.length > 0) {
+                    // Update existing linked event
+                    supabase.from('events').update({
+                        name: 'Offerte: ' + (offerteData.client_naam || offerteData.nummer),
+                        date: offerteData.datum,
+                        guests: estimatedGuests || 50,
+                        ppp: Math.round(ppp * 100) / 100,
+                        location: offerteData.client_adres || '',
+                        client_naam: offerteData.client_naam || '',
+                        client_adres: offerteData.client_adres || '',
+                        status: 'optie',
+                        notitie: offerteData.notitie || ''
+                    }).eq('offerte_id', offerteId).then(function () {
+                        console.log('[SYNC] Updated optie event for offerte', offerteId);
+                    });
+                } else {
+                    // Create new linked event
+                    supabase.from('events').insert({
+                        name: 'Offerte: ' + (offerteData.client_naam || offerteData.nummer),
+                        date: offerteData.datum,
+                        guests: estimatedGuests || 50,
+                        ppp: Math.round(ppp * 100) / 100,
+                        location: offerteData.client_adres || '',
+                        client_naam: offerteData.client_naam || '',
+                        client_adres: offerteData.client_adres || '',
+                        status: 'optie',
+                        type: 'Zakelijk',
+                        offerte_id: offerteId,
+                        menu: [],
+                        notitie: offerteData.notitie || ''
+                    }).then(function () {
+                        console.log('[SYNC] Created optie event for offerte', offerteId);
+                        showToast('📅 Optie toegevoegd aan Agenda', 'success');
+                    });
+                }
+            });
+        }
+
+        // TRIGGER 2: Status → geaccepteerd → upgrade event to 'confirmed'
+        if (newStatus === 'geaccepteerd' && oldStatus !== 'geaccepteerd') {
+            supabase.from('events').update({ status: 'confirmed' })
+                .eq('offerte_id', offerteId).then(function (res) {
+                    if (res.error) { console.error('[SYNC] Confirm error:', res.error); return; }
+                    console.log('[SYNC] Event upgraded to confirmed for offerte', offerteId);
+                    showToast('✅ Event bevestigd — Offerte geaccepteerd!', 'success');
+                });
+        }
+
+        // TRIGGER 3: Status → afgewezen/verlopen → remove linked event
+        if (newStatus === 'afgewezen' || newStatus === 'verlopen') {
+            supabase.from('events').delete()
+                .eq('offerte_id', offerteId).then(function (res) {
+                    if (res.error) { console.error('[SYNC] Delete error:', res.error); return; }
+                    console.log('[SYNC] Removed optie event for offerte', offerteId);
+                    showToast('🗑️ Optie verwijderd uit Agenda', 'info');
+                });
+        }
+    }
+
     function saveOfferte() {
         if (!form.client_naam) { showToast('Vul een klantnaam in', 'error'); return; }
         if (editing === 'new') {
-            insert(form).then(function () { showToast('Offerte aangemaakt', 'success'); setEditing(null); setForm(null); });
+            insert(form).then(function (res) {
+                showToast('Offerte aangemaakt', 'success');
+                // Get the newly inserted offerte's ID and sync
+                if (res && res.data && res.data.length > 0) {
+                    syncOfferteToEvent(res.data[0].id, form, null);
+                } else {
+                    // Fallback: look up by nummer
+                    supabase.from('offertes').select('id').eq('nummer', form.nummer).single().then(function (lookup) {
+                        if (lookup.data) syncOfferteToEvent(lookup.data.id, form, null);
+                    });
+                }
+                setEditing(null); setForm(null);
+            });
         } else {
+            // Get old status before update
+            var oldOfferte = offertes.find(function (o) { return o.id === editing; });
+            var oldStatus = oldOfferte ? oldOfferte.status : 'concept';
             var { id, created_at, ...rest } = form;
-            update(editing, rest).then(function () { showToast('Offerte bijgewerkt', 'success'); setEditing(null); setForm(null); });
+            update(editing, rest).then(function () {
+                showToast('Offerte bijgewerkt', 'success');
+                syncOfferteToEvent(editing, form, oldStatus);
+                setEditing(null); setForm(null);
+            });
         }
     }
 
     function deleteOfferte() {
         showConfirm('Weet je zeker dat je deze offerte wilt verwijderen?', function () {
+            // Also remove linked event
+            supabase.from('events').delete().eq('offerte_id', editing).then(function () {
+                console.log('[SYNC] Removed linked event on offerte delete');
+            });
             remove(editing).then(function () { showToast('Offerte verwijderd', 'success'); setEditing(null); setForm(null); });
         });
     }
@@ -53,9 +154,12 @@ export default function Offertes() {
             items: form.items
         };
         facturen.insert(factuurData).then(function () {
+            var oldStatus = form.status;
             var { id, created_at, ...rest } = Object.assign({}, form, { status: 'geaccepteerd' });
             update(editing, rest).then(function () {
                 showToast('Factuur aangemaakt vanuit offerte', 'success');
+                // Sync: upgrade event to confirmed
+                syncOfferteToEvent(editing, Object.assign({}, form, { status: 'geaccepteerd' }), oldStatus);
                 setEditing(null); setForm(null);
             });
         });
@@ -115,6 +219,19 @@ export default function Offertes() {
                         <div className="field"><label>Geldig Tot</label><input type="date" value={form.geldig_tot} onChange={function (e) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e) { setField('notitie', e.target.value); }} /></div>
                     </div>
+
+                    {/* Sync indicator */}
+                    <div style={{ margin: '16px 0 8px', padding: '10px 14px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className="fa-solid fa-link" style={{ color: 'var(--brand)', fontSize: 11 }}></i>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                            {form.status === 'geaccepteerd'
+                                ? '✅ Event bevestigd in Agenda — Voorraad-aftrek actief bij voltooiing'
+                                : form.status === 'afgewezen' || form.status === 'verlopen'
+                                    ? '🗑️ Optie wordt verwijderd uit Agenda bij opslaan'
+                                    : '📅 Opslaan maakt automatisch een Optie aan in de Agenda'}
+                        </span>
+                    </div>
+
                     <div style={{ marginTop: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                             <h4 style={{ fontSize: 14, fontWeight: 600 }}>Regels</h4>
