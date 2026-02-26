@@ -302,17 +302,24 @@ export default function Agenda() {
                                             <div style={{ display: 'flex', gap: 6 }}>
                                                 <button className="btn btn-brand btn-sm" style={{ fontSize: 10, padding: '3px 10px' }}
                                                     onClick={function () {
-                                                        // Find next empty day
-                                                        var tomorrow = new Date();
-                                                        tomorrow.setDate(tomorrow.getDate() + 1);
-                                                        var sugDate = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
-                                                        // Find any event to link to, or use first event
+                                                        // Find next Monday at 09:00 for a 4-hour prep block
+                                                        var d = new Date();
+                                                        var day = d.getDay();
+                                                        var diff = (day === 0) ? 1 : (day === 1 ? 7 : (8 - day));
+                                                        var monday = new Date(d);
+                                                        monday.setDate(d.getDate() + diff);
+                                                        monday.setHours(9, 0, 0, 0);
+                                                        var mondayStr = monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
+                                                        // Link to any event or create a standalone prep task
                                                         var firstEvent = events[0];
                                                         if (firstEvent) {
-                                                            insertPrep({ event_id: firstEvent.id, text: sug.task_name, dagen: 0, done: false })
+                                                            // Calculate days difference from event date
+                                                            var evDate = new Date(firstEvent.date + 'T00:00:00');
+                                                            var daysDiff = Math.round((monday - evDate) / 86400000);
+                                                            insertPrep({ event_id: firstEvent.id, text: '🔥 ' + sug.task_name + ' (4u prep-blok, ma 09:00)', dagen: daysDiff, done: false })
                                                                 .then(function () {
                                                                     removeSuggestion(sug.id);
-                                                                    showToast('✅ Prep-taak ingepland', 'success');
+                                                                    showToast('✅ Prep-blok ingepland op maandag ' + mondayStr + ' om 09:00', 'success');
                                                                 });
                                                         } else {
                                                             removeSuggestion(sug.id);

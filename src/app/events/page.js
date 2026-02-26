@@ -29,15 +29,35 @@ export default function Events() {
         var oldEvent = events.find(function (e) { return e.id === editing; });
         var justCompleted = oldEvent && oldEvent.status !== 'completed' && form.status === 'completed';
         if (editing === 'new') {
-            insert(form).then(function () { showToast('Event aangemaakt', 'success'); setEditing(null); setForm(null); });
+            insert(form).then(function () {
+                showToast('Event aangemaakt 🔥', 'success');
+                setEditing(null); setForm(null);
+            }).catch(function (err) {
+                console.error('Event insert error:', err);
+                showToast('Fout bij aanmaken: ' + (err.message || 'onbekend'), 'error');
+            });
         } else {
             var { id, created_at, ...rest } = form;
             update(editing, rest).then(function () {
                 showToast('Event bijgewerkt', 'success');
                 if (justCompleted) { drainInventoryForEvent(form); }
                 setEditing(null); setForm(null);
+            }).catch(function (err) {
+                console.error('Event update error:', err);
+                showToast('Fout bij opslaan: ' + (err.message || 'onbekend'), 'error');
             });
         }
+    }
+
+    // Helper: find next Monday >= today at 09:00
+    function getNextFreeMonday() {
+        var d = new Date();
+        var day = d.getDay(); // 0=Sun, 1=Mon ...
+        var diff = (day === 0) ? 1 : (day === 1 ? 7 : (8 - day));
+        var monday = new Date(d);
+        monday.setDate(d.getDate() + diff);
+        monday.setHours(9, 0, 0, 0);
+        return monday;
     }
 
     // DATA CENTER: Inventory drain when event completed
@@ -46,9 +66,11 @@ export default function Events() {
         if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
         var guests = event.guests || 1;
         supabase.from('inventory').select('*').then(function (invRes) {
+            if (invRes.error) { console.error('Inventory fetch error:', invRes.error); return; }
             var inventory = invRes.data || [];
             if (inventory.length === 0) return;
             var deducted = [];
+            var lowStockItems = [];
             menuIds.forEach(function (receptId) {
                 var recept = recepten.find(function (r) { return r.id === receptId; });
                 if (!recept) return;
@@ -66,17 +88,19 @@ export default function Events() {
                         var deductAmount = qty * unitFactor;
                         var newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
                         supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id).then(function () { });
-                        match.current_stock = newStock; // update local ref
+                        match.current_stock = newStock;
                         deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
                         // Auto-generate prep suggestion if below par-level
                         if (newStock < (match.min_stock || 0)) {
                             var tekort = (match.min_stock || 0) - newStock;
+                            lowStockItems.push(match.naam);
+                            var prepMonday = getNextFreeMonday();
                             supabase.from('prep_suggestions').insert({
                                 task_name: 'Prep ' + tekort.toFixed(1) + match.unit + ' ' + match.naam,
                                 ingredient_naam: match.naam,
                                 tekort: tekort,
                                 unit: match.unit,
-                                scheduled_at: new Date(new Date().getTime() + 86400000).toISOString(),
+                                scheduled_at: prepMonday.toISOString(),
                                 status: 'pending'
                             }).then(function () { });
                         }
@@ -86,6 +110,14 @@ export default function Events() {
             if (deducted.length > 0) {
                 showToast('📉 Voorraad afgetrokken: ' + deducted.slice(0, 3).join(', ') + (deducted.length > 3 ? ' +' + (deducted.length - 3) + ' meer' : ''), 'success');
             }
+            if (lowStockItems.length > 0) {
+                setTimeout(function () {
+                    showToast('⚠️ VOORRAAD TE LAAG: Bestel of Prep ' + lowStockItems.join(', '), 'error');
+                }, 1500);
+            }
+        }).catch(function (err) {
+            console.error('Inventory drain error:', err);
+            showToast('Fout bij voorraad verwerking', 'error');
         });
     }
 

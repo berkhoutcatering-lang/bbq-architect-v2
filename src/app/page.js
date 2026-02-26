@@ -65,7 +65,7 @@ export default function Dashboard() {
         <div className="low-stock-float">
           <div className="low-stock-float-header">
             <i className="fa-solid fa-triangle-exclamation"></i>
-            <span>VOORRAAD ALERTS</span>
+            <span>ANTIGRAVITY ALERT</span>
             <span className="low-stock-float-count">{lowStockItems.length}</span>
           </div>
           {lowStockItems.map(function (item) {
@@ -74,7 +74,7 @@ export default function Dashboard() {
               <Link href="/voorraad" key={item.id} className="low-stock-float-item" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <i className="fa-solid fa-box-open" style={{ color: 'var(--red)', fontSize: 12 }}></i>
-                  <span style={{ fontWeight: 800, fontSize: 12, flex: 1 }}>TE WEINIG VOORRAAD: {item.naam}</span>
+                  <span style={{ fontWeight: 800, fontSize: 12, flex: 1 }}>VOORRAAD TE LAAG: Bestel of Prep {item.naam}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1, height: 6, background: 'rgba(239,68,68,.15)', borderRadius: 3, overflow: 'hidden' }}>
