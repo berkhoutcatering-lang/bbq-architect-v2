@@ -10,6 +10,7 @@ export function useSupabase(table, defaultVal) {
         if (!supabase) { setLoading(false); return; }
         setLoading(true);
         supabase.from(table).select('*').order('id', { ascending: true }).then(function (res) {
+            if (res.error) { console.error('[DB] Fetch error on ' + table + ':', res.error); }
             if (res.data) setData(res.data);
             setLoading(false);
         });
@@ -17,22 +18,16 @@ export function useSupabase(table, defaultVal) {
 
     useEffect(function () { fetchData(); }, [fetchData]);
 
-    // =============================================
-    // SUPABASE REALTIME — auto-refresh on DB changes
-    // This makes the Agenda/Events/Dashboard update
-    // live when data changes from another device.
-    // =============================================
+    // Supabase Realtime — auto-refresh on DB changes from other devices
     useEffect(function () {
         if (!supabase) return;
         var channel = supabase
-            .channel('realtime_' + table)
+            .channel('rt_' + table + '_' + Math.random().toString(36).slice(2, 6))
             .on('postgres_changes', { event: '*', schema: 'public', table: table }, function (payload) {
-                console.log('[REALTIME] ' + table + ' changed:', payload.eventType, payload.new || payload.old);
-                fetchData(); // Re-fetch all data for this table
+                console.log('[REALTIME] ' + table + ':', payload.eventType);
+                fetchData();
             })
-            .subscribe(function (status) {
-                console.log('[REALTIME] ' + table + ' subscription:', status);
-            });
+            .subscribe();
 
         return function () {
             supabase.removeChannel(channel);
@@ -42,6 +37,11 @@ export function useSupabase(table, defaultVal) {
     var insert = useCallback(function (row) {
         if (!supabase) return Promise.resolve(null);
         return supabase.from(table).insert(row).select().single().then(function (res) {
+            if (res.error) {
+                console.error('[DB] Insert error on ' + table + ':', res.error.message, res.error);
+                throw res.error;
+            }
+            console.log('[DB] Inserted into ' + table + ', id=' + (res.data && res.data.id));
             if (res.data) setData(function (prev) { return prev.concat([res.data]); });
             return res.data;
         });
@@ -50,6 +50,10 @@ export function useSupabase(table, defaultVal) {
     var update = useCallback(function (id, row) {
         if (!supabase) return Promise.resolve(null);
         return supabase.from(table).update(row).eq('id', id).select().single().then(function (res) {
+            if (res.error) {
+                console.error('[DB] Update error on ' + table + ':', res.error.message, res.error);
+                throw res.error;
+            }
             if (res.data) {
                 setData(function (prev) {
                     return prev.map(function (item) { return item.id === id ? res.data : item; });
@@ -61,7 +65,11 @@ export function useSupabase(table, defaultVal) {
 
     var remove = useCallback(function (id) {
         if (!supabase) return Promise.resolve(null);
-        return supabase.from(table).delete().eq('id', id).then(function () {
+        return supabase.from(table).delete().eq('id', id).then(function (res) {
+            if (res.error) {
+                console.error('[DB] Delete error on ' + table + ':', res.error.message, res.error);
+                throw res.error;
+            }
             setData(function (prev) { return prev.filter(function (item) { return item.id !== id; }); });
         });
     }, [table]);
