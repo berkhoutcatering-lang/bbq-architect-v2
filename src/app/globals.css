@@ -1140,3 +1140,93 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(167, 139, 250, .1);
 }
+
+/* ============================================= */
+/* Floating Low-Stock Alerts                     */
+/* ============================================= */
+
+.low-stock-float {
+  position: relative;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(239, 68, 68, .05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(239, 68, 68, .25);
+  border-radius: 16px;
+  animation: lowStockPulse 2s ease-in-out infinite;
+}
+
+@keyframes lowStockPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, .1);
+    border-color: rgba(239, 68, 68, .25);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 4px rgba(239, 68, 68, .15);
+    border-color: rgba(239, 68, 68, .4);
+  }
+}
+
+.low-stock-float-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--red);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+}
+
+.low-stock-float-count {
+  background: var(--red);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.low-stock-float-item {
+  display: block;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, .04);
+  border: 1px solid rgba(239, 68, 68, .12);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  transition: transform .15s ease, background .15s ease;
+  cursor: pointer;
+}
+
+.low-stock-float-item:hover {
+  transform: translateY(-2px);
+  background: rgba(239, 68, 68, .08);
+}
+
+/* Prep suggestion banner */
+.prep-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  background: rgba(167, 139, 250, .06);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(167, 139, 250, .2);
+  border-radius: 14px;
+  transition: transform .15s ease;
+}
+
+.prep-banner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, .1);
+}
