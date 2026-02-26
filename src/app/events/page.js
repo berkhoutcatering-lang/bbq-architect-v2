@@ -26,8 +26,6 @@ export default function Events() {
 
     function saveEvent() {
         if (!form.name) { showToast('Vul een naam in', 'error'); return; }
-        var oldEvent = events.find(function (e) { return e.id === editing; });
-        var justCompleted = oldEvent && oldEvent.status !== 'completed' && form.status === 'completed';
         if (editing === 'new') {
             insert(form).then(function () {
                 showToast('Event aangemaakt 🔥', 'success');
@@ -37,14 +35,19 @@ export default function Events() {
                 showToast('Fout bij aanmaken: ' + (err.message || 'onbekend'), 'error');
             });
         } else {
-            var { id, created_at, ...rest } = form;
-            update(editing, rest).then(function () {
-                showToast('Event bijgewerkt', 'success');
-                if (justCompleted) { drainInventoryForEvent(form); }
-                setEditing(null); setForm(null);
-            }).catch(function (err) {
-                console.error('Event update error:', err);
-                showToast('Fout bij opslaan: ' + (err.message || 'onbekend'), 'error');
+            // Fetch fresh status from DB to avoid stale React state
+            supabase.from('events').select('status').eq('id', editing).single().then(function (freshRes) {
+                var freshStatus = (freshRes.data && freshRes.data.status) || 'pending';
+                var justCompleted = freshStatus !== 'completed' && form.status === 'completed';
+                var { id, created_at, ...rest } = form;
+                update(editing, rest).then(function () {
+                    showToast('Event bijgewerkt', 'success');
+                    if (justCompleted) { drainInventoryForEvent(form); }
+                    setEditing(null); setForm(null);
+                }).catch(function (err) {
+                    console.error('Event update error:', err);
+                    showToast('Fout bij opslaan: ' + (err.message || 'onbekend'), 'error');
+                });
             });
         }
     }
