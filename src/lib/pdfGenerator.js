@@ -1,7 +1,7 @@
 /**
  * PDF Generator for BBQ Architect
- * Uses jsPDF + autoTable loaded via CDN
- * Generates professional A4 PDFs styled like Rompslomp
+ * Premium white-background design with gold accents
+ * Styled for maximum visual impact
  */
 
 var jsPDFLoaded = null;
@@ -11,15 +11,9 @@ function loadJsPDF() {
     jsPDFLoaded = new Promise(function (resolve, reject) {
         var attempts = 0;
         function check() {
-            if (window.jspdf) {
-                resolve(window.jspdf);
-                return;
-            }
+            if (window.jspdf) { resolve(window.jspdf); return; }
             attempts++;
-            if (attempts > 50) {
-                reject(new Error('jsPDF kon niet geladen worden. Probeer de pagina te vernieuwen.'));
-                return;
-            }
+            if (attempts > 50) { reject(new Error('jsPDF kon niet geladen worden.')); return; }
             setTimeout(check, 100);
         }
         check();
@@ -32,7 +26,6 @@ function loadLogoAsBase64() {
         var img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = function () {
-            // Crop to top 45% — actual logo is in the upper portion of the image
             var cropH = Math.floor(img.naturalHeight * 0.45);
             var canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth;
@@ -42,33 +35,33 @@ function loadLogoAsBase64() {
             console.log('[PDF] Logo geladen:', img.naturalWidth + 'x' + img.naturalHeight, '→ cropped to', canvas.width + 'x' + canvas.height);
             resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
-        img.onerror = function () {
-            console.warn('[PDF] Logo kon niet geladen worden');
-            resolve(null);
-        };
+        img.onerror = function () { console.warn('[PDF] Logo niet gevonden'); resolve(null); };
         img.src = '/logo.png';
     });
 }
 
-function fmt(n) {
+// ── Helpers ──
+function eur(n) {
     if (n == null || isNaN(n)) return '€ 0,00';
     return '€ ' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
-function fmtDate(d) {
+function nlDate(d) {
     if (!d) return '';
-    var parts = d.split('-');
-    if (parts.length !== 3) return d;
-    return parts[2] + '/' + parts[1] + '/' + parts[0];
+    var p = d.split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d;
 }
 
+// ── Brand Colors ──
+var GOLD = [180, 140, 20];   // Premium gold
+var DARK_GOLD = [140, 105, 10];   // Darker gold for accents
+var BLACK = [35, 35, 35];
+var DARK_GRAY = [80, 80, 80];
+var MID_GRAY = [130, 130, 130];
+var LIGHT_BG = [250, 248, 244];  // Warm off-white for table header
+var WHITE = [255, 255, 255];
+
 /**
- * Generate a professional PDF (Rompslomp-style)
- * @param {Object} opts
- * @param {'factuur'|'offerte'} opts.type
- * @param {Object} opts.form - The factuur/offerte form data
- * @param {Object} opts.settings - Company settings
- * @param {Object} opts.totals - { subtotaal, btw, totaal }
+ * Generate a premium PDF invoice or quote
  */
 export async function generatePDF(opts) {
     try {
@@ -82,169 +75,192 @@ export async function generatePDF(opts) {
         var doc = new jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
         var pageW = 210;
-        var mL = 20;  // left margin
-        var mR = 20;  // right margin
-        var rightX = pageW - mR; // right edge for right-aligned text
-        var black = [30, 30, 30];
-        var gray = [100, 100, 100];
-        var lightGray = [160, 160, 160];
+        var pageH = 297;
+        var mL = 22;
+        var mR = 22;
+        var rightX = pageW - mR;
+        var contentW = pageW - mL - mR;
 
-        // ═══════════════════════════════════════════════
-        // HEADER SECTION: Logo left + Company info right
-        // ═══════════════════════════════════════════════
+        // ═══════════════════════════════════════════
+        //  TOP GOLD ACCENT BAR
+        // ═══════════════════════════════════════════
+        doc.setFillColor.apply(doc, GOLD);
+        doc.rect(0, 0, pageW, 3, 'F');
 
+        // ═══════════════════════════════════════════
+        //  LOGO — Large, centered, prominent
+        // ═══════════════════════════════════════════
         var logoResult = await loadLogoAsBase64();
-        var headerBottomY = 55; // default bottom of header area
+        var logoBottomY = 18;
 
-        // -- Logo (left side) --
         if (logoResult && logoResult.data) {
-            var logoW = 40;
+            var logoMaxW = 65;
+            var logoMaxH = 40;
+            var logoW = logoMaxW;
             var logoH = logoW * (logoResult.h / logoResult.w);
-            if (logoH > 30) { logoW = logoW * (30 / logoH); logoH = 30; }
-            // Center logo horizontally in the left half
-            var logoX = mL + 5;
-            var logoY = 15;
-            doc.addImage(logoResult.data, 'PNG', logoX, logoY, logoW, logoH);
-            headerBottomY = Math.max(headerBottomY, logoY + logoH + 10);
-        } else {
-            // Fallback: text logo
-            doc.setFontSize(20);
-            doc.setTextColor(180, 120, 0);
-            doc.setFont('helvetica', 'bold');
-            doc.text('HOP&BITES', mL + 5, 30);
-        }
-
-        // -- Company info (right side, right-aligned) --
-        var infoY = 15;
-        doc.setFontSize(11);
-        doc.setTextColor.apply(doc, black);
-        doc.setFont('helvetica', 'bold');
-        doc.text(s.bedrijfsnaam || 'hop&bites', rightX, infoY, { align: 'right' });
-        infoY += 5;
-
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor.apply(doc, gray);
-
-        if (s.adres) {
-            // Split address on comma for multi-line
-            var adresLines = s.adres.split(',').map(function (l) { return l.trim(); });
-            for (var ai = 0; ai < adresLines.length; ai++) {
-                doc.text(adresLines[ai], rightX, infoY, { align: 'right' });
-                infoY += 4;
+            if (logoH > logoMaxH) {
+                logoH = logoMaxH;
+                logoW = logoH * (logoResult.w / logoResult.h);
             }
+            var logoX = (pageW - logoW) / 2;
+            var logoY = 8;
+            doc.addImage(logoResult.data, 'PNG', logoX, logoY, logoW, logoH);
+            logoBottomY = logoY + logoH + 3;
+        } else {
+            // Text fallback
+            doc.setFontSize(24);
+            doc.setTextColor.apply(doc, GOLD);
+            doc.setFont('helvetica', 'bold');
+            doc.text('HOP & BITES', pageW / 2, 25, { align: 'center' });
+            doc.setFontSize(10);
+            doc.setTextColor.apply(doc, MID_GRAY);
+            doc.setFont('helvetica', 'normal');
+            doc.text(s.ondertitel || 'BBQ Catering', pageW / 2, 32, { align: 'center' });
+            logoBottomY = 38;
         }
 
-        infoY += 2;
-        doc.setFontSize(8);
-        if (s.btw || s.btw_nummer) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text('Btw-nummer: ', rightX - doc.getTextWidth(s.btw || s.btw_nummer), infoY);
-            doc.setTextColor.apply(doc, black);
-            doc.text(s.btw || s.btw_nummer, rightX, infoY, { align: 'right' });
-            infoY += 4;
+        // Thin gold line below logo
+        doc.setDrawColor.apply(doc, GOLD);
+        doc.setLineWidth(0.4);
+        doc.line(mL + 30, logoBottomY, pageW - mR - 30, logoBottomY);
+
+        // ═══════════════════════════════════════════
+        //  COMPANY DETAILS — centered below logo
+        // ═══════════════════════════════════════════
+        var compY = logoBottomY + 5;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor.apply(doc, MID_GRAY);
+
+        var compParts = [];
+        if (s.adres) compParts.push(s.adres);
+        if (s.telefoon) compParts.push('Tel: ' + s.telefoon);
+        if (s.email) compParts.push(s.email);
+        if (compParts.length > 0) {
+            doc.text(compParts.join('   •   '), pageW / 2, compY, { align: 'center' });
+            compY += 4;
         }
-        if (s.kvk) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text('KVK-nummer: ' + s.kvk, rightX, infoY, { align: 'right' });
-            infoY += 4;
-        }
-        if (s.telefoon) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text('Tel: ' + s.telefoon, rightX, infoY, { align: 'right' });
-            infoY += 4;
-        }
-        if (s.email) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text(s.email, rightX, infoY, { align: 'right' });
-            infoY += 4;
-        }
-        if (s.iban) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text('IBAN: ' + s.iban, rightX, infoY, { align: 'right' });
-            infoY += 4;
+        var compParts2 = [];
+        if (s.kvk) compParts2.push('KVK: ' + s.kvk);
+        if (s.btw || s.btw_nummer) compParts2.push('BTW: ' + (s.btw || s.btw_nummer));
+        if (s.iban) compParts2.push('IBAN: ' + s.iban);
+        if (compParts2.length > 0) {
+            doc.text(compParts2.join('   •   '), pageW / 2, compY, { align: 'center' });
+            compY += 4;
         }
         if (s.website) {
-            doc.setTextColor.apply(doc, lightGray);
-            doc.text(s.website, rightX, infoY, { align: 'right' });
-            infoY += 4;
+            doc.text(s.website, pageW / 2, compY, { align: 'center' });
+            compY += 4;
         }
 
-        headerBottomY = Math.max(headerBottomY, infoY + 5);
+        // ═══════════════════════════════════════════
+        //  DOCUMENT TYPE BADGE
+        // ═══════════════════════════════════════════
+        var badgeY = compY + 4;
+        var badgeText = isFactuur ? 'FACTUUR' : 'OFFERTE';
 
-        // ═══════════════════════════════════════════════
-        // CLIENT NAME
-        // ═══════════════════════════════════════════════
-        var y = headerBottomY + 2;
-        doc.setFontSize(13);
-        doc.setTextColor.apply(doc, black);
+        // Gold badge background
+        var badgeW = 50;
+        var badgeH = 10;
+        var badgeX = (pageW - badgeW) / 2;
+        doc.setFillColor.apply(doc, GOLD);
+        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'F');
+
+        // White text on gold badge
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text(form.client_naam || '', mL, y);
+        doc.setTextColor.apply(doc, WHITE);
+        doc.text(badgeText, pageW / 2, badgeY + 7.3, { align: 'center' });
+
+        var y = badgeY + badgeH + 10;
+
+        // ═══════════════════════════════════════════
+        //  TWO COLUMNS: Client left | Details right
+        // ═══════════════════════════════════════════
+        var colLeftX = mL;
+        var colRightLabelX = pageW / 2 + 15;
+        var colRightValX = rightX;
+
+        // Left column: Client
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor.apply(doc, GOLD);
+        doc.text('FACTUUR AAN', colLeftX, y);
         y += 5;
-        if (form.client_adres) {
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor.apply(doc, gray);
-            var clientAdresLines = doc.splitTextToSize(form.client_adres, 90);
-            doc.text(clientAdresLines, mL, y);
-            y += clientAdresLines.length * 5;
-        }
 
-        // ═══════════════════════════════════════════════
-        // DOCUMENT TITLE + DATES
-        // ═══════════════════════════════════════════════
-        y += 10;
-
-        // Left: Document title + number
         doc.setFontSize(12);
-        doc.setTextColor.apply(doc, black);
         doc.setFont('helvetica', 'bold');
-        var docTitle = isFactuur ? 'Factuur: ' : 'Offerte: ';
-        doc.text(docTitle + (form.nummer || ''), mL, y);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.text(form.client_naam || '', colLeftX, y);
 
-        // Right: Dates
+        // Right column: Document info
+        var detY = y - 5;
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor.apply(doc, GOLD);
+        doc.text('GEGEVENS', colRightLabelX, detY);
+        detY += 5;
+
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor.apply(doc, gray);
-        if (isFactuur) {
-            doc.text('Factuurdatum: ' + fmtDate(form.datum), rightX, y - 4, { align: 'right' });
-            doc.text('Vervaldatum: ' + fmtDate(form.vervaldatum), rightX, y + 1, { align: 'right' });
-        } else {
-            doc.text('Datum: ' + fmtDate(form.datum), rightX, y - 4, { align: 'right' });
-            doc.text('Geldig tot: ' + fmtDate(form.geldig_tot), rightX, y + 1, { align: 'right' });
-        }
 
-        y += 8;
+        // Nummer
+        doc.setTextColor.apply(doc, MID_GRAY);
+        doc.text('Nummer:', colRightLabelX, detY);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.setFont('helvetica', 'bold');
+        doc.text(form.nummer || '', colRightValX, detY, { align: 'right' });
+        detY += 5;
 
-        // "Betreft" line (if notitie exists)
-        if (form.notitie) {
-            doc.setFontSize(10);
-            doc.setTextColor.apply(doc, black);
+        // Datum
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor.apply(doc, MID_GRAY);
+        doc.text(isFactuur ? 'Factuurdatum:' : 'Datum:', colRightLabelX, detY);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.text(nlDate(form.datum), colRightValX, detY, { align: 'right' });
+        detY += 5;
+
+        // Vervaldatum / Geldig tot
+        doc.setTextColor.apply(doc, MID_GRAY);
+        doc.text(isFactuur ? 'Vervaldatum:' : 'Geldig tot:', colRightLabelX, detY);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.text(nlDate(isFactuur ? form.vervaldatum : form.geldig_tot), colRightValX, detY, { align: 'right' });
+        detY += 5;
+
+        y += 5;
+        // Client address
+        if (form.client_adres) {
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text('Betreft: ' + form.notitie, mL, y);
-            y += 8;
+            doc.setTextColor.apply(doc, DARK_GRAY);
+            var adresLines = doc.splitTextToSize(form.client_adres, 80);
+            doc.text(adresLines, colLeftX, y);
+            y += adresLines.length * 4.5;
         }
 
-        // ═══════════════════════════════════════════════
-        // ITEMS TABLE
-        // ═══════════════════════════════════════════════
-        y += 2;
+        y = Math.max(y + 8, detY + 8);
 
-        var tableHead = [['Aantal', 'Beschrijving', 'Bedrag\nexcl. btw', 'Bedrag\nincl. btw']];
+        // "Betreft" line
+        if (form.notitie) {
+            doc.setFontSize(9);
+            doc.setTextColor.apply(doc, DARK_GRAY);
+            doc.setFont('helvetica', 'italic');
+            doc.text('Betreft: ' + form.notitie, colLeftX, y);
+            y += 7;
+        }
+
+        // ═══════════════════════════════════════════
+        //  ITEMS TABLE — Clean & elegant
+        // ═══════════════════════════════════════════
+        var tableHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW%', 'Totaal']];
         var tableBody = (form.items || []).map(function (item) {
-            var lineExcl = (item.qty || 0) * (item.prijs || 0);
-            var btwPct = item.btw || 0;
-            var lineIncl = lineExcl * (1 + btwPct / 100);
-            var descText = item.desc || '';
-            if (item.prijs) {
-                descText += '\nStuksprijs: ' + fmt(item.prijs);
-            }
-            var btwLabel = btwPct > 0 ? '' : '\nBtw vrijgesteld';
+            var lineTotal = (item.qty || 0) * (item.prijs || 0);
             return [
+                item.desc || '',
                 String(item.qty || 0),
-                descText,
-                fmt(lineExcl) + btwLabel,
-                fmt(lineIncl) + btwLabel
+                eur(item.prijs),
+                (item.btw || 0) + '%',
+                eur(lineTotal)
             ];
         });
 
@@ -255,119 +271,142 @@ export async function generatePDF(opts) {
             margin: { left: mL, right: mR },
             styles: {
                 fontSize: 9,
-                cellPadding: 4,
-                textColor: [30, 30, 30],
-                lineColor: [200, 200, 200],
+                cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+                textColor: BLACK,
+                lineColor: [220, 215, 205],
                 lineWidth: 0.2,
                 overflow: 'linebreak'
             },
             headStyles: {
-                fillColor: [245, 245, 245],
-                textColor: [80, 80, 80],
+                fillColor: LIGHT_BG,
+                textColor: DARK_GOLD,
                 fontStyle: 'bold',
                 fontSize: 8,
-                lineColor: [200, 200, 200],
+                lineColor: GOLD,
                 lineWidth: 0.3
             },
             columnStyles: {
-                0: { cellWidth: 20, halign: 'center' },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 35, halign: 'right' },
-                3: { cellWidth: 35, halign: 'right' }
+                0: { cellWidth: 'auto' },
+                1: { cellWidth: 20, halign: 'center' },
+                2: { cellWidth: 28, halign: 'right' },
+                3: { cellWidth: 18, halign: 'center' },
+                4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: {
                 fillColor: [255, 255, 255]
             },
-            theme: 'grid'
+            bodyStyles: {
+                fillColor: [255, 255, 255]
+            },
+            theme: 'grid',
+            tableLineColor: [220, 215, 205],
+            tableLineWidth: 0.2
         });
 
-        y = doc.lastAutoTable.finalY + 6;
+        y = doc.lastAutoTable.finalY + 8;
 
-        // ═══════════════════════════════════════════════
-        // TOTALS (right-aligned, like Rompslomp)
-        // ═══════════════════════════════════════════════
-        var totColLabel = rightX - 55;
-        var totColValue = rightX;
+        // ═══════════════════════════════════════════
+        //  TOTALS — Right-aligned, premium style
+        // ═══════════════════════════════════════════
+        var totBoxX = rightX - 75;
+        var totBoxW = 75;
+        var totValX = rightX;
 
-        doc.setFontSize(10);
+        // Subtotaal
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor.apply(doc, gray);
-
-        // Totaalbedrag excl. btw
-        doc.text('Totaalbedrag excl. btw', totColLabel, y, { align: 'left' });
-        doc.setTextColor.apply(doc, black);
-        doc.text(fmt(totals.subtotaal), totColValue, y, { align: 'right' });
-        y += 6;
+        doc.setTextColor.apply(doc, MID_GRAY);
+        doc.text('Subtotaal', totBoxX, y);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.text(eur(totals.subtotaal), totValX, y, { align: 'right' });
+        y += 5.5;
 
         // BTW
-        doc.setTextColor.apply(doc, gray);
-        doc.text('BTW', totColLabel, y, { align: 'left' });
-        doc.setTextColor.apply(doc, black);
-        doc.text(fmt(totals.btw), totColValue, y, { align: 'right' });
+        doc.setTextColor.apply(doc, MID_GRAY);
+        doc.text('BTW', totBoxX, y);
+        doc.setTextColor.apply(doc, BLACK);
+        doc.text(eur(totals.btw), totValX, y, { align: 'right' });
         y += 3;
 
-        // Thick line
-        doc.setDrawColor(30, 30, 30);
-        doc.setLineWidth(0.6);
-        doc.line(totColLabel, y, totColValue, y);
+        // Gold divider
+        doc.setDrawColor.apply(doc, GOLD);
+        doc.setLineWidth(0.8);
+        doc.line(totBoxX, y, totValX, y);
         y += 6;
 
-        // Totaalbedrag incl. btw (bold, larger)
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor.apply(doc, black);
-        doc.text('Totaalbedrag incl. btw', totColLabel, y, { align: 'left' });
-        doc.text(fmt(totals.totaal), totColValue, y, { align: 'right' });
-        y += 15;
+        // Total — gold background strip
+        doc.setFillColor.apply(doc, GOLD);
+        doc.roundedRect(totBoxX - 3, y - 5, totBoxW + 6, 10, 1.5, 1.5, 'F');
 
-        // ═══════════════════════════════════════════════
-        // PAYMENT INSTRUCTIONS
-        // ═══════════════════════════════════════════════
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor.apply(doc, WHITE);
+        doc.text('TOTAAL', totBoxX, y + 1.5);
+        doc.text(eur(totals.totaal), totValX, y + 1.5, { align: 'right' });
+        y += 18;
+
+        // ═══════════════════════════════════════════
+        //  PAYMENT INSTRUCTIONS (factuur only)
+        // ═══════════════════════════════════════════
         if (isFactuur) {
-            doc.setFontSize(9);
+            // Light background box for payment info
+            var payH = 20;
+            doc.setFillColor(252, 250, 245);
+            doc.roundedRect(mL, y - 2, contentW, payH, 2, 2, 'F');
+            doc.setDrawColor.apply(doc, GOLD);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(mL, y - 2, contentW, payH, 2, 2, 'S');
+
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor.apply(doc, GOLD);
+            doc.text('BETALINGSGEGEVENS', mL + 5, y + 3);
+
+            doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor.apply(doc, black);
+            doc.setTextColor.apply(doc, DARK_GRAY);
 
             if (s.betaalvoorwaarden) {
-                var betalingLines = doc.splitTextToSize(s.betaalvoorwaarden, pageW - mL - mR);
-                doc.text(betalingLines, mL, y);
-                y += betalingLines.length * 4 + 4;
+                var betLines = doc.splitTextToSize(s.betaalvoorwaarden, contentW - 12);
+                doc.text(betLines, mL + 5, y + 8);
             } else {
-                var defaultText = 'Gelieve dit bedrag van ' + fmt(totals.totaal) + ' over te maken voor ' + fmtDate(form.vervaldatum) + ' op rekeningnummer:';
-                doc.text(defaultText, mL, y);
-                y += 5;
+                var defText = 'Gelieve ' + eur(totals.totaal) + ' over te maken voor ' + nlDate(form.vervaldatum) + ' op:';
+                doc.text(defText, mL + 5, y + 8);
             }
 
             if (s.iban) {
                 doc.setFont('helvetica', 'bold');
-                doc.text(s.iban + ' t.n.v. ' + (s.bedrijfsnaam || '') + ' o.v.v. "' + (form.nummer || '') + '"', mL, y);
-                y += 5;
+                doc.setTextColor.apply(doc, BLACK);
+                doc.text(s.iban + ' t.n.v. ' + (s.bedrijfsnaam || 'Hop & Bites') + ' o.v.v. "' + (form.nummer || '') + '"', mL + 5, y + 13);
             }
+
+            y += payH + 8;
         }
 
-        // ═══════════════════════════════════════════════
-        // FOOTER (subtle, bottom of page)
-        // ═══════════════════════════════════════════════
-        var footerY = 285;
-        doc.setDrawColor(200, 200, 200);
-        doc.setLineWidth(0.2);
-        doc.line(mL, footerY - 3, rightX, footerY - 3);
+        // ═══════════════════════════════════════════
+        //  FOOTER — Elegant gold bar at bottom
+        // ═══════════════════════════════════════════
+        // Bottom gold accent bar (mirror of top)
+        doc.setFillColor.apply(doc, GOLD);
+        doc.rect(0, pageH - 3, pageW, 3, 'F');
 
-        doc.setFontSize(7);
-        doc.setTextColor.apply(doc, lightGray);
+        // Footer text just above the gold bar
+        doc.setFontSize(6.5);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor.apply(doc, MID_GRAY);
 
-        var footerParts = [];
-        if (s.bedrijfsnaam) footerParts.push(s.bedrijfsnaam);
-        if (s.email) footerParts.push(s.email);
-        if (s.telefoon) footerParts.push(s.telefoon);
-        if (s.website) footerParts.push(s.website);
-        var footerLine = footerParts.join('  •  ');
-        doc.text(footerLine, pageW / 2, footerY, { align: 'center' });
+        var footItems = [];
+        if (s.bedrijfsnaam) footItems.push(s.bedrijfsnaam);
+        if (s.email) footItems.push(s.email);
+        if (s.telefoon) footItems.push(s.telefoon);
+        if (s.website) footItems.push(s.website);
+        if (footItems.length > 0) {
+            doc.text(footItems.join('   •   '), pageW / 2, pageH - 6, { align: 'center' });
+        }
 
-        // ═══════════════════════════════════════════════
-        // SAVE
-        // ═══════════════════════════════════════════════
+        // ═══════════════════════════════════════════
+        //  SAVE
+        // ═══════════════════════════════════════════
         var prefix = isFactuur ? 'Factuur' : 'Offerte';
         doc.save(prefix + '_' + (form.nummer || 'document') + '.pdf');
 
