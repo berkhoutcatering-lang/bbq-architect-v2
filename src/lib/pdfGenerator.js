@@ -34,14 +34,17 @@ function loadLogoAsBase64() {
         var img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = function () {
+            // Crop to top 45% — the actual logo is in the upper portion
+            var cropH = Math.floor(img.naturalHeight * 0.45);
             var canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
+            canvas.height = cropH;
             var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/png'));
+            ctx.drawImage(img, 0, 0, img.naturalWidth, cropH, 0, 0, img.naturalWidth, cropH);
+            console.log('[PDF] Logo geladen:', img.naturalWidth + 'x' + img.naturalHeight, '→ cropped to', canvas.width + 'x' + canvas.height);
+            resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
-        img.onerror = function () { resolve(null); };
+        img.onerror = function () { console.warn('[PDF] Logo kon niet geladen worden'); resolve(null); };
         img.src = '/logo.png';
     });
 }
@@ -85,12 +88,14 @@ export async function generatePDF(opts) {
         var lightGray = [245, 245, 245];
 
         // ── LOGO ──
-        var logoData = await loadLogoAsBase64();
+        var logoResult = await loadLogoAsBase64();
         var y = 20;
-        if (logoData) {
-            // Draw the logo cropped to just the top part (the actual logo area)
-            doc.addImage(logoData, 'PNG', margin, y, 50, 25);
-            y = 50;
+        if (logoResult && logoResult.data) {
+            var logoW = 50;
+            var logoH = logoW * (logoResult.h / logoResult.w);
+            if (logoH > 35) logoH = 35;
+            doc.addImage(logoResult.data, 'PNG', margin, y, logoW, logoH);
+            y = 20 + logoH + 5;
         } else {
             // Fallback: text logo
             doc.setFontSize(22);

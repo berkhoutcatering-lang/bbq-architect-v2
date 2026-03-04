@@ -40,7 +40,7 @@ export default function Instellingen() {
                         <div className="field full"><label>Adres</label><input value={form.adres || ''} onChange={function (e) { setField('adres', e.target.value); }} /></div>
                         <div className="field"><label>Website</label><input value={form.website || ''} placeholder="www.hopenbites.nl" onChange={function (e) { setField('website', e.target.value); }} /></div>
                         <div className="field"><label>KVK-nummer</label><input value={form.kvk || ''} onChange={function (e) { setField('kvk', e.target.value); }} /></div>
-                        <div className="field"><label>BTW-nummer</label><input value={form.btw_nummer || ''} onChange={function (e) { setField('btw_nummer', e.target.value); }} /></div>
+                        <div className="field"><label>BTW-nummer</label><input value={form.btw || ''} onChange={function (e) { setField('btw', e.target.value); }} /></div>
                         <div className="field"><label>IBAN</label><input value={form.iban || ''} onChange={function (e) { setField('iban', e.target.value); }} /></div>
                     </div>
                 </div>
