@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { generatePDF } from '@/lib/pdfGenerator';
 
 export default function Facturen() {
     var { data: facturen, insert, update, remove } = useSupabase('facturen', []);
@@ -80,27 +81,7 @@ export default function Facturen() {
 
     function downloadFactuur() {
         var totals = calcLineTotals(form.items);
-        var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Factuur ' + form.nummer + '</title>' +
-            '<style>body{font-family:DM Sans,Arial,sans-serif;max-width:700px;margin:40px auto;padding:20px;color:#222}' +
-            'h1{color:#FF8C00;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin:20px 0}' +
-            'th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #ddd}th{background:#f5f5f5;font-size:12px;text-transform:uppercase}' +
-            '.right{text-align:right}.total{font-size:18px;font-weight:bold;color:#FF8C00}</style></head><body>' +
-            '<h1>FACTUUR</h1><p>' + form.nummer + '</p>' +
-            '<p><strong>Aan:</strong> ' + form.client_naam + '<br>' + (form.client_adres || '') + '</p>' +
-            '<p><strong>Datum:</strong> ' + fmtNl(form.datum) + '<br><strong>Vervaldatum:</strong> ' + fmtNl(form.vervaldatum) + '</p>' +
-            '<table><tr><th>Omschrijving</th><th class="right">Aantal</th><th class="right">Prijs</th><th class="right">BTW</th><th class="right">Totaal</th></tr>';
-        (form.items || []).forEach(function (item) {
-            var lt = (item.qty || 0) * (item.prijs || 0);
-            html += '<tr><td>' + (item.desc || '') + '</td><td class="right">' + item.qty + '</td><td class="right">' + fmt(item.prijs) + '</td><td class="right">' + item.btw + '%</td><td class="right">' + fmt(lt) + '</td></tr>';
-        });
-        html += '</table><p class="right">Subtotaal: ' + fmt(totals.subtotaal) + '<br>BTW: ' + fmt(totals.btw) + '<br><span class="total">Totaal: ' + fmt(totals.totaal) + '</span></p>';
-        if (settings) html += '<hr><p style="font-size:12px;color:#888">' + (settings.bedrijfsnaam || '') + ' | ' + (settings.email || '') + ' | KVK: ' + (settings.kvk || '') + ' | BTW: ' + (settings.btw || '') + ' | IBAN: ' + (settings.iban || '') + '</p>';
-        html += '</body></html>';
-        var blob = new Blob([html], { type: 'text/html' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Factuur_' + form.nummer + '.html';
-        a.click();
+        generatePDF({ type: 'factuur', form: form, settings: settings, totals: totals });
     }
 
     // Editor
@@ -157,7 +138,7 @@ export default function Facturen() {
                     </div>
                     <div className="editor-actions">
                         <button className="btn btn-brand" onClick={saveFactuur}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn btn-cyan" onClick={downloadFactuur}><i className="fa-solid fa-download"></i> Download</button>
+                        <button className="btn btn-cyan" onClick={downloadFactuur}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
                 </div>

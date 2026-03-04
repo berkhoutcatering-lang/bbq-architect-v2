@@ -38,8 +38,9 @@ export default function Instellingen() {
                         <div className="field"><label>Email</label><input value={form.email || ''} onChange={function (e) { setField('email', e.target.value); }} /></div>
                         <div className="field"><label>Telefoon</label><input value={form.telefoon || ''} onChange={function (e) { setField('telefoon', e.target.value); }} /></div>
                         <div className="field full"><label>Adres</label><input value={form.adres || ''} onChange={function (e) { setField('adres', e.target.value); }} /></div>
+                        <div className="field"><label>Website</label><input value={form.website || ''} placeholder="www.hopenbites.nl" onChange={function (e) { setField('website', e.target.value); }} /></div>
                         <div className="field"><label>KVK-nummer</label><input value={form.kvk || ''} onChange={function (e) { setField('kvk', e.target.value); }} /></div>
-                        <div className="field"><label>BTW-nummer</label><input value={form.btw || ''} onChange={function (e) { setField('btw', e.target.value); }} /></div>
+                        <div className="field"><label>BTW-nummer</label><input value={form.btw_nummer || ''} onChange={function (e) { setField('btw_nummer', e.target.value); }} /></div>
                         <div className="field"><label>IBAN</label><input value={form.iban || ''} onChange={function (e) { setField('iban', e.target.value); }} /></div>
                     </div>
                 </div>
@@ -55,6 +56,20 @@ export default function Instellingen() {
                         <div className="field"><label>Standaard BTW (%)</label><input type="number" value={form.default_btw || 21} onChange={function (e) { setField('default_btw', parseInt(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Betaaltermijn (dagen)</label><input type="number" value={form.betaaltermijn || 14} onChange={function (e) { setField('betaaltermijn', parseInt(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Offerte geldigheid (dagen)</label><input type="number" value={form.offerte_geldig || 30} onChange={function (e) { setField('offerte_geldig', parseInt(e.target.value) || 0); }} /></div>
+                    </div>
+                </div>
+            </div>
+
+            {/* PDF Instellingen */}
+            <div className="panel" style={{ marginBottom: 20 }}>
+                <div className="panel-head"><h3><i className="fa-solid fa-file-pdf" style={{ marginRight: 8, color: 'var(--brand)' }}></i>PDF Instellingen</h3></div>
+                <div className="panel-body">
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze gegevens verschijnen automatisch op je facturen en offertes PDF's.</p>
+                    <div className="form-grid">
+                        <div className="field full">
+                            <label>Betaalvoorwaarden</label>
+                            <textarea rows={3} value={form.betaalvoorwaarden || ''} placeholder="Bijv: Betaling binnen 14 dagen na factuurdatum. Graag onder vermelding van het factuurnummer." onChange={function (e) { setField('betaalvoorwaarden', e.target.value); }} />
+                        </div>
                     </div>
                 </div>
             </div>
