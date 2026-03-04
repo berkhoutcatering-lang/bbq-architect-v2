@@ -26,13 +26,13 @@ function loadLogoAsBase64() {
         var img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = function () {
-            var cropH = Math.floor(img.naturalHeight * 0.45);
+            // Use full image — white background logo, no cropping needed
             var canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth;
-            canvas.height = cropH;
+            canvas.height = img.naturalHeight;
             var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, img.naturalWidth, cropH, 0, 0, img.naturalWidth, cropH);
-            console.log('[PDF] Logo geladen:', img.naturalWidth + 'x' + img.naturalHeight, '→ cropped to', canvas.width + 'x' + canvas.height);
+            ctx.drawImage(img, 0, 0);
+            console.log('[PDF] Logo geladen:', img.naturalWidth + 'x' + img.naturalHeight);
             resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
         img.onerror = function () { console.warn('[PDF] Logo niet gevonden'); resolve(null); };
