@@ -6,9 +6,11 @@ import { useState } from 'react';
 var NAV_ITEMS = [
     { id: '/', label: 'Dashboard', icon: 'fa-gauge-high' },
     { id: '/recepten', label: 'Recepten', icon: 'fa-utensils' },
+    { id: '/gerechten', label: 'Gerechten', icon: 'fa-plate-wheat' },
     { id: '/facturen', label: 'Facturen', icon: 'fa-file-invoice' },
     { id: '/offertes', label: 'Offertes', icon: 'fa-file-signature' },
     { id: '/events', label: 'Events', icon: 'fa-fire' },
+    { id: '/service', label: 'Service', icon: 'fa-bell-concierge' },
     { id: '/agenda', label: 'Agenda', icon: 'fa-calendar-days' },
     { id: '/logistiek', label: 'Logistiek', icon: 'fa-truck' },
     { id: '/haccp', label: 'HACCP', icon: 'fa-shield-halved' },

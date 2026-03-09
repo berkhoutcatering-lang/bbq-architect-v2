@@ -6,6 +6,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
+import MenuWizard from '@/components/MenuWizard';
 
 export default function Offertes() {
     var { data: offertes, insert, update, remove } = useSupabase('offertes', []);
@@ -15,6 +16,30 @@ export default function Offertes() {
     var showConfirm = useConfirm();
     var [editing, setEditing] = useState(null);
     var [form, setForm] = useState(null);
+    var [showWizard, setShowWizard] = useState(false);
+
+    function handleWizardComplete(result) {
+        var geldigDagen = (settings && settings.offerte_geldig) || 30;
+        var nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+        setShowWizard(false);
+        setEditing('new');
+        setForm({
+            nummer: nummer,
+            status: 'definitief',
+            client_naam: result.client_naam,
+            client_adres: result.client_adres,
+            datum: result.datum,
+            geldig_tot: addDays(result.datum, geldigDagen),
+            notitie: 'Signature Menu - ' + result.aantal_gasten + ' gasten',
+            items: result.items,
+            menu_selectie: result.menu_selectie,
+            aantal_gasten: result.aantal_gasten,
+            aantal_vega: result.aantal_vega,
+            basis_prijs_pp: result.basis_prijs_pp,
+            korting: result.korting
+        });
+        showToast('Menu samengesteld! Klik Opslaan om definitief te maken.', 'info');
+    }
 
     function newOfferte() {
         var geldigDagen = (settings && settings.offerte_geldig) || 30;
@@ -358,8 +383,12 @@ export default function Offertes() {
         <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Offertes ({offertes.length})</h3>
-                <button className="btn btn-brand" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-brand" onClick={function () { setShowWizard(true); }} style={{ background: '#B48C14' }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
+                    <button className="btn btn-brand" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
+                </div>
             </div>
+            {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
             <div className="panel">
                 {offertes.length === 0 && <div className="empty-state"><i className="fa-solid fa-file-signature"></i><p>Nog geen offertes aangemaakt</p></div>}
                 {offertes.map(function (o) {
