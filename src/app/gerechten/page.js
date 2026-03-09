@@ -175,7 +175,7 @@ export default function Gerechten() {
                             </div>
                             <div className="field">
                                 <label>Volgorde</label>
-                                <input type="number" value={form.volgorde || 0} onChange={function (e) { setForm(Object.assign({}, form, { volgorde: parseInt(e.target.value) || 0 })); }} />
+                                <input type="number" value={form.volgorde != null ? form.volgorde : ''} onChange={function (e) { setForm(Object.assign({}, form, { volgorde: e.target.value === '' ? '' : parseInt(e.target.value) })); }} />
                             </div>
                         </div>
                         <div className="modal-actions">
@@ -204,16 +204,16 @@ export default function Gerechten() {
                             <div className="form-grid">
                                 <div className="field">
                                     <label>Minimum selectie</label>
-                                    <input type="number" value={gangForm.minimum || 1} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { minimum: parseInt(e.target.value) || 1 })); }} />
+                                    <input type="number" value={gangForm.minimum != null ? gangForm.minimum : ''} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { minimum: e.target.value === '' ? '' : parseInt(e.target.value) })); }} />
                                 </div>
                                 <div className="field">
                                     <label>Extra prijs p.p. (€)</label>
-                                    <input type="number" step="0.25" value={gangForm.extra_prijs_pp || 0} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { extra_prijs_pp: parseFloat(e.target.value) || 0 })); }} />
+                                    <input type="number" step="0.25" value={gangForm.extra_prijs_pp != null ? gangForm.extra_prijs_pp : ''} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { extra_prijs_pp: e.target.value === '' ? '' : parseFloat(e.target.value) })); }} />
                                 </div>
                             </div>
                             <div className="field">
                                 <label>Volgorde</label>
-                                <input type="number" value={gangForm.volgorde || 0} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { volgorde: parseInt(e.target.value) || 0 })); }} />
+                                <input type="number" value={gangForm.volgorde != null ? gangForm.volgorde : ''} onChange={function (e) { setGangForm(Object.assign({}, gangForm, { volgorde: e.target.value === '' ? '' : parseInt(e.target.value) })); }} />
                             </div>
                         </div>
                         <div className="modal-actions">
