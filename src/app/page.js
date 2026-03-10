@@ -10,6 +10,8 @@ export default function Dashboard() {
   var rec = useSupabase('recepten', []);
   var inv = useSupabase('inventory', []);
   var sug = useSupabase('prep_suggestions', []);
+  var gan = useSupabase('gangen', []);
+  var ger = useSupabase('gerechten', []);
 
   var events = ev.data;
   var facturen = fac.data;
@@ -17,6 +19,8 @@ export default function Dashboard() {
   var recepten = rec.data;
   var inventory = inv.data;
   var suggestions = sug.data;
+  var gangenData = gan.data;
+  var gerechtenData = ger.data;
 
   // Stats
   var totalEvents = events.length;
@@ -56,11 +60,16 @@ export default function Dashboard() {
   // Pending suggestions
   var pendingSuggestions = suggestions.filter(function (s) { return s.status === 'pending'; });
 
+  // ═══ VANDAAG PREPPEN ═══
+  // Find today's (or next) events that have a menu
+  var prepEvents = offertes
+    .filter(function (o) { return o.menu_selectie && o.datum >= today; })
+    .sort(function (a, b) { return a.datum < b.datum ? -1 : 1; })
+    .slice(0, 3);
+
   return (
     <>
-      {/* ========================================== */}
-      {/* FLOATING LOW-STOCK ALERTS                  */}
-      {/* ========================================== */}
+      {/* FLOATING LOW-STOCK ALERTS */}
       {lowStockItems.length > 0 && (
         <div className="low-stock-float">
           <div className="low-stock-float-header">
@@ -90,9 +99,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* PENDING PREP SUGGESTIONS BANNER            */}
-      {/* ========================================== */}
+      {/* PENDING PREP SUGGESTIONS BANNER */}
       {pendingSuggestions.length > 0 && (
         <div className="prep-banner">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -112,9 +119,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* OFFERTE OPTIE NOTIFICATIONS                */}
-      {/* ========================================== */}
+      {/* OFFERTE OPTIE NOTIFICATIONS */}
       {events.filter(function (e) { return e.status === 'optie' && e.offerte_id; }).length > 0 && (
         <div style={{ padding: '14px 18px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 14, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -131,6 +136,85 @@ export default function Dashboard() {
           <Link href="/events" className="btn btn-brand btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>
             <i className="fa-solid fa-eye"></i> Bekijk Events
           </Link>
+        </div>
+      )}
+
+      {/* ═══ VANDAAG PREPPEN ═══ */}
+      {prepEvents.length > 0 && (
+        <div className="prep-today-section">
+          <div className="prep-today-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <i className="fa-solid fa-fire" style={{ fontSize: 18, color: '#B48C14' }}></i>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>🔥 Prep Schema</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Eerstvolgende events</div>
+              </div>
+            </div>
+            <Link href="/service" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none', fontSize: 11 }}>
+              📋 Service Mode →
+            </Link>
+          </div>
+
+          {prepEvents.map(function (offerte) {
+            var menuSel = typeof offerte.menu_selectie === 'string' ? JSON.parse(offerte.menu_selectie) : offerte.menu_selectie;
+            var aantalNormaal = (offerte.aantal_gasten || 0) - (offerte.aantal_vega || 0);
+            var aantalVega = offerte.aantal_vega || 0;
+
+            return (
+              <div key={offerte.id} className="prep-today-event">
+                <div className="prep-today-event-header">
+                  <div>
+                    <span style={{ fontWeight: 700 }}>{offerte.client_naam}</span>
+                    <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 10 }}>
+                      {offerte.datum} • {offerte.aantal_gasten} gasten
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#B48C14' }}>🍖 {aantalNormaal}</span>
+                    {aantalVega > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7A2F' }}>🌿 {aantalVega}</span>}
+                  </div>
+                </div>
+
+                {gangenData.sort(function (a, b) { return (a.volgorde || 0) - (b.volgorde || 0); }).map(function (gang) {
+                  var gangDishes = menuSel[gang.slug] || [];
+                  if (gangDishes.length === 0) return null;
+
+                  return (
+                    <div key={gang.slug} className="prep-today-gang">
+                      <div className="prep-today-gang-title">Gang — {gang.naam}</div>
+                      {gangDishes.map(function (dishName, i) {
+                        var dish = gerechtenData.find(function (g) { return g.naam === dishName && g.gang_slug === gang.slug; }) || {};
+                        return (
+                          <div key={i} className="prep-today-dish">
+                            <div className="prep-today-dish-header">
+                              {dish.foto_url && <img src={dish.foto_url} alt={dishName} className="prep-today-dish-foto" />}
+                              <div className="prep-today-dish-info">
+                                <div className="prep-today-dish-name">
+                                  <span style={{ fontWeight: 700, color: '#B48C14', marginRight: 6 }}>[{aantalNormaal}]x</span>
+                                  {dishName}
+                                </div>
+                                {dish.beschrijving && <div className="prep-today-dish-desc">{dish.beschrijving}</div>}
+                              </div>
+                            </div>
+                            {dish.ingredienten && dish.ingredienten.length > 0 && (
+                              <div className="prep-today-ingredients">
+                                {dish.ingredienten.map(function (ing, j) {
+                                  return <span key={j} className="bon-ingredient-chip">{ing}</span>;
+                                })}
+                              </div>
+                            )}
+                            {dish.bereidingswijze && (
+                              <div className="prep-today-bereiding">👨‍🍳 {dish.bereidingswijze}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
 

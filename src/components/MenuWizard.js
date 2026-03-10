@@ -8,19 +8,23 @@ import { supabase } from '@/lib/supabase';
  *   onComplete(result) — called with { menu_selectie, aantal_gasten, aantal_vega, basis_prijs_pp, korting, client_naam, client_adres, datum, items }
  *   onClose() — close wizard
  *   settings — company settings
+ *   existingOfferte — optional, pre-fill from existing offerte
  */
-export default function MenuWizard({ onComplete, onClose, settings }) {
+export default function MenuWizard({ onComplete, onClose, settings, existingOfferte }) {
+    var ex = existingOfferte || {};
+    var existingMenu = ex.menu_selectie ? (typeof ex.menu_selectie === 'string' ? JSON.parse(ex.menu_selectie) : ex.menu_selectie) : {};
+
     var [gangen, setGangen] = useState([]);
     var [gerechten, setGerechten] = useState([]);
-    var [step, setStep] = useState(0);                // 0-based, last step = gangen.length
-    var [selected, setSelected] = useState({});         // { slug: ['dish1', 'dish2'] }
-    var [aantalGasten, setAantalGasten] = useState(40);
-    var [aantalVega, setAantalVega] = useState(0);
-    var [basisPrijs, setBasisPrijs] = useState(38.50);
-    var [korting, setKorting] = useState(0);
-    var [clientNaam, setClientNaam] = useState('');
-    var [clientAdres, setClientAdres] = useState('');
-    var [datum, setDatum] = useState(new Date().toISOString().split('T')[0]);
+    var [step, setStep] = useState(0);
+    var [selected, setSelected] = useState(existingMenu);
+    var [aantalGasten, setAantalGasten] = useState(ex.aantal_gasten || 40);
+    var [aantalVega, setAantalVega] = useState(ex.aantal_vega || 0);
+    var [basisPrijs, setBasisPrijs] = useState(ex.basis_prijs_pp || 38.50);
+    var [korting, setKorting] = useState(ex.korting || 0);
+    var [clientNaam, setClientNaam] = useState(ex.client_naam || '');
+    var [clientAdres, setClientAdres] = useState(ex.client_adres || '');
+    var [datum, setDatum] = useState(ex.datum || new Date().toISOString().split('T')[0]);
 
     useEffect(function () {
         supabase.from('gangen').select('*').eq('actief', true).order('volgorde').then(function (res) {
@@ -30,6 +34,7 @@ export default function MenuWizard({ onComplete, onClose, settings }) {
             if (res.data) setGerechten(res.data);
         });
     }, []);
+
 
     var totalSteps = gangen.length + 1; // gang steps + overview step
     var isOverview = step === gangen.length;

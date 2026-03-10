@@ -17,6 +17,7 @@ export default function Offertes() {
     var [editing, setEditing] = useState(null);
     var [form, setForm] = useState(null);
     var [showWizard, setShowWizard] = useState(false);
+    var [showWizardForExisting, setShowWizardForExisting] = useState(false);
 
     function handleWizardComplete(result) {
         var geldigDagen = (settings && settings.offerte_geldig) || 30;
@@ -39,6 +40,22 @@ export default function Offertes() {
             korting: result.korting
         });
         showToast('Menu samengesteld! Klik Opslaan om definitief te maken.', 'info');
+    }
+
+    function handleWizardUpdateExisting(result) {
+        setShowWizardForExisting(false);
+        setForm(Object.assign({}, form, {
+            menu_selectie: result.menu_selectie,
+            aantal_gasten: result.aantal_gasten,
+            aantal_vega: result.aantal_vega,
+            basis_prijs_pp: result.basis_prijs_pp,
+            korting: result.korting,
+            client_naam: result.client_naam,
+            client_adres: result.client_adres,
+            datum: result.datum,
+            items: result.items
+        }));
+        showToast('🍽️ Menu bijgewerkt! Klik Opslaan om wijzigingen door te voeren.', 'info');
     }
 
     function newOfferte() {
@@ -369,10 +386,12 @@ export default function Offertes() {
                     </div>
                     <div className="editor-actions">
                         <button className="btn btn-brand" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
+                        <button className="btn" style={{ background: '#B48C14', color: '#000' }} onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Samenstellen</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur}><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
+                    {showWizardForExisting && <MenuWizard onComplete={handleWizardUpdateExisting} onClose={function () { setShowWizardForExisting(false); }} settings={settings} existingOfferte={form} />}
                 </div>
             </div>
         );

@@ -1507,9 +1507,17 @@ body {
   margin-bottom: 12px;
 }
 
-.bon-idle .bon-gang-title { color: #666; }
-.bon-active .bon-gang-title { color: #B48C14; }
-.bon-served .bon-gang-title { color: #6B7A2F; }
+.bon-idle .bon-gang-title {
+  color: #666;
+}
+
+.bon-active .bon-gang-title {
+  color: #B48C14;
+}
+
+.bon-served .bon-gang-title {
+  color: #6B7A2F;
+}
 
 .bon-dish-line {
   font-size: 14px;
@@ -1529,9 +1537,17 @@ body {
   letter-spacing: 2px;
 }
 
-.bon-idle .bon-timer { color: #444; }
-.bon-active .bon-timer { color: #B48C14; }
-.bon-served .bon-timer { color: #6B7A2F; }
+.bon-idle .bon-timer {
+  color: #444;
+}
+
+.bon-active .bon-timer {
+  color: #B48C14;
+}
+
+.bon-served .bon-timer {
+  color: #6B7A2F;
+}
 
 .bon-action-btn {
   margin-top: 12px;
@@ -1562,6 +1578,240 @@ body {
   background: rgba(107, 122, 47, .3);
 }
 
+/* ── FOTO UPLOAD ZONE ── */
+.foto-upload-zone {
+  border: 2px dashed rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s ease;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.foto-upload-zone:hover {
+  border-color: rgba(180, 140, 20, .3);
+  background: rgba(180, 140, 20, .04);
+  color: #B48C14;
+}
+
+.foto-upload-zone.has-foto {
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+/* ── INGREDIENT TAG INPUT ── */
+.tag-input-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  transition: border-color .15s;
+}
+
+.tag-input-container:focus-within {
+  border-color: rgba(180, 140, 20, .4);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ingredient-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(180, 140, 20, .12);
+  border: 1px solid rgba(180, 140, 20, .2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #B48C14;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: rgba(180, 140, 20, .5);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.tag-remove:hover {
+  color: var(--red);
+}
+
+.tag-input {
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  padding: 4px 0 !important;
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+}
+
+.ingredient-chip-small {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(180, 140, 20, .08);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #B48C14;
+}
+
+/* ── DISH FOTO PREVIEW ── */
+.dish-foto-preview {
+  width: 100%;
+  height: 100px;
+  border-radius: 8px 8px 0 0;
+  margin: -16px -18px 12px;
+  width: calc(100% + 36px);
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+/* ── EXPANDED BON CARD ── */
+.bon-expanded {
+  grid-column: 1 / -1;
+}
+
+.bon-header-clickable {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+/* ── PREP SCHEMA IN BONNEN ── */
+.bon-prep-schema {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.bon-prep-item {
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.bon-prep-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.bon-prep-foto {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.bon-prep-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bon-prep-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.bon-prep-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bon-ingredient-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.bon-ingredient-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-right: 4px;
+}
+
+.bon-ingredient-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(180, 140, 20, .1);
+  border: 1px solid rgba(180, 140, 20, .15);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #B48C14;
+}
+
+.bon-prep-text {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(107, 122, 47, .06);
+  border: 1px solid rgba(107, 122, 47, .12);
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .7);
+  line-height: 1.5;
+}
+
+/* ── TIMING HISTORIE ── */
+.timing-history {
+  background: var(--card);
+  border: var(--glass-border);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.timing-avg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(180, 140, 20, .04);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.timing-event-card {
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.timing-event-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: rgba(107, 122, 47, .1);
+  border: 1px solid rgba(107, 122, 47, .15);
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7A2F;
+}
+
 /* ── WIZARD INFO BAR ── */
 .wizard-info-bar {
   text-align: center;
@@ -1588,18 +1838,292 @@ body {
 }
 
 @media (max-width: 768px) {
+
   .dish-grid,
   .dish-select-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .bon-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 480px) {
+
   .dish-grid,
   .dish-select-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── ALLERGEEN & TAG CHIPS (Dish Cards) ── */
+.dish-tag-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  background: rgba(107, 122, 47, .12);
+  border: 1px solid rgba(107, 122, 47, .18);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6B7A2F;
+}
+
+.dish-allergen-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  background: rgba(239, 68, 68, .08);
+  border: 1px solid rgba(239, 68, 68, .14);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.dish-kostprijs {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #B48C14;
+  padding: 3px 0;
+  border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+/* ── ALLERGEEN & LABEL TAG (Modal) ── */
+.allergen-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, .1);
+  border: 1px solid rgba(239, 68, 68, .15);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.label-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(107, 122, 47, .12);
+  border: 1px solid rgba(107, 122, 47, .18);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7A2F;
+}
+
+.preset-chip {
+  display: inline-block;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.preset-chip:hover {
+  background: rgba(180, 140, 20, .08);
+  border-color: rgba(180, 140, 20, .2);
+  color: #B48C14;
+}
+
+/* ── GERECHT STATISTIEKEN PANEL ── */
+.gerecht-stats-panel {
+  background: rgba(180, 140, 20, .04);
+  border: 1px solid rgba(180, 140, 20, .1);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.gerecht-stats-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #B48C14;
+  margin-bottom: 10px;
+}
+
+.gerecht-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.gerecht-stat-item {
+  text-align: center;
+  padding: 10px 8px;
+  background: rgba(0, 0, 0, .15);
+  border-radius: 8px;
+}
+
+.gerecht-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #B48C14;
+}
+
+.gerecht-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-top: 2px;
+}
+
+/* ── PREP SCHEMA DASHBOARD ── */
+.prep-today-section {
+  background: var(--card);
+  border: var(--glass-border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.prep-today-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.prep-today-event {
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.prep-today-event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.prep-today-gang {
+  margin-bottom: 12px;
+}
+
+.prep-today-gang-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #B48C14;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.prep-today-dish {
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid rgba(255, 255, 255, .04);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 6px;
+}
+
+.prep-today-dish-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.prep-today-dish-foto {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.prep-today-dish-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.prep-today-dish-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.prep-today-dish-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prep-today-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.prep-today-bereiding {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(107, 122, 47, .06);
+  border: 1px solid rgba(107, 122, 47, .1);
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .65);
+  line-height: 1.4;
+}
+
+/* ── TABLET OPTIMALISATIE ── */
+@media (min-width: 768px) and (max-width: 1280px) {
+  .bon-card {
+    padding: 18px;
+  }
+
+  .bon-title {
+    font-size: 18px;
+  }
+
+  .bon-timer {
+    font-size: 36px;
+  }
+
+  .bon-actions button {
+    min-height: 56px;
+    font-size: 15px;
+  }
+
+  .prep-today-dish-foto {
+    width: 72px;
+    height: 72px;
+  }
+
+  .prep-today-dish-name {
+    font-size: 16px;
+  }
+
+  .bon-prep-foto {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+/* Landscape tablet (op standaard naast smoker) */
+@media (min-width: 768px) and (orientation: landscape) {
+  .bon-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .dish-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
