@@ -66,6 +66,103 @@ var WHITE = [255, 255, 255];
 export async function generatePDF(opts) {
     try {
         var type = opts.type;
+
+        // ═══ HACCP RAPPORT PDF ═══
+        if (type === 'haccp') {
+            var jspdf2 = await loadJsPDF();
+            var doc2 = new jspdf2.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            var pageW2 = 210; var mL2 = 18; var mR2 = 18; var contentW2 = pageW2 - mL2 - mR2;
+
+            // Top gold bar
+            doc2.setFillColor.apply(doc2, GOLD);
+            doc2.rect(0, 0, pageW2, 3, 'F');
+
+            // Logo
+            var logo2 = await loadLogoAsBase64();
+            var y2 = 10;
+            if (logo2 && logo2.data) {
+                var lw2 = 50; var lh2 = lw2 * (logo2.h / logo2.w);
+                if (lh2 > 30) { lh2 = 30; lw2 = lh2 * (logo2.w / logo2.h); }
+                doc2.addImage(logo2.data, 'PNG', (pageW2 - lw2) / 2, y2, lw2, lh2);
+                y2 += lh2 + 4;
+            } else {
+                doc2.setFontSize(20); doc2.setTextColor.apply(doc2, GOLD); doc2.setFont('helvetica', 'bold');
+                doc2.text('HOP & BITES', pageW2 / 2, y2 + 8, { align: 'center' });
+                y2 += 16;
+            }
+
+            // Badge
+            var bw2 = 60; var bx2 = (pageW2 - bw2) / 2;
+            doc2.setFillColor(200, 50, 50);
+            doc2.roundedRect(bx2, y2, bw2, 9, 2, 2, 'F');
+            doc2.setFontSize(12); doc2.setFont('helvetica', 'bold'); doc2.setTextColor.apply(doc2, WHITE);
+            doc2.text('HACCP RAPPORT', pageW2 / 2, y2 + 6.5, { align: 'center' });
+            y2 += 15;
+
+            // Event details
+            doc2.setFontSize(10); doc2.setFont('helvetica', 'bold'); doc2.setTextColor.apply(doc2, BLACK);
+            doc2.text('Event: ' + (opts.eventName || 'Onbekend'), mL2, y2);
+            y2 += 5;
+            doc2.setFontSize(9); doc2.setFont('helvetica', 'normal'); doc2.setTextColor.apply(doc2, DARK_GRAY);
+            doc2.text('Datum: ' + nlDate(opts.eventDatum || '') + (opts.eventGasten ? '   •   Gasten: ' + opts.eventGasten : ''), mL2, y2);
+            y2 += 8;
+
+            // Table
+            var haccpHead = [['Tijd', 'Type Check', 'Product', 'Temp', 'Status', 'Chef']];
+            var haccpBody = (opts.records || []).map(function (r) {
+                var ctLabels = { ontvangst: 'Ontvangst', opslag: 'Opslag/Koeling', bereiding: 'Bereiding', regenereren: 'Regenereren', uitgifte: 'Uitgifte' };
+                return [
+                    (r.tijd || '') + (r.datum ? ' (' + nlDate(r.datum) + ')' : ''),
+                    ctLabels[r.check_type] || r.type || '',
+                    r.wat || '',
+                    r.temp + '°C',
+                    r.status === 'ok' ? 'OK' : r.status === 'warn' ? 'LET OP' : 'AFWIJKING',
+                    r.chef || 'Cor'
+                ];
+            });
+
+            doc2.autoTable({
+                startY: y2,
+                head: haccpHead,
+                body: haccpBody,
+                margin: { left: mL2, right: mR2 },
+                styles: { fontSize: 8, cellPadding: 3, textColor: BLACK, lineColor: [200, 200, 200], lineWidth: 0.2 },
+                headStyles: { fillColor: [200, 50, 50], textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+                columnStyles: {
+                    0: { cellWidth: 35 }, 1: { cellWidth: 28 }, 2: { cellWidth: 'auto' },
+                    3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                    4: { cellWidth: 22, halign: 'center' }, 5: { cellWidth: 20 }
+                },
+                didParseCell: function (data) {
+                    if (data.section === 'body' && data.column.index === 4) {
+                        var val = data.cell.raw;
+                        if (val === 'AFWIJKING') { data.cell.styles.textColor = [200, 50, 50]; data.cell.styles.fontStyle = 'bold'; }
+                        else if (val === 'LET OP') { data.cell.styles.textColor = [200, 150, 0]; data.cell.styles.fontStyle = 'bold'; }
+                        else { data.cell.styles.textColor = [34, 150, 80]; }
+                    }
+                },
+                theme: 'grid'
+            });
+
+            // Footer
+            var fy2 = doc2.lastAutoTable.finalY + 12;
+            doc2.setDrawColor.apply(doc2, GOLD); doc2.setLineWidth(0.3);
+            doc2.line(mL2, fy2, pageW2 - mR2, fy2);
+            fy2 += 5;
+            doc2.setFontSize(7); doc2.setFont('helvetica', 'italic'); doc2.setTextColor.apply(doc2, MID_GRAY);
+            doc2.text('Digitaal HACCP Dossier — Gegenereerd door BBQ Architect op ' + new Date().toLocaleString('nl-NL'), pageW2 / 2, fy2, { align: 'center' });
+            fy2 += 3;
+            doc2.text('Dit document dient als bewijs van temperatuurregistratie conform HACCP-normen.', pageW2 / 2, fy2, { align: 'center' });
+
+            // Bottom bar
+            doc2.setFillColor.apply(doc2, GOLD);
+            doc2.rect(0, 294, pageW2, 3, 'F');
+
+            doc2.save('HACCP_Rapport_' + (opts.eventName || 'event').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+            return;
+        }
+
+        // ═══ INVOICE / QUOTE PDF ═══
         var form = opts.form;
         var s = opts.settings || {};
         var totals = opts.totals;

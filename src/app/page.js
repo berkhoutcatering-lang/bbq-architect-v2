@@ -12,6 +12,7 @@ export default function Dashboard() {
   var sug = useSupabase('prep_suggestions', []);
   var gan = useSupabase('gangen', []);
   var ger = useSupabase('gerechten', []);
+  var hac = useSupabase('haccp_records', []);
 
   var events = ev.data;
   var facturen = fac.data;
@@ -21,6 +22,7 @@ export default function Dashboard() {
   var suggestions = sug.data;
   var gangenData = gan.data;
   var gerechtenData = ger.data;
+  var haccpRecords = hac.data;
 
   // Stats
   var totalEvents = events.length;
@@ -110,6 +112,14 @@ export default function Dashboard() {
     return m.gasten > 0 && m.margePct < 60 && o.datum >= today;
   });
 
+  // HACCP MISSING LOGS
+  var haccpMissing = offertes.filter(function (o) {
+    if (o.status !== 'definitief' || !o.datum || o.datum < today) return false;
+    var hasLogs = haccpRecords.some(function (r) { return r.offerte_id === String(o.id); });
+    return !hasLogs;
+  });
+
+
   return (
     <>
       {/* BUS-CHECK WARNING */}
@@ -158,6 +168,25 @@ export default function Dashboard() {
           </Link>
         );
       })}
+
+      {/* HACCP MISSING-LOG WARNING */}
+      {haccpMissing.map(function (o) {
+        return (
+          <Link href="/haccp" key={'haccp-' + o.id} style={{ textDecoration: 'none', display: 'block', marginBottom: 12 }}>
+            <div className="haccp-missing-banner">
+              <i className="fa-solid fa-shield-halved" style={{ fontSize: 16, color: '#c83232' }}></i>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: 13 }}>🌡️ HACCP metingen ontbreken — {o.client_naam}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Geen temperatuurregistraties voor dit event ({o.datum})
+                </div>
+              </div>
+              <span className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>Registreren →</span>
+            </div>
+          </Link>
+        );
+      })}
+
 
       {/* FLOATING LOW-STOCK ALERTS */}
       {lowStockItems.length > 0 && (

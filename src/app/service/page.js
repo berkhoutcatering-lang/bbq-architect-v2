@@ -25,6 +25,10 @@ export default function ServiceMode() {
     var modalStartRef = useRef(null);
     var [modalElapsed, setModalElapsed] = useState(0);
 
+    // ═══ HACCP Quick-Log State ═══
+    var [tempPopup, setTempPopup] = useState(null); // { slug, temp, dishName, defaultTemp }
+    var [busLog, setBusLog] = useState({ koelTemp: 4, schoonmaak: false, saved: false });
+
     useEffect(function () {
         loadData();
         return function () {
@@ -123,7 +127,54 @@ export default function ServiceMode() {
         showToast('🔥 The Architect — GO!', 'info');
     }
 
-    // ═══ FINISH GANG — Gang Uitgeserveerd ═══
+    // ═══ FINISH GANG — Now shows Quick-Log popup first ═══
+    function requestFinishGang(slug) {
+        // Find dish names for this gang
+        var dishNames = menuSelectie[slug] || [];
+        var dishName = dishNames.length > 0 ? dishNames.join(', ') : slug;
+        // Smart default temp based on gang type
+        var defaultTemp = 75; // kern temp default
+        var gangObj = gangen.find(function (g) { return g.slug === slug; });
+        if (gangObj) {
+            var gangNaam = (gangObj.naam || '').toLowerCase();
+            if (gangNaam.indexOf('dessert') >= 0 || gangNaam.indexOf('ijs') >= 0) defaultTemp = 4;
+            else if (gangNaam.indexOf('amuse') >= 0 || gangNaam.indexOf('bite') >= 0) defaultTemp = 65;
+        }
+        setTempPopup({ slug: slug, temp: defaultTemp, dishName: dishName, defaultTemp: defaultTemp });
+    }
+
+    async function confirmTempAndFinish() {
+        if (!tempPopup) return;
+        var slug = tempPopup.slug;
+        // Save HACCP record
+        try {
+            await supabase.from('haccp_records').insert([{
+                event_id: null,
+                offerte_id: String(selectedId),
+                gang_slug: slug,
+                type: 'kern',
+                check_type: 'uitgifte',
+                wat: tempPopup.dishName,
+                temp: tempPopup.temp,
+                datum: new Date().toISOString().slice(0, 10),
+                tijd: new Date().toTimeString().slice(0, 5),
+                chef: 'Cor',
+                status: tempPopup.temp >= 75 ? 'ok' : tempPopup.temp >= 65 ? 'warn' : tempPopup.temp <= 7 ? 'ok' : 'danger',
+                auto_logged: true,
+                notitie: 'Quick-log via Service Mode'
+            }]);
+        } catch (e) { console.error('[HACCP] Quick-log error:', e); }
+        setTempPopup(null);
+        finishGang(slug);
+    }
+
+    function skipTempAndFinish() {
+        if (!tempPopup) return;
+        var slug = tempPopup.slug;
+        setTempPopup(null);
+        finishGang(slug);
+    }
+
     async function finishGang(slug) {
         var now = new Date();
         var elapsed = modalElapsed;
@@ -161,6 +212,45 @@ export default function ServiceMode() {
 
         showToast('✅ Gang uitgeserveerd! ' + formatTime(elapsed));
         loadHistorie();
+    }
+
+    // ═══ BUS-LOG — Pre-departure HACCP checks ═══
+    async function saveBusLog() {
+        try {
+            await supabase.from('haccp_records').insert([
+                {
+                    offerte_id: String(selectedId),
+                    type: 'koeling',
+                    check_type: 'opslag',
+                    wat: 'Koeling bus (vertrek)',
+                    temp: busLog.koelTemp,
+                    datum: new Date().toISOString().slice(0, 10),
+                    tijd: new Date().toTimeString().slice(0, 5),
+                    chef: 'Cor',
+                    status: busLog.koelTemp >= 0 && busLog.koelTemp <= 7 ? 'ok' : busLog.koelTemp <= 10 ? 'warn' : 'danger',
+                    auto_logged: false,
+                    notitie: 'Bus-Log vertrekcheck'
+                },
+                {
+                    offerte_id: String(selectedId),
+                    type: 'kern',
+                    check_type: 'bereiding',
+                    wat: 'Schoonmaak & hygiëne check',
+                    temp: 0,
+                    datum: new Date().toISOString().slice(0, 10),
+                    tijd: new Date().toTimeString().slice(0, 5),
+                    chef: 'Cor',
+                    status: busLog.schoonmaak ? 'ok' : 'danger',
+                    auto_logged: false,
+                    notitie: busLog.schoonmaak ? 'Materialen + Yoders OK' : 'Schoonmaak NIET bevestigd'
+                }
+            ]);
+            setBusLog(Object.assign({}, busLog, { saved: true }));
+            showToast('✅ Bus-Log opgeslagen — HACCP dossier compleet');
+        } catch (e) {
+            console.error('[HACCP] Bus-Log error:', e);
+            showToast('Fout bij opslaan Bus-Log', 'error');
+        }
     }
 
     function formatTime(seconds) {
@@ -491,6 +581,50 @@ export default function ServiceMode() {
                                     </span>
                                 </div>
                             </div>
+
+                            {/* ═══ BUS-LOG — Critical Control Points ═══ */}
+                            {!busLog.saved ? (
+                                <div className="bus-log-panel">
+                                    <div className="bus-log-head">
+                                        <i className="fa-solid fa-clipboard-check" style={{ color: '#B48C14' }}></i>
+                                        <span>Bus-Log — Vertrekcheck</span>
+                                    </div>
+
+                                    <div className="bus-log-item">
+                                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🌡️ Koeling Bus Temperatuur</div>
+                                        <div className="temp-adjust-row">
+                                            <button type="button" className="temp-adjust-btn" onClick={function () { setBusLog(Object.assign({}, busLog, { koelTemp: busLog.koelTemp - 1 })); }}>−</button>
+                                            <div className={'temp-display' + (busLog.koelTemp >= 0 && busLog.koelTemp <= 7 ? ' temp-ok' : busLog.koelTemp <= 10 ? ' temp-warn' : ' temp-danger')}>
+                                                {busLog.koelTemp}°C
+                                            </div>
+                                            <button type="button" className="temp-adjust-btn" onClick={function () { setBusLog(Object.assign({}, busLog, { koelTemp: busLog.koelTemp + 1 })); }}>+</button>
+                                        </div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>Norm: 0-7°C</div>
+                                    </div>
+
+                                    <div className="bus-log-item">
+                                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🧹 Schoonmaak & Hygiëne</div>
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>Materialen en Yoders gecontroleerd op hygiëne voor vertrek</div>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <button type="button" className={'btn btn-sm ' + (busLog.schoonmaak ? 'btn-green' : 'btn-ghost')}
+                                                style={{ flex: 1, fontSize: 16, padding: '12px 0' }}
+                                                onClick={function () { setBusLog(Object.assign({}, busLog, { schoonmaak: true })); }}>✅ JA</button>
+                                            <button type="button" className={'btn btn-sm ' + (!busLog.schoonmaak ? 'btn-red' : 'btn-ghost')}
+                                                style={{ flex: 1, fontSize: 16, padding: '12px 0' }}
+                                                onClick={function () { setBusLog(Object.assign({}, busLog, { schoonmaak: false })); }}>❌ NEE</button>
+                                        </div>
+                                    </div>
+
+                                    <button className="btn btn-brand" style={{ width: '100%', marginTop: 12, padding: '14px 0', fontSize: 14 }} onClick={saveBusLog}>
+                                        <i className="fa-solid fa-check-double"></i> Bus-Log Opslaan
+                                    </button>
+                                </div>
+                            ) : (
+                                <div style={{ marginTop: 16, padding: 16, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.2)', borderRadius: 12, textAlign: 'center' }}>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>✅ Bus-Log Compleet</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>HACCP dossier voor dit event is afgesloten</div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -637,12 +771,36 @@ export default function ServiceMode() {
                         <div className="architect-bottom">
                             <button
                                 className="architect-finish-btn"
-                                onClick={function () { finishGang(activeModal); }}
+                                onClick={function () { requestFinishGang(activeModal); }}
                             >
                                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                                 <span>GANG UITGESERVEERD</span>
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ HACCP Quick-Log Temperature Popup ═══ */}
+            {tempPopup && (
+                <div className="temp-popup-overlay">
+                    <div className="temp-popup">
+                        <div className="temp-popup-head">
+                            <span>🌡️ Kern Temperatuur?</span>
+                            <button className="temp-popup-skip" onClick={skipTempAndFinish}>Skip →</button>
+                        </div>
+                        <div className="temp-popup-dish">{tempPopup.dishName}</div>
+                        <div className="temp-adjust-row">
+                            <button type="button" className="temp-adjust-btn temp-minus" onClick={function () { setTempPopup(Object.assign({}, tempPopup, { temp: tempPopup.temp - 1 })); }}>−</button>
+                            <div className={'temp-display temp-display-lg' + (tempPopup.temp >= 75 ? ' temp-ok' : tempPopup.temp >= 65 ? ' temp-warn' : tempPopup.temp <= 7 ? ' temp-ok' : ' temp-danger')}>
+                                {tempPopup.temp}°C
+                            </div>
+                            <button type="button" className="temp-adjust-btn temp-plus" onClick={function () { setTempPopup(Object.assign({}, tempPopup, { temp: tempPopup.temp + 1 })); }}>+</button>
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 4 }}>Standaard: {tempPopup.defaultTemp}°C — tik +/− om aan te passen</div>
+                        <button className="btn btn-brand temp-popup-confirm" onClick={confirmTempAndFinish}>
+                            <i className="fa-solid fa-check"></i> Bevestig & Serveer
+                        </button>
                     </div>
                 </div>
             )}
