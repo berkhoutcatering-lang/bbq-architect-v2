@@ -86,19 +86,26 @@ export default function Dashboard() {
     }, 0);
   }
   function calcMargeForOfferte(o) {
-    var gasten = o.aantal_gasten || (o.items && o.items[0] ? o.items[0].qty : 0) || 0;
-    var pp = o.basis_prijs_pp || 38.50;
-    var revenue = gasten * pp;
-    var fcPP = 0;
-    (o.menu_selectie || []).forEach(function (s) { fcPP += calcDishCostPP(s.gerecht_naam || s.naam || ''); });
-    var fcTotal = fcPP * gasten;
-    var vk = (o.vaste_kosten || []).reduce(function (s2, k) { return s2 + (parseFloat(k.bedrag) || 0); }, 0);
-    var profit = revenue - fcTotal - vk;
-    var pct = revenue > 0 ? (profit / revenue) * 100 : 0;
-    return { gasten: gasten, omzet: revenue, foodcost: fcTotal, vasteKosten: vk, winst: profit, margePct: pct };
+    try {
+      var gasten = o.aantal_gasten || (o.items && o.items[0] ? o.items[0].qty : 0) || 0;
+      var pp = o.basis_prijs_pp || 38.50;
+      var revenue = gasten * pp;
+      var fcPP = 0;
+      var ms = o.menu_selectie;
+      if (Array.isArray(ms)) ms.forEach(function (s) { if (s) fcPP += calcDishCostPP(s.gerecht_naam || s.naam || ''); });
+      var fcTotal = fcPP * gasten;
+      var vk = Array.isArray(o.vaste_kosten) ? o.vaste_kosten : [];
+      var vasteKosten = vk.reduce(function (s2, k) { return s2 + (parseFloat(k.bedrag) || 0); }, 0);
+      var profit = revenue - fcTotal - vasteKosten;
+      var pct = revenue > 0 ? (profit / revenue) * 100 : 0;
+      return { gasten: gasten, omzet: revenue, foodcost: fcTotal, vasteKosten: vasteKosten, winst: profit, margePct: pct };
+    } catch (e) {
+      console.error('[MARGE] dashboard calc error:', e);
+      return { gasten: 0, omzet: 0, foodcost: 0, vasteKosten: 0, winst: 0, margePct: 0 };
+    }
   }
   var lowMargeOffertes = offertes.filter(function (o) {
-    if (!o.menu_selectie || (o.menu_selectie || []).length === 0) return false;
+    if (!o.menu_selectie || !Array.isArray(o.menu_selectie) || o.menu_selectie.length === 0) return false;
     var m = calcMargeForOfferte(o);
     return m.gasten > 0 && m.margePct < 60 && o.datum >= today;
   });
