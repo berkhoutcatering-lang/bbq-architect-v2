@@ -34,7 +34,7 @@ export default function Voorraad() {
 
     function newItem() {
         setEditing('new');
-        setForm({ naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, unit: 'kg', purchase_price: 0, supplier: '' });
+        setForm({ naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, unit: 'kg', purchase_price: 0, supplier: '', yield_factor: 1.0 });
     }
 
     function editItem(item) { setEditing(item.id); setForm(JSON.parse(JSON.stringify(item))); }
@@ -104,6 +104,8 @@ export default function Voorraad() {
                             <input type="number" step="0.1" value={form.min_stock} onChange={function (e) { setField('min_stock', parseFloat(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Inkoopprijs per {form.unit}</label>
                             <input type="number" step="0.01" value={form.purchase_price} onChange={function (e) { setField('purchase_price', parseFloat(e.target.value) || 0); }} /></div>
+                        <div className="field"><label>Yield Factor <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>(bereidingsverlies, bijv. 0.85 = 15% krimp)</span></label>
+                            <input type="number" step="0.05" min="0.1" max="1" value={form.yield_factor != null ? form.yield_factor : 1.0} onChange={function (e) { setField('yield_factor', parseFloat(e.target.value) || 1.0); }} /></div>
                         <div className="field"><label>Leverancier</label>
                             <input value={form.supplier} onChange={function (e) { setField('supplier', e.target.value); }} placeholder="bijv. Sligro, Hanos..." /></div>
                     </div>

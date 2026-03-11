@@ -11,6 +11,8 @@ import MenuWizard from '@/components/MenuWizard';
 export default function Offertes() {
     var { data: offertes, insert, update, remove } = useSupabase('offertes', []);
     var facturen = useSupabase('facturen', []);
+    var { data: gerechtenData } = useSupabase('gerechten', []);
+    var { data: inventoryData } = useSupabase('inventory', []);
     var { settings } = useSettings();
     var showToast = useToast();
     var showConfirm = useConfirm();
@@ -18,6 +20,44 @@ export default function Offertes() {
     var [form, setForm] = useState(null);
     var [showWizard, setShowWizard] = useState(false);
     var [showWizardForExisting, setShowWizardForExisting] = useState(false);
+    var [vasteKostenInput, setVasteKostenInput] = useState({ naam: '', bedrag: '' });
+
+    // ── Marge Calculation Engine ──
+    function getInvPrice(naam) {
+        var inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
+        return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
+    }
+    function calcDishCostPP(gerechtNaam) {
+        var gerecht = gerechtenData.find(function (g) { return g.naam === gerechtNaam; });
+        if (!gerecht || !gerecht.ingredient_costs) return 0;
+        return (gerecht.ingredient_costs || []).reduce(function (sum, item) {
+            var inv = getInvPrice(item.naam);
+            var price = inv ? inv.price : 0;
+            var yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
+            var unitFactor = 1;
+            if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
+            if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
+            return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
+        }, 0);
+    }
+    function calcOfferteMargeData(offerte) {
+        var gasten = offerte.aantal_gasten || (offerte.items && offerte.items[0] ? offerte.items[0].qty : 0) || 0;
+        var prijsPP = offerte.basis_prijs_pp || 38.50;
+        var omzet = gasten * prijsPP;
+        var menuGerechten = offerte.menu_selectie || [];
+        var foodcostPP = 0;
+        menuGerechten.forEach(function (sel) {
+            foodcostPP += calcDishCostPP(sel.gerecht_naam || sel.naam || '');
+        });
+        var foodcostTotaal = foodcostPP * gasten;
+        var vasteKosten = (offerte.vaste_kosten || []).reduce(function (s, k) { return s + (parseFloat(k.bedrag) || 0); }, 0);
+        var nettoWinst = omzet - foodcostTotaal - vasteKosten;
+        var margePct = omzet > 0 ? (nettoWinst / omzet) * 100 : 0;
+        return { gasten: gasten, prijsPP: prijsPP, omzet: omzet, foodcostPP: foodcostPP, foodcostTotaal: foodcostTotaal, vasteKosten: vasteKosten, nettoWinst: nettoWinst, margePct: margePct };
+    }
+    function margeColor(pct) { return pct > 70 ? 'green' : pct >= 60 ? 'orange' : 'red'; }
+    function margeLabel(pct) { return pct > 70 ? 'Strong' : pct >= 60 ? 'Watchful' : 'Low Margin'; }
+    function margeEmoji(pct) { return pct > 70 ? '\ud83d\udfe2' : pct >= 60 ? '\ud83d\udfe1' : '\ud83d\udd34'; }
 
     function handleWizardComplete(result) {
         var geldigDagen = (settings && settings.offerte_geldig) || 30;
@@ -391,6 +431,88 @@ export default function Offertes() {
                         {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur}><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
+
+                    {/* ═══ VASTE KOSTEN ═══ */}
+                    <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
+                            ⚙️ Vaste Kosten per Event
+                        </div>
+                        {(form.vaste_kosten || []).length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                                {(form.vaste_kosten || []).map(function (k, idx) {
+                                    return (
+                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(180,140,20,.04)', borderRadius: 8, border: '1px solid rgba(180,140,20,.1)' }}>
+                                            <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{k.naam}</span>
+                                            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--brand)' }}>€{(parseFloat(k.bedrag) || 0).toFixed(2)}</span>
+                                            <button type="button" className="tag-remove" onClick={function () {
+                                                var items = (form.vaste_kosten || []).slice();
+                                                items.splice(idx, 1);
+                                                setField('vaste_kosten', items);
+                                            }}>×</button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                            <div className="field" style={{ flex: 1 }}>
+                                <label>Kostenpost</label>
+                                <input value={vasteKostenInput.naam} onChange={function (e) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { naam: e.target.value })); }}
+                                    placeholder="bijv. Brandstof, Personeel" style={{ fontSize: 12, padding: '7px 10px' }} />
+                            </div>
+                            <div className="field" style={{ width: 100 }}>
+                                <label>Bedrag €</label>
+                                <input type="number" step="0.01" value={vasteKostenInput.bedrag}
+                                    onChange={function (e) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { bedrag: e.target.value })); }}
+                                    placeholder="75" style={{ fontSize: 12, padding: '7px 10px' }} />
+                            </div>
+                            <button type="button" className="btn btn-brand btn-sm" style={{ height: 34 }} onClick={function () {
+                                if (!vasteKostenInput.naam.trim()) return;
+                                setField('vaste_kosten', (form.vaste_kosten || []).concat([{ naam: vasteKostenInput.naam.trim(), bedrag: parseFloat(vasteKostenInput.bedrag) || 0 }]));
+                                setVasteKostenInput({ naam: '', bedrag: '' });
+                            }}>+</button>
+                        </div>
+                    </div>
+
+                    {/* ═══ PROFIT BREAKDOWN ═══ */}
+                    {(function () {
+                        var m = calcOfferteMargeData(form);
+                        if (m.gasten === 0) return null;
+                        var color = margeColor(m.margePct);
+                        var barWidth = Math.min(100, Math.max(0, m.margePct));
+                        return (
+                            <div className="profit-breakdown">
+                                <div className="profit-breakdown-head">
+                                    <span style={{ fontWeight: 800, fontSize: 13 }}>📊 Profit Breakdown</span>
+                                    <span className={'marge-badge marge-' + color}>{margeEmoji(m.margePct)} {m.margePct.toFixed(1)}% {margeLabel(m.margePct)}</span>
+                                </div>
+                                <div className="profit-breakdown-bar">
+                                    <div className="profit-breakdown-fill" style={{ width: barWidth + '%', background: color === 'green' ? 'var(--green)' : color === 'orange' ? 'var(--amber)' : 'var(--red)' }}></div>
+                                </div>
+                                <div className="profit-breakdown-grid">
+                                    <div className="profit-breakdown-cell">
+                                        <div className="profit-breakdown-label">Omzet</div>
+                                        <div className="profit-breakdown-value" style={{ color: 'var(--green)' }}>€{m.omzet.toFixed(2)}</div>
+                                        <div className="profit-breakdown-sub">{m.gasten} gasten × €{m.prijsPP.toFixed(2)}</div>
+                                    </div>
+                                    <div className="profit-breakdown-cell">
+                                        <div className="profit-breakdown-label">Foodcost</div>
+                                        <div className="profit-breakdown-value" style={{ color: 'var(--red)' }}>-€{m.foodcostTotaal.toFixed(2)}</div>
+                                        <div className="profit-breakdown-sub">€{m.foodcostPP.toFixed(2)} p.p.</div>
+                                    </div>
+                                    <div className="profit-breakdown-cell">
+                                        <div className="profit-breakdown-label">Vaste Kosten</div>
+                                        <div className="profit-breakdown-value" style={{ color: 'var(--amber)' }}>-€{m.vasteKosten.toFixed(2)}</div>
+                                    </div>
+                                    <div className="profit-breakdown-cell">
+                                        <div className="profit-breakdown-label">Netto Winst</div>
+                                        <div className="profit-breakdown-value" style={{ fontSize: 18, fontWeight: 900, color: m.nettoWinst >= 0 ? 'var(--green)' : 'var(--red)' }}>€{m.nettoWinst.toFixed(2)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {showWizardForExisting && <MenuWizard onComplete={handleWizardUpdateExisting} onClose={function () { setShowWizardForExisting(false); }} settings={settings} existingOfferte={form} />}
                 </div>
             </div>
@@ -414,10 +536,14 @@ export default function Offertes() {
                     var total = 0;
                     (o.items || []).forEach(function (item) { total += (item.qty || 0) * (item.prijs || 0); });
                     var pillMap = { concept: 'pill-blue', verzonden: 'pill-amber', geaccepteerd: 'pill-green', akkoord: 'pill-green', betaald: 'pill-green', afgewezen: 'pill-red', verlopen: 'pill-red' };
+                    var m = calcOfferteMargeData(o);
+                    var hasMenu = (o.menu_selectie || []).length > 0;
                     return (
                         <div key={o.id} className="ev-row" onClick={function () { editOfferte(o); }}>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 2 }}>{o.nummer}</div>
+                                <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>{o.nummer}
+                                    {hasMenu && m.gasten > 0 && <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {m.margePct.toFixed(0)}%</span>}
+                                </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.client_naam} — {fmtNl(o.datum)}</div>
                                 {o.notitie && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{o.notitie}</div>}
                             </div>

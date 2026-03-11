@@ -67,6 +67,42 @@ export default function Dashboard() {
     .sort(function (a, b) { return a.datum < b.datum ? -1 : 1; })
     .slice(0, 3);
 
+  // ═══ MARGE CALCULATION ENGINE (Dashboard) ═══
+  function getInvPrice(naam) {
+    var item = inventory.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
+    return item ? { price: item.purchase_price || 0, unit: item.unit || 'kg', yield_factor: item.yield_factor || 1.0 } : null;
+  }
+  function calcDishCostPP(gerechtNaam) {
+    var g = gerechtenData.find(function (d) { return d.naam === gerechtNaam; });
+    if (!g || !g.ingredient_costs) return 0;
+    return (g.ingredient_costs || []).reduce(function (sum, item) {
+      var inv2 = getInvPrice(item.naam);
+      var price = inv2 ? inv2.price : 0;
+      var yld = item.yield || (inv2 ? inv2.yield_factor : 1.0) || 1.0;
+      var uf = 1;
+      if (item.unit === 'g' && inv2 && inv2.unit === 'kg') uf = 0.001;
+      if (item.unit === 'ml' && inv2 && inv2.unit === 'L') uf = 0.001;
+      return sum + ((item.qty_pp || 0) * uf / yld) * price;
+    }, 0);
+  }
+  function calcMargeForOfferte(o) {
+    var gasten = o.aantal_gasten || (o.items && o.items[0] ? o.items[0].qty : 0) || 0;
+    var pp = o.basis_prijs_pp || 38.50;
+    var revenue = gasten * pp;
+    var fcPP = 0;
+    (o.menu_selectie || []).forEach(function (s) { fcPP += calcDishCostPP(s.gerecht_naam || s.naam || ''); });
+    var fcTotal = fcPP * gasten;
+    var vk = (o.vaste_kosten || []).reduce(function (s2, k) { return s2 + (parseFloat(k.bedrag) || 0); }, 0);
+    var profit = revenue - fcTotal - vk;
+    var pct = revenue > 0 ? (profit / revenue) * 100 : 0;
+    return { gasten: gasten, omzet: revenue, foodcost: fcTotal, vasteKosten: vk, winst: profit, margePct: pct };
+  }
+  var lowMargeOffertes = offertes.filter(function (o) {
+    if (!o.menu_selectie || (o.menu_selectie || []).length === 0) return false;
+    var m = calcMargeForOfferte(o);
+    return m.gasten > 0 && m.margePct < 60 && o.datum >= today;
+  });
+
   return (
     <>
       {/* BUS-CHECK WARNING */}
@@ -96,6 +132,25 @@ export default function Dashboard() {
           );
         });
       })()}
+
+      {/* MARGE / PRICE-SHOCK WARNING */}
+      {lowMargeOffertes.map(function (o) {
+        var m = calcMargeForOfferte(o);
+        return (
+          <Link href="/offertes" key={'marge-' + o.id} style={{ textDecoration: 'none', display: 'block', marginBottom: 12 }}>
+            <div className="price-shock-banner">
+              <i className="fa-solid fa-chart-line-down" style={{ fontSize: 16, color: 'var(--red)' }}></i>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: 13 }}>🔴 Low Margin Alert — {o.client_naam}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Marge slechts {m.margePct.toFixed(1)}% — Netto winst €{m.winst.toFixed(2)} op €{m.omzet.toFixed(2)} omzet
+                </div>
+              </div>
+              <span className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>Bekijk →</span>
+            </div>
+          </Link>
+        );
+      })}
 
       {/* FLOATING LOW-STOCK ALERTS */}
       {lowStockItems.length > 0 && (

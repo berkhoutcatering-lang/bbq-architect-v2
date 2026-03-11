@@ -1,12 +1,14 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 
 export default function Gerechten() {
     var showToast = useToast();
     var showConfirm = useConfirm();
+    var { data: inventoryData } = useSupabase('inventory', []);
     var [gangen, setGangen] = useState([]);
     var [gerechten, setGerechten] = useState([]);
     var [activeGang, setActiveGang] = useState(null);
@@ -21,10 +23,12 @@ export default function Gerechten() {
     var [uploading, setUploading] = useState(false);
     var [stats, setStats] = useState(null);
     var [hwInput, setHwInput] = useState({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
+    var [costInput, setCostInput] = useState({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
     var fileInputRef = useRef(null);
     var serviceImageRef = useRef(null);
     var WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
     var HW_CATS = ['servies', 'apparatuur', 'branding', 'meubilair'];
+    var COST_UNITS = ['kg', 'g', 'L', 'ml', 'stuks'];
 
     useEffect(function () { loadData(); }, []);
 
@@ -79,10 +83,12 @@ export default function Gerechten() {
             foto_url: '', ingredienten: [], bereidingswijze: '',
             allergenen: [], tags: [], kostprijs_pp: '',
             service_image: '', battle_plan_steps: [], target_prep_time: 0,
-            hardware_items: [], ingredienten_winkels: {}
+            hardware_items: [], ingredienten_winkels: {},
+            ingredient_costs: []
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
+        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
         setStats(null);
     }
     async function editGerecht(g) {
@@ -102,10 +108,12 @@ export default function Gerechten() {
             battle_plan_steps: g.battle_plan_steps || [],
             target_prep_time: g.target_prep_time || 0,
             hardware_items: g.hardware_items || [],
-            ingredienten_winkels: g.ingredienten_winkels || {}
+            ingredienten_winkels: g.ingredienten_winkels || {},
+            ingredient_costs: g.ingredient_costs || []
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
+        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
         loadStats(g.naam);
     }
 
@@ -257,6 +265,33 @@ export default function Gerechten() {
         else delete winkels[ingredient];
         setForm(Object.assign({}, form, { ingredienten_winkels: winkels }));
     }
+
+    // ── Ingredient Cost helpers ──
+    function addCostItem() {
+        if (!costInput.naam.trim()) return;
+        var items = (form.ingredient_costs || []).concat([Object.assign({}, costInput, { naam: costInput.naam.trim(), qty_pp: parseFloat(costInput.qty_pp) || 0, yield: parseFloat(costInput.yield) || 1.0 })]);
+        setForm(Object.assign({}, form, { ingredient_costs: items }));
+        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
+    }
+    function removeCostItem(idx) {
+        var items = (form.ingredient_costs || []).slice();
+        items.splice(idx, 1);
+        setForm(Object.assign({}, form, { ingredient_costs: items }));
+    }
+    function getInvPrice(naam) {
+        var inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
+        return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
+    }
+    function calcCostPP(item) {
+        var inv = getInvPrice(item.naam);
+        var price = inv ? inv.price : 0;
+        var yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
+        var unitFactor = 1;
+        if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
+        if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
+        return ((item.qty_pp || 0) * unitFactor / yld) * price;
+    }
+    var totalFoodcostPP = (form.ingredient_costs || []).reduce(function (sum, item) { return sum + calcCostPP(item); }, 0);
 
     function formatTime(seconds) {
         var m = Math.floor(seconds / 60);
@@ -574,6 +609,81 @@ export default function Gerechten() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* ═══ INGREDIENT COSTS ═══ */}
+                            <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                    💰 Kostprijsberekening
+                                </div>
+
+                                {/* Existing cost items */}
+                                {(form.ingredient_costs || []).length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                                        {(form.ingredient_costs || []).map(function (item, idx) {
+                                            var inv = getInvPrice(item.naam);
+                                            var costPP = calcCostPP(item);
+                                            return (
+                                                <div key={idx} className="ingredient-cost-row">
+                                                    <div className="ingredient-cost-info">
+                                                        <span className="ingredient-cost-name">{item.naam}</span>
+                                                        {inv ? (
+                                                            <span className="ingredient-cost-linked"><i className="fa-solid fa-link"></i> €{inv.price.toFixed(2)}/{inv.unit}</span>
+                                                        ) : (
+                                                            <span className="ingredient-cost-unlinked"><i className="fa-solid fa-unlink"></i> niet in voorraad</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="ingredient-cost-details">
+                                                        <span className="ingredient-cost-chip">{item.qty_pp} {item.unit}/gast</span>
+                                                        {item.yield && item.yield < 1 && <span className="ingredient-cost-chip">yield {(item.yield * 100).toFixed(0)}%</span>}
+                                                        <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>€{costPP.toFixed(2)}</span>
+                                                    </div>
+                                                    <button type="button" className="tag-remove" onClick={function () { removeCostItem(idx); }}>×</button>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Total */}
+                                        <div className="ingredient-cost-total">
+                                            <span>Totale Foodcost p.p.</span>
+                                            <span className="ingredient-cost-total-value">€{totalFoodcostPP.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Add cost item form */}
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                    <div className="field" style={{ flex: 2, minWidth: 120 }}>
+                                        <label>Ingrediënt</label>
+                                        <input value={costInput.naam} onChange={function (e) { setCostInput(Object.assign({}, costInput, { naam: e.target.value })); }}
+                                            onKeyDown={function (e) { if (e.key === 'Enter') { e.preventDefault(); addCostItem(); } }}
+                                            placeholder="bijv. Bavette" style={{ fontSize: 12, padding: '7px 10px' }}
+                                            list="inv-suggestions" />
+                                        <datalist id="inv-suggestions">
+                                            {inventoryData.map(function (inv) { return <option key={inv.id} value={inv.naam} />; })}
+                                        </datalist>
+                                    </div>
+                                    <div className="field" style={{ width: 80 }}>
+                                        <label>Qty p.p.</label>
+                                        <input type="number" step="0.01" min="0" value={costInput.qty_pp}
+                                            onChange={function (e) { setCostInput(Object.assign({}, costInput, { qty_pp: e.target.value })); }}
+                                            placeholder="0.08" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    </div>
+                                    <div className="field" style={{ width: 70 }}>
+                                        <label>Eenheid</label>
+                                        <select value={costInput.unit} onChange={function (e) { setCostInput(Object.assign({}, costInput, { unit: e.target.value })); }}
+                                            style={{ fontSize: 12, padding: '7px 6px' }}>
+                                            {COST_UNITS.map(function (u) { return <option key={u} value={u}>{u}</option>; })}
+                                        </select>
+                                    </div>
+                                    <div className="field" style={{ width: 70 }}>
+                                        <label>Yield</label>
+                                        <input type="number" step="0.05" min="0.1" max="1" value={costInput.yield}
+                                            onChange={function (e) { setCostInput(Object.assign({}, costInput, { yield: parseFloat(e.target.value) || 1.0 })); }}
+                                            style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    </div>
+                                    <button type="button" className="btn btn-brand btn-sm" onClick={addCostItem} style={{ height: 34 }}>+</button>
+                                </div>
+                            </div>
 
                             {/* Allergenen */}
                             <div className="field">

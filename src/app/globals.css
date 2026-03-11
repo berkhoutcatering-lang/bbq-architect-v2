@@ -3025,3 +3025,249 @@ body {
     width: 100%;
   }
 }
+
+/* ═══════════════════════════════════════════════════
+   MARGE-CALCULATOR — Ingredient Costs, Traffic Light,
+   Profit Breakdown, Price-Shock Banner
+   ═══════════════════════════════════════════════════ */
+
+/* Ingredient Cost Row */
+.ingredient-cost-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(180, 140, 20, .04);
+  border: 1px solid rgba(180, 140, 20, .1);
+  border-radius: 10px;
+  position: relative;
+}
+
+.ingredient-cost-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ingredient-cost-name {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.ingredient-cost-linked {
+  font-size: 10px;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ingredient-cost-unlinked {
+  font-size: 10px;
+  color: var(--red);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.7;
+}
+
+.ingredient-cost-details {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ingredient-cost-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: rgba(255, 191, 0, .08);
+  border: 1px solid rgba(255, 191, 0, .15);
+  border-radius: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ingredient-cost-price {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--brand);
+  min-width: 55px;
+  text-align: right;
+}
+
+.ingredient-cost-price.empty {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.ingredient-cost-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(180, 140, 20, .08);
+  border: 1px solid rgba(180, 140, 20, .18);
+  border-radius: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ingredient-cost-total-value {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--brand);
+}
+
+/* Traffic Light Marge Badge */
+.marge-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.marge-badge-sm {
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+.marge-green {
+  background: rgba(34, 197, 94, .12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, .25);
+  box-shadow: 0 0 8px rgba(34, 197, 94, .15);
+}
+
+.marge-orange {
+  background: rgba(245, 158, 11, .12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, .25);
+  box-shadow: 0 0 8px rgba(245, 158, 11, .15);
+}
+
+.marge-red {
+  background: rgba(239, 68, 68, .12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, .25);
+  box-shadow: 0 0 8px rgba(239, 68, 68, .15);
+  animation: marge-pulse-red 2s ease-in-out infinite;
+}
+
+@keyframes marge-pulse-red {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, .15);
+  }
+
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, .3);
+  }
+}
+
+/* Profit Breakdown Panel */
+.profit-breakdown {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+
+.profit-breakdown-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.profit-breakdown-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, .06);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+
+.profit-breakdown-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profit-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.profit-breakdown-cell {
+  text-align: center;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid rgba(255, 255, 255, .04);
+  border-radius: 12px;
+}
+
+.profit-breakdown-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.profit-breakdown-value {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.profit-breakdown-sub {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Price-Shock Banner */
+.price-shock-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(239, 68, 68, .06);
+  border: 1px solid rgba(239, 68, 68, .18);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.price-shock-banner:hover {
+  background: rgba(239, 68, 68, .1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, .12);
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .profit-breakdown-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ingredient-cost-row {
+    flex-wrap: wrap;
+  }
+
+  .ingredient-cost-details {
+    flex-wrap: wrap;
+  }
+}
