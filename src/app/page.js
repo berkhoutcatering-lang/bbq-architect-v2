@@ -139,7 +139,7 @@ export default function Dashboard() {
         return (
           <Link href="/offertes" key={'marge-' + o.id} style={{ textDecoration: 'none', display: 'block', marginBottom: 12 }}>
             <div className="price-shock-banner">
-              <i className="fa-solid fa-chart-line-down" style={{ fontSize: 16, color: 'var(--red)' }}></i>
+              <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: 16, color: 'var(--red)' }}></i>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 800, fontSize: 13 }}>🔴 Low Margin Alert — {o.client_naam}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>

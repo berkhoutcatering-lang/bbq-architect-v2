@@ -57,7 +57,7 @@ export default function Offertes() {
     }
     function margeColor(pct) { return pct > 70 ? 'green' : pct >= 60 ? 'orange' : 'red'; }
     function margeLabel(pct) { return pct > 70 ? 'Strong' : pct >= 60 ? 'Watchful' : 'Low Margin'; }
-    function margeEmoji(pct) { return pct > 70 ? '\ud83d\udfe2' : pct >= 60 ? '\ud83d\udfe1' : '\ud83d\udd34'; }
+    function margeEmoji(pct) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
 
     function handleWizardComplete(result) {
         var geldigDagen = (settings && settings.offerte_geldig) || 30;
