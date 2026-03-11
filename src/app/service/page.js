@@ -17,10 +17,19 @@ export default function ServiceMode() {
     var [showHistorie, setShowHistorie] = useState(false);
     var intervalRef = useRef({});
 
+    // ═══ THE ARCHITECT — Action Modal State ═══
+    var [activeModal, setActiveModal] = useState(null); // gang slug or null
+    var [modalDishIndex, setModalDishIndex] = useState(0);
+    var [checkedSteps, setCheckedSteps] = useState({});
+    var modalTimerRef = useRef(null);
+    var modalStartRef = useRef(null);
+    var [modalElapsed, setModalElapsed] = useState(0);
+
     useEffect(function () {
         loadData();
         return function () {
             Object.values(intervalRef.current).forEach(clearInterval);
+            if (modalTimerRef.current) clearInterval(modalTimerRef.current);
         };
     }, []);
 
@@ -73,11 +82,13 @@ export default function ServiceMode() {
         if (res.data) setHistorie(res.data);
     }
 
+    // ═══ START GANG — Opens The Architect Modal ═══
     function startGang(slug) {
         var now = new Date();
         setBonStates(function (prev) { return Object.assign({}, prev, { [slug]: 'active' }); });
         setTimers(function (prev) { return Object.assign({}, prev, { [slug]: { start: now, elapsed: 0 } }); });
 
+        // Start background timer for bon card
         intervalRef.current[slug] = setInterval(function () {
             setTimers(function (prev) {
                 var t = prev[slug];
@@ -87,34 +98,68 @@ export default function ServiceMode() {
             });
         }, 1000);
 
+        // Save to DB
         supabase.from('service_logs').insert([{
             offerte_id: selectedId,
             gang_slug: slug,
             started_at: now.toISOString()
         }]);
 
-        showToast('⏱️ Gang gestart!', 'info');
+        // Open The Architect modal
+        setActiveModal(slug);
+        setModalDishIndex(0);
+        setCheckedSteps({});
+        setModalElapsed(0);
+        modalStartRef.current = now;
+
+        // Start modal timer
+        if (modalTimerRef.current) clearInterval(modalTimerRef.current);
+        modalTimerRef.current = setInterval(function () {
+            if (modalStartRef.current) {
+                setModalElapsed(Math.floor((Date.now() - modalStartRef.current.getTime()) / 1000));
+            }
+        }, 100);
+
+        showToast('🔥 The Architect — GO!', 'info');
     }
 
-    async function serveGang(slug) {
+    // ═══ FINISH GANG — Gang Uitgeserveerd ═══
+    async function finishGang(slug) {
         var now = new Date();
-        var elapsed = timers[slug] ? timers[slug].elapsed : 0;
+        var elapsed = modalElapsed;
 
+        // Stop modal timer
+        if (modalTimerRef.current) {
+            clearInterval(modalTimerRef.current);
+            modalTimerRef.current = null;
+        }
+
+        // Stop bon timer
         if (intervalRef.current[slug]) {
             clearInterval(intervalRef.current[slug]);
             delete intervalRef.current[slug];
         }
 
+        // Update states
         setBonStates(function (prev) { return Object.assign({}, prev, { [slug]: 'served' }); });
         setFinalTimes(function (prev) { return Object.assign({}, prev, { [slug]: elapsed }); });
+        setTimers(function (prev) { return Object.assign({}, prev, { [slug]: { start: null, elapsed: elapsed } }); });
 
+        // Save to DB
         await supabase.from('service_logs')
-            .update({ served_at: now.toISOString(), duration_seconds: elapsed })
+            .update({
+                served_at: now.toISOString(),
+                duration_seconds: elapsed
+            })
             .eq('offerte_id', selectedId)
             .eq('gang_slug', slug)
             .is('served_at', null);
 
-        showToast('✅ Gang geserveerd!');
+        // Close modal
+        setActiveModal(null);
+        modalStartRef.current = null;
+
+        showToast('✅ Gang uitgeserveerd! ' + formatTime(elapsed));
         loadHistorie();
     }
 
@@ -124,7 +169,6 @@ export default function ServiceMode() {
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    // Bereken gemiddelde tijd per gang slug uit historie
     function getAvgTime(slug) {
         var gangLogs = historie.filter(function (h) { return h.gang_slug === slug && h.duration_seconds > 0; });
         if (gangLogs.length === 0) return null;
@@ -139,14 +183,12 @@ export default function ServiceMode() {
 
     var allServed = gangen.length > 0 && gangen.every(function (g) { return bonStates[g.slug] === 'served'; });
 
-    // Groepeer historie per offerte
     function getHistoriePerEvent() {
         var eventMap = {};
         historie.forEach(function (log) {
             if (!eventMap[log.offerte_id]) eventMap[log.offerte_id] = [];
             eventMap[log.offerte_id].push(log);
         });
-        // Match met offerte info
         return Object.keys(eventMap).map(function (oid) {
             var off = offertes.find(function (o) { return o.id === oid; });
             return {
@@ -155,16 +197,41 @@ export default function ServiceMode() {
                 datum: off ? off.datum : '',
                 logs: eventMap[oid]
             };
-        }).slice(0, 10); // Max 10 events
+        }).slice(0, 10);
+    }
+
+    // ═══ ARCHITECT MODAL — Get dishes for active gang ═══
+    var modalGang = activeModal ? gangen.find(function (g) { return g.slug === activeModal; }) : null;
+    var modalDishNames = activeModal && menuSelectie[activeModal] ? menuSelectie[activeModal] : [];
+    var modalDishes = modalDishNames.map(function (name) {
+        return gerechtenDb.find(function (g) { return g.naam === name && g.gang_slug === activeModal; }) || { naam: name };
+    });
+    var currentDish = modalDishes[modalDishIndex] || {};
+    var currentSteps = currentDish.battle_plan_steps || [];
+    var currentImage = currentDish.service_image || currentDish.foto_url || '';
+    var targetTime = currentDish.target_prep_time || 0;
+    var isOvertime = targetTime > 0 && modalElapsed > targetTime;
+
+    // Toggle check step
+    function toggleStep(stepIdx) {
+        var key = modalDishIndex + '_' + stepIdx;
+        setCheckedSteps(function (prev) {
+            var next = Object.assign({}, prev);
+            next[key] = !next[key];
+            return next;
+        });
     }
 
     return (
         <div className="main-content" style={{ maxWidth: 1200 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>📋 Service Mode</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B48C14" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'text-bottom', marginRight: 8 }}><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+                Service Mode — The Architect
+            </h2>
 
             {!selectedId ? (
                 <div>
-                    <p style={{ color: 'var(--muted)', marginBottom: 16 }}>Selecteer een event om de bonnen te starten:</p>
+                    <p style={{ color: 'var(--muted)', marginBottom: 16 }}>Selecteer een event om de service te starten:</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {offertes.map(function (o) {
                             return (
@@ -264,7 +331,6 @@ export default function ServiceMode() {
                             var isExpanded = expandedBon === gang.slug;
                             var avgTime = getAvgTime(gang.slug);
 
-                            // Zoek de volledige gerecht-data voor elk dish in deze gang
                             var dishDetails = dishNames.map(function (name) {
                                 return gerechtenDb.find(function (g) { return g.naam === name && g.gang_slug === gang.slug; }) || { naam: name };
                             });
@@ -342,6 +408,16 @@ export default function ServiceMode() {
                                                                 👨‍🍳 {dish.bereidingswijze}
                                                             </div>
                                                         )}
+
+                                                        {/* Battle Plan preview */}
+                                                        {dish.battle_plan_steps && dish.battle_plan_steps.length > 0 && (
+                                                            <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(180,140,20,.06)', borderRadius: 8, borderLeft: '3px solid #B48C14' }}>
+                                                                <div style={{ fontSize: 10, fontWeight: 700, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>⚔️ Battle Plan</div>
+                                                                {dish.battle_plan_steps.map(function (step, j) {
+                                                                    return <div key={j} style={{ fontSize: 12, padding: '2px 0', color: 'var(--text)' }}>{j + 1}. {step}</div>;
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -367,17 +443,20 @@ export default function ServiceMode() {
                                     {/* Action Button */}
                                     {state === 'idle' && (
                                         <button className="bon-action-btn bon-start-btn" onClick={function () { startGang(gang.slug); }}>
-                                            ▶ START
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: 'text-bottom' }}><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                            START
                                         </button>
                                     )}
                                     {state === 'active' && (
-                                        <button className="bon-action-btn bon-serve-btn" onClick={function () { serveGang(gang.slug); }}>
-                                            ✅ GESERVEERD
+                                        <button className="bon-action-btn bon-serve-btn" onClick={function () { setActiveModal(gang.slug); setModalDishIndex(0); setCheckedSteps({}); }}>
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: 'text-bottom' }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
+                                            OPEN ARCHITECT
                                         </button>
                                     )}
                                     {state === 'served' && (
-                                        <div style={{ marginTop: 12, textAlign: 'center', fontSize: 12, color: '#6B7A2F', fontWeight: 700 }}>
-                                            ✓ Klaar in {formatTime(elapsed)}
+                                        <div style={{ marginTop: 12, textAlign: 'center', fontSize: 13, color: '#6B7A2F', fontWeight: 700 }}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7A2F" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, verticalAlign: 'text-bottom' }}><polyline points="20 6 9 17 4 12" /></svg>
+                                            Gereed in {formatTime(elapsed)}
                                         </div>
                                     )}
                                 </div>
@@ -414,6 +493,157 @@ export default function ServiceMode() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* ═══ THE ARCHITECT — FULLSCREEN ACTION MODAL ═══ */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {activeModal && modalGang && (
+                <div className="architect-overlay">
+                    <div className="architect-modal">
+
+                        {/* ─── TOP BAR: Timer + Gang Info ─── */}
+                        <div className="architect-topbar">
+                            <div className="architect-topbar-left">
+                                <div className="architect-gang-badge">
+                                    Gang {gangen.indexOf(modalGang) + 1}
+                                </div>
+                                <div className="architect-gang-name">{modalGang.naam}</div>
+                                <div className="architect-guests">
+                                    <span>🍖 {aantalNormaal}</span>
+                                    {aantalVega > 0 && <span style={{ color: '#6B7A2F' }}>🌿 {aantalVega}</span>}
+                                </div>
+                            </div>
+
+                            <div className={'architect-timer' + (isOvertime ? ' architect-timer-overtime' : '')}>
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="architect-timer-icon">
+                                    <path d="M12 2v4" /><path d="M12 18v4" /><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2 2" />
+                                </svg>
+                                <span className="architect-timer-digits">{formatTime(modalElapsed)}</span>
+                                {targetTime > 0 && (
+                                    <span className="architect-timer-target">
+                                        / {formatTime(targetTime)}
+                                    </span>
+                                )}
+                            </div>
+
+                            <button className="architect-close-btn" onClick={function () { setActiveModal(null); }}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                        </div>
+
+                        {/* ─── DISH NAVIGATION (tabs for multiple dishes) ─── */}
+                        {modalDishes.length > 1 && (
+                            <div className="architect-dish-nav">
+                                {modalDishes.map(function (dish, i) {
+                                    return (
+                                        <button
+                                            key={i}
+                                            className={'architect-dish-tab' + (i === modalDishIndex ? ' active' : '')}
+                                            onClick={function () { setModalDishIndex(i); }}
+                                        >
+                                            <span className="architect-dish-tab-num">{i + 1}</span>
+                                            {dish.naam}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* ─── MAIN CONTENT: Split Layout ─── */}
+                        <div className="architect-content">
+
+                            {/* LEFT: Service Image */}
+                            <div className="architect-left">
+                                {currentImage ? (
+                                    <img src={currentImage} alt={currentDish.naam} className="architect-hero-image" />
+                                ) : (
+                                    <div className="architect-no-image">
+                                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(180,140,20,.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                                        <span>Geen service foto</span>
+                                    </div>
+                                )}
+
+                                {/* Dish info below image */}
+                                <div className="architect-dish-meta">
+                                    <div className="architect-dish-title">
+                                        <span className="architect-dish-qty">[{aantalNormaal}]x</span>
+                                        {currentDish.naam}
+                                    </div>
+                                    {currentDish.beschrijving && (
+                                        <div className="architect-dish-desc">{currentDish.beschrijving}</div>
+                                    )}
+                                    {currentDish.ingredienten && currentDish.ingredienten.length > 0 && (
+                                        <div className="architect-ingredients">
+                                            {currentDish.ingredienten.map(function (ing, i) {
+                                                return <span key={i} className="architect-ing-chip">{ing}</span>;
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* RIGHT: Battle Plan Steps */}
+                            <div className="architect-right">
+                                <div className="architect-steps-header">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B48C14" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                                    <span>Battle Plan</span>
+                                </div>
+
+                                {currentSteps.length > 0 ? (
+                                    <div className="architect-steps-list">
+                                        {currentSteps.map(function (step, i) {
+                                            var stepKey = modalDishIndex + '_' + i;
+                                            var isChecked = checkedSteps[stepKey] || false;
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    className={'architect-step' + (isChecked ? ' checked' : '')}
+                                                    onClick={function () { toggleStep(i); }}
+                                                >
+                                                    <div className="architect-step-check">
+                                                        {isChecked ? (
+                                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6B7A2F" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                        ) : (
+                                                            <div className="architect-step-circle" />
+                                                        )}
+                                                    </div>
+                                                    <span className="architect-step-num">{i + 1}</span>
+                                                    <span className="architect-step-text">{step}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="architect-no-steps">
+                                        {currentDish.bereidingswijze ? (
+                                            <div className="architect-bereiding-fallback">
+                                                <div style={{ fontWeight: 700, marginBottom: 8, color: '#B48C14' }}>👨‍🍳 Bereidingswijze</div>
+                                                {currentDish.bereidingswijze}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(180,140,20,.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                                                <p style={{ color: 'var(--muted)', marginTop: 12 }}>Geen battle plan. Voeg stappen toe in Gerechten beheer.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ─── BOTTOM: Finish Button ─── */}
+                        <div className="architect-bottom">
+                            <button
+                                className="architect-finish-btn"
+                                onClick={function () { finishGang(activeModal); }}
+                            >
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                <span>GANG UITGESERVEERD</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

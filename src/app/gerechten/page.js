@@ -17,9 +17,11 @@ export default function Gerechten() {
     var [tagInput, setTagInput] = useState('');
     var [allergeenInput, setAllergeenInput] = useState('');
     var [labelInput, setLabelInput] = useState('');
+    var [battleInput, setBattleInput] = useState('');
     var [uploading, setUploading] = useState(false);
     var [stats, setStats] = useState(null);
     var fileInputRef = useRef(null);
+    var serviceImageRef = useRef(null);
 
     useEffect(function () { loadData(); }, []);
 
@@ -72,9 +74,10 @@ export default function Gerechten() {
             naam: '', beschrijving: '', gang_slug: activeGang,
             volgorde: gerechten.filter(function (g) { return g.gang_slug === activeGang; }).length + 1,
             foto_url: '', ingredienten: [], bereidingswijze: '',
-            allergenen: [], tags: [], kostprijs_pp: ''
+            allergenen: [], tags: [], kostprijs_pp: '',
+            service_image: '', battle_plan_steps: [], target_prep_time: 0
         });
-        setTagInput(''); setAllergeenInput(''); setLabelInput('');
+        setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setStats(null);
     }
     async function editGerecht(g) {
@@ -89,9 +92,12 @@ export default function Gerechten() {
             bereidingswijze: g.bereidingswijze || '',
             allergenen: g.allergenen || [],
             tags: g.tags || [],
-            kostprijs_pp: g.kostprijs_pp || ''
+            kostprijs_pp: g.kostprijs_pp || '',
+            service_image: g.service_image || '',
+            battle_plan_steps: g.battle_plan_steps || [],
+            target_prep_time: g.target_prep_time || 0
         });
-        setTagInput(''); setAllergeenInput(''); setLabelInput('');
+        setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         loadStats(g.naam);
     }
 
@@ -181,6 +187,28 @@ export default function Gerechten() {
         setForm(Object.assign({}, form, { foto_url: urlData.publicUrl }));
         setUploading(false);
         showToast('📸 Foto geüpload!');
+    }
+
+    async function handleServiceImageUpload(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        setUploading(true);
+        var ext = file.name.split('.').pop();
+        var fileName = 'service_' + Date.now() + '.' + ext;
+        var { data, error } = await supabase.storage
+            .from('gerechten-fotos')
+            .upload(fileName, file, { cacheControl: '3600', upsert: true });
+        if (error) {
+            showToast('Upload fout: ' + error.message, 'error');
+            setUploading(false);
+            return;
+        }
+        var { data: urlData } = supabase.storage
+            .from('gerechten-fotos')
+            .getPublicUrl(fileName);
+        setForm(Object.assign({}, form, { service_image: urlData.publicUrl }));
+        setUploading(false);
+        showToast('🎯 Service foto geüpload!');
     }
 
     // ── Generic Tag Helpers ──
@@ -377,6 +405,68 @@ export default function Gerechten() {
                                     onChange={function (e) { setForm(Object.assign({}, form, { bereidingswijze: e.target.value })); }}
                                     placeholder="bijv. Krokant gyoza vel met gerookte zalm en mierikswortel mayo, garneer met borage cress"
                                     rows={3} style={{ resize: 'vertical' }} />
+                            </div>
+
+                            {/* ═══ SERVICE MODE — THE ARCHITECT ═══ */}
+                            <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                    🔥 The Architect — Service Mode
+                                </div>
+
+                                {/* Service Image */}
+                                <div className="field">
+                                    <label>🎯 Service Foto <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(perfecte opmaak)</span></label>
+                                    {form.service_image ? (
+                                        <div className="foto-upload-zone has-foto">
+                                            <img src={form.service_image} alt="Service" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8 }} />
+                                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { serviceImageRef.current.click(); }}>🔄 Vervangen</button>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { service_image: '' })); }}>🗑️ Verwijder</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="foto-upload-zone" onClick={function () { serviceImageRef.current.click(); }} style={{ borderColor: 'rgba(180,140,20,.2)' }}>
+                                            {uploading ? <span style={{ color: '#B48C14' }}>⏳ Uploaden...</span> : <span>🎯 Klik om service foto te uploaden</span>}
+                                        </div>
+                                    )}
+                                    <input ref={serviceImageRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleServiceImageUpload} />
+                                </div>
+
+                                {/* Battle Plan Steps */}
+                                <div className="field">
+                                    <label>⚔️ Battle Plan <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(stappen voor de chef)</span></label>
+                                    <div className="tag-input-container">
+                                        <div className="tag-list">
+                                            {(form.battle_plan_steps || []).map(function (step, idx) {
+                                                return (
+                                                    <span key={idx} className="battle-step-tag">
+                                                        <span style={{ color: '#B48C14', fontWeight: 700, marginRight: 4 }}>{idx + 1}.</span>
+                                                        {step}
+                                                        <button type="button" className="tag-remove" onClick={function () { removeArrayItem('battle_plan_steps', idx); }}>×</button>
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                        <input className="tag-input" value={battleInput} onChange={function (e) { setBattleInput(e.target.value); }}
+                                            onKeyDown={function (e) { handleTagKeyDown('battle_plan_steps', battleInput, setBattleInput, e); }}
+                                            placeholder="Typ stap + Enter (bijv. Flat Top 220°C)" />
+                                    </div>
+                                </div>
+
+                                {/* Target Prep Time */}
+                                <div className="field">
+                                    <label>⏱️ Doeltijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel, in seconden)</span></label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <input type="number" min="0" step="30" value={form.target_prep_time || ''}
+                                            onChange={function (e) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
+                                            placeholder="bijv. 300 (= 5 min)" style={{ maxWidth: 160 }} />
+                                        {form.target_prep_time > 0 && (
+                                            <span style={{ fontSize: 13, color: '#B48C14', fontWeight: 600 }}>
+                                                = {formatTime(form.target_prep_time)}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Allergenen */}
