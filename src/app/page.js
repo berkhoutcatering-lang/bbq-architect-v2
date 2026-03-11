@@ -69,6 +69,34 @@ export default function Dashboard() {
 
   return (
     <>
+      {/* BUS-CHECK WARNING */}
+      {(function () {
+        var busWarnings = offertes.filter(function (o) {
+          if (o.status !== 'definitief' || !o.menu_selectie) return false;
+          var bc = o.bus_check || {};
+          var checked = (bc.checked || []).length;
+          return !bc.completed_at && o.datum >= today;
+        });
+        if (busWarnings.length === 0) return null;
+        return busWarnings.map(function (o) {
+          var checked = ((o.bus_check || {}).checked || []).length;
+          return (
+            <Link href="/logistiek" key={'bus-' + o.id} style={{ textDecoration: 'none', display: 'block', marginBottom: 12 }}>
+              <div className="bus-warning-banner">
+                <i className="fa-solid fa-truck" style={{ fontSize: 16, color: '#e67e22' }}></i>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13 }}>⚠️ Bussemaker — {o.client_naam}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    Bus niet volledig geladen ({checked} items afgevinkt) — {o.datum}
+                  </div>
+                </div>
+                <span className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>Bus-Check →</span>
+              </div>
+            </Link>
+          );
+        });
+      })()}
+
       {/* FLOATING LOW-STOCK ALERTS */}
       {lowStockItems.length > 0 && (
         <div className="low-stock-float">

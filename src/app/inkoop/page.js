@@ -8,6 +8,8 @@ export default function Inkoop() {
     var { data: leveranciers, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase('leveranciers', []);
     var { data: inkooplijsten, insert: insertInk, update: updateInk, remove: removeInk } = useSupabase('inkooplijsten', []);
     var { data: events } = useSupabase('events', []);
+    var { data: offertes } = useSupabase('offertes', []);
+    var { data: gerechtenData } = useSupabase('gerechten', []);
     var showToast = useToast();
     var showConfirm = useConfirm();
     var [tab, setTab] = useState('leveranciers');
@@ -16,6 +18,7 @@ export default function Inkoop() {
     var [expandedInk, setExpandedInk] = useState(null);
     var [newInkEvent, setNewInkEvent] = useState('');
     var [newInkItem, setNewInkItem] = useState({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' });
+    var [boodschappenOfferte, setBoodschappenOfferte] = useState('');
 
     // Leverancier CRUD
     function newLeverancier() {
@@ -58,6 +61,51 @@ export default function Inkoop() {
         updateInk(list.id, { items: items });
     }
 
+    // ── Boodschappen-Engine ──
+    var boodOfferte = offertes.find(function (o) { return String(o.id) === boodschappenOfferte; });
+    var winkelGroepen = { Sligro: [], Crisp: [], PLUS: [], Overig: [] };
+
+    if (boodOfferte && boodOfferte.menu_selectie) {
+        var menuSel = typeof boodOfferte.menu_selectie === 'string' ? JSON.parse(boodOfferte.menu_selectie) : boodOfferte.menu_selectie;
+        Object.values(menuSel || {}).forEach(function (dishes) {
+            (dishes || []).forEach(function (dishName) {
+                var dish = gerechtenData.find(function (g) { return g.naam === dishName; });
+                if (dish && dish.ingredienten) {
+                    var winkels = dish.ingredienten_winkels || {};
+                    dish.ingredienten.forEach(function (ing) {
+                        var winkel = winkels[ing] || 'Overig';
+                        if (!winkelGroepen[winkel]) winkelGroepen[winkel] = [];
+                        // Avoid duplicates
+                        if (winkelGroepen[winkel].indexOf(ing) < 0) {
+                            winkelGroepen[winkel].push(ing);
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    function copyBoodschappenToClipboard() {
+        var lines = [];
+        lines.push('🛒 BOODSCHAPPENLIJST — ' + (boodOfferte ? boodOfferte.client_naam : '') + ' (' + (boodOfferte ? boodOfferte.datum : '') + ')');
+        lines.push('');
+        Object.keys(winkelGroepen).forEach(function (winkel) {
+            var items = winkelGroepen[winkel];
+            if (items.length > 0) {
+                var icoon = winkel === 'Sligro' ? '🏪' : winkel === 'Crisp' ? '📦' : winkel === 'PLUS' ? '🛒' : '📋';
+                lines.push(icoon + ' ' + winkel.toUpperCase());
+                items.forEach(function (item) { lines.push('  ☐ ' + item); });
+                lines.push('');
+            }
+        });
+        navigator.clipboard.writeText(lines.join('\n')).then(function () {
+            showToast('📋 Lijst gekopieerd naar klembord!', 'success');
+        });
+    }
+
+    var winkelKleuren = { Sligro: '#e67e22', Crisp: '#27ae60', PLUS: '#2980b9', Overig: '#95a5a6' };
+    var winkelIcoon = { Sligro: '🏪', Crisp: '📦', PLUS: '🛒', Overig: '📋' };
+
     // Leverancier editor
     if (editingLev !== null && levForm) {
         return (
@@ -92,6 +140,7 @@ export default function Inkoop() {
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={function () { setTab('leveranciers'); }}>Leveranciers</button>
                 <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={function () { setTab('inkooplijsten'); }}>Inkooplijsten</button>
+                <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={function () { setTab('boodschappen'); }}>🛒 Boodschappen</button>
                 <button className={'tab-btn' + (tab === 'bestellingen' ? ' active' : '')} onClick={function () { setTab('bestellingen'); }}>Bestellingen</button>
             </div>
 
@@ -171,6 +220,73 @@ export default function Inkoop() {
                             </div>
                         );
                     })}
+                </>
+            )}
+
+            {/* ═══ BOODSCHAPPEN TAB ═══ */}
+            {tab === 'boodschappen' && (
+                <>
+                    <div style={{ marginBottom: 16 }}>
+                        <select className="bus-select" value={boodschappenOfferte} onChange={function (e) { setBoodschappenOfferte(e.target.value); }}>
+                            <option value="">— Kies Offerte / Event —</option>
+                            {offertes.filter(function (o) { return o.menu_selectie; }).map(function (o) {
+                                return <option key={o.id} value={String(o.id)}>{o.client_naam} — {o.datum} ({o.aantal_gasten || '?'} gasten)</option>;
+                            })}
+                        </select>
+                    </div>
+
+                    {boodOfferte && (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <div>
+                                    <span style={{ fontWeight: 700, fontSize: 16 }}>{boodOfferte.client_naam}</span>
+                                    <span style={{ color: 'var(--muted)', fontSize: 13, marginLeft: 10 }}>{boodOfferte.datum} • {boodOfferte.aantal_gasten} gasten</span>
+                                </div>
+                                <button className="btn btn-brand btn-sm" onClick={copyBoodschappenToClipboard}>
+                                    📋 Kopieer Lijst
+                                </button>
+                            </div>
+
+                            {Object.keys(winkelGroepen).map(function (winkel) {
+                                var items = winkelGroepen[winkel];
+                                if (items.length === 0) return null;
+                                return (
+                                    <div key={winkel} className="winkel-group">
+                                        <div className="winkel-group-header">
+                                            <span className="winkel-badge" style={{ background: winkelKleuren[winkel] }}>
+                                                {winkelIcoon[winkel]} {winkel}
+                                            </span>
+                                            <span className="winkel-count">{items.length} items</span>
+                                        </div>
+                                        <div className="winkel-items">
+                                            {items.map(function (item, idx) {
+                                                return (
+                                                    <div key={idx} className="winkel-item">
+                                                        <span className="winkel-item-bullet">•</span>
+                                                        <span>{item}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {Object.values(winkelGroepen).every(function (g) { return g.length === 0; }) && (
+                                <div className="empty-state">
+                                    <i className="fa-solid fa-cart-shopping"></i>
+                                    <p>Geen ingrediënten gevonden — tag ingrediënten in Gerechten</p>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {!boodOfferte && !boodschappenOfferte && (
+                        <div className="empty-state">
+                            <i className="fa-solid fa-cart-shopping"></i>
+                            <p>Selecteer een offerte om de boodschappenlijst te genereren</p>
+                        </div>
+                    )}
                 </>
             )}
 

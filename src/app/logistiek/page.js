@@ -1,19 +1,81 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 
 export default function Logistiek() {
     var { data: rtrItems, insert: insertRtr, update: updateRtr, remove: removeRtr, setData: setRtrItems } = useSupabase('rtr_items', []);
     var { data: packLists, insert: insertPack, update: updatePack, remove: removePack } = useSupabase('pack_lists', []);
     var { data: events } = useSupabase('events', []);
+    var { data: offertes, update: updateOfferte } = useSupabase('offertes', []);
+    var { data: gerechtenData } = useSupabase('gerechten', []);
+    var { data: hardwareStandaard } = useSupabase('hardware_items', []);
     var showToast = useToast();
-    var [tab, setTab] = useState('rtr');
+    var [tab, setTab] = useState('buscheck');
     var [newRtr, setNewRtr] = useState('');
     var [newPackEvent, setNewPackEvent] = useState('');
     var [editingPack, setEditingPack] = useState(null);
     var [newPackItem, setNewPackItem] = useState({ text: '', qty: 1 });
+    var [selectedOfferte, setSelectedOfferte] = useState('');
 
+    // ── Bus-Check: berekening ──
+    var busOfferte = offertes.find(function (o) { return String(o.id) === selectedOfferte; });
+    var busItems = [];
+    var busChecked = (busOfferte && busOfferte.bus_check && busOfferte.bus_check.checked) || [];
+
+    if (busOfferte && busOfferte.menu_selectie) {
+        var menuSel = typeof busOfferte.menu_selectie === 'string' ? JSON.parse(busOfferte.menu_selectie) : busOfferte.menu_selectie;
+        var gasten = busOfferte.aantal_gasten || 0;
+        var hwMap = {}; // naam → { totaal, categorie }
+
+        // 1. Hardware van gerechten
+        Object.values(menuSel || {}).forEach(function (dishes) {
+            (dishes || []).forEach(function (dishName) {
+                var dish = gerechtenData.find(function (g) { return g.naam === dishName; });
+                if (dish && dish.hardware_items) {
+                    (dish.hardware_items || []).forEach(function (hw) {
+                        var basis = gasten * (hw.ratio || 1);
+                        var buffer = Math.ceil(basis * (hw.buffer_pct || 0) / 100);
+                        var totaal = Math.ceil(basis) + buffer + (hw.min_extra || 0);
+                        var key = hw.naam;
+                        if (hwMap[key]) {
+                            hwMap[key].totaal += totaal;
+                        } else {
+                            hwMap[key] = { naam: hw.naam, totaal: totaal, categorie: hw.categorie || 'servies', bron: 'gerecht' };
+                        }
+                    });
+                }
+            });
+        });
+
+        // 2. Standaard event hardware
+        hardwareStandaard.filter(function (h) { return h.standaard_event; }).forEach(function (h) {
+            if (!hwMap[h.naam]) {
+                hwMap[h.naam] = { naam: h.naam, totaal: 1, categorie: h.categorie, bron: 'standaard', icoon: h.icoon };
+            }
+        });
+
+        busItems = Object.values(hwMap);
+    }
+
+    var busProgress = busItems.length > 0 ? Math.round((busChecked.length / busItems.length) * 100) : 0;
+
+    function toggleBusItem(naam) {
+        if (!busOfferte) return;
+        var current = (busOfferte.bus_check && busOfferte.bus_check.checked) || [];
+        var next;
+        if (current.indexOf(naam) >= 0) {
+            next = current.filter(function (n) { return n !== naam; });
+        } else {
+            next = current.concat([naam]);
+        }
+        var completedAt = next.length === busItems.length ? new Date().toISOString() : null;
+        updateOfferte(busOfferte.id, { bus_check: { checked: next, completed_at: completedAt } });
+        if (completedAt) showToast('🚛 Bus is compleet geladen!', 'success');
+    }
+
+    // ── RTR ──
     function toggleRtr(item) {
         updateRtr(item.id, { done: !item.done });
     }
@@ -28,6 +90,7 @@ export default function Logistiek() {
         insertRtr({ text: newRtr, done: false }).then(function () { setNewRtr(''); showToast('Item toegevoegd', 'success'); });
     }
 
+    // ── Paklijsten ──
     function createPackList() {
         if (!newPackEvent) { showToast('Kies een event', 'error'); return; }
         insertPack({ event_id: parseInt(newPackEvent), items: [] }).then(function () {
@@ -51,13 +114,90 @@ export default function Logistiek() {
         updatePack(pack.id, { items: items });
     }
 
+    var catIcoon = { servies: '🍽️', apparatuur: '🔥', branding: '💡', meubilair: '🪑' };
+
     return (
         <>
             <div className="tab-bar">
-                <button className={'tab-btn' + (tab === 'rtr' ? ' active' : '')} onClick={function () { setTab('rtr'); }}>RTR Checklist</button>
-                <button className={'tab-btn' + (tab === 'pack' ? ' active' : '')} onClick={function () { setTab('pack'); }}>Paklijsten</button>
+                <button className={'tab-btn' + (tab === 'buscheck' ? ' active' : '')} onClick={function () { setTab('buscheck'); }}>🚛 Bus-Check</button>
+                <button className={'tab-btn' + (tab === 'rtr' ? ' active' : '')} onClick={function () { setTab('rtr'); }}>📦 RTR Checklist</button>
+                <button className={'tab-btn' + (tab === 'pack' ? ' active' : '')} onClick={function () { setTab('pack'); }}>📋 Paklijsten</button>
             </div>
 
+            {/* ═══ BUS-CHECK TAB ═══ */}
+            {tab === 'buscheck' && (
+                <>
+                    <div style={{ marginBottom: 16 }}>
+                        <select className="bus-select" value={selectedOfferte} onChange={function (e) { setSelectedOfferte(e.target.value); }}>
+                            <option value="">— Kies Offerte / Event —</option>
+                            {offertes.filter(function (o) { return o.menu_selectie; }).map(function (o) {
+                                return <option key={o.id} value={String(o.id)}>{o.client_naam} — {o.datum} ({o.aantal_gasten} gasten)</option>;
+                            })}
+                        </select>
+                    </div>
+
+                    {busOfferte && (
+                        <>
+                            {/* Progress bar */}
+                            <div className="bus-progress-container">
+                                <div className="bus-progress-label">
+                                    <span>🚛 Bus is voor <strong>{busProgress}%</strong> geladen</span>
+                                    <span className="bus-progress-count">{busChecked.length} / {busItems.length}</span>
+                                </div>
+                                <div className="bus-progress-bar">
+                                    <div className="bus-progress-fill" style={{ width: busProgress + '%' }}></div>
+                                </div>
+                            </div>
+
+                            {/* Hardware items by category */}
+                            {['servies', 'apparatuur', 'branding', 'meubilair'].map(function (cat) {
+                                var catItems = busItems.filter(function (i) { return i.categorie === cat; });
+                                if (catItems.length === 0) return null;
+                                return (
+                                    <div key={cat} className="bus-category">
+                                        <div className="bus-category-header">
+                                            <span>{catIcoon[cat] || '📦'} {cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
+                                            <span className="bus-category-count">{catItems.filter(function (i) { return busChecked.indexOf(i.naam) >= 0; }).length}/{catItems.length}</span>
+                                        </div>
+                                        {catItems.map(function (item) {
+                                            var checked = busChecked.indexOf(item.naam) >= 0;
+                                            return (
+                                                <div key={item.naam} className={'bus-check-item' + (checked ? ' checked' : '')} onClick={function () { toggleBusItem(item.naam); }}>
+                                                    <div className={'bus-checkbox' + (checked ? ' checked' : '')}>
+                                                        {checked && <i className="fa-solid fa-check"></i>}
+                                                    </div>
+                                                    <div className="bus-item-info">
+                                                        <span className="bus-item-name">{item.naam}</span>
+                                                        {item.bron === 'gerecht' && <span className="bus-item-qty">×{item.totaal}</span>}
+                                                        {item.bron === 'standaard' && <span className="bus-item-badge">STANDAARD</span>}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })}
+
+                            {busItems.length === 0 && (
+                                <div className="empty-state" style={{ marginTop: 24 }}>
+                                    <i className="fa-solid fa-box-open"></i>
+                                    <p>Geen hardware items gekoppeld aan de gerechten van dit menu</p>
+                                    <p style={{ fontSize: 12 }}>Ga naar Gerechten → 🍽️ Hardware per Gast om items toe te voegen</p>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {!busOfferte && !selectedOfferte && (
+                        <div className="empty-state">
+                            <i className="fa-solid fa-truck-loading"></i>
+                            <p>Selecteer een offerte om de bus-check te starten</p>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* ═══ RTR TAB ═══ */}
             {tab === 'rtr' && (
                 <>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -84,6 +224,7 @@ export default function Logistiek() {
                 </>
             )}
 
+            {/* ═══ PAKLIJSTEN TAB ═══ */}
             {tab === 'pack' && (
                 <>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>

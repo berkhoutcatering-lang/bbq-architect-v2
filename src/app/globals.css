@@ -2675,3 +2675,353 @@ body {
     border-radius: 18px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════ */
+/* HARDWARE, LOGISTIEK & BOODSCHAPPEN MODULE                  */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ── Bus-Check Select ── */
+.bus-select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font: 500 14px 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.bus-select:focus {
+  border-color: var(--brand);
+}
+
+/* ── Bus Progress Bar ── */
+.bus-progress-container {
+  background: var(--card);
+  border: var(--glass-border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.bus-progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bus-progress-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.bus-progress-bar {
+  height: 10px;
+  background: rgba(255, 255, 255, .06);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.bus-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e67e22, #f59e0b, #22c55e);
+  border-radius: 5px;
+  transition: width .5s ease;
+  position: relative;
+}
+
+.bus-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, .2) 50%, transparent 100%);
+  animation: busShimmer 2s infinite;
+}
+
+@keyframes busShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Bus Category ── */
+.bus-category {
+  background: var(--card);
+  border: var(--glass-border);
+  border-radius: 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.bus-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  border-bottom: 1px solid var(--border);
+  color: var(--brand);
+}
+
+.bus-category-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ── Bus Check Item ── */
+.bus-check-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .03);
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+
+.bus-check-item:hover {
+  background: rgba(255, 191, 0, .03);
+}
+
+.bus-check-item:last-child {
+  border-bottom: none;
+}
+
+.bus-check-item.checked {
+  opacity: .5;
+}
+
+.bus-checkbox {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, .12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: transparent;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+
+.bus-checkbox.checked {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border-color: #22c55e;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(34, 197, 94, .3);
+}
+
+.bus-item-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bus-item-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.bus-item-qty {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand);
+  background: var(--brand-light);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.bus-item-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  background: rgba(255, 255, 255, .05);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* ── Hardware Item Row (Gerechten Modal) ── */
+.hw-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.hw-item-cat {
+  font-size: 16px;
+}
+
+.hw-item-name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.hw-item-detail {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ── Winkel Tag Row (Gerechten Modal) ── */
+.winkel-tag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid rgba(255, 255, 255, .04);
+  border-radius: 8px;
+}
+
+.winkel-tag-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.winkel-tag-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font: 400 12px 'DM Sans', sans-serif;
+  outline: none;
+  width: 100px;
+}
+
+.winkel-tag-select:focus {
+  border-color: var(--brand);
+}
+
+/* ── Boodschappen Winkel Groups ── */
+.winkel-group {
+  background: var(--card);
+  border: var(--glass-border);
+  border-radius: 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.winkel-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.winkel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.winkel-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.winkel-items {
+  padding: 12px 18px;
+}
+
+.winkel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .03);
+}
+
+.winkel-item:last-child {
+  border-bottom: none;
+}
+
+.winkel-item-bullet {
+  color: var(--brand);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ── Dashboard Bus-Check Warning ── */
+.bus-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(230, 126, 34, .06);
+  border: 1px solid rgba(230, 126, 34, .15);
+  border-radius: 14px;
+  transition: all .2s;
+}
+
+.bus-warning-banner:hover {
+  background: rgba(230, 126, 34, .10);
+  border-color: rgba(230, 126, 34, .25);
+  transform: translateY(-1px);
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+  .bus-checkbox {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+
+  .bus-check-item {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .winkel-items {
+    padding: 10px 14px;
+  }
+
+  .hw-item-row {
+    flex-wrap: wrap;
+  }
+
+  .winkel-tag-row {
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .winkel-tag-select {
+    width: 100%;
+  }
+}

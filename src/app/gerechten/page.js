@@ -20,8 +20,11 @@ export default function Gerechten() {
     var [battleInput, setBattleInput] = useState('');
     var [uploading, setUploading] = useState(false);
     var [stats, setStats] = useState(null);
+    var [hwInput, setHwInput] = useState({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
     var fileInputRef = useRef(null);
     var serviceImageRef = useRef(null);
+    var WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
+    var HW_CATS = ['servies', 'apparatuur', 'branding', 'meubilair'];
 
     useEffect(function () { loadData(); }, []);
 
@@ -75,9 +78,11 @@ export default function Gerechten() {
             volgorde: gerechten.filter(function (g) { return g.gang_slug === activeGang; }).length + 1,
             foto_url: '', ingredienten: [], bereidingswijze: '',
             allergenen: [], tags: [], kostprijs_pp: '',
-            service_image: '', battle_plan_steps: [], target_prep_time: 0
+            service_image: '', battle_plan_steps: [], target_prep_time: 0,
+            hardware_items: [], ingredienten_winkels: {}
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
+        setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
         setStats(null);
     }
     async function editGerecht(g) {
@@ -95,9 +100,12 @@ export default function Gerechten() {
             kostprijs_pp: g.kostprijs_pp || '',
             service_image: g.service_image || '',
             battle_plan_steps: g.battle_plan_steps || [],
-            target_prep_time: g.target_prep_time || 0
+            target_prep_time: g.target_prep_time || 0,
+            hardware_items: g.hardware_items || [],
+            ingredienten_winkels: g.ingredienten_winkels || {}
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
+        setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
         loadStats(g.naam);
     }
 
@@ -229,6 +237,25 @@ export default function Gerechten() {
             e.preventDefault();
             addArrayItem(field, value, setter);
         }
+    }
+
+    // ── Hardware helpers ──
+    function addHardwareItem() {
+        if (!hwInput.naam.trim()) return;
+        var items = (form.hardware_items || []).concat([Object.assign({}, hwInput, { naam: hwInput.naam.trim() })]);
+        setForm(Object.assign({}, form, { hardware_items: items }));
+        setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
+    }
+    function removeHardwareItem(idx) {
+        var items = (form.hardware_items || []).slice();
+        items.splice(idx, 1);
+        setForm(Object.assign({}, form, { hardware_items: items }));
+    }
+    function setWinkelTag(ingredient, winkel) {
+        var winkels = Object.assign({}, form.ingredienten_winkels || {});
+        if (winkel) winkels[ingredient] = winkel;
+        else delete winkels[ingredient];
+        setForm(Object.assign({}, form, { ingredienten_winkels: winkels }));
     }
 
     function formatTime(seconds) {
@@ -468,6 +495,85 @@ export default function Gerechten() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* ═══ HARDWARE ITEMS ═══ */}
+                            <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                    🍽️ Hardware per Gast
+                                </div>
+
+                                {/* Existing hardware items */}
+                                {(form.hardware_items || []).length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                                        {(form.hardware_items || []).map(function (hw, idx) {
+                                            return (
+                                                <div key={idx} className="hw-item-row">
+                                                    <span className="hw-item-cat">{hw.categorie === 'servies' ? '🍽️' : hw.categorie === 'apparatuur' ? '🔥' : hw.categorie === 'branding' ? '💡' : '🪑'}</span>
+                                                    <span className="hw-item-name">{hw.naam}</span>
+                                                    <span className="hw-item-detail">×{hw.ratio}/gast</span>
+                                                    <span className="hw-item-detail">+{hw.buffer_pct}%</span>
+                                                    {hw.min_extra > 0 && <span className="hw-item-detail">+{hw.min_extra} extra</span>}
+                                                    <button type="button" className="tag-remove" onClick={function () { removeHardwareItem(idx); }}>×</button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* Add hardware form */}
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                    <div className="field" style={{ flex: 2, minWidth: 120 }}>
+                                        <label>Item naam</label>
+                                        <input value={hwInput.naam} onChange={function (e) { setHwInput(Object.assign({}, hwInput, { naam: e.target.value })); }}
+                                            onKeyDown={function (e) { if (e.key === 'Enter') { e.preventDefault(); addHardwareItem(); } }}
+                                            placeholder="bijv. Churchill Dessertbord" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    </div>
+                                    <div className="field" style={{ width: 70 }}>
+                                        <label>Ratio</label>
+                                        <input type="number" step="0.1" min="0" value={hwInput.ratio}
+                                            onChange={function (e) { setHwInput(Object.assign({}, hwInput, { ratio: parseFloat(e.target.value) || 0 })); }}
+                                            style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    </div>
+                                    <div className="field" style={{ width: 70 }}>
+                                        <label>Buffer%</label>
+                                        <input type="number" min="0" value={hwInput.buffer_pct}
+                                            onChange={function (e) { setHwInput(Object.assign({}, hwInput, { buffer_pct: parseInt(e.target.value) || 0 })); }}
+                                            style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    </div>
+                                    <div className="field" style={{ width: 80 }}>
+                                        <label>Categorie</label>
+                                        <select value={hwInput.categorie} onChange={function (e) { setHwInput(Object.assign({}, hwInput, { categorie: e.target.value })); }}
+                                            style={{ fontSize: 12, padding: '7px 6px' }}>
+                                            {HW_CATS.map(function (c) { return <option key={c} value={c}>{c}</option>; })}
+                                        </select>
+                                    </div>
+                                    <button type="button" className="btn btn-brand btn-sm" onClick={addHardwareItem} style={{ height: 34 }}>+</button>
+                                </div>
+                            </div>
+
+                            {/* ═══ WINKEL-TAGGING ═══ */}
+                            {(form.ingredienten || []).length > 0 && (
+                                <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                        🛒 Winkel per Ingrediënt
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {(form.ingredienten || []).map(function (ing, idx) {
+                                            var currentWinkel = (form.ingredienten_winkels || {})[ing] || '';
+                                            return (
+                                                <div key={idx} className="winkel-tag-row">
+                                                    <span className="winkel-tag-name">{ing}</span>
+                                                    <select className="winkel-tag-select" value={currentWinkel}
+                                                        onChange={function (e) { setWinkelTag(ing, e.target.value); }}>
+                                                        <option value="">—</option>
+                                                        {WINKELS.map(function (w) { return <option key={w} value={w}>{w}</option>; })}
+                                                    </select>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Allergenen */}
                             <div className="field">
