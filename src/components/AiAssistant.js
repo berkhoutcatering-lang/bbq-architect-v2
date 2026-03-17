@@ -1,6 +1,5 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AiAssistant() {
     var [isOpen, setIsOpen] = useState(false);
@@ -79,80 +78,72 @@ export default function AiAssistant() {
             </button>
 
             {/* Chat Window */}
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="ai-chat-window panel"
-                    >
-                        <div className="panel-head" style={{ padding: '16px', borderBottom: '1px solid var(--border)', background: 'var(--brand)', color: '#000' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <i className="fa-solid fa-robot" style={{ fontSize: '18px' }}></i>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800 }}>BBQ Copilot</h3>
-                                    <p style={{ margin: 0, fontSize: '11px', opacity: 0.8 }}>Powered by Groq ⚡️</p>
-                                </div>
+            {isOpen && (
+                <div className="ai-chat-window panel">
+                    <div className="panel-head" style={{ padding: '16px', borderBottom: '1px solid var(--border)', background: 'var(--brand)', color: '#000' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <i className="fa-solid fa-robot" style={{ fontSize: '18px' }}></i>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800 }}>BBQ Copilot</h3>
+                                <p style={{ margin: 0, fontSize: '11px', opacity: 0.8 }}>Powered by Groq ⚡️</p>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="ai-chat-messages">
-                            {messages.map(function (msg, idx) {
-                                var isUser = msg.role === 'user';
-                                return (
-                                    <div key={idx} className={`ai-message-wrapper ${isUser ? 'user' : 'assistant'}`}>
-                                        {!isUser && (
-                                            <div className="ai-avatar">
-                                                <i className="fa-solid fa-robot"></i>
-                                            </div>
-                                        )}
-                                        <div className={`ai-message bubble ${isUser ? 'user-bubble' : 'assistant-bubble'}`}>
-                                            {/* Basic formatting support for markdown-like text */}
-                                            {msg.content.split('\n').map((line, i) => (
-                                                <span key={i}>
-                                                    {line}
-                                                    {i !== msg.content.split('\n').length - 1 && <br />}
-                                                </span>
-                                            ))}
+                    <div className="ai-chat-messages">
+                        {messages.map(function (msg, idx) {
+                            var isUser = msg.role === 'user';
+                            return (
+                                <div key={idx} className={`ai-message-wrapper ${isUser ? 'user' : 'assistant'}`}>
+                                    {!isUser && (
+                                        <div className="ai-avatar">
+                                            <i className="fa-solid fa-robot"></i>
                                         </div>
-                                    </div>
-                                );
-                            })}
-
-                            {isLoading && (
-                                <div className="ai-message-wrapper assistant">
-                                    <div className="ai-avatar">
-                                        <i className="fa-solid fa-robot"></i>
-                                    </div>
-                                    <div className="ai-message bubble assistant-bubble loading-dots">
-                                        <span>.</span><span>.</span><span>.</span>
+                                    )}
+                                    <div className={`ai-message bubble ${isUser ? 'user-bubble' : 'assistant-bubble'}`}>
+                                        {/* Basic formatting support for markdown-like text */}
+                                        {msg.content.split('\n').map((line, i) => (
+                                            <span key={i}>
+                                                {line}
+                                                {i !== msg.content.split('\n').length - 1 && <br />}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
+                            );
+                        })}
 
-                        <div className="ai-chat-input">
-                            <form onSubmit={sendMessage} style={{ display: 'flex', gap: '8px' }}>
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    value={input}
-                                    onChange={function (e) { setInput(e.target.value); }}
-                                    placeholder="Stel een vraag aan de copilot..."
-                                    disabled={isLoading}
-                                    autoComplete="off"
-                                />
-                                <button type="submit" disabled={!input.trim() || isLoading} className="send-btn">
-                                    <i className="fa-solid fa-paper-plane"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                        {isLoading && (
+                            <div className="ai-message-wrapper assistant">
+                                <div className="ai-avatar">
+                                    <i className="fa-solid fa-robot"></i>
+                                </div>
+                                <div className="ai-message bubble assistant-bubble loading-dots">
+                                    <span>.</span><span>.</span><span>.</span>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="ai-chat-input">
+                        <form onSubmit={sendMessage} style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={input}
+                                onChange={function (e) { setInput(e.target.value); }}
+                                placeholder="Stel een vraag aan de copilot..."
+                                disabled={isLoading}
+                                autoComplete="off"
+                            />
+                            <button type="submit" disabled={!input.trim() || isLoading} className="send-btn">
+                                <i className="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
