@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import Sidebar from "@/components/Sidebar";
 import AiAssistant from "@/components/AiAssistant";
-import { ThemeProvider } from "@/lib/theme-context";
+
 import { ToastProvider } from "@/components/Toast";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 
