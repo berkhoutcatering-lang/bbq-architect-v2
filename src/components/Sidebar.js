@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 var NAV_ITEMS = [
     { id: '/', label: 'Dashboard', icon: 'fa-gauge-high' },
+    { id: '/menu-engineering', label: 'Menu Engineering', icon: 'fa-filter' },
     { id: '/recepten', label: 'Recepten', icon: 'fa-utensils' },
     { id: '/gerechten', label: 'Gerechten', icon: 'fa-plate-wheat' },
     { id: '/facturen', label: 'Facturen', icon: 'fa-file-invoice' },
