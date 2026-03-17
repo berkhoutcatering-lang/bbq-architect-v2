@@ -64,7 +64,7 @@ export default function Instellingen() {
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div className="panel-head"><h3><i className="fa-solid fa-file-pdf" style={{ marginRight: 8, color: 'var(--brand)' }}></i>PDF Instellingen</h3></div>
                 <div className="panel-body">
-                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze gegevens verschijnen automatisch op je facturen en offertes PDF's.</p>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze gegevens verschijnen automatisch op je facturen en offertes PDF&apos;s.</p>
                     <div className="form-grid">
                         <div className="field full">
                             <label>Betaalvoorwaarden</label>

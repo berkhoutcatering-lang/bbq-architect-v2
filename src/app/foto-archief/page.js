@@ -193,7 +193,7 @@ export default function FotoArchief() {
                 }}
             >
                 <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 56, color: 'var(--brand)' }}></i>
-                <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>Sleep foto's hier naartoe</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>Sleep foto&apos;s hier naartoe</p>
             </div>
 
             <div className="tab-bar">
@@ -330,7 +330,7 @@ export default function FotoArchief() {
                         style={{ border: '2px dashed ' + (dragOver ? 'var(--brand)' : 'var(--border)'), borderRadius: 14, padding: '36px 24px', textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--brand-light)' : 'transparent', marginBottom: 20, transition: 'all .2s' }}
                     >
                         <i className="fa-solid fa-camera" style={{ fontSize: 36, color: 'var(--brand)', marginBottom: 12, display: 'block' }}></i>
-                        <p style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 4 }}>Sleep foto's hierheen of klik om te kiezen</p>
+                        <p style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 4 }}>Sleep foto&apos;s hierheen of klik om te kiezen</p>
                         <p style={{ color: 'var(--muted)', fontSize: 12 }}>JPG, PNG, WEBP · Meerdere bestanden tegelijk</p>
                     </div>
                     <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleInputChange} />
