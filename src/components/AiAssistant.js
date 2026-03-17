@@ -12,11 +12,11 @@ export default function AiAssistant() {
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
 
-    function scrollToBottom() {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-
     useEffect(function () {
+        function scrollToBottom() {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+
         if (isOpen) {
             scrollToBottom();
             setTimeout(function () { inputRef.current?.focus(); }, 100);
