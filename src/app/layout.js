@@ -1,8 +1,11 @@
 import './globals.css';
-import Script from 'next/script';
-import Sidebar from '@/components/Sidebar';
-import ToastProvider from '@/components/Toast';
-import ConfirmProvider from '@/components/ConfirmDialog';
+import { Inter } from "next/font/google";
+import Script from "next/script";
+import Sidebar from "@/components/Sidebar";
+import AiAssistant from "@/components/AiAssistant";
+import { ThemeProvider } from "@/lib/theme-context";
+import { ToastProvider } from "@/components/Toast";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
@@ -27,6 +30,7 @@ export default function RootLayout({ children }) {
                   {children}
                 </div>
               </main>
+              <AiAssistant />
             </div>
           </ConfirmProvider>
         </ToastProvider>
