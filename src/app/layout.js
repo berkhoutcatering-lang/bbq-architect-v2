@@ -4,8 +4,8 @@ import Script from "next/script";
 import Sidebar from "@/components/Sidebar";
 import AiAssistant from "@/components/AiAssistant";
 
-import { ToastProvider } from "@/components/Toast";
-import { ConfirmProvider } from "@/components/ConfirmDialog";
+import ToastProvider from "@/components/Toast";
+import ConfirmProvider from "@/components/ConfirmDialog";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
