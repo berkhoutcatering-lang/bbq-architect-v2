@@ -194,6 +194,16 @@ export var ACTION_TYPES = {
         icon: 'fa-folder-plus',
         color: '#FFBF00',
     },
+
+    // ── Smart Data Center ────────────────────────────────────────────────────
+    import_vault_recipe: {
+        label: 'Importeer naar Vault (Bedenk recept)',
+        table: 'recepten',
+        op: 'insert',
+        pages: ['/ai-chat', '/gerechten', '/recepten'], // Beschikbaar in de Studio en Recepten-omgeving
+        icon: 'fa-file-import',
+        color: '#22c55e',
+    },
 };
 
 // ─── Geef beschikbare acties terug voor een pagina ────────────────────────────
@@ -299,6 +309,13 @@ export async function loadPageContextData(pathname, supabase) {
 
     try {
         var ctx = {};
+
+        // ── OMNISCIENT COPILOT: Laad altijd globale 'Vault' data ─────────────
+        var vaultInvRes = await supabase.from('inventory').select('id,naam,purchase_price,unit,yield_factor,categorie').order('naam');
+        var vaultRecRes = await supabase.from('recepten').select('id,naam,categorie,porties').order('naam');
+
+        if (vaultInvRes.data) ctx.vault_inventory = vaultInvRes.data;
+        if (vaultRecRes.data) ctx.vault_recepten = vaultRecRes.data;
 
         if (pathname === '/' || pathname === '/dashboard') {
             var evs = await supabase.from('events').select('id,name,date,guests,status,location').order('date', { ascending: true }).limit(10);
@@ -408,7 +425,25 @@ export async function loadPageContextData(pathname, supabase) {
 // ─── Formatteer context data als tekst voor systeem-prompt ───────────────────
 export function formatContextForPrompt(contextData) {
     if (!contextData) return '';
-    var lines = ['\n## Huidige pagina data (live uit de database)\n'];
+    var lines = ['\n## DATA VAULT (ALTIJD BESCHIKBAAR)\n'];
+
+    if (contextData.vault_inventory && contextData.vault_inventory.length > 0) {
+        lines.push('**INKOOP CSV (Prijs/Eenheid):**');
+        var invList = contextData.vault_inventory.map(function (i) {
+            return '- ' + i.naam + ': \u20AC' + (i.purchase_price || 0).toFixed(2) + ' per ' + i.unit + ' (Yield factor: ' + (i.yield_factor || 1.0) + ', Categorie: ' + (i.categorie || '?') + ')';
+        });
+        // We tonen de eerste 100 voor context
+        lines.push(invList.slice(0, 100).join('\n'));
+        lines.push('');
+    }
+
+    if (contextData.vault_recepten && contextData.vault_recepten.length > 0) {
+        lines.push('**HUIDIGE RECEPTEN LIJST:**');
+        lines.push(contextData.vault_recepten.map(function (r) { return r.naam; }).join(', '));
+        lines.push('');
+    }
+
+    lines.push('## Huidige pagina specifieke data\n');
 
     if (contextData.events && contextData.events.length > 0) {
         lines.push('**Events (' + contextData.events.length + '):**');
