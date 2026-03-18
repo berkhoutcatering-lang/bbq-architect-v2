@@ -300,12 +300,12 @@ export async function loadPageContextData(pathname, supabase) {
         var ctx = {};
 
         if (pathname === '/' || pathname === '/dashboard') {
-            var evs = await supabase.from('events').select('id,name,date,guests,status,location').order('date', { ascending: true }).limit(10);
+            var evs = await supabase.from('events').select('id,name,date,guests,status,location,ppp').order('date', { ascending: true }).limit(10);
             ctx.events = evs.data || [];
-            var inv = await supabase.from('inventory').select('id,naam,current_stock,min_stock,unit').lt('current_stock', supabase.raw ? undefined : 0);
-            // Low stock items
             var invAll = await supabase.from('inventory').select('id,naam,current_stock,min_stock,unit');
             ctx.lowStock = (invAll.data || []).filter(function (i) { return i.current_stock <= i.min_stock; }).slice(0, 10);
+            var dashOffRes = await supabase.from('offertes').select('id,nummer,status,client_naam,aantal_gasten,basis_prijs_pp,korting,items,datum').order('datum', { ascending: false }).limit(20);
+            ctx.offertes = dashOffRes.data || [];
         }
 
         if (pathname === '/events') {
@@ -331,12 +331,12 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/offertes') {
-            var offRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp').order('datum', { ascending: false }).limit(20);
+            var offRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,korting,vaste_kosten,items').order('datum', { ascending: false }).limit(30);
             ctx.offertes = offRes.data || [];
         }
 
         if (pathname === '/facturen') {
-            var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum').order('datum', { ascending: false }).limit(20);
+            var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(30);
             ctx.facturen = facRes.data || [];
         }
 
@@ -388,8 +388,8 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/boekhouding') {
-            var offBRes = await supabase.from('offertes').select('id,status,basis_prijs_pp,aantal_gasten,datum').order('datum', { ascending: false }).limit(30);
-            var facBRes = await supabase.from('facturen').select('id,status,datum').order('datum', { ascending: false }).limit(30);
+            var offBRes = await supabase.from('offertes').select('id,nummer,status,client_naam,basis_prijs_pp,aantal_gasten,korting,items,datum').order('datum', { ascending: false }).limit(50);
+            var facBRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
             ctx.offertes = offBRes.data || [];
             ctx.facturen = facBRes.data || [];
         }
@@ -406,6 +406,44 @@ export async function loadPageContextData(pathname, supabase) {
     }
 }
 
+// ─── Hulpfuncties voor financiële berekeningen ───────────────────────────────
+function fmtEur(n) {
+    if (!n || isNaN(n)) return '€0,00';
+    return '€' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calcOfferteTotaal(o) {
+    var korting = parseFloat(o.korting) || 0;
+    // Als er regelitems zijn, bereken via items (meest accuraat)
+    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+        var subtotaal = 0;
+        var btw = 0;
+        o.items.forEach(function (item) {
+            var line = (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
+            subtotaal += line;
+            btw += line * ((parseFloat(item.btw) || 0) / 100);
+        });
+        return { subtotaal: subtotaal, btw: btw, totaal: subtotaal + btw - korting, exBtw: subtotaal - korting };
+    }
+    // Fallback: gasten * prijs pp
+    var omzet = (parseFloat(o.aantal_gasten) || 0) * (parseFloat(o.basis_prijs_pp) || 0);
+    return { subtotaal: omzet, btw: 0, totaal: omzet - korting, exBtw: omzet - korting };
+}
+
+function calcFactuurTotaal(f) {
+    if (f.items && Array.isArray(f.items) && f.items.length > 0) {
+        var subtotaal = 0;
+        var btw = 0;
+        f.items.forEach(function (item) {
+            var line = (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
+            subtotaal += line;
+            btw += line * ((parseFloat(item.btw) || 0) / 100);
+        });
+        return { subtotaal: subtotaal, btw: btw, totaal: subtotaal + btw };
+    }
+    return { subtotaal: 0, btw: 0, totaal: 0 };
+}
+
 // ─── Formatteer context data als tekst voor systeem-prompt ───────────────────
 export function formatContextForPrompt(contextData) {
     if (!contextData) return '';
@@ -413,15 +451,17 @@ export function formatContextForPrompt(contextData) {
 
     if (contextData.events && contextData.events.length > 0) {
         lines.push('**Events (' + contextData.events.length + '):**');
-        contextData.events.slice(0, 8).forEach(function (e) {
-            lines.push('- [' + e.id + '] ' + e.name + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?'));
+        contextData.events.slice(0, 10).forEach(function (e) {
+            var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) + ' (' + fmtEur(e.ppp) + '/p.p.)' : (e.ppp ? ' | ' + fmtEur(e.ppp) + '/p.p.' : '');
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : ''));
         });
         lines.push('');
     }
     if (contextData.active_events && contextData.active_events.length > 0) {
         lines.push('**Actieve events:**');
         contextData.active_events.forEach(function (e) {
-            lines.push('- [' + e.id + '] ' + e.name + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten');
+            var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) : '';
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten' + omzetStr);
         });
         lines.push('');
     }
@@ -444,16 +484,40 @@ export function formatContextForPrompt(contextData) {
         lines.push('');
     }
     if (contextData.offertes && contextData.offertes.length > 0) {
-        lines.push('**Offertes (' + contextData.offertes.length + '):**');
-        contextData.offertes.slice(0, 8).forEach(function (o) {
-            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | ' + (o.status || '?') + ' | ' + (o.aantal_gasten || 0) + ' gasten');
+        // Bereken totalen per status
+        var offTotaalOpen = 0, offTotaalBetaald = 0, offTotaalAlles = 0;
+        contextData.offertes.forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            offTotaalAlles += t.totaal;
+            if (o.status === 'betaald' || o.status === 'goedgekeurd') offTotaalBetaald += t.totaal;
+            if (o.status === 'concept' || o.status === 'verzonden') offTotaalOpen += t.totaal;
+        });
+
+        lines.push('**Offertes (' + contextData.offertes.length + ') — Totaal omzet: ' + fmtEur(offTotaalAlles) + ' | Open: ' + fmtEur(offTotaalOpen) + ' | Betaald/goedgekeurd: ' + fmtEur(offTotaalBetaald) + '**');
+        contextData.offertes.slice(0, 15).forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            var pppInfo = o.basis_prijs_pp ? ' | ' + fmtEur(o.basis_prijs_pp) + '/p.p.' : '';
+            var kortingInfo = (parseFloat(o.korting) > 0) ? ' | korting: ' + fmtEur(o.korting) : '';
+            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | ' + (o.status || '?') + ' | ' + (o.aantal_gasten || 0) + ' gasten' + pppInfo + kortingInfo + ' | TOTAAL: ' + fmtEur(t.totaal));
         });
         lines.push('');
     }
     if (contextData.facturen && contextData.facturen.length > 0) {
-        lines.push('**Facturen (' + contextData.facturen.length + '):**');
-        contextData.facturen.slice(0, 8).forEach(function (f) {
-            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | ' + (f.status || '?'));
+        // Bereken totalen
+        var facTotaalOpen = 0, facTotaalBetaald = 0, facTotaalAlles = 0;
+        contextData.facturen.forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            facTotaalAlles += t.totaal;
+            if (f.status === 'betaald') facTotaalBetaald += t.totaal;
+            if (f.status === 'verzonden' || f.status === 'verlopen') facTotaalOpen += t.totaal;
+        });
+
+        lines.push('**Facturen (' + contextData.facturen.length + ') — Totaal: ' + fmtEur(facTotaalAlles) + ' | Openstaand: ' + fmtEur(facTotaalOpen) + ' | Betaald: ' + fmtEur(facTotaalBetaald) + '**');
+        contextData.facturen.slice(0, 15).forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            var totaalStr = t.totaal > 0 ? ' | TOTAAL: ' + fmtEur(t.totaal) : '';
+            var vervalStr = f.vervaldatum ? ' | vervalt: ' + f.vervaldatum : '';
+            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | ' + (f.status || '?') + vervalStr + totaalStr);
         });
         lines.push('');
     }
