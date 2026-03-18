@@ -2,28 +2,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 
-function renderMarkdown(text) {
-    return text
-        .split('\n')
-        .map(function (line, i) {
-            // bold **text**
-            var parts = line.split(/(\*\*[^*]+\*\*)/g).map(function (part, j) {
-                if (part.startsWith('**') && part.endsWith('**')) {
-                    return <strong key={j}>{part.slice(2, -2)}</strong>;
-                }
-                return part;
-            });
-            // bullet points
-            var isBullet = line.trim().startsWith('- ') || line.trim().startsWith('• ');
-            return (
-                <span key={i} style={{ display: 'block', paddingLeft: isBullet ? 12 : 0 }}>
-                    {isBullet && <span style={{ color: 'var(--brand)', marginRight: 6 }}>•</span>}
-                    {isBullet ? parts.slice(1) : parts}
-                </span>
-            );
-        });
-}
-
 export default function AiAssistant() {
     var pathname = usePathname();
     var [isOpen, setIsOpen] = useState(false);
@@ -35,9 +13,9 @@ export default function AiAssistant() {
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
 
-    // Reset conversation when page changes
     useEffect(function () {
-        setMessages([{ role: 'assistant', content: 'Hallo! Ik ben BBQ Copilot. Ik help je op **' + (pathname === '/' ? 'het Dashboard' : pathname.replace('/', '')) + '**. Wat wil je weten?' }]);
+        var pageName = pathname === '/' ? 'het Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
+        setMessages([{ role: 'assistant', content: 'Hallo! Ik ben BBQ Copilot. Ik help je op ' + pageName + '. Wat wil je weten?' }]);
     }, [pathname]);
 
     useEffect(function () {
@@ -48,7 +26,7 @@ export default function AiAssistant() {
 
     useEffect(function () {
         if (isOpen && inputRef.current) {
-            setTimeout(function () { inputRef.current?.focus(); }, 100);
+            setTimeout(function () { if (inputRef.current) inputRef.current.focus(); }, 100);
         }
     }, [isOpen]);
 
@@ -75,7 +53,7 @@ export default function AiAssistant() {
             var reply = data.choices[0].message.content;
             setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply }]; });
         } catch (error) {
-            setMessages(function (prev) { return [...prev, { role: 'assistant', content: '❌ ' + error.message }]; });
+            setMessages(function (prev) { return [...prev, { role: 'assistant', content: '\u274C ' + error.message }]; });
         } finally {
             setIsLoading(false);
         }
@@ -85,9 +63,10 @@ export default function AiAssistant() {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     }
 
+    var pageName = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
+
     return (
         <div className="ai-assistant-container">
-            {/* Floating toggle button */}
             <button
                 className={'ai-toggle-btn' + (isOpen ? ' active' : '')}
                 onClick={function () { setIsOpen(function (v) { return !v; }); }}
@@ -98,10 +77,8 @@ export default function AiAssistant() {
                 {!isOpen && <span className="ai-pulse-ring"></span>}
             </button>
 
-            {/* Chat window */}
             {isOpen && (
                 <div className="ai-chat-window panel" id="ai-chat-window">
-                    {/* Header */}
                     <div className="ai-chat-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div className="ai-avatar-header">
@@ -109,9 +86,7 @@ export default function AiAssistant() {
                             </div>
                             <div>
                                 <div style={{ fontWeight: 800, fontSize: 14, color: '#000' }}>BBQ Copilot</div>
-                                <div style={{ fontSize: 10, opacity: 0.7, color: '#000' }}>
-                                    📍 {pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ')}
-                                </div>
+                                <div style={{ fontSize: 10, opacity: 0.7, color: '#000' }}>{'\uD83D\uDCCD'} {pageName}</div>
                             </div>
                         </div>
                         <button onClick={function () { setMessages([{ role: 'assistant', content: 'Gesprek gewist. Hoe kan ik helpen?' }]); }} className="ai-clear-btn" title="Gesprek wissen">
@@ -119,7 +94,6 @@ export default function AiAssistant() {
                         </button>
                     </div>
 
-                    {/* Messages */}
                     <div className="ai-chat-messages" id="ai-chat-messages">
                         {messages.map(function (msg, idx) {
                             var isUser = msg.role === 'user';
@@ -129,7 +103,13 @@ export default function AiAssistant() {
                                         <div className="ai-avatar"><i className="fa-solid fa-robot"></i></div>
                                     )}
                                     <div className={'ai-message bubble ' + (isUser ? 'user-bubble' : 'assistant-bubble')}>
-                                        {renderMarkdown(msg.content)}
+                                        {msg.content.split('\n').map(function (line, i) {
+                                            return (
+                                                <span key={i} style={{ display: 'block' }}>
+                                                    {line || '\u00A0'}
+                                                </span>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             );
@@ -145,7 +125,6 @@ export default function AiAssistant() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* Input */}
                     <div className="ai-chat-input">
                         <form onSubmit={sendMessage} style={{ display: 'flex', gap: 8 }}>
                             <textarea
@@ -153,7 +132,7 @@ export default function AiAssistant() {
                                 value={input}
                                 onChange={function (e) { setInput(e.target.value); }}
                                 onKeyDown={handleKey}
-                                placeholder={'Vraag iets over ' + (pathname === '/' ? 'het dashboard' : pathname.replace('/', '').replace(/-/g, ' ')) + '...'}
+                                placeholder={'Vraag iets over ' + pageName + '...'}
                                 disabled={isLoading}
                                 autoComplete="off"
                                 rows={1}
