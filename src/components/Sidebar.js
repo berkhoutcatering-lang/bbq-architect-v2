@@ -22,6 +22,7 @@ var NAV_ITEMS = [
     { id: '/boekhouding', label: 'Boekhouding', icon: 'fa-chart-line' },
     { id: '/price-intelligence', label: 'Prijsintelligentie', icon: 'fa-tags' },
     { id: '/foto-archief', label: 'Foto-archief', icon: 'fa-camera' },
+    { id: '/ai-chat', label: 'AI Copilot', icon: 'fa-robot' },
     { id: '/instellingen', label: 'Instellingen', icon: 'fa-gear' },
 ];
 
