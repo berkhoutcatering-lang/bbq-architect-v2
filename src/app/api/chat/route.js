@@ -194,6 +194,7 @@ var BASE_INSTRUCTIONS = [
     '  Dit actieblok genereert een interactieve tabel in het dashboard. Gebruik EXACT dit formaat:',
     '  `<<<ACTION:{"type":"render_recipe_matrix","description":"Jouw titel hier","data":{"recipes":[{"naam":"Naam","categorie":"Bite/Voorgerecht/Hoofdgerecht/Amuse","gram":25,"inkoop":0.65,"marge":75,"ingredienten":[{"naam":"Zalm","hoeveelheid":25,"eenheid":"gram"}],"bereiding":"Stap 1"}]}}>>>`',
     '  Zorg dat elk item direct import-klaar is en dat inkoop/marge klopt met de Vault.',
+    '  **LET OP MAXIMALE BATCH GROOTTE:** Genereer **MAXIMAAL 30 gerechten per keer**, anders crasht de JSON-parser. Als de gebruiker er 100 vraagt, genereer er eerst 30 en zeg "Klik op import, ik heb er nog 70 voor je klaarstaan als je "Volgende lading" zegt".',
     '',
     '## IMPORT FUNCTIE (Enkel Recept)',
     '- Als de gebruiker zegt "Zet dit in mijn systeem" of "Importeer dit", genereer dan MOEITELOOS een actieblok om het recept op te slaan.',
@@ -285,7 +286,7 @@ export async function POST(req) {
                 model: 'llama-3.3-70b-versatile',
                 messages: groqMessages,
                 temperature: mode === 'brainstorm' ? 0.85 : 0.7,
-                max_tokens: mode === 'brainstorm' ? 1800 : 1200,
+                max_tokens: mode === 'brainstorm' ? 6000 : 4000,
             }),
         });
 
