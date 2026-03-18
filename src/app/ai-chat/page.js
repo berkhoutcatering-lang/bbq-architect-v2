@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction } from '@/lib/ai-actions';
+import RecipeMatrix from '@/components/RecipeMatrix';
 
 var BRAINSTORM_SUGGESTIONS = [
     'Bedenk 5 thema-BBQ concepten voor de zomer',
@@ -406,6 +407,10 @@ export default function AiStudioPage() {
 
     // ── Render actiekaart ─────────────────────────────────────────────────────
     function renderActionCard(action, msgIdx) {
+        if (action.type === 'render_recipe_matrix') {
+            return <RecipeMatrix key={action.id} action={action} supabase={supabase} />;
+        }
+
         var isPending = action.status === 'pending';
         var isExecuting = action.status === 'executing';
         var isDone = action.status === 'done';

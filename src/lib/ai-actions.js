@@ -204,6 +204,14 @@ export var ACTION_TYPES = {
         icon: 'fa-file-import',
         color: '#22c55e',
     },
+    render_recipe_matrix: {
+        label: 'Interactieve Recepten Trechter',
+        table: 'recepten', // Virtual table handler
+        op: 'custom',
+        pages: ['/ai-chat', '/gerechten', '/recepten'],
+        icon: 'fa-table-list',
+        color: '#8b5cf6', // Purple
+    },
 };
 
 // ─── Geef beschikbare acties terug voor een pagina ────────────────────────────

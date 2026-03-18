@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction, loadPageContextData } from '@/lib/ai-actions';
+import RecipeMatrix from '@/components/RecipeMatrix';
 
 export default function AiAssistant() {
     var pathname = usePathname();
@@ -217,6 +218,10 @@ export default function AiAssistant() {
 
     // ── Render actiekaart ─────────────────────────────────────────────────────
     function renderActionCard(action, msgIdx) {
+        if (action.type === 'render_recipe_matrix') {
+            return <RecipeMatrix key={action.id} action={action} supabase={supabase} />;
+        }
+
         var isPending = action.status === 'pending';
         var isExecuting = action.status === 'executing';
         var isDone = action.status === 'done';
