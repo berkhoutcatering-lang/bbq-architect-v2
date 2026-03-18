@@ -69,101 +69,111 @@ export default function RecipeMatrix({ action, supabase }) {
     }
 
     return (
-        <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+        <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg)', padding: 16 }}>
             {/* Header */}
-            <div style={{ background: 'var(--brand-light)', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>
-                        <i className="fa-solid fa-table-list" style={{ marginRight: 6 }}></i>
-                        {action.description || 'De Trechter Matrix'}
+                    <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--brand)' }}>
+                        <i className="fa-solid fa-layer-group" style={{ marginRight: 8 }}></i>
+                        {action.description || 'Concept Funnel'}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--brand)', opacity: 0.8, marginTop: 2 }}>
-                        {recipes.length} items gegenereerd \u2022 Selecteer om te importeren
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                        {recipes.length} items gegenereerd \u2022 Klik op een kaart om te bewaren
                     </div>
                 </div>
-                {!imported && (
+                <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                        className="btn btn-brand btn-sm"
+                        className="btn btn-ghost btn-sm"
+                        onClick={toggleAll}
+                        disabled={imported}
+                        style={{ fontSize: 11 }}
+                    >
+                        {selected.length === recipes.length ? 'Deselecteer geselecteerd' : 'Selecteer alles'}
+                    </button>
+                    {imported && (
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <i className="fa-solid fa-check-circle"></i> Ge\u00EFmporteerd
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Grid */}
+            <div className="dish-select-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                {recipes.map(function (r, idx) {
+                    var isSelected = selected.includes(idx);
+
+                    var margeColor = 'var(--text)';
+                    var margeBg = 'rgba(255,255,255,0.1)';
+                    if (r.marge >= 70) { margeColor = 'var(--green)'; margeBg = 'rgba(34,197,94,0.2)'; }
+                    else if (r.marge >= 60) { margeColor = 'var(--amber)'; margeBg = 'rgba(245,158,11,0.2)'; }
+                    else { margeColor = 'var(--red)'; margeBg = 'rgba(239,68,68,0.2)'; }
+
+                    return (
+                        <button
+                            key={idx}
+                            className={'dish-select-btn' + (isSelected ? ' selected' : '')}
+                            onClick={function () { toggleRow(idx); }}
+                            disabled={imported}
+                            style={{
+                                padding: 12,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                textAlign: 'left',
+                                gap: 6,
+                                opacity: imported && !isSelected ? 0.3 : 1
+                            }}
+                        >
+                            <div className="dish-select-name" style={{ fontSize: 14, marginBottom: 2, width: '100%' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <span style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{r.naam}</span>
+                                    {isSelected && <i className="fa-solid fa-circle-check" style={{ color: 'var(--brand)', fontSize: 14, marginLeft: 8, marginTop: 2 }}></i>}
+                                </div>
+                            </div>
+
+                            <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ background: 'rgba(255,255,255,.05)', padding: '2px 6px', borderRadius: 4 }}>
+                                    {r.categorie}
+                                </span>
+                                <span>&#8226;</span>
+                                <span>Portie: <strong style={{ color: 'var(--text)' }}>{r.gram}g</strong></span>
+                            </div>
+
+                            <div style={{ marginTop: 'auto', width: '100%', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                                    <span style={{ color: 'var(--muted)' }}>Foodcost:</span>
+                                    <span style={{ fontWeight: 600 }}>&euro;{(r.inkoop || 0).toFixed(2)}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--muted)' }}>Marge:</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ width: 40, height: 6, borderRadius: 3, background: margeBg, overflow: 'hidden' }}>
+                                            <div style={{ width: Math.min(100, Math.max(0, r.marge)) + '%', height: '100%', background: margeColor }}></div>
+                                        </div>
+                                        <span style={{ fontWeight: 700, color: margeColor }}>{Number(r.marge).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Bottom Action Footer */}
+            {!imported && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                        className="btn btn-brand"
                         onClick={handleBulkImport}
                         disabled={selected.length === 0 || importing}
-                        style={{ padding: '6px 14px', fontSize: 12 }}
+                        style={{ padding: '10px 24px', fontSize: 14, fontWeight: 700 }}
                     >
-                        {importing ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-file-import"></i>}
-                        <span style={{ marginLeft: 6 }}>
-                            {importing ? 'Importeren...' : 'Importeer (' + selected.length + ') in Vault'}
-                        </span>
+                        {importing ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }}></i> : <i className="fa-solid fa-vault" style={{ marginRight: 8 }}></i>}
+                        {importing ? 'Importeren...' : 'Finaliseer Selectie naar Vault (' + selected.length + ')'}
                     </button>
-                )}
-                {imported && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <i className="fa-solid fa-check-circle"></i> Ge\u00EFmporteerd
-                    </div>
-                )}
-            </div>
-
-            {/* Table */}
-            <div style={{ overflowX: 'auto' }}>
-                <table className="tbl" style={{ margin: 0 }}>
-                    <thead>
-                        <tr>
-                            <th style={{ width: 40, textAlign: 'center' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={selected.length === recipes.length && recipes.length > 0}
-                                    onChange={toggleAll}
-                                    disabled={imported}
-                                />
-                            </th>
-                            <th>Naam</th>
-                            <th>Cat. & Gram</th>
-                            <th>Inkoop</th>
-                            <th>Marge</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {recipes.map(function (r, idx) {
-                            var isSelected = selected.includes(idx);
-
-                            // Traffic light logic
-                            var margeColor = 'var(--text)';
-                            var margeIcon = '';
-                            if (r.marge >= 70) { margeColor = 'var(--green)'; margeIcon = '\uD83DFE2'; }
-                            else if (r.marge >= 60) { margeColor = 'var(--amber)'; margeIcon = '\uD83DFEA'; }
-                            else { margeColor = 'var(--red)'; margeIcon = '\uD83DD34'; }
-
-                            return (
-                                <tr key={idx} style={{ background: isSelected ? 'rgba(59,130,246,0.03)' : 'transparent', opacity: imported && !isSelected ? 0.3 : 1 }}>
-                                    <td style={{ textAlign: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isSelected}
-                                            onChange={function () { toggleRow(idx); }}
-                                            disabled={imported}
-                                        />
-                                    </td>
-                                    <td style={{ fontWeight: 600, fontSize: 13 }}>{r.naam}</td>
-                                    <td>
-                                        <div style={{ fontSize: 12 }}>{r.categorie}</div>
-                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{r.gram}g</div>
-                                    </td>
-                                    <td style={{ fontSize: 13, fontWeight: 500 }}>
-                                        &euro;{(r.inkoop || 0).toFixed(2)}
-                                    </td>
-                                    <td style={{ fontSize: 13, fontWeight: 700, color: margeColor }}>
-                                        {margeIcon} {r.marge}%
-                                    </td>
-                                    <td>
-                                        <div style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {(r.ingredienten || []).map(function (ig) { return ig.naam; }).join(', ')}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+                </div>
+            )}
         </div>
     );
 }
