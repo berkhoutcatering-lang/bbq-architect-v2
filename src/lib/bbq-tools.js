@@ -1,0 +1,838 @@
+// src/lib/bbq-tools.js
+// Alle tool-schema's voor Groq native function calling.
+// Gegroepeerd per module. Groq gebruikt OpenAI-compatible format.
+
+export var TOOL_SCHEMAS = [
+
+    // ══════════════════════════════════════════════════════
+    // EVENTS & PLANNING
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getUpcomingEvents',
+            description: 'Haal de aankomende catering-events op uit de agenda. Gebruik dit als de gebruiker vraagt naar planning, wat er deze/volgende week staat, of voor wie er geprept moet worden.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    days_ahead: { type: 'number', description: 'Hoeveel dagen vooruit kijken (default: 14)' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getEventDetail',
+            description: 'Haal de volledige details van één specifiek event op, inclusief menu, gasten, locatie en recepten.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number', description: 'ID van het event' }
+                },
+                required: ['event_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createEvent',
+            description: 'Maak een nieuw catering-event aan in het systeem.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Naam van het event (bijv. "Bruiloft Familie Janssen")' },
+                    date: { type: 'string', description: 'Datum in YYYY-MM-DD formaat' },
+                    guests: { type: 'number', description: 'Aantal gasten' },
+                    location: { type: 'string', description: 'Locatie' },
+                    ppp: { type: 'number', description: 'Prijs per persoon in euro' },
+                    client_naam: { type: 'string', description: 'Naam van de klant' },
+                    type: { type: 'string', description: 'Type event: Particulier, Zakelijk, of Festival' }
+                },
+                required: ['name', 'date', 'guests']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateEventStatus',
+            description: 'Wijzig de status van een event.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number', description: 'ID van het event' },
+                    status: { type: 'string', enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] }
+                },
+                required: ['event_id', 'status']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generatePrepList',
+            description: 'Genereer een volledige prep-lijst en MEP-lijst (Mise-en-place) voor een aankomend event. Kijkt naar het gekoppelde menu en de recepten in The Vault. Gebruik dit als gebruiker vraagt om een prep-schema, bereidingsplan of tijdlijn.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number', description: 'ID van het event (optioneel, pakt het eerstvolgende als niet opgegeven)' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generateTimeline',
+            description: 'Maak een dag-voor-dag tijdlijn voor een event op basis van aantal gasten en menu.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number', description: 'ID van het event' },
+                    event_date: { type: 'string', description: 'Datum van het event (YYYY-MM-DD)' }
+                },
+                required: []
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // MENU ONTWIKKELAAR (GERECHTEN)
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getGerechten',
+            description: 'Haal alle gerechten op uit de Menu Ontwikkelaar, gegroepeerd per gang.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    gang_slug: { type: 'string', description: 'Filter op gang-slug (optioneel)' },
+                    actief_only: { type: 'boolean', description: 'Alleen actieve gerechten (default: false)' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getGangen',
+            description: 'Haal alle gangen op (categorieën zoals Bite, Hoofdgerecht, Vegetarisch, etc.).',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createGerecht',
+            description: 'Voeg één nieuw gerecht toe aan de Menu Ontwikkelaar.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    naam: { type: 'string', description: 'Naam van het gerecht' },
+                    gang_slug: { type: 'string', description: 'Slug van de gang (bijv. "bite", "hoofdgerecht", "vegetarisch")' },
+                    beschrijving: { type: 'string', description: 'Korte beschrijving' },
+                    bereidingswijze: { type: 'string', description: 'Bereidingswijze' },
+                    ingredienten: { type: 'array', items: { type: 'string' }, description: 'Lijst van ingrediënten' },
+                    tags: { type: 'array', items: { type: 'string' }, description: 'Tags zoals Vegan, Populair, Nieuw' },
+                    allergenen: { type: 'array', items: { type: 'string' } }
+                },
+                required: ['naam', 'gang_slug']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createGerechtBulk',
+            description: 'Voeg meerdere gerechten tegelijk toe aan de Menu Ontwikkelaar. Gebruik dit voor: "20 gerechten met buikspek", "10 vegetarische hapjes", etc. Genereer de gerechten zelf op basis van de vraag van de chef.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    gerechten: {
+                        type: 'array',
+                        description: 'Array van gerecht-objecten',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                naam: { type: 'string' },
+                                gang_slug: { type: 'string', description: 'bijv. bite, hoofdgerecht, vegetarisch, dessert' },
+                                beschrijving: { type: 'string' },
+                                bereidingswijze: { type: 'string' },
+                                ingredienten: { type: 'array', items: { type: 'string' } },
+                                tags: { type: 'array', items: { type: 'string' } }
+                            },
+                            required: ['naam', 'gang_slug', 'beschrijving']
+                        }
+                    }
+                },
+                required: ['gerechten']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateGerecht',
+            description: 'Bewerk een bestaand gerecht in de Menu Ontwikkelaar.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    gerecht_id: { type: 'number' },
+                    naam: { type: 'string' },
+                    beschrijving: { type: 'string' },
+                    bereidingswijze: { type: 'string' },
+                    gang_slug: { type: 'string' },
+                    tags: { type: 'array', items: { type: 'string' } }
+                },
+                required: ['gerecht_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'deleteGerecht',
+            description: 'Verwijder een gerecht uit de Menu Ontwikkelaar.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    gerecht_id: { type: 'number', description: 'ID van het te verwijderen gerecht' }
+                },
+                required: ['gerecht_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'deactivateGerechten',
+            description: 'Deactiveer of verwijder meerdere gerechten tegelijk. Gebruik dit als chef zegt: "haal de 5 minst interessante eruit", "verwijder alles met varkensvlees", etc.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    gerecht_ids: { type: 'array', items: { type: 'number' }, description: 'IDs van gerechten om te deactiveren/verwijderen' },
+                    actie: { type: 'string', enum: ['deactiveer', 'verwijder'], description: 'Deactiveer (verbergen) of verwijder (permanent)' },
+                    reden: { type: 'string', description: 'Toelichting: waarom worden deze gerechten verwijderd?' }
+                },
+                required: ['gerecht_ids', 'actie']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'analyzeMenuBalance',
+            description: 'Analyseer de balans van het menu: verhouding Bite/VG/HG, allergenen-dekking, seizoensgebondenheid, uniekheid.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // RECEPTEN (THE VAULT)
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getRecepten',
+            description: 'Haal alle recepten op uit The Vault (het receptenboek van de chef).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    categorie: { type: 'string', description: 'Filter op categorie: Vlees, Vis, Bijgerecht, Saus, Dessert, Drank' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getReceptDetail',
+            description: 'Haal het volledige recept op inclusief ingrediënten, bereiding en notities.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    recept_id: { type: 'number' }
+                },
+                required: ['recept_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createRecept',
+            description: 'Voeg een nieuw recept toe aan The Vault.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    naam: { type: 'string' },
+                    categorie: { type: 'string', enum: ['Vlees', 'Vis', 'Bijgerecht', 'Saus', 'Dessert', 'Drank'] },
+                    porties: { type: 'number', description: 'Aantal porties' },
+                    preptime: { type: 'number', description: 'Bereidingstijd in minuten' },
+                    ingredienten: { type: 'array', items: { type: 'string' } },
+                    instructies: { type: 'string' },
+                    notitie: { type: 'string' }
+                },
+                required: ['naam', 'categorie']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateRecept',
+            description: 'Bewerk een bestaand recept in The Vault.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    recept_id: { type: 'number' },
+                    naam: { type: 'string' },
+                    instructies: { type: 'string' },
+                    porties: { type: 'number' },
+                    preptime: { type: 'number' },
+                    ingredienten: { type: 'array', items: { type: 'string' } },
+                    notitie: { type: 'string' }
+                },
+                required: ['recept_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcPortiesVoor',
+            description: 'Bereken hoeveel van een recept er nodig is voor X gasten, inclusief inkoop-hoeveelheden.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    recept_id: { type: 'number' },
+                    recept_naam: { type: 'string', description: 'Naam van het recept (als alternatief voor ID)' },
+                    gasten: { type: 'number', description: 'Aantal gasten om voor te bereiden' }
+                },
+                required: ['gasten']
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // OFFERTES
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getOffertes',
+            description: 'Haal alle offertes op, inclusief berekende totaalbedragen.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    status: { type: 'string', enum: ['concept', 'verzonden', 'goedgekeurd', 'afgewezen', 'betaald'], description: 'Filter op status' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getOpenOffertes',
+            description: 'Haal alle open offertes op (status: concept of verzonden) met totaalbedragen.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcOfferteOmzet',
+            description: 'Bereken de totale omzet van offertes per status of periode.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    periode: { type: 'string', description: 'bijv. "dit kwartaal", "dit jaar", "deze maand"' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateOfferteStatus',
+            description: 'Wijzig de status van een offerte.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    offerte_id: { type: 'number' },
+                    status: { type: 'string', enum: ['concept', 'verzonden', 'goedgekeurd', 'afgewezen', 'betaald'] }
+                },
+                required: ['offerte_id', 'status']
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // FACTUREN
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getFacturen',
+            description: 'Haal alle facturen op met totaalbedragen en vervaldatums.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    status: { type: 'string', enum: ['concept', 'verzonden', 'betaald', 'vervallen'] }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getOpenFacturen',
+            description: 'Haal alle onbetaalde facturen op, inclusief welke al vervallen zijn.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getVervaldatumsFacturen',
+            description: 'Haal facturen op die binnen X dagen vervallen of al vervallen zijn.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    dagen: { type: 'number', description: 'Aantal dagen vooruit kijken (default: 7)' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcCashflow',
+            description: 'Bereken de verwachte cashflow op basis van openstaande facturen en offertes.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // VOORRAAD
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getVoorraad',
+            description: 'Haal de volledige voorraadlijst op.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    laag_only: { type: 'boolean', description: 'Alleen items onder min. par-level tonen' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getLageVoorraadItems',
+            description: 'Haal alle items op die onder het minimum par-level zitten. Gebruik bij "wat moet ik bijbestellen" of "lage voorraad check".',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateVoorraadItem',
+            description: 'Pas de hoeveelheid of par-level van een voorraad-item aan.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    item_id: { type: 'number' },
+                    hoeveelheid: { type: 'number', description: 'Nieuwe hoeveelheid' },
+                    min_par: { type: 'number', description: 'Nieuw minimum par-level' }
+                },
+                required: ['item_id']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcBenodigdVoorEvent',
+            description: 'Bereken hoeveel van elk ingrediënt er nodig is voor een event op basis van het menu en aantal gasten.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    gasten: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // INKOOP
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getInkoopLijst',
+            description: 'Genereer een inkooplijst op basis van lage voorraad en aankomende events.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    groepeer_per_winkel: { type: 'boolean', description: 'Groepeer per leverancier/winkel' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'generateInkoopVoorEvent',
+            description: 'Maak een specifieke inkooplijst voor een event.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getInkoopPerWinkel',
+            description: 'Haal de inkooplijst gegroepeerd per winkel (Sligro, Crisp, PLUS, etc.) op.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // HACCP
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getHaccpLogs',
+            description: 'Haal recente HACCP temperatuurlogs op.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    days: { type: 'number', description: 'Hoeveel dagen terug (default: 7)' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createHaccpLog',
+            description: 'Registreer een nieuwe temperatuurmeting in het HACCP-systeem.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    product: { type: 'string' },
+                    temperatuur: { type: 'number', description: 'Gemeten temperatuur in Celsius' },
+                    chef: { type: 'string' },
+                    event_id: { type: 'number' },
+                    notitie: { type: 'string' }
+                },
+                required: ['product', 'temperatuur']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getMissingHaccpLogs',
+            description: 'Check welke events of producten nog geen HACCP-log hebben.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getTemperatureAlerts',
+            description: 'Haal alle temperatuurmetingen op die buiten de veilige zone vielen.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // UREN
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getUrenRegistraties',
+            description: 'Haal urenregistraties op voor de opgegeven periode.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    periode: { type: 'string', description: 'bijv. deze week, deze maand, dit kwartaal' },
+                    medewerker: { type: 'string' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getUrenPerMedewerker',
+            description: 'Overzicht van gewerkte uren per medewerker.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    maand: { type: 'string', description: 'YYYY-MM formaat' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcOveruren',
+            description: 'Bereken het aantal overuren op basis van contracturen vs. geregistreerde uren.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    medewerker: { type: 'string' },
+                    contract_uren_per_week: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // MATERIEEL
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getMaterieel',
+            description: 'Haal de volledige materieellijst op (BBQs, servies, tenten, etc.).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    categorie: { type: 'string' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getMaterieelVoorEvent',
+            description: 'Bereken welk materieel nodig is voor een specifiek event op basis van het menu en gasten.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    gasten: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'updateMaterieelStatus',
+            description: 'Markeer materieel als beschikbaar, in gebruik, of in onderhoud.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    item_id: { type: 'number' },
+                    status: { type: 'string', enum: ['beschikbaar', 'in_gebruik', 'onderhoud', 'kapot'] }
+                },
+                required: ['item_id', 'status']
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // LOGISTIEK
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getBusCheck',
+            description: 'Genereer de bus-check lijst voor het inladen vóór een event.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getLogistiekVoorEvent',
+            description: 'Volledige logistiek-overzicht voor een event: materieel, voedsel, personeel.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // BOEKHOUDING
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getOmzetPerPeriode',
+            description: 'Haal de gerealiseerde omzet op per periode op basis van betaalde facturen.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    periode: { type: 'string', description: 'bijv. "Q1 2025", "maart 2025", "dit jaar"' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getKwartaalOmzet',
+            description: 'Haal de omzet van het huidige of een specifiek kwartaal op.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    kwartaal: { type: 'number', enum: [1, 2, 3, 4] },
+                    jaar: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'calcFoodCostRatio',
+            description: 'Bereken de food cost ratio voor een event of het gehele menu.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // AI GESPREKKEN (AI CHAT PAGINA)
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'saveConversation',
+            description: 'Sla dit gesprek op in het systeem. Gebruik ALLEEN als de gebruiker expliciet vraagt om op te slaan, of als jij detecteert dat het gesprek waardevolle ideeën bevat en toestemming vraagt.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    titel: { type: 'string', description: 'Titel voor het gesprek' },
+                    folder_naam: { type: 'string', description: 'Map om het gesprek in te plaatsen (optioneel)' }
+                },
+                required: ['titel']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getConversations',
+            description: 'Haal opgeslagen gesprekken op.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    folder_id: { type: 'number' }
+                },
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'createFolder',
+            description: 'Maak een nieuwe map aan voor het opslaan van gesprekken.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    naam: { type: 'string' },
+                    kleur: { type: 'string', description: 'Hex kleurcode, bijv. #FFBF00' }
+                },
+                required: ['naam']
+            }
+        }
+    },
+
+    // ══════════════════════════════════════════════════════
+    // CROSS-MODULE
+    // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'getWeekOverzicht',
+            description: 'Haal een volledig overzicht van de komende week op: events, prep-taken, te bestellen voorraad, open offertes.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'getDashboardSummary',
+            description: 'Haal een samenvatting op van het dashboard: KPIs, alerts, aankomende events.',
+            parameters: { type: 'object', properties: {}, required: [] }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'filterSystemData',
+            description: 'Verberg of verwijder data uit het systeem op basis van criteria. Bijv. "verwijder alles met varkensvlees", "haal de niet-interessante gerechten weg". Altijd toestemming vragen voor uitvoering.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    module: { type: 'string', enum: ['gerechten', 'recepten', 'events', 'offertes'], description: 'In welke module filteren' },
+                    criteria: { type: 'string', description: 'Beschrijving van de filtercriteria, bijv. "bevat varkensvlees" of "culinair minst interessant"' },
+                    actie: { type: 'string', enum: ['deactiveer', 'verwijder'], description: 'Deactiveer (verbergen) of permanent verwijderen' }
+                },
+                required: ['module', 'criteria']
+            }
+        }
+    }
+];
+
+// Tool namen als Set voor snelle lookup
+export var TOOL_NAMES = new Set(TOOL_SCHEMAS.map(function (t) { return t.function.name; }));
