@@ -99,7 +99,10 @@ export default function Gerechten() {
             gang_slug: g.gang_slug,
             volgorde: g.volgorde,
             foto_url: g.foto_url || '',
-            ingredienten: g.ingredienten || [],
+            ingredienten: (g.ingredienten || []).map(function (i) {
+                if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
+                return i;
+            }),
             bereidingswijze: g.bereidingswijze || '',
             allergenen: g.allergenen || [],
             tags: g.tags || [],
@@ -299,7 +302,7 @@ export default function Gerechten() {
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    var gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang; });
+    var gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang && g.actief !== false; });
     var currentGang = gangen.find(function (g) { return g.slug === activeGang; });
 
     // ── Quick-add labels ──
@@ -370,11 +373,11 @@ export default function Gerechten() {
                                 })}
                             </div>
 
-                            {/* Ingrediënten preview */}
                             {g.ingredienten && g.ingredienten.length > 0 && (
                                 <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                                     {g.ingredienten.slice(0, 3).map(function (ing, i) {
-                                        return <span key={i} className="ingredient-chip-small">{ing}</span>;
+                                        var rawText = typeof ing === 'object' && ing !== null ? (ing.hoeveelheid ? ing.hoeveelheid + (ing.eenheid ? ' ' + ing.eenheid + ' ' : ' ') : '') + (ing.naam || JSON.stringify(ing)) : ing;
+                                        return <span key={i} className="ingredient-chip-small">{rawText}</span>;
                                     })}
                                     {g.ingredienten.length > 3 && <span className="ingredient-chip-small" style={{ opacity: 0.4 }}>+{g.ingredienten.length - 3}</span>}
                                 </div>
