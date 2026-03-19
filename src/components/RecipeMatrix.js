@@ -44,6 +44,8 @@ export default function RecipeMatrix({ action, supabase }) {
                     beschrijving: r.beschrijving || 'Geen beschrijving gegenereerd',
                     bereidingswijze: r.bereidingswijze || '',
                     ingredienten: r.ingredienten || [],
+                    allergenen: r.allergenen || [],
+                    kostprijs_pp: r.inkoop || 0,
                     actief: false,
                     volgorde: 900 + index
                 };
