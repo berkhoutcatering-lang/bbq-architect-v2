@@ -194,6 +194,43 @@ export var ACTION_TYPES = {
         icon: 'fa-folder-plus',
         color: '#FFBF00',
     },
+
+    // ── System Operator Tools ────────────────────────────────────────────────
+    generate_prep_list: {
+        label: 'Prep-lijst genereren',
+        table: null,
+        op: 'tool',
+        pages: ['/', '/events', '/agenda', '/service'],
+        icon: 'fa-list-check',
+        color: '#22c55e',
+        tool: 'generatePrepList',
+    },
+    bulk_create_gerechten: {
+        label: 'Gerechten toevoegen aan Menu Ontwikkelaar',
+        table: 'gerechten',
+        op: 'bulk_insert',
+        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-utensils',
+        color: '#a78bfa',
+        tool: 'bulkCreateGerechten',
+    },
+    filter_gerechten: {
+        label: 'Gerechten verwijderen/verbergen',
+        table: 'gerechten',
+        op: 'bulk_delete',
+        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-filter',
+        color: '#ef4444',
+        tool: 'filterGerechten',
+    },
+    mark_weak_dishes: {
+        label: 'Zwakke gerechten markeren',
+        table: null,
+        op: 'client_only',
+        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-star-half-stroke',
+        color: '#f59e0b',
+    },
 };
 
 // ─── Geef beschikbare acties terug voor een pagina ────────────────────────────

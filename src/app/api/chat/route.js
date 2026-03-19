@@ -213,6 +213,48 @@ var PAGE_SYSTEM_PROMPTS = {
     ].join('\n'),
 };
 
+// ─── System Operator: Intent-detectie + tool-instructies ─────────────────────
+var OPERATOR_INSTRUCTIONS = [
+    '',
+    '## Jij bent een System Operator — geen gewone chatbot',
+    'Je herkent het verschil tussen een GESPREK en een SYSTEEM-OPDRACHT:',
+    '',
+    '**GESPREK** (reageer met tekst):',
+    '- Begroetingen: "Hoe gaat het?", "Goedemorgen"',
+    '- Algemene vragen: "Wat is een goede temperatuur voor brisket?"',
+    '- Advies: "Welke saus past bij pulled pork?"',
+    '',
+    '**SYSTEEM-OPDRACHT** (gebruik een ACTION-blok + korte tekst):',
+    '- "Maak een prep-lijst" → generate_prep_list',
+    '- "Bedenk X gerechten met Y" → bulk_create_gerechten (genereer de gerechten zelf!)',
+    '- "Voeg toe aan het menu" → bulk_create_gerechten',
+    '- "Haal de zwakke gerechten eruit" → mark_weak_dishes (geef indices van zwakste)',
+    '- "Verwijder gerecht X" → filter_gerechten',
+    '',
+    '## Regels voor bulk_create_gerechten',
+    'Wanneer gevraagd om gerechten te bedenken voor het menu:',
+    '- Genereer ALTIJD de volledige lijst met unieke, concrete gerechten',
+    '- Gebruik de gangen-slugs uit de context-data (hapje, starter, hoofdgerecht, etc.)',
+    '- Volg de "Menu Trechter": mix van Bite/Borrelhapje (hapje), Starter (starter), Hoofdgerecht (hoofdgerecht)',
+    '- Per gerecht: naam (creatief + concreet), gang_slug, beschrijving (1 zin), bereidingswijze (2-3 stappen)',
+    '- Zet actief: false — de gebruiker bevestigt welke hij wil toevoegen',
+    '',
+    'Voorbeeld ACTION voor 3 buikspek-gerechten:',
+    '<<<ACTION:{"type":"bulk_create_gerechten","description":"3 buikspek-gerechten toevoegen aan Menu Ontwikkelaar","data":{"gerechten":[{"naam":"Buikspek lolly met kofferub","gang_slug":"hapje","beschrijving":"Sappig buikspek op stokje, 12u gerookt met kofferub en honing","bereidingswijze":"1. Snij buikspek in gelijke stukken. 2. Rub met koffie, paprika en bruine suiker. 3. 3u smoker op 110°C, glaceer met honing.","actief":false}]}}>>>',
+    '',
+    '## Regels voor generate_prep_list',
+    'Wanneer gevraagd om een prep-lijst, planning of "wat moet ik doen voor":',
+    '- Gebruik generate_prep_list met het event_id als je dat weet, anders zonder (dan pakt het systeem het volgende event)',
+    '- Voorbeeld: <<<ACTION:{"type":"generate_prep_list","description":"Prep-lijst genereren voor het aankomende event","data":{"event_id":5}}>>>',
+    '',
+    '## Regels voor mark_weak_dishes',
+    'Wanneer gevraagd welke gerechten minder sterk zijn uit een bulk-selectie:',
+    '- Analyseer de gerechten op: originaliteit, smaakvariatie, uitvoerbaarheid, markt-appeal',
+    '- Geef de indices (0-based) van de zwakste gerechten',
+    '- Leg ALTIJD uit WAAROM je die kiest',
+    '- Voorbeeld: <<<ACTION:{"type":"mark_weak_dishes","description":"5 zwakste gerechten markeren","data":{"weak_indices":[2,7,11,14,18],"reasons":["Te klassiek","Lijkt op gerecht 3",...]}}>>>',
+].join('\n');
+
 // ─── Gemeenschappelijke basis-instructies ─────────────────────────────────────
 var BASE_INSTRUCTIONS = [
     '',
@@ -282,12 +324,15 @@ export async function POST(req) {
         }
 
         // ── Voeg actie-instructies toe ────────────────────────────────────
-        if (pageContext && mode !== 'general' && mode !== 'qa') {
-            var actionInstructions = getActionInstructions(pageContext);
+        if (mode !== 'general' && mode !== 'qa') {
+            var actionInstructions = getActionInstructions(pageContext || '/');
             if (actionInstructions) {
                 systemParts.push(actionInstructions);
             }
         }
+
+        // ── Voeg System Operator instructies toe (altijd) ─────────────────
+        systemParts.push(OPERATOR_INSTRUCTIONS);
 
         // ── Voeg basis-instructies toe ────────────────────────────────────
         systemParts.push(BASE_INSTRUCTIONS);
@@ -306,7 +351,7 @@ export async function POST(req) {
                 model: 'llama-3.3-70b-versatile',
                 messages: groqMessages,
                 temperature: mode === 'brainstorm' ? 0.85 : 0.7,
-                max_tokens: mode === 'brainstorm' ? 1800 : 1200,
+                max_tokens: mode === 'brainstorm' ? 2400 : 2000,
             }),
         });
 
