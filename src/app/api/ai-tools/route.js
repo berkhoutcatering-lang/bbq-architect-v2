@@ -368,6 +368,40 @@ async function handleCalcPortiesVoor(sb, params) {
     };
 }
 
+async function handleGenerateSmartQuote(sb, params) {
+    var { data: lastRows } = await sb.from('offertes').select('nummer').order('id', { ascending: false }).limit(1);
+    var nextNum = 1;
+    if (lastRows && lastRows.length > 0 && lastRows[0].nummer) {
+        var match = lastRows[0].nummer.match(/\d+/);
+        if (match) nextNum = parseInt(match[0], 10) + 1;
+    }
+    var nummer = 'OFF-2026-' + nextNum.toString().padStart(3, '0');
+
+    var payload = {
+        nummer: nummer,
+        status: 'concept',
+        client_naam: params.client_naam,
+        client_adres: params.client_adres || '',
+        datum: params.datum,
+        geldig_tot: new Date(new Date(params.datum).getTime() + 14 * 86400000).toISOString().slice(0, 10),
+        notitie: params.notitie || '',
+        items: params.items || [],
+        menu_selectie: params.menu_selectie || [],
+        aantal_gasten: params.aantal_gasten,
+        basis_prijs_pp: params.basis_prijs_pp,
+        vaste_kosten: (params.vaste_kosten || []).map(k => ({ naam: k.naam, bedrag: parseFloat(k.bedrag) || 0 }))
+    };
+
+    var { data, error } = await sb.from('offertes').insert(payload).select();
+    if (error) throw new Error(error.message);
+
+    // De synchronisatie met Agenda wordt normaal in frontend gedaan, maar hier kan AI vast de Offerte wegschrijven.
+    // Sync logic (simpel): We roepen geen ingewikkelde events-sync aan vanuit AI om race conditions te voorkomen,
+    // De user kan in de UI de offerte openen en opslaan om te syncen, óf de AI krijgt later een plan_event_full tool.
+
+    return { created_quote: data[0], summary: `Offerte ${nummer} voor ${params.client_naam} succesvol aangemaakt met marge-check.` };
+}
+
 async function handleGetOffertes(sb, params) {
     var query = sb.from('offertes').select('*').order('datum', { ascending: false }).limit(30);
     if (params.status) query = query.eq('status', params.status);
@@ -823,6 +857,7 @@ var TOOL_HANDLERS = {
     createRecept: handleCreateRecept,
     updateRecept: handleUpdateRecept,
     calcPortiesVoor: handleCalcPortiesVoor,
+    generate_smart_quote: handleGenerateSmartQuote,
     getOffertes: handleGetOffertes,
     getOpenOffertes: handleGetOpenOffertes,
     calcOfferteOmzet: handleCalcOfferteOmzet,

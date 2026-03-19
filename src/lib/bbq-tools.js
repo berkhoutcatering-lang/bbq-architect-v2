@@ -327,6 +327,64 @@ export var TOOL_SCHEMAS = [
     {
         type: 'function',
         function: {
+            name: 'generate_smart_quote',
+            description: 'Genereer een complete, slimme offerte inclusief geselecteerde gerechten en perfect doorgerekende factuurregels om een specifieke marge te behalen.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    client_naam: { type: 'string', description: 'Naam van de klant' },
+                    client_adres: { type: 'string', description: 'Adres of vestiging' },
+                    datum: { type: 'string', description: 'YYYY-MM-DD' },
+                    aantal_gasten: { type: 'number', description: 'Totaal aantal gasten' },
+                    basis_prijs_pp: { type: 'number', description: 'Prijs per persoon (excl BTW) om de marge >70% te checken' },
+                    notitie: { type: 'string', description: 'Toelichting op het menu en de opzet' },
+                    menu_selectie: {
+                        type: 'array',
+                        description: 'De gekozen of bedachte gerechten voor deze offerte',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                gang_slug: { type: 'string' },
+                                gerecht_naam: { type: 'string' },
+                                beschrijving: { type: 'string' }
+                            },
+                            required: ['gang_slug', 'gerecht_naam']
+                        }
+                    },
+                    items: {
+                        type: 'array',
+                        description: 'Factuurregels (Offerte Lines) zoals "BBQ Signature Menu p.p." of "Huur Kok"',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                desc: { type: 'string', description: 'Omschrijving op de factuurregel' },
+                                qty: { type: 'number', description: 'Aantal' },
+                                prijs: { type: 'number', description: 'Prijs per eenheid (excl BTW)' },
+                                btw: { type: 'number', description: 'BTW percentage (9 voor eten, 21 voor service/drank)' }
+                            },
+                            required: ['desc', 'qty', 'prijs', 'btw']
+                        }
+                    },
+                    vaste_kosten: {
+                        type: 'array',
+                        description: 'Verwachte vaste kosten voor winst-calculatie (bijv. Uren Kok, Brandstof)',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                naam: { type: 'string' },
+                                bedrag: { type: 'number' }
+                            },
+                            required: ['naam', 'bedrag']
+                        }
+                    }
+                },
+                required: ['client_naam', 'datum', 'aantal_gasten', 'basis_prijs_pp', 'items']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'getOffertes',
             description: 'Haal alle offertes op, inclusief berekende totaalbedragen.',
             parameters: {

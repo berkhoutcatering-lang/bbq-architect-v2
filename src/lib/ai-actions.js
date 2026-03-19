@@ -158,6 +158,14 @@ export var ACTION_TYPES = {
     },
 
     // ── Offertes ─────────────────────────────────────────────────────────────
+    generate_smart_quote: {
+        label: 'Slimme Offerte Genereren',
+        table: 'offertes',
+        op: 'insert',
+        pages: ['/offertes', '/agenda', '/menu-engineering'],
+        icon: 'fa-brain',
+        color: '#8b5cf6', // Violet for Genius Actions
+    },
     update_offerte_status: {
         label: 'Offerte status bijwerken',
         table: 'offertes',
