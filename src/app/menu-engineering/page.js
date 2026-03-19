@@ -26,21 +26,27 @@ function scoreColor(pct) {
 }
 
 // ── Gerecht Kaart ───────────────────────────────────────────────────────────
-function GerechtKaart({ gerecht, onMoveToMap, geselecteerd }) {
+function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails }) {
   var gang = getGang(gerecht.gang_slug);
   var marge = gerecht.kostprijs_pp
     ? Math.round((1 - gerecht.kostprijs_pp / 45) * 100)
     : null;
 
   return (
-    <div style={{
-      background: geselecteerd ? 'rgba(167,139,250,.05)' : 'var(--card)',
-      border: geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)',
-      borderRadius: 12,
-      padding: '16px',
-      transition: 'all .15s',
-      position: 'relative',
-    }}>
+    <div
+      onClick={function () { if (onViewDetails) onViewDetails(gerecht); }}
+      style={{
+        background: geselecteerd ? 'rgba(167,139,250,.05)' : 'var(--card)',
+        border: geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '16px',
+        transition: 'all .15s',
+        position: 'relative',
+        cursor: 'pointer' /* Made clickable */
+      }}
+      onMouseEnter={function (e) { e.currentTarget.style.borderColor = 'rgba(255,255,255,.2)'; }}
+      onMouseLeave={function (e) { e.currentTarget.style.borderColor = geselecteerd ? 'rgba(167,139,250,.25)' : 'var(--border)'; }}
+    >
       {/* Gang badge — subtiel */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
         <span style={{ fontSize: 11, color: gang.kleur, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
@@ -89,7 +95,7 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd }) {
 
       {/* Map knop */}
       <button
-        onClick={function () { onMoveToMap(gerecht); }}
+        onClick={function (e) { e.stopPropagation(); onMoveToMap(gerecht); }}
         style={{
           width: '100%', background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.15)',
           color: '#a78bfa', padding: '6px', borderRadius: 7, fontSize: 11, fontWeight: 600,
@@ -100,6 +106,87 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd }) {
       >
         → Zet in map
       </button>
+    </div>
+  );
+}
+
+// ── Gerecht Details / Edit Modal ────────────────────────────────────────────
+function GerechtDetailsModal({ gerecht, onSave, onClose, supabase }) {
+  if (!gerecht) return null;
+
+  function stringifyArray(arr) {
+    if (!Array.isArray(arr)) return '';
+    return arr.map(function (i) {
+      if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
+      return i;
+    }).join(', ');
+  }
+
+  var [form, setForm] = useState({
+    naam: gerecht.naam || '',
+    beschrijving: gerecht.beschrijving || '',
+    ingredienten: stringifyArray(gerecht.ingredienten),
+    bereidingswijze: gerecht.bereidingswijze || '',
+    allergenen: stringifyArray(gerecht.allergenen),
+    kostprijs_pp: gerecht.kostprijs_pp || '',
+  });
+  var [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    var updateData = {
+      naam: form.naam,
+      beschrijving: form.beschrijving,
+      ingredienten: form.ingredienten.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+      bereidingswijze: form.bereidingswijze,
+      allergenen: form.allergenen.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+      kostprijs_pp: parseFloat(form.kostprijs_pp) || 0,
+    };
+    var { error } = await supabase.from('gerechten').update(updateData).eq('id', gerecht.id);
+    setSaving(false);
+    if (!error) onSave(gerecht.id, updateData);
+    else alert('Fout bij opslaan: ' + error.message);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px 28px', width: 600, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function (e) { e.stopPropagation(); }}>
+        <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16, color: 'var(--brand)' }}>{gerecht.naam} Bewerken</h3>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Naam</label>
+            <input value={form.naam} onChange={function (e) { setForm(Object.assign({}, form, { naam: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Beschrijving (Smaakprofiel)</label>
+            <textarea rows={2} value={form.beschrijving} onChange={function (e) { setForm(Object.assign({}, form, { beschrijving: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Ingrediënten (komma-gescheiden)</label>
+            <textarea rows={2} value={form.ingredienten} onChange={function (e) { setForm(Object.assign({}, form, { ingredienten: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#B48C14', textTransform: 'uppercase', marginBottom: 4 }}>Allergenen (volgens warenwet, komma-gescheiden)</label>
+            <input value={form.allergenen} onChange={function (e) { setForm(Object.assign({}, form, { allergenen: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'rgba(180,140,20,.1)', border: '1px solid rgba(180,140,20,.3)', borderRadius: 8, color: '#fff', fontSize: 13 }} placeholder="bijv. Gluten, Melk, Noten" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Bereidingswijze (Stappenplan)</label>
+            <textarea rows={5} value={form.bereidingswijze} onChange={function (e) { setForm(Object.assign({}, form, { bereidingswijze: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Foodcost p.p. (€)</label>
+            <input type="number" step="0.01" value={form.kostprijs_pp} onChange={function (e) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13 }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: 'rgba(255,255,255,.5)', fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 800, cursor: 'pointer' }}>
+            {saving ? 'Opslaan...' : 'Wijzigingen Opslaan'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -234,6 +321,9 @@ export default function MenuEngineering() {
   // Gang picker modal
   var [picking, setPicking] = useState(null); // gerecht object
 
+  // Gerecht details modal
+  var [viewingGerecht, setViewingGerecht] = useState(null);
+
   // Publish toast
   var [toast, setToast] = useState(null);
 
@@ -344,6 +434,17 @@ export default function MenuEngineering() {
       });
     });
     showToast('✅ ' + gerechtenLijst.length + ' gerechten gepubliceerd als ' + gang.label);
+  }
+
+  function handleSaveDetails(id, updateData) {
+    setGerechten(function (prev) {
+      return prev.map(function (g) {
+        if (g.id === id) return Object.assign({}, g, updateData);
+        return g;
+      });
+    });
+    setViewingGerecht(null);
+    showToast('✅ Gerecht succcesvol gewijzigd!');
   }
 
   function showToast(msg) {
@@ -498,6 +599,7 @@ export default function MenuEngineering() {
                   gerecht={g}
                   geselecteerd={inMap.has(g.id)}
                   onMoveToMap={openGangPicker}
+                  onViewDetails={setViewingGerecht}
                 />
               );
             })}
@@ -593,6 +695,14 @@ export default function MenuEngineering() {
         gerecht={picking}
         onPick={placeInMap}
         onClose={function () { setPicking(null); }}
+      />
+
+      {/* Details / Edit modal */}
+      <GerechtDetailsModal
+        gerecht={viewingGerecht}
+        onSave={handleSaveDetails}
+        onClose={function () { setViewingGerecht(null); }}
+        supabase={supabase}
       />
     </div>
   );
