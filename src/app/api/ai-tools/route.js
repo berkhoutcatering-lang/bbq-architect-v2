@@ -325,6 +325,78 @@ async function handleGetReceptDetail(sb, params) {
     return { recept: data };
 }
 
+async function handlePlanEventFull(sb, params) {
+    // 1. Maak Event aan
+    var eventPayload = {
+        klant_naam: params.klant_naam,
+        datum: params.datum,
+        aantal_personen: params.aantal_gasten,
+        status: 'bevestigd', // End-to-end planning gaat uit van een bevestigd event
+        notities: (params.notities || '') + '\n[AI] Geplande Menu Selectie: ' + (params.menu_selectie || []).join(', ')
+    };
+
+    var { data: eventData, error: eventErr } = await sb.from('events').insert(eventPayload).select();
+    if (eventErr) throw new Error("Fout bij aanmaken event: " + eventErr.message);
+
+    var event = eventData[0];
+    var createdTasks = [];
+
+    // 2. Plan Prep Taken
+    if (params.prep_taken && params.prep_taken.length > 0) {
+        var tasksPayload = params.prep_taken.map(function (pt) {
+            return {
+                event_id: event.id,
+                taak_naam: pt.taak + (pt.context_gerecht ? ' (' + pt.context_gerecht + ')' : ''),
+                datum: pt.datum_uitvoer,
+                status: 'todo',
+                verantwoordelijke: pt.toegewezen_aan || 'Keuken'
+            };
+        });
+
+        var { data: taskData, error: taskErr } = await sb.from('prep_tasks').insert(tasksPayload).select();
+        if (taskErr) throw new Error("Event aangemaakt, maar fout bij prep-taken: " + taskErr.message);
+        createdTasks = taskData || [];
+    }
+
+    // 3. (Optioneel) Init Bus-Check: We could add a logistics table entry here.
+
+    return {
+        event: event,
+        aantal_prep_taken: createdTasks.length,
+        prep_taken: params.prep_taken,
+        summary: `Event voor ${params.klant_naam} ingepland op ${params.datum}. Er zijn direct ${createdTasks.length} prep-taken klaargezet in de agenda.`
+    };
+}
+
+async function handleEngineerMenuProfitability(sb, params) {
+    if (!params.analyse_resultaten || params.analyse_resultaten.length === 0) {
+        return { summary: "Geen optimalisaties gevonden." };
+    }
+
+    var updates = [];
+    for (var i = 0; i < params.analyse_resultaten.length; i++) {
+        var res = params.analyse_resultaten[i];
+        if (res.gerecht_id) {
+            // Haal huidig gerecht op
+            var { data: g } = await sb.from('gerechten').select('id, bereidingswijze').eq('id', res.gerecht_id).single();
+            if (g) {
+                // We appenden de AI notitie aan de bereiding/notities zodat de chef de vervanging ziet.
+                // In een nog geavanceerdere versie herschrijven we de JSON ingredienten-array direct.
+                var note = `\n\n[AI Winstoptimalisatie]: Vervang ${res.knelpunt_ingredient} met ${res.suggestie_vervanging}. Reden: ${res.reden}. Marge stijgt naar ${res.nieuwe_geschatte_marge}%.`;
+                await sb.from('gerechten').update({ bereidingswijze: (g.bereidingswijze || '') + note }).eq('id', g.id);
+                updates.push(res.gerecht_naam);
+            }
+        }
+    }
+
+    return {
+        aantal_geoptimaliseerd: updates.length,
+        gerechten: updates,
+        totaal_winstpotentieel: params.totaal_winstpotentieel,
+        summary: `Marge-optimalisatie toegepast op ${updates.length} gerechten. Geschat winstpotentieel: ${params.totaal_winstpotentieel}.`
+    };
+}
+
 async function handleCreateRecept(sb, params) {
     var { data, error } = await sb.from('recepten').insert([{
         naam: params.naam,
@@ -637,6 +709,57 @@ async function handleProcessReceipt(sb, params) {
     };
 }
 
+async function handleOptimizeShoppingList(sb, params) {
+    var payload = {
+        periode_start: params.periode_start,
+        periode_eind: params.periode_eind,
+        event_nummers: params.event_nummers || [],
+        leveranciers_lijsten: params.leveranciers_lijsten || [],
+        totaal_geschatte_kosten: params.totaal_geschatte_kosten || 0,
+        aangemaakt_op: new Date().toISOString()
+    };
+
+    // Probeer in_koopljsten tabel te schrijven (zo niet, geven we het gewoon terug aan de UI)
+    var { data, error } = await sb.from('inkooplijsten').insert(payload).select();
+    if (error) {
+        // Fallback: stuur data terug zonder opslaan, puur informatief voor de Action Card in UI.
+        return Object.assign({ opslaan_mislukt: true, error: error.message }, payload);
+    }
+
+    return data[0];
+}
+
+async function handlePredictHardwareNeeds(sb, params) {
+    if (!params.benodigd_materieel || params.benodigd_materieel.length === 0) {
+        return { summary: "Geen bijzonder materieel nodig voor dit event." };
+    }
+
+    // We kunnen de Bus-Check items opslaan in een logistieke tabel.
+    // Voor nu sturen we de payload direct terug naar de UI zodat de Action Card 'm kan renderen,
+    // en bij 'Accepteren' gooien we het in de DB.
+
+    var payload = params.benodigd_materieel.map(function (item) {
+        return {
+            event_id: params.event_id,
+            item_naam: item.item_naam,
+            aantal: item.aantal,
+            reden: item.reden,
+            status: 'inpakken' // of 'bus-check'
+        };
+    });
+
+    // Note: We stoppen het hier in event_materieel. Falen is OK, we geven data altijd terug voor UI.
+    await sb.from('event_materieel').insert(payload);
+
+    return {
+        event_id: params.event_id,
+        event_naam: params.event_naam,
+        aantal_items: params.benodigd_materieel.length,
+        bus_check_lijst: params.benodigd_materieel,
+        summary: `Bus-Check voor ${params.event_naam || 'het event'} gegenereerd: ${params.benodigd_materieel.length} items ingepland.`
+    };
+}
+
 async function handleGetHaccpLogs(sb, params) {
     var days = params.days || 7;
     var from = new Date(Date.now() - days * 86400000).toISOString();
@@ -896,6 +1019,8 @@ var TOOL_HANDLERS = {
     getUpcomingEvents: handleGetUpcomingEvents,
     getEventDetail: handleGetEventDetail,
     createEvent: handleCreateEvent,
+    plan_event_full: handlePlanEventFull,
+    engineer_menu_profitability: handleEngineerMenuProfitability,
     updateEventStatus: handleUpdateEventStatus,
     generatePrepList: handleGeneratePrepList,
     generateTimeline: handleGenerateTimeline,
@@ -929,6 +1054,8 @@ var TOOL_HANDLERS = {
     generateInkoopVoorEvent: handleGenerateInkoopVoorEvent,
     getInkoopPerWinkel: handleGetInkoopPerWinkel,
     process_receipt: handleProcessReceipt,
+    optimize_shopping_list: handleOptimizeShoppingList,
+    predict_hardware_needs: handlePredictHardwareNeeds,
     getHaccpLogs: handleGetHaccpLogs,
     createHaccpLog: handleCreateHaccpLog,
     getMissingHaccpLogs: handleGetMissingHaccpLogs,

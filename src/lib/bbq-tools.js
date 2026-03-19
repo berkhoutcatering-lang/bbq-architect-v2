@@ -38,6 +38,38 @@ export var TOOL_SCHEMAS = [
     {
         type: 'function',
         function: {
+            name: 'plan_event_full',
+            description: 'PLAN EEN EVENT END-TO-END. Maak het event aan, selecteer het menu, en plan direct de afgeleide prep-taken (-3 dg, -2 dg, -1 dg) in de agenda op basis van het gekozen menu.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    klant_naam: { type: 'string' },
+                    datum: { type: 'string', description: 'YYYY-MM-DD' },
+                    aantal_gasten: { type: 'number' },
+                    menu_selectie: { type: 'array', items: { type: 'string' } },
+                    notities: { type: 'string' },
+                    prep_taken: {
+                        type: 'array',
+                        description: 'Automatisch berekende voorbereidingstaken gebaseerd op de gekozen gerechten.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                taak: { type: 'string' },
+                                dagen_vooraf: { type: 'number', description: 'bv. 3 voor -3 dagen' },
+                                datum_uitvoer: { type: 'string', description: 'YYYY-MM-DD (live berekend o.b.v. event datum)' },
+                                context_gerecht: { type: 'string', description: 'Voor welk gerecht is deze taak?' }
+                            },
+                            required: ['taak', 'dagen_vooraf', 'datum_uitvoer']
+                        }
+                    }
+                },
+                required: ['klant_naam', 'datum', 'aantal_gasten', 'menu_selectie', 'prep_taken']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'createEvent',
             description: 'Maak een nieuw catering-event aan in het systeem.',
             parameters: {
@@ -236,6 +268,37 @@ export var TOOL_SCHEMAS = [
     // ══════════════════════════════════════════════════════
     // RECEPTEN (THE VAULT)
     // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'engineer_menu_profitability',
+            description: 'Zoek naar "Plowhorses" in het systeem (hoge verkoop, lage marge). Reken live de foodcost door en stel slimme ingrediënt-vervangingen voor die de marge verhogen zonder kwaliteitsverlies.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    analyse_resultaten: {
+                        type: 'array',
+                        description: 'Lijst van geanalyseerde gerechten en voorgestelde verbeteringen.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                gerecht_id: { type: 'number' },
+                                gerecht_naam: { type: 'string' },
+                                huidige_marge: { type: 'number' },
+                                knelpunt_ingredient: { type: 'string', description: 'Het ingrediënt dat de marge drukt' },
+                                suggestie_vervanging: { type: 'string', description: 'Door welk ingrediënt kunnen we dit vervangen?' },
+                                nieuwe_geschatte_marge: { type: 'number', description: 'Marge na vervanging' },
+                                reden: { type: 'string', description: 'Chef-waardige uitleg voor deze aanpassing' }
+                            },
+                            required: ['gerecht_naam', 'huidige_marge', 'knelpunt_ingredient', 'suggestie_vervanging', 'nieuwe_geschatte_marge', 'reden']
+                        }
+                    },
+                    totaal_winstpotentieel: { type: 'string', description: 'Bv. +8% marge op het totale menu' }
+                },
+                required: ['analyse_resultaten', 'totaal_winstpotentieel']
+            }
+        }
+    },
     {
         type: 'function',
         function: {
@@ -611,6 +674,51 @@ export var TOOL_SCHEMAS = [
             }
         }
     },
+    {
+        type: 'function',
+        function: {
+            name: 'optimize_shopping_list',
+            description: 'Genereer een slimme, netto inkooplijst voor een specifieke periode. Bereken (Recepturen x Gasten) - Huidige Voorraad + 5% Waste, uitgesplitst per leverancier.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    periode_start: { type: 'string', description: 'YYYY-MM-DD' },
+                    periode_eind: { type: 'string', description: 'YYYY-MM-DD' },
+                    event_nummers: { type: 'array', items: { type: 'string' }, description: 'Optioneel: Specifieke events (bijv. EVT-001) om in te kopen.' },
+                    leveranciers_lijsten: {
+                        type: 'array',
+                        description: 'De gegenereerde netto inkooplijsten, gegroepeerd per leverancier (Sligro, Crisp, Slager, etc.)',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                leverancier: { type: 'string' },
+                                items: {
+                                    type: 'array',
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            naam: { type: 'string' },
+                                            bruto_nodig: { type: 'number', description: 'Wat de recepten exact vragen' },
+                                            voorraad_af: { type: 'number', description: 'Wat we al in huis hebben' },
+                                            waste_marge: { type: 'number', description: '5% extra buffer' },
+                                            netto_inkoop: { type: 'number', description: 'Bruto - Voorraad + Waste (Wat we écht moeten kopen)' },
+                                            eenheid: { type: 'string' },
+                                            geschatte_kosten: { type: 'number', description: 'Netto inkoop x verwachte inkoopprijs' }
+                                        },
+                                        required: ['naam', 'netto_inkoop', 'eenheid']
+                                    }
+                                },
+                                subtotaal_kosten: { type: 'number' }
+                            },
+                            required: ['leverancier', 'items']
+                        }
+                    },
+                    totaal_geschatte_kosten: { type: 'number' }
+                },
+                required: ['periode_start', 'periode_eind', 'leveranciers_lijsten', 'totaal_geschatte_kosten']
+            }
+        }
+    },
 
     // ══════════════════════════════════════════════════════
     // HACCP
@@ -716,6 +824,34 @@ export var TOOL_SCHEMAS = [
     // ══════════════════════════════════════════════════════
     // MATERIEEL
     // ══════════════════════════════════════════════════════
+    {
+        type: 'function',
+        function: {
+            name: 'predict_hardware_needs',
+            description: 'Lees het menu van een gepland event en voorspel exact welke hardware (smokers, ovens, gas, koelboxen) mee in de bus moet. Genereert de "Bus-Check" lijst.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    event_naam: { type: 'string' },
+                    benodigd_materieel: {
+                        type: 'array',
+                        description: 'De voorspelde hardware items gebaseerd op de gekozen gerechten en het aantal gasten.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                item_naam: { type: 'string' },
+                                aantal: { type: 'number' },
+                                reden: { type: 'string', description: 'Waarom is dit nodig? (Bv. "Nodig voor de Pulled Pork")' }
+                            },
+                            required: ['item_naam', 'aantal', 'reden']
+                        }
+                    }
+                },
+                required: ['event_id', 'benodigd_materieel']
+            }
+        }
+    },
     {
         type: 'function',
         function: {

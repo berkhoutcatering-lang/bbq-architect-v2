@@ -20,6 +20,38 @@ export var ACTION_TYPES = {
         icon: 'fa-calendar-check',
         color: '#f59e0b',
     },
+    getUpcomingEvents: {
+        label: 'Aankomende events ophalen',
+        table: 'events',
+        op: 'select',
+        pages: ['/agenda', '/events'],
+        icon: 'fa-calendar-days',
+        color: '#3b82f6', // Blauw
+    },
+    analyzeMenuBalance: {
+        label: 'Menu Balans Analyseren',
+        table: 'gerechten',
+        op: 'select',
+        pages: ['/menu-engineering', '/ai-chat'],
+        icon: 'fa-scale-balanced',
+        color: '#a855f7', // Purper
+    },
+    engineer_menu_profitability: {
+        label: 'Winstoptimalisatie Toepassen (Plowhorses)',
+        table: 'gerechten', // Optioneel updates direct op recepten/gerechten
+        op: 'update',
+        pages: ['/menu-engineering', '/recepten', '/ai-chat'],
+        icon: 'fa-money-bill-trend-up',
+        color: '#8b5cf6', // Violet for Genius Actions
+    },
+    plan_event_full: {
+        label: 'Event End-to-End Inplannen',
+        table: 'events',
+        op: 'insert',
+        pages: ['/agenda', '/events', '/ai-chat'],
+        icon: 'fa-calendar-check',
+        color: '#8b5cf6', // Violet for Genius Actions
+    },
     delete_event: {
         label: 'Event verwijderen',
         table: 'events',
@@ -88,6 +120,14 @@ export var ACTION_TYPES = {
         op: 'insert', // Aangepaste backend logic neemt dit over
         pages: ['/ai-chat', '/inkoop', '/voorraad'],
         icon: 'fa-receipt',
+        color: '#8b5cf6', // Violet
+    },
+    optimize_shopping_list: {
+        label: 'Boodschappenlijst Genereren (Netto Inkoop)',
+        table: 'inkooplijsten',
+        op: 'insert',
+        pages: ['/inkoop', '/ai-chat', '/events'],
+        icon: 'fa-cart-shopping',
         color: '#8b5cf6', // Violet for Genius Actions
     },
 
@@ -153,6 +193,14 @@ export var ACTION_TYPES = {
         pages: ['/materieel'],
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
+    },
+    predict_hardware_needs: {
+        label: 'Hardware Voorspelling (Bus-Check)',
+        table: 'event_materieel',
+        op: 'insert',
+        pages: ['/logistiek', '/events', '/ai-chat'],
+        icon: 'fa-truck-fast',
+        color: '#8b5cf6', // Violet for Genius Actions
     },
 
     // ── Prep-taken ───────────────────────────────────────────────────────────
