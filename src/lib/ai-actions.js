@@ -236,7 +236,7 @@ export function getActionInstructions(pathname) {
         'Wanneer de gebruiker expliciet vraagt om iets aan te maken, bij te werken of te verwijderen,',
         'kun je een actieblok opnemen in je antwoord. ALLEEN bij expliciete verzoeken, NOOIT automatisch.',
         '',
-        'Formaat (exact overnemen, inclusief <<<>>>):',
+        'Formaat (exact overnemen, inclusief <<<>>> en ZONDER markdown backticks):',
         '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving van wat er gaat gebeuren","data":{...velden...}}>>>',
         '',
         'Beschikbare actietypes voor deze pagina:',
@@ -260,7 +260,11 @@ export function parseActions(text) {
 
     while ((match = pattern.exec(text)) !== null) {
         try {
-            var parsed = JSON.parse(match[1]);
+            var rawJsonString = match[1].trim();
+            // Verwijder markdown code blokken als de AI die per ongeluk toevoegt
+            rawJsonString = rawJsonString.replace(/^```(json)?\s*/i, '').replace(/\s*```$/i, '');
+
+            var parsed = JSON.parse(rawJsonString);
             if (parsed.type && ACTION_TYPES[parsed.type]) {
                 actions.push({
                     id: Math.random().toString(36).slice(2, 8),
@@ -272,7 +276,16 @@ export function parseActions(text) {
                 });
             }
         } catch (e) {
-            console.warn('[AI Actions] Kon actieblok niet parsen:', match[1]);
+            console.warn('[AI Actions] Kon actieblok niet parsen:', e.message);
+            console.warn('[AI Actions] Ontvangen string:', match[1]);
+            // Voeg een fake actie toe met een foutmelding zodat de UI (en developer) dit ziet
+            actions.push({
+                id: 'error-' + Math.random().toString(36).slice(2, 8),
+                type: 'error',
+                description: 'Parsen mislukt: ' + e.message,
+                data: { raw: match[1] },
+                status: 'failed'
+            });
         }
     }
 

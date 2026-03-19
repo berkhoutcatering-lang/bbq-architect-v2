@@ -193,8 +193,8 @@ var BASE_INSTRUCTIONS = [
     '- **Matrix Generatie (Bv. "Trechter", "De Zalm-Matrix", "Maak 10 gerechten"):**',
     '  Als de gebruiker vraagt om een grote hoeveelheid gerechten of een matrix, genereer DAN GEEN PLATTE TEKST TABEL, maar ALTIJD een JSON actieblok.',
     '  Dit actieblok genereert een interactieve tabel in het dashboard. Voordat je het blok genereert, zeg je in platte tekst EXACT dit: "Chef, ik heb de concepten voor je klaargezet in de funnel. Welke zullen we naar Menu Engineering schieten?"',
-    '  Gebruik EXACT dit formaat voor het blok:',
-    '  `<<<ACTION:{"type":"render_recipe_matrix","description":"Jouw titel hier","data":{"recipes":[{"naam":"Naam","categorie":"bites/voorgerechten/hoofdgerechten/desserts","gram":25,"inkoop":0.65,"marge":75,"ingredienten":[{"naam":"Zalm","hoeveelheid":25,"eenheid":"gram"}],"beschrijving":"Licht waarom dit een topgerecht is. Focus op smaakprofiel: zuren, structuren (krokant/zacht) en balans.","bereidingswijze":"EXPLICIETE EN COMPLETE BEREIDINGSWIJZE. Denk na over elke stap, van pekelen/rubben tot garen en opmaak."}]}}>>>`',
+    '  Gebruik EXACT dit formaat voor het blok (LET OP: GEBRUIK GEEN MARKDOWN CODE BLOKKEN, START DIRECT MET <<<ACTION):',
+    '  <<<ACTION:{"type":"render_recipe_matrix","description":"Jouw titel hier","data":{"recipes":[{"naam":"Naam","categorie":"bites/voorgerechten/hoofdgerechten/desserts","gram":25,"inkoop":0.65,"marge":75,"ingredienten":[{"naam":"Zalm","hoeveelheid":25,"eenheid":"gram"}],"beschrijving":"...","bereidingswijze":"..."}]}}>>>',
     '  Belangrijke regels voor de Matrix:',
     '  1. **Beschrijving:** Verklaar altijd waarom het gerecht klopt (zuren, structuren, umami).',
     '  2. **Bereidingswijze:** Neem hier echt de tijd voor. Schrijf de complete bereiding uit in professionele kokstaal.',
@@ -203,9 +203,8 @@ var BASE_INSTRUCTIONS = [
     '',
     '## IMPORT FUNCTIE (Enkel Recept)',
     '- Als de gebruiker zegt "Zet dit in mijn systeem" of "Importeer dit", genereer dan MOEITELOOS een actieblok om het recept op te slaan.',
-    '- Het formaat van je actieblok data is:',
-    '  `{"naam": "Naam Gerecht", "categorie": "bites/voorgerechten/hoofdgerechten/desserts", "porties": 10, "ingredienten": [{"naam": "Zalm", "hoeveelheid": 150, "eenheid": "gram"}], "bereiding": "Stap 1...", "geschatte_kostprijs": 5.40}`',
-    '- Gebruik ALTIJD de actietype: "import_vault_recipe"',
+    '- Het formaat van je actieblok data is (ZONDER markdown backticks):',
+    '  <<<ACTION:{"type":"import_vault_recipe","description":"Recept opslaan","data":{"naam": "Naam Gerecht", "categorie": "bites/voorgerechten/hoofdgerechten/desserts", "porties": 10, "ingredienten": [{"naam": "Zalm", "hoeveelheid": 150, "eenheid": "gram"}], "bereiding": "Stap 1...", "geschatte_kostprijs": 5.40}}>>>',
 ].join('\n');
 
 // ─── Brainstorm modus instructies ─────────────────────────────────────────────

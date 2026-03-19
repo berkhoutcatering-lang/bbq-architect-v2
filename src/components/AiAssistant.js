@@ -226,7 +226,8 @@ export default function AiAssistant() {
         var isExecuting = action.status === 'executing';
         var isDone = action.status === 'done';
         var isRejected = action.status === 'rejected';
-        var isError = action.status === 'error';
+        var isError = action.status === 'error' || action.status === 'failed';
+        var meta = action.meta || { icon: 'fa-triangle-exclamation', color: '#ef4444', label: 'Systeem Actie' };
 
         return (
             <div key={action.id} style={{
@@ -239,8 +240,8 @@ export default function AiAssistant() {
                 background: isDone ? 'rgba(34,197,94,.08)' : isError ? 'rgba(239,68,68,.08)' : isRejected ? 'rgba(113,113,122,.08)' : 'rgba(255,191,0,.08)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <i className={'fa-solid ' + (action.meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00'), fontSize: 13 }}></i>
-                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>{action.meta.label}</span>
+                    <i className={'fa-solid ' + (meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (meta.color || '#FFBF00'), fontSize: 13 }}></i>
+                    <span style={{ fontWeight: 700, color: 'var(--text)' }}>{meta.label}</span>
                     {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 11 }}>&#10003; Uitgevoerd</span>}
                     {isRejected && <span style={{ marginLeft: 'auto', color: '#71717a', fontSize: 11 }}>Afgewezen</span>}
                     {isError && <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: 11 }}>Fout</span>}
