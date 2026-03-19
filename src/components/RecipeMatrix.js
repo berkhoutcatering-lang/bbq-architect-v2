@@ -40,20 +40,20 @@ export default function RecipeMatrix({ action, supabase }) {
                 var r = recipes[index];
                 return {
                     naam: r.naam,
-                    categorie: r.categorie || 'Onbekend',
-                    porties: r.porties || 10,
-                    instructies: r.bereiding || '',
+                    gang_slug: (r.categorie || 'hoofdgerechten').toLowerCase(),
+                    beschrijving: r.beschrijving || 'Geen beschrijving gegenereerd',
+                    bereidingswijze: r.bereidingswijze || '',
                     ingredienten: r.ingredienten || [],
-                    preptime: 15,
-                    notitie: 'Geschatte inkoop: €' + (r.inkoop || 0).toFixed(2) + ' (Marge: ' + (r.marge || 0) + '%)'
+                    actief: false,
+                    volgorde: 900 + index
                 };
             });
 
-            var res = await supabase.from('recepten').insert(toImport);
+            var res = await supabase.from('gerechten').insert(toImport);
 
             if (res.error) throw res.error;
 
-            showToast(selected.length + ' recepten succesvol in de Vault gezet! 🚀', 'success');
+            showToast(selected.length + ' gerechten succesvol in Menu Engineering gezet! 🚀', 'success');
             setImported(true);
         } catch (err) {
             console.error('[Matrix Import Error]', err);
@@ -168,8 +168,7 @@ export default function RecipeMatrix({ action, supabase }) {
                         disabled={selected.length === 0 || importing}
                         style={{ padding: '10px 24px', fontSize: 14, fontWeight: 700 }}
                     >
-                        {importing ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }}></i> : <i className="fa-solid fa-vault" style={{ marginRight: 8 }}></i>}
-                        {importing ? 'Importeren...' : 'Finaliseer Selectie naar Vault (' + selected.length + ')'}
+                        {importing ? 'Importeren...' : 'Finaliseer Selectie naar Menu Engineering (' + selected.length + ')'}
                     </button>
                 </div>
             )}
