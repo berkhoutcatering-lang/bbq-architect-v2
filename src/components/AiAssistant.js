@@ -14,8 +14,11 @@ export default function AiAssistant() {
     var [contextData, setContextData] = useState(null);
     var [contextLoaded, setContextLoaded] = useState(false);
     var [contextLoading, setContextLoading] = useState(false);
+    var [imageFile, setImageFile] = useState(null);
+    var [imageBase64, setImageBase64] = useState(null);
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
+    var fileInputRef = useRef(null);
 
     var pageName = (function () {
         var n = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
@@ -76,20 +79,47 @@ export default function AiAssistant() {
         }
     }, [isOpen]);
 
+    // ── Image Handling ───────────────────────────────────────────────────────
+    function handleImageSelect(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { alert("Afbeelding is te groot (max 5MB)"); return; }
+        setImageFile(file);
+        var reader = new FileReader();
+        reader.onload = function (ev) { setImageBase64(ev.target.result); };
+        reader.readAsDataURL(file);
+    }
+    function removeImage() {
+        setImageFile(null);
+        setImageBase64(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+
     // ── Bericht versturen ────────────────────────────────────────────────────
     async function sendMessage(e) {
         if (e) e.preventDefault();
         var text = input.trim();
-        if (!text || isLoading) return;
-        setInput('');
+        if (!text && !imageBase64 || isLoading) return;
 
-        var userMsg = { role: 'user', content: text };
-        var apiMessages = [
-            ...messages.map(function (m) { return { role: m.role, content: m.content }; }),
-            { role: 'user', content: text }
-        ];
+        var userMsg = { role: 'user', content: text || '📸 Afbeelding geüpload', imageUrl: imageBase64 };
+
+        var apiMessages = messages.map(function (m) {
+            if (m.imageUrl) {
+                return { role: m.role, content: [{ type: "text", text: m.content || "Zie afbeelding" }, { type: "image_url", image_url: { url: m.imageUrl } }] };
+            }
+            return { role: m.role, content: m.content };
+        });
+
+        if (imageBase64) {
+            apiMessages.push({ role: 'user', content: [{ type: "text", text: text || "Lees dit bonnetje uit met process_receipt" }, { type: "image_url", image_url: { url: imageBase64 } }] });
+        } else {
+            apiMessages.push({ role: 'user', content: text });
+        }
+
         setMessages(function (prev) { return [...prev, userMsg]; });
         setIsLoading(true);
+        setInput('');
+        removeImage();
 
         try {
             var res = await fetch('/api/chat', {
@@ -343,6 +373,11 @@ export default function AiAssistant() {
                                                     <i className="fa-solid fa-database"></i> Pagina-data geladen
                                                 </div>
                                             )}
+                                            {msg.imageUrl && (
+                                                <div style={{ marginBottom: 8 }}>
+                                                    <img src={msg.imageUrl} alt="Upload" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }} />
+                                                </div>
+                                            )}
                                             {renderText(msg.content)}
                                         </div>
                                     </div>
@@ -369,19 +404,31 @@ export default function AiAssistant() {
 
                     {/* Input */}
                     <div className="ai-chat-input">
-                        <form onSubmit={sendMessage} style={{ display: 'flex', gap: 8 }}>
+                        {imageBase64 && (
+                            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+                                <img src={imageBase64} alt="Upload preview" style={{ height: 60, borderRadius: 8, border: '1px solid var(--border)' }} />
+                                <button type="button" onClick={removeImage} style={{ position: 'absolute', top: -5, right: -5, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <i className="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                        )}
+                        <form onSubmit={sendMessage} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImageSelect} />
+                            <button type="button" onClick={function () { if (fileInputRef.current) fileInputRef.current.click(); }} className="btn btn-ghost" style={{ padding: '0 12px', height: '36px', borderRadius: 8, background: 'rgba(255,255,255,0.05)' }} title="Upload Bonnetje (OCR)">
+                                <i className="fa-solid fa-camera"></i>
+                            </button>
                             <textarea
                                 ref={inputRef}
                                 value={input}
                                 onChange={function (e) { setInput(e.target.value); }}
                                 onKeyDown={handleKey}
-                                placeholder={'Vraag of opdracht voor ' + pageName + '\u2026'}
+                                placeholder={'Vraag of upload een bon\u2026'}
                                 disabled={isLoading}
                                 autoComplete="off"
                                 rows={1}
                                 className="ai-textarea"
                             />
-                            <button type="submit" disabled={!input.trim() || isLoading} className="send-btn" id="ai-send-btn">
+                            <button type="submit" disabled={(!input.trim() && !imageBase64) || isLoading} className="send-btn" id="ai-send-btn">
                                 <i className="fa-solid fa-paper-plane"></i>
                             </button>
                         </form>

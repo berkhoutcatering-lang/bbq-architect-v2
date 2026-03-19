@@ -578,6 +578,39 @@ export var TOOL_SCHEMAS = [
             parameters: { type: 'object', properties: {}, required: [] }
         }
     },
+    {
+        type: 'function',
+        function: {
+            name: 'process_receipt',
+            description: 'Lees een geüpload bonnetje of inkoopfactuur in en update automatisch de voorraad-aantallen, inkoopprijzen en registreer de BTW-uitsplitsing in de boekhouding.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    winkel: { type: 'string', description: 'Naam van de winkel/makro/sligro' },
+                    datum: { type: 'string', description: 'YYYY-MM-DD' },
+                    totaal_bedrag: { type: 'number', description: 'Totaalbedrag inclusief BTW' },
+                    btw_hoog: { type: 'number', description: 'Totaalbedrag aan 21% BTW' },
+                    btw_laag: { type: 'number', description: 'Totaalbedrag aan 9% BTW' },
+                    btw_nul: { type: 'number', description: 'Totaalbedrag vrij van BTW (0%)' },
+                    items: {
+                        type: 'array',
+                        description: 'Lijst van gekochte items (voorraad update)',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                naam: { type: 'string' },
+                                aantal: { type: 'number' },
+                                prijs: { type: 'number', description: 'Prijs per eenheid ex. BTW (Update inkoopprijs!)' },
+                                btw_tarief: { type: 'number', description: '9 of 21' }
+                            },
+                            required: ['naam', 'aantal', 'prijs', 'btw_tarief']
+                        }
+                    }
+                },
+                required: ['winkel', 'datum', 'totaal_bedrag', 'items']
+            }
+        }
+    },
 
     // ══════════════════════════════════════════════════════
     // HACCP

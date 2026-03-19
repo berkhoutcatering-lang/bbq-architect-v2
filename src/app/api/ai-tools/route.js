@@ -582,6 +582,61 @@ async function handleGetInkoopPerWinkel(sb) {
     return { per_winkel: perWinkel };
 }
 
+// ── Inkoop & Vision (Bonnetjes) ──────────────────────────────────────────────
+async function handleProcessReceipt(sb, params) {
+    if (!params.items || !Array.isArray(params.items)) throw new Error("Geen items gevonden op het bonnetje.");
+    var updates = [];
+    var newItems = [];
+
+    // 1. Process items -> Update Inventory
+    for (var i = 0; i < params.items.length; i++) {
+        var item = params.items[i];
+
+        // Find in inventory by name (case-insensitive fuzzy match)
+        var { data: inv } = await sb.from('inventory').select('*').ilike('naam', '%' + item.naam + '%').limit(1);
+
+        if (inv && inv.length > 0) {
+            var existing = inv[0];
+            var newQty = (existing.huidige_hoeveelheid || 0) + item.aantal;
+            var newPrice = item.prijs; // Update to latest purchase price!
+            await sb.from('inventory').update({ huidige_hoeveelheid: newQty, prijs_per_eenheid: newPrice }).eq('id', existing.id);
+            updates.push(item.naam + ' (+' + item.aantal + ', Prijs: €' + newPrice + ')');
+        } else {
+            // Create new inventory item
+            var { data: inserted } = await sb.from('inventory').insert({
+                naam: item.naam,
+                categorie: 'Inkoop / Diversen',
+                huidige_hoeveelheid: item.aantal,
+                minimale_hoeveelheid: 0,
+                eenheid: 'stuk',
+                prijs_per_eenheid: item.prijs,
+                leverancier_info: params.winkel
+            }).select();
+            if (inserted && inserted.length > 0) newItems.push(item.naam + ' (' + item.aantal + 'x toegevoegd)');
+        }
+    }
+
+    var btwTotaal = ((params.btw_hoog || 0) + (params.btw_laag || 0)).toFixed(2);
+
+    return {
+        winkel: params.winkel,
+        datum: params.datum,
+        voorraad_updates: updates.length,
+        nieuwe_artikelen: newItems.length,
+        financieel: {
+            totaalbedrag_incl: params.totaal_bedrag,
+            te_vorderen_btw: Number(btwTotaal),
+            btw_specificatie: {
+                hoog: params.btw_hoog || 0,
+                laag: params.btw_laag || 0,
+                nul: params.btw_nul || 0
+            }
+        },
+        gewijzigde_voorraad: updates,
+        summary: 'Bonnetje van ' + params.winkel + ' succesvol verwerkt. ' + (updates.length + newItems.length) + ' artikelen bijgewerkt. Te vorderen BTW: €' + btwTotaal
+    };
+}
+
 async function handleGetHaccpLogs(sb, params) {
     var days = params.days || 7;
     var from = new Date(Date.now() - days * 86400000).toISOString();
@@ -873,6 +928,7 @@ var TOOL_HANDLERS = {
     getInkoopLijst: handleGetInkoopLijst,
     generateInkoopVoorEvent: handleGenerateInkoopVoorEvent,
     getInkoopPerWinkel: handleGetInkoopPerWinkel,
+    process_receipt: handleProcessReceipt,
     getHaccpLogs: handleGetHaccpLogs,
     createHaccpLog: handleCreateHaccpLog,
     getMissingHaccpLogs: handleGetMissingHaccpLogs,

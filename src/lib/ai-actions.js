@@ -82,6 +82,14 @@ export var ACTION_TYPES = {
         icon: 'fa-boxes-stacked',
         color: '#f59e0b',
     },
+    process_receipt: {
+        label: 'Bonnetje Verwerken & Voorraad Updaten',
+        table: 'inventory',
+        op: 'insert', // Aangepaste backend logic neemt dit over
+        pages: ['/ai-chat', '/inkoop', '/voorraad'],
+        icon: 'fa-receipt',
+        color: '#8b5cf6', // Violet for Genius Actions
+    },
 
     // ── Leveranciers ─────────────────────────────────────────────────────────
     create_leverancier: {

@@ -286,6 +286,23 @@ export async function POST(req) {
         // ── Voeg basis-instructies toe ────────────────────────────────────
         systemParts.push(BASE_INSTRUCTIONS);
 
+        // ── Detecteer afbeeldingen voor Vision model ──────────────────────
+        var hasImage = false;
+        if (messages && messages.length > 0) {
+            hasImage = messages.some(function (m) { return Array.isArray(m.content) && m.content.some(function (c) { return c.type === 'image_url'; }); });
+        }
+        var modelName = hasImage ? 'llama-3.2-90b-vision-preview' : 'llama-3.3-70b-versatile';
+
+        if (hasImage) {
+            systemParts.push(
+                '**VISION MODE GEACTIVEERD**',
+                'Je hebt een afbeelding ontvangen (bijv. een bonnetje of inkoopfactuur). Bestudeer de image aandachtig.',
+                'Als het een bonnetje is, IS HET JOUW TAAK OM DEZE UIT TE LEZEN EN DE VOORRAAD/PRIJZEN TE UPDATEN.',
+                'Gebruik hiervoor ALTIJD EXACT het volgende JSON actieblok in je antwoord (GEEN MARKDOWN, direct starten met <<<ACTION):',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop Sligro verwerkt","data":{"winkel":"Naam Winkel","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"btw_hoog":21.00,"btw_laag":0.00,"btw_nul":0.00,"items":[{"naam":"Product","aantal":1,"prijs":10.50,"btw_tarief":21}]}}>>>'
+            );
+        }
+
         var systemContent = systemParts.join('\n');
         var systemMessage = { role: 'system', content: systemContent };
         var groqMessages = [systemMessage, ...messages];
@@ -297,7 +314,7 @@ export async function POST(req) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
+                model: modelName,
                 messages: groqMessages,
                 temperature: mode === 'brainstorm' ? 0.85 : 0.7,
                 max_tokens: mode === 'brainstorm' ? 6000 : 4000,
