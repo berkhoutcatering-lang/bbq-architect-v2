@@ -41,11 +41,11 @@ export default function RecipeMatrix({ action, supabase }) {
                 return {
                     naam: r.naam,
                     categorie: r.categorie || 'Onbekend',
-                    porties: r.porties || 10, // Standaard 10 porties voor batch
-                    bereiding: r.bereiding || '',
+                    porties: r.porties || 10,
+                    instructies: r.bereiding || '',
                     ingredienten: r.ingredienten || [],
-                    // we slaan inkoopprijs en marge op in een notitie of berekend veld als dat gewenst is
-                    ingredient_costs: r.inkoop || 0
+                    preptime: 15,
+                    notitie: 'Geschatte inkoop: €' + (r.inkoop || 0).toFixed(2) + ' (Marge: ' + (r.marge || 0) + '%)'
                 };
             });
 
