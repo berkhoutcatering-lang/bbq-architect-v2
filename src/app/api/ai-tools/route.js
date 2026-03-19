@@ -244,15 +244,35 @@ async function handleCreateGerechtBulk(sb, params) {
 }
 
 async function handleUpdateGerecht(sb, params) {
+    var id = params.gerecht_id || params.id;
+
+    // Geen ID? Zoek op naam als fallback
+    if (!id && params.naam) {
+        var { data: found } = await sb.from('gerechten').select('id').ilike('naam', params.naam).limit(1);
+        if (found && found.length > 0) id = found[0].id;
+    }
+
+    // Nog steeds geen ID? Maak het gerecht aan als nieuw
+    if (!id) {
+        return handleCreateGerecht(sb, params);
+    }
+
     var update = {};
     if (params.naam !== undefined) update.naam = params.naam;
     if (params.beschrijving !== undefined) update.beschrijving = params.beschrijving;
     if (params.bereidingswijze !== undefined) update.bereidingswijze = params.bereidingswijze;
     if (params.gang_slug !== undefined) update.gang_slug = params.gang_slug;
     if (params.tags !== undefined) update.tags = params.tags;
-    var { error } = await sb.from('gerechten').update(update).eq('id', params.gerecht_id);
+    if (params.allergenen !== undefined) update.allergenen = params.allergenen;
+    if (params.ingredienten !== undefined) update.ingredienten = params.ingredienten;
+    if (params.kostprijs_pp !== undefined) update.kostprijs_pp = params.kostprijs_pp;
+    if (params.actief !== undefined) update.actief = params.actief;
+
+    if (Object.keys(update).length === 0) return { updated: false, reden: 'Geen velden opgegeven' };
+
+    var { error } = await sb.from('gerechten').update(update).eq('id', id);
     if (error) throw new Error(error.message);
-    return { updated: true, gerecht_id: params.gerecht_id };
+    return { updated: true, gerecht_id: id };
 }
 
 async function handleDeleteGerecht(sb, params) {
