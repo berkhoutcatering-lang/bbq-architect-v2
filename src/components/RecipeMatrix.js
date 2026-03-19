@@ -38,14 +38,38 @@ export default function RecipeMatrix({ action, supabase }) {
         try {
             var toImport = selected.map(function (index) {
                 var r = recipes[index];
+
+                // Normaliseer ingredienten
+                var mappedIngs = [];
+                if (Array.isArray(r.ingredienten)) {
+                    mappedIngs = r.ingredienten.map(function (i) {
+                        if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
+                        return String(i);
+                    });
+                } else if (typeof r.ingredienten === 'string') {
+                    mappedIngs = r.ingredienten.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                }
+
+                // Normaliseer allergenen
+                var mappedAllergs = [];
+                if (Array.isArray(r.allergenen)) {
+                    mappedAllergs = r.allergenen.map(String);
+                } else if (typeof r.allergenen === 'string') {
+                    mappedAllergs = r.allergenen.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                }
+
+                // Vang aliassen op
+                var safeBereiding = r.bereidingswijze || r.bereiding || r.stappenplan || r.instructies || '';
+                var safeKostprijs = r.inkoop || r.kostprijs_pp || r.kostprijs || r.foodcost || 0;
+
                 return {
-                    naam: r.naam,
+                    naam: r.naam || 'Naamloos gerecht',
                     gang_slug: (r.categorie || 'hoofdgerechten').toLowerCase(),
                     beschrijving: r.beschrijving || 'Geen beschrijving gegenereerd',
-                    bereidingswijze: r.bereidingswijze || '',
-                    ingredienten: r.ingredienten || [],
-                    allergenen: r.allergenen || [],
-                    kostprijs_pp: r.inkoop || 0,
+                    bereidingswijze: safeBereiding,
+                    ingredienten: mappedIngs,
+                    allergenen: mappedAllergs,
+                    kostprijs_pp: parseFloat(safeKostprijs) || 0,
                     actief: false,
                     volgorde: 900 + index
                 };
