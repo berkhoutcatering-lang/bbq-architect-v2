@@ -45,8 +45,7 @@ export default function RecipeMatrix({ action, supabase }) {
                     bereiding: r.bereiding || '',
                     ingredienten: r.ingredienten || [],
                     // we slaan inkoopprijs en marge op in een notitie of berekend veld als dat gewenst is
-                    ingredient_costs: r.inkoop || 0,
-                    actief: true
+                    ingredient_costs: r.inkoop || 0
                 };
             });
 

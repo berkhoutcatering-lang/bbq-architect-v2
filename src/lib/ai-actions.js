@@ -52,7 +52,7 @@ export var ACTION_TYPES = {
         label: 'Gerecht aanmaken',
         table: 'gerechten',
         op: 'insert',
-        pages: ['/gerechten'],
+        pages: ['/gerechten', '/menu-engineering'],
         icon: 'fa-utensils',
         color: '#a78bfa',
     },
@@ -200,7 +200,7 @@ export var ACTION_TYPES = {
         label: 'Importeer naar Vault (Bedenk recept)',
         table: 'recepten',
         op: 'insert',
-        pages: ['/ai-chat', '/gerechten', '/recepten'], // Beschikbaar in de Studio en Recepten-omgeving
+        pages: ['/ai-chat', '/gerechten', '/recepten', '/menu-engineering'], // Beschikbaar in de Studio, Recepten, en Menu Engineering
         icon: 'fa-file-import',
         color: '#22c55e',
     },
@@ -208,7 +208,7 @@ export var ACTION_TYPES = {
         label: 'Interactieve Recepten Trechter',
         table: 'recepten', // Virtual table handler
         op: 'custom',
-        pages: ['/ai-chat', '/gerechten', '/recepten'],
+        pages: ['/ai-chat', '/gerechten', '/recepten', '/menu-engineering'],
         icon: 'fa-table-list',
         color: '#8b5cf6', // Purple
     },

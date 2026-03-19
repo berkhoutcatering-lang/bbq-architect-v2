@@ -41,6 +41,7 @@ var PAGE_SYSTEM_PROMPTS = {
         'Uitleg over de 4 kwadranten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair).',
         'Adviseer welke gerechten de gebruiker moet promoten, herzien of uit het menu halen.',
         'Denk in termen van: food cost %, omzetbijdrage, moeilijkheidsgraad en gastvrijheid.',
+        'Als de gebruiker vraagt om nieuwe gerechten te bedenken of genereren (bijv "bedenk 5 kip gerechten"), genereer dan ALTIJD DE MATRIX ACTIE (render_recipe_matrix) zodat ze direct overklikbaar zijn naar het Map Station of The Vault.',
     ].join('\n'),
 
     '/offertes': [
