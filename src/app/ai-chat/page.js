@@ -1,322 +1,590 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { parseActions, executeAction } from '@/lib/ai-actions';
+import RecipeMatrix from '@/components/RecipeMatrix';
 
-// ── Formateer AI-tekst ──────────────────────────────────────────────────────
-function renderText(text) {
-    if (!text) return null;
-    return text.split('\n').map(function (line, i) {
-        var rendered = [];
-        var remaining = line;
-        var key = 0;
-        while (remaining.includes('**')) {
-            var start = remaining.indexOf('**');
-            var end = remaining.indexOf('**', start + 2);
-            if (end === -1) break;
-            if (start > 0) rendered.push(<span key={key++}>{remaining.slice(0, start)}</span>);
-            rendered.push(<strong key={key++}>{remaining.slice(start + 2, end)}</strong>);
-            remaining = remaining.slice(end + 2);
-        }
-        if (remaining) rendered.push(<span key={key++}>{remaining}</span>);
-        return (
-            <span key={i} style={{ display: 'block', marginBottom: 1 }}>
-                {rendered.length ? rendered : '\u00A0'}
-            </span>
-        );
-    });
-}
-
-var BRAINSTORM_CHIPS = [
-    '20 gerechten met buikspek',
-    'Thema-BBQ: Japans', 'Zomermenu 2025',
-    'Hoe onderscheid ik me van concurrenten?',
-    'Top 10 BBQ trends 2025',
+var BRAINSTORM_SUGGESTIONS = [
+    'Bedenk 5 thema-BBQ concepten voor de zomer',
+    'Welke trendy menu-items kan ik toevoegen?',
+    'Ideeen voor een vegetarisch BBQ-menu',
+    'Hoe kan ik mijn catering onderscheiden?',
+    'Brainstorm over een winter-event concept',
+    'Marketingtips voor BBQ-catering',
 ];
 
-var QA_CHIPS = [
-    'Kerntemperatuur brisket?', 'Hoeveel vlees per persoon?',
-    'Verschil rub vs marinade', 'Low & slow temperatuur instelling',
-    'Wat kost een gemiddeld BBQ-event?',
+var QA_SUGGESTIONS = [
+    'Hoeveel kilo vlees voor 100 gasten?',
+    'Wat is een goede marge voor catering?',
+    'Hoe maak ik een perfecte dry rub?',
+    'Tips voor efficiente mise en place',
+    'Wat moet ik meenemen in de bus?',
+    'Hoe bereken ik mijn uurtarief?',
+    'HACCP-kerntemperaturen vlees',
+    'Hoeveel voorloopdagen voor een event?',
 ];
 
-export default function AiChat() {
-    // ── AI Studio state ───────────────────────────────────────────────────────
-    var [mode, setMode] = useState('brainstorm'); // 'brainstorm' | 'qa'
-    var [messages, setMessages] = useState([
-        {
-            role: 'assistant',
-            content: '🔥 **Welkom in de AI Studio!**\n\nHier kun je ongestoord brainstormen en alles vragen. Ik heb toegang tot je hele systeem.\n\nWat wil je ontdekken, chef?'
-        }
-    ]);
+var FOLDER_COLORS = ['#FFBF00', '#22c55e', '#3b82f6', '#a78bfa', '#ef4444', '#f59e0b', '#4ECDC4', '#ec4899'];
+
+export default function AiStudioPage() {
+    var [mode, setMode] = useState('brainstorm');
+    var [messages, setMessages] = useState([]);
     var [input, setInput] = useState('');
     var [isLoading, setIsLoading] = useState(false);
-
-    // ── Sidebar / gesprekken state ─────────────────────────────────────────
     var [sidebarOpen, setSidebarOpen] = useState(true);
+
+    // ── Mappen & gesprekken ──────────────────────────────────────────────────
     var [folders, setFolders] = useState([]);
     var [conversations, setConversations] = useState([]);
-    var [activeConvId, setActiveConvId] = useState(null);
+    var [activeConversation, setActiveConversation] = useState(null);
     var [activeFolder, setActiveFolder] = useState(null);
-    var [savingAs, setSavingAs] = useState(false); // toon save-formulier
-    var [saveForm, setSaveForm] = useState({ titel: '', folder_id: '' });
-    var [newFolderForm, setNewFolderForm] = useState({ show: false, naam: '', kleur: '#FFBF00' });
-    var [loadingConvs, setLoadingConvs] = useState(false);
+    var [loadingFolders, setLoadingFolders] = useState(true);
+
+    // ── Map aanmaken UI ──────────────────────────────────────────────────────
+    var [showNewFolder, setShowNewFolder] = useState(false);
+    var [newFolderName, setNewFolderName] = useState('');
+    var [newFolderColor, setNewFolderColor] = useState('#FFBF00');
 
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
 
-    // ── Data laden ────────────────────────────────────────────────────────
-    useEffect(function () { loadFolders(); loadConversations(); }, []);
-
+    // ── Init begroeting bij modus-wissel ─────────────────────────────────────
     useEffect(function () {
-        setTimeout(function () { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 50);
-    }, [messages]);
-
-    async function loadFolders() {
-        var { data } = await supabase.from('ai_conversation_folders').select('*').order('created_at', { ascending: false });
-        if (data) setFolders(data);
-    }
-
-    async function loadConversations(folderId) {
-        setLoadingConvs(true);
-        var query = supabase.from('ai_conversations').select('id,titel,modus,updated_at,folder_id').order('updated_at', { ascending: false }).limit(50);
-        if (folderId) query = query.eq('folder_id', folderId);
-        var { data } = await query;
-        if (data) setConversations(data);
-        setLoadingConvs(false);
-    }
-
-    async function loadConversation(conv) {
-        var { data } = await supabase.from('ai_conversations').select('messages,modus').eq('id', conv.id).single();
-        if (data) {
-            setMessages(data.messages || []);
-            setMode(data.modus || 'brainstorm');
-            setActiveConvId(conv.id);
-        }
-    }
-
-    async function createFolder() {
-        if (!newFolderForm.naam.trim()) return;
-        var { data, error } = await supabase.from('ai_conversation_folders').insert([{
-            naam: newFolderForm.naam.trim(),
-            kleur: newFolderForm.kleur
-        }]).select().single();
-        if (data) {
-            setFolders(function (prev) { return [data, ...prev]; });
-            setNewFolderForm({ show: false, naam: '', kleur: '#FFBF00' });
-        }
-    }
-
-    async function deleteFolder(id) {
-        if (!window.confirm('Map verwijderen? Gesprekken blijven bestaan.')) return;
-        await supabase.from('ai_conversation_folders').delete().eq('id', id);
-        setFolders(function (prev) { return prev.filter(function (f) { return f.id !== id; }); });
-        if (activeFolder === id) { setActiveFolder(null); loadConversations(); }
-    }
-
-    async function saveConversation() {
-        if (!saveForm.titel.trim()) return;
-        var payload = {
-            titel: saveForm.titel.trim(),
-            modus: mode,
-            messages: messages,
-            folder_id: saveForm.folder_id ? Number(saveForm.folder_id) : null,
-            updated_at: new Date().toISOString()
-        };
-        if (activeConvId) {
-            await supabase.from('ai_conversations').update(payload).eq('id', activeConvId);
-        } else {
-            var { data } = await supabase.from('ai_conversations').insert([payload]).select().single();
-            if (data) setActiveConvId(data.id);
-        }
-        setSavingAs(false);
-        setSaveForm({ titel: '', folder_id: '' });
-        loadConversations(activeFolder);
-    }
-
-    async function deleteConversation(id) {
-        if (!window.confirm('Gesprek verwijderen?')) return;
-        await supabase.from('ai_conversations').delete().eq('id', id);
-        setConversations(function (prev) { return prev.filter(function (c) { return c.id !== id; }); });
-        if (activeConvId === id) { newConversation(); }
-    }
-
-    function newConversation() {
-        setActiveConvId(null);
         setMessages([{
             role: 'assistant',
             content: mode === 'brainstorm'
-                ? '🔥 Nieuw brainstorm-gesprek. Waar gaan we vandaag mee aan de slag, chef?'
-                : '💡 Nieuw Q&A gesprek. Stel je vraag!'
+                ? '\uD83D\uDD25 **Brainstorm Modus actief!**\n\nWelkom in de AI Studio van Hop & Bites. Hier denk ik creatief met je mee over menu\'s, events, marketing en alles wat BBQ-catering groot maakt.\n\nWaar wil je over brainstormen?'
+                : '\uD83D\uDCA1 **Vraag & Antwoord Modus**\n\nStel me directe vragen over catering, BBQ-technieken, calculaties, planning of bedrijfsvoering. Ik geef concrete, praktische antwoorden.\n\nWat wil je weten?',
+            actions: [],
+        }]);
+    }, [mode]);
+
+    // ── Scroll ───────────────────────────────────────────────────────────────
+    useEffect(function () {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages]);
+
+    // ── Laad mappen en gesprekken ────────────────────────────────────────────
+    var loadFoldersAndConversations = useCallback(async function () {
+        if (!supabase) { setLoadingFolders(false); return; }
+        setLoadingFolders(true);
+        try {
+            var fRes = await supabase.from('ai_conversation_folders').select('*').order('id');
+            var cRes = await supabase.from('ai_conversations').select('id,folder_id,titel,modus,created_at,updated_at').order('updated_at', { ascending: false });
+            setFolders(fRes.data || []);
+            setConversations(cRes.data || []);
+        } catch (e) {
+            console.warn('[AI Studio] Mappen laden mislukt:', e.message);
+        } finally {
+            setLoadingFolders(false);
+        }
+    }, []);
+
+    useEffect(function () { loadFoldersAndConversations(); }, [loadFoldersAndConversations]);
+
+    // ── Gesprek laden ─────────────────────────────────────────────────────────
+    async function loadConversation(conv) {
+        if (!supabase) return;
+        try {
+            var res = await supabase.from('ai_conversations').select('*').eq('id', conv.id).single();
+            if (res.data && res.data.messages) {
+                setActiveConversation(res.data);
+                setMessages(res.data.messages.map(function (m) {
+                    return Object.assign({ actions: [] }, m);
+                }));
+                setMode(res.data.modus || 'brainstorm');
+            }
+        } catch (e) {
+            console.warn('[AI Studio] Gesprek laden mislukt:', e.message);
+        }
+    }
+
+    // ── Gesprek opslaan ───────────────────────────────────────────────────────
+    async function saveConversation(folderId, titel) {
+        if (!supabase || messages.length < 2) return null;
+        var msgToSave = messages.map(function (m) {
+            return { role: m.role, content: m.content };
+        });
+        try {
+            var res = await supabase.from('ai_conversations').insert({
+                folder_id: folderId || null,
+                titel: titel || 'Gesprek ' + new Date().toLocaleDateString('nl-NL'),
+                modus: mode,
+                messages: msgToSave,
+            }).select().single();
+            if (res.data) {
+                setActiveConversation(res.data);
+                setConversations(function (prev) { return [res.data, ...prev]; });
+                return res.data;
+            }
+        } catch (e) {
+            console.warn('[AI Studio] Opslaan mislukt:', e.message);
+        }
+        return null;
+    }
+
+    // ── Gesprek bijwerken ────────────────────────────────────────────────────
+    async function updateConversation() {
+        if (!supabase || !activeConversation) return;
+        var msgToSave = messages.map(function (m) {
+            return { role: m.role, content: m.content };
+        });
+        try {
+            await supabase.from('ai_conversations').update({
+                messages: msgToSave,
+                updated_at: new Date().toISOString(),
+            }).eq('id', activeConversation.id);
+        } catch (e) {
+            console.warn('[AI Studio] Bijwerken mislukt:', e.message);
+        }
+    }
+
+    // ── Map aanmaken ──────────────────────────────────────────────────────────
+    async function createFolder() {
+        if (!newFolderName.trim() || !supabase) return;
+        try {
+            var res = await supabase.from('ai_conversation_folders').insert({
+                naam: newFolderName.trim(),
+                kleur: newFolderColor,
+            }).select().single();
+            if (res.data) {
+                setFolders(function (prev) { return [...prev, res.data]; });
+                setNewFolderName('');
+                setShowNewFolder(false);
+            }
+        } catch (e) {
+            console.warn('[AI Studio] Map aanmaken mislukt:', e.message);
+        }
+    }
+
+    // ── Map verwijderen ───────────────────────────────────────────────────────
+    async function deleteFolder(folderId) {
+        if (!supabase || !window.confirm('Map verwijderen? Gesprekken in deze map blijven behouden.')) return;
+        try {
+            await supabase.from('ai_conversation_folders').delete().eq('id', folderId);
+            setFolders(function (prev) { return prev.filter(function (f) { return f.id !== folderId; }); });
+            if (activeFolder === folderId) setActiveFolder(null);
+        } catch (e) {
+            console.warn('[AI Studio] Map verwijderen mislukt:', e.message);
+        }
+    }
+
+    // ── Gesprek verwijderen ───────────────────────────────────────────────────
+    async function deleteConversation(convId) {
+        if (!supabase || !window.confirm('Dit gesprek definitief verwijderen?')) return;
+        try {
+            await supabase.from('ai_conversations').delete().eq('id', convId);
+            setConversations(function (prev) { return prev.filter(function (c) { return c.id !== convId; }); });
+            if (activeConversation && activeConversation.id === convId) {
+                setActiveConversation(null);
+                startNewConversation();
+            }
+        } catch (e) {
+            console.warn('[AI Studio] Gesprek verwijderen mislukt:', e.message);
+        }
+    }
+
+    // ── Nieuw gesprek starten ─────────────────────────────────────────────────
+    function startNewConversation() {
+        setActiveConversation(null);
+        setMessages([{
+            role: 'assistant',
+            content: mode === 'brainstorm'
+                ? '\uD83D\uDD25 **Nieuw brainstorm gesprek**\n\nWaar wil je over brainstormen?'
+                : '\uD83D\uDCA1 **Nieuw Q&A gesprek**\n\nWat wil je weten?',
+            actions: [],
         }]);
     }
 
-    // ── Bericht sturen ────────────────────────────────────────────────────
-    var sendMessage = useCallback(async function (e, overrideText) {
+    // ── Bericht versturen ─────────────────────────────────────────────────────
+    async function sendMessage(e, overrideText) {
         if (e) e.preventDefault();
         var text = (overrideText || input).trim();
         if (!text || isLoading) return;
         setInput('');
 
-        var userMsg = { role: 'user', content: text };
-        var nextMessages = [...messages, userMsg];
-        setMessages(nextMessages);
+        var userMsg = { role: 'user', content: text, actions: [] };
+        var apiMessages = [
+            ...messages.map(function (m) { return { role: m.role, content: m.content }; }),
+            { role: 'user', content: text }
+        ];
+        setMessages(function (prev) { return [...prev, userMsg]; });
         setIsLoading(true);
 
-        try {
-            var apiMessages = nextMessages.map(function (m) {
-                return { role: m.role, content: m.content || '' };
-            });
+        // Mappen-context meegeven aan AI
+        var ctxData = null;
+        if (folders.length > 0) {
+            ctxData = {
+                folders: folders.map(function (f) {
+                    return {
+                        id: f.id,
+                        naam: f.naam,
+                        gesprekken: conversations.filter(function (c) { return c.folder_id === f.id; }).length,
+                    };
+                }),
+            };
+        }
 
+        try {
             var res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: apiMessages,
-                    pathname: '/ai-chat',
-                    mode: mode,
+                    pageContext: '/ai-chat',
+                    mode: mode === 'brainstorm' ? 'brainstorm' : 'qa',
+                    contextData: ctxData,
                 }),
             });
-
             var data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Fout bij AI');
+            if (!res.ok) throw new Error(data.error || 'Fout opgetreden');
 
-            var content = data.choices && data.choices[0] && data.choices[0].message.content || '';
-            var finalMessages = [...nextMessages, { role: 'assistant', content: content }];
-            setMessages(finalMessages);
+            var rawReply = data.choices[0].message.content;
+            var parsed = parseActions(rawReply);
 
-            // Auto-save als actief gesprek
-            if (activeConvId) {
-                await supabase.from('ai_conversations').update({
-                    messages: finalMessages,
-                    updated_at: new Date().toISOString()
-                }).eq('id', activeConvId);
+            setMessages(function (prev) {
+                return [...prev, {
+                    role: 'assistant',
+                    content: parsed.cleanText,
+                    actions: parsed.actions,
+                }];
+            });
+
+            if (activeConversation) {
+                setTimeout(updateConversation, 500);
             }
 
-        } catch (err) {
-            setMessages(function (prev) { return [...prev, { role: 'assistant', content: '❌ ' + err.message }]; });
+        } catch (error) {
+            setMessages(function (prev) {
+                return [...prev, { role: 'assistant', content: '\u274C ' + error.message, actions: [] }];
+            });
         } finally {
             setIsLoading(false);
-            setTimeout(function () { inputRef.current?.focus(); }, 50);
         }
-    }, [input, isLoading, messages, mode, activeConvId]);
+    }
 
-    var chips = mode === 'brainstorm' ? BRAINSTORM_CHIPS : QA_CHIPS;
+    // ── Actie goedkeuren ─────────────────────────────────────────────────────
+    async function approveAction(msgIdx, actionId) {
+        var msg = messages[msgIdx];
+        var action = msg && msg.actions && msg.actions.find(function (a) { return a.id === actionId; });
+        if (!action) return;
 
-    var filteredConvs = activeFolder
+        setMessages(function (prev) {
+            return prev.map(function (m, i) {
+                if (i !== msgIdx) return m;
+                return Object.assign({}, m, {
+                    actions: m.actions.map(function (a) {
+                        return a.id === actionId ? Object.assign({}, a, { status: 'executing' }) : a;
+                    }),
+                });
+            });
+        });
+
+        try {
+            if (action.type === 'save_conversation') {
+                var saved = await saveConversation(action.data.folder_id || null, action.data.titel || null);
+                setMessages(function (prev) {
+                    return prev.map(function (m, i) {
+                        if (i !== msgIdx) return m;
+                        return Object.assign({}, m, {
+                            actions: m.actions.map(function (a) {
+                                return a.id === actionId ? Object.assign({}, a, { status: 'done' }) : a;
+                            }),
+                        });
+                    });
+                });
+                setMessages(function (prev) {
+                    return [...prev, {
+                        role: 'assistant',
+                        content: '\u2705 Gesprek opgeslagen' + (saved ? ' (ID: ' + saved.id + ')' : '') + '!',
+                        actions: [],
+                    }];
+                });
+                await loadFoldersAndConversations();
+                return;
+            }
+
+            if (action.type === 'create_folder') {
+                var fRes = await supabase.from('ai_conversation_folders').insert({
+                    naam: action.data.naam,
+                    kleur: action.data.kleur || '#FFBF00',
+                }).select().single();
+                if (fRes.data) {
+                    setFolders(function (prev) { return [...prev, fRes.data]; });
+                    setMessages(function (prev) {
+                        return prev.map(function (m, i) {
+                            if (i !== msgIdx) return m;
+                            return Object.assign({}, m, {
+                                actions: m.actions.map(function (a) {
+                                    return a.id === actionId ? Object.assign({}, a, { status: 'done' }) : a;
+                                }),
+                            });
+                        });
+                    });
+                    setMessages(function (prev) {
+                        return [...prev, {
+                            role: 'assistant',
+                            content: '\u2705 Map **' + action.data.naam + '** aangemaakt!',
+                            actions: [],
+                        }];
+                    });
+                }
+                return;
+            }
+
+            var result = await executeAction(action, supabase);
+            setMessages(function (prev) {
+                return prev.map(function (m, i) {
+                    if (i !== msgIdx) return m;
+                    return Object.assign({}, m, {
+                        actions: m.actions.map(function (a) {
+                            return a.id === actionId ? Object.assign({}, a, { status: 'done', result: result }) : a;
+                        }),
+                    });
+                });
+            });
+            setMessages(function (prev) {
+                return [...prev, {
+                    role: 'assistant',
+                    content: '\u2705 **' + action.meta.label + '** is uitgevoerd!',
+                    actions: [],
+                }];
+            });
+
+        } catch (err) {
+            setMessages(function (prev) {
+                return prev.map(function (m, i) {
+                    if (i !== msgIdx) return m;
+                    return Object.assign({}, m, {
+                        actions: m.actions.map(function (a) {
+                            return a.id === actionId ? Object.assign({}, a, { status: 'error', error: err.message }) : a;
+                        }),
+                    });
+                });
+            });
+            setMessages(function (prev) {
+                return [...prev, { role: 'assistant', content: '\u274C Mislukt: ' + err.message, actions: [] }];
+            });
+        }
+    }
+
+    function rejectAction(msgIdx, actionId) {
+        setMessages(function (prev) {
+            return prev.map(function (m, i) {
+                if (i !== msgIdx) return m;
+                return Object.assign({}, m, {
+                    actions: m.actions.map(function (a) {
+                        return a.id === actionId ? Object.assign({}, a, { status: 'rejected' }) : a;
+                    }),
+                });
+            });
+        });
+        setMessages(function (prev) {
+            return [...prev, { role: 'assistant', content: 'Begrepen, ik sla het niet op.', actions: [] }];
+        });
+    }
+
+    function handleKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    }
+
+    // ── Render markdown-achtige tekst ─────────────────────────────────────────
+    function renderText(content) {
+        if (!content) return null;
+        return content.split('\n').map(function (line, i) {
+            var parts = line.split(/(\*\*[^*]+\*\*)/g);
+            var rendered = parts.map(function (part, j) {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                    return <strong key={j}>{part.slice(2, -2)}</strong>;
+                }
+                return part;
+            });
+            return <span key={i} style={{ display: 'block' }}>{rendered.length ? rendered : '\u00A0'}</span>;
+        });
+    }
+
+    // ── Render actiekaart ─────────────────────────────────────────────────────
+    function renderActionCard(action, msgIdx) {
+        if (action.type === 'render_recipe_matrix') {
+            return <RecipeMatrix key={action.id} action={action} supabase={supabase} />;
+        }
+
+        var isPending = action.status === 'pending';
+        var isExecuting = action.status === 'executing';
+        var isDone = action.status === 'done';
+        var isRejected = action.status === 'rejected';
+        var isError = action.status === 'error';
+
+        return (
+            <div key={action.id} style={{
+                margin: '10px 0 0 0',
+                padding: '12px 14px',
+                borderRadius: 12,
+                border: '1px solid',
+                borderColor: isDone ? 'rgba(34,197,94,.4)' : isError ? 'rgba(239,68,68,.4)' : isRejected ? 'rgba(113,113,122,.3)' : 'rgba(255,191,0,.4)',
+                background: isDone ? 'rgba(34,197,94,.06)' : isError ? 'rgba(239,68,68,.06)' : isRejected ? 'rgba(113,113,122,.06)' : 'rgba(255,191,0,.06)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <i className={'fa-solid ' + (action.meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00'), fontSize: 15 }}></i>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{action.meta.label}</span>
+                    {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12, fontWeight: 600 }}>&#10003; Uitgevoerd</span>}
+                    {isRejected && <span style={{ marginLeft: 'auto', color: '#71717a', fontSize: 12 }}>Afgewezen</span>}
+                    {isError && <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: 12 }}>Fout</span>}
+                </div>
+                <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: isPending ? 10 : 0, lineHeight: 1.5 }}>{action.description}</div>
+                {action.data && Object.keys(action.data).length > 0 && action.type !== 'save_conversation' && (
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)', background: 'rgba(0,0,0,.3)', padding: '6px 8px', borderRadius: 7, marginBottom: isPending ? 10 : 0 }}>
+                        {JSON.stringify(action.data, null, 2).slice(0, 300)}
+                    </div>
+                )}
+                {isPending && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                            onClick={function () { approveAction(msgIdx, action.id); }}
+                            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: '#22c55e', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                        >
+                            <i className="fa-solid fa-check" style={{ marginRight: 6 }}></i>Goedkeuren & uitvoeren
+                        </button>
+                        <button
+                            onClick={function () { rejectAction(msgIdx, action.id); }}
+                            style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}
+                        >
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                )}
+                {isExecuting && (
+                    <div style={{ color: '#FFBF00', fontSize: 13 }}>
+                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }}></i>Bezig met uitvoeren&hellip;
+                    </div>
+                )}
+                {isError && action.error && (
+                    <div style={{ color: '#ef4444', fontSize: 12, marginTop: 6 }}>{action.error}</div>
+                )}
+            </div>
+        );
+    }
+
+    var visibleConversations = activeFolder
         ? conversations.filter(function (c) { return c.folder_id === activeFolder; })
         : conversations;
 
+    var suggestions = mode === 'brainstorm' ? BRAINSTORM_SUGGESTIONS : QA_SUGGESTIONS;
+
     return (
-        <div className="main-area" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-
-            {/* ── Sidebar ─────────────────────────────────────────────────── */}
+        <div className="ai-studio-layout">
+            {/* ── Sidebar ────────────────────────────────────────────────── */}
             <div className={'ai-studio-sidebar' + (sidebarOpen ? ' open' : '')}>
-                {/* Nieuw gesprek */}
-                <button
-                    className="ai-new-conv-btn"
-                    onClick={newConversation}
-                    title="Nieuw gesprek"
-                >
-                    <i className="fa-solid fa-plus" /> Nieuw gesprek
-                </button>
-
-                {/* Folder header */}
                 <div className="ai-sidebar-header">
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Mappen</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className="fa-solid fa-folder-tree" style={{ color: 'var(--brand)' }}></i>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>Gespreksmappen</span>
+                    </div>
                     <button
-                        onClick={function () { setNewFolderForm(function (prev) { return Object.assign({}, prev, { show: !prev.show }); }); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--brand)', cursor: 'pointer', fontSize: 14 }}
+                        onClick={function () { setShowNewFolder(function (v) { return !v; }); }}
+                        style={{ background: 'rgba(255,191,0,.15)', border: 'none', color: 'var(--brand)', width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
                         title="Nieuwe map"
                     >
-                        <i className="fa-solid fa-folder-plus" />
+                        <i className="fa-solid fa-plus"></i>
                     </button>
                 </div>
 
-                {/* Nieuwe map form */}
-                {newFolderForm.show && (
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,.03)' }}>
+                {showNewFolder && (
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(255,191,0,.04)' }}>
                         <input
-                            value={newFolderForm.naam}
-                            onChange={function (e) { setNewFolderForm(function (p) { return Object.assign({}, p, { naam: e.target.value }); }); }}
+                            value={newFolderName}
+                            onChange={function (e) { setNewFolderName(e.target.value); }}
+                            placeholder="Mapnaam&hellip;"
+                            style={{ width: '100%', background: 'var(--card-solid)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 6 }}
                             onKeyDown={function (e) { if (e.key === 'Enter') createFolder(); }}
-                            placeholder="Map naam..."
                             autoFocus
-                            style={{ width: '100%', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 6 }}
                         />
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            {['#FFBF00', '#4ade80', '#818cf8', '#fb923c', '#f472b6'].map(function (c) {
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                            {FOLDER_COLORS.map(function (c) {
                                 return (
-                                    <button
+                                    <div
                                         key={c}
-                                        onClick={function () { setNewFolderForm(function (p) { return Object.assign({}, p, { kleur: c }); }); }}
-                                        style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: newFolderForm.kleur === c ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer' }}
-                                    />
+                                        onClick={function () { setNewFolderColor(c); }}
+                                        style={{ width: 18, height: 18, borderRadius: '50%', background: c, cursor: 'pointer', outline: newFolderColor === c ? '2px solid #fff' : 'none', outlineOffset: 1 }}
+                                    ></div>
                                 );
                             })}
-                            <button onClick={createFolder} style={{ marginLeft: 'auto', fontSize: 10, background: 'var(--brand)', color: '#000', border: 'none', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>OK</button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={createFolder} style={{ flex: 1, padding: '4px 0', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Aanmaken</button>
+                            <button onClick={function () { setShowNewFolder(false); setNewFolderName(''); }} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>Annuleer</button>
                         </div>
                     </div>
                 )}
 
-                {/* Alle gesprekken */}
+                <button onClick={startNewConversation} className="ai-new-conv-btn">
+                    <i className="fa-solid fa-plus"></i> Nieuw gesprek
+                </button>
+
                 <div
-                    className={'ai-folder-item' + (activeFolder === null ? ' active' : '')}
-                    onClick={function () { setActiveFolder(null); loadConversations(null); }}
+                    className={'ai-folder-item' + (!activeFolder ? ' active' : '')}
+                    onClick={function () { setActiveFolder(null); }}
                 >
-                    <i className="fa-solid fa-clock" style={{ fontSize: 11 }} />
-                    <span>Recente gesprekken</span>
+                    <i className="fa-solid fa-comments" style={{ color: 'var(--muted)', fontSize: 13 }}></i>
+                    <span>Alle gesprekken</span>
                     <span className="ai-folder-count">{conversations.length}</span>
                 </div>
 
-                {/* Mappen */}
-                {folders.map(function (folder) {
-                    var count = conversations.filter(function (c) { return c.folder_id === folder.id; }).length;
-                    return (
-                        <div
-                            key={folder.id}
-                            className={'ai-folder-item' + (activeFolder === folder.id ? ' active' : '')}
-                            onClick={function () { setActiveFolder(folder.id); loadConversations(folder.id); }}
-                        >
-                            <i className="fa-solid fa-folder" style={{ color: folder.kleur || 'var(--brand)', fontSize: 11 }} />
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.naam}</span>
-                            <span className="ai-folder-count">{count}</span>
-                            <button
-                                className="ai-folder-delete"
-                                onClick={function (e) { e.stopPropagation(); deleteFolder(folder.id); }}
-                                style={{ opacity: 0, background: 'none', border: 'none', color: 'rgba(255,255,255,.4)', cursor: 'pointer', fontSize: 10, padding: '0 2px', transition: 'opacity .15s' }}
-                                title="Map verwijderen"
-                            >
-                                ×
-                            </button>
-                        </div>
-                    );
-                })}
+                {loadingFolders ? (
+                    <div style={{ padding: '8px 12px', color: 'var(--muted)', fontSize: 11 }}>Laden&hellip;</div>
+                ) : (
+                    folders.map(function (folder) {
+                        var count = conversations.filter(function (c) { return c.folder_id === folder.id; }).length;
+                        return (
+                            <div key={folder.id} className={'ai-folder-item' + (activeFolder === folder.id ? ' active' : '')}>
+                                <div
+                                    style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                                    onClick={function () { setActiveFolder(folder.id === activeFolder ? null : folder.id); }}
+                                >
+                                    <i className="fa-solid fa-folder" style={{ color: folder.kleur || 'var(--brand)', fontSize: 13 }}></i>
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.naam}</span>
+                                    <span className="ai-folder-count">{count}</span>
+                                </div>
+                                <button
+                                    onClick={function (e) { e.stopPropagation(); deleteFolder(folder.id); }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0, transition: 'opacity .15s' }}
+                                    className="ai-folder-delete"
+                                    title="Map verwijderen"
+                                >
+                                    <i className="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        );
+                    })
+                )}
 
-                {/* Gesprekken lijst */}
                 <div className="ai-conv-list">
-                    {loadingConvs && <div style={{ padding: '12px', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Laden...</div>}
-                    {!loadingConvs && filteredConvs.length === 0 && (
-                        <div style={{ padding: '16px 12px', fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+                    {visibleConversations.length === 0 && !loadingFolders && (
+                        <div style={{ padding: '12px', color: 'var(--muted)', fontSize: 11, textAlign: 'center' }}>
                             Nog geen gesprekken opgeslagen
                         </div>
                     )}
-                    {filteredConvs.map(function (conv) {
+                    {visibleConversations.map(function (conv) {
+                        var isActive = activeConversation && activeConversation.id === conv.id;
                         return (
-                            <div
-                                key={conv.id}
-                                className={'ai-conv-item' + (activeConvId === conv.id ? ' active' : '')}
-                                onClick={function () { loadConversation(conv); }}
-                            >
-                                <i className="fa-solid fa-message" style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0 }} />
-                                <span style={{ fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.titel}</span>
+                            <div key={conv.id} className={'ai-conv-item' + (isActive ? ' active' : '')}>
+                                <div style={{ flex: 1, cursor: 'pointer', overflow: 'hidden' }} onClick={function () { loadConversation(conv); }}>
+                                    <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.titel}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                                        <span style={{ background: conv.modus === 'brainstorm' ? 'rgba(255,191,0,.2)' : 'rgba(59,130,246,.2)', color: conv.modus === 'brainstorm' ? '#FFBF00' : '#3b82f6', padding: '1px 5px', borderRadius: 4, fontSize: 9, fontWeight: 700 }}>
+                                            {conv.modus === 'brainstorm' ? 'Brainstorm' : 'Q&A'}
+                                        </span>
+                                        {new Date(conv.updated_at || conv.created_at).toLocaleDateString('nl-NL')}
+                                    </div>
+                                </div>
                                 <button
-                                    className="ai-conv-delete"
                                     onClick={function (e) { e.stopPropagation(); deleteConversation(conv.id); }}
-                                    style={{ opacity: 0, background: 'none', border: 'none', color: 'rgba(255,255,255,.4)', cursor: 'pointer', fontSize: 11, padding: '0 2px', transition: 'opacity .15s', flexShrink: 0 }}
-                                    title="Verwijderen"
+                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '2px 4px', fontSize: 11, opacity: 0, transition: 'opacity .15s' }}
+                                    className="ai-conv-delete"
                                 >
-                                    ×
+                                    <i className="fa-solid fa-trash"></i>
                                 </button>
                             </div>
                         );
@@ -324,101 +592,88 @@ export default function AiChat() {
                 </div>
             </div>
 
-            {/* ── Hoofdvenster ─────────────────────────────────────────────── */}
+            {/* ── Hoofdvenster ───────────────────────────────────────────── */}
             <div className="ai-studio-main">
                 {/* Topbar */}
                 <div className="ai-studio-topbar">
                     <button
-                        onClick={function () { setSidebarOpen(!sidebarOpen); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}
-                        title={sidebarOpen ? 'Sidebar sluiten' : 'Sidebar openen'}
+                        onClick={function () { setSidebarOpen(function (v) { return !v; }); }}
+                        style={{ background: 'rgba(255,255,255,.06)', border: 'none', color: 'var(--text)', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 14 }}
+                        title="Sidebar toggling"
                     >
-                        <i className="fa-solid fa-bars" />
+                        <i className={'fa-solid ' + (sidebarOpen ? 'fa-chevron-left' : 'fa-bars')}></i>
                     </button>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <i className="fa-solid fa-robot" style={{ color: 'var(--brand)', fontSize: 16 }} />
-                        <span style={{ fontWeight: 800, fontSize: 15 }}>AI Studio</span>
-                        {activeConvId && (
-                            <span style={{ fontSize: 11, color: 'var(--muted)', background: 'rgba(255,255,255,.05)', padding: '2px 8px', borderRadius: 10 }}>
-                                {conversations.find(function (c) { return c.id === activeConvId; })?.titel || 'Gesprek'}
-                            </span>
-                        )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontSize: 16 }}>
+                            <i className="fa-solid fa-robot"></i>
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 800, fontSize: 15 }}>BBQ AI Studio</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Hop &amp; Bites &mdash; Powered by Groq</div>
+                        </div>
                     </div>
 
-                    {/* Modi */}
                     <div className="ai-mode-tabs">
                         <button
-                            className={'ai-mode-tab' + (mode === 'brainstorm' ? ' active' : '')}
                             onClick={function () { setMode('brainstorm'); }}
+                            className={'ai-mode-tab' + (mode === 'brainstorm' ? ' active' : '')}
                         >
-                            🔥 Brainstorm
+                            <i className="fa-solid fa-fire" style={{ marginRight: 5 }}></i>Brainstorm
                         </button>
                         <button
-                            className={'ai-mode-tab' + (mode === 'qa' ? ' active' : '')}
                             onClick={function () { setMode('qa'); }}
+                            className={'ai-mode-tab' + (mode === 'qa' ? ' active' : '')}
                         >
-                            💡 Q&A
+                            <i className="fa-solid fa-circle-question" style={{ marginRight: 5 }}></i>Vragen
                         </button>
                     </div>
 
-                    {/* Opslaan */}
-                    <button
-                        onClick={function () { setSavingAs(!savingAs); setSaveForm({ titel: activeConvId ? (conversations.find(function (c) { return c.id === activeConvId; })?.titel || '') : '', folder_id: activeFolder || '' }); }}
-                        style={{ background: 'rgba(255,191,0,.12)', border: '1px solid rgba(255,191,0,.2)', color: 'var(--brand)', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                    >
-                        <i className="fa-solid fa-floppy-disk" style={{ marginRight: 5 }} />
-                        {activeConvId ? 'Bijwerken' : 'Opslaan'}
-                    </button>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {messages.length > 2 && !activeConversation && (
+                            <SaveButton
+                                folders={folders}
+                                onSave={saveConversation}
+                                onRefresh={loadFoldersAndConversations}
+                            />
+                        )}
+                        {activeConversation && (
+                            <div style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <i className="fa-solid fa-floppy-disk"></i>
+                                {activeConversation.titel}
+                            </div>
+                        )}
+                    </div>
                 </div>
-
-                {/* Save form */}
-                {savingAs && (
-                    <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'rgba(255,191,0,.04)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                            value={saveForm.titel}
-                            onChange={function (e) { setSaveForm(function (p) { return Object.assign({}, p, { titel: e.target.value }); }); }}
-                            onKeyDown={function (e) { if (e.key === 'Enter') saveConversation(); }}
-                            placeholder="Titel gesprek..."
-                            autoFocus
-                            style={{ background: 'rgba(255,255,255,.06)', border: '1px solid var(--border)', color: 'var(--text)', padding: '7px 12px', borderRadius: 7, fontSize: 13, flex: 1, minWidth: 200 }}
-                        />
-                        <select
-                            value={saveForm.folder_id}
-                            onChange={function (e) { setSaveForm(function (p) { return Object.assign({}, p, { folder_id: e.target.value }); }); }}
-                            style={{ background: 'rgba(255,255,255,.06)', border: '1px solid var(--border)', color: 'var(--text)', padding: '7px 10px', borderRadius: 7, fontSize: 13 }}
-                        >
-                            <option value="">Geen map</option>
-                            {folders.map(function (f) { return <option key={f.id} value={f.id}>{f.naam}</option>; })}
-                        </select>
-                        <button onClick={saveConversation} style={{ background: 'var(--brand)', color: '#000', border: 'none', padding: '7px 16px', borderRadius: 7, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
-                            💾 Opslaan
-                        </button>
-                        <button onClick={function () { setSavingAs(false); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 13 }}>
-                            ✕
-                        </button>
-                    </div>
-                )}
 
                 {/* Berichten */}
                 <div className="ai-studio-messages">
-                    {messages.map(function (msg, i) {
+                    {messages.map(function (msg, idx) {
                         var isUser = msg.role === 'user';
                         return (
-                            <div key={i} className={'ai-studio-msg-row' + (isUser ? ' user' : '')}>
-                                {!isUser && (
-                                    <div className="ai-studio-avatar">
-                                        <i className="fa-solid fa-robot" />
+                            <div key={idx}>
+                                <div className={'ai-studio-msg-row' + (isUser ? ' user' : '')}>
+                                    {!isUser && (
+                                        <div className="ai-studio-avatar">
+                                            <i className="fa-solid fa-robot"></i>
+                                        </div>
+                                    )}
+                                    <div className={'ai-studio-bubble' + (isUser ? ' user' : '')}>
+                                        {renderText(msg.content)}
                                     </div>
-                                )}
-                                {isUser && (
-                                    <div className="ai-studio-user-avatar">
-                                        <i className="fa-solid fa-user" />
-                                    </div>
-                                )}
-                                <div className={'ai-studio-bubble' + (isUser ? ' user' : '')}>
-                                    {renderText(msg.content)}
+                                    {isUser && (
+                                        <div className="ai-studio-user-avatar">
+                                            <i className="fa-solid fa-user"></i>
+                                        </div>
+                                    )}
                                 </div>
+                                {!isUser && msg.actions && msg.actions.length > 0 && (
+                                    <div style={{ paddingLeft: 50, maxWidth: 640 }}>
+                                        {msg.actions.map(function (action) {
+                                            return renderActionCard(action, idx);
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -426,81 +681,136 @@ export default function AiChat() {
                     {isLoading && (
                         <div className="ai-studio-msg-row">
                             <div className="ai-studio-avatar">
-                                <i className="fa-solid fa-robot" />
+                                <i className="fa-solid fa-robot"></i>
                             </div>
                             <div className="ai-studio-bubble loading-dots">
-                                <span /><span /><span />
+                                <span></span><span></span><span></span>
                             </div>
                         </div>
                     )}
+
+                    {messages.length <= 1 && !isLoading && (
+                        <div style={{ maxWidth: 600, margin: '16px auto 0 50px' }}>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                                {mode === 'brainstorm' ? '\uD83D\uDD25 Brainstorm-starters:' : '\uD83D\uDCA1 Veelgestelde vragen:'}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {suggestions.map(function (s, i) {
+                                    return (
+                                        <button
+                                            key={i}
+                                            onClick={function () { sendMessage(null, s); }}
+                                            className="ai-suggestion-chip"
+                                        >
+                                            {s}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div ref={messagesEndRef} />
                 </div>
-
-                {/* Quick chips */}
-                {messages.length <= 2 && (
-                    <div style={{ padding: '8px 20px', display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border)' }}>
-                        {chips.map(function (s) {
-                            return (
-                                <button
-                                    key={s}
-                                    onClick={function () { sendMessage(null, s); }}
-                                    className="ai-suggestion-chip"
-                                >
-                                    {s}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
 
                 {/* Input */}
                 <div className="ai-studio-input-area">
                     <form onSubmit={sendMessage} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                        <div style={{ flex: 1, position: 'relative' }}>
-                            <textarea
-                                ref={inputRef}
-                                value={input}
-                                onChange={function (e) { setInput(e.target.value); }}
-                                onKeyDown={function (e) {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        sendMessage(null);
-                                    }
-                                }}
-                                placeholder={mode === 'brainstorm' ? '🔥 Brainstorm vrijuit... (Enter = verstuur, Shift+Enter = nieuw regel)' : '💡 Stel je vraag... (Enter = verstuur)'}
-                                disabled={isLoading}
-                                rows={2}
-                                style={{
-                                    width: '100%', background: 'rgba(255,255,255,.06)',
-                                    border: '1px solid var(--border)', color: 'var(--text)',
-                                    padding: '12px 14px', borderRadius: 10, fontSize: 14,
-                                    resize: 'none', fontFamily: 'inherit', lineHeight: 1.5,
-                                    transition: 'border-color .15s'
-                                }}
-                                onFocus={function (e) { e.target.style.borderColor = 'rgba(180,140,20,.4)'; }}
-                                onBlur={function (e) { e.target.style.borderColor = 'var(--border)'; }}
-                            />
-                        </div>
+                        <textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={function (e) { setInput(e.target.value); }}
+                            onKeyDown={handleKey}
+                            placeholder={mode === 'brainstorm' ? 'Waar wil je over brainstormen? (Enter = versturen)' : 'Stel een vraag\u2026 (Enter = versturen)'}
+                            disabled={isLoading}
+                            rows={2}
+                            autoComplete="off"
+                            className="ai-textarea general"
+                            style={{ flex: 1, resize: 'none' }}
+                        />
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
-                            style={{
-                                background: !input.trim() || isLoading ? 'rgba(255,255,255,.08)' : 'var(--brand)',
-                                color: !input.trim() || isLoading ? 'var(--muted)' : '#000',
-                                border: 'none', padding: '12px 18px', borderRadius: 10,
-                                cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer',
-                                fontWeight: 700, fontSize: 16, transition: 'all .15s', flexShrink: 0,
-                                alignSelf: 'flex-end'
-                            }}
+                            className="send-btn"
+                            style={{ padding: '12px 18px', fontSize: 16 }}
                         >
-                            <i className="fa-solid fa-paper-plane" />
+                            <i className="fa-solid fa-paper-plane"></i>
                         </button>
                     </form>
-                    <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
-                        Groq ⚡ llama-3.3-70b-versatile • {mode === 'brainstorm' ? '🔥 Brainstorm modus' : '💡 Q&A modus'}
-                    </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ─── Opslaan knop met folder-selectie dropdown ─────────────────────────────
+function SaveButton({ folders, onSave, onRefresh }) {
+    var [open, setOpen] = useState(false);
+    var [titel, setTitel] = useState('');
+    var [folderId, setFolderId] = useState(null);
+    var [saving, setSaving] = useState(false);
+
+    async function doSave() {
+        if (!titel.trim()) return;
+        setSaving(true);
+        try {
+            await onSave(folderId, titel.trim());
+            await onRefresh();
+            setOpen(false);
+            setTitel('');
+        } catch (e) {
+            console.warn('Opslaan mislukt:', e.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div style={{ position: 'relative' }}>
+            <button
+                onClick={function () { setOpen(function (v) { return !v; }); }}
+                style={{ background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', color: 'var(--brand)', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+            >
+                <i className="fa-solid fa-floppy-disk" style={{ marginRight: 5 }}></i>Opslaan
+            </button>
+            {open && (
+                <div style={{ position: 'absolute', right: 0, top: '110%', width: 240, background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>Gesprek opslaan</div>
+                    <input
+                        value={titel}
+                        onChange={function (e) { setTitel(e.target.value); }}
+                        placeholder="Geef een titel&hellip;"
+                        style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}
+                        onKeyDown={function (e) { if (e.key === 'Enter') doSave(); }}
+                        autoFocus
+                    />
+                    <select
+                        value={folderId || ''}
+                        onChange={function (e) { setFolderId(e.target.value ? parseInt(e.target.value) : null); }}
+                        style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8 }}
+                    >
+                        <option value="">Geen map (los)</option>
+                        {folders.map(function (f) {
+                            return <option key={f.id} value={f.id}>{f.naam}</option>;
+                        })}
+                    </select>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                            onClick={doSave}
+                            disabled={!titel.trim() || saving}
+                            style={{ flex: 1, padding: '6px 0', borderRadius: 7, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+                        >
+                            {saving ? 'Opslaan\u2026' : 'Opslaan'}
+                        </button>
+                        <button
+                            onClick={function () { setOpen(false); }}
+                            style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}
+                        >
+                            &#x2715;
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
