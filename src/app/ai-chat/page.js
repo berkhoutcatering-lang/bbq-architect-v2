@@ -248,17 +248,16 @@ export default function AiStudioPage() {
 
             setMessages(function (prev) { return [...prev, assistantMsg]; });
 
-            // Auto-save als dit gesprek al opgeslagen was
-            if (activeConversation) {
-                setTimeout(updateConversation, 500);
-            }
-
         } catch (error) {
             setMessages(function (prev) {
                 return [...prev, { role: 'assistant', content: '❌ ' + error.message, actions: [] }];
             });
         } finally {
             setIsLoading(false);
+            // Auto-save nadat AI response verwerkt is (state is dan bijgewerkt)
+            if (activeConversation) {
+                setTimeout(updateConversation, 300);
+            }
         }
     }
 
@@ -404,7 +403,7 @@ export default function AiStudioPage() {
                 }
                 return part;
             });
-            return <span key={i} style={{ display: 'block' }}>{rendered || '\u00A0'}</span>;
+            return <span key={i} style={{ display: 'block' }}>{rendered.length ? rendered : '\u00A0'}</span>;
         });
     }
 

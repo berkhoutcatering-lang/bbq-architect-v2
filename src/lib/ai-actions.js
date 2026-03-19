@@ -306,6 +306,10 @@ export async function executeAction(action, supabase) {
     var def = ACTION_TYPES[type];
     if (!def) throw new Error('Onbekend actietype: ' + type);
 
+    if (def.op === 'tool' || def.op === 'bulk_insert' || def.op === 'bulk_delete' || def.op === 'client_only') {
+        throw new Error('Actie "' + type + '" wordt afgehandeld via speciale handler, niet via executeAction');
+    }
+
     var result;
 
     if (def.op === 'insert') {

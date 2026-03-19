@@ -26,24 +26,27 @@ async function generatePrepList(params) {
     var event_id = params.event_id;
 
     // Haal event op (of het eerstvolgende event als geen ID)
-    var eventRes;
+    var eventData = null;
     if (event_id) {
-        eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+        var byId = await supabase.from('events').select('*').eq('id', event_id).single();
+        if (!byId.error) eventData = byId.data;
     } else {
         var today = new Date().toISOString().slice(0, 10);
-        eventRes = await supabase.from('events')
+        var upcoming = await supabase.from('events')
             .select('*')
             .gte('date', today)
             .order('date', { ascending: true })
-            .limit(1)
-            .single();
+            .limit(1);
+        if (!upcoming.error && upcoming.data && upcoming.data.length > 0) {
+            eventData = upcoming.data[0];
+        }
     }
 
-    if (eventRes.error || !eventRes.data) {
-        return { error: 'Geen event gevonden' };
+    if (!eventData) {
+        return { error: 'Geen aankomend event gevonden. Voeg eerst een event toe via de Events-pagina.' };
     }
 
-    var event = eventRes.data;
+    var event = eventData;
     var menuIds = event.menu || [];
 
     // Haal gekoppelde recepten op
@@ -187,25 +190,32 @@ async function bulkCreateGerechten(params) {
     var gerechten = params.gerechten || [];
     if (gerechten.length === 0) return { error: 'Geen gerechten opgegeven' };
 
+    // Parallel inserts voor snelheid
+    var settled = await Promise.allSettled(
+        gerechten.map(function (g, i) {
+            return supabase.from('gerechten').insert({
+                naam: g.naam,
+                gang_slug: g.gang_slug,
+                beschrijving: g.beschrijving || '',
+                bereidingswijze: g.bereidingswijze || '',
+                actief: g.actief !== undefined ? g.actief : false,
+                volgorde: g.volgorde || i + 1,
+            }).select().single();
+        })
+    );
+
     var results = [];
     var errors = [];
-
-    for (var i = 0; i < gerechten.length; i++) {
-        var g = gerechten[i];
-        var res = await supabase.from('gerechten').insert({
-            naam: g.naam,
-            gang_slug: g.gang_slug,
-            beschrijving: g.beschrijving || '',
-            bereidingswijze: g.bereidingswijze || '',
-            actief: g.actief !== undefined ? g.actief : true,
-            volgorde: g.volgorde || i + 1,
-        }).select().single();
-        if (res.error) {
-            errors.push({ naam: g.naam, error: res.error.message });
+    settled.forEach(function (outcome, i) {
+        if (outcome.status === 'fulfilled' && !outcome.value.error) {
+            results.push(outcome.value.data);
         } else {
-            results.push(res.data);
+            var msg = outcome.status === 'rejected'
+                ? outcome.reason.message
+                : outcome.value.error.message;
+            errors.push({ naam: gerechten[i].naam, error: msg });
         }
-    }
+    });
 
     return { inserted: results.length, errors: errors, ids: results.map(function (r) { return r.id; }) };
 }

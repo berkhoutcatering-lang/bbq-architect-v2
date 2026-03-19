@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getActionInstructions } from '@/lib/ai-actions';
+import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions';
 
 // ─── Per-pagina gepersonaliseerde systeem-prompts ─────────────────────────────
 var PAGE_SYSTEM_PROMPTS = {
@@ -297,7 +297,7 @@ export async function POST(req) {
         var systemParts = [];
 
         if (mode === 'brainstorm') {
-            systemParts.push(PAGE_SYSTEM_PROMPTS['/ai-chat'] || PAGE_SYSTEM_PROMPTS['/ai-chat']);
+            systemParts.push(PAGE_SYSTEM_PROMPTS['/ai-chat']);
             systemParts.push(BRAINSTORM_INSTRUCTIONS);
         } else if (mode === 'general' || mode === 'qa') {
             systemParts.push(
@@ -319,7 +319,6 @@ export async function POST(req) {
 
         // ── Voeg live pagina-data toe als die beschikbaar is ───────────────
         if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
-            var { formatContextForPrompt } = await import('@/lib/ai-actions');
             systemParts.push(formatContextForPrompt(contextData));
         }
 

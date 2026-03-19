@@ -85,6 +85,29 @@ export default function AiAssistant() {
         }
     }, [isOpen]);
 
+    // ── Snelkoppelingen per pagina ────────────────────────────────────────────
+    var PAGE_CHIPS = {
+        '/':            ['Wat moet ik vandaag regelen?', 'Maak een prep-lijst', 'Lage voorraad check', 'Omzet overzicht'],
+        '/events':      ['Voeg een nieuw event toe', 'Welke events komen eraan?', 'Maak een prep-lijst', 'Tip voor grote groepen'],
+        '/agenda':      ['Maak een prep-lijst', 'Planning voor komende week', 'Wat staat er dit weekend?', 'Aankomende taken'],
+        '/recepten':    ['Bereken vlees voor 80 gasten', 'Dry rub recept voor brisket', 'Pulled pork bereidingstijd', 'Salade voor 50 gasten'],
+        '/gerechten':   ['20 gerechten met buikspek', 'Vegetarische hapjes bedenken', 'Dessert-ideeën voor BBQ', 'Menubalans analyseren'],
+        '/menu-engineering': ['Welke gerechten hebben beste marge?', 'Menu-analyse uitleggen', 'Stars vs Dogs in mijn menu', 'Gerecht verbeteren voor marge'],
+        '/offertes':    ['Omzet overzicht', 'Hoeveel open offertes?', 'Offerte schrijftips', 'Marge berekenen voor event'],
+        '/facturen':    ['Openstaande facturen overzicht', 'Vervallen facturen check', 'Cashflow advies', 'Debiteurenbeheer tips'],
+        '/voorraad':    ['Lage voorraad check', 'Wat moet ik bijbestellen?', 'Par levels uitleggen', 'FIFO-systeem tips'],
+        '/inkoop':      ['Inkooplijst voor weekend-event', 'Beste leverancier kiezen', 'Vleesinkoop calculeren', 'Bulk-voordelen berekenen'],
+        '/service':     ['HACCP temperaturen checklist', 'Hoe lang warm houden?', 'Tijdlijn voor service', 'Snel probleem oplossen'],
+        '/haccp':       ['Kerntemperaturen vlees', 'Koelketen checklist', 'Temperatuur registreren', 'HACCP-regels uitleggen'],
+        '/uren':        ['Uren registreren', 'Overuren berekenen', 'Wettelijke regels urenregistratie', 'Pauzetijden checken'],
+        '/materieel':   ['BBQ onderhoudstips', 'Welk materieel meenemen?', 'Levensduur kamado', 'Materieel checklist'],
+        '/logistiek':   ['Bus inlaadvolgorde', 'Koelboxen tips', 'Vergeten items check', 'Materieel voor 100 gasten'],
+        '/boekhouding': ['Omzet dit kwartaal', 'BTW-aangifte tips', 'Food cost ratio berekenen', 'Winst-verlies analyse'],
+        '/price-intelligence': ['Leverancier vergelijken', 'Beste prijs-kwaliteit vlees', 'Inkoopprijs optimaliseren', 'Seizoensprijzen advies'],
+        '/ai-chat':     ['20 gerechten met buikspek', 'Thema-BBQ concepten', 'Zomermenu brainstorm', 'Onderscheidend vermogen tips'],
+    };
+    var quickChips = PAGE_CHIPS[pathname] || ['Maak een prep-lijst', '20 gerechten met buikspek', 'Omzet overzicht', 'Lage voorraad check'];
+
     // ── Bericht versturen ─────────────────────────────────────────────────────
     async function sendMessage(e, overrideText) {
         if (e) e.preventDefault();
@@ -647,12 +670,7 @@ export default function AiAssistant() {
                     {/* Snelkoppelingen */}
                     {messages.length <= 2 && !isLoading && (
                         <div style={{ padding: '6px 12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            {[
-                                'Maak een prep-lijst',
-                                '20 gerechten met buikspek',
-                                'Omzet overzicht',
-                                'Lage voorraad check',
-                            ].map(function (s) {
+                            {quickChips.map(function (s) {
                                 return (
                                     <button key={s} onClick={function () { sendMessage(null, s); }} style={{ background: 'rgba(255,191,0,.08)', border: '1px solid rgba(255,191,0,.2)', color: 'var(--brand)', padding: '3px 8px', borderRadius: 20, fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>
                                         {s}
