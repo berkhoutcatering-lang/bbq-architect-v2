@@ -47,7 +47,7 @@ export default function Inkoop() {
         reader.onload = async function (ev) {
             var rawB64 = ev.target.result;
             // Stap 1: Aggressief resizen om "Request Entity Too Large" te voorkomen op Vercel/Groq
-            var b64 = await resizeImage(rawB64, 1000, 1000, 0.6);
+            var b64 = await resizeImage(rawB64, 1200, 1200, 0.8);
 
             setScanStatus('ANALYSING GRID & MATCHING DATA...');
             try {
