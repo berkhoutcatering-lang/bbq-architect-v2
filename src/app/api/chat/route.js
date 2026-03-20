@@ -310,28 +310,25 @@ export async function POST(req) {
 
         if (hasImage) {
             systemParts.push(
-                'Je bent een OCR-scanner voor horeca inkoopfacturen. OUTPUT ALLEEN ACTION-BLOKKEN. Geen intro.',
+                'Je bent een OCR-robot. Jouw enige taak: maak één ACTION-blok per productregel op de factuur.',
+                'STOP NIET eerder dan de LAATSTE productregel verwerkt is.',
+                'Schrijf GEEN introductie, GEEN uitleg, GEEN Insight. Alleen ACTION-blokken.',
                 '',
-                '### STAP 1 — SCAN ALLE RIJEN EERST:',
-                'Tel alle productregels van boven naar beneden. Maak dan voor ELKE regel een ACTION-blok.',
-                'Doe dit in één doorloop. Stop pas als je de laatste productregel hebt verwerkt.',
+                '### MAKRO FACTUUR KOLOMMEN:',
+                '"Prijs st/kg na korting" (laatste kolom) = prijs per eenheid. Geen korting? Gebruik "Prijs st/kg".',
+                '"Stuks per eenheid" = bijv. "2,045 KG" → aantal=2.045, eenheid=kg. "10 ST" → aantal=10, eenheid=stuks.',
+                '"Bedrag" = totaal. Gebruik dit als controle: prijs × aantal ≈ Bedrag.',
                 '',
-                '### PRODUCTNAAM REGEL (ABSOLUUT VERPLICHT):',
-                'De "Artikelomschrijving" kolom bevat AFGEKAPTE MAGAZIJN-CODES — dit zijn GEEN spellingsfouten.',
-                'Kopieer de naam EXACT zoals gedrukt: elke letter, punt, spatie, afkorting. Niets veranderen.',
-                'VERBODEN: woorden aanvullen, vertalen, corrigeren of vervangen door synoniemen.',
+                '### PRODUCTNAAM — LETTERLIJK KOPIËREN:',
+                'De "Artikelomschrijving" zijn afgekapte magazijn-codes. Geen echte woorden.',
+                'Schrijf EXACT over wat er staat. Geen correcties, geen aanvullingen, geen vertalingen.',
+                'Voorbeeld: "MC FRITUURVET VLBR.NEUTR 10L" schrijf je als "MC FRITUURVET VLBR.NEUTR 10L".',
                 '',
-                '### MAKRO KOLOMMEN:',
-                '- prijs → "Prijs st/kg na korting" (laatste kolom). Geen korting? → "Prijs st/kg"',
-                '- aantal → het GETAL uit "Stuks per eenheid" (bv. "2,045 KG" → 2.045)',
-                '- eenheid → de EENHEID uit "Stuks per eenheid" (KG→kg, ST→stuks, DS→doos, LT→liter)',
-                '- btw_tarief → 9 voor voedsel, 21 voor non-food',
-                '- CONTROLE: prijs × aantal moet ≈ "Bedrag" kolom',
+                '### PER PRODUCTREGEL — dit formaat (dubbele aanhalingstekens verplicht):',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: NAAM","data":{"winkel":"Makro","datum":"YYYY-MM-DD","totaal_bedrag":0,"items":[{"naam":"EXACT ZOALS OP FACTUUR","aantal":2.045,"eenheid":"kg","prijs":16.99,"btw_tarief":9}]}}>>>',
                 '',
-                '### FORMAT (één blok per productregel, dubbele aanhalingstekens verplicht):',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: [NAAM]","data":{"winkel":"Makro","datum":"YYYY-MM-DD","totaal_bedrag":0,"items":[{"naam":"EXACT ZOALS OP FACTUUR","aantal":1.0,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
-                '',
-                'Na ALLE ACTION-blokken: één regel "### Pitmaster Insight" met totaal aantal verwerkte items.'
+                'Ga direct door naar het volgende ACTION-blok. Geen tekst tussen de blokken.',
+                'Na het LAATSTE ACTION-blok: schrijf alleen "KLAAR — X items verwerkt."'
             );
         }
 
