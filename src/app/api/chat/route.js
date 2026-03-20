@@ -303,10 +303,15 @@ export async function POST(req) {
         if (hasImage) {
             systemParts.push(
                 '**VISION MODE GEACTIVEERD**',
-                'Je hebt een afbeelding ontvangen (bijv. een bonnetje of inkoopfactuur). Bestudeer de image aandachtig.',
-                'Als het een bonnetje is, IS HET JOUW TAAK OM DEZE UIT TE LEZEN EN DE VOORRAAD/PRIJZEN TE UPDATEN.',
-                'Gebruik hiervoor ALTIJD EXACT het volgende JSON actieblok in je antwoord (GEEN MARKDOWN, direct starten met <<<ACTION):',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop Sligro verwerkt","data":{"winkel":"Naam Winkel","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"btw_hoog":21.00,"btw_laag":0.00,"btw_nul":0.00,"items":[{"naam":"Product","aantal":1,"prijs":10.50,"btw_tarief":21}]}}>>>'
+                'Je hebt een afbeelding ontvangen (bijv. een bonnetje, factuur, OF een foto van een Menukaart). Bestudeer deze aandachtig.',
+                '',
+                'SCENARIO A: HET IS EEN KASSABON OF FACTUUR',
+                'Lees de bon uit om de voorraad en prijzen te updaten. Gebruik ALTIJD EXACT dit JSON actieblok (GEEN MARKDOWN, direct starten met <<<ACTION):',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop verwerkt","data":{"winkel":"Naam Winkel","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"btw_hoog":21.00,"btw_laag":0.00,"btw_nul":0.00,"items":[{"naam":"Product","aantal":1,"prijs":10.50,"btw_tarief":21}]}}>>>',
+                '',
+                'SCENARIO B: HET IS EEN GERECHTENLIJST OF MENUKAART',
+                'Scan alle gerechten van de foto. Voor élk gerecht dat je herkent MOET je de missende details (beschrijving, complete ingrediënten array, uitgebreide bereidingswijze stappenplan) zelf professioneel invullen. Gebruik ALTIJD EXACT dit JSON actieblok (GEEN MARKDOWN, direct starten met <<<ACTION):',
+                '<<<ACTION:{"type":"render_recipe_matrix","description":"Menu Kaart Scan Resultaten","data":{"recipes":[{"naam":"Gerechtnaam","categorie":"hoofdgerecht","beschrijving":"Smaakprofiel","bereidingswijze":"Stappenplan...","ingredienten":["Ingrediënt 1", "Ingrediënt 2"],"allergenen":["Gluten"]}]}}>>>'
             );
         }
 
