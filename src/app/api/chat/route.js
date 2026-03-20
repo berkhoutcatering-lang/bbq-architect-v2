@@ -324,9 +324,12 @@ export async function POST(req) {
                 '5. Prijs: De kolom "Bedrag" (uiterst rechts) gedeeld door "Aantal". dit is de prijs per stuk of per kg.',
                 '6. Sla GEEN items over. Ga door tot de allerlaatste regel.',
                 '',
-                '### OUTPUT FORMAAT:',
-                'Voor elk item:',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ID]: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product","aantal":1.23,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
+                '### OUTPUT FORMAAT (KRITISCH):',
+                'Gebruik ALTIJD dubbele aanhalingstekens (") in JSON. NOOIT enkele aanhalingstekens.',
+                'Voor elk item OP EEN APARTE REGEL:',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ID]: [NAAM]","data":{"winkel":"Makro","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product Naam","aantal":1.23,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
+                '',
+                'VOORBEELD EENHEDEN: "kg", "stks", "liter", "stuks"',
                 '',
                 'Eindig met één korte "### Pitmaster Insight" sectie met een proactief advies.'
             );

@@ -347,6 +347,51 @@ export function getActionInstructions(pathname) {
     ].join('\n');
 }
 
+// ─── Herstel veelvoorkomende LLM JSON-fouten ─────────────────────────────────
+function repairJson(str) {
+    // Stap 1: Vervang enkelvoudige aanhalingstekens door dubbele (bewust van context)
+    var result = '';
+    var i = 0;
+    var len = str.length;
+    var inDoubleQuote = false;
+
+    while (i < len) {
+        var ch = str[i];
+        if (inDoubleQuote) {
+            if (ch === '\\') { result += ch + (str[i + 1] || ''); i += 2; continue; }
+            if (ch === '"') inDoubleQuote = false;
+            result += ch; i++;
+        } else if (ch === '"') {
+            inDoubleQuote = true; result += ch; i++;
+        } else if (ch === "'") {
+            // Enkelvoudig aanhalingsteken → dubbel aanhalingsteken
+            result += '"'; i++;
+            while (i < len) {
+                var c = str[i];
+                if (c === "'") { result += '"'; i++; break; }
+                if (c === '"') { result += '\\"'; }
+                else if (c === '\\') { result += c; i++; if (i < len) { result += str[i]; i++; } continue; }
+                else { result += c; }
+                i++;
+            }
+        } else { result += ch; i++; }
+    }
+
+    // Stap 2: Fix sleutels zonder aanhalingstekens: {naam: → {"naam":
+    result = result.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
+
+    // Stap 3: Fix waarden zonder aanhalingstekens: "eenheid": stks → "eenheid": "stks"
+    result = result.replace(/:\s*([a-zA-Z_][a-zA-Z0-9_]*)(\s*[,}\]])/g, function (match, val, end) {
+        if (['true', 'false', 'null'].indexOf(val) >= 0) return match;
+        return ': "' + val + '"' + end;
+    });
+
+    // Stap 4: Verwijder trailing commas
+    result = result.replace(/,(\s*[}\]])/g, '$1');
+
+    return result;
+}
+
 // ─── Parseer actieblokken uit AI-responstekst ─────────────────────────────────
 export function parseActions(text) {
     if (!text) return { cleanText: '', actions: [] };
@@ -360,7 +405,9 @@ export function parseActions(text) {
             // Verwijder markdown code blokken als de AI die per ongeluk toevoegt
             rawJsonString = rawJsonString.replace(/^```(json)?\s*/i, '').replace(/\s*```$/i, '');
 
-            var parsed = JSON.parse(rawJsonString);
+            // Herstel veelvoorkomende LLM JSON-fouten (enkelvoudige quotes, ontbrekende quotes)
+            var repairedJsonString = repairJson(rawJsonString);
+            var parsed = JSON.parse(repairedJsonString);
             if (parsed.type && ACTION_TYPES[parsed.type]) {
                 actions.push({
                     id: Math.random().toString(36).slice(2, 8),
