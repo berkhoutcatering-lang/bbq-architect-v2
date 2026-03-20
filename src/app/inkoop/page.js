@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 export default function Inkoop() {
     var { data: leveranciers, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase('leveranciers', []);
     var { data: inkooplijsten, insert: insertInk, update: updateInk, remove: removeInk } = useSupabase('inkooplijsten', []);
+    var { data: inventoryData } = useSupabase('inventory', []);
     var { data: events } = useSupabase('events', []);
     var { data: offertes } = useSupabase('offertes', []);
     var { data: gerechtenData } = useSupabase('gerechten', []);
@@ -27,6 +28,7 @@ export default function Inkoop() {
     var [receiptScanning, setReceiptScanning] = useState(false);
     var [pendingActions, setPendingActions] = useState([]);
     var [scanStatus, setScanStatus] = useState('');
+    var [scanInsight, setScanInsight] = useState('');
     var fileInputRef = useRef(null);
 
     async function handleReceiptUpload(e) {
@@ -34,30 +36,42 @@ export default function Inkoop() {
         if (!file) return;
         setReceiptScanning(true);
         setPendingActions([]);
+        setScanInsight('');
         setScanStatus('AFBEELDING INLADEN...');
 
         var reader = new FileReader();
         reader.onload = async function (ev) {
             var b64 = ev.target.result;
-            setScanStatus('LLAMA VISION ANALYSEERT BON...');
+            setScanStatus('ANALYSING GRID & MATCHING DATA...');
             try {
+                // We sturen de huidige voorraad en leveranciers mee voor "deep matching"
                 var res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         pageContext: '/inkoop',
+                        contextData: {
+                            leveranciers: leveranciers,
+                            inventory: inventoryData,
+                            events: events // Voor proactief advies
+                        },
                         messages: [{
                             role: 'user',
                             content: [
-                                { type: 'text', text: 'Scan deze kassabon. Zoek naar items, prijzen en aantallen. Gebruik de process_receipt tool.' },
-                                { type: 'image_url', image_url: { url: b64 } }
+                                {
+                                    type: 'text',
+                                    text: 'Scan deze groothandel-factuur (Makro/Sligro). Analyseer de grid-structuur zeer nauwkeurig. Focus op de Artikelomschrijving, Aantal en Nettoprijs. Probeer de items te matchen aan onze bestaande leveranciers en producten (see contextData). Als je ziet dat de inkoop overeenkomt met een aankomend event (zie events in context), geef dan een korte proactieve opmerking in je tekst-antwoord.'
+                                },
+                                { type: 'image_url', image_url: { url: b64, detail: 'high' } }
                             ]
                         }]
                     })
                 });
                 var json = await res.json();
                 var content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
-                var { actions } = parseActions(content);
+                var { actions, cleanText } = parseActions(content);
+
+                setScanInsight(cleanText);
 
                 if (actions.length > 0) {
                     setPendingActions(actions);
@@ -161,8 +175,11 @@ export default function Inkoop() {
                     <div className="artisan-panel" style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
                         <i className="fa-solid fa-receipt" style={{ fontSize: 48, color: 'var(--brand)', marginBottom: 20 }}></i>
                         <h2 style={{ fontFamily: 'var(--font-artisan)', letterSpacing: 2, fontSize: 24, marginBottom: 16 }}>VISION INKOOP TRACKER</h2>
-                        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32, maxWidth: 500, margin: '0 auto 32px' }}>
-                            Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen en boekt ze direct in je inventaris.
+                        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 8, maxWidth: 500, margin: '0 auto 8px' }}>
+                            Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen.
+                        </p>
+                        <p style={{ color: 'var(--brand)', fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 32 }}>
+                            <i className="fa-solid fa-circle-info"></i> MOMENTEEL ENKEL FOTO'S & SCREENSHOTS (PDF WORDT NOG NIET ONDERSTEUND)
                         </p>
 
                         <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleReceiptUpload} style={{ display: 'none' }} />
@@ -178,22 +195,36 @@ export default function Inkoop() {
                         {scanStatus && <div style={{ marginTop: 20, fontSize: 11, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
                     </div>
 
+                    {scanInsight && (
+                        <div className="artisan-panel" style={{ marginBottom: 24, borderLeft: '4px solid var(--brand)', background: 'rgba(213, 178, 98, 0.05)' }}>
+                            <div className="panel-head"><h3><i className="fa-solid fa-wand-magic-sparkles"></i> PITMASTER INSIGHT</h3></div>
+                            <div className="panel-body" style={{ fontSize: 13, color: 'var(--white)', fontStyle: 'italic', lineHeight: 1.6 }}>
+                                {scanInsight}
+                            </div>
+                        </div>
+                    )}
+
                     {pendingActions.length > 0 && (
                         <div className="artisan-panel">
-                            <div className="panel-head"><h3>GEVONDEN ITEMS ({pendingActions.length})</h3></div>
+                            <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
+                                <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 10 }} onClick={async () => {
+                                    for (let a of [...pendingActions]) await runAction(a);
+                                }}>ALLES INBOEKEN</button>
+                            </div>
                             <div className="panel-body">
                                 {pendingActions.map(action => (
                                     <div key={action.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 13 }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
+                                            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
                                             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                                                {action.data.aantal} {action.data.eenheid || 'stks'} • €{action.data.prijs?.toFixed(2)}
+                                                {action.data.items?.[0]?.aantal || action.data.aantal || 1} {action.data.items?.[0]?.eenheid || action.data.eenheid || 'stks'} • €{(action.data.items?.[0]?.prijs || action.data.prijs || 0).toFixed(2)}
                                             </div>
                                         </div>
-                                        <button className="btn-brand" style={{ padding: '6px 16px', fontSize: 11 }} onClick={() => runAction(action)}>BOEK IN</button>
+                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 11, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={() => runAction(action)}>BEVESTIG</button>
                                     </div>
                                 ))}
-                                <button className="tab-btn w-full mt-16" onClick={() => setPendingActions([])}>ALLES WISSEN</button>
+                                <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 10 }} onClick={() => setPendingActions([])}>WISSEN</button>
                             </div>
                         </div>
                     )}
