@@ -56,10 +56,10 @@ const NAV_GROUPS = [
     },
     {
         id: 'ai',
-        label: 'Copilot',
-        icon: 'fa-robot',
+        label: 'Digital Pitmaster',
+        icon: 'fa-fire-flame-curved',
         items: [
-            { id: '/ai-chat', label: 'AI Studio', icon: 'fa-wand-magic-sparkles' },
+            { id: '/ai-chat', label: 'Pitmaster Studio', icon: 'fa-wand-magic-sparkles' },
             { id: '/price-intelligence', label: 'Prijsintelligentie', icon: 'fa-tags' },
         ]
     },
@@ -133,7 +133,7 @@ export default function Sidebar() {
             {/* Sidebar */}
             <aside className={'sidebar' + (open ? ' open' : '')}>
                 <div className="sidebar-logo">
-                    <h1><i className="fa-solid fa-fire"></i> BBQ Architect</h1>
+                    <h1 className="artisan-font"><i className="fa-solid fa-fire"></i> BBQ Architect</h1>
                     <p>Hop &amp; Bites • Ambacht</p>
                 </div>
 

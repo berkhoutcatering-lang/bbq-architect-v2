@@ -1,29 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --brand: #FF8000;
-  /* Strakker Oranje/Goud */
-  --brand-light: rgba(255, 128, 0, .08);
-  --bg: #050505;
-  /* Dieper zwart */
-  --card: rgba(20, 20, 22, .85);
-  --card-solid: #121214;
-  --border: rgba(255, 255, 255, .1);
-  /* Strakkere borders */
+  --brand: #FF6600;
+  /* Deep Fire Orange */
+  --brand-light: rgba(255, 102, 0, .1);
+  --bg: #030303;
+  /* Obsidian Black */
+  --card: rgba(18, 18, 18, 0.9);
+  --card-solid: #0f0f10;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-steel: rgba(255, 255, 255, 0.15);
   --text: #f8fafc;
-  --muted: #94a3b8;
+  --muted: #64748b;
   --green: #10b981;
   --red: #f43f5e;
-  --amber: #f59e0b;
-  --cyan: #06b6d4;
-  --purple: #8b5cf6;
-  --blue: #3b82f6;
+  --amber: #fbbf24;
   --sidebar-w: 260px;
-  /* Iets breder voor nesten */
-  --header-h: 60px;
-  --glass-blur: blur(8px);
-  /* Minder kermis-blur */
-  --glass-border: 1px solid rgba(255, 255, 255, .08);
+  --header-h: 64px;
+  --font-artisan: 'Bebas Neue', cursive;
+  --font-main: 'Outfit', sans-serif;
+  --glass-blur: blur(4px);
+  --glass-border: 1px solid rgba(255, 255, 255, .05);
   --lift-shadow: 0 4px 12px rgba(0, 0, 0, .5);
 }
 
@@ -37,10 +34,21 @@ html,
 body {
   height: 100%;
   background: var(--bg);
+  background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png");
+  /* Artisan texture */
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-main);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.artisan-font {
+  font-family: var(--font-artisan);
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 /* Layout */
@@ -4325,3 +4333,290 @@ body {
     padding: 10px 12px;
   }
 }
+/* ==========================================================================
+   ARTISAN DASHBOARD & WOW ELEMENTS
+   ========================================================================== */
+
+.artisan-dashboard {
+  padding: 0;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.artisan-hero {
+  position: relative;
+  height: 420px;
+  width: 100%;
+  border-radius: 0 0 24px 24px;
+  overflow: hidden;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--border-steel);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+
+.hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.8) contrast(1.1);
+  transform: scale(1.05);
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(3,3,3,0.95) 90%);
+  z-index: 1;
+}
+
+.hero-content {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  right: 40px;
+  z-index: 2;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--brand);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 10px rgba(255,102,0,0.3);
+}
+
+.hero-title {
+  font-size: 56px;
+  margin: 0 0 8px 0;
+  line-height: 0.95;
+  color: #fff;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+}
+
+.hero-subtitle {
+  font-size: 18px;
+  color: var(--muted);
+  max-width: 600px;
+  margin-bottom: 24px;
+}
+
+.hero-quick-stats {
+  display: flex;
+  gap: 32px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 20px;
+}
+
+.h-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.h-val {
+  font-family: var(--font-artisan);
+  font-size: 32px;
+  color: var(--brand);
+  line-height: 1;
+}
+
+.h-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+.h-stat.danger .h-val { color: var(--red); }
+
+/* Grid Layout */
+.dashboard-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 32px;
+  padding: 0 20px 40px 20px;
+}
+
+.dash-section {
+  margin-bottom: 40px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  color: var(--text);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title i {
+  color: var(--brand);
+  font-size: 18px;
+}
+
+/* Artisan Panels & Cards */
+.artisan-panel {
+  background: var(--card);
+  border: 1px solid var(--border-steel);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--lift-shadow);
+  position: relative;
+}
+
+.artisan-panel.flat { padding: 0; }
+
+.prep-card {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.prep-card:last-child { border: none; padding: 0; margin: 0; }
+
+.prep-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.prep-client { font-weight: 700; font-size: 16px; color: var(--brand); }
+.prep-date { font-size: 12px; color: var(--muted); }
+
+.prep-gang-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.gang-name { font-weight: 600; color: var(--muted); min-width: 80px; }
+.gang-dishes { color: #fff; }
+
+/* Banners */
+.artisan-action-banner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  text-decoration: none;
+  transition: transform 0.2s;
+  border: 1px solid transparent;
+}
+
+.artisan-action-banner:hover { transform: translateY(-2px); }
+
+.artisan-action-banner i { font-size: 24px; }
+
+.artisan-action-banner.danger {
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.2);
+  color: var(--red);
+}
+
+.artisan-action-banner.info {
+  background: rgba(255, 102, 0, 0.08);
+  border-color: rgba(255, 102, 0, 0.2);
+  color: var(--brand);
+}
+
+.banner-txt { flex: 1; }
+.b-title { font-weight: 800; font-size: 14px; letter-spacing: 0.5px; }
+.b-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+.b-btn { font-size: 11px; font-weight: 700; padding: 6px 12px; background: rgba(255,255,255,0.1); border-radius: 4px; color: #fff; }
+
+/* Stats Row */
+.artisan-stat-row {
+  display: flex;
+  gap: 16px;
+}
+
+.artisan-stat-box {
+  flex: 1;
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.artisan-stat-box.highlight {
+  border-color: var(--brand);
+  background: rgba(255,102,0,0.03);
+}
+
+.s-lbl { font-size: 10px; font-weight: 700; color: var(--muted); margin-bottom: 8px; letter-spacing: 1px; }
+.s-val { font-family: var(--font-artisan); font-size: 32px; color: #fff; line-height: 1; }
+
+/* Sidebar/Agenda Rows */
+.side-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.side-row:hover { background: rgba(255,255,255,0.03); }
+
+.row-date { font-family: var(--font-artisan); font-size: 20px; color: var(--brand); line-height: 1; }
+.row-title { font-weight: 700; color: #fff; font-size: 14px; }
+.row-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Grid Nav */
+.artisan-grid-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.nav-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 90px;
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.nav-box:hover {
+  background: rgba(255,102,0,0.05);
+  border-color: var(--brand);
+  transform: translateY(-2px);
+}
+
+.nav-box i { font-size: 20px; color: var(--brand); }
+.nav-box span { font-size: 10px; font-weight: 800; color: var(--muted); letter-spacing: 1px; }
+
+/* Quote */
+.pitmaster-quote {
+  margin-top: 40px;
+  padding: 30px;
+  text-align: center;
+  border: 1px dashed var(--border-steel);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.01);
+}
+
+.pitmaster-quote i { font-size: 24px; color: var(--brand); opacity: 0.3; margin-bottom: 16px; display: block; }
+.pitmaster-quote p { font-style: italic; font-size: 15px; color: var(--muted); line-height: 1.6; }
+

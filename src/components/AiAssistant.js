@@ -29,7 +29,7 @@ export default function AiAssistant() {
     useEffect(function () {
         setMessages([{
             role: 'assistant',
-            content: 'Hallo! Ik ben BBQ Copilot. Ik help je op **' + pageName + '**.\n\nTyp je vraag of verzoek en ik ga aan de slag.',
+            content: 'Gegroet, vakman! Ik ben je **Digital Pitmaster**. Ik help je op **' + pageName + '**.\n\nWat staat er op het vuur vandaag?',
             actions: [],
         }]);
         setContextData(null);
@@ -365,7 +365,7 @@ export default function AiAssistant() {
                                 <div key={idx}>
                                     <div className={'ai-message-wrapper ' + (isUser ? 'user' : 'assistant')}>
                                         {!isUser && (
-                                            <div className="ai-avatar"><i className="fa-solid fa-robot"></i></div>
+                                            <div className="ai-avatar"><i className="fa-solid fa-fire-flame-curved"></i></div>
                                         )}
                                         <div className={'ai-message bubble ' + (isUser ? 'user-bubble' : 'assistant-bubble')}>
                                             {msg.contextBadge && (
@@ -393,7 +393,7 @@ export default function AiAssistant() {
                         })}
                         {isLoading && (
                             <div className="ai-message-wrapper assistant">
-                                <div className="ai-avatar"><i className="fa-solid fa-robot"></i></div>
+                                <div className="ai-avatar"><i className="fa-solid fa-fire-flame-curved"></i></div>
                                 <div className="ai-message bubble assistant-bubble loading-dots">
                                     <span></span><span></span><span></span>
                                 </div>
