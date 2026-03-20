@@ -235,7 +235,7 @@ export var TOOL_SCHEMAS = [
                     tags: { type: 'array', items: { type: 'string' }, description: 'Tags zoals Vegan, Populair, Nieuw' },
                     allergenen: { type: 'array', items: { type: 'string' } }
                 },
-                required: ['naam', 'gang_slug']
+                required: ['naam', 'gang_slug', 'beschrijving', 'bereidingswijze', 'ingredienten']
             }
         }
     },
@@ -255,12 +255,13 @@ export var TOOL_SCHEMAS = [
                             properties: {
                                 naam: { type: 'string' },
                                 gang_slug: { type: 'string', description: 'bijv. bite, hoofdgerecht, vegetarisch, dessert' },
-                                beschrijving: { type: 'string' },
-                                bereidingswijze: { type: 'string' },
+                                beschrijving: { type: 'string', description: 'Be Argumentatie: Smaakprofiel' },
+                                bereidingswijze: { type: 'string', description: 'Stappenplan' },
                                 ingredienten: { type: 'array', items: { type: 'string' } },
-                                tags: { type: 'array', items: { type: 'string' } }
+                                tags: { type: 'array', items: { type: 'string' } },
+                                allergenen: { type: 'array', items: { type: 'string' } }
                             },
-                            required: ['naam', 'gang_slug', 'beschrijving']
+                            required: ['naam', 'gang_slug', 'beschrijving', 'bereidingswijze', 'ingredienten']
                         }
                     }
                 },
