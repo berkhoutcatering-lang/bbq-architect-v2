@@ -46,12 +46,10 @@ export default function Inkoop() {
         var reader = new FileReader();
         reader.onload = async function (ev) {
             var rawB64 = ev.target.result;
-            // Stap 1: Aggressief resizen om "Request Entity Too Large" te voorkomen op Vercel/Groq
             var b64 = await resizeImage(rawB64, 1920, 2560, 0.92);
 
-            setScanStatus('ANALYSING GRID & MATCHING DATA...');
+            setScanStatus('FACTUUR LEZEN — ELKE REGEL...');
             try {
-                // We sturen de huidige voorraad en leveranciers mee voor "deep matching"
                 var res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -63,7 +61,7 @@ export default function Inkoop() {
                             content: [
                                 {
                                     type: 'text',
-                                    text: 'Extraheer ELKE productregel van deze factuur als ACTION-blok. Sla geen enkele regel over. Begin direct met het eerste <<<ACTION:...>>> blok.'
+                                    text: 'Lees deze factuur regel voor regel van boven naar beneden. Voor ELKE productregel maak je ONE ACTION-blok. Neem de tijd. Sla geen enkele regel over. Begin direct met het eerste <<<ACTION>>> blok.'
                                 },
                                 { type: 'image_url', image_url: { url: b64, detail: 'high' } }
                             ]
@@ -72,25 +70,23 @@ export default function Inkoop() {
                 });
                 var json = await res.json();
                 if (json.error) throw new Error(json.error);
-
                 var content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
                 if (!content) {
                     setScanStatus('GEEN RESPONSE');
                     showToast('AI gaf geen tekst terug. Is de foto te wazig?', 'info');
+                    setReceiptScanning(false);
                     return;
                 }
-
                 var { actions, cleanText } = parseActions(content);
                 setScanInsight(cleanText);
-
                 if (actions.length > 0) {
                     setPendingActions(actions);
-                    setScanStatus('READY ✓');
+                    setScanStatus('READY ✓ — ' + actions.length + ' ITEMS GEVONDEN');
                     setLastScanData({ b64, actions, cleanText });
-                    showToast('Bon geanalyseerd!', 'success');
+                    showToast('Bon geanalyseerd! ' + actions.length + ' items gevonden.', 'success');
                 } else {
                     setScanStatus('GEEN ITEMS GEVONDEN');
-                    // De insight box laat nu zien wat de AI wél zei (bv. "Ik kan dit niet lezen")
+                    showToast('Geen items herkend. Is de foto scherp genoeg?', 'info');
                 }
             } catch (err) {
                 setScanStatus('SCAN FOUT MET RECEPT');

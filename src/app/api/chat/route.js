@@ -306,32 +306,33 @@ export async function POST(req) {
         if (messages && messages.length > 0) {
             hasImage = messages.some(function (m) { return Array.isArray(m.content) && m.content.some(function (c) { return c.type === 'image_url'; }); });
         }
-        var modelName = hasImage ? 'meta-llama/llama-4-maverick-17b-16e-instruct' : 'llama-3.3-70b-versatile';
+        var modelName = hasImage ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'llama-3.3-70b-versatile';
 
         if (hasImage) {
             systemParts.push(
-                '**VISION MODE GEACTIVEERD (STEERBARE ANALYSE)**',
-                'Je hebt een complexe afbeelding (factuur/bon) ontvangen. Voer de volgende stappen uit in je antwoord:',
+                'Je bent een gespecialiseerde OCR-robot voor horeca inkoopfacturen (Sligro, Makro, Metro, etc.).',
+                'START DIRECT MET DE ACTION-BLOKKEN. GEEN INTRODUCTIE, GEEN UITLEG VOORAF.',
                 '',
-                'Je bent een gespecialiseerde OCR-JSON robot voor horeca facturen.',
-                'START DIRECT MET DE JSON BLOKKEN. GEEN INTRODUCTIE OF UITLEG.',
+                '### EXTRACTIE REGELS (VERPLICHT):',
+                '1. Lees ELKE productregel van boven naar beneden. Sla NIETS over, ook geen regels die moeilijk leesbaar zijn.',
+                '2. Productnaam: gebruik de kolom "Omschrijving" of "Product". Gebruik NOOIT het woord "ONBEKEND".',
+                '3. Aantal: de kolom "Aantal" of "Qty". Kan een decimaal zijn (bv. 2.5).',
+                '4. Eenheid: KRITISCH — lees de eenheidkolom of de productnaam heel precies:',
+                '   - KG of kg of KGR → gebruik "kg"',
+                '   - GR of gram of GRM → gebruik "gram"',
+                '   - LT of L of liter of LTR of litre → gebruik "liter"',
+                '   - CL of cl → gebruik "cl"',
+                '   - ST of STK of stuks of STUK of collo of pcs of piece → gebruik "stuks"',
+                '   - DS of doos of box → gebruik "doos"',
+                '   - Als de eenheid NIET duidelijk staat: kijk naar de productnaam (bv. "5KG Zak" → kg, "1L fles" → liter)',
+                '5. Prijs per eenheid: kolom "Prijs" of "Bedrag excl BTW" gedeeld door "Aantal". Nooit het totaalbedrag.',
+                '6. BTW: 9 voor voedsel, 21 voor non-food.',
                 '',
-                '### REGELS VOOR EXTRACTIE:',
-                '1. Extraheer ELKE regel op de factuur (ook als er 50+ items zijn).',
-                '2. Gebruik de kolom "Omschrijving" voor de productnaam. NOOIT "ONBEKEND" gebruiken.',
-                '3. Gebruik de 13-cijferige code als ID: "Inkoop [ID]: [PROD_NAAM]".',
-                '4. Eenheid: ZEER BELANGRIJK. ST = stuks, KG = kilogram. Bepaal dit op basis van de kolom "eenheid" of de productnaam (bv. 2KG zak).',
-                '5. Prijs: De kolom "Bedrag" (uiterst rechts) gedeeld door "Aantal". dit is de prijs per stuk of per kg.',
-                '6. Sla GEEN items over. Ga door tot de allerlaatste regel.',
+                '### OUTPUT FORMAAT (exact overnemen, dubbele aanhalingstekens verplicht):',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ARTIKELNR]: [PRODUCTNAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":0,"items":[{"naam":"Volledige Productnaam","aantal":1.0,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
                 '',
-                '### OUTPUT FORMAAT (KRITISCH):',
-                'Gebruik ALTIJD dubbele aanhalingstekens (") in JSON. NOOIT enkele aanhalingstekens.',
-                'Voor elk item OP EEN APARTE REGEL:',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ID]: [NAAM]","data":{"winkel":"Makro","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product Naam","aantal":1.23,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
-                '',
-                'VOORBEELD EENHEDEN: "kg", "stks", "liter", "stuks"',
-                '',
-                'Eindig met één korte "### Pitmaster Insight" sectie met een proactief advies.'
+                'KRITISCH: Gebruik ALTIJD dubbele aanhalingstekens (") in JSON. NOOIT enkele aanhalingstekens.',
+                'Eindig na alle ACTION-blokken met één korte "### Pitmaster Insight" alinea.'
             );
         }
 
@@ -349,7 +350,7 @@ export async function POST(req) {
             body: JSON.stringify({
                 model: modelName,
                 messages: groqMessages,
-                temperature: hasImage ? 0.1 : (mode === 'brainstorm' ? 0.85 : 0.7),
+                temperature: hasImage ? 0.05 : (mode === 'brainstorm' ? 0.85 : 0.7),
                 max_tokens: hasImage ? 16000 : (mode === 'brainstorm' ? 6000 : 4000),
             }),
         });
