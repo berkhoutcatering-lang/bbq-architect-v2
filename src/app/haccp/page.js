@@ -92,16 +92,18 @@ export default function HACCP() {
     };
 
     return (
-        <>
+        <div className="artisan-page haccp-page">
+            <h1 className="hero-title mb-16" style={{ fontSize: 24 }}>HACCP MONITORING</h1>
+
             <div className="tab-bar">
-                <button className={'tab-btn' + (tab === 'overzicht' ? ' active' : '')} onClick={function () { setTab('overzicht'); }}>Overzicht</button>
-                <button className={'tab-btn' + (tab === 'registratie' ? ' active' : '')} onClick={function () { setTab('registratie'); }}>Registratie</button>
-                <button className={'tab-btn' + (tab === 'dossier' ? ' active' : '')} onClick={function () { setTab('dossier'); }}>📋 Dossier</button>
+                <button className={'tab-btn' + (tab === 'overzicht' ? ' active' : '')} onClick={function () { setTab('overzicht'); }}>OVERZICHT</button>
+                <button className={'tab-btn' + (tab === 'registratie' ? ' active' : '')} onClick={function () { setTab('registratie'); }}>REGISTRATIE</button>
+                <button className={'tab-btn' + (tab === 'dossier' ? ' active' : '')} onClick={function () { setTab('dossier'); }}>DOSSIER</button>
             </div>
 
             {tab === 'registratie' && (
                 <div className="panel">
-                    <div className="panel-head"><h3>🌡️ Temperatuur Registreren</h3></div>
+                    <div className="panel-head"><h3><i className="fa-solid fa-thermometer"></i> TEMPERATUUR REGISTREREN</h3></div>
                     <div className="panel-body">
                         <div className="form-grid">
                             <div className="field">
@@ -143,20 +145,19 @@ export default function HACCP() {
                             <div className="field full"><label>Notitie</label><input value={form.notitie} onChange={function (e) { setField('notitie', e.target.value); }} /></div>
                         </div>
 
-                        {/* Real-time boundary warning */}
                         {form.temp && (function () {
                             var s = getStatus(form.type, form.temp);
                             if (s === 'ok') return null;
                             return (
-                                <div className={'haccp-boundary-warn haccp-boundary-' + s}>
+                                <div className={'haccp-boundary-warn haccp-boundary-' + s} style={{ marginTop: 20 }}>
                                     <i className={'fa-solid ' + (s === 'warn' ? 'fa-triangle-exclamation' : 'fa-skull-crossbones')}></i>
                                     <span>{s === 'warn' ? '⚠️ Temperatuur in risicozone!' : '🔴 AFWIJKING — Temperatuur buiten veilige norm!'}</span>
                                 </div>
                             );
                         })()}
 
-                        <div style={{ marginTop: 16 }}>
-                            <button className="btn btn-brand" onClick={saveRecord}><i className="fa-solid fa-thermometer-half"></i> Registreren</button>
+                        <div style={{ marginTop: 24 }}>
+                            <button className="btn-brand" onClick={saveRecord}><i className="fa-solid fa-fire"></i> METING OPSLAAN</button>
                         </div>
                     </div>
                 </div>
@@ -164,8 +165,8 @@ export default function HACCP() {
 
             {tab === 'overzicht' && (
                 <>
-                    <div style={{ marginBottom: 14, display: 'flex', gap: 8 }}>
-                        <select style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif', flex: 1 }}
+                    <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+                        <select className="artisan-select" style={{ flex: 1, padding: 10, background: 'var(--card-solid)', border: '1px solid var(--border-steel)', borderRadius: 8, color: 'var(--brand)' }}
                             value={filterEvent} onChange={function (e) { setFilterEvent(e.target.value); }}>
                             <option value="">Alle Records</option>
                             <option value="afwijkingen">🔴 Afwijkingen</option>
@@ -174,88 +175,86 @@ export default function HACCP() {
                         </select>
                     </div>
                     <div className="panel">
-                        {filtered.length === 0 && <div className="empty-state"><i className="fa-solid fa-shield-halved"></i><p>Geen HACCP registraties</p></div>}
-                        {filtered.slice().reverse().map(function (rec) {
-                            var pillClass = rec.status === 'ok' ? 'pill-green' : rec.status === 'warn' ? 'pill-amber' : 'pill-red';
-                            var ev = events.find(function (e) { return e.id === rec.event_id; });
-                            var off = rec.offerte_id ? offertes.find(function (o) { return String(o.id) === rec.offerte_id; }) : null;
-                            var eventLabel = off ? off.client_naam : (ev ? ev.name : '');
-                            return (
-                                <div key={rec.id} className="ev-row">
-                                    <div style={{ width: 48, height: 48, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0, background: rec.status === 'ok' ? 'rgba(34,197,94,.12)' : rec.status === 'warn' ? 'rgba(245,158,11,.12)' : 'rgba(239,68,68,.12)', color: rec.status === 'ok' ? 'var(--green)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
-                                        {rec.temp}°
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 600, marginBottom: 2 }}>{rec.wat}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                            {checkTypeLabels[rec.check_type] || rec.check_type || rec.type} • {fmtNl(rec.datum)} {rec.tijd || ''}
-                                            {eventLabel && <span> • {eventLabel}</span>}
-                                            {rec.chef && <span> • 👨‍🍳 {rec.chef}</span>}
-                                            {rec.auto_logged && <span className="pill pill-blue" style={{ fontSize: 9, marginLeft: 6 }}>auto</span>}
+                        <div className="panel-body">
+                            {filtered.length === 0 && <div className="empty-state"><i className="fa-solid fa-shield-halved"></i><p>Geen HACCP registraties</p></div>}
+                            {filtered.slice().reverse().map(function (rec) {
+                                var pillClass = rec.status === 'ok' ? 'pill-green' : rec.status === 'warn' ? 'pill-amber' : 'pill-red';
+                                var ev = events.find(function (e) { return e.id === rec.event_id; });
+                                var off = rec.offerte_id ? offertes.find(function (o) { return String(o.id) === rec.offerte_id; }) : null;
+                                var eventLabel = off ? off.client_naam : (ev ? ev.name : '');
+                                return (
+                                    <div key={rec.id} className="side-row" style={{ padding: '16px 0' }}>
+                                        <div style={{ width: 44, height: 44, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, flexShrink: 0, background: 'var(--bg)', border: '1px solid var(--border)', color: rec.status === 'ok' ? 'var(--green)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
+                                            {rec.temp}°
+                                        </div>
+                                        <div style={{ flex: 1, marginLeft: 16 }}>
+                                            <div style={{ fontWeight: 600, fontSize: 14 }}>{rec.wat}</div>
+                                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                                {checkTypeLabels[rec.check_type] || rec.check_type || rec.type} • {fmtNl(rec.datum)} {rec.tijd || ''}
+                                                {eventLabel && <span> • {eventLabel}</span>}
+                                                {rec.chef && <span> • 👨‍🍳 {rec.chef}</span>}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <span className={'pill ' + pillClass}>{rec.status === 'ok' ? 'OK' : rec.status === 'warn' ? 'Let op' : 'Afwijking'}</span>
+                                            <button className="del-btn" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }} onClick={function () { remove(rec.id); }}><i className="fa-solid fa-trash"></i></button>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span className={'pill ' + pillClass}>{rec.status === 'ok' ? 'OK' : rec.status === 'warn' ? 'Let op' : 'Afwijking'}</span>
-                                        <button className="del-btn" onClick={function () { remove(rec.id); }}><i className="fa-solid fa-trash"></i></button>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </>
             )}
 
             {tab === 'dossier' && (
-                <>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
-                        NVWA-ready dossiers per event. Download als PDF voor archivering.
-                    </div>
-                    {getEventGroups().length === 0 && (
-                        <div className="empty-state"><i className="fa-solid fa-folder-open"></i><p>Geen HACCP dossiers beschikbaar</p></div>
-                    )}
-                    {getEventGroups().map(function (group) {
-                        var okCount = group.records.filter(function (r) { return r.status === 'ok'; }).length;
-                        var warnCount = group.records.filter(function (r) { return r.status === 'warn'; }).length;
-                        var dangerCount = group.records.filter(function (r) { return r.status === 'danger'; }).length;
-                        return (
-                            <div key={group.id} className="haccp-dossier-card">
-                                <div className="haccp-dossier-head">
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{group.naam || 'Losse metingen'}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtNl(group.datum)} • {group.records.length} metingen</div>
+                <div className="panel">
+                    <div className="panel-head"><h3><i className="fa-solid fa-folder-open"></i> NVWA-READY DOSSIERS</h3></div>
+                    <div className="panel-body">
+                        {getEventGroups().length === 0 && (
+                            <div className="empty-state"><i className="fa-solid fa-folder-open"></i><p>Geen HACCP dossiers beschikbaar</p></div>
+                        )}
+                        {getEventGroups().map(function (group) {
+                            var okCount = group.records.filter(function (r) { return r.status === 'ok'; }).length;
+                            var warnCount = group.records.filter(function (r) { return r.status === 'warn'; }).length;
+                            var dangerCount = group.records.filter(function (r) { return r.status === 'danger'; }).length;
+                            return (
+                                <div key={group.id} className="haccp-dossier-card artisan-panel mb-16" style={{ padding: 20 }}>
+                                    <div className="haccp-dossier-head" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--brand)' }}>{group.naam || 'Losse metingen'}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtNl(group.datum)} • {group.records.length} metingen</div>
+                                        </div>
+                                        <button className="btn-brand btn-sm" style={{ padding: '6px 12px', fontSize: 12 }} onClick={function () { downloadHACCPRapport(group); }}>
+                                            <i className="fa-solid fa-file-pdf"></i> PDF RAPPORT
+                                        </button>
                                     </div>
-                                    <button className="btn btn-brand btn-sm" onClick={function () { downloadHACCPRapport(group); }}>
-                                        <i className="fa-solid fa-file-pdf"></i> Download Rapport
-                                    </button>
-                                </div>
-                                <div className="haccp-dossier-stats">
-                                    <span className="haccp-stat-ok">✅ {okCount} OK</span>
-                                    {warnCount > 0 && <span className="haccp-stat-warn">⚠️ {warnCount} Let op</span>}
-                                    {dangerCount > 0 && <span className="haccp-stat-danger">🔴 {dangerCount} Afwijking</span>}
-                                </div>
-                                <div className="haccp-timeline">
-                                    {group.records.sort(function (a, b) { return (a.datum + (a.tijd || '')) < (b.datum + (b.tijd || '')) ? -1 : 1; }).map(function (rec) {
-                                        return (
-                                            <div key={rec.id} className={'haccp-timeline-item haccp-tl-' + (rec.status || 'ok')}>
-                                                <div className="haccp-tl-dot"></div>
-                                                <div className="haccp-tl-content">
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <span style={{ fontWeight: 600, fontSize: 12 }}>{rec.wat}</span>
-                                                        <span style={{ fontWeight: 800, fontSize: 14 }}>{rec.temp}°C</span>
+                                    <div className="haccp-dossier-stats" style={{ display: 'flex', gap: 12, marginBottom: 16, fontSize: 12, fontWeight: 600 }}>
+                                        <span style={{ color: 'var(--green)' }}>✅ {okCount} OK</span>
+                                        {warnCount > 0 && <span style={{ color: 'var(--amber)' }}>⚠️ {warnCount} WAARSCHUWING</span>}
+                                        {dangerCount > 0 && <span style={{ color: 'var(--red)' }}>🔴 {dangerCount} AFWIJKING</span>}
+                                    </div>
+                                    <div className="haccp-timeline" style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                                        {group.records.sort(function (a, b) { return (a.datum + (a.tijd || '')) < (b.datum + (b.tijd || '')) ? -1 : 1; }).map(function (rec) {
+                                            return (
+                                                <div key={rec.id} className={'haccp-timeline-item mb-16'} style={{ position: 'relative' }}>
+                                                    <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
+                                                        <span>{rec.wat}</span>
+                                                        <span style={{ color: rec.status === 'ok' ? 'var(--green)' : 'var(--red)' }}>{rec.temp}°C</span>
                                                     </div>
                                                     <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
                                                         {rec.tijd || ''} • {checkTypeLabels[rec.check_type] || rec.type} • {rec.chef || 'Cor'}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </>
+                            );
+                        })}
+                    </div>
+                </div>
             )}
-        </>
+        </div>
     );
 }

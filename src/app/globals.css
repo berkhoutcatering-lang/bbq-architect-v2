@@ -4964,3 +4964,134 @@ body {
   letter-spacing: 2px;
   opacity: 0.6;
 }
+/* ==========================================================================
+   GLOBAL COAL & GOLD COMPONENT STYLES
+   ========================================================================== */
+
+/* Universal Tab Bar */
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  background: var(--card-solid);
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border-steel);
+  margin-bottom: 24px;
+  width: fit-content;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: rgba(213, 178, 98, 0.05);
+  color: var(--text);
+}
+
+.tab-btn.active {
+  background: var(--brand);
+  color: #1a1a1a;
+}
+
+/* Universal Panel (Coal Cards) */
+.panel {
+  background: var(--card-solid);
+  border: 1px solid var(--border-steel);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  margin-bottom: 24px;
+}
+
+.panel-head {
+  padding: 16px 20px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-head h3 {
+  font-family: var(--font-artisan);
+  letter-spacing: 1px;
+  color: var(--brand);
+  font-size: 18px;
+  margin: 0;
+}
+
+.panel-body {
+  padding: 20px;
+}
+
+/* Form Grid Refinement */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+
+.field input, .field select, .field textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+/* Buttons */
+.btn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--brand);
+  color: #1a1a1a;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.btn-brand:hover {
+  background: #e5c575; /* Lighter gold */
+  transform: translateY(-1px);
+}
+
+.btn-brand:active {
+  transform: translateY(0);
+}
+
+/* Utility */
+.mb-16 { margin-bottom: 16px; }
+.mt-20 { margin-top: 20px; }
+

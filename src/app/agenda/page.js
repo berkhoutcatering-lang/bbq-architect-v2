@@ -21,7 +21,6 @@ export default function Agenda() {
     function nextMonth() { if (month === 11) { setMonth(0); setYear(year + 1); } else { setMonth(month + 1); } }
     function goToday() { var now = new Date(); setYear(now.getFullYear()); setMonth(now.getMonth()); setSelected(today()); }
 
-    // Build calendar grid
     var firstDay = new Date(year, month, 1).getDay();
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var prevDays = new Date(year, month, 0).getDate();
@@ -46,7 +45,6 @@ export default function Agenda() {
 
     var todayStr = today();
 
-    // Helper: get prep-task date
     function getPrepDate(task) {
         var ev = events.find(function (e) { return e.id === task.event_id; });
         if (!ev || !ev.date) return null;
@@ -56,24 +54,19 @@ export default function Agenda() {
         return prepDate.getFullYear() + '-' + String(prepDate.getMonth() + 1).padStart(2, '0') + '-' + String(prepDate.getDate()).padStart(2, '0');
     }
 
-    // Get events for a date
     function eventsForDate(ds) { return events.filter(function (e) { return e.date === ds; }); }
-
-    // Get prep tasks for a date
     function prepsForDate(ds) {
         return prepTasks.filter(function (pt) { return getPrepDate(pt) === ds; }).map(function (pt) {
             return { task: pt, event: events.find(function (e) { return e.id === pt.event_id; }) };
         });
     }
 
-    // Selected day items
     var selEvents = eventsForDate(selected);
     var selPreps = prepsForDate(selected);
     var selDate = new Date(selected + 'T00:00:00');
     var dagNamen = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
-    var selLabel = dagNamen[selDate.getDay()] + ' ' + selDate.getDate() + ' ' + MAANDEN[selDate.getMonth()].toLowerCase();
+    var selLabel = dagNamen[selDate.getDay()].toUpperCase() + ' ' + selDate.getDate() + ' ' + MAANDEN[selDate.getMonth()].toUpperCase();
 
-    // All prep tasks sorted
     var allPreps = prepTasks.map(function (pt) {
         var ev = events.find(function (e) { return e.id === pt.event_id; });
         var pd = getPrepDate(pt);
@@ -104,59 +97,56 @@ export default function Agenda() {
     }
 
     return (
-        <>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div className="artisan-page agenda-page">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-calendar-days" style={{ color: 'var(--brand)' }}></i> Agenda
-                    </h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>
-                        {events.length} events · {prepTasks.filter(function (p) { return !p.done; }).length} open prep-taken
+                    <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
+                    <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4, letterSpacing: 1 }}>
+                        {events.length} EVENTS • {prepTasks.filter(function (p) { return !p.done; }).length} OPEN PREP-TAKEN
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={goToday}>Vandaag</button>
-                    <button className="btn btn-brand btn-sm" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
-                        <i className="fa-solid fa-plus"></i> Nieuw Event
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <button className="tab-btn" onClick={goToday}>VANDAAG</button>
+                    <button className="btn-brand" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
+                        <i className="fa-solid fa-plus"></i> NIEUW EVENT
                     </button>
                 </div>
             </div>
 
-            {/* Agenda layout: calendar + side panel */}
-            <div className="agenda-layout">
-                {/* Calendar */}
-                <div>
+            <div className="agenda-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 24 }}>
+                <div className="panel" style={{ height: 'fit-content' }}>
                     <div className="calendar">
-                        <div className="cal-header">
-                            <button className="cal-nav" onClick={prevMonth}><i className="fa-solid fa-chevron-left"></i></button>
-                            <h3>{MAANDEN[month]} {year}</h3>
-                            <button className="cal-nav" onClick={nextMonth}><i className="fa-solid fa-chevron-right"></i></button>
+                        <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }}><i className="fa-solid fa-chevron-left"></i></button>
+                            <h3 style={{ margin: 0, fontFamily: 'var(--font-artisan)', letterSpacing: 2, color: 'var(--brand)' }}>{MAANDEN[month].toUpperCase()} {year}</h3>
+                            <button className="cal-nav" onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }}><i className="fa-solid fa-chevron-right"></i></button>
                         </div>
-                        <div className="cal-grid">
-                            {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map(function (dn) { return <div key={dn} className="cal-day-name">{dn}</div>; })}
+                        <div className="cal-grid" style={{ padding: 10 }}>
+                            {['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'].map(function (dn) { return <div key={dn} className="cal-day-name" style={{ textAlign: 'center', fontSize: 10, fontWeight: 800, color: 'var(--muted)', padding: '10px 0' }}>{dn}</div>; })}
                             {cells.map(function (cell, idx) {
                                 var dayEvts = eventsForDate(cell.date);
                                 var dayPreps = prepsForDate(cell.date);
-                                var cls = 'cal-cell' + (cell.other ? ' other-month' : '') + (cell.date === todayStr ? ' today' : '') + (cell.date === selected ? ' selected' : '');
+                                var isSelected = cell.date === selected;
+                                var isToday = cell.date === todayStr;
                                 return (
-                                    <div key={idx} className={cls} onClick={function () { setSelected(cell.date); }}>
-                                        <div className="cal-num">{cell.day}</div>
-                                        {dayEvts.map(function (ev) {
-                                            var dotClass = ev.status === 'optie' ? 'cal-dot-optie' : ev.status === 'confirmed' ? 'cal-dot-confirmed' : 'cal-dot-event';
-                                            var icon = ev.status === 'optie' ? 'fa-file-signature' : 'fa-fire';
-                                            return <div key={ev.id} className={'cal-dot ' + dotClass} title={ev.name}>
-                                                <i className={'fa-solid ' + icon} style={{ fontSize: 7, marginRight: 3 }}></i>
-                                                {ev.name.split(' ').slice(0, 2).join(' ')}
-                                            </div>;
-                                        })}
-                                        {dayPreps.slice(0, 2).map(function (pp, i) {
-                                            return <div key={i} className="cal-dot cal-dot-prep" title={pp.task.text}>
-                                                <i className="fa-solid fa-clipboard-check" style={{ fontSize: 7, marginRight: 3 }}></i>
-                                                {pp.task.text.split(' ').slice(0, 3).join(' ')}
-                                            </div>;
-                                        })}
-                                        {dayPreps.length > 2 && <div className="cal-dot cal-dot-prep" style={{ textAlign: 'center' }}>+{dayPreps.length - 2} meer</div>}
+                                    <div key={idx} className={'cal-cell' + (cell.other ? ' other-month' : '')}
+                                        onClick={function () { setSelected(cell.date); }}
+                                        style={{ minHeight: 100, padding: 8, border: '1px solid var(--border)', cursor: 'pointer', background: isSelected ? 'rgba(213,178,98,0.05)' : isToday ? 'rgba(255,255,255,0.02)' : 'transparent', position: 'relative' }}>
+                                        <div className="cal-num" style={{ fontWeight: 800, fontSize: 12, color: isSelected ? 'var(--brand)' : isToday ? '#fff' : 'var(--muted)', marginBottom: 6 }}>{cell.day}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            {dayEvts.map(function (ev) {
+                                                return <div key={ev.id} style={{ fontSize: 9, background: 'var(--brand)', color: '#1a1a1a', padding: '2px 4px', borderRadius: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {ev.name.toUpperCase()}
+                                                </div>;
+                                            })}
+                                            {dayPreps.map(function (pp, i) {
+                                                if (i > 1) return null;
+                                                return <div key={i} style={{ fontSize: 9, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 4px', borderRadius: 4, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {pp.task.text}
+                                                </div>;
+                                            })}
+                                            {dayPreps.length > 2 && <div style={{ fontSize: 8, color: 'var(--muted)', textAlign: 'center' }}>+{dayPreps.length - 2}</div>}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -164,292 +154,74 @@ export default function Agenda() {
                     </div>
                 </div>
 
-                {/* Side panel */}
                 <div className="agenda-side">
-                    {/* Selected Day Detail */}
-                    <div className="panel" style={{ marginBottom: 16 }}>
-                        <div className="panel-head">
-                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="fa-solid fa-calendar-day" style={{ color: 'var(--brand)', fontSize: 12 }}></i> {selLabel}
-                            </h3>
-                        </div>
-                        <div className="panel-body" style={{ padding: 14 }}>
-                            {selEvents.length === 0 && selPreps.length === 0 && (
-                                <div style={{ textAlign: 'center', padding: 16 }}>
-                                    <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
-                                    <p style={{ color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>Geen items op deze dag</p>
-                                </div>
-                            )}
-
-                            {/* Events on this day */}
+                    <div className="panel mb-16">
+                        <div className="panel-head"><h3><i className="fa-solid fa-calendar-day"></i> {selLabel}</h3></div>
+                        <div className="panel-body">
+                            {selEvents.length === 0 && selPreps.length === 0 && <div className="empty-state">Geen items op deze dag</div>}
                             {selEvents.map(function (ev) {
-                                var isOptie = ev.status === 'optie';
-                                var isConfirmed = ev.status === 'confirmed';
-                                var bgColor = isOptie ? 'rgba(255,191,0,.06)' : isConfirmed ? 'rgba(34,197,94,.06)' : 'rgba(255,140,0,.06)';
-                                var borderColor = isOptie ? 'rgba(255,191,0,.2)' : isConfirmed ? 'rgba(34,197,94,.2)' : 'rgba(255,140,0,.2)';
-                                var iconBg = isOptie ? 'rgba(255,191,0,.15)' : isConfirmed ? 'rgba(34,197,94,.15)' : 'rgba(255,140,0,.15)';
-                                var iconColor = isConfirmed ? 'var(--green)' : 'var(--brand)';
-                                var icon = isOptie ? 'fa-file-signature' : 'fa-fire';
-                                var pillInfo = isOptie ? { cls: 'pill-optie', txt: '🟠' } : isConfirmed ? { cls: 'pill-green', txt: '✅' } : ev.status === 'completed' ? { cls: 'pill-green', txt: '✓' } : { cls: 'pill-amber', txt: '⏳' };
                                 return (
-                                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: bgColor, border: '1px solid ' + borderColor, borderRadius: 10, marginBottom: 8, transition: 'border-color .5s ease, background .5s ease' }}>
-                                        <div style={{ width: 32, height: 32, borderRadius: 10, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            <i className={'fa-solid ' + icon} style={{ color: iconColor, fontSize: 12 }}></i>
+                                    <div key={ev.id} className="side-row" style={{ padding: 12, marginBottom: 8, borderLeft: '3px solid var(--brand)' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 800, fontSize: 13 }}>{ev.name.toUpperCase()}</div>
+                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{ev.guests} GASTEN • {ev.location || '—'}</div>
                                         </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 12 }}>
-                                                {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 8, color: 'var(--brand)', marginRight: 4 }}></i>}
-                                                {ev.name}
-                                            </div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                                                {ev.guests} gasten · {ev.location || '—'} · {fmt((ev.guests || 0) * (ev.ppp || 0))}
-                                            </div>
-                                        </div>
-                                        <span className={'pill ' + pillInfo.cls} style={{ fontSize: 9, padding: '3px 8px' }}>
-                                            {pillInfo.txt}
-                                        </span>
+                                        <span className={'pill pill-' + (ev.status === 'confirmed' ? 'green' : 'amber')} style={{ fontSize: 9 }}>{ev.status.toUpperCase()}</span>
                                     </div>
                                 );
                             })}
-
-                            {/* Prep tasks on this day */}
                             {selPreps.map(function (pp) {
-                                var isDone = pp.task.done;
                                 return (
-                                    <div key={pp.task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, background: 'rgba(167,139,250,.06)', border: '1px solid rgba(167,139,250,.15)', borderRadius: 10, marginBottom: 6, opacity: isDone ? 0.45 : 1 }}>
-                                        <button className={'check-box' + (isDone ? ' checked' : '')} onClick={function () { toggleTask(pp.task); }} style={{ width: 24, height: 24, borderRadius: 8 }}>
-                                            {isDone && <i className="fa-solid fa-check" style={{ fontSize: 9 }}></i>}
-                                        </button>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 700, fontSize: 11, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--muted)' : 'var(--text)' }}>{pp.task.text}</div>
-                                            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 1 }}>📌 {pp.event ? pp.event.name : 'Onbekend'}</div>
+                                    <div key={pp.task.id} className="side-row" style={{ padding: 12, marginBottom: 8, opacity: pp.task.done ? 0.4 : 1 }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 600, fontSize: 12, textDecoration: pp.task.done ? 'line-through' : 'none' }}>{pp.task.text}</div>
+                                            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>📌 {pp.event ? pp.event.name : '—'}</div>
                                         </div>
+                                        <button className="tab-btn" style={{ padding: '4px 8px' }} onClick={function () { toggleTask(pp.task); }}>{pp.task.done ? 'UNDO' : 'DONE'}</button>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* New Event Form */}
                     {showEventForm && (
-                        <div className="panel" style={{ marginBottom: 16 }}>
-                            <div className="panel-head">
-                                <h3 style={{ color: 'var(--brand)' }}><i className="fa-solid fa-fire" style={{ marginRight: 6, fontSize: 12 }}></i> Nieuw Event</h3>
-                                <button className="btn btn-ghost btn-sm" onClick={function () { setShowEventForm(false); }}>
-                                    <i className="fa-solid fa-xmark"></i>
-                                </button>
-                            </div>
+                        <div className="panel mb-16">
+                            <div className="panel-head"><h3>NIEUW EVENT</h3></div>
                             <div className="panel-body">
                                 <div className="form-grid">
-                                    <div className="field full">
-                                        <label>Event Naam</label>
-                                        <input value={newEvent.name} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { name: e.target.value })); }} placeholder="bijv. Familie BBQ de Vries" />
-                                    </div>
-                                    <div className="field">
-                                        <label>Datum</label>
-                                        <input type="date" value={newEvent.date || selected} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { date: e.target.value })); }} />
-                                    </div>
-                                    <div className="field">
-                                        <label>Locatie</label>
-                                        <input value={newEvent.location} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { location: e.target.value })); }} placeholder="bijv. Assen" />
-                                    </div>
-                                    <div className="field">
-                                        <label>Aantal Gasten</label>
-                                        <input type="number" value={newEvent.guests} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { guests: parseInt(e.target.value) || 0 })); }} />
-                                    </div>
-                                    <div className="field">
-                                        <label>Prijs per Persoon</label>
-                                        <input type="number" step="0.50" value={newEvent.ppp} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { ppp: parseFloat(e.target.value) || 0 })); }} />
-                                    </div>
-                                    <div className="field">
-                                        <label>Type</label>
-                                        <select value={newEvent.type} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { type: e.target.value })); }}>
-                                            {['Particulier', 'Zakelijk', 'Festival', 'Bruiloft'].map(function (t) { return <option key={t}>{t}</option>; })}
-                                        </select>
-                                    </div>
-                                    <div className="field">
-                                        <label>Status</label>
-                                        <select value={newEvent.status} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { status: e.target.value })); }}>
-                                            <option value="pending">In afwachting</option>
-                                            <option value="confirmed">Bevestigd</option>
-                                        </select>
-                                    </div>
+                                    <div className="field full"><label>Event Naam</label><input value={newEvent.name} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { name: e.target.value })); }} /></div>
+                                    <div className="field"><label>Datum</label><input type="date" value={newEvent.date || selected} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { date: e.target.value })); }} /></div>
+                                    <div className="field"><label>Gasten</label><input type="number" value={newEvent.guests} onChange={function (e) { setNewEvent(Object.assign({}, newEvent, { guests: parseInt(e.target.value) || 0 })); }} /></div>
                                 </div>
-                                {/* Geschatte omzet */}
-                                <div style={{ marginTop: 12, padding: 10, background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center' }}>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>Geschatte omzet: </span>
-                                    <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--brand)' }}>{fmt((newEvent.guests || 0) * (newEvent.ppp || 0))}</span>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                                    <button className="btn btn-brand btn-sm" onClick={addEvent} style={{ flex: 1, justifyContent: 'center' }}>
-                                        <i className="fa-solid fa-plus"></i> Event Aanmaken
-                                    </button>
-                                    <button className="btn btn-ghost btn-sm" onClick={function () { setShowEventForm(false); }}>Annuleren</button>
-                                </div>
+                                <button className="btn-brand mt-20" style={{ width: '100%' }} onClick={addEvent}>OPSLAAN</button>
                             </div>
                         </div>
                     )}
 
-                    {/* Smart Prep Suggestions from Data Center */}
-                    {suggestions.filter(function (s) { return s.status === 'pending'; }).length > 0 && (
-                        <div className="panel" style={{ marginBottom: 16 }}>
-                            <div className="panel-head">
-                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <i className="fa-solid fa-robot" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Smart Suggesties
-                                </h3>
-                                <span className="pill pill-amber" style={{ fontSize: 9 }}>
-                                    {suggestions.filter(function (s) { return s.status === 'pending'; }).length} actief
-                                </span>
-                            </div>
-                            <div className="panel-body" style={{ padding: 10 }}>
-                                {suggestions.filter(function (s) { return s.status === 'pending'; }).map(function (sug) {
-                                    return (
-                                        <div key={sug.id} className="prep-suggestion">
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                                <i className="fa-solid fa-lightbulb" style={{ color: '#FFBF00', fontSize: 11 }}></i>
-                                                <span style={{ fontWeight: 800, fontSize: 12 }}>{sug.task_name}</span>
-                                            </div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8 }}>
-                                                Tekort: <span style={{ color: 'var(--red)', fontWeight: 700 }}>{sug.tekort} {sug.unit}</span> · {sug.ingredient_naam}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                                <button className="btn btn-brand btn-sm" style={{ fontSize: 10, padding: '3px 10px' }}
-                                                    onClick={function () {
-                                                        // Find next Monday at 09:00 for a 4-hour prep block
-                                                        var d = new Date();
-                                                        var day = d.getDay();
-                                                        var diff = (day === 0) ? 1 : (day === 1 ? 7 : (8 - day));
-                                                        var monday = new Date(d);
-                                                        monday.setDate(d.getDate() + diff);
-                                                        monday.setHours(9, 0, 0, 0);
-                                                        var mondayStr = monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
-                                                        // Link to any event or create a standalone prep task
-                                                        var firstEvent = events[0];
-                                                        if (firstEvent) {
-                                                            // Calculate days difference from event date
-                                                            var evDate = new Date(firstEvent.date + 'T00:00:00');
-                                                            var daysDiff = Math.round((monday - evDate) / 86400000);
-                                                            insertPrep({ event_id: firstEvent.id, text: '🔥 ' + sug.task_name + ' (4u prep-blok, ma 09:00)', dagen: daysDiff, done: false })
-                                                                .then(function () {
-                                                                    removeSuggestion(sug.id);
-                                                                    showToast('✅ Prep-blok ingepland op maandag ' + mondayStr + ' om 09:00', 'success');
-                                                                });
-                                                        } else {
-                                                            removeSuggestion(sug.id);
-                                                            showToast('Geen event om aan te koppelen', 'info');
-                                                        }
-                                                    }}>
-                                                    <i className="fa-solid fa-check" style={{ fontSize: 8 }}></i> Accepteer
-                                                </button>
-                                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '3px 10px' }}
-                                                    onClick={function () { removeSuggestion(sug.id); }}>
-                                                    <i className="fa-solid fa-xmark" style={{ fontSize: 8 }}></i> Negeer
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-
-                    {/* Prep Tasks Overview */}
                     <div className="panel">
                         <div className="panel-head">
-                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="fa-solid fa-clipboard-list" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Prep-Taken
-                            </h3>
-                            <button className="btn btn-ghost btn-sm" onClick={function () { setShowPrepForm(!showPrepForm); setShowEventForm(false); }}>
-                                <i className="fa-solid fa-plus"></i> Taak
-                            </button>
+                            <h3>PREP-TAKEN</h3>
+                            <button className="tab-btn" onClick={function () { setShowPrepForm(!showPrepForm); }}>+ TAAK</button>
                         </div>
-                        <div className="panel-body" style={{ padding: 10 }}>
-                            {/* Add prep form */}
+                        <div className="panel-body">
                             {showPrepForm && (
-                                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 10 }}>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Nieuwe Prep-taak</div>
-                                    <div className="field" style={{ marginBottom: 8 }}>
-                                        <label>Event</label>
-                                        <select value={newTask.event_id} onChange={function (e) { setNewTask(Object.assign({}, newTask, { event_id: e.target.value })); }}>
-                                            <option value="">Kies event...</option>
-                                            {events.map(function (ev) { return <option key={ev.id} value={ev.id}>{ev.name} ({ev.date})</option>; })}
-                                        </select>
-                                    </div>
-                                    <div className="field" style={{ marginBottom: 8 }}>
-                                        <label>Taak</label>
-                                        <input value={newTask.text} onChange={function (e) { setNewTask(Object.assign({}, newTask, { text: e.target.value })); }} placeholder="bijv. Vlees marineren..." />
-                                    </div>
-                                    <div className="field" style={{ marginBottom: 10 }}>
-                                        <label>Dagen voor event</label>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <input type="number" value={Math.abs(newTask.dagen)} min="0" max="30" style={{ width: 70 }}
-                                                onChange={function (e) { setNewTask(Object.assign({}, newTask, { dagen: -Math.abs(parseInt(e.target.value) || 1) })); }} />
-                                            <span style={{ fontSize: 10, color: 'var(--muted)' }}>dagen van tevoren</span>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <button className="btn btn-brand btn-sm" onClick={addPrepTask}><i className="fa-solid fa-plus" style={{ fontSize: 9 }}></i> Toevoegen</button>
-                                        <button className="btn btn-ghost btn-sm" onClick={function () { setShowPrepForm(false); }}>Annuleren</button>
-                                    </div>
+                                <div className="artisan-panel mb-16" style={{ padding: 16 }}>
+                                    <div className="field mb-16"><label>Taak</label><input value={newTask.text} onChange={function (e) { setNewTask(Object.assign({}, newTask, { text: e.target.value })); }} /></div>
+                                    <button className="btn-brand" onClick={addPrepTask}>TOEVOEGEN</button>
                                 </div>
                             )}
-
-                            {/* Undone prep tasks */}
-                            {undonePreps.length === 0 && donePreps.length === 0 && !showPrepForm && (
-                                <div style={{ textAlign: 'center', padding: 16 }}>
-                                    <p style={{ color: 'var(--muted)', fontSize: 12 }}>Geen prep-taken</p>
-                                </div>
-                            )}
-                            {undonePreps.map(function (pp) {
-                                var isPast = pp.prepDate < todayStr;
-                                var isNow = pp.prepDate === todayStr;
+                            {undonePreps.slice(0, 5).map(function (pp) {
                                 return (
-                                    <div key={pp.task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: '#111', border: '2px solid ' + (isPast ? 'rgba(239,68,68,.4)' : isNow ? 'rgba(255,140,0,.4)' : 'var(--border)'), borderRadius: 12, marginBottom: 6 }}>
-                                        <button className={'check-box'} onClick={function () { toggleTask(pp.task); }} style={{ width: 24, height: 24, borderRadius: 8 }}>
-                                            <div style={{ width: 6, height: 6, borderRadius: 3, background: isPast ? 'var(--red)' : isNow ? 'var(--brand)' : '#52525b' }}></div>
-                                        </button>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 12 }}>{pp.task.text}</div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                                                <span className="pill pill-amber" style={{ fontSize: 9, padding: '2px 8px', background: 'rgba(255,140,0,.12)', color: 'var(--brand)', border: 'none' }}>
-                                                    {pp.event ? pp.event.name.split(' ').slice(0, 2).join(' ') : '?'}
-                                                </span>
-                                                <span style={{ fontSize: 9, color: 'var(--muted)' }}>
-                                                    {isPast ? '⚠ Te laat!' : isNow ? '🔥 Vandaag' : '📅 ' + fmtNl(pp.prepDate)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <button className="del-btn" onClick={function () { removePrep(pp.task.id); }} style={{ fontSize: 11 }}>
-                                            <i className="fa-solid fa-xmark"></i>
-                                        </button>
+                                    <div key={pp.task.id} style={{ fontSize: 12, padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>{pp.task.text}</span>
+                                        <span style={{ fontSize: 10, color: 'var(--brand)' }}>{fmtNl(pp.prepDate)}</span>
                                     </div>
                                 );
                             })}
-
-                            {/* Done prep tasks */}
-                            {donePreps.length > 0 && (
-                                <>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 0 4px', marginTop: 4 }}>
-                                        <i className="fa-solid fa-check" style={{ color: 'var(--green)', fontSize: 8, marginRight: 4 }}></i>
-                                        Afgerond ({donePreps.length})
-                                    </div>
-                                    {donePreps.map(function (pp) {
-                                        return (
-                                            <div key={pp.task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, opacity: 0.5, borderRadius: 10, marginBottom: 4 }}>
-                                                <button className="check-box checked" onClick={function () { toggleTask(pp.task); }} style={{ width: 22, height: 22, borderRadius: 7 }}>
-                                                    <i className="fa-solid fa-check" style={{ fontSize: 9 }}></i>
-                                                </button>
-                                                <span style={{ flex: 1, fontSize: 11, textDecoration: 'line-through', color: 'var(--muted)' }}>{pp.task.text}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </>
-                            )}
                         </div>
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 }
