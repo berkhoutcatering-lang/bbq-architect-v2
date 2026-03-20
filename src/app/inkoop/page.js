@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import useSupabase from '@/lib/useSupabase';
-import useToast from '@/lib/useToast';
-import useConfirm from '@/lib/useConfirm';
+import { useSupabase } from '@/lib/useSupabase';
+import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { parseActions } from '@/lib/ai-actions';
 import { fmt, resizeImage } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
