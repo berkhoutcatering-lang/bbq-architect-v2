@@ -28,6 +28,14 @@ export var ACTION_TYPES = {
         icon: 'fa-calendar-days',
         color: '#3b82f6', // Blauw
     },
+    get_weather_forecast: {
+        label: 'Weersvoorspelling Checken',
+        table: 'weer',
+        op: 'select',
+        pages: ['/agenda', '/events', '/ai-chat'],
+        icon: 'fa-cloud-sun-rain',
+        color: '#0ea5e9', // Luchtblauw
+    },
     analyzeMenuBalance: {
         label: 'Menu Balans Analyseren',
         table: 'gerechten',
@@ -160,6 +168,14 @@ export var ACTION_TYPES = {
     },
 
     // ── Uren ─────────────────────────────────────────────────────────────────
+    predict_staff_needs: {
+        label: 'Formatie Voorspellen (AI Staff Planner)',
+        table: 'personeels_planning',
+        op: 'insert',
+        pages: ['/uren', '/events', '/ai-chat'],
+        icon: 'fa-users-gear',
+        color: '#8b5cf6', // Violet
+    },
     create_urenlog: {
         label: 'Uren registreren',
         table: 'time_logs',
@@ -204,6 +220,14 @@ export var ACTION_TYPES = {
     },
 
     // ── Prep-taken ───────────────────────────────────────────────────────────
+    shift_service_timeline: {
+        label: 'Service Planning Verschuiven (Floor Manager)',
+        table: 'timeline_events',
+        op: 'update',
+        pages: ['/service', '/events', '/ai-chat'],
+        icon: 'fa-clock-rotate-left',
+        color: '#8b5cf6', // Violet for Master AI Tools
+    },
     create_prep_task: {
         label: 'Prep-taak aanmaken',
         table: 'prep_tasks',

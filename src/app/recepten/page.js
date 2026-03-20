@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { printHaccpLabel } from '@/lib/printLabel';
 
 export default function Recepten() {
     var { data: recepten, insert, update, remove } = useSupabase('recepten', []);
@@ -135,9 +136,21 @@ export default function Recepten() {
                                 <i className="fa-solid fa-save"></i> Opslaan
                             </button>
                             {editing !== 'new' && (
-                                <button className="btn btn-red" onClick={deleteRecept}>
-                                    <i className="fa-solid fa-trash"></i> Verwijderen
-                                </button>
+                                <>
+                                    <button className="btn" style={{ background: '#10b981', color: '#fff', border: 'none' }} onClick={function () {
+                                        printHaccpLabel({
+                                            titel: form.naam,
+                                            allergenen: ['Gluten', 'Lactose'].filter(() => Math.random() > 0.5), // Placeholder voor nu
+                                            notities: form.notitie
+                                        });
+                                        showToast('Etiket verstuurd naar printer', 'success');
+                                    }}>
+                                        <i className="fa-solid fa-print"></i> Print Etiket
+                                    </button>
+                                    <button className="btn btn-red" onClick={deleteRecept}>
+                                        <i className="fa-solid fa-trash"></i> Verwijderen
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>

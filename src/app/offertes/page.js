@@ -436,6 +436,15 @@ export default function Offertes() {
                         <button className="btn btn-brand" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
                         <button className="btn" style={{ background: '#B48C14', color: '#000' }} onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Samenstellen</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte}><i className="fa-solid fa-file-pdf"></i> PDF</button>
+                        {editing !== 'new' && (
+                            <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
+                                var link = window.location.origin + '/q/' + editing;
+                                navigator.clipboard.writeText(link);
+                                showToast('Magic Link gekopieerd!', 'success');
+                            }}>
+                                <i className="fa-solid fa-link"></i> Magic Link
+                            </button>
+                        )}
                         {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur}><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>

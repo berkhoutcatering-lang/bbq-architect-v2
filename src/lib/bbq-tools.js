@@ -70,6 +70,20 @@ export var TOOL_SCHEMAS = [
     {
         type: 'function',
         function: {
+            name: 'get_weather_forecast',
+            description: 'Haal de weersvoorspelling op voor een specifieke stad. Gebruik dit om voorspellend te adviseren over regie-materiaal (partytenten, heaters).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    stad: { type: 'string' }
+                },
+                required: ['stad']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'createEvent',
             description: 'Maak een nieuw catering-event aan in het systeem.',
             parameters: {
@@ -113,6 +127,53 @@ export var TOOL_SCHEMAS = [
                     event_id: { type: 'number', description: 'ID van het event (optioneel, pakt het eerstvolgende als niet opgegeven)' }
                 },
                 required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'shift_service_timeline',
+            description: 'AI Floor Manager: Verschuif alle openstaande acties in een service timeline met X minuten (bijv. als een toespraak uitloopt).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    minuten: { type: 'number', description: 'Aantal minuten om te verschuiven (positief is later, negatief is eerder)' },
+                    reden: { type: 'string', description: 'Bijv. Toespraak loopt uit' }
+                },
+                required: ['event_id', 'minuten']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'predict_staff_needs',
+            description: 'AI Staff Planner: Voorspel de benodigde personeelsformatie (aantal chefs, runners, barmannen) op basis van het evenement, aantal gasten en de complexiteit van het menu.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    event_id: { type: 'number' },
+                    event_naam: { type: 'string' },
+                    benodigd_personeel: {
+                        type: 'array',
+                        description: 'De geadviseerde formatie.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                rol: { type: 'string', description: 'Bv. Head Chef, Sous Chef, Runner, Barman' },
+                                aantal: { type: 'number' },
+                                start_tijd: { type: 'string', description: 'Geadviseerde starttijd (Bv. 14:00)' },
+                                eind_tijd: { type: 'string', description: 'Geadviseerde eindtijd' },
+                                reden: { type: 'string', description: 'Be Argumentatie: Waarom is deze rol/aantal nodig?' }
+                            },
+                            required: ['rol', 'aantal', 'start_tijd', 'eind_tijd', 'reden']
+                        }
+                    },
+                    totaal_geschatte_uren: { type: 'number' }
+                },
+                required: ['event_id', 'benodigd_personeel', 'totaal_geschatte_uren']
             }
         }
     },
