@@ -47,7 +47,7 @@ export default function Inkoop() {
         reader.onload = async function (ev) {
             var rawB64 = ev.target.result;
             // Stap 1: Aggressief resizen om "Request Entity Too Large" te voorkomen op Vercel/Groq
-            var b64 = await resizeImage(rawB64, 1200, 1200, 0.8);
+            var b64 = await resizeImage(rawB64, 1920, 2560, 0.92);
 
             setScanStatus('ANALYSING GRID & MATCHING DATA...');
             try {
@@ -57,17 +57,13 @@ export default function Inkoop() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         pageContext: '/inkoop',
-                        contextData: {
-                            leveranciers: leveranciers,
-                            inventory: inventoryData,
-                            events: events // Voor proactief advies
-                        },
+                        contextData: { leveranciers: leveranciers },
                         messages: [{
                             role: 'user',
                             content: [
                                 {
                                     type: 'text',
-                                    text: 'DIRECTE DATA-EXTRACTIE (LEES ALLES):\n1. Visuele beschrijving\n2. Grid analyse\n3. Extraheer ELK item van de bon (SLA NIETS OVER!)\n4. Genereer <<<ACTION:...>>> blokken voor ELK item, ook onbekende.\n5. Pitmaster Insight.\n\nLees elke regel. Als je iets niet matcht aan de voorraad, voeg het dan alsnog toe met de naam op de bon.'
+                                    text: 'Extraheer ELKE productregel van deze factuur als ACTION-blok. Sla geen enkele regel over. Begin direct met het eerste <<<ACTION:...>>> blok.'
                                 },
                                 { type: 'image_url', image_url: { url: b64, detail: 'high' } }
                             ]

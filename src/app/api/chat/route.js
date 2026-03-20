@@ -306,7 +306,7 @@ export async function POST(req) {
         if (messages && messages.length > 0) {
             hasImage = messages.some(function (m) { return Array.isArray(m.content) && m.content.some(function (c) { return c.type === 'image_url'; }); });
         }
-        var modelName = hasImage ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'llama-3.3-70b-versatile';
+        var modelName = hasImage ? 'meta-llama/llama-4-maverick-17b-16e-instruct' : 'llama-3.3-70b-versatile';
 
         if (hasImage) {
             systemParts.push(
@@ -350,7 +350,7 @@ export async function POST(req) {
                 model: modelName,
                 messages: groqMessages,
                 temperature: hasImage ? 0.1 : (mode === 'brainstorm' ? 0.85 : 0.7),
-                max_tokens: hasImage ? 8000 : (mode === 'brainstorm' ? 6000 : 4000),
+                max_tokens: hasImage ? 16000 : (mode === 'brainstorm' ? 6000 : 4000),
             }),
         });
 
