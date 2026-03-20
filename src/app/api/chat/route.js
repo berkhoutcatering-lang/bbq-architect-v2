@@ -351,7 +351,7 @@ export async function POST(req) {
                 model: modelName,
                 messages: groqMessages,
                 temperature: hasImage ? 0.05 : (mode === 'brainstorm' ? 0.85 : 0.7),
-                max_tokens: hasImage ? 16000 : (mode === 'brainstorm' ? 6000 : 4000),
+                max_tokens: hasImage ? 8192 : (mode === 'brainstorm' ? 6000 : 4000),
             }),
         });
 
