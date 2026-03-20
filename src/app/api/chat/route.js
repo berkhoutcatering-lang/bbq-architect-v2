@@ -319,18 +319,17 @@ export async function POST(req) {
                 '### STAP 2: GRID ANALYSE (CHAIN-OF-THOUGHT)',
                 'Analyseer de tabel-structuur. Benoem de kolommen die je ziet (bijv: Art.nr, Omschrijving, Aantal, Eenheid, Prijs, Totaal). Dit helpt je om geen data te missen.',
                 '',
-                '### STAP 3: DATA EXTRACTIE & MATCHING',
-                'Extraheer ELK item van de bon. Gebruik voor ELKE regel een apart <<<ACTION:...>>> blok.',
-                'Match de Artikelomschrijving tegen de verstrekte `contextData.inventory` en `contextData.leveranciers`.',
+                '### STAP 3: DATA EXTRACTIE (LEES ALLES)',
+                'Extraheer ELK fysiek item van de bon. Sla NIETS over. Ook artikelen die we nog niet kennen moeten ingeboekt worden.',
+                'Voor elk item bepaal je: Naam, Aantal, Eenheid (stuks/kg/collo), Stukprijs en BTW-tarief.',
                 '',
-                '### STAP 4: JSON ACTIONS',
-                'Genereer voor ELK gevonden product exact dit formaat:',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":12.34,"items":[{"naam":"Product","aantal":1,"prijs":1.23,"btw_tarief":21}]}}>>>',
+                '### STAP 4: JSON ACTIONS (INDIVIDUEEL)',
+                'Genereer voor ELK gevonden product op de bon een apart <<<ACTION:...>>> blok.',
+                'Gebruik de gevonden winkelnaam en datum voor elk blok.',
+                'Match de Artikelomschrijving alleen tegen `contextData.inventory` voor een betere naamgeving, maar voeg het item ALTIJD toe, ook als er geen match is.',
                 '',
-                '⚠️ CRITISCH: Sla geen regels over. Elke regel op de factuur is een potentiële inkoop actie.',
-                '',
-                '### STAP 5: PITMASTER INSIGHT',
-                'Als je ziet dat de inkoop overeenkomt met een aankomend event in `contextData.events`, geef dan een proactief advies.'
+                '### STAP 5: PITMASTER INSIGHT & MATCHING',
+                'Geef een proactief advies als de inkoop nuttig is voor een aankomend event in `contextData.events`.'
             );
         }
 

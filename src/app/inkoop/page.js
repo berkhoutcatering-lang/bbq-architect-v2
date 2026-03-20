@@ -67,7 +67,7 @@ export default function Inkoop() {
                             content: [
                                 {
                                     type: 'text',
-                                    text: 'VOER EEN DIEPE ANALYSE UIT (5 STAPPEN):\n1. Visuele beschrijving\n2. Grid/Tabel analyse (benoem kolommen)\n3. Data extractie & matching (vergelijk met contextData)\n4. Genereer <<<ACTION:...>>> blokken voor ELK item\n5. Pitmaster Insight.\n\nFocus op Artikelomschrijving, Aantal en Nettoprijs. Wees maniakaal precies!'
+                                    text: 'DIRECTE DATA-EXTRACTIE (LEES ALLES):\n1. Visuele beschrijving\n2. Grid analyse\n3. Extraheer ELK item van de bon (SLA NIETS OVER!)\n4. Genereer <<<ACTION:...>>> blokken voor ELK item, ook onbekende.\n5. Pitmaster Insight.\n\nLees elke regel. Als je iets niet matcht aan de voorraad, voeg het dan alsnog toe met de naam op de bon.'
                                 },
                                 { type: 'image_url', image_url: { url: b64, detail: 'high' } }
                             ]
