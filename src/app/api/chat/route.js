@@ -310,24 +310,27 @@ export async function POST(req) {
 
         if (hasImage) {
             systemParts.push(
-                '**VISION MODE GEACTIVEERD**',
-                'Je hebt een afbeelding ontvangen (bijv. een bonnetje, factuur, OF een foto van een Menukaart). Bestudeer deze aandachtig.',
+                '**VISION MODE GEACTIVEERD (STEERBARE ANALYSE)**',
+                'Je hebt een complexe afbeelding (factuur/bon) ontvangen. Voer de volgende stappen uit in je antwoord:',
                 '',
-                'SCENARIO A: HET IS EEN KASSABON OF FACTUUR (MAKRO, SLIGRO, HANOS, ETC.)',
-                'Dit is een complexe taak. Gebruik je visuele intelligentie om de grid-structuur te ontleden.',
-                '1. **GRID ANALYSE**: Identificeer de kolommen (Omschrijving, Aantal, Prijs per stuk, Bedrag).',
-                '2. **DEEP MATCHING**: Kijk in de meegegeven `contextData.inventory` en `contextData.leveranciers`.',
-                '   - Komt de Artikelomschrijving overeen met een bestaand voorraad-item? Gebruik die naam.',
-                '   - Is de winkel herkenbaar als een van onze leveranciers?',
-                '3. **DATA EXTRACTIE**: Bepaal het werkelijke aantal en de netto-prijs per eenheid.',
+                '### STAP 1: VISUELE BESCHRIJVING',
+                'Beschrijf kort wat je ziet (welke winkel, welke datum, algemene layout).',
                 '',
-                'Gebruik voor ELK item op de bon dit JSON actieblok (GEEN MARKDOWN, direct starten met <<<ACTION):',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: [PRODUCTNAAM]","data":{"winkel":"Naam Winkel","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"btw_hoog":21.00,"btw_laag":0.00,"btw_nul":0.00,"items":[{"naam":"Product","aantal":1,"prijs":10.50,"btw_tarief":21}]}}>>>',
-                '⚠️ BELANGRIJK: Maak voor ELK artikel een APART actieblok aan.',
+                '### STAP 2: GRID ANALYSE (CHAIN-OF-THOUGHT)',
+                'Analyseer de tabel-structuur. Benoem de kolommen die je ziet (bijv: Art.nr, Omschrijving, Aantal, Eenheid, Prijs, Totaal). Dit helpt je om geen data te missen.',
                 '',
-                'SCENARIO B: HET IS EEN GERECHTENLIJST OF MENUKAART',
-                'Scan alle gerechten van de foto. Voor élk gerecht dat je herkent MOET je de missende details (beschrijving, complete ingrediënten array, uitgebreide bereidingswijze stappenplan) zelf professioneel invullen. Gebruik ALTIJD EXACT dit JSON actieblok (GEEN MARKDOWN, direct starten met <<<ACTION):',
-                '<<<ACTION:{"type":"render_recipe_matrix","description":"Menu Kaart Scan Resultaten","data":{"recipes":[{"naam":"Gerechtnaam","categorie":"hoofdgerecht","beschrijving":"Smaakprofiel","bereidingswijze":"Stappenplan...","ingredienten":["Ingrediënt 1", "Ingrediënt 2"],"allergenen":["Gluten"]}]}}>>>'
+                '### STAP 3: DATA EXTRACTIE & MATCHING',
+                'Extraheer ELK item van de bon. Gebruik voor ELKE regel een apart <<<ACTION:...>>> blok.',
+                'Match de Artikelomschrijving tegen de verstrekte `contextData.inventory` en `contextData.leveranciers`.',
+                '',
+                '### STAP 4: JSON ACTIONS',
+                'Genereer voor ELK gevonden product exact dit formaat:',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":12.34,"items":[{"naam":"Product","aantal":1,"prijs":1.23,"btw_tarief":21}]}}>>>',
+                '',
+                '⚠️ CRITISCH: Sla geen regels over. Elke regel op de factuur is een potentiële inkoop actie.',
+                '',
+                '### STAP 5: PITMASTER INSIGHT',
+                'Als je ziet dat de inkoop overeenkomt met een aankomend event in `contextData.events`, geef dan een proactief advies.'
             );
         }
 
@@ -344,7 +347,7 @@ export async function POST(req) {
             body: JSON.stringify({
                 model: modelName,
                 messages: groqMessages,
-                temperature: mode === 'brainstorm' ? 0.85 : 0.7,
+                temperature: hasImage ? 0.1 : (mode === 'brainstorm' ? 0.85 : 0.7),
                 max_tokens: mode === 'brainstorm' ? 6000 : 4000,
             }),
         });

@@ -67,7 +67,7 @@ export default function Inkoop() {
                             content: [
                                 {
                                     type: 'text',
-                                    text: 'Scan deze groothandel-factuur (Makro/Sligro). Analyseer de grid-structuur zeer nauwkeurig. Focus op de Artikelomschrijving, Aantal en Nettoprijs. Probeer de items te matchen aan onze bestaande leveranciers en producten (see contextData). Als je ziet dat de inkoop overeenkomt met een aankomend event (zie events in context), geef dan een korte proactieve opmerking in je tekst-antwoord.'
+                                    text: 'VOER EEN DIEPE ANALYSE UIT (5 STAPPEN):\n1. Visuele beschrijving\n2. Grid/Tabel analyse (benoem kolommen)\n3. Data extractie & matching (vergelijk met contextData)\n4. Genereer <<<ACTION:...>>> blokken voor ELK item\n5. Pitmaster Insight.\n\nFocus op Artikelomschrijving, Aantal en Nettoprijs. Wees maniakaal precies!'
                                 },
                                 { type: 'image_url', image_url: { url: b64, detail: 'high' } }
                             ]
