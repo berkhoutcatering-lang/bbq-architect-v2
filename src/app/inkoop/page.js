@@ -284,7 +284,14 @@ export default function Inkoop() {
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
                                             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                                                {action.data.items?.[0]?.aantal || action.data.aantal || 1} {action.data.items?.[0]?.eenheid || action.data.eenheid || 'stks'} • €{(action.data.items?.[0]?.prijs || action.data.prijs || 0).toFixed(2)}
+                                                {(() => {
+                                                    const item = action.data.items?.[0] || {};
+                                                    const prijs = item.prijs || action.data.prijs || 0;
+                                                    const aantal = item.aantal || action.data.aantal || 1;
+                                                    const eenheid = item.eenheid || action.data.eenheid || 'stks';
+                                                    const totaal = prijs * aantal;
+                                                    return `€${prijs.toFixed(2)}/${eenheid} × ${aantal} ${eenheid} = €${totaal.toFixed(2)}`;
+                                                })()}
                                             </div>
                                         </div>
                                         <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 11, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
