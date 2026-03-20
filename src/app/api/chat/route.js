@@ -337,6 +337,7 @@ export async function POST(req) {
         var systemContent = systemParts.join('\n');
         var systemMessage = { role: 'system', content: systemContent };
         var groqMessages = [systemMessage, ...messages];
+        if (hasImage) console.log('[AI] Model:', modelName, 'Targeting vision scan...');
 
         var response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -354,10 +355,12 @@ export async function POST(req) {
 
         if (!response.ok) {
             var errText = await response.text();
+            console.error('[AI] Groq Fout:', errText);
             return NextResponse.json({ error: 'Groq API fout: ' + errText }, { status: response.status });
         }
 
         var data = await response.json();
+        if (hasImage) console.log('[AI] Vision Raw Result:', data.choices?.[0]?.message?.content?.slice(0, 500) + '...');
         return NextResponse.json(data);
 
     } catch (err) {
