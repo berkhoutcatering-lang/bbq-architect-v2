@@ -4,12 +4,12 @@
   --brand: #D5B262;
   /* Hop & Bites Gold */
   --brand-light: rgba(213, 178, 98, 0.08);
-  --bg: #121212;
-  /* Soft Midnight Charcoal (Minder schreeuwerig dan diepzwart) */
-  --card: rgba(24, 24, 24, 0.8);
-  --card-solid: #181818;
-  --border: rgba(213, 178, 98, 0.1);
-  --border-steel: rgba(213, 178, 98, 0.15);
+  --bg: #2b2d31;
+  /* Anthracite Grey (Warm & Professional) */
+  --card: rgba(30, 31, 34, 0.8);
+  --card-solid: #1e1f22;
+  --border: rgba(255, 255, 255, 0.05);
+  --border-steel: rgba(213, 178, 98, 0.2);
   /* Dunne gouden lijn */
   --text: #f3f4f6;
   --muted: #9ca3af;
@@ -4883,13 +4883,14 @@ h3,
 body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
+
 /* ==========================================================================
    HOP & BITES PREMIUM REFINEMENTS
    ========================================================================== */
 
 .artisan-panel {
   border: 1px solid var(--border-steel);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .section-title {
@@ -4945,7 +4946,8 @@ body {
 }
 
 .pitmaster-quote p {
-  font-family: 'Georgia', serif; /* More 'Chef/Classic' feel for quotes */
+  font-family: 'Georgia', serif;
+  /* More 'Chef/Classic' feel for quotes */
   font-style: italic;
   color: var(--text);
   opacity: 0.8;
@@ -4962,4 +4964,3 @@ body {
   letter-spacing: 2px;
   opacity: 0.6;
 }
-
