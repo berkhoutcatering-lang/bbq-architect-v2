@@ -133,8 +133,8 @@ export default function Sidebar() {
             {/* Sidebar */}
             <aside className={'sidebar' + (open ? ' open' : '')}>
                 <div className="sidebar-logo">
-                    <h1 className="artisan-font"><i className="fa-solid fa-fire"></i> BBQ Architect</h1>
-                    <p>Hop &amp; Bites • Ambacht</p>
+                    <h1 className="artisan-font"><i className="fa-solid fa-fire"></i> BBQ ARCHITECT</h1>
+                    <p>HOP & BITES • AMBACHT</p>
                 </div>
 
                 <nav className="sidebar-nav">

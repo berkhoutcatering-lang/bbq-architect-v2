@@ -47,24 +47,23 @@ export default function Dashboard() {
 
   return (
     <div className="artisan-dashboard minimalist">
-      {/* HERO SECTION - REFINED FOCUS */}
+      {/* HERO SECTION - PURE SHOWMANSHIP */}
       <div className="artisan-hero simple">
         <div className="hero-overlay"></div>
         <img src="/pitmaster-hero.png" alt="Artisan Pitmaster" className="hero-img" />
         <div className="hero-content">
-          <div className="hero-badge"><i className="fa-solid fa-fire-flame-curved"></i> ARTISAN PITMASTER</div>
+          <div className="hero-badge">RESTAURANT KWALITEIT • OPEN VUUR</div>
           <h1 className="hero-title">PITMASTER COMMAND CENTER</h1>
-          <p className="hero-subtitle">Vakmanschap en overzicht. Alle smokers staan klaar.</p>
         </div>
       </div>
 
       <div className="dashboard-content-single">
 
-        {/* ACTION CENTER (CONSOLIDATED ALERTS) */}
+        {/* ACTIE CENTRUM (CONSOLIDATED ALERTS) */}
         {(lowStockItems.length > 0 || pendingSuggestions.length > 0) && (
-          <div className="artisan-alert-center">
+          <div className="artisan-alert-center mb-16">
             <div className="alert-center-header">
-              <i className="fa-solid fa-bullhorn"></i> ATTENTIE VEREIST
+              ACTIE VEREIST
             </div>
             <div className="alert-center-body">
               {lowStockItems.length > 0 && (
@@ -76,20 +75,20 @@ export default function Dashboard() {
               {pendingSuggestions.length > 0 && (
                 <Link href="/agenda" className="alert-item info">
                   <i className="fa-solid fa-wand-magic-sparkles"></i>
-                  <span><strong>SUGGESTIES:</strong> {pendingSuggestions.length} Pitmaster suggesties</span>
+                  <span><strong>PLANNING:</strong> {pendingSuggestions.length} Pitmaster suggesties</span>
                 </Link>
               )}
             </div>
           </div>
         )}
 
-        {/* TOP STATS BAR */}
+        {/* TOP STATS BAR - GOLD & CHARCOAL */}
         <div className="artisan-compact-stats">
           <div className="c-stat">
             <span className="c-lbl">CONFIRMED EVENTS</span>
             <span className="c-val">{confirmedEvents}</span>
           </div>
-          <div className="c-stat">
+          <div className="c-stat highlight">
             <span className="c-lbl">GEREALISEERDE OMZET</span>
             <span className="c-val">{fmt(omzet)}</span>
           </div>
@@ -99,16 +98,16 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* PREP PLANNING - THE CORE FOCUS */}
+        {/* DAGPLANNING & PREP */}
         <div className="dash-section">
-          <h2 className="section-title"><i className="fa-solid fa-fire"></i> DAGPLANNING & PREP</h2>
+          <h2 className="section-title">DAGPLANNING & PREP</h2>
           <div className="artisan-panel">
             {prepEvents.length === 0 && <p className="empty-msg">Geen actuele prep voor vandaag.</p>}
             {prepEvents.map(offerte => (
               <div key={offerte.id} className="prep-card">
                 <div className="prep-header">
                   <span className="prep-client">{offerte.client_naam}</span>
-                  <span className="prep-date">{offerte.datum} • {offerte.aantal_gasten}p</span>
+                  <span className="prep-date">{offerte.datum.split('-').reverse().join('-')} • {offerte.aantal_gasten}p</span>
                 </div>
                 <div className="prep-dishes">
                   {gangenData.sort((a, b) => (a.volgorde || 0) - (b.volgorde || 0)).map(gang => {
@@ -117,7 +116,7 @@ export default function Dashboard() {
                     if (dishes.length === 0) return null;
                     return (
                       <div key={gang.slug} className="prep-gang-row">
-                        <span className="gang-name">{gang.naam}:</span>
+                        <span className="gang-name">{gang.naam}</span>
                         <span className="gang-dishes">{dishes.join(', ')}</span>
                       </div>
                     )
@@ -128,9 +127,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* UPCOMING AGENDA */}
+        {/* VOLGENDE EVENTS */}
         <div className="dash-section">
-          <h2 className="section-title"><i className="fa-solid fa-calendar-days"></i> VOLGENDE EVENTS</h2>
+          <h2 className="section-title">VOLGENDE EVENTS</h2>
           <div className="artisan-panel">
             {upcoming.length === 0 && <p className="empty-msg">Geen events gepland</p>}
             {upcoming.map(ev2 => (
@@ -147,7 +146,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* QUICK SHORTCUTS */}
+        {/* QUICK SHORTCUTS - CIRCULAR GOLD */}
         <div className="dash-section center">
           <div className="artisan-shortcut-bar">
             <Link href="/offertes" className="icon-nav-btn" title="Offertes"><i className="fa-solid fa-file-contract"></i></Link>
@@ -156,6 +155,12 @@ export default function Dashboard() {
             <Link href="/logistiek" className="icon-nav-btn" title="Logistiek"><i className="fa-solid fa-truck-loading"></i></Link>
             <Link href="/recepten" className="icon-nav-btn" title="Recepten"><i className="fa-solid fa-utensils"></i></Link>
           </div>
+        </div>
+
+        {/* PITMASTER QUOTE - THE "CHEF" VOICE */}
+        <div className="pitmaster-quote">
+          <p>"Vakmanschap is niet alleen hoe je het vlees snijdt, maar ook hoe je de volledige restaurant-ervaring op locatie overbrengt."</p>
+          <span className="quote-author">— Mathijs Berkhout</span>
         </div>
       </div>
     </div>
