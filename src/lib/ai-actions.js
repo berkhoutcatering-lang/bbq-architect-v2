@@ -208,7 +208,15 @@ export var ACTION_TYPES = {
         op: 'update',
         pages: ['/materieel'],
         icon: 'fa-pen-to-square',
-        color: '#f59e0b',
+        color: '#f59e0b', // Amber
+    },
+    plan_logistics_route: {
+        label: 'Logistieke Route & Callsheet (AI Route Planner)',
+        table: 'timeline_events',
+        op: 'insert',
+        pages: ['/logistiek', '/ai-chat', '/events'],
+        icon: 'fa-route',
+        color: '#8b5cf6', // Violet
     },
     predict_hardware_needs: {
         label: 'Hardware Voorspelling (Bus-Check)',

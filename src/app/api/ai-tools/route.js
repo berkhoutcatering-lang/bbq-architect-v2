@@ -482,6 +482,25 @@ async function handlePlanEventFull(sb, params) {
     };
 }
 
+
+
+// ── Logistiek Route Planner ──────────────────────────────────────────────────
+async function handlePlanLogisticsRoute(sb, params) {
+    if (!params.datum || !params.route_stops) throw new Error("Datum en route_stops zijn verplicht.");
+
+    // In een live omgeving zouden we dit opslaan in een logistiek_routes tabel.
+    // Voor nu retourneren we de state voor de AI Copilot UI.
+
+    return {
+        datum: params.datum,
+        start_tijd_hq: params.start_tijd_hq || 'Onbekend',
+        route_stops: params.route_stops,
+        km_schatting: params.totaal_km_schatting || 0,
+        waarschuwingen: params.waarschuwingen || [],
+        summary: `De AI Route Planner heeft de efficiëntste route voor ${params.datum} berekend met in totaal ${params.route_stops.length} stops en geschat op ${params.totaal_km_schatting}km.`
+    };
+}
+
 async function handleEngineerMenuProfitability(sb, params) {
     if (!params.analyse_resultaten || params.analyse_resultaten.length === 0) {
         return { summary: "Geen optimalisaties gevonden." };
@@ -1139,6 +1158,7 @@ var TOOL_HANDLERS = {
     updateEventStatus: handleUpdateEventStatus,
     generatePrepList: handleGeneratePrepList,
     predict_staff_needs: handlePredictStaffNeeds,
+    plan_logistics_route: handlePlanLogisticsRoute,
     generateTimeline: handleGenerateTimeline,
     shift_service_timeline: handleShiftServiceTimeline,
     getGerechten: handleGetGerechten,

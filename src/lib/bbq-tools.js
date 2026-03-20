@@ -914,6 +914,41 @@ export var TOOL_SCHEMAS = [
             }
         }
     },
+
+    // ── Logistiek Route Planner ─────────────────────────────────────────────
+    {
+        type: 'function',
+        function: {
+            name: 'plan_logistics_route',
+            description: 'AI Route & Logistiek Planner: Berekent de ideale rij-route en callsheet voor de chauffeur op een specifieke datum, rekening houdend met meerdere events, laadtijden en reistijden.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    datum: { type: 'string', description: 'De datum van de ritten (YYYY-MM-DD)' },
+                    start_tijd_hq: { type: 'string', description: 'Hoe laat vertrekt de bus vanaf HQ?' },
+                    route_stops: {
+                        type: 'array',
+                        description: 'Logische volgorde van de stops/events. De AI optimaliseert deze op basis van de tijden in de offertes.',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                event_id: { type: 'number', description: 'Event ID (indien gekoppeld aan event), mag leeg zijn voor HQ' },
+                                locatie: { type: 'string', description: 'Naam of adres van de stop' },
+                                aankomst: { type: 'string', description: 'Aankomsttijd' },
+                                vertrek: { type: 'string', description: 'Vertrektijd na laden/lossen/opbouw' },
+                                taken: { type: 'array', items: { type: 'string' }, description: 'Wat moet er hier gebeuren? Bv "Lossen hardware", "Ophalen vriezer Sligro", etc.' }
+                            },
+                            required: ['locatie', 'aankomst', 'vertrek', 'taken']
+                        }
+                    },
+                    totaal_km_schatting: { type: 'number' },
+                    waarschuwingen: { type: 'array', items: { type: 'string' }, description: 'Bijv: "Krappe laadtijd tussen Event A en B"' }
+                },
+                required: ['datum', 'start_tijd_hq', 'route_stops', 'totaal_km_schatting']
+            }
+        }
+    },
+
     {
         type: 'function',
         function: {

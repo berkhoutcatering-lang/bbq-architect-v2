@@ -19,6 +19,46 @@ export default function Inkoop() {
     var [newInkEvent, setNewInkEvent] = useState('');
     var [newInkItem, setNewInkItem] = useState({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' });
     var [boodschappenOfferte, setBoodschappenOfferte] = useState('');
+    var [receiptScanning, setReceiptScanning] = useState(false);
+    var [receiptResult, setReceiptResult] = useState(null);
+
+    async function handleReceiptUpload(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        setReceiptScanning(true);
+        setReceiptResult(null);
+        var reader = new FileReader();
+        reader.onload = async function (ev) {
+            var b64 = ev.target.result;
+            try {
+                var res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [{
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: 'Strikte instructie: Voer de process_receipt tool uit op deze kassabon. Zoek naar items, prijzen en aantallen. Retouneer ALLEEN de call.' },
+                                { type: 'image_url', image_url: { url: b64 } }
+                            ]
+                        }]
+                    })
+                });
+                var json = await res.json();
+                setReceiptResult(json.response || "De AI heeft de bon succesvol ingeboekt.");
+                // Update table stats if tools were called
+                if (json.actions && json.actions.length > 0) {
+                    showToast('Bon succesvol verwerkt (' + json.actions[0].data.summary + ')', 'success');
+                } else {
+                    showToast('Bon ingelezen', 'success');
+                }
+            } catch (err) {
+                showToast('Fout bij scannen: ' + err.message, 'error');
+            }
+            setReceiptScanning(false);
+        };
+        reader.readAsDataURL(file);
+    }
 
     // Leverancier CRUD
     function newLeverancier() {
@@ -142,6 +182,7 @@ export default function Inkoop() {
                 <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={function () { setTab('inkooplijsten'); }}>Inkooplijsten</button>
                 <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={function () { setTab('boodschappen'); }}>🛒 Boodschappen</button>
                 <button className={'tab-btn' + (tab === 'bestellingen' ? ' active' : '')} onClick={function () { setTab('bestellingen'); }}>Bestellingen</button>
+                <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={function () { setTab('bonnen'); }}>📸 Bon-Scanner</button>
             </div>
 
             {tab === 'leveranciers' && (
@@ -316,6 +357,32 @@ export default function Inkoop() {
                             });
                         })()}
                     </div>
+                </div>
+            )}
+
+            {tab === 'bonnen' && (
+                <div className="panel" style={{ textAlign: 'center', padding: '60px 20px', border: '2px dashed rgba(245, 158, 11, 0.3)', borderRadius: 24, background: 'rgba(245, 158, 11, 0.02)', marginTop: 24 }}>
+                    <i className="fa-solid fa-receipt" style={{ fontSize: 64, color: 'var(--brand)', marginBottom: 20, filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.5))' }}></i>
+                    <h3 style={{ marginBottom: 16, fontSize: 24, fontWeight: 800 }}>Vision AI Kassabon Analysator</h3>
+                    <p style={{ color: 'var(--muted)', marginBottom: 30, maxWidth: 500, margin: '0 auto 30px', lineHeight: 1.6 }}>
+                        Maak een foto van je Sligro of Makro bon. De AI scant elke regel op de factuur, herberekent je kiloprijzen en boekt alles direct in je actuele inventaris.
+                    </p>
+                    <label className="btn btn-brand" style={{ cursor: 'pointer', padding: '16px 32px', fontSize: 18, borderRadius: 99 }}>
+                        <i className="fa-solid fa-camera"></i> Scan Kassabon
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleReceiptUpload} disabled={receiptScanning} />
+                    </label>
+                    {receiptScanning && (
+                        <div style={{ marginTop: 30, color: 'var(--brand)', fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: 32, marginBottom: 12 }}></i>
+                            Llama Vision LLM analyseert miljoenen pixels...
+                        </div>
+                    )}
+                    {receiptResult && !receiptScanning && (
+                        <div style={{ marginTop: 30, background: 'var(--bg)', border: '1px solid var(--border)', padding: '24px', borderRadius: 16, textAlign: 'left', display: 'inline-block', maxWidth: 800, width: '100%' }}>
+                            <h4 style={{ margin: '0 0 12px 0', color: 'var(--brand)' }}><i className="fa-solid fa-check"></i> Bon Verwerkt</h4>
+                            <div style={{ whiteSpace: 'pre-wrap', color: '#fff', fontSize: 14, fontFamily: 'monospace' }}>{receiptResult}</div>
+                        </div>
+                    )}
                 </div>
             )}
         </>
