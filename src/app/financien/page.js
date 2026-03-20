@@ -71,6 +71,7 @@ export default function Financien() {
 
             var omzet = (gasten * prijsPP) + vk;
 
+            var foodcostTotaal = 0;
             var menuOpties = Array.isArray(offerte.menu_selectie) ? offerte.menu_selectie : [];
             menuOpties.forEach(function (sel) {
                 if (sel && (sel.gerecht_naam || sel.naam)) {
