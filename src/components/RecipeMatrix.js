@@ -36,6 +36,11 @@ export default function RecipeMatrix({ action, supabase }) {
 
         setImporting(true);
         try {
+            // Haal gangen op voor validatie om Foreign Key crashes te voorkomen
+            var { data: gangenData } = await supabase.from('gangen').select('slug');
+            var validSlugs = (gangenData || []).map(function (g) { return g.slug; });
+            var fallbackSlug = validSlugs[0] || 'onbekend';
+
             var toImport = selected.map(function (index) {
                 var r = recipes[index];
 
@@ -62,9 +67,22 @@ export default function RecipeMatrix({ action, supabase }) {
                 var safeBereiding = r.bereidingswijze || r.bereiding || r.stappenplan || r.instructies || '';
                 var safeKostprijs = r.inkoop || r.kostprijs_pp || r.kostprijs || r.foodcost || 0;
 
+                // Match Gang Slug veilig
+                var providedSlug = (r.categorie || r.gang_slug || 'hoofdgerechten').toLowerCase();
+                var safeSlug = providedSlug;
+
+                if (!validSlugs.includes(providedSlug)) {
+                    if (providedSlug.endsWith('en') && validSlugs.includes(providedSlug.slice(0, -2))) safeSlug = providedSlug.slice(0, -2);
+                    else if (providedSlug.endsWith('s') && validSlugs.includes(providedSlug.slice(0, -1))) safeSlug = providedSlug.slice(0, -1);
+                    else {
+                        var match = validSlugs.find(function (s) { return providedSlug.includes(s) || s.includes(providedSlug); });
+                        safeSlug = match || fallbackSlug;
+                    }
+                }
+
                 return {
                     naam: r.naam || 'Naamloos gerecht',
-                    gang_slug: (r.categorie || 'hoofdgerechten').toLowerCase(),
+                    gang_slug: safeSlug,
                     beschrijving: r.beschrijving || 'Geen beschrijving gegenereerd',
                     bereidingswijze: safeBereiding,
                     ingredienten: mappedIngs,
