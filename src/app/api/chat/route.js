@@ -262,6 +262,13 @@ export async function POST(req) {
             systemParts.push('Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites).');
         }
 
+        // Voeg ALTIJD deze strikte waarschuwing toe voor gerechten:
+        systemParts.push(
+            'CRUCIALE REGEL: Als je gerechten genereert (via tools zoals createGerecht of createGerechtBulk), ' +
+            'MOET je ALTIJD voor ELK gerecht een uitgebreide array van `ingredienten` en een stappenplan voor `bereidingswijze` genereren. ' +
+            'Het is absoluut verboden om deze velden leeg te laten of over te slaan om tokens te besparen. Verzin creatieve ingrediënten en bereidingswijzen.'
+        );
+
         // ── Voeg live pagina-data toe als die beschikbaar is ───────────────
         if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
             systemParts.push(formatContextForPrompt(contextData));

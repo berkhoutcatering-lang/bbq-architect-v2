@@ -223,15 +223,15 @@ export var TOOL_SCHEMAS = [
         type: 'function',
         function: {
             name: 'createGerecht',
-            description: 'Voeg één nieuw gerecht toe aan de Menu Ontwikkelaar.',
+            description: 'Maak of Bedenk een nieuw los gerecht. CRITICAAL: JE MOET EEN UITGEBREIDE INGREDIENTENLIJST EN BEREIDINGSWIJZE MAKEN. DIT IS ABSOLUUT VERPLICHT EN NIET OPTIONEEL.',
             parameters: {
                 type: 'object',
                 properties: {
-                    naam: { type: 'string', description: 'Naam van het gerecht' },
-                    gang_slug: { type: 'string', description: 'Slug van de gang (bijv. "bite", "hoofdgerecht", "vegetarisch")' },
-                    beschrijving: { type: 'string', description: 'Korte beschrijving' },
-                    bereidingswijze: { type: 'string', description: 'Bereidingswijze' },
-                    ingredienten: { type: 'array', items: { type: 'string' }, description: 'Lijst van ingrediënten' },
+                    naam: { type: 'string' },
+                    gang_slug: { type: 'string', description: 'Kies precies 1: bite, voorgerecht, tussengerecht, hoofdgerecht, bijgerecht, dessert' },
+                    beschrijving: { type: 'string', description: 'Inspirerende beschrijving van het gerecht' },
+                    bereidingswijze: { type: 'string', description: 'Uitgebreid stappenplan voor pannes en prep. MAG NOOIT LEEG ZIJN. Verzin de stappen.' },
+                    ingredienten: { type: 'array', items: { type: 'string' }, description: 'Array met ingrediënten. MAG NOOIT LEEG ZIJN. Verzin wat erin hoort.' },
                     tags: { type: 'array', items: { type: 'string' }, description: 'Tags zoals Vegan, Populair, Nieuw' },
                     allergenen: { type: 'array', items: { type: 'string' } }
                 },
@@ -243,7 +243,7 @@ export var TOOL_SCHEMAS = [
         type: 'function',
         function: {
             name: 'createGerechtBulk',
-            description: 'Voeg meerdere gerechten tegelijk toe aan de Menu Ontwikkelaar. Gebruik dit voor: "20 gerechten met buikspek", "10 vegetarische hapjes", etc. Genereer de gerechten zelf op basis van de vraag van de chef.',
+            description: 'Voeg meerdere gerechten tegelijk toe aan de Menu Ontwikkelaar. CRITICAAL: JE MOET VOOR ELK GERECHT EEN UITGEBREIDE INGREDIENTENLIJST EN BEREIDINGSWIJZE MAKEN. DIT IS ABSOLUUT VERPLICHT EN NIET OPTIONEEL.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -255,9 +255,9 @@ export var TOOL_SCHEMAS = [
                             properties: {
                                 naam: { type: 'string' },
                                 gang_slug: { type: 'string', description: 'bijv. bite, hoofdgerecht, vegetarisch, dessert' },
-                                beschrijving: { type: 'string', description: 'Be Argumentatie: Smaakprofiel' },
-                                bereidingswijze: { type: 'string', description: 'Stappenplan' },
-                                ingredienten: { type: 'array', items: { type: 'string' } },
+                                beschrijving: { type: 'string', description: 'Smaakprofiel (Verplicht)' },
+                                bereidingswijze: { type: 'string', description: 'Uitgebreid Stappenplan. MAG NOOIT LEEG ZIJN. Verzin de bereiding.' },
+                                ingredienten: { type: 'array', items: { type: 'string' }, description: 'Array van ingrediënten strings. MAG NOOIT LEEG ZIJN. Verzin de ingrediënten.' },
                                 tags: { type: 'array', items: { type: 'string' } },
                                 allergenen: { type: 'array', items: { type: 'string' } }
                             },
