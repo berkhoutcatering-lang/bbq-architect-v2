@@ -79,11 +79,36 @@ export default function Inkoop() {
                 }
                 var { actions, cleanText } = parseActions(content);
                 setScanInsight(cleanText);
+
                 if (actions.length > 0) {
-                    setPendingActions(actions);
-                    setScanStatus('READY ✓ — ' + actions.length + ' ITEMS GEVONDEN');
-                    setLastScanData({ b64, actions, cleanText });
-                    showToast('Bon geanalyseerd! ' + actions.length + ' items gevonden.', 'success');
+                    // Aggregatie logica: voeg items met dezelfde naam en prijs samen
+                    const aggregated = [];
+                    actions.forEach(action => {
+                        if (action.type !== 'process_receipt') { aggregated.push(action); return; }
+                        const item = action.data.items?.[0];
+                        if (!item) { aggregated.push(action); return; }
+
+                        const key = `${item.naam.toLowerCase().trim()}_${item.prijs}_${item.eenheid}`;
+                        const existing = aggregated.find(a => {
+                            const eItem = a.data.items?.[0];
+                            return eItem && `${eItem.naam.toLowerCase().trim()}_${eItem.prijs}_${eItem.eenheid}` === key;
+                        });
+
+                        if (existing) {
+                            existing.data.items[0].aantal += item.aantal;
+                            if (!existing.data.items[0].breakdown) existing.data.items[0].breakdown = [existing.data.items[0].aantal - item.aantal];
+                            existing.data.items[0].breakdown.push(item.aantal);
+                        } else {
+                            // Deep copy om vervuiling te voorkomen
+                            const newAction = JSON.parse(JSON.stringify(action));
+                            aggregated.push(newAction);
+                        }
+                    });
+
+                    setPendingActions(aggregated);
+                    setScanStatus('READY ✓ — ' + aggregated.length + ' GROEPEN');
+                    setLastScanData({ b64, actions: aggregated, cleanText });
+                    showToast('Bon geanalyseerd! ' + aggregated.length + ' groepen gevormd.', 'success');
                 } else {
                     setScanStatus('GEEN ITEMS GEVONDEN');
                     showToast('Geen items herkend. Is de foto scherp genoeg?', 'info');
@@ -290,7 +315,8 @@ export default function Inkoop() {
                                                     const aantal = item.aantal || action.data.aantal || 1;
                                                     const eenheid = item.eenheid || action.data.eenheid || 'stks';
                                                     const totaal = prijs * aantal;
-                                                    return `€${prijs.toFixed(2)}/${eenheid} × ${aantal} ${eenheid} = €${totaal.toFixed(2)}`;
+                                                    const breakdown = item.breakdown ? `(${item.breakdown.join(' + ')}) ` : '';
+                                                    return `${breakdown}€${prijs.toFixed(2)}/${eenheid} × ${aantal.toFixed(3)} ${eenheid} = €${totaal.toFixed(2)}`;
                                                 })()}
                                             </div>
                                         </div>
