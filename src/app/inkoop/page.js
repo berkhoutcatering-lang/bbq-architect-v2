@@ -75,20 +75,26 @@ export default function Inkoop() {
                     })
                 });
                 var json = await res.json();
-                var content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
-                var { actions, cleanText } = parseActions(content);
+                if (json.error) throw new Error(json.error);
 
+                var content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
+                if (!content) {
+                    setScanStatus('GEEN RESPONSE');
+                    showToast('AI gaf geen tekst terug. Is de foto te wazig?', 'info');
+                    return;
+                }
+
+                var { actions, cleanText } = parseActions(content);
                 setScanInsight(cleanText);
 
                 if (actions.length > 0) {
                     setPendingActions(actions);
-                    setScanStatus('SCAN VOLTOOID ✓');
-                    // Bewaar data voor archivering
+                    setScanStatus('READY ✓');
                     setLastScanData({ b64, actions, cleanText });
-                    showToast('Bon geanalyseerd! Bevestig de items.', 'success');
+                    showToast('Bon geanalyseerd!', 'success');
                 } else {
                     setScanStatus('GEEN ITEMS GEVONDEN');
-                    showToast('Geen herkenbare items op de bon', 'info');
+                    // De insight box laat nu zien wat de AI wél zei (bv. "Ik kan dit niet lezen")
                 }
             } catch (err) {
                 setScanStatus('SCAN FOUT MET RECEPT');
