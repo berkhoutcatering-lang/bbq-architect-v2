@@ -20,6 +20,7 @@ var NAV_ITEMS = [
     { id: '/uren', label: 'Uren', icon: 'fa-clock' },
     { id: '/materieel', label: 'Materieel', icon: 'fa-wrench' },
     { id: '/boekhouding', label: 'Boekhouding', icon: 'fa-chart-line' },
+    { id: '/financien', label: 'The Vault Analytics', icon: 'fa-vault' },
     { id: '/price-intelligence', label: 'Prijsintelligentie', icon: 'fa-tags' },
     { id: '/foto-archief', label: 'Foto-archief', icon: 'fa-camera' },
     { id: '/ai-chat', label: 'AI Copilot', icon: 'fa-robot' },

@@ -468,6 +468,15 @@ export async function loadPageContextData(pathname, supabase) {
             ctx.offertes = offRes.data || [];
         }
 
+        if (pathname === '/financien') {
+            var fOff = await supabase.from('offertes').select('id,status,datum,aantal_gasten,basis_prijs_pp,vaste_kosten,menu_selectie').in('status', ['goedgekeurd', 'geaccepteerd', 'voltooid']);
+            var fGer = await supabase.from('gerechten').select('id,naam,ingredient_costs');
+            var fUr = await supabase.from('time_logs').select('id,start_time,end_time,status').in('status', ['completed', 'signed']);
+            ctx.financien_omzet_events = fOff.data || [];
+            ctx.financien_foodcosts = fGer.data || [];
+            ctx.financien_uren = fUr.data || [];
+        }
+
         if (pathname === '/facturen') {
             var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum').order('datum', { ascending: false }).limit(20);
             ctx.facturen = facRes.data || [];
