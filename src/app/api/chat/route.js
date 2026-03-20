@@ -320,13 +320,13 @@ export async function POST(req) {
                 '1. Extraheer ELKE regel op de factuur (ook als er 50+ items zijn).',
                 '2. Gebruik de kolom "Omschrijving" voor de productnaam. NOOIT "ONBEKEND" gebruiken.',
                 '3. Gebruik de 13-cijferige code als ID: "Inkoop [ID]: [PROD_NAAM]".',
-                '4. Eenheid: ST = stuks, KG = kilogram. Bij KG is aantal het gewicht.',
-                '5. Prijs: De kolom "Bedrag" (uiterst rechts) gedeeld door "Aantal".',
+                '4. Eenheid: ZEER BELANGRIJK. ST = stuks, KG = kilogram. Bepaal dit op basis van de kolom "eenheid" of de productnaam (bv. 2KG zak).',
+                '5. Prijs: De kolom "Bedrag" (uiterst rechts) gedeeld door "Aantal". dit is de prijs per stuk of per kg.',
                 '6. Sla GEEN items over. Ga door tot de allerlaatste regel.',
                 '',
                 '### OUTPUT FORMAAT:',
                 'Voor elk item:',
-                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ID]: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product","aantal":1.23,"prijs":4.56,"btw_tarief":9}]}}>>>',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop [ID]: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product","aantal":1.23,"eenheid":"kg","prijs":4.56,"btw_tarief":9}]}}>>>',
                 '',
                 'Eindig met één korte "### Pitmaster Insight" sectie met een proactief advies.'
             );
