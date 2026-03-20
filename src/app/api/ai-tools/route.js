@@ -272,10 +272,33 @@ async function handleGetGangen(sb) {
     return { gangen: data || [] };
 }
 
+// ── Helper to resolve AI-hallucinated gang_slugs ─────────
+async function resolveGangSlug(sb, providedSlug) {
+    var { data } = await sb.from('gangen').select('slug');
+    if (!data || data.length === 0) return providedSlug;
+    var slugs = data.map(function (d) { return d.slug; });
+
+    if (slugs.includes(providedSlug)) return providedSlug;
+
+    // Fuzzy match (e.g. 'hoofdgerechten' -> 'hoofdgerecht', 'desserts' -> 'dessert')
+    if (providedSlug) {
+        var str = providedSlug.toLowerCase();
+        if (str.endsWith('en') && slugs.includes(str.slice(0, -2))) return str.slice(0, -2);
+        if (str.endsWith('s') && slugs.includes(str.slice(0, -1))) return str.slice(0, -1);
+        var match = slugs.find(function (s) { return str.includes(s) || s.includes(str); });
+        if (match) return match;
+    }
+
+    // Fallback naar de eerste in de database om Foreign Key crash te voorkomen
+    return slugs[0];
+}
+
 async function handleCreateGerecht(sb, params) {
+    var safeSlug = await resolveGangSlug(sb, params.gang_slug);
+
     var { data, error } = await sb.from('gerechten').insert([{
         naam: params.naam,
-        gang_slug: params.gang_slug,
+        gang_slug: safeSlug,
         beschrijving: params.beschrijving || '',
         bereidingswijze: params.bereidingswijze || '',
         ingredienten: params.ingredienten || [],
@@ -285,17 +308,21 @@ async function handleCreateGerecht(sb, params) {
         volgorde: 99
     }]).select().single();
     if (error) throw new Error(error.message);
-    return { created: data, message: '"' + params.naam + '" toegevoegd aan ' + params.gang_slug };
+    return { created: data, message: '"' + params.naam + '" toegevoegd aan ' + safeSlug };
 }
 
 async function handleCreateGerechtBulk(sb, params) {
     var gerechten = params.gerechten || [];
     if (gerechten.length === 0) return { error: 'Geen gerechten opgegeven' };
 
-    var rows = gerechten.map(function (g, i) {
-        return {
+    // Resolve slugs vooraf
+    var rows = [];
+    for (var i = 0; i < gerechten.length; i++) {
+        var g = gerechten[i];
+        var safeSlug = await resolveGangSlug(sb, g.gang_slug);
+        rows.push({
             naam: g.naam,
-            gang_slug: g.gang_slug,
+            gang_slug: safeSlug,
             beschrijving: g.beschrijving || '',
             bereidingswijze: g.bereidingswijze || '',
             ingredienten: g.ingredienten || [],
@@ -303,8 +330,8 @@ async function handleCreateGerechtBulk(sb, params) {
             allergenen: g.allergenen || [],
             actief: false,
             volgorde: 900 + i
-        };
-    });
+        });
+    }
 
     var settled = await Promise.allSettled(
         rows.map(function (row) { return sb.from('gerechten').insert([row]).select().single(); })
