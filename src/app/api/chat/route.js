@@ -322,7 +322,7 @@ export async function POST(req) {
                 '',
                 '### EXTRACTIE REGELS (VERPLICHT):',
                 '1. Lees ELKE productregel van boven naar beneden. Sla NIETS over.',
-                '2. naam: kolom "Artikelomschrijving". Gebruik NOOIT het woord "ONBEKEND".',
+                '2. naam: kopieer de kolom "Artikelomschrijving" LETTERLIJK, teken voor teken, EXACT zoals gedrukt op de factuur. Geen spellingsverbeteringen, geen aanvullingen, geen vertaling. Als je een letter niet zeker weet, schrijf dan wat er staat.',
                 '3. prijs: gebruik "Prijs st/kg na korting" (laatste kolom). Geen korting? Gebruik "Prijs st/kg". Dit is de prijs PER kg/stuk/liter.',
                 '4. aantal: pak het GETAL uit "Stuks per eenheid" (bijv. "2,045 KG" → 2.045). Als er staat "1 ST" → 1.',
                 '5. eenheid: pak de EENHEID uit "Stuks per eenheid":',
