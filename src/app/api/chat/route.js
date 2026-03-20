@@ -313,23 +313,24 @@ export async function POST(req) {
                 '**VISION MODE GEACTIVEERD (STEERBARE ANALYSE)**',
                 'Je hebt een complexe afbeelding (factuur/bon) ontvangen. Voer de volgende stappen uit in je antwoord:',
                 '',
-                '### STAP 1: VISUELE BESCHRIJVING',
-                'Beschrijf kort wat je ziet (welke winkel, welke datum, algemene layout).',
+                '### STAP 1: VISUELE IDENTIFICATIE',
+                'Benoem de winkel (Makro/Sligro) en de datum van de bon.',
                 '',
-                '### STAP 2: GRID ANALYSE (CHAIN-OF-THOUGHT)',
-                'Analyseer de tabel-structuur. Benoem de kolommen die je ziet (bijv: Art.nr, Omschrijving, Aantal, Eenheid, Prijs, Totaal). Dit helpt je om geen data te missen.',
+                '### STAP 2: KOLOM-MAPPING (CHAIN-OF-THOUGHT)',
+                'Identificeer de kolommen. Bij groothandels is de laatste kolom meestal het "Bedrag" (totaal per regel). Gebruik DIT bedrag voor de prijs per item (of bereken het indien nodig).',
                 '',
-                '### STAP 3: DATA EXTRACTIE (LEES ALLES)',
-                'Extraheer ELK fysiek item van de bon. Sla NIETS over. Ook artikelen die we nog niet kennen moeten ingeboekt worden.',
-                'Voor elk item bepaal je: Naam, Aantal, Eenheid (stuks/kg/collo), Stukprijs en BTW-tarief.',
+                '### STAP 3: MASS DATA EXTRACTIE (STRIKT!)',
+                'Extraheer ELKE regel. Sla GEEN items over. Ook niet als er 40 items op staan.',
+                '⚠️ BELANGRIJK: Schrijf GEEN lijst met producten in gewone tekst (dat verspilt tokens). Ga DIRECT over naar de JSON actieblokken.',
                 '',
-                '### STAP 4: JSON ACTIONS (INDIVIDUEEL)',
-                'Genereer voor ELK gevonden product op de bon een apart <<<ACTION:...>>> blok.',
-                'Gebruik de gevonden winkelnaam en datum voor elk blok.',
-                'Match de Artikelomschrijving alleen tegen `contextData.inventory` voor een betere naamgeving, maar voeg het item ALTIJD toe, ook als er geen match is.',
+                '### STAP 4: JSON ACTIONS (FORMAAT)',
+                'Genereer voor ELK item op de bon EXACT dit formaat:',
+                '<<<ACTION:{"type":"process_receipt","description":"Inkoop: [NAAM]","data":{"winkel":"Winkelnaam","datum":"YYYY-MM-DD","totaal_bedrag":123.45,"items":[{"naam":"Product","aantal":1,"prijs":12.34,"btw_tarief":21}]}}>>>',
                 '',
-                '### STAP 5: PITMASTER INSIGHT & MATCHING',
-                'Geef een proactief advies als de inkoop nuttig is voor een aankomend event in `contextData.events`.'
+                '⚠️ REGEL: De "prijs" in het JSON blok moet het bedrag per eenheid zijn. Gebruik de kolom "Bedrag" aan de rechterkant om de prijs te bepalen. Geen €0.00!',
+                '',
+                '### STAP 5: PITMASTER INSIGHT',
+                'Geef aan het einde één kort overkoepelend advies over de totale inkoop.'
             );
         }
 
@@ -348,7 +349,7 @@ export async function POST(req) {
                 model: modelName,
                 messages: groqMessages,
                 temperature: hasImage ? 0.1 : (mode === 'brainstorm' ? 0.85 : 0.7),
-                max_tokens: mode === 'brainstorm' ? 6000 : 4000,
+                max_tokens: hasImage ? 8000 : (mode === 'brainstorm' ? 6000 : 4000),
             }),
         });
 
