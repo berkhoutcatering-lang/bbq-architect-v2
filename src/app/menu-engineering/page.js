@@ -111,7 +111,7 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails }) {
 }
 
 // ── Gerecht Details / Edit Modal ────────────────────────────────────────────
-function GerechtDetailsModal({ gerecht, onSave, onClose, supabase }) {
+function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase }) {
   if (!gerecht) return null;
 
   function stringifyArray(arr) {
@@ -148,6 +148,15 @@ function GerechtDetailsModal({ gerecht, onSave, onClose, supabase }) {
     else alert('Fout bij opslaan: ' + error.message);
   }
 
+  async function handleDelete() {
+    if (!confirm('Let op: weet je zeker dat je dit gerecht permanent wilt verwijderen?')) return;
+    setSaving(true);
+    var { error } = await supabase.from('gerechten').delete().eq('id', gerecht.id);
+    setSaving(false);
+    if (!error) onDelete(gerecht.id);
+    else alert('Fout bij verwijderen: ' + error.message);
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={onClose}>
       <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16, padding: '24px 28px', width: 600, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }} onClick={function (e) { e.stopPropagation(); }}>
@@ -180,11 +189,16 @@ function GerechtDetailsModal({ gerecht, onSave, onClose, supabase }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: 'rgba(255,255,255,.5)', fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 800, cursor: 'pointer' }}>
-            {saving ? 'Opslaan...' : 'Wijzigingen Opslaan'}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <button onClick={handleDelete} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.1)', color: '#ef4444', fontWeight: 600, cursor: 'pointer', transition: '0.2s' }} onMouseEnter={function (e) { e.currentTarget.style.background = 'rgba(239,68,68,.2)'; }} onMouseLeave={function (e) { e.currentTarget.style.background = 'rgba(239,68,68,.1)'; }}>
+            <i className="fa-solid fa-trash"></i> Verwijderen
           </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: 'rgba(255,255,255,.5)', fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 800, cursor: 'pointer' }}>
+              {saving ? 'Laden...' : 'Wijzigingen Opslaan'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -447,6 +461,12 @@ export default function MenuEngineering() {
     showToast('✅ Gerecht succcesvol gewijzigd!');
   }
 
+  function handleDeleteDetails(id) {
+    setGerechten(function (prev) { return prev.filter(function (g) { return g.id !== id; }); });
+    setViewingGerecht(null);
+    showToast('❌ Gerecht verwijderd!');
+  }
+
   function showToast(msg) {
     setToast(msg);
     setTimeout(function () { setToast(null); }, 3500);
@@ -701,6 +721,7 @@ export default function MenuEngineering() {
       <GerechtDetailsModal
         gerecht={viewingGerecht}
         onSave={handleSaveDetails}
+        onDelete={handleDeleteDetails}
         onClose={function () { setViewingGerecht(null); }}
         supabase={supabase}
       />
