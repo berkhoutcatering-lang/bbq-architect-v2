@@ -162,6 +162,57 @@ export async function generatePDF(opts) {
             return;
         }
 
+        // ═══ RECEIPT / BON PDF ═══
+        if (type === 'receipt') {
+            var jspdf3 = await loadJsPDF();
+            var doc3 = new jspdf3.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            var pageW3 = 210; var mL3 = 20;
+
+            // Brand Header
+            doc3.setFillColor.apply(doc3, GOLD);
+            doc3.rect(0, 0, pageW3, 3, 'F');
+            doc3.setFontSize(18); doc3.setTextColor.apply(doc3, GOLD); doc3.setFont('helvetica', 'bold');
+            doc3.text('DIGITAAL BON-ARCHIEF', pageW3 / 2, 15, { align: 'center' });
+
+            // Info
+            doc3.setFontSize(10); doc3.setTextColor.apply(doc3, BLACK);
+            doc3.text('Winkel: ' + (opts.winkel || 'Onbekend'), mL3, 25);
+            doc3.text('Datum: ' + nlDate(opts.datum || ''), mL3, 30);
+            doc3.text('Totaal: ' + eur(opts.totaal_bedrag || 0), mL3, 35);
+
+            // Items Table
+            var receiptHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW']];
+            var receiptBody = (opts.items || []).map(function (i) {
+                return [i.naam || '', i.aantal || 1, eur(i.prijs), (i.btw_tarief || 21) + '%'];
+            });
+
+            doc3.autoTable({
+                startY: 45,
+                head: receiptHead,
+                body: receiptBody,
+                margin: { left: mL3, right: mL3 },
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: GOLD }
+            });
+
+            // Original Image (The "Proof")
+            if (opts.imageData) {
+                var imgY = doc3.lastAutoTable.finalY + 10;
+                doc3.setFontSize(9); doc3.setFont('helvetica', 'bold');
+                doc3.text('ORIGINEEL BEWIJS:', mL3, imgY);
+                imgY += 5;
+
+                // Keep image within page bounds
+                var imgW = 120;
+                var imgH = 160;
+                // We don't have the natural aspect ratio easily here, so we fit it 
+                doc3.addImage(opts.imageData, 'JPEG', mL3, imgY, imgW, imgH, undefined, 'FAST');
+            }
+
+            doc3.save('BON_' + (opts.winkel || 'scan').replace(/[^a-zA-Z0-9]/g, '_') + '_' + (opts.datum || 'nu') + '.pdf');
+            return;
+        }
+
         // ═══ INVOICE / QUOTE PDF ═══
         var form = opts.form;
         var s = opts.settings || {};

@@ -53,3 +53,35 @@ export var DAGEN = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 export function genNummer(prefix, nr) {
     return prefix + String(nr).padStart(3, '0');
 }
+
+// Resize image to max dimensions to avoid API limits and 'expected pattern' errors
+export function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200) {
+    return new Promise(function (resolve) {
+        var img = new Image();
+        img.src = base64Str;
+        img.onload = function () {
+            var canvas = document.createElement('canvas');
+            var width = img.width;
+            var height = img.height;
+
+            if (width > height) {
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width *= maxHeight / height;
+                    height = maxHeight;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85)); // Use JPEG for better compression
+        };
+        img.onerror = function () { resolve(base64Str); }; // Fallback
+    });
+}

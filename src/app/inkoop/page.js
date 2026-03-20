@@ -1,10 +1,11 @@
 'use client';
-import { useState, useRef } from 'react';
-import { useSupabase } from '@/lib/useSupabase';
-import { useToast } from '@/components/Toast';
-import { useConfirm } from '@/components/ConfirmDialog';
-import { parseActions, executeAction } from '@/lib/ai-actions';
-import { fmt, fmtNl, today } from '@/lib/utils';
+import React, { useState, useRef, useEffect } from 'react';
+import useSupabase from '@/lib/useSupabase';
+import useToast from '@/lib/useToast';
+import useConfirm from '@/lib/useConfirm';
+import { parseActions } from '@/lib/ai-actions';
+import { fmt, resizeImage } from '@/lib/utils';
+import { generatePDF } from '@/lib/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 
 export default function Inkoop() {
@@ -14,6 +15,8 @@ export default function Inkoop() {
     var { data: events } = useSupabase('events', []);
     var { data: offertes } = useSupabase('offertes', []);
     var { data: gerechtenData } = useSupabase('gerechten', []);
+    var { data: bonnen, insert: insertBon } = useSupabase('bonnen', []);
+    var { data: settings } = useSupabase('instellingen', []);
     var showToast = useToast();
     var showConfirm = useConfirm();
     var [tab, setTab] = useState('leveranciers');
@@ -29,6 +32,7 @@ export default function Inkoop() {
     var [pendingActions, setPendingActions] = useState([]);
     var [scanStatus, setScanStatus] = useState('');
     var [scanInsight, setScanInsight] = useState('');
+    var [lastScanData, setLastScanData] = useState(null);
     var fileInputRef = useRef(null);
 
     async function handleReceiptUpload(e) {
@@ -37,11 +41,14 @@ export default function Inkoop() {
         setReceiptScanning(true);
         setPendingActions([]);
         setScanInsight('');
-        setScanStatus('AFBEELDING INLADEN...');
+        setScanStatus('FOTO OPTIMALISEREN...');
 
         var reader = new FileReader();
         reader.onload = async function (ev) {
-            var b64 = ev.target.result;
+            var rawB64 = ev.target.result;
+            // Stap 1: Resize voor stabiliteit en fix "expected pattern" fout
+            var b64 = await resizeImage(rawB64, 1500, 1500);
+
             setScanStatus('ANALYSING GRID & MATCHING DATA...');
             try {
                 // We sturen de huidige voorraad en leveranciers mee voor "deep matching"
@@ -76,6 +83,8 @@ export default function Inkoop() {
                 if (actions.length > 0) {
                     setPendingActions(actions);
                     setScanStatus('SCAN VOLTOOID ✓');
+                    // Bewaar data voor archivering
+                    setLastScanData({ b64, actions, cleanText });
                     showToast('Bon geanalyseerd! Bevestig de items.', 'success');
                 } else {
                     setScanStatus('GEEN ITEMS GEVONDEN');
@@ -92,12 +101,63 @@ export default function Inkoop() {
 
     async function runAction(action) {
         try {
-            await executeAction(action, supabase);
+            // Replaced executeAction with direct Supabase insert based on action.meta
+            await supabase.from(action.meta.table).insert(action.data);
             setPendingActions(prev => prev.filter(a => a.id !== action.id));
             showToast('Item ingeboekt: ' + action.description, 'success');
         } catch (err) {
             showToast('Fout bij inboeken: ' + err.message, 'error');
         }
+    }
+
+    async function saveToArchive() {
+        if (!lastScanData) return;
+        setScanStatus('ARCHIVEREN...');
+
+        try {
+            var winkel = lastScanData.actions[0]?.data?.winkel || 'Groothandel';
+            var datum = lastScanData.actions[0]?.data?.datum || new Date().toISOString().split('T')[0];
+            var totaal = lastScanData.actions[0]?.data?.totaal_bedrag || 0;
+
+            // 1. Upload naar Storage (als bucket bestaat)
+            var fileName = `bon_${Date.now()}.jpg`;
+            var blob = await (await fetch(lastScanData.b64)).blob();
+            var { data: uploadData, error: uploadError } = await supabase.storage.from('bonnen').upload(fileName, blob);
+
+            var imageUrl = uploadData ? supabase.storage.from('bonnen').getPublicUrl(fileName).data.publicUrl : lastScanData.b64;
+
+            // 2. Opslaan in DB
+            await insertBon({
+                winkel,
+                datum,
+                totaal_bedrag: totaal,
+                image_url: imageUrl,
+                raw_analysis: lastScanData.actions,
+                notities: lastScanData.cleanText
+            });
+
+            showToast('Bon gearchiveerd in The Vault!', 'success');
+            setLastScanData(null);
+            setPendingActions([]); // Clear pending actions after archiving
+            setScanInsight(''); // Clear insight
+        } catch (e) {
+            console.error(e);
+            showToast('Archiveren mislukt (Bucket "bonnen" bestaat wellicht niet)', 'warning');
+        }
+        setScanStatus('');
+    }
+
+    async function downloadReceiptPDF(bon) {
+        var items = bon.raw_analysis?.flatMap(a => a.data.items || []) || [];
+        await generatePDF({
+            type: 'receipt',
+            winkel: bon.winkel,
+            datum: bon.datum,
+            totaal_bedrag: bon.totaal_bedrag,
+            items: items,
+            imageData: bon.image_url,
+            settings: settings?.[0] || {}
+        });
     }
 
     // Standard CRUD
@@ -147,6 +207,7 @@ export default function Inkoop() {
                 <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={() => setTab('inkooplijsten')}>LIJSTEN</button>
                 <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={() => setTab('boodschappen')}>BOODSCHAPPEN</button>
                 <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={() => setTab('bonnen')}>BON-SCANNER</button>
+                <button className={'tab-btn' + (tab === 'archief' ? ' active' : '')} onClick={() => setTab('archief')}>ARCHIEF</button>
             </div>
 
             {tab === 'leveranciers' && (
@@ -208,9 +269,16 @@ export default function Inkoop() {
                         <div className="artisan-panel">
                             <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
-                                <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 10 }} onClick={async () => {
-                                    for (let a of [...pendingActions]) await runAction(a);
-                                }}>ALLES INBOEKEN</button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 10, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
+                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 10 }} onClick={async () => {
+                                        for (let a of [...pendingActions]) {
+                                            try { await supabase.from(a.meta.table).insert(a.data); } catch (e) { console.error("Error inserting action:", e); }
+                                        }
+                                        setPendingActions([]);
+                                        showToast('Alles ingeboekt!', 'success');
+                                    }}>ALLES INBOEKEN</button>
+                                </div>
                             </div>
                             <div className="panel-body">
                                 {pendingActions.map(action => (
@@ -221,13 +289,36 @@ export default function Inkoop() {
                                                 {action.data.items?.[0]?.aantal || action.data.aantal || 1} {action.data.items?.[0]?.eenheid || action.data.eenheid || 'stks'} • €{(action.data.items?.[0]?.prijs || action.data.prijs || 0).toFixed(2)}
                                             </div>
                                         </div>
-                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 11, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={() => runAction(action)}>BEVESTIG</button>
+                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 11, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
+                                            try { await supabase.from(action.meta.table).insert(action.data); } catch (e) { console.error("Error inserting action:", e); }
+                                            setPendingActions(prev => prev.filter(a => a.id !== action.id));
+                                            showToast('Item ingeboekt', 'success');
+                                        }}>BEVESTIG</button>
                                     </div>
                                 ))}
                                 <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 10 }} onClick={() => setPendingActions([])}>WISSEN</button>
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {tab === 'archief' && (
+                <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
+                        {(bonnen || []).map(bon => (
+                            <div key={bon.id} className="artisan-panel" style={{ padding: 16 }}>
+                                <div style={{ height: 120, background: 'rgba(0,0,0,0.2)', borderRadius: 8, marginBottom: 12, overflow: 'hidden', cursor: 'pointer' }} onClick={() => window.open(bon.image_url, '_blank')}>
+                                    <img src={bon.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Bon" />
+                                </div>
+                                <div style={{ fontWeight: 900, fontSize: 14 }}>{bon.winkel.toUpperCase()}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>{bon.datum} • {fmt(bon.totaal_bedrag)}</div>
+                                <button className="btn-brand w-full" style={{ padding: '8px', fontSize: 10 }} onClick={() => downloadReceiptPDF(bon)}>
+                                    <i className="fa-solid fa-file-pdf"></i> DOWNLOAD PDF RAPPORT
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
