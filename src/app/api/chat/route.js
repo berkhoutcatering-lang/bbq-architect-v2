@@ -306,7 +306,7 @@ export async function POST(req) {
         if (messages && messages.length > 0) {
             hasImage = messages.some(function (m) { return Array.isArray(m.content) && m.content.some(function (c) { return c.type === 'image_url'; }); });
         }
-        var modelName = hasImage ? 'llama-3.2-90b-vision-preview' : 'llama-3.3-70b-versatile';
+        var modelName = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
 
         if (hasImage) {
             systemParts.push(
