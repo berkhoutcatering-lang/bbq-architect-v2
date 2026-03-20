@@ -1,113 +1,94 @@
 export function printHaccpLabel(data) {
     // data: { titel, datum_gemaakt, datum_tht, allergenen, notities }
 
-    // Create a hidden iframe for printing
-    var iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
+    // We tekenen de label op een canvas van 400x300 pixels (40x30mm verhouding)
+    var canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 300;
+    var ctx = canvas.getContext('2d');
 
-    var doc = iframe.contentWindow.document;
+    // Witte achtergrond
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 400, 300);
 
-    doc.open();
-    doc.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                /* Critical: Set physical page size to 40mm x 30mm */
-                @page { margin: 0; size: 40mm 30mm; }
-                body {
-                    margin: 0;
-                    padding: 0;
-                    width: 40mm;
-                    height: 30mm;
-                    font-family: Arial, sans-serif;
-                    background: white;
-                    color: black;
-                    overflow: hidden;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: flex-start;
-                }
-                .label-container {
-                    width: 100%;
-                    height: 100%;
-                    box-sizing: border-box;
-                    padding: 2mm 3mm;
-                    border: 1px solid transparent; 
-                    display: flex;
-                    flex-direction: column;
-                }
-                .title {
-                    font-size: 10px;
-                    font-weight: bold;
-                    text-transform: uppercase;
-                    line-height: 1.1;
-                    margin-bottom: 2px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .meta {
-                    font-size: 8px;
-                    margin-bottom: 2px;
-                    line-height: 1;
-                }
-                .meta span {
-                    display: inline-block;
-                    margin-right: 4px;
-                }
-                .date-row {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 8px;
-                    font-weight: bold;
-                    margin-top: 2px;
-                    border-top: 1px solid black;
-                    padding-top: 2px;
-                }
-                .divider {
-                    border-top: 1px dotted black;
-                    margin: 2px 0;
-                }
-                .notes {
-                    font-size: 7px;
-                    line-height: 1.1;
-                    overflow: hidden;
-                    flex-grow: 1;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="label-container">
-                <div class="title">${data.titel || 'Onbekend Gerecht'}</div>
-                <div class="meta">
-                    <strong>Allerg:</strong> ${data.allergenen ? data.allergenen.join(', ') : 'Geen'}
-                </div>
-                <div class="notes">
-                    ${data.notities || 'Geen opslag instructies'}
-                </div>
-                <div class="date-row">
-                    <span>In: ${data.datum_gemaakt || new Date().toISOString().split('T')[0]}</span>
-                    <span>THT: ${data.datum_tht || 'Zie batch'}</span>
-                </div>
-            </div>
-        </body>
-        </html>
-    `);
-    doc.close();
+    // Zwarte tekst (Thermische printer)
+    ctx.fillStyle = '#000000';
 
-    // Wait for the iframe to load, then print it, then remove it
-    iframe.onload = function () {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
-    };
+    // 1. Titel (Groot & Vet)
+    ctx.font = 'bold 36px Arial';
+    // Knip lange titels af
+    var title = data.titel || 'Onbekend Gerecht';
+    if (title.length > 20) title = title.substring(0, 18) + '..';
+    ctx.fillText(title, 20, 50);
+
+    // Lijn eronder
+    ctx.beginPath();
+    ctx.moveTo(20, 65);
+    ctx.lineTo(380, 65);
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // 2. Allergenen
+    ctx.font = '20px Arial';
+    var allerg = data.allergenen && data.allergenen.length > 0 ? data.allergenen.join(', ') : 'Geen';
+    ctx.fillText('Allerg: ' + allerg, 20, 100);
+
+    // 3. Notities (bijv instructies / weight)
+    ctx.font = '22px Arial';
+    var note = data.notities || 'Geen opslag instructies';
+    if (note.length > 35) note = note.substring(0, 32) + '...';
+    ctx.fillText(note, 20, 140);
+
+    // Lijn boven datum
+    ctx.beginPath();
+    ctx.moveTo(20, 240);
+    ctx.lineTo(380, 240);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 4. Datums (Gemaakt & THT)
+    ctx.font = 'bold 24px Arial';
+    var inDate = data.datum_gemaakt || new Date().toISOString().split('T')[0];
+    var thtDate = data.datum_tht || 'Zie batch';
+    ctx.fillText('In: ' + inDate, 20, 275);
+
+    // Align rechts voor THT
+    ctx.textAlign = 'right';
+    ctx.fillText('THT: ' + thtDate, 380, 275);
+
+    try {
+        // Synchronous Base64 URL creation keeps the iOS User Gesture alive!
+        var dataUrl = canvas.toDataURL('image/png');
+
+        // Convert Base64 to Blob synchronously in memory
+        var arr = dataUrl.split(',');
+        var mime = arr[0].match(/:(.*?);/)[1];
+        var bstr = atob(arr[1]);
+        var n = bstr.length;
+        var u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        var blob = new File([u8arr], 'HACCP-Label-BBQ-Architect.png', { type: mime });
+
+        // 5. Trigger Web Share API for iOS/Android
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [blob] })) {
+            navigator.share({
+                title: 'Print HACCP Label',
+                text: 'HACCP Label voor Eleph-Label',
+                files: [blob]
+            }).catch(function (error) {
+                console.log('Error sharing:', error);
+            });
+        } else {
+            // Fallback: download direct as file on desktops
+            var link = document.createElement('a');
+            link.download = 'HACCP-Label-BBQ-Architect.png';
+            link.href = dataUrl;
+            link.click();
+        }
+    } catch (e) {
+        console.error("Fout bij genereren label image:", e);
+        alert('Kan label niet delen/downloaden op dit apparaat.');
+    }
 }
