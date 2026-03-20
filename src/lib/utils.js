@@ -55,7 +55,7 @@ export function genNummer(prefix, nr) {
 }
 
 // Resize image to max dimensions to avoid API limits and 'expected pattern' errors
-export function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200) {
+export function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
     return new Promise(function (resolve) {
         var img = new Image();
         img.src = base64Str;
@@ -80,7 +80,7 @@ export function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200) {
             canvas.height = height;
             var ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.85)); // Use JPEG for better compression
+            resolve(canvas.toDataURL('image/jpeg', quality)); // Dynamic quality
         };
         img.onerror = function () { resolve(base64Str); }; // Fallback
     });
