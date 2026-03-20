@@ -1,8 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { parseActions, executeAction } from '@/lib/ai-actions';
+import { fmt, fmtNl, today } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function Inkoop() {
     var { data: leveranciers, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase('leveranciers', []);
@@ -19,92 +22,86 @@ export default function Inkoop() {
     var [newInkEvent, setNewInkEvent] = useState('');
     var [newInkItem, setNewInkItem] = useState({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' });
     var [boodschappenOfferte, setBoodschappenOfferte] = useState('');
+
+    // Receipt Scanning State
     var [receiptScanning, setReceiptScanning] = useState(false);
-    var [receiptResult, setReceiptResult] = useState(null);
+    var [pendingActions, setPendingActions] = useState([]);
+    var [scanStatus, setScanStatus] = useState('');
+    var fileInputRef = useRef(null);
 
     async function handleReceiptUpload(e) {
         var file = e.target.files[0];
         if (!file) return;
         setReceiptScanning(true);
-        setReceiptResult(null);
+        setPendingActions([]);
+        setScanStatus('AFBEELDING INLADEN...');
+
         var reader = new FileReader();
         reader.onload = async function (ev) {
             var b64 = ev.target.result;
+            setScanStatus('LLAMA VISION ANALYSEERT BON...');
             try {
                 var res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        pageContext: '/inkoop',
                         messages: [{
                             role: 'user',
                             content: [
-                                { type: 'text', text: 'Strikte instructie: Voer de process_receipt tool uit op deze kassabon. Zoek naar items, prijzen en aantallen. Retouneer ALLEEN de call.' },
+                                { type: 'text', text: 'Scan deze kassabon. Zoek naar items, prijzen en aantallen. Gebruik de process_receipt tool.' },
                                 { type: 'image_url', image_url: { url: b64 } }
                             ]
                         }]
                     })
                 });
                 var json = await res.json();
-                setReceiptResult(json.response || "De AI heeft de bon succesvol ingeboekt.");
-                // Update table stats if tools were called
-                if (json.actions && json.actions.length > 0) {
-                    showToast('Bon succesvol verwerkt (' + json.actions[0].data.summary + ')', 'success');
+                var content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
+                var { actions } = parseActions(content);
+
+                if (actions.length > 0) {
+                    setPendingActions(actions);
+                    setScanStatus('SCAN VOLTOOID ✓');
+                    showToast('Bon geanalyseerd! Bevestig de items.', 'success');
                 } else {
-                    showToast('Bon ingelezen', 'success');
+                    setScanStatus('GEEN ITEMS GEVONDEN');
+                    showToast('Geen herkenbare items op de bon', 'info');
                 }
             } catch (err) {
-                showToast('Fout bij scannen: ' + err.message, 'error');
+                setScanStatus('SCAN FOUT MET RECEPT');
+                showToast('Fout: ' + err.message, 'error');
             }
             setReceiptScanning(false);
         };
         reader.readAsDataURL(file);
     }
 
-    // Leverancier CRUD
-    function newLeverancier() {
-        setEditingLev('new');
-        setLevForm({ naam: '', type: 'Overig', contact: '', email: '', tel: '' });
-    }
-    function editLeverancier(l) { setEditingLev(l.id); setLevForm(JSON.parse(JSON.stringify(l))); }
-    function setLevField(key, val) { setLevForm(Object.assign({}, levForm, { [key]: val })); }
-
-    function saveLeverancier() {
-        if (!levForm.naam) { showToast('Vul een naam in', 'error'); return; }
-        if (editingLev === 'new') {
-            insertLev(levForm).then(function () { showToast('Leverancier toegevoegd', 'success'); setEditingLev(null); setLevForm(null); });
-        } else {
-            var { id, created_at, ...rest } = levForm;
-            updateLev(editingLev, rest).then(function () { showToast('Leverancier bijgewerkt', 'success'); setEditingLev(null); setLevForm(null); });
+    async function runAction(action) {
+        try {
+            await executeAction(action, supabase);
+            setPendingActions(prev => prev.filter(a => a.id !== action.id));
+            showToast('Item ingeboekt: ' + action.description, 'success');
+        } catch (err) {
+            showToast('Fout bij inboeken: ' + err.message, 'error');
         }
     }
 
-    function deleteLeverancier() {
-        showConfirm('Leverancier verwijderen?', function () {
-            removeLev(editingLev).then(function () { showToast('Verwijderd', 'success'); setEditingLev(null); setLevForm(null); });
-        });
+    // Standard CRUD
+    function newLeverancier() { setEditingLev('new'); setLevForm({ naam: '', type: 'Overig', contact: '', email: '', tel: '' }); }
+    function editLeverancier(l) { setEditingLev(l.id); setLevForm(JSON.parse(JSON.stringify(l))); }
+    function saveLeverancier() {
+        if (!levForm.naam) { showToast('Vul een naam in', 'error'); return; }
+        if (editingLev === 'new') {
+            insertLev(levForm).then(function () { showToast('Leverancier toegevoegd', 'success'); setEditingLev(null); });
+        } else {
+            var { id, ...rest } = levForm;
+            updateLev(editingLev, rest).then(function () { showToast('Bijgewerkt', 'success'); setEditingLev(null); });
+        }
     }
 
-    // Inkooplijst
-    function createInkooplijst() {
-        if (!newInkEvent) { showToast('Kies een event', 'error'); return; }
-        insertInk({ event_id: parseInt(newInkEvent), items: [] }).then(function () { showToast('Inkooplijst aangemaakt', 'success'); setNewInkEvent(''); });
-    }
-
-    function addInkItem(list) {
-        if (!newInkItem.desc) return;
-        var items = (list.items || []).concat([Object.assign({ id: Date.now(), besteld: false }, newInkItem)]);
-        updateInk(list.id, { items: items }).then(function () { setNewInkItem({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' }); });
-    }
-
-    function toggleInkItem(list, itemId) {
-        var items = (list.items || []).map(function (i) { return i.id === itemId ? Object.assign({}, i, { besteld: !i.besteld }) : i; });
-        updateInk(list.id, { items: items });
-    }
-
-    // ── Boodschappen-Engine ──
+    // Boodschappen Engine
     var boodOfferte = offertes.find(function (o) { return String(o.id) === boodschappenOfferte; });
     var winkelGroepen = { Sligro: [], Crisp: [], PLUS: [], Overig: [] };
-
     if (boodOfferte && boodOfferte.menu_selectie) {
         var menuSel = typeof boodOfferte.menu_selectie === 'string' ? JSON.parse(boodOfferte.menu_selectie) : boodOfferte.menu_selectie;
         Object.values(menuSel || {}).forEach(function (dishes) {
@@ -115,276 +112,122 @@ export default function Inkoop() {
                     dish.ingredienten.forEach(function (ing) {
                         var winkel = winkels[ing] || 'Overig';
                         if (!winkelGroepen[winkel]) winkelGroepen[winkel] = [];
-                        // Avoid duplicates
-                        if (winkelGroepen[winkel].indexOf(ing) < 0) {
-                            winkelGroepen[winkel].push(ing);
-                        }
+                        if (winkelGroepen[winkel].indexOf(ing) < 0) winkelGroepen[winkel].push(ing);
                     });
                 }
             });
         });
     }
 
-    function copyBoodschappenToClipboard() {
-        var lines = [];
-        lines.push('🛒 BOODSCHAPPENLIJST — ' + (boodOfferte ? boodOfferte.client_naam : '') + ' (' + (boodOfferte ? boodOfferte.datum : '') + ')');
-        lines.push('');
-        Object.keys(winkelGroepen).forEach(function (winkel) {
-            var items = winkelGroepen[winkel];
-            if (items.length > 0) {
-                var icoon = winkel === 'Sligro' ? '🏪' : winkel === 'Crisp' ? '📦' : winkel === 'PLUS' ? '🛒' : '📋';
-                lines.push(icoon + ' ' + winkel.toUpperCase());
-                items.forEach(function (item) { lines.push('  ☐ ' + item); });
-                lines.push('');
-            }
-        });
-        navigator.clipboard.writeText(lines.join('\n')).then(function () {
-            showToast('📋 Lijst gekopieerd naar klembord!', 'success');
-        });
-    }
-
-    var winkelKleuren = { Sligro: '#e67e22', Crisp: '#27ae60', PLUS: '#2980b9', Overig: '#95a5a6' };
-    var winkelIcoon = { Sligro: '🏪', Crisp: '📦', PLUS: '🛒', Overig: '📋' };
-
-    // Leverancier editor
-    if (editingLev !== null && levForm) {
-        return (
-            <div className="panel">
-                <div className="panel-head">
-                    <h3>{editingLev === 'new' ? 'Nieuwe Leverancier' : 'Leverancier Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditingLev(null); setLevForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
-                </div>
-                <div className="panel-body">
-                    <div className="form-grid">
-                        <div className="field"><label>Naam</label><input value={levForm.naam} onChange={function (e) { setLevField('naam', e.target.value); }} /></div>
-                        <div className="field"><label>Type</label>
-                            <select value={levForm.type} onChange={function (e) { setLevField('type', e.target.value); }}>
-                                {['Vlees', 'Groente', 'Dranken', 'Overig'].map(function (t) { return <option key={t}>{t}</option>; })}
-                            </select>
-                        </div>
-                        <div className="field"><label>Contactpersoon</label><input value={levForm.contact} onChange={function (e) { setLevField('contact', e.target.value); }} /></div>
-                        <div className="field"><label>Email</label><input value={levForm.email} onChange={function (e) { setLevField('email', e.target.value); }} /></div>
-                        <div className="field"><label>Telefoon</label><input value={levForm.tel} onChange={function (e) { setLevField('tel', e.target.value); }} /></div>
-                    </div>
-                    <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveLeverancier}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        {editingLev !== 'new' && <button className="btn btn-red" onClick={deleteLeverancier}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
-                    </div>
+    return (
+        <div className="artisan-page inkoop-page">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <div>
+                    <h1 className="hero-title">INKOOP & LOGISTIEK</h1>
+                    <p style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 1 }}>BEHEER LEVERANCIERS, BOODSCHAPPEN EN BONNEN</p>
                 </div>
             </div>
-        );
-    }
 
-    return (
-        <>
-            <div className="tab-bar">
-                <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={function () { setTab('leveranciers'); }}>Leveranciers</button>
-                <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={function () { setTab('inkooplijsten'); }}>Inkooplijsten</button>
-                <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={function () { setTab('boodschappen'); }}>🛒 Boodschappen</button>
-                <button className={'tab-btn' + (tab === 'bestellingen' ? ' active' : '')} onClick={function () { setTab('bestellingen'); }}>Bestellingen</button>
-                <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={function () { setTab('bonnen'); }}>📸 Bon-Scanner</button>
+            <div className="tab-bar mb-24">
+                <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={() => setTab('leveranciers')}>LEVERANCIERS</button>
+                <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={() => setTab('inkooplijsten')}>LIJSTEN</button>
+                <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={() => setTab('boodschappen')}>BOODSCHAPPEN</button>
+                <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={() => setTab('bonnen')}>BON-SCANNER</button>
             </div>
 
             {tab === 'leveranciers' && (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-                        <button className="btn btn-brand" onClick={newLeverancier}><i className="fa-solid fa-plus"></i> Nieuwe Leverancier</button>
-                    </div>
-                    <div className="grid-3">
-                        {leveranciers.length === 0 && <div className="empty-state"><i className="fa-solid fa-boxes-stacked"></i><p>Nog geen leveranciers</p></div>}
-                        {leveranciers.map(function (l) {
-                            var typeColors = { Vlees: 'var(--red)', Groente: 'var(--green)', Dranken: 'var(--amber)', Overig: 'var(--muted)' };
-                            return (
-                                <div key={l.id} className="rec-card" onClick={function () { editLeverancier(l); }}>
-                                    <div className="rec-cat" style={{ color: typeColors[l.type] || 'var(--muted)' }}>{l.type}</div>
-                                    <div className="rec-name">{l.naam}</div>
-                                    <div className="rec-meta">
-                                        {l.contact && <span><i className="fa-solid fa-user"></i> {l.contact}</span>}
-                                        {l.tel && <span><i className="fa-solid fa-phone"></i> {l.tel}</span>}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </>
-            )}
-
-            {tab === 'inkooplijsten' && (
-                <>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                        <select style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
-                            value={newInkEvent} onChange={function (e) { setNewInkEvent(e.target.value); }}>
-                            <option value="">— Kies Event —</option>
-                            {events.map(function (ev) { return <option key={ev.id} value={ev.id}>{ev.name}</option>; })}
-                        </select>
-                        <button className="btn btn-brand btn-sm" onClick={createInkooplijst}><i className="fa-solid fa-plus"></i> Lijst</button>
-                    </div>
-                    {inkooplijsten.length === 0 && <div className="empty-state"><i className="fa-solid fa-clipboard-list"></i><p>Nog geen inkooplijsten</p></div>}
-                    {inkooplijsten.map(function (list) {
-                        var ev = events.find(function (e) { return e.id === list.event_id; });
-                        var expanded = expandedInk === list.id;
-                        return (
-                            <div key={list.id} className="panel" style={{ marginBottom: 12 }}>
-                                <div className="panel-head" style={{ cursor: 'pointer' }} onClick={function () { setExpandedInk(expanded ? null : list.id); }}>
-                                    <h3>{ev ? ev.name : 'Onbekend Event'}</h3>
-                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{(list.items || []).length} items</span>
-                                </div>
-                                {expanded && (
-                                    <div className="panel-body">
-                                        {(list.items || []).map(function (item) {
-                                            return (
-                                                <div key={item.id} className="check-row">
-                                                    <button className={'check-box' + (item.besteld ? ' checked' : '')} onClick={function () { toggleInkItem(list, item.id); }}>
-                                                        {item.besteld && <i className="fa-solid fa-check"></i>}
-                                                    </button>
-                                                    <span className={'check-text' + (item.besteld ? ' done' : '')}>{item.desc}</span>
-                                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{item.qty} {item.eenheid}</span>
-                                                </div>
-                                            );
-                                        })}
-                                        <div style={{ display: 'flex', gap: 6, paddingTop: 12, flexWrap: 'wrap' }}>
-                                            <input style={{ flex: 2, minWidth: 120, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
-                                                placeholder="Omschrijving" value={newInkItem.desc} onChange={function (e) { setNewInkItem(Object.assign({}, newInkItem, { desc: e.target.value })); }} />
-                                            <input type="number" style={{ width: 60, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
-                                                value={newInkItem.qty} onChange={function (e) { setNewInkItem(Object.assign({}, newInkItem, { qty: parseFloat(e.target.value) || 1 })); }} />
-                                            <select style={{ width: 70, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
-                                                value={newInkItem.eenheid} onChange={function (e) { setNewInkItem(Object.assign({}, newInkItem, { eenheid: e.target.value })); }}>
-                                                {['kg', 'gram', 'liter', 'stuks', 'doos'].map(function (u) { return <option key={u}>{u}</option>; })}
-                                            </select>
-                                            <button className="btn btn-brand btn-sm" onClick={function () { addInkItem(list); }}><i className="fa-solid fa-plus"></i></button>
-                                        </div>
-                                        <div style={{ marginTop: 12 }}>
-                                            <button className="btn btn-red btn-sm" onClick={function () { removeInk(list.id); }}><i className="fa-solid fa-trash"></i> Verwijderen</button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </>
-            )}
-
-            {/* ═══ BOODSCHAPPEN TAB ═══ */}
-            {tab === 'boodschappen' && (
-                <>
-                    <div style={{ marginBottom: 16 }}>
-                        <select className="bus-select" value={boodschappenOfferte} onChange={function (e) { setBoodschappenOfferte(e.target.value); }}>
-                            <option value="">— Kies Offerte / Event —</option>
-                            {offertes.filter(function (o) { return o.menu_selectie; }).map(function (o) {
-                                return <option key={o.id} value={String(o.id)}>{o.client_naam} — {o.datum} ({o.aantal_gasten || '?'} gasten)</option>;
-                            })}
-                        </select>
-                    </div>
-
-                    {boodOfferte && (
-                        <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <div>
-                                    <span style={{ fontWeight: 700, fontSize: 16 }}>{boodOfferte.client_naam}</span>
-                                    <span style={{ color: 'var(--muted)', fontSize: 13, marginLeft: 10 }}>{boodOfferte.datum} • {boodOfferte.aantal_gasten} gasten</span>
-                                </div>
-                                <button className="btn btn-brand btn-sm" onClick={copyBoodschappenToClipboard}>
-                                    📋 Kopieer Lijst
-                                </button>
-                            </div>
-
-                            {Object.keys(winkelGroepen).map(function (winkel) {
-                                var items = winkelGroepen[winkel];
-                                if (items.length === 0) return null;
-                                return (
-                                    <div key={winkel} className="winkel-group">
-                                        <div className="winkel-group-header">
-                                            <span className="winkel-badge" style={{ background: winkelKleuren[winkel] }}>
-                                                {winkelIcoon[winkel]} {winkel}
-                                            </span>
-                                            <span className="winkel-count">{items.length} items</span>
-                                        </div>
-                                        <div className="winkel-items">
-                                            {items.map(function (item, idx) {
-                                                return (
-                                                    <div key={idx} className="winkel-item">
-                                                        <span className="winkel-item-bullet">•</span>
-                                                        <span>{item}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            {Object.values(winkelGroepen).every(function (g) { return g.length === 0; }) && (
-                                <div className="empty-state">
-                                    <i className="fa-solid fa-cart-shopping"></i>
-                                    <p>Geen ingrediënten gevonden — tag ingrediënten in Gerechten</p>
-                                </div>
-                            )}
-                        </>
-                    )}
-
-                    {!boodOfferte && !boodschappenOfferte && (
-                        <div className="empty-state">
-                            <i className="fa-solid fa-cart-shopping"></i>
-                            <p>Selecteer een offerte om de boodschappenlijst te genereren</p>
+                <div className="grid-3">
+                    <div className="artisan-panel" style={{ cursor: 'pointer', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 140 }} onClick={newLeverancier}>
+                        <div style={{ textAlign: 'center' }}>
+                            <i className="fa-solid fa-plus-circle" style={{ fontSize: 24, color: 'var(--brand)', marginBottom: 12 }}></i>
+                            <div style={{ fontWeight: 800, fontSize: 12 }}>NIEUWE LEVERANCIER</div>
                         </div>
-                    )}
-                </>
-            )}
-
-            {tab === 'bestellingen' && (
-                <div className="panel">
-                    <div className="panel-head"><h3>Bestelde Items</h3></div>
-                    <div className="panel-body">
-                        {(function () {
-                            var allItems = [];
-                            inkooplijsten.forEach(function (list) {
-                                var ev = events.find(function (e) { return e.id === list.event_id; });
-                                (list.items || []).forEach(function (item) {
-                                    if (item.besteld) allItems.push(Object.assign({}, item, { eventName: ev ? ev.name : 'Onbekend' }));
-                                });
-                            });
-                            if (allItems.length === 0) return <div className="empty-state"><i className="fa-solid fa-cart-shopping"></i><p>Nog geen bestelde items</p></div>;
-                            return allItems.map(function (item, idx) {
-                                return (
-                                    <div key={idx} className="check-row">
-                                        <i className="fa-solid fa-check-circle" style={{ color: 'var(--green)' }}></i>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 600 }}>{item.desc}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.qty} {item.eenheid} — {item.eventName}</div>
-                                        </div>
-                                    </div>
-                                );
-                            });
-                        })()}
                     </div>
+                    {leveranciers.map(l => (
+                        <div key={l.id} className="artisan-panel" onClick={() => editLeverancier(l)} style={{ cursor: 'pointer' }}>
+                            <div style={{ color: 'var(--brand)', fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>{l.type?.toUpperCase()}</div>
+                            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>{l.naam.toUpperCase()}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                {l.contact && <div><i className="fa-solid fa-user" style={{ width: 16 }}></i> {l.contact}</div>}
+                                {l.tel && <div><i className="fa-solid fa-phone" style={{ width: 16 }}></i> {l.tel}</div>}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
             {tab === 'bonnen' && (
-                <div className="panel" style={{ textAlign: 'center', padding: '60px 20px', border: '2px dashed rgba(245, 158, 11, 0.3)', borderRadius: 24, background: 'rgba(245, 158, 11, 0.02)', marginTop: 24 }}>
-                    <i className="fa-solid fa-receipt" style={{ fontSize: 64, color: 'var(--brand)', marginBottom: 20, filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.5))' }}></i>
-                    <h3 style={{ marginBottom: 16, fontSize: 24, fontWeight: 800 }}>Vision AI Kassabon Analysator</h3>
-                    <p style={{ color: 'var(--muted)', marginBottom: 30, maxWidth: 500, margin: '0 auto 30px', lineHeight: 1.6 }}>
-                        Maak een foto van je Sligro of Makro bon. De AI scant elke regel op de factuur, herberekent je kiloprijzen en boekt alles direct in je actuele inventaris.
-                    </p>
-                    <label className="btn btn-brand" style={{ cursor: 'pointer', padding: '16px 32px', fontSize: 18, borderRadius: 99 }}>
-                        <i className="fa-solid fa-camera"></i> Scan Kassabon
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleReceiptUpload} disabled={receiptScanning} />
-                    </label>
-                    {receiptScanning && (
-                        <div style={{ marginTop: 30, color: 'var(--brand)', fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: 32, marginBottom: 12 }}></i>
-                            Llama Vision LLM analyseert miljoenen pixels...
-                        </div>
-                    )}
-                    {receiptResult && !receiptScanning && (
-                        <div style={{ marginTop: 30, background: 'var(--bg)', border: '1px solid var(--border)', padding: '24px', borderRadius: 16, textAlign: 'left', display: 'inline-block', maxWidth: 800, width: '100%' }}>
-                            <h4 style={{ margin: '0 0 12px 0', color: 'var(--brand)' }}><i className="fa-solid fa-check"></i> Bon Verwerkt</h4>
-                            <div style={{ whiteSpace: 'pre-wrap', color: '#fff', fontSize: 14, fontFamily: 'monospace' }}>{receiptResult}</div>
+                <div style={{ maxWidth: 800, margin: '0 auto' }}>
+                    <div className="artisan-panel" style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
+                        <i className="fa-solid fa-receipt" style={{ fontSize: 48, color: 'var(--brand)', marginBottom: 20 }}></i>
+                        <h2 style={{ fontFamily: 'var(--font-artisan)', letterSpacing: 2, fontSize: 24, marginBottom: 16 }}>VISION INKOOP TRACKER</h2>
+                        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 32, maxWidth: 500, margin: '0 auto 32px' }}>
+                            Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen en boekt ze direct in je inventaris.
+                        </p>
+
+                        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleReceiptUpload} style={{ display: 'none' }} />
+
+                        <button className="btn-brand" style={{ padding: '16px 40px', fontSize: 16 }} onClick={() => fileInputRef.current.click()} disabled={receiptScanning}>
+                            {receiptScanning ? (
+                                <><i className="fa-solid fa-circle-notch fa-spin"></i> ANALYSEREN...</>
+                            ) : (
+                                <><i className="fa-solid fa-camera"></i> SCAN KASSABON</>
+                            )}
+                        </button>
+
+                        {scanStatus && <div style={{ marginTop: 20, fontSize: 11, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
+                    </div>
+
+                    {pendingActions.length > 0 && (
+                        <div className="artisan-panel">
+                            <div className="panel-head"><h3>GEVONDEN ITEMS ({pendingActions.length})</h3></div>
+                            <div className="panel-body">
+                                {pendingActions.map(action => (
+                                    <div key={action.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 800, fontSize: 13 }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
+                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                                                {action.data.aantal} {action.data.eenheid || 'stks'} • €{action.data.prijs?.toFixed(2)}
+                                            </div>
+                                        </div>
+                                        <button className="btn-brand" style={{ padding: '6px 16px', fontSize: 11 }} onClick={() => runAction(action)}>BOEK IN</button>
+                                    </div>
+                                ))}
+                                <button className="tab-btn w-full mt-16" onClick={() => setPendingActions([])}>ALLES WISSEN</button>
+                            </div>
                         </div>
                     )}
                 </div>
             )}
-        </>
+
+            {/* Editing Modal */}
+            {editingLev && (
+                <div className="architect-modal-overlay">
+                    <div className="architect-modal" style={{ maxWidth: 500 }}>
+                        <div className="modal-head">
+                            <h3>{editingLev === 'new' ? 'NIEUWE LEVERANCIER' : 'LEVERANCIER BEWERKEN'}</h3>
+                            <button className="close-btn" onClick={() => setEditingLev(null)}><i className="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="field mb-16"><label>NAAM</label><input value={levForm.naam} onChange={e => setLevForm({ ...levForm, naam: e.target.value })} /></div>
+                            <div className="field mb-16">
+                                <label>TYPE</label>
+                                <select value={levForm.type} onChange={e => setLevForm({ ...levForm, type: e.target.value })}>
+                                    {['Vlees', 'Groente', 'Dranken', 'Overig'].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
+                                </select>
+                            </div>
+                            <div className="field mb-16"><label>CONTACTPERSOON</label><input value={levForm.contact} onChange={e => setLevForm({ ...levForm, contact: e.target.value })} /></div>
+                            <div className="field mb-16"><label>TELEFOON</label><input value={levForm.tel} onChange={e => setLevForm({ ...levForm, tel: e.target.value })} /></div>
+                            <div className="field mb-24"><label>EMAIL</label><input value={levForm.email} onChange={e => setLevForm({ ...levForm, email: e.target.value })} /></div>
+
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <button className="btn-brand flex-1" onClick={saveLeverancier}>OPSLAAN</button>
+                                <button className="tab-btn" onClick={() => setEditingLev(null)}>ANNULEREN</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
