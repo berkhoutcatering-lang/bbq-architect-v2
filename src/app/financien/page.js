@@ -6,17 +6,23 @@ import { supabase } from '@/lib/supabase';
 
 // Helper to calc unit conversions
 function getInvPrice(inventoryData, naam) {
-    var inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
+    if (!naam) return null;
+    var inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === String(naam).toLowerCase(); });
     return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
 }
 
 function calcDishCostPP(gerechtenData, inventoryData, gerechtNaam) {
+    if (!gerechtNaam) return 0;
     var gerecht = gerechtenData.find(function (g) { return g.naam === gerechtNaam; });
     if (!gerecht || !gerecht.ingredient_costs) return 0;
-    return (gerecht.ingredient_costs || []).reduce(function (sum, item) {
+
+    var costsArray = Array.isArray(gerecht.ingredient_costs) ? gerecht.ingredient_costs : [];
+
+    return costsArray.reduce(function (sum, item) {
+        if (!item || !item.naam) return sum;
         var inv = getInvPrice(inventoryData, item.naam);
         var price = inv ? inv.price : 0;
-        var yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
+        var yld = (item.yield || (inv ? inv.yield_factor : 1.0)) || 1.0;
         var unitFactor = 1;
         if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
         if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
@@ -65,9 +71,11 @@ export default function Financien() {
 
             var omzet = (gasten * prijsPP) + vk;
 
-            var foodcostTotaal = 0;
-            (offerte.menu_selectie || []).forEach(function (sel) {
-                if (sel) foodcostTotaal += calcDishCostPP(gerechtenData, inventoryData, sel.gerecht_naam || sel.naam || '') * gasten;
+            var menuOpties = Array.isArray(offerte.menu_selectie) ? offerte.menu_selectie : [];
+            menuOpties.forEach(function (sel) {
+                if (sel && (sel.gerecht_naam || sel.naam)) {
+                    foodcostTotaal += calcDishCostPP(gerechtenData, inventoryData, sel.gerecht_naam || sel.naam) * gasten;
+                }
             });
 
             monthsMap[mStr].omzet += omzet;
