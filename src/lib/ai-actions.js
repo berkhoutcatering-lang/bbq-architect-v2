@@ -317,6 +317,31 @@ export function getActionsForPage(pathname) {
         .map(function (entry) { return Object.assign({ key: entry[0] }, entry[1]); });
 }
 
+// ─── Veldschema's per actietype (voor expliciete AI-instructies) ─────────────
+var ACTION_SCHEMAS = {
+    create_gerecht: {
+        voorbeeld: '<<<ACTION:{"type":"create_gerecht","description":"Gerecht aanmaken: Pulled Pork Slider","data":{"naam":"Pulled Pork Slider","gang_slug":"bite","beschrijving":"Zacht, gerookt pulled pork op een briochebroodje met zelfgemaakte coleslaw en BBQ-glaze. Rokerig, zoet en licht pittig.","ingredienten":["200g varkensschouder","2 briochebroodjes","50g rode kool","30ml appelazijn","15ml honing","10g mosterd","5g zout","3g paprikapoeder","2g knoflookpoeder","1g cayennepeper"],"allergenen":["Gluten","Mosterd","Eieren"],"bereidingswijze":"1. Wrijf de varkensschouder in met paprika, knoflookpoeder, zout en cayenne. 2. Rook de schouder op 110°C gedurende 8-10 uur tot kerntemperatuur 93°C. 3. Trek het vlees met twee vorken uit elkaar en meng met BBQ-glaze. 4. Snijd rode kool fijn en marineer 30 min in appelazijn, honing en mosterd. 5. Serveer pulled pork op gesneden briochebroodje met coleslaw.","tags":["Populair","BBQ"],"kostprijs_pp":1.85}}>>>',
+        regels: [
+            'VERPLICHTE velden for create_gerecht:',
+            '  naam           → exacte gerechtnaam',
+            '  gang_slug      → één van: bite, borrelhapje, starter, voorgerecht, tussengerecht, hoofdgerecht, bijgerecht, dessert',
+            '  beschrijving   → 2-3 zinnen smaakprofiel (zuren, texturen, umami)',
+            '  ingredienten   → ARRAY van strings, minimaal 6 ingrediënten met hoeveelheid+eenheid+naam',
+            '  allergenen     → ARRAY volgens Nederlandse Warenwet (Gluten, Melk, Eieren, Vis, Noten, Soja, Selderij, Mosterd, etc.)',
+            '  bereidingswijze → GENUMMERD stappenplan, minimaal 4 stappen, professionele kokstaal',
+            '  kostprijs_pp   → foodcost per persoon in euro (getal)',
+        ],
+    },
+    update_gerecht: {
+        voorbeeld: '<<<ACTION:{"type":"update_gerecht","description":"Gerecht bijwerken: naam of id","data":{"id":"uuid-van-gerecht","naam":"Nieuwe Naam","beschrijving":"Bijgewerkt smaakprofiel...","ingredienten":["Ingrediënt 1","Ingrediënt 2"],"bereidingswijze":"1. Stap één. 2. Stap twee.","allergenen":["Gluten"],"kostprijs_pp":2.50}}>>>',
+        regels: [
+            'Geef altijd id mee (of naam als id onbekend is).',
+            'Vul alleen de velden in die gewijzigd worden.',
+            'ingredienten en bereidingswijze: geef ALTIJD volledige nieuwe waarde mee, nooit gedeeltelijk.',
+        ],
+    },
+};
+
 // ─── Geef actie-instructies voor systeem-prompt ───────────────────────────────
 export function getActionInstructions(pathname) {
     var actions = getActionsForPage(pathname);
@@ -326,23 +351,37 @@ export function getActionInstructions(pathname) {
         return '- ' + a.key + ': ' + a.label;
     }).join('\n');
 
+    var schemaBlocks = actions
+        .filter(function (a) { return ACTION_SCHEMAS[a.key]; })
+        .map(function (a) {
+            var s = ACTION_SCHEMAS[a.key];
+            return [
+                '',
+                '### Schema: ' + a.key,
+                s.regels.join('\n'),
+                'Voorbeeld (gebruik dit formaat exact):',
+                s.voorbeeld,
+            ].join('\n');
+        }).join('\n');
+
     return [
         '',
         '## Acties die jij kunt voorstellen',
         'Wanneer de gebruiker expliciet vraagt om iets aan te maken, bij te werken of te verwijderen,',
         'kun je een actieblok opnemen in je antwoord. ALLEEN bij expliciete verzoeken, NOOIT automatisch.',
         '',
-        'Formaat (exact overnemen, inclusief <<<>>> en ZONDER markdown backticks):',
-        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving van wat er gaat gebeuren","data":{...velden...}}>>>',
+        'Algemeen formaat (exact overnemen, inclusief <<<>>> en ZONDER markdown backticks):',
+        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving","data":{...velden...}}>>>',
         '',
         'Beschikbare actietypes voor deze pagina:',
         actionList,
+        schemaBlocks,
         '',
         'Regels:',
         '- Vraag ALTIJD eerst bevestiging via het actieblok — de gebruiker keurt goed of wijst af',
         '- Zet het actieblok ONDER je antwoordtekst',
         '- Gebruik exacte veldnamen uit de database',
-        '- Vul alleen velden in die je zeker weet van de gebruiker',
+        '- VERBODEN: lege ingredienten-arrays, lege bereidingswijze, placeholder-tekst zoals "..." of "stap 1..."',
         '- Gebruik geen acties voor informatie-vragen, enkel voor daadwerkelijke wijzigingen',
     ].join('\n');
 }
