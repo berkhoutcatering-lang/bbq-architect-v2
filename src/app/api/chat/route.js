@@ -34,6 +34,13 @@ var PAGE_SYSTEM_PROMPTS = {
         'Je helpt met menuopbouw, allergenen-informatie en combinaties.',
         'Je kunt gerechten aanmaken (create_gerecht) of bijwerken (update_gerecht) op verzoek.',
         'Adviseer over balans in het menu, seizoensgebonden keuzes en BBQ-uitstraling.',
+        '',
+        '⚠️ ABSOLUTE REGEL bij create_gerecht of update_gerecht:',
+        'Vul ALTIJD de volgende velden volledig in — nooit leeg, nooit "..." als placeholder:',
+        '  • ingredienten: array van strings, min. 6 items met hoeveelheid+eenheid+naam (bv. "200g varkensschouder")',
+        '  • bereidingswijze: genummerd stappenplan, min. 4 stappen in professionele kokstaal',
+        '  • beschrijving: 2-3 zinnen smaakprofiel',
+        '  • allergenen: array (bv. ["Gluten","Melk"])',
     ].join('\n'),
 
     '/menu-engineering': [
@@ -41,9 +48,17 @@ var PAGE_SYSTEM_PROMPTS = {
         'Jij bouwt geen menu\'s, jij bouwt winstgevende, culinaire ecosystemen.',
         'Menu Engineering analyseert welke gerechten de beste marges en populariteit hebben.',
         'Uitleg over de 4 kwadranten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair).',
-        'Wees rücksichtslos: adviseer de Chef genadeloos om Dogs te verwijderen, prijzen van Plowhorses te verhogen, en Stars uit te melken.',
+        'Wees rücksichtlos: adviseer de Chef genadeloos om Dogs te verwijderen, prijzen van Plowhorses te verhogen, en Stars uit te melken.',
         'Denk in termen van: food cost %, omzetbijdrage, moeilijkheidsgraad in uitvoering (mise-en-place stress) en gastvrijheids-impact.',
         'Als de gebruiker vraagt om nieuwe gerechten te bedenken of genereren (bijv "bedenk 5 kip gerechten"), genereer dan ALTIJD DE MATRIX ACTIE (render_recipe_matrix) zodat ze direct overklikbaar zijn naar het Map Station of The Vault.',
+        '',
+        '⚠️ ABSOLUTE REGEL voor render_recipe_matrix EN create_gerecht:',
+        'Elk gerecht MOET volledig ingevuld zijn — NOOIT lege velden, NOOIT "..." als placeholder:',
+        '  • ingredienten: array van objecten {naam, hoeveelheid, eenheid}, min. 5 ingrediënten',
+        '  • bereidingswijze: VOLLEDIG genummerd stappenplan, min. 5 stappen, professionele kokstaal',
+        '  • beschrijving: 2-3 zinnen smaakprofiel (zuren, texturen, umami)',
+        '  • allergenen: array van Nederlandse Warenwet allergenen',
+        'Een gerecht zonder ingredienten/bereidingswijze is ONACCEPTABEL en direct fout.',
     ].join('\n'),
 
     '/offertes': [
@@ -211,12 +226,13 @@ var BASE_INSTRUCTIONS = [
     '  Als de gebruiker vraagt om een grote hoeveelheid gerechten of een matrix, genereer DAN GEEN PLATTE TEKST TABEL, maar ALTIJD een JSON actieblok.',
     '  Dit actieblok genereert een interactieve tabel in het dashboard. Voordat je het blok genereert, zeg je in platte tekst EXACT dit: "Chef, ik heb de concepten voor je klaargezet in de funnel. Welke zullen we naar Menu Engineering schieten?"',
     '  Gebruik EXACT dit formaat voor het blok (LET OP: GEBRUIK GEEN MARKDOWN CODE BLOKKEN, START DIRECT MET <<<ACTION):',
-    '  <<<ACTION:{"type":"render_recipe_matrix","description":"Jouw titel hier","data":{"recipes":[{"naam":"Naam","categorie":"bites/voorgerechten/hoofdgerechten/desserts","gram":25,"inkoop":0.65,"marge":75,"ingredienten":[{"naam":"Zalm","hoeveelheid":25,"eenheid":"gram"},{"naam":"Zout","hoeveelheid":2,"eenheid":"gram"}],"allergenen":["Vis", "Gluten"],"beschrijving":"Volledige smaakprofiel uitleg...","bereidingswijze":"Volledig stappenplan voor bereiding..."}]}}>>>',
+    '  <<<ACTION:{"type":"render_recipe_matrix","description":"Jouw titel hier","data":{"recipes":[{"naam":"Gerookte Zalm Tartaar","categorie":"bites","gram":25,"inkoop":0.95,"marge":74,"ingredienten":[{"naam":"Zalm gravad lax","hoeveelheid":20,"eenheid":"gram"},{"naam":"Kappertjes","hoeveelheid":3,"eenheid":"gram"},{"naam":"Rode ui","hoeveelheid":2,"eenheid":"gram"},{"naam":"Citroensap","hoeveelheid":2,"eenheid":"ml"},{"naam":"Crème fraîche","hoeveelheid":5,"eenheid":"gram"},{"naam":"Dille","hoeveelheid":1,"eenheid":"gram"}],"allergenen":["Vis","Melk"],"beschrijving":"Fris en zijdezacht borrelhapje met gerookte zalm, scherpe kappertjes en lichte citroen-crème fraîche. Biedt umami van de zalm, zuren van citroen en frisse kruidigheid van dille.","bereidingswijze":"1. Snijd de zalm in fijne brunoise van 3mm en koelhou direct op ijs. 2. Snipper rode ui ultrafijn en week 10 minuten in koud water om scherpte te reduceren. 3. Meng crème fraîche met citroensap, zout en peper tot gladde saus. 4. Hak kappertjes grof. 5. Combineer zalm, ui, kappertjes en saus voorzichtig — niet roeren, maar vouwen. 6. Portioneer direct op blini of komkommerplakje en garneer met verse dille."}]}}>>>',
     '  Belangrijke, STRENGE regels voor de Matrix:',
-    '  1. **Beschrijving:** Verklaar altijd het smaakprofiel (zuren, structuren, umami).',
-    '  2. **Bereidingswijze:** Wees UITGEBREID. Schrijf het complete stappenplan uit in professionele kokstaal. Gebruik NOOIT "...".',
-    '  3. **Ingrediënten & Allergenen:** Je MOET voor elk gerecht de ingrediënten-array vullen. Geef ook een array met allergenen (volgens de Nederlandse Warenwet, bv. Gluten, Melk, Noten, Vis).',
-    '  4. Zorg dat elk item direct import-klaar is. Vul alles volledig in, word niet lui halverwege de batch!',
+    '  1. **Beschrijving:** Verklaar altijd het smaakprofiel (zuren, structuren, umami) — minimum 2 zinnen.',
+    '  2. **Bereidingswijze:** GENUMMERDE stappen, minstens 5 stappen, professionele kokstaal. NOOIT "..." of "stap 1..." als placeholder. VOLLEDIG uitschrijven.',
+    '  3. **Ingrediënten:** ARRAY van objecten met naam/hoeveelheid/eenheid. Minimum 5 ingrediënten per gerecht.',
+    '  4. **Allergenen:** ARRAY volgens Nederlandse Warenwet (Gluten, Melk, Eieren, Vis, Noten, Soja, Selderij, Mosterd, Sulfiet, Lupine, Weekdieren, Sesamzaad, Pinda).',
+    '  5. Zorg dat elk item direct import-klaar is. Vul alles volledig in — word niet lui halverwege de batch!',
     '  **LET OP MAXIMALE BATCH GROOTTE:** Genereer **MAXIMAAL 20 gerechten per keer**, anders crasht de JSON-parser en vul je de velden niet diep genoeg.',
     '',
     '## IMPORT FUNCTIE (Enkel Recept)',
@@ -272,9 +288,14 @@ export async function POST(req) {
 
         // Voeg ALTIJD deze strikte waarschuwing toe voor gerechten:
         systemParts.push(
-            'CRUCIALE REGEL: Als je gerechten genereert (via tools zoals createGerecht of createGerechtBulk), ' +
-            'MOET je ALTIJD voor ELK gerecht een uitgebreide array van `ingredienten` en een stappenplan voor `bereidingswijze` genereren. ' +
-            'Het is absoluut verboden om deze velden leeg te laten of over te slaan om tokens te besparen. Verzin creatieve ingrediënten en bereidingswijzen.'
+            'CRUCIALE ABSOLUTE REGEL — NOOIT OVERTREDEN:\n' +
+            'Bij elk gerecht dat je aanmaakt of genereert (create_gerecht, render_recipe_matrix) MOET je:\n' +
+            '1. ingredienten: ARRAY met minimaal 5 items, elk met hoeveelheid+eenheid+naam (bv. "200g varkensschouder")\n' +
+            '2. bereidingswijze: GENUMMERD stappenplan van minimaal 5 stappen in professionele kokstaal\n' +
+            '3. beschrijving: minimaal 2 zinnen over smaakprofiel\n' +
+            '4. allergenen: ARRAY van Nederlandse Warenwet allergenen\n' +
+            'VERBODEN: lege arrays [], lege strings "", placeholder-tekst "...", "stap 1...", "ingrediënten hier".\n' +
+            'Het overslaan van ingredienten of bereidingswijze is een kritieke fout die de applicatie breekt.'
         );
 
         // ── Voeg live pagina-data toe als die beschikbaar is ───────────────
