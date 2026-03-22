@@ -158,6 +158,22 @@ export var ACTION_TYPES = {
     },
 
     // ── Offertes ─────────────────────────────────────────────────────────────
+    create_offerte: {
+        label: 'Offerte aanmaken',
+        table: 'offertes',
+        op: 'insert',
+        pages: ['/offertes'],
+        icon: 'fa-file-invoice',
+        color: '#22c55e',
+    },
+    update_offerte: {
+        label: 'Offerte bijwerken',
+        table: 'offertes',
+        op: 'update',
+        pages: ['/offertes'],
+        icon: 'fa-pen-to-square',
+        color: '#3b82f6',
+    },
     update_offerte_status: {
         label: 'Offerte status bijwerken',
         table: 'offertes',
@@ -374,6 +390,14 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/offertes') {
             var offRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,korting,vaste_kosten,items').order('datum', { ascending: false }).limit(30);
             ctx.offertes = offRes.data || [];
+            // Verloopwaarschuwingen: offertes waarvan geldig_tot binnen 7 dagen verloopt of al verlopen is
+            var nu = new Date();
+            var over7dagen = new Date(nu.getTime() + 7 * 24 * 60 * 60 * 1000);
+            ctx.verloopAlerts = (offRes.data || []).filter(function (o) {
+                if (!o.geldig_tot || o.status === 'goedgekeurd' || o.status === 'betaald' || o.status === 'afgewezen') return false;
+                var geldigTot = new Date(o.geldig_tot);
+                return geldigTot <= over7dagen;
+            });
         }
 
         if (pathname === '/facturen') {
@@ -574,6 +598,14 @@ export function formatContextForPrompt(contextData) {
         lines.push('**⚠️ Lage voorraad (' + contextData.lowStock.length + ' items):**');
         contextData.lowStock.forEach(function (i) {
             lines.push('- ' + i.naam + ': ' + i.current_stock + '/' + i.min_stock + ' ' + (i.unit || ''));
+        });
+        lines.push('');
+    }
+    if (contextData.verloopAlerts && contextData.verloopAlerts.length > 0) {
+        lines.push('**⚠️ Offertes die binnenkort verlopen of al verlopen zijn (' + contextData.verloopAlerts.length + '):**');
+        contextData.verloopAlerts.forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | geldig t/m: ' + (o.geldig_tot || '?') + ' | status: ' + (o.status || '?') + ' | TOTAAL: ' + fmtEur(t.totaal));
         });
         lines.push('');
     }

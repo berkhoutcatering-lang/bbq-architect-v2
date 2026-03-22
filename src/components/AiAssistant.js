@@ -93,7 +93,7 @@ export default function AiAssistant() {
         '/recepten':    ['Bereken vlees voor 80 gasten', 'Dry rub recept voor brisket', 'Pulled pork bereidingstijd', 'Salade voor 50 gasten'],
         '/gerechten':   ['20 gerechten met buikspek', 'Vegetarische hapjes bedenken', 'Dessert-ideeën voor BBQ', 'Menubalans analyseren'],
         '/menu-engineering': ['Welke gerechten hebben beste marge?', 'Menu-analyse uitleggen', 'Stars vs Dogs in mijn menu', 'Gerecht verbeteren voor marge'],
-        '/offertes':    ['Omzet overzicht', 'Hoeveel open offertes?', 'Offerte schrijftips', 'Marge berekenen voor event'],
+        '/offertes':    ['Nieuwe offerte aanmaken', 'Welke offertes verlopen binnenkort?', 'Marge analyse', 'Omzet overzicht per status'],
         '/facturen':    ['Openstaande facturen overzicht', 'Vervallen facturen check', 'Cashflow advies', 'Debiteurenbeheer tips'],
         '/voorraad':    ['Lage voorraad check', 'Wat moet ik bijbestellen?', 'Par levels uitleggen', 'FIFO-systeem tips'],
         '/inkoop':      ['Inkooplijst voor weekend-event', 'Beste leverancier kiezen', 'Vleesinkoop calculeren', 'Bulk-voordelen berekenen'],
