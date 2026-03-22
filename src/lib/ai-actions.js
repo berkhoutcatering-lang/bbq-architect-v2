@@ -46,6 +46,14 @@ export var ACTION_TYPES = {
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
+    delete_recept: {
+        label: 'Recept verwijderen',
+        table: 'recepten',
+        op: 'delete',
+        pages: ['/recepten'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
 
     // ── Gerechten ────────────────────────────────────────────────────────────
     create_gerecht: {
@@ -64,6 +72,14 @@ export var ACTION_TYPES = {
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
+    delete_gerecht: {
+        label: 'Gerecht verwijderen',
+        table: 'gerechten',
+        op: 'delete',
+        pages: ['/gerechten'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
 
     // ── Voorraad ─────────────────────────────────────────────────────────────
     create_voorraad: {
@@ -81,6 +97,14 @@ export var ACTION_TYPES = {
         pages: ['/voorraad', '/inkoop', '/service'],
         icon: 'fa-boxes-stacked',
         color: '#f59e0b',
+    },
+    delete_voorraad: {
+        label: 'Voorraad item verwijderen',
+        table: 'inventory',
+        op: 'delete',
+        pages: ['/voorraad'],
+        icon: 'fa-trash',
+        color: '#ef4444',
     },
 
     // ── Leveranciers ─────────────────────────────────────────────────────────
@@ -128,6 +152,42 @@ export var ACTION_TYPES = {
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
+    delete_urenlog: {
+        label: 'Urenregistratie verwijderen',
+        table: 'time_logs',
+        op: 'delete',
+        pages: ['/uren'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
+
+    // ── Inkooplijsten ────────────────────────────────────────────────────────
+    create_inkooplijst: {
+        label: 'Inkooplijst aanmaken',
+        table: 'inkooplijsten',
+        op: 'insert',
+        pages: ['/inkoop'],
+        icon: 'fa-basket-shopping',
+        color: '#22c55e',
+    },
+    update_inkooplijst: {
+        label: 'Inkooplijst bijwerken',
+        table: 'inkooplijsten',
+        op: 'update',
+        pages: ['/inkoop'],
+        icon: 'fa-pen-to-square',
+        color: '#f59e0b',
+    },
+
+    // ── Logistiek RTR ────────────────────────────────────────────────────────
+    update_rtr_item: {
+        label: 'Bus-check item bijwerken',
+        table: 'rtr_items',
+        op: 'update',
+        pages: ['/logistiek', '/service'],
+        icon: 'fa-truck-ramp-box',
+        color: '#f59e0b',
+    },
 
     // ── Materieel ────────────────────────────────────────────────────────────
     create_materieel: {
@@ -155,6 +215,22 @@ export var ACTION_TYPES = {
         pages: ['/agenda', '/events', '/service'],
         icon: 'fa-list-check',
         color: '#22c55e',
+    },
+    update_prep_task: {
+        label: 'Prep-taak bijwerken',
+        table: 'prep_tasks',
+        op: 'update',
+        pages: ['/agenda', '/service'],
+        icon: 'fa-pen-to-square',
+        color: '#f59e0b',
+    },
+    delete_prep_task: {
+        label: 'Prep-taak verwijderen',
+        table: 'prep_tasks',
+        op: 'delete',
+        pages: ['/agenda'],
+        icon: 'fa-trash',
+        color: '#ef4444',
     },
 
     // ── Offertes ─────────────────────────────────────────────────────────────
@@ -184,6 +260,22 @@ export var ACTION_TYPES = {
     },
 
     // ── Facturen ─────────────────────────────────────────────────────────────
+    create_factuur: {
+        label: 'Factuur aanmaken',
+        table: 'facturen',
+        op: 'insert',
+        pages: ['/facturen'],
+        icon: 'fa-receipt',
+        color: '#22c55e',
+    },
+    update_factuur: {
+        label: 'Factuur bijwerken',
+        table: 'facturen',
+        op: 'update',
+        pages: ['/facturen'],
+        icon: 'fa-pen-to-square',
+        color: '#3b82f6',
+    },
     update_factuur_status: {
         label: 'Factuur status bijwerken',
         table: 'facturen',
@@ -403,6 +495,14 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/facturen') {
             var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(30);
             ctx.facturen = facRes.data || [];
+            // Vervaldatum-waarschuwingen: facturen die verlopen zijn of binnen 7 dagen vervallen (niet betaald)
+            var nu2 = new Date();
+            var over7d = new Date(nu2.getTime() + 7 * 24 * 60 * 60 * 1000);
+            ctx.vervalAlerts = (facRes.data || []).filter(function (f) {
+                if (!f.vervaldatum || f.status === 'betaald') return false;
+                var vd = new Date(f.vervaldatum);
+                return vd <= over7d;
+            });
         }
 
         if (pathname === '/voorraad') {
@@ -421,16 +521,37 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/haccp') {
             var hacRes = await supabase.from('haccp_records').select('*').order('datum', { ascending: false }).limit(30);
             ctx.haccp_records = hacRes.data || [];
+            // Haal ook aankomende events op zodat AI kan zien welke events nog geen HACCP-registratie hebben
+            var hacEvRes = await supabase.from('events').select('id,name,date,status').in('status', ['bevestigd', 'actief']).order('date', { ascending: true }).limit(10);
+            ctx.events = hacEvRes.data || [];
         }
 
         if (pathname === '/uren') {
-            var urenRes = await supabase.from('time_logs').select('*').order('start_time', { ascending: false }).limit(20);
+            var urenRes = await supabase.from('time_logs').select('*').order('start_time', { ascending: false }).limit(50);
             ctx.time_logs = urenRes.data || [];
+            // Weekoverzicht: bereken totaal uren per medewerker voor de afgelopen 7 dagen
+            var weekGeleden = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            var weekLogs = (urenRes.data || []).filter(function (t) { return t.start_time >= weekGeleden; });
+            var medewerkerUren = {};
+            weekLogs.forEach(function (t) {
+                var naam = t.medewerker || 'Onbekend';
+                if (!medewerkerUren[naam]) medewerkerUren[naam] = 0;
+                if (t.start_time && t.end_time) {
+                    var uren = (new Date(t.end_time) - new Date(t.start_time)) / 3600000;
+                    medewerkerUren[naam] += Math.max(0, uren);
+                }
+            });
+            ctx.weekoverzicht = medewerkerUren;
         }
 
         if (pathname === '/materieel') {
             var matRes = await supabase.from('materieel').select('*').order('naam');
             ctx.materieel = matRes.data || [];
+            // Onderhoudswaarschuwingen: items waarvan last_maintenance > 90 dagen geleden of ontbreekt
+            var grens = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            ctx.onderhoudsAlerts = (matRes.data || []).filter(function (m) {
+                return !m.last_maintenance || m.last_maintenance < grens;
+            });
         }
 
         if (pathname === '/logistiek') {
@@ -450,6 +571,16 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/service') {
             var svcEvRes = await supabase.from('events').select('id,name,date,status,guests').eq('status', 'actief');
             ctx.active_events = svcEvRes.data || [];
+            // Haal prep-taken op voor actieve events
+            var activeIds = (svcEvRes.data || []).map(function (e) { return e.id; });
+            if (activeIds.length > 0) {
+                var svcPtRes = await supabase.from('prep_tasks').select('*').in('event_id', activeIds).order('id');
+                ctx.prep_tasks = svcPtRes.data || [];
+            }
+            // HACCP van vandaag
+            var vandaag = new Date().toISOString().slice(0, 10);
+            var svcHacRes = await supabase.from('haccp_records').select('*').eq('datum', vandaag).order('tijd');
+            ctx.haccp_vandaag = svcHacRes.data || [];
         }
 
         if (pathname === '/boekhouding') {
@@ -457,6 +588,16 @@ export async function loadPageContextData(pathname, supabase) {
             var facBRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
             ctx.offertes = offBRes.data || [];
             ctx.facturen = facBRes.data || [];
+            // Bereken KPIs
+            var totaalOmzet = 0, totaalBetaald = 0, totaalOpenstaand = 0, totaalVerlopen = 0;
+            (facBRes.data || []).forEach(function (f) {
+                var t = calcFactuurTotaal(f);
+                totaalOmzet += t.totaal;
+                if (f.status === 'betaald') totaalBetaald += t.totaal;
+                if (f.status === 'verzonden') totaalOpenstaand += t.totaal;
+                if (f.status === 'verlopen') totaalVerlopen += t.totaal;
+            });
+            ctx.boekhoudingKPIs = { totaalOmzet: totaalOmzet, totaalBetaald: totaalBetaald, totaalOpenstaand: totaalOpenstaand, totaalVerlopen: totaalVerlopen };
         }
 
         if (pathname === '/price-intelligence') {
@@ -601,6 +742,14 @@ export function formatContextForPrompt(contextData) {
         });
         lines.push('');
     }
+    if (contextData.vervalAlerts && contextData.vervalAlerts.length > 0) {
+        lines.push('**⚠️ Facturen die binnenkort vervallen of al verlopen zijn (' + contextData.vervalAlerts.length + '):**');
+        contextData.vervalAlerts.forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | vervalt: ' + (f.vervaldatum || '?') + ' | status: ' + (f.status || '?') + ' | TOTAAL: ' + fmtEur(t.totaal));
+        });
+        lines.push('');
+    }
     if (contextData.verloopAlerts && contextData.verloopAlerts.length > 0) {
         lines.push('**⚠️ Offertes die binnenkort verlopen of al verlopen zijn (' + contextData.verloopAlerts.length + '):**');
         contextData.verloopAlerts.forEach(function (o) {
@@ -643,6 +792,36 @@ export function formatContextForPrompt(contextData) {
     }
     if (contextData.rtr_items && contextData.rtr_items.length > 0) {
         lines.push('**Bus RTR-items (' + contextData.rtr_items.length + '):** ' + contextData.rtr_items.filter(function (r) { return r.done; }).length + '/' + contextData.rtr_items.length + ' afgevinkt');
+        lines.push('');
+    }
+    if (contextData.haccp_vandaag && contextData.haccp_vandaag.length > 0) {
+        lines.push('**HACCP registraties vandaag (' + contextData.haccp_vandaag.length + '):**');
+        contextData.haccp_vandaag.forEach(function (h) {
+            lines.push('- ' + (h.tijd || '?') + ' | ' + (h.wat || '?') + ' | ' + (h.temp || '?') + '°C | ' + (h.status || '?'));
+        });
+        lines.push('');
+    }
+    if (contextData.weekoverzicht && Object.keys(contextData.weekoverzicht).length > 0) {
+        lines.push('**Uren deze week per medewerker:**');
+        Object.entries(contextData.weekoverzicht).forEach(function (entry) {
+            lines.push('- ' + entry[0] + ': ' + entry[1].toFixed(1) + 'u');
+        });
+        lines.push('');
+    }
+    if (contextData.onderhoudsAlerts && contextData.onderhoudsAlerts.length > 0) {
+        lines.push('**⚠️ Materieel dat onderhoud nodig heeft (' + contextData.onderhoudsAlerts.length + '):**');
+        contextData.onderhoudsAlerts.forEach(function (m) {
+            lines.push('- [' + m.id + '] ' + m.naam + ' | laatste onderhoud: ' + (m.last_maintenance || 'onbekend') + ' | status: ' + (m.status || '?'));
+        });
+        lines.push('');
+    }
+    if (contextData.boekhoudingKPIs) {
+        var kpi = contextData.boekhoudingKPIs;
+        lines.push('**Boekhouding KPIs:**');
+        lines.push('- Totale omzet (facturen): ' + fmtEur(kpi.totaalOmzet));
+        lines.push('- Betaald: ' + fmtEur(kpi.totaalBetaald));
+        lines.push('- Openstaand: ' + fmtEur(kpi.totaalOpenstaand));
+        lines.push('- Verlopen (niet betaald): ' + fmtEur(kpi.totaalVerlopen));
         lines.push('');
     }
     if (contextData.folders && contextData.folders.length > 0) {
