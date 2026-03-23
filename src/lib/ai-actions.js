@@ -166,7 +166,7 @@ export var ACTION_TYPES = {
         label: 'Inkooplijst aanmaken',
         table: 'inkooplijsten',
         op: 'insert',
-        pages: ['/inkoop'],
+        pages: ['/inkoop', '/voorraad'],
         icon: 'fa-basket-shopping',
         color: '#22c55e',
     },
@@ -174,7 +174,7 @@ export var ACTION_TYPES = {
         label: 'Inkooplijst bijwerken',
         table: 'inkooplijsten',
         op: 'update',
-        pages: ['/inkoop'],
+        pages: ['/inkoop', '/voorraad'],
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
@@ -523,7 +523,12 @@ export async function loadPageContextData(pathname, supabase) {
             ctx.inventory = vRes.data || [];
             ctx.lowStock = (vRes.data || []).filter(function (i) { return i.current_stock <= i.min_stock; });
             // Laad aankomende events zodat AI inkooplijst kan genereren zonder te vragen
-            var vEvRes = await supabase.from('events').select('id,name,date,aantal_personen,status,menu_items').in('status', ['concept', 'bevestigd', 'actief']).gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true }).limit(5);
+            var vEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status,menu_items')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', new Date().toISOString().split('T')[0])
+                .order('date', { ascending: true })
+                .limit(5);
             ctx.events = vEvRes.data || [];
             ctx.volgendEvent = (vEvRes.data || [])[0] || null;
         }
@@ -813,7 +818,7 @@ export function formatContextForPrompt(contextData) {
     if (contextData.volgendEvent) {
         var ev = contextData.volgendEvent;
         lines.push('**Volgend event (gebruik dit bij inkoop-vragen):**');
-        lines.push('- ID: ' + ev.id + ' | ' + (ev.name || '?') + ' | ' + (ev.date || '?') + ' | ' + (ev.aantal_personen || '?') + ' personen | status: ' + (ev.status || '?'));
+        lines.push('- ID: ' + ev.id + ' | ' + (ev.name || '?') + ' | ' + (ev.date || '?') + ' | ' + (ev.guests || ev.aantal_personen || '?') + ' gasten | status: ' + (ev.status || '?') + (ev.location ? ' | ' + ev.location : ''));
         lines.push('');
     }
     if (contextData.lowStock && contextData.lowStock.length > 0) {

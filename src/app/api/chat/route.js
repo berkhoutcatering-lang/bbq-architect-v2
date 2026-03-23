@@ -140,8 +140,9 @@ var PAGE_SYSTEM_PROMPTS = {
         'Wijs proactief op lage-voorraad items uit de context. Stel bestelhoeveelheden voor op basis van min_stock.',
         'FIFO-principe: oudste voorraad als eerste gebruiken. Roteer wekelijks.',
         'Adviseer over par levels: 1.5x het minimum als veilige buffer voor catering-events.',
-        'De context bevat volgendEvent en events — gebruik dit DIRECT bij vragen over inkoop of het volgende event. Vraag NOOIT om een event ID.',
-        'Bij "wat moet er besteld worden voor het volgende event": gebruik volgendEvent.id en genereer direct een generateInkooplijst actie.',
+        'De context bevat volgendEvent (eerste aankomende event) — gebruik dit DIRECT. Vraag NOOIT om een event ID.',
+        'Bij "wat moet er besteld worden": som eerst lage-voorraad items op, dan genereer je een create_inkooplijst actie met event_id van volgendEvent en items-array met naam+hoeveelheid+eenheid.',
+        'Formaat actie: ACTION:create_inkooplijst met velden event_id (getal), items (array van {naam, hoeveelheid, eenheid, leverancier?}).',
     ].join('\n'),
 
     '/logistiek': [
