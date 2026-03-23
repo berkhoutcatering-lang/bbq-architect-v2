@@ -448,6 +448,10 @@ export async function loadPageContextData(pathname, supabase) {
     try {
         var ctx = {};
 
+        // Bedrijfsinstellingen altijd laden (globaal voor alle pagina's)
+        var settRes = await supabase.from('settings').select('bedrijfsnaam,ondertitel,default_btw,betaaltermijn,offerte_geldig,factuur_prefix,offerte_prefix').limit(1);
+        if (settRes.data && settRes.data[0]) ctx.settings = settRes.data[0];
+
         if (pathname === '/' || pathname === '/dashboard') {
             var evs = await supabase.from('events').select('id,name,date,guests,status,location,ppp').order('date', { ascending: true }).limit(10);
             ctx.events = evs.data || [];
@@ -669,7 +673,7 @@ export async function loadPageContextData(pathname, supabase) {
             }).forEach(function (o) {
                 var mStr = (o.datum || '').split('-')[1];
                 if (!maanden[mStr]) return;
-                maanden[mStr].omzet += ((o.aantal_gasten || 0) * (o.basis_prijs_pp || 0));
+                maanden[mStr].omzet += calcOfferteTotaal(o).totaal;
                 maanden[mStr].offertes += 1;
             });
             (urenFinRes.data || []).filter(function (u) { return (u.datum || '').startsWith(String(jaar)); }).forEach(function (u) {
@@ -736,11 +740,21 @@ export function formatContextForPrompt(contextData) {
     if (!contextData) return '';
     var lines = ['\n## Huidige pagina data (live uit de database)\n'];
 
+    if (contextData.settings) {
+        var s = contextData.settings;
+        lines.push('**Bedrijf:** ' + (s.bedrijfsnaam || '?') + (s.ondertitel ? ' — ' + s.ondertitel : ''));
+        lines.push('**Instellingen:** BTW ' + (s.default_btw || 21) + '% | Betaaltermijn ' + (s.betaaltermijn || 14) + ' dagen | Offerte geldig ' + (s.offerte_geldig || 30) + ' dagen');
+        lines.push('');
+    }
+
     if (contextData.events && contextData.events.length > 0) {
         lines.push('**Aankomende events (' + contextData.events.length + '):**');
         contextData.events.slice(0, 15).forEach(function (e) {
             var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) + ' (' + fmtEur(e.ppp) + '/p.p.)' : (e.ppp ? ' | ' + fmtEur(e.ppp) + '/p.p.' : '');
-            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : '') + (e.client_naam ? ' | klant: ' + e.client_naam : ''));
+            var menuIds = e.menu || [];
+            if (typeof menuIds === 'string') { try { menuIds = JSON.parse(menuIds); } catch (_) { menuIds = []; } }
+            var menuStr = Array.isArray(menuIds) && menuIds.length > 0 ? ' | menu: ' + menuIds.length + ' recept(en)' : ' | ⚠️ geen menu gekoppeld';
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : '') + (e.client_naam ? ' | klant: ' + e.client_naam : '') + menuStr);
         });
         lines.push('');
     }
