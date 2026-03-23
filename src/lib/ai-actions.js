@@ -460,7 +460,7 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/events') {
             var todayEv = new Date().toISOString().slice(0, 10);
             var evRes = await supabase.from('events')
-                .select('id,name,date,guests,location,ppp,status,menu_items,client_naam,notitie')
+                .select('id,name,date,guests,location,ppp,status,menu,client_naam,notitie')
                 .in('status', ['optie', 'pending', 'confirmed'])
                 .gte('date', todayEv)
                 .order('date', { ascending: true })
@@ -524,7 +524,7 @@ export async function loadPageContextData(pathname, supabase) {
             ctx.lowStock = (vRes.data || []).filter(function (i) { return i.current_stock <= i.min_stock; });
             // Laad aankomende events zodat AI inkooplijst kan genereren zonder te vragen
             var vEvRes = await supabase.from('events')
-                .select('id,name,date,guests,status,menu_items')
+                .select('id,name,date,guests,status,menu')
                 .in('status', ['optie', 'pending', 'confirmed'])
                 .gte('date', new Date().toISOString().split('T')[0])
                 .order('date', { ascending: true })
@@ -576,10 +576,11 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/materieel') {
             var matRes = await supabase.from('materieel').select('*').order('naam');
             ctx.materieel = matRes.data || [];
-            // Onderhoudswaarschuwingen: items waarvan last_maintenance > 90 dagen geleden of ontbreekt
-            var grens = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            // Onderhoudswaarschuwingen: items met status 'defect' of 'onderhoud' of aanschaf_datum > 2 jaar
+            var grensJaar = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
             ctx.onderhoudsAlerts = (matRes.data || []).filter(function (m) {
-                return !m.last_maintenance || m.last_maintenance < grens;
+                return m.status === 'defect' || m.status === 'onderhoud' ||
+                    (m.aanschaf_datum && m.aanschaf_datum < grensJaar);
             });
         }
 
@@ -904,7 +905,7 @@ export function formatContextForPrompt(contextData) {
     if (contextData.onderhoudsAlerts && contextData.onderhoudsAlerts.length > 0) {
         lines.push('**⚠️ Materieel dat onderhoud nodig heeft (' + contextData.onderhoudsAlerts.length + '):**');
         contextData.onderhoudsAlerts.forEach(function (m) {
-            lines.push('- [' + m.id + '] ' + m.naam + ' | laatste onderhoud: ' + (m.last_maintenance || 'onbekend') + ' | status: ' + (m.status || '?'));
+            lines.push('- [' + m.id + '] ' + m.naam + ' | aanschaf: ' + (m.aanschaf_datum || 'onbekend') + ' | status: ' + (m.status || '?') + (m.notitie ? ' | ' + m.notitie : ''));
         });
         lines.push('');
     }

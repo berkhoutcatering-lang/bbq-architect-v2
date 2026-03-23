@@ -277,9 +277,12 @@ async function generateEventBriefing(params) {
     var prepRes = await supabase.from('prep_tasks').select('*').eq('event_id', event_id).order('dagen');
     var prep_tasks = prepRes.data || [];
 
-    // Offerte
-    var offRes = await supabase.from('offertes').select('id,nummer,status,basis_prijs_pp,aantal_gasten,korting,items').eq('event_id', event_id).limit(1);
-    var offerte = offRes.data && offRes.data[0] ? offRes.data[0] : null;
+    // Offerte via events.offerte_id (offertes heeft geen event_id kolom)
+    var offerte = null;
+    if (event.offerte_id) {
+        var offRes = await supabase.from('offertes').select('id,nummer,status,basis_prijs_pp,aantal_gasten,korting,items').eq('id', event.offerte_id).single();
+        offerte = offRes.data || null;
+    }
 
     // HACCP-records voor dit event
     var hacRes = await supabase.from('haccp_records').select('id,datum,tijd,wat,temp,status').eq('event_id', event_id).order('datum').limit(20);
@@ -326,17 +329,30 @@ async function getEventWinstgevendheid(params) {
     }
     if (!eventRes || eventRes.error || !eventRes.data) return { error: 'Geen aankomend event gevonden.' };
     var event = eventRes.data;
+    var resolvedEventId = event.id;
 
-    // Facturen voor dit event
-    var facRes = await supabase.from('facturen').select('*').eq('event_id', event_id);
-    var facturen = facRes.data || [];
+    // Offerte via events.offerte_id (facturen/offertes hebben geen event_id kolom)
+    var offerte = null;
+    if (event.offerte_id) {
+        var offRes2 = await supabase.from('offertes').select('*').eq('id', event.offerte_id).single();
+        offerte = offRes2.data || null;
+    }
 
-    // Uren voor dit event
-    var urenRes = await supabase.from('time_logs').select('*').eq('event_id', event_id);
+    // Facturen: koppel via offerte.nummer of client_naam + datum als proxy
+    var facturen = [];
+    if (offerte) {
+        var facRes = await supabase.from('facturen').select('*').eq('client_naam', offerte.client_naam);
+        facturen = facRes.data || [];
+    }
+
+    // Uren: alle uren op de eventdatum (time_logs heeft geen event_id)
+    var urenRes = await supabase.from('time_logs').select('*')
+        .gte('start_time', event.date + 'T00:00:00')
+        .lte('start_time', event.date + 'T23:59:59');
     var time_logs = urenRes.data || [];
 
-    // Inkooplijsten voor dit event
-    var inkoopRes = await supabase.from('inkooplijsten').select('*').eq('event_id', event_id);
+    // Inkooplijsten voor dit event (inkooplijsten WEL event_id)
+    var inkoopRes = await supabase.from('inkooplijsten').select('*').eq('event_id', resolvedEventId);
     var inkoop = inkoopRes.data || [];
 
     // Helper: bereken totaal van items-array
@@ -348,7 +364,14 @@ async function getEventWinstgevendheid(params) {
         }, 0);
     }
 
+    // Omzet: facturen → anders offerte → anders ppp × guests
     var omzet = facturen.reduce(function (s, f) { return s + calcItemsTotaal(f.items); }, 0);
+    if (omzet === 0 && offerte) {
+        omzet = ((offerte.aantal_gasten || 0) * (offerte.basis_prijs_pp || 0)) - (offerte.korting || 0);
+    }
+    if (omzet === 0 && event.ppp && event.guests) {
+        omzet = event.ppp * event.guests;
+    }
     var inkoopKosten = inkoop.reduce(function (s, l) { return s + calcItemsTotaal(l.items); }, 0);
 
     var DEFAULT_UURLOON = 15;
