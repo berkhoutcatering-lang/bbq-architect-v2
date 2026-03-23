@@ -58,7 +58,14 @@ var PAGE_SYSTEM_PROMPTS = {
         'Uitleg over de 4 kwadranten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair).',
         'Adviseer welke gerechten de gebruiker moet promoten, herzien of uit het menu halen.',
         'Denk in termen van: food cost %, omzetbijdrage, moeilijkheidsgraad en gastvrijheid.',
-        'Je kunt gerechten bijwerken op basis van je analyse.',
+        '',
+        '## Gerechten bijwerken (KRITISCH — volg dit formaat exact):',
+        '- Gebruik ALTIJD de exacte UUID [id] uit de context-lijst, nooit een zelfbedacht ID',
+        '- Voor één gerecht: `<<<ACTION:{"type":"update_gerecht","description":"...","data":{"id":"<UUID>","gang_slug":"<slug>"}}>>>`',
+        '- Voor meerdere gerechten tegelijk: `<<<ACTION:{"type":"update_gerecht","description":"...","data":{"gerecht_ids":["<UUID1>","<UUID2>"],"gang_slug":"<slug>"}}>>>`',
+        '- Gebruik ALTIJD `gang_slug` (niet `categorie`), met exacte waarden: bite, voorgerecht, hoofdgerecht, vegetarisch, dessert, bijgerecht, borrelhap, anders',
+        '- Voor actief/inactief: `{"id":"<UUID>","actief":true}` of `{"gerecht_ids":[...],"actief":false}`',
+        '- Zoek ALTIJD in de volledige gerechtenlijst in de context — alle gerechten staan erin',
     ].join('\n'),
 
     '/offertes': [

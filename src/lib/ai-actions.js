@@ -425,12 +425,27 @@ export async function executeAction(action, supabase) {
         if (res.error) throw res.error;
         result = res.data;
     } else if (def.op === 'update') {
-        if (!data.id) throw new Error('ID ontbreekt voor update-actie');
+        // Normaliseer: 'categorie' is alias voor 'gang_slug' (AI gebruikt soms categorie)
         var updateData = Object.assign({}, data);
-        delete updateData.id;
-        var res2 = await supabase.from(def.table).update(updateData).eq('id', data.id).select().single();
-        if (res2.error) throw res2.error;
-        result = res2.data;
+        if (updateData.categorie !== undefined && updateData.gang_slug === undefined) {
+            updateData.gang_slug = updateData.categorie;
+            delete updateData.categorie;
+        }
+        // Bulk update: als gerecht_ids array meegegeven
+        if (Array.isArray(updateData.gerecht_ids)) {
+            var ids = updateData.gerecht_ids;
+            delete updateData.gerecht_ids;
+            delete updateData.id;
+            var res2bulk = await supabase.from(def.table).update(updateData).in('id', ids);
+            if (res2bulk.error) throw res2bulk.error;
+            result = { updated: ids.length, ids: ids };
+        } else {
+            if (!updateData.id) throw new Error('ID ontbreekt voor update-actie');
+            delete updateData.id;
+            var res2 = await supabase.from(def.table).update(updateData).eq('id', data.id).select().single();
+            if (res2.error) throw res2.error;
+            result = res2.data;
+        }
     } else if (def.op === 'delete') {
         if (!data.id) throw new Error('ID ontbreekt voor delete-actie');
         var res3 = await supabase.from(def.table).delete().eq('id', data.id);
@@ -492,7 +507,7 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/menu-engineering') {
-            var gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,ingredient_costs').order('naam');
+            var gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp').order('naam');
             ctx.gerechten = gerRes2.data || [];
         }
 
@@ -781,8 +796,8 @@ export function formatContextForPrompt(contextData) {
         lines.push('');
     }
     if (contextData.gerechten && contextData.gerechten.length > 0) {
-        lines.push('**Gerechten (' + contextData.gerechten.length + '):**');
-        contextData.gerechten.slice(0, 10).forEach(function (g) {
+        lines.push('**Gerechten (' + contextData.gerechten.length + ' totaal — gebruik ALTIJD de exacte [id] bij updates):**');
+        contextData.gerechten.forEach(function (g) {
             lines.push('- [' + g.id + '] ' + g.naam + ' | gang: ' + (g.gang_slug || '?') + ' | actief: ' + (g.actief ? 'ja' : 'nee'));
         });
         lines.push('');
