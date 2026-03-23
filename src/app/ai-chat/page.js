@@ -2,12 +2,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction } from '@/lib/ai-actions';
-import RecipeMatrix from '@/components/RecipeMatrix';
 
 var BRAINSTORM_SUGGESTIONS = [
     'Bedenk 5 thema-BBQ concepten voor de zomer',
     'Welke trendy menu-items kan ik toevoegen?',
-    'Ideeen voor een vegetarisch BBQ-menu',
+    'Ideeën voor een vegetarisch BBQ-menu',
     'Hoe kan ik mijn catering onderscheiden?',
     'Brainstorm over een winter-event concept',
     'Marketingtips voor BBQ-catering',
@@ -17,17 +16,15 @@ var QA_SUGGESTIONS = [
     'Hoeveel kilo vlees voor 100 gasten?',
     'Wat is een goede marge voor catering?',
     'Hoe maak ik een perfecte dry rub?',
-    'Tips voor efficiente mise en place',
+    'Tips voor efficiënte mise en place',
     'Wat moet ik meenemen in de bus?',
     'Hoe bereken ik mijn uurtarief?',
     'HACCP-kerntemperaturen vlees',
     'Hoeveel voorloopdagen voor een event?',
 ];
 
-var FOLDER_COLORS = ['#FFBF00', '#22c55e', '#3b82f6', '#a78bfa', '#ef4444', '#f59e0b', '#4ECDC4', '#ec4899'];
-
 export default function AiStudioPage() {
-    var [mode, setMode] = useState('brainstorm');
+    var [mode, setMode] = useState('brainstorm'); // 'brainstorm' | 'qa'
     var [messages, setMessages] = useState([]);
     var [input, setInput] = useState('');
     var [isLoading, setIsLoading] = useState(false);
@@ -48,13 +45,15 @@ export default function AiStudioPage() {
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
 
-    // ── Init begroeting bij modus-wissel ─────────────────────────────────────
+    var FOLDER_COLORS = ['#FFBF00', '#22c55e', '#3b82f6', '#a78bfa', '#ef4444', '#f59e0b', '#4ECDC4', '#ec4899'];
+
+    // ── Init begroeting ──────────────────────────────────────────────────────
     useEffect(function () {
         setMessages([{
             role: 'assistant',
             content: mode === 'brainstorm'
-                ? '\uD83D\uDD25 **Brainstorm Modus actief!**\n\nWelkom in de AI Studio van Hop & Bites. Hier denk ik creatief met je mee over menu\'s, events, marketing en alles wat BBQ-catering groot maakt.\n\nWaar wil je over brainstormen?'
-                : '\uD83D\uDCA1 **Vraag & Antwoord Modus**\n\nStel me directe vragen over catering, BBQ-technieken, calculaties, planning of bedrijfsvoering. Ik geef concrete, praktische antwoorden.\n\nWat wil je weten?',
+                ? '🔥 **Brainstorm Modus actief!**\n\nWelkom in de AI Studio van Hop & Bites. Hier denk ik creatief met je mee over menu\'s, events, marketing en alles wat BBQ-catering groot maakt.\n\nWaar wil je over brainstormen?'
+                : '💡 **Vraag & Antwoord Modus**\n\nStel me directe vragen over catering, BBQ-technieken, calculaties, planning of bedrijfsvoering. Ik geef concrete, praktische antwoorden.\n\nWat wil je weten?',
             actions: [],
         }]);
     }, [mode]);
@@ -125,7 +124,7 @@ export default function AiStudioPage() {
         return null;
     }
 
-    // ── Gesprek bijwerken ────────────────────────────────────────────────────
+    // ── Gesprek bijwerken (al opgeslagen) ────────────────────────────────────
     async function updateConversation() {
         if (!supabase || !activeConversation) return;
         var msgToSave = messages.map(function (m) {
@@ -192,8 +191,8 @@ export default function AiStudioPage() {
         setMessages([{
             role: 'assistant',
             content: mode === 'brainstorm'
-                ? '\uD83D\uDD25 **Nieuw brainstorm gesprek**\n\nWaar wil je over brainstormen?'
-                : '\uD83D\uDCA1 **Nieuw Q&A gesprek**\n\nWat wil je weten?',
+                ? '🔥 **Nieuw brainstorm gesprek**\n\nWaar wil je over brainstormen?'
+                : '💡 **Nieuw Q&A gesprek**\n\nWat wil je weten?',
             actions: [],
         }]);
     }
@@ -206,10 +205,7 @@ export default function AiStudioPage() {
         setInput('');
 
         var userMsg = { role: 'user', content: text, actions: [] };
-        var apiMessages = [
-            ...messages.map(function (m) { return { role: m.role, content: m.content }; }),
-            { role: 'user', content: text }
-        ];
+        var apiMessages = [...messages.map(function (m) { return { role: m.role, content: m.content }; }), { role: 'user', content: text }];
         setMessages(function (prev) { return [...prev, userMsg]; });
         setIsLoading(true);
 
@@ -244,24 +240,24 @@ export default function AiStudioPage() {
             var rawReply = data.choices[0].message.content;
             var parsed = parseActions(rawReply);
 
-            setMessages(function (prev) {
-                return [...prev, {
-                    role: 'assistant',
-                    content: parsed.cleanText,
-                    actions: parsed.actions,
-                }];
-            });
+            var assistantMsg = {
+                role: 'assistant',
+                content: parsed.cleanText,
+                actions: parsed.actions,
+            };
 
-            if (activeConversation) {
-                setTimeout(updateConversation, 500);
-            }
+            setMessages(function (prev) { return [...prev, assistantMsg]; });
 
         } catch (error) {
             setMessages(function (prev) {
-                return [...prev, { role: 'assistant', content: '\u274C ' + error.message, actions: [] }];
+                return [...prev, { role: 'assistant', content: '❌ ' + error.message, actions: [] }];
             });
         } finally {
             setIsLoading(false);
+            // Auto-save nadat AI response verwerkt is (state is dan bijgewerkt)
+            if (activeConversation) {
+                setTimeout(updateConversation, 300);
+            }
         }
     }
 
@@ -283,8 +279,12 @@ export default function AiStudioPage() {
         });
 
         try {
+            // Speciale behandeling voor save_conversation
             if (action.type === 'save_conversation') {
-                var saved = await saveConversation(action.data.folder_id || null, action.data.titel || null);
+                var saved = await saveConversation(
+                    action.data.folder_id || null,
+                    action.data.titel || null
+                );
                 setMessages(function (prev) {
                     return prev.map(function (m, i) {
                         if (i !== msgIdx) return m;
@@ -298,7 +298,7 @@ export default function AiStudioPage() {
                 setMessages(function (prev) {
                     return [...prev, {
                         role: 'assistant',
-                        content: '\u2705 Gesprek opgeslagen' + (saved ? ' (ID: ' + saved.id + ')' : '') + '!',
+                        content: '✅ Gesprek opgeslagen' + (saved ? ' (ID: ' + saved.id + ')' : '') + '!',
                         actions: [],
                     }];
                 });
@@ -306,6 +306,7 @@ export default function AiStudioPage() {
                 return;
             }
 
+            // Speciale behandeling voor create_folder
             if (action.type === 'create_folder') {
                 var fRes = await supabase.from('ai_conversation_folders').insert({
                     naam: action.data.naam,
@@ -326,7 +327,7 @@ export default function AiStudioPage() {
                     setMessages(function (prev) {
                         return [...prev, {
                             role: 'assistant',
-                            content: '\u2705 Map **' + action.data.naam + '** aangemaakt!',
+                            content: '✅ Map **' + action.data.naam + '** aangemaakt!',
                             actions: [],
                         }];
                     });
@@ -334,6 +335,7 @@ export default function AiStudioPage() {
                 return;
             }
 
+            // Andere acties
             var result = await executeAction(action, supabase);
             setMessages(function (prev) {
                 return prev.map(function (m, i) {
@@ -348,7 +350,7 @@ export default function AiStudioPage() {
             setMessages(function (prev) {
                 return [...prev, {
                     role: 'assistant',
-                    content: '\u2705 **' + action.meta.label + '** is uitgevoerd!',
+                    content: '✅ **' + action.meta.label + '** is uitgevoerd!',
                     actions: [],
                 }];
             });
@@ -365,7 +367,7 @@ export default function AiStudioPage() {
                 });
             });
             setMessages(function (prev) {
-                return [...prev, { role: 'assistant', content: '\u274C Mislukt: ' + err.message, actions: [] }];
+                return [...prev, { role: 'assistant', content: '❌ Mislukt: ' + err.message, actions: [] }];
             });
         }
     }
@@ -390,7 +392,7 @@ export default function AiStudioPage() {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     }
 
-    // ── Render markdown-achtige tekst ─────────────────────────────────────────
+    // ── Render markdown tekst ─────────────────────────────────────────────────
     function renderText(content) {
         if (!content) return null;
         return content.split('\n').map(function (line, i) {
@@ -407,10 +409,6 @@ export default function AiStudioPage() {
 
     // ── Render actiekaart ─────────────────────────────────────────────────────
     function renderActionCard(action, msgIdx) {
-        if (action.type === 'render_recipe_matrix') {
-            return <RecipeMatrix key={action.id} action={action} supabase={supabase} />;
-        }
-
         var isPending = action.status === 'pending';
         var isExecuting = action.status === 'executing';
         var isDone = action.status === 'done';
@@ -429,12 +427,12 @@ export default function AiStudioPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <i className={'fa-solid ' + (action.meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00'), fontSize: 15 }}></i>
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{action.meta.label}</span>
-                    {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12, fontWeight: 600 }}>&#10003; Uitgevoerd</span>}
+                    {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12, fontWeight: 600 }}>✓ Uitgevoerd</span>}
                     {isRejected && <span style={{ marginLeft: 'auto', color: '#71717a', fontSize: 12 }}>Afgewezen</span>}
                     {isError && <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: 12 }}>Fout</span>}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: isPending ? 10 : 0, lineHeight: 1.5 }}>{action.description}</div>
-                {action.data && Object.keys(action.data).length > 0 && action.type !== 'save_conversation' && (
+                {action.data && Object.keys(action.data).length > 0 && (action.type !== 'save_conversation') && (
                     <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)', background: 'rgba(0,0,0,.3)', padding: '6px 8px', borderRadius: 7, marginBottom: isPending ? 10 : 0 }}>
                         {JSON.stringify(action.data, null, 2).slice(0, 300)}
                     </div>
@@ -457,7 +455,7 @@ export default function AiStudioPage() {
                 )}
                 {isExecuting && (
                     <div style={{ color: '#FFBF00', fontSize: 13 }}>
-                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }}></i>Bezig met uitvoeren&hellip;
+                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }}></i>Bezig met uitvoeren…
                     </div>
                 )}
                 {isError && action.error && (
@@ -467,6 +465,7 @@ export default function AiStudioPage() {
         );
     }
 
+    // ── Gesprekken in actieve folder ──────────────────────────────────────────
     var visibleConversations = activeFolder
         ? conversations.filter(function (c) { return c.folder_id === activeFolder; })
         : conversations;
@@ -491,12 +490,13 @@ export default function AiStudioPage() {
                     </button>
                 </div>
 
+                {/* Nieuwe map formulier */}
                 {showNewFolder && (
                     <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(255,191,0,.04)' }}>
                         <input
                             value={newFolderName}
                             onChange={function (e) { setNewFolderName(e.target.value); }}
-                            placeholder="Mapnaam&hellip;"
+                            placeholder="Mapnaam…"
                             style={{ width: '100%', background: 'var(--card-solid)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 6 }}
                             onKeyDown={function (e) { if (e.key === 'Enter') createFolder(); }}
                             autoFocus
@@ -519,10 +519,15 @@ export default function AiStudioPage() {
                     </div>
                 )}
 
-                <button onClick={startNewConversation} className="ai-new-conv-btn">
+                {/* Nieuw gesprek knop */}
+                <button
+                    onClick={startNewConversation}
+                    className="ai-new-conv-btn"
+                >
                     <i className="fa-solid fa-plus"></i> Nieuw gesprek
                 </button>
 
+                {/* Alle gesprekken (geen map) */}
                 <div
                     className={'ai-folder-item' + (!activeFolder ? ' active' : '')}
                     onClick={function () { setActiveFolder(null); }}
@@ -532,8 +537,9 @@ export default function AiStudioPage() {
                     <span className="ai-folder-count">{conversations.length}</span>
                 </div>
 
+                {/* Mappen */}
                 {loadingFolders ? (
-                    <div style={{ padding: '8px 12px', color: 'var(--muted)', fontSize: 11 }}>Laden&hellip;</div>
+                    <div style={{ padding: '8px 12px', color: 'var(--muted)', fontSize: 11 }}>Laden…</div>
                 ) : (
                     folders.map(function (folder) {
                         var count = conversations.filter(function (c) { return c.folder_id === folder.id; }).length;
@@ -560,6 +566,7 @@ export default function AiStudioPage() {
                     })
                 )}
 
+                {/* Gesprekkenlijst */}
                 <div className="ai-conv-list">
                     {visibleConversations.length === 0 && !loadingFolders && (
                         <div style={{ padding: '12px', color: 'var(--muted)', fontSize: 11, textAlign: 'center' }}>
@@ -569,7 +576,10 @@ export default function AiStudioPage() {
                     {visibleConversations.map(function (conv) {
                         var isActive = activeConversation && activeConversation.id === conv.id;
                         return (
-                            <div key={conv.id} className={'ai-conv-item' + (isActive ? ' active' : '')}>
+                            <div
+                                key={conv.id}
+                                className={'ai-conv-item' + (isActive ? ' active' : '')}
+                            >
                                 <div style={{ flex: 1, cursor: 'pointer', overflow: 'hidden' }} onClick={function () { loadConversation(conv); }}>
                                     <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.titel}</div>
                                     <div style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
@@ -594,14 +604,14 @@ export default function AiStudioPage() {
 
             {/* ── Hoofdvenster ───────────────────────────────────────────── */}
             <div className="ai-studio-main">
-                {/* Topbar */}
+                {/* Header */}
                 <div className="ai-studio-topbar">
                     <button
                         onClick={function () { setSidebarOpen(function (v) { return !v; }); }}
                         style={{ background: 'rgba(255,255,255,.06)', border: 'none', color: 'var(--text)', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 14 }}
                         title="Sidebar toggling"
                     >
-                        <i className={'fa-solid ' + (sidebarOpen ? 'fa-chevron-left' : 'fa-bars')}></i>
+                        <i className={'fa-solid ' + (sidebarOpen ? 'fa-sidebar' : 'fa-bars')}></i>
                     </button>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -610,10 +620,11 @@ export default function AiStudioPage() {
                         </div>
                         <div>
                             <div style={{ fontWeight: 800, fontSize: 15 }}>BBQ AI Studio</div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Hop &amp; Bites &mdash; Powered by Groq</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Hop & Bites — Powered by Groq</div>
                         </div>
                     </div>
 
+                    {/* Modus tabs */}
                     <div className="ai-mode-tabs">
                         <button
                             onClick={function () { setMode('brainstorm'); }}
@@ -629,13 +640,16 @@ export default function AiStudioPage() {
                         </button>
                     </div>
 
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                        {/* Opslaan knop */}
                         {messages.length > 2 && !activeConversation && (
-                            <SaveButton
-                                folders={folders}
-                                onSave={saveConversation}
-                                onRefresh={loadFoldersAndConversations}
-                            />
+                            <div className="ai-save-dropdown">
+                                <SaveButton
+                                    folders={folders}
+                                    onSave={saveConversation}
+                                    onRefresh={loadFoldersAndConversations}
+                                />
+                            </div>
                         )}
                         {activeConversation && (
                             <div style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -689,10 +703,11 @@ export default function AiStudioPage() {
                         </div>
                     )}
 
-                    {messages.length <= 1 && !isLoading && (
+                    {/* Suggesties bij leeg gesprek */}
+                    {messages.length === 1 && !isLoading && (
                         <div style={{ maxWidth: 600, margin: '16px auto 0 50px' }}>
                             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
-                                {mode === 'brainstorm' ? '\uD83D\uDD25 Brainstorm-starters:' : '\uD83D\uDCA1 Veelgestelde vragen:'}
+                                {mode === 'brainstorm' ? '🔥 Brainstorm-starters:' : '💡 Veelgestelde vragen:'}
                             </div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                 {suggestions.map(function (s, i) {
@@ -721,7 +736,7 @@ export default function AiStudioPage() {
                             value={input}
                             onChange={function (e) { setInput(e.target.value); }}
                             onKeyDown={handleKey}
-                            placeholder={mode === 'brainstorm' ? 'Waar wil je over brainstormen? (Enter = versturen)' : 'Stel een vraag\u2026 (Enter = versturen)'}
+                            placeholder={mode === 'brainstorm' ? 'Waar wil je over brainstormen? (Enter = versturen)' : 'Stel een vraag… (Enter = versturen)'}
                             disabled={isLoading}
                             rows={2}
                             autoComplete="off"
@@ -779,8 +794,8 @@ function SaveButton({ folders, onSave, onRefresh }) {
                     <input
                         value={titel}
                         onChange={function (e) { setTitel(e.target.value); }}
-                        placeholder="Geef een titel&hellip;"
-                        style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}
+                        placeholder="Geef een titel…"
+                        style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8 }}
                         onKeyDown={function (e) { if (e.key === 'Enter') doSave(); }}
                         autoFocus
                     />
@@ -800,13 +815,13 @@ function SaveButton({ folders, onSave, onRefresh }) {
                             disabled={!titel.trim() || saving}
                             style={{ flex: 1, padding: '6px 0', borderRadius: 7, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
                         >
-                            {saving ? 'Opslaan\u2026' : 'Opslaan'}
+                            {saving ? 'Opslaan…' : 'Opslaan'}
                         </button>
                         <button
                             onClick={function () { setOpen(false); }}
                             style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}
                         >
-                            &#x2715;
+                            ✕
                         </button>
                     </div>
                 </div>

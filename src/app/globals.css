@@ -1,28 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --brand: #D5B262;
-  /* Hop & Bites Gold */
-  --brand-light: rgba(213, 178, 98, 0.08);
-  --bg: #2b2d31;
-  /* Anthracite Grey (Warm & Professional) */
-  --card: rgba(30, 31, 34, 0.8);
-  --card-solid: #1e1f22;
-  --border: rgba(255, 255, 255, 0.05);
-  --border-steel: rgba(213, 178, 98, 0.2);
-  /* Dunne gouden lijn */
-  --text: #f3f4f6;
-  --muted: #9ca3af;
-  --green: #10b981;
-  --red: #f43f5e;
+  --brand: #FFBF00;
+  --brand-light: rgba(255, 191, 0, .12);
+  --bg: #0D0D0D;
+  --card: rgba(24, 24, 27, .65);
+  --card-solid: #18181b;
+  --border: rgba(255, 255, 255, .06);
+  --text: #f4f4f5;
+  --muted: #71717a;
+  --green: #22c55e;
+  --red: #ef4444;
   --amber: #f59e0b;
-  --sidebar-w: 260px;
-  --header-h: 64px;
-  --font-artisan: 'Bebas Neue', cursive;
-  --font-main: 'Outfit', sans-serif;
-  --glass-blur: blur(10px);
-  --glass-border: 1px solid rgba(213, 178, 98, 0.1);
-  --lift-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  --cyan: #4ECDC4;
+  --purple: #a78bfa;
+  --blue: #3b82f6;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  --glass-blur: blur(18px);
+  --glass-border: 1px solid rgba(255, 191, 0, .08);
+  --lift-shadow: 0 8px 24px rgba(255, 191, 0, .06);
 }
 
 * {
@@ -35,20 +32,10 @@ html,
 body {
   height: 100%;
   background: var(--bg);
-  /* Schoon, premium effect zonder drukke texture */
   color: var(--text);
-  font-family: var(--font-main);
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-}
-
-h1,
-h2,
-h3,
-.artisan-font {
-  font-family: var(--font-artisan);
-  letter-spacing: 1px;
-  text-transform: uppercase;
 }
 
 /* Layout */
@@ -131,78 +118,7 @@ h3,
 .sidebar-nav a i {
   width: 20px;
   text-align: center;
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-.sidebar-nav a.active i {
-  opacity: 1;
-}
-
-/* Nested Navigation Styles */
-.sidebar-group {
-  margin-bottom: 2px;
-}
-
-.sidebar-group-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  transition: all 0.2s;
-}
-
-.sidebar-group-header:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.sidebar-group-header i:first-child {
-  width: 20px;
-  text-align: center;
-  font-size: 14px;
-  color: var(--brand);
-}
-
-.sidebar-group-header span {
-  flex: 1;
-}
-
-.sidebar-group-header .chevron {
-  font-size: 10px;
-  transition: transform 0.3s;
-  opacity: 0.5;
-}
-
-.sidebar-group-header .chevron.open {
-  transform: rotate(180deg);
-}
-
-.sidebar-group-items {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease-out;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.sidebar-group.expanded .sidebar-group-items {
-  max-height: 500px;
-}
-
-.sidebar-group-items a {
-  padding-left: 50px !important;
-  font-size: 12.5px;
-  border-left: none !important;
-}
-
-.sidebar-group.has-active .sidebar-group-header {
-  color: var(--text);
+  font-size: 15px;
 }
 
 .sidebar-overlay {
@@ -1595,6 +1511,11 @@ h3,
   overflow: hidden;
   z-index: 9999;
   animation: chat-fade-in 0.2s ease-out forwards;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 @keyframes chat-fade-in {
@@ -4015,6 +3936,7 @@ h3,
   gap: 0;
 }
 
+/* Sidebar */
 .ai-studio-sidebar {
   width: 0;
   overflow: hidden;
@@ -4134,6 +4056,7 @@ h3,
   border-left: 2px solid var(--brand);
 }
 
+/* Hoofdvenster */
 .ai-studio-main {
   flex: 1;
   display: flex;
@@ -4152,6 +4075,7 @@ h3,
   flex-shrink: 0;
 }
 
+/* Modus tabs */
 .ai-mode-tabs {
   display: flex;
   background: rgba(255, 255, 255, .06);
@@ -4181,6 +4105,7 @@ h3,
   color: #000;
 }
 
+/* Berichten gebied */
 .ai-studio-messages {
   flex: 1;
   overflow-y: auto;
@@ -4260,6 +4185,7 @@ h3,
   font-weight: 600;
 }
 
+/* Suggestie chips */
 .ai-suggestion-chip {
   background: var(--card-solid);
   border: 1px solid var(--border);
@@ -4277,6 +4203,7 @@ h3,
   color: var(--brand);
 }
 
+/* Input gebied */
 .ai-studio-input-area {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
@@ -4284,10 +4211,12 @@ h3,
   flex-shrink: 0;
 }
 
+/* Opslaan dropdown */
 .ai-save-dropdown {
   position: relative;
 }
 
+/* Loading dots animatie in studio */
 .ai-studio-bubble.loading-dots {
   display: flex;
   gap: 5px;
@@ -4333,765 +4262,3 @@ h3,
     padding: 10px 12px;
   }
 }
-
-/* ==========================================================================
-   ARTISAN DASHBOARD & WOW ELEMENTS
-   ========================================================================== */
-
-.artisan-dashboard {
-  padding: 0;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.artisan-hero {
-  position: relative;
-  height: 420px;
-  width: 100%;
-  border-radius: 0 0 24px 24px;
-  overflow: hidden;
-  margin-bottom: 32px;
-  border-bottom: 1px solid var(--border-steel);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-}
-
-.hero-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: saturate(0.8) contrast(1.1);
-  transform: scale(1.05);
-}
-
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(3, 3, 3, 0.95) 90%);
-  z-index: 1;
-}
-
-.hero-content {
-  position: absolute;
-  bottom: 40px;
-  left: 40px;
-  right: 40px;
-  z-index: 2;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--brand);
-  color: #fff;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 10px rgba(255, 102, 0, 0.3);
-}
-
-.hero-title {
-  font-size: 56px;
-  margin: 0 0 8px 0;
-  line-height: 0.95;
-  color: #fff;
-  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
-}
-
-.hero-subtitle {
-  font-size: 18px;
-  color: var(--muted);
-  max-width: 600px;
-  margin-bottom: 24px;
-}
-
-.hero-quick-stats {
-  display: flex;
-  gap: 32px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 20px;
-}
-
-.h-stat {
-  display: flex;
-  flex-direction: column;
-}
-
-.h-val {
-  font-family: var(--font-artisan);
-  font-size: 32px;
-  color: var(--brand);
-  line-height: 1;
-}
-
-.h-lbl {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-  letter-spacing: 1px;
-  margin-top: 4px;
-}
-
-.h-stat.danger .h-val {
-  color: var(--red);
-}
-
-/* Grid Layout */
-.dashboard-layout-grid {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 32px;
-  padding: 0 20px 40px 20px;
-}
-
-.dash-section {
-  margin-bottom: 40px;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 20px;
-  color: var(--text);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.section-title i {
-  color: var(--brand);
-  font-size: 18px;
-}
-
-/* Artisan Panels & Cards */
-.artisan-panel {
-  background: var(--card);
-  border: 1px solid var(--border-steel);
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--lift-shadow);
-  position: relative;
-}
-
-.artisan-panel.flat {
-  padding: 0;
-}
-
-.prep-card {
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.prep-card:last-child {
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-
-.prep-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.prep-client {
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--brand);
-}
-
-.prep-date {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.prep-gang-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-
-.gang-name {
-  font-weight: 600;
-  color: var(--muted);
-  min-width: 80px;
-}
-
-.gang-dishes {
-  color: #fff;
-}
-
-/* Banners */
-.artisan-action-banner {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 20px 24px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  text-decoration: none;
-  transition: transform 0.2s;
-  border: 1px solid transparent;
-}
-
-.artisan-action-banner:hover {
-  transform: translateY(-2px);
-}
-
-.artisan-action-banner i {
-  font-size: 24px;
-}
-
-.artisan-action-banner.danger {
-  background: rgba(244, 63, 94, 0.08);
-  border-color: rgba(244, 63, 94, 0.2);
-  color: var(--red);
-}
-
-.artisan-action-banner.info {
-  background: rgba(255, 102, 0, 0.08);
-  border-color: rgba(255, 102, 0, 0.2);
-  color: var(--brand);
-}
-
-.banner-txt {
-  flex: 1;
-}
-
-.b-title {
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-}
-
-.b-sub {
-  font-size: 12px;
-  opacity: 0.8;
-  margin-top: 2px;
-}
-
-.b-btn {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #fff;
-}
-
-/* Stats Row */
-.artisan-stat-row {
-  display: flex;
-  gap: 16px;
-}
-
-.artisan-stat-box {
-  flex: 1;
-  background: var(--card-solid);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-}
-
-.artisan-stat-box.highlight {
-  border-color: var(--brand);
-  background: rgba(255, 102, 0, 0.03);
-}
-
-.s-lbl {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-  margin-bottom: 8px;
-  letter-spacing: 1px;
-}
-
-.s-val {
-  font-family: var(--font-artisan);
-  font-size: 32px;
-  color: #fff;
-  line-height: 1;
-}
-
-/* Sidebar/Agenda Rows */
-.side-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  text-decoration: none;
-  transition: background 0.2s;
-}
-
-.side-row:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.row-date {
-  font-family: var(--font-artisan);
-  font-size: 20px;
-  color: var(--brand);
-  line-height: 1;
-}
-
-.row-title {
-  font-weight: 700;
-  color: #fff;
-  font-size: 14px;
-}
-
-.row-meta {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-/* Grid Nav */
-.artisan-grid-nav {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.nav-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 90px;
-  background: var(--card-solid);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.nav-box:hover {
-  background: rgba(255, 102, 0, 0.05);
-  border-color: var(--brand);
-  transform: translateY(-2px);
-}
-
-.nav-box i {
-  font-size: 20px;
-  color: var(--brand);
-}
-
-.nav-box span {
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--muted);
-  letter-spacing: 1px;
-}
-
-/* Quote */
-.pitmaster-quote {
-  margin-top: 40px;
-  padding: 30px;
-  text-align: center;
-  border: 1px dashed var(--border-steel);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.01);
-}
-
-.pitmaster-quote i {
-  font-size: 24px;
-  color: var(--brand);
-  opacity: 0.3;
-  margin-bottom: 16px;
-  display: block;
-}
-
-.pitmaster-quote p {
-  font-style: italic;
-  font-size: 15px;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-/* ==========================================================================
-   MINIMALIST ARTISAN DASHBOARD
-   ========================================================================== */
-
-.artisan-dashboard.minimalist {
-  padding-bottom: 40px;
-}
-
-.artisan-hero.simple {
-  height: 320px;
-  border-radius: 0;
-  /* Minder "app-achtig", meer industrieel */
-}
-
-.dashboard-content-single {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-}
-
-/* Alert Center */
-.artisan-alert-center {
-  background: rgba(180, 83, 9, 0.05);
-  border: 1px solid var(--brand);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.alert-center-header {
-  background: var(--brand);
-  color: #fff;
-  padding: 8px 16px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-
-.alert-center-body {
-  padding: 8px 0;
-}
-
-.alert-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  text-decoration: none;
-  font-size: 13px;
-  color: var(--text);
-}
-
-.alert-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.alert-item.danger i {
-  color: var(--red);
-}
-
-.alert-item.info i {
-  color: var(--brand);
-}
-
-/* Compact Stats */
-.artisan-compact-stats {
-  display: flex;
-  justify-content: space-around;
-  padding: 24px;
-  background: var(--card-solid);
-  border: 1px solid var(--border-steel);
-  border-radius: 12px;
-}
-
-.c-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.c-lbl {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-}
-
-.c-val {
-  font-family: var(--font-artisan);
-  font-size: 28px;
-  color: #fff;
-}
-
-/* Simplified Layout Elements */
-.artisan-header-mini {
-  font-size: 18px;
-  margin-bottom: 12px;
-}
-
-.artisan-panel {
-  border-color: var(--border-steel);
-  background: var(--card);
-}
-
-.prep-card {
-  border-color: var(--border);
-}
-
-.side-row {
-  border-color: var(--border);
-}
-
-.side-row:last-child {
-  border: none;
-}
-
-.row-price {
-  font-family: var(--font-artisan);
-  font-size: 18px;
-  color: var(--text);
-  margin-left: auto;
-  opacity: 0.8;
-}
-
-/* Shortcut Bar */
-.dash-section.center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.artisan-shortcut-bar {
-  display: flex;
-  gap: 16px;
-  padding: 10px;
-}
-
-.icon-nav-btn {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--card-solid);
-  border: 1px solid var(--border-steel);
-  border-radius: 50%;
-  color: var(--brand);
-  font-size: 18px;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.icon-nav-btn:hover {
-  background: var(--brand);
-  color: #fff;
-  transform: translateY(-2px);
-}
-
-/* Clearer text on dark leather */
-body {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-/* ==========================================================================
-   HOP & BITES PREMIUM REFINEMENTS
-   ========================================================================== */
-
-.artisan-panel {
-  border: 1px solid var(--border-steel);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.section-title {
-  font-family: var(--font-artisan);
-  letter-spacing: 2px;
-  color: var(--brand);
-  border-bottom: 1px solid rgba(213, 178, 98, 0.2);
-}
-
-.prep-gang-row {
-  position: relative;
-  padding-left: 20px;
-}
-
-.prep-gang-row::before {
-  content: '>';
-  position: absolute;
-  left: 0;
-  color: var(--brand);
-  font-family: var(--font-artisan);
-  font-weight: bold;
-}
-
-.gang-name {
-  color: var(--brand);
-  opacity: 0.9;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 1px;
-}
-
-/* Action Center Refinement */
-.artisan-alert-center {
-  border-radius: 4px;
-  border-left: 4px solid var(--brand);
-  background: rgba(213, 178, 98, 0.03);
-}
-
-.alert-center-header {
-  background: transparent;
-  color: var(--brand);
-  border-bottom: 1px solid rgba(213, 178, 98, 0.1);
-  padding: 12px 16px;
-}
-
-/* Pitmaster Speech */
-.pitmaster-quote {
-  border: none;
-  border-left: 2px solid var(--brand);
-  background: rgba(213, 178, 98, 0.02);
-  border-radius: 0 8px 8px 0;
-  text-align: left;
-}
-
-.pitmaster-quote p {
-  font-family: 'Georgia', serif;
-  /* More 'Chef/Classic' feel for quotes */
-  font-style: italic;
-  color: var(--text);
-  opacity: 0.8;
-}
-
-/* Sidebar Logo Refinement */
-.sidebar-logo h1 {
-  color: var(--brand);
-  font-size: 24px;
-}
-
-.sidebar-logo p {
-  font-size: 10px;
-  letter-spacing: 2px;
-  opacity: 0.6;
-}
-/* ==========================================================================
-   GLOBAL COAL & GOLD COMPONENT STYLES
-   ========================================================================== */
-
-/* Universal Tab Bar */
-.tab-bar {
-  display: flex;
-  gap: 8px;
-  background: var(--card-solid);
-  padding: 6px;
-  border-radius: 12px;
-  border: 1px solid var(--border-steel);
-  margin-bottom: 24px;
-  width: fit-content;
-}
-
-.tab-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  background: rgba(213, 178, 98, 0.05);
-  color: var(--text);
-}
-
-.tab-btn.active {
-  background: var(--brand);
-  color: #1a1a1a;
-}
-
-/* Universal Panel (Coal Cards) */
-.panel {
-  background: var(--card-solid);
-  border: 1px solid var(--border-steel);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  margin-bottom: 24px;
-}
-
-.panel-head {
-  padding: 16px 20px;
-  background: rgba(255,255,255,0.02);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-head h3 {
-  font-family: var(--font-artisan);
-  letter-spacing: 1px;
-  color: var(--brand);
-  font-size: 18px;
-  margin: 0;
-}
-
-.panel-body {
-  padding: 20px;
-}
-
-/* Form Grid Refinement */
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-}
-
-.field label {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--brand);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 6px;
-  opacity: 0.8;
-}
-
-.field input, .field select, .field textarea {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 14px;
-  transition: border-color 0.2s;
-}
-
-.field input:focus {
-  outline: none;
-  border-color: var(--brand);
-}
-
-/* Buttons */
-.btn-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--brand);
-  color: #1a1a1a;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s, background 0.2s;
-}
-
-.btn-brand:hover {
-  background: #e5c575; /* Lighter gold */
-  transform: translateY(-1px);
-}
-
-.btn-brand:active {
-  transform: translateY(0);
-}
-
-/* Utility */
-.mb-16 { margin-bottom: 16px; }
-.mt-20 { margin-top: 20px; }
-
