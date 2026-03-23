@@ -346,7 +346,7 @@ export default function MenuEngineering() {
     if (!supabase) { setLoading(false); return; }
     Promise.all([
       supabase.from('gangen').select('*').order('volgorde'),
-      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief').order('volgorde'),
+      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze').order('volgorde'),
     ]).then(function (results) {
       var gangenData = results[0].data || [];
       var gerechtenData = results[1].data || [];

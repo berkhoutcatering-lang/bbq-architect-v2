@@ -293,6 +293,32 @@ async function resolveGangSlug(sb, providedSlug) {
     return slugs[0];
 }
 
+function normaliseIngredientenArray(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(function (item) {
+        if (typeof item === 'string') {
+            // Soms stuurt de AI een JSON-geëncodeerd object als string
+            try {
+                var parsed = JSON.parse(item);
+                if (parsed && typeof parsed === 'object') {
+                    var hoeveelheid = parsed.hoeveelheid || parsed.amount || '';
+                    var eenheid = parsed.eenheid || parsed.unit || '';
+                    var naam = parsed.naam || parsed.name || parsed.ingredient || JSON.stringify(parsed);
+                    return [hoeveelheid, eenheid, naam].filter(Boolean).join(' ').trim();
+                }
+            } catch (e) { /* geen JSON, gewone string */ }
+            return item.trim();
+        }
+        if (typeof item === 'object' && item !== null) {
+            var hoeveelheid = item.hoeveelheid || item.amount || '';
+            var eenheid = item.eenheid || item.unit || '';
+            var naam = item.naam || item.name || item.ingredient || JSON.stringify(item);
+            return [hoeveelheid, eenheid, naam].filter(Boolean).join(' ').trim();
+        }
+        return String(item);
+    }).filter(Boolean);
+}
+
 async function handleCreateGerecht(sb, params) {
     var safeSlug = await resolveGangSlug(sb, params.gang_slug);
 
@@ -301,7 +327,7 @@ async function handleCreateGerecht(sb, params) {
         gang_slug: safeSlug,
         beschrijving: params.beschrijving || '',
         bereidingswijze: params.bereidingswijze || '',
-        ingredienten: params.ingredienten || [],
+        ingredienten: normaliseIngredientenArray(params.ingredienten),
         tags: params.tags || [],
         allergenen: params.allergenen || [],
         actief: false,
@@ -325,7 +351,7 @@ async function handleCreateGerechtBulk(sb, params) {
             gang_slug: safeSlug,
             beschrijving: g.beschrijving || '',
             bereidingswijze: g.bereidingswijze || '',
-            ingredienten: g.ingredienten || [],
+            ingredienten: normaliseIngredientenArray(g.ingredienten),
             tags: g.tags || [],
             allergenen: g.allergenen || [],
             actief: false,
@@ -378,7 +404,7 @@ async function handleUpdateGerecht(sb, params) {
     if (params.gang_slug !== undefined) update.gang_slug = params.gang_slug;
     if (params.tags !== undefined) update.tags = params.tags;
     if (params.allergenen !== undefined) update.allergenen = params.allergenen;
-    if (params.ingredienten !== undefined) update.ingredienten = params.ingredienten;
+    if (params.ingredienten !== undefined) update.ingredienten = normaliseIngredientenArray(params.ingredienten);
     if (params.kostprijs_pp !== undefined) update.kostprijs_pp = params.kostprijs_pp;
     if (params.actief !== undefined) update.actief = params.actief;
 
