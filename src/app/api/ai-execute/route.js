@@ -158,11 +158,22 @@ async function generatePrepList(params) {
 // ─── TOOL: Genereer slimme inkooplijst op basis van event + recepten ─────────
 async function generateInkooplijst(params) {
     var event_id = params.event_id;
-    if (!event_id) return { error: 'event_id is verplicht' };
 
-    // Haal event op
-    var eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
-    if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden (id: ' + event_id + ')' };
+    // Haal event op — fallback op eerstvolgende event als geen ID meegegeven
+    var eventRes;
+    if (event_id) {
+        eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    } else {
+        var todayInk = new Date().toISOString().slice(0, 10);
+        var fallbackRes = await supabase.from('events').select('*')
+            .in('status', ['optie', 'pending', 'confirmed'])
+            .gte('date', todayInk)
+            .order('date', { ascending: true })
+            .limit(1)
+            .single();
+        eventRes = fallbackRes;
+    }
+    if (!eventRes || eventRes.error || !eventRes.data) return { error: 'Geen aankomend event gevonden. Voeg eerst een event toe via de Events-pagina.' };
     var event = eventRes.data;
     var gasten = event.guests || 1;
 
@@ -237,10 +248,21 @@ async function generateInkooplijst(params) {
 // ─── TOOL: Genereer event briefing ───────────────────────────────────────────
 async function generateEventBriefing(params) {
     var event_id = params.event_id;
-    if (!event_id) return { error: 'event_id is verplicht' };
 
-    var eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
-    if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
+    var eventRes;
+    if (event_id) {
+        eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    } else {
+        var todayBrf = new Date().toISOString().slice(0, 10);
+        var fallbackBrf = await supabase.from('events').select('*')
+            .in('status', ['optie', 'pending', 'confirmed'])
+            .gte('date', todayBrf)
+            .order('date', { ascending: true })
+            .limit(1)
+            .single();
+        eventRes = fallbackBrf;
+    }
+    if (!eventRes || eventRes.error || !eventRes.data) return { error: 'Geen aankomend event gevonden.' };
     var event = eventRes.data;
 
     // Recepten
@@ -288,10 +310,21 @@ async function generateEventBriefing(params) {
 // ─── TOOL: Winstgevendheid per event ─────────────────────────────────────────
 async function getEventWinstgevendheid(params) {
     var event_id = params.event_id;
-    if (!event_id) return { error: 'event_id is verplicht' };
 
-    var eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
-    if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
+    var eventRes;
+    if (event_id) {
+        eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    } else {
+        var todayWst = new Date().toISOString().slice(0, 10);
+        var fallbackWst = await supabase.from('events').select('*')
+            .in('status', ['optie', 'pending', 'confirmed'])
+            .gte('date', todayWst)
+            .order('date', { ascending: true })
+            .limit(1)
+            .single();
+        eventRes = fallbackWst;
+    }
+    if (!eventRes || eventRes.error || !eventRes.data) return { error: 'Geen aankomend event gevonden.' };
     var event = eventRes.data;
 
     // Facturen voor dit event

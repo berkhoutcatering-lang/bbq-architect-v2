@@ -544,8 +544,15 @@ export async function loadPageContextData(pathname, supabase) {
             var hacRes = await supabase.from('haccp_records').select('*').order('datum', { ascending: false }).limit(30);
             ctx.haccp_records = hacRes.data || [];
             // Haal ook aankomende events op zodat AI kan zien welke events nog geen HACCP-registratie hebben
-            var hacEvRes = await supabase.from('events').select('id,name,date,status').in('status', ['bevestigd', 'actief']).order('date', { ascending: true }).limit(10);
+            var hacToday = new Date().toISOString().slice(0, 10);
+            var hacEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests')
+                .in('status', ['pending', 'confirmed'])
+                .gte('date', hacToday)
+                .order('date', { ascending: true })
+                .limit(10);
             ctx.events = hacEvRes.data || [];
+            ctx.volgendEvent = (hacEvRes.data || [])[0] || null;
         }
 
         if (pathname === '/uren') {
