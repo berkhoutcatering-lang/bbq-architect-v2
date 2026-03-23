@@ -509,6 +509,10 @@ export async function loadPageContextData(pathname, supabase) {
             var vRes = await supabase.from('inventory').select('*').order('naam');
             ctx.inventory = vRes.data || [];
             ctx.lowStock = (vRes.data || []).filter(function (i) { return i.current_stock <= i.min_stock; });
+            // Laad aankomende events zodat AI inkooplijst kan genereren zonder te vragen
+            var vEvRes = await supabase.from('events').select('id,name,date,aantal_personen,status,menu_items').in('status', ['concept', 'bevestigd', 'actief']).gte('date', new Date().toISOString().split('T')[0]).order('date', { ascending: true }).limit(5);
+            ctx.events = vEvRes.data || [];
+            ctx.volgendEvent = (vEvRes.data || [])[0] || null;
         }
 
         if (pathname === '/inkoop') {
@@ -762,6 +766,12 @@ export function formatContextForPrompt(contextData) {
             var alert = i.current_stock <= i.min_stock ? ' ⚠️ LAAG' : '';
             lines.push('- [' + i.id + '] ' + i.naam + ' | ' + i.current_stock + ' ' + (i.unit || '') + ' (min: ' + i.min_stock + ')' + alert);
         });
+        lines.push('');
+    }
+    if (contextData.volgendEvent) {
+        var ev = contextData.volgendEvent;
+        lines.push('**Volgend event (gebruik dit bij inkoop-vragen):**');
+        lines.push('- ID: ' + ev.id + ' | ' + (ev.name || '?') + ' | ' + (ev.date || '?') + ' | ' + (ev.aantal_personen || '?') + ' personen | status: ' + (ev.status || '?'));
         lines.push('');
     }
     if (contextData.lowStock && contextData.lowStock.length > 0) {
