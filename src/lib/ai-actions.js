@@ -600,6 +600,35 @@ export async function loadPageContextData(pathname, supabase) {
             ctx.boekhoudingKPIs = { totaalOmzet: totaalOmzet, totaalBetaald: totaalBetaald, totaalOpenstaand: totaalOpenstaand, totaalVerlopen: totaalVerlopen };
         }
 
+        if (pathname === '/financien') {
+            var offFinRes = await supabase.from('offertes').select('id,status,datum,basis_prijs_pp,aantal_gasten,items,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(100);
+            var urenFinRes = await supabase.from('time_logs').select('id,datum,uren,medewerker').order('datum', { ascending: false }).limit(200);
+            ctx.offertes = offFinRes.data || [];
+            ctx.urenLogs = urenFinRes.data || [];
+            // Bereken maandsamenvatting huidig jaar
+            var jaar = new Date().getFullYear();
+            var maanden = {};
+            for (var m = 1; m <= 12; m++) {
+                var mStr = String(m).padStart(2, '0');
+                maanden[mStr] = { maand: new Date(jaar, m - 1, 1).toLocaleString('nl-NL', { month: 'long' }), omzet: 0, offertes: 0, uren: 0 };
+            }
+            (offFinRes.data || []).filter(function (o) {
+                return ['goedgekeurd', 'geaccepteerd', 'voltooid'].includes(o.status || '') && (o.datum || '').startsWith(String(jaar));
+            }).forEach(function (o) {
+                var mStr = (o.datum || '').split('-')[1];
+                if (!maanden[mStr]) return;
+                maanden[mStr].omzet += ((o.aantal_gasten || 0) * (o.basis_prijs_pp || 0));
+                maanden[mStr].offertes += 1;
+            });
+            (urenFinRes.data || []).filter(function (u) { return (u.datum || '').startsWith(String(jaar)); }).forEach(function (u) {
+                var mStr = (u.datum || '').split('-')[1];
+                if (!maanden[mStr]) return;
+                maanden[mStr].uren += (u.uren || 0);
+            });
+            ctx.financienMaanden = maanden;
+            ctx.financienJaar = jaar;
+        }
+
         if (pathname === '/price-intelligence') {
             var levPiRes = await supabase.from('leveranciers').select('id,naam,type').order('naam');
             ctx.leveranciers = levPiRes.data || [];
@@ -822,6 +851,17 @@ export function formatContextForPrompt(contextData) {
         lines.push('- Betaald: ' + fmtEur(kpi.totaalBetaald));
         lines.push('- Openstaand: ' + fmtEur(kpi.totaalOpenstaand));
         lines.push('- Verlopen (niet betaald): ' + fmtEur(kpi.totaalVerlopen));
+        lines.push('');
+    }
+    if (contextData.financienMaanden) {
+        lines.push('**Financiën ' + contextData.financienJaar + ' — maandoverzicht:**');
+        Object.values(contextData.financienMaanden).forEach(function (m) {
+            if (m.omzet > 0 || m.uren > 0) {
+                var arbeidskosten = m.uren * 35;
+                var netto = m.omzet - arbeidskosten;
+                lines.push('- ' + m.maand + ': omzet ' + fmtEur(m.omzet) + ' | ' + m.offertes + ' events | ' + m.uren + 'u arbeid (' + fmtEur(arbeidskosten) + ') | netto ~' + fmtEur(netto));
+            }
+        });
         lines.push('');
     }
     if (contextData.folders && contextData.folders.length > 0) {
