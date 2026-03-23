@@ -48,6 +48,8 @@ async function generatePrepList(params) {
 
     var event = eventData;
     var menuIds = event.menu || [];
+    if (typeof menuIds === 'string') { try { menuIds = JSON.parse(menuIds); } catch(e) { menuIds = []; } }
+    if (!Array.isArray(menuIds)) menuIds = [];
 
     // Haal gekoppelde recepten op
     var recepten = [];
@@ -179,6 +181,8 @@ async function generateInkooplijst(params) {
 
     // Haal recepten voor dit event op
     var menuIds = event.menu || [];
+    if (typeof menuIds === 'string') { try { menuIds = JSON.parse(menuIds); } catch(e) { menuIds = []; } }
+    if (!Array.isArray(menuIds)) menuIds = [];
     var recepten = [];
     if (menuIds.length > 0) {
         var recRes = await supabase.from('recepten').select('*').in('id', menuIds);
@@ -267,6 +271,8 @@ async function generateEventBriefing(params) {
 
     // Recepten
     var menuIds = event.menu || [];
+    if (typeof menuIds === 'string') { try { menuIds = JSON.parse(menuIds); } catch(e) { menuIds = []; } }
+    if (!Array.isArray(menuIds)) menuIds = [];
     var recepten = [];
     if (menuIds.length > 0) {
         var recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime').in('id', menuIds);

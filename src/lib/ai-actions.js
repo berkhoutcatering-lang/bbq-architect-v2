@@ -499,7 +499,7 @@ export async function loadPageContextData(pathname, supabase) {
             var nu = new Date();
             var over7dagen = new Date(nu.getTime() + 7 * 24 * 60 * 60 * 1000);
             ctx.verloopAlerts = (offRes.data || []).filter(function (o) {
-                if (!o.geldig_tot || o.status === 'goedgekeurd' || o.status === 'betaald' || o.status === 'afgewezen') return false;
+                if (!o.geldig_tot || o.status === 'geaccepteerd' || o.status === 'goedgekeurd' || o.status === 'betaald' || o.status === 'afgewezen') return false;
                 var geldigTot = new Date(o.geldig_tot);
                 return geldigTot <= over7dagen;
             });
@@ -646,7 +646,7 @@ export async function loadPageContextData(pathname, supabase) {
                 var t = calcFactuurTotaal(f);
                 totaalOmzet += t.totaal;
                 if (f.status === 'betaald') totaalBetaald += t.totaal;
-                if (f.status === 'verzonden') totaalOpenstaand += t.totaal;
+                if (f.status === 'concept' || f.status === 'verzonden' || f.status === 'verlopen') totaalOpenstaand += t.totaal;
                 if (f.status === 'verlopen') totaalVerlopen += t.totaal;
             });
             ctx.boekhoudingKPIs = { totaalOmzet: totaalOmzet, totaalBetaald: totaalBetaald, totaalOpenstaand: totaalOpenstaand, totaalVerlopen: totaalVerlopen };
@@ -783,7 +783,7 @@ export function formatContextForPrompt(contextData) {
         contextData.offertes.forEach(function (o) {
             var t = calcOfferteTotaal(o);
             offTotaalAlles += t.totaal;
-            if (o.status === 'betaald' || o.status === 'goedgekeurd') offTotaalBetaald += t.totaal;
+            if (o.status === 'betaald' || o.status === 'goedgekeurd' || o.status === 'geaccepteerd') offTotaalBetaald += t.totaal;
             if (o.status === 'concept' || o.status === 'verzonden') offTotaalOpen += t.totaal;
         });
 
@@ -803,7 +803,7 @@ export function formatContextForPrompt(contextData) {
             var t = calcFactuurTotaal(f);
             facTotaalAlles += t.totaal;
             if (f.status === 'betaald') facTotaalBetaald += t.totaal;
-            if (f.status === 'verzonden' || f.status === 'verlopen') facTotaalOpen += t.totaal;
+            if (f.status === 'concept' || f.status === 'verzonden' || f.status === 'verlopen') facTotaalOpen += t.totaal;
         });
 
         lines.push('**Facturen (' + contextData.facturen.length + ') — Totaal: ' + fmtEur(facTotaalAlles) + ' | Openstaand: ' + fmtEur(facTotaalOpen) + ' | Betaald: ' + fmtEur(facTotaalBetaald) + '**');
