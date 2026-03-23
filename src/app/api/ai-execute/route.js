@@ -363,7 +363,7 @@ async function getCrossModuleContext(params) {
 
     // Aankomende events met gekoppelde recepten
     var today = new Date().toISOString().slice(0, 10);
-    var nextWeek = addDays(today, 7);
+    var nextWeek = addDays(today, 14);
     var evRes = await supabase.from('events').select('id,name,date,guests,status,location,menu,ppp')
         .gte('date', today).lte('date', nextWeek).order('date', { ascending: true });
     ctx.events = evRes.data || [];

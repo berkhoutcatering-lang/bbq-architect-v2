@@ -458,8 +458,21 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/events') {
-            var evRes = await supabase.from('events').select('*').order('date', { ascending: true });
+            var todayEv = new Date().toISOString().slice(0, 10);
+            var evRes = await supabase.from('events')
+                .select('id,name,date,guests,location,ppp,status,menu_items,client_naam,notitie')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', todayEv)
+                .order('date', { ascending: true })
+                .limit(20);
             ctx.events = evRes.data || [];
+            ctx.volgendEvent = (evRes.data || [])[0] || null;
+            var pastEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status')
+                .eq('status', 'completed')
+                .order('date', { ascending: false })
+                .limit(5);
+            ctx.recenteEvents = pastEvRes.data || [];
         }
 
         if (pathname === '/recepten') {
@@ -566,15 +579,37 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/agenda') {
-            var agEvRes = await supabase.from('events').select('id,name,date,status').order('date', { ascending: true }).limit(10);
-            var ptRes = await supabase.from('prep_tasks').select('*').order('id', { ascending: false }).limit(20);
+            var todayAg = new Date().toISOString().slice(0, 10);
+            var agEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests,location')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', todayAg)
+                .order('date', { ascending: true })
+                .limit(10);
             ctx.events = agEvRes.data || [];
-            ctx.prep_tasks = ptRes.data || [];
+            ctx.volgendEvent = (agEvRes.data || [])[0] || null;
+            // Prep-taken gekoppeld aan aankomende events
+            var agEventIds = (agEvRes.data || []).map(function (e) { return e.id; });
+            if (agEventIds.length > 0) {
+                var ptRes = await supabase.from('prep_tasks').select('*').in('event_id', agEventIds).order('dagen').limit(50);
+                ctx.prep_tasks = ptRes.data || [];
+            } else {
+                // Fallback: recente taken
+                var ptFallback = await supabase.from('prep_tasks').select('*').order('id', { ascending: false }).limit(20);
+                ctx.prep_tasks = ptFallback.data || [];
+            }
         }
 
         if (pathname === '/service') {
-            var svcEvRes = await supabase.from('events').select('id,name,date,status,guests').eq('status', 'actief');
+            var vandaagSvc = new Date().toISOString().slice(0, 10);
+            var svcEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests,location,client_naam')
+                .in('status', ['confirmed', 'optie', 'pending'])
+                .gte('date', vandaagSvc)
+                .order('date', { ascending: true })
+                .limit(5);
             ctx.active_events = svcEvRes.data || [];
+            ctx.volgendEvent = (svcEvRes.data || [])[0] || null;
             // Haal prep-taken op voor actieve events
             var activeIds = (svcEvRes.data || []).map(function (e) { return e.id; });
             if (activeIds.length > 0) {
@@ -689,10 +724,17 @@ export function formatContextForPrompt(contextData) {
     var lines = ['\n## Huidige pagina data (live uit de database)\n'];
 
     if (contextData.events && contextData.events.length > 0) {
-        lines.push('**Events (' + contextData.events.length + '):**');
-        contextData.events.slice(0, 10).forEach(function (e) {
+        lines.push('**Aankomende events (' + contextData.events.length + '):**');
+        contextData.events.slice(0, 15).forEach(function (e) {
             var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) + ' (' + fmtEur(e.ppp) + '/p.p.)' : (e.ppp ? ' | ' + fmtEur(e.ppp) + '/p.p.' : '');
-            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : ''));
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : '') + (e.client_naam ? ' | klant: ' + e.client_naam : ''));
+        });
+        lines.push('');
+    }
+    if (contextData.recenteEvents && contextData.recenteEvents.length > 0) {
+        lines.push('**Recent afgeronde events:**');
+        contextData.recenteEvents.forEach(function (e) {
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten');
         });
         lines.push('');
     }

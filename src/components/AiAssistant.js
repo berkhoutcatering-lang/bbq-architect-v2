@@ -41,7 +41,7 @@ export default function AiAssistant() {
         try {
             // Laad cross-module context via server-side tool als het dashboard/events is
             var data;
-            if (pathname === '/' || pathname === '/events' || pathname === '/agenda') {
+            if (pathname === '/') {
                 var res = await fetch('/api/ai-execute', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
