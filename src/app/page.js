@@ -371,7 +371,10 @@ export default function DashboardPage() {
                     var prepItems = [];
                     gangenData.sort((a, b) => (a.volgorde || 0) - (b.volgorde || 0)).forEach(g => {
                       var dishes = sel[g.slug] || [];
-                      dishes.forEach(d => prepItems.push({ dish: d, gang: g.naam }));
+                      dishes.forEach(d => {
+                        var dishName = typeof d === 'string' ? d : (d.naam || d.gerecht_naam || 'Onbekend gerecht');
+                        prepItems.push({ dish: dishName, gang: g.naam });
+                      });
                     });
 
                     return prepItems.length > 0 ? (

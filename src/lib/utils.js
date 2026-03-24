@@ -118,7 +118,23 @@ export function calcMargeForOfferte(offerte, gerechtenData, inventoryData) {
 
     var gasten = offerte.aantal_gasten || 0;
     var omzet = gasten * (offerte.basis_prijs_pp || 0);
-    var foodcostTotaal = (offerte.menu_selectie || []).reduce(function (sum, sel) {
+
+    // Safely parse and flatten menu_selectie (which is an object grouped by gang slug, or an array)
+    var parsedMenu = typeof offerte.menu_selectie === 'string' ? safeJsonParse(offerte.menu_selectie, {}) : (offerte.menu_selectie || {});
+    var menuArray = [];
+    if (Array.isArray(parsedMenu)) {
+        menuArray = parsedMenu;
+    } else if (parsedMenu && typeof parsedMenu === 'object') {
+        Object.values(parsedMenu).forEach(function (arr) {
+            if (Array.isArray(arr)) {
+                arr.forEach(function (item) {
+                    menuArray.push(typeof item === 'string' ? { naam: item } : item);
+                });
+            }
+        });
+    }
+
+    var foodcostTotaal = menuArray.reduce(function (sum, sel) {
         return sum + dishCost(sel.gerecht_naam || sel.naam) * gasten;
     }, 0);
     var vk = (offerte.vaste_kosten || []).reduce(function (sum, k) { return sum + (parseFloat(k.bedrag) || 0); }, 0);
