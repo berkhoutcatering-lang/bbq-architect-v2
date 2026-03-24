@@ -163,9 +163,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
 export default function Sidebar() {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
-    const [expandedSections, setExpandedSections] = useState(
-        navSections.map((s) => s.title)
-    );
+    const [expandedSections, setExpandedSections] = useState([]);
 
     const toggleSection = (title) => {
         setExpandedSections((prev) =>
