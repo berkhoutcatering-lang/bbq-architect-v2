@@ -271,11 +271,11 @@ export default function DashboardPage() {
         {/* ========== KPI GRID ========== */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           <KPICard
-            icon={<Calendar className="w-4 h-4 text-[#c4a35a]" />}
+            icon={<Calendar className="w-4 h-4 text-[#3b82f6]" />}
             label="Bevestigde Events"
             value={confirmedEvents.length.toString()}
             subtitle={`totaal geregistreerd dit jaar`}
-            accentColor="#c4a35a"
+            accentColor="#3b82f6"
             trend="+12%"
           />
           <KPICard
@@ -431,11 +431,11 @@ export default function DashboardPage() {
                 {[
                   { icon: <FileText className="w-4 h-4" />, label: "Offertes", href: "/offertes" },
                   { icon: <Calendar className="w-4 h-4" />, label: "Agenda", href: "/agenda" },
-                  { icon: <Package className="w-4 h-4" />, label: "Inkoop", href: "/inkoop" },
-                  { icon: <Star className="w-4 h-4" />, label: "Menu Engineering", href: "/menu-engineering" },
+                  { icon: <ShoppingCart className="w-4 h-4" />, label: "Inkoop", href: "/inkoop" },
+                  { icon: <UtensilsCrossed className="w-4 h-4" />, label: "Menu Engineering", href: "/menu-engineering" },
                 ].map((action) => (
-                  <Link key={action.label} href={action.href} className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#2a2a30] hover:bg-[#121216] transition-all duration-300 group">
-                    <div className="text-[#555558] group-hover:text-white transition-colors">{action.icon}</div>
+                  <Link key={action.label} href={action.href} className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#3b82f6]/30 hover:bg-[#121216] transition-all duration-300 group">
+                    <div className="text-[#444447] group-hover:text-[#3b82f6] transition-colors">{action.icon}</div>
                     <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#444447] group-hover:text-[#888] transition-colors text-center">{action.label}</span>
                   </Link>
                 ))}
