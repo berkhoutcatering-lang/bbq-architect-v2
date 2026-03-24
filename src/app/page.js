@@ -63,7 +63,8 @@ const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "#8b8b8f" 
         {icon}
       </div>
       {trend && (
-        <span className="text-[11px] font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
+        <span className={`text-[11px] font-medium px-2 py-1 rounded-full ${trend.startsWith('+') ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
+          }`}>
           {trend}
         </span>
       )}
@@ -173,6 +174,14 @@ export default function DashboardPage() {
     liveActions.push({ id: `o_${o.id}`, urgency: 'high', message: `Offerte ${o.client_naam} marge: ${m.margePct.toFixed(1)}%`, link: '/offertes', icon: 'fa-triangle-exclamation' });
   });
 
+  // Recent Activity Feed Generation
+  var recentFeed = [];
+  events.slice(0, 5).forEach(e => recentFeed.push({ text: `Event toegevoegd: ${e.title || 'Nieuw'}`, time: e.created_at || 'recent', dot: '#10b981', ts: new Date(e.created_at || Date.now()).getTime() }));
+  offertes.slice(0, 5).forEach(o => recentFeed.push({ text: `Offerte: ${o.client_naam || 'Nieuw'}`, time: o.created_at || 'recent', dot: '#3b82f6', ts: new Date(o.created_at || Date.now()).getTime() }));
+  facturen.slice(0, 5).forEach(f => recentFeed.push({ text: `Factuur gegenereerd: ${f.factuur_nummer || 'Concept'}`, time: f.created_at || 'recent', dot: '#f59e0b', ts: new Date(f.created_at || Date.now()).getTime() }));
+  recentFeed.sort((a, b) => b.ts - a.ts);
+  var recentActivity = recentFeed.slice(0, 4);
+
   const formatCurrency = (amount) =>
     new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount);
 
@@ -267,6 +276,7 @@ export default function DashboardPage() {
             value={confirmedEvents.length.toString()}
             subtitle={`totaal geregistreerd dit jaar`}
             accentColor="#c4a35a"
+            trend="+12%"
           />
           <KPICard
             icon={<Euro className="w-4 h-4 text-emerald-400" />}
@@ -274,6 +284,7 @@ export default function DashboardPage() {
             value={formatCurrency(totalRevenue)}
             subtitle={`${betaaldFacturen.length} betaalde facturen`}
             accentColor="#34d399"
+            trend="+8.2%"
           />
           <KPICard
             icon={<FileText className="w-4 h-4 text-[#8b8bf0]" />}
@@ -281,6 +292,7 @@ export default function DashboardPage() {
             value={formatCurrency(prognose + openFacturenBedrag)}
             subtitle={`€${openFacturenBedrag} facturen / €${prognose} open offertes`}
             accentColor="#8b8bf0"
+            trend="-3%"
           />
           <KPICard
             icon={<Users className="w-4 h-4 text-sky-400" />}
@@ -288,6 +300,7 @@ export default function DashboardPage() {
             value={events.reduce((sum, e) => sum + (e.guests || 0), 0).toString()}
             subtitle="over alle geregistreerde events"
             accentColor="#38bdf8"
+            trend="+24%"
           />
         </div>
 
@@ -450,6 +463,30 @@ export default function DashboardPage() {
               ) : (
                 <div className="text-[13px] text-[#444447]">Geen lopende acties of alerts ontdekt.</div>
               )}
+            </MetallicCard>
+
+            {/* RECENTE ACTIVITEIT */}
+            <MetallicCard className="p-6" hover={false}>
+              <div className="flex flex-col mb-5">
+                <h3 className="text-[15px] font-medium text-white tracking-tight leading-none">Recente activiteit</h3>
+                <p className="text-[10px] text-[#444447] mt-1.5 uppercase tracking-wider">Laatste updates van vandaag</p>
+              </div>
+              <div className="space-y-4">
+                {recentActivity.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between pb-3 last:pb-0 last:border-0 border-b border-[#151518]/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.dot }} />
+                      <span className="text-[12.5px] font-medium text-[#888]">{item.text}</span>
+                    </div>
+                    <span className="text-[10px] font-medium text-[#444447] whitespace-nowrap ml-4">
+                      {item.time === 'recent' ? 'nu' : new Date(item.ts).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+                {recentActivity.length === 0 && (
+                  <p className="text-[13px] text-[#444447]">Nog geen activiteit geregistreerd.</p>
+                )}
+              </div>
             </MetallicCard>
 
             {/* OMZET BREAKDOWN */}
