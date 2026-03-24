@@ -91,11 +91,11 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                         toggleSection(section.title);
                     }
                 }}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#555558] hover:text-[#88888c] transition-colors group"
+                className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a0a5] hover:text-white transition-colors group"
                 title={collapsed ? section.title : ""}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
-                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#c4a35a]' : 'text-[#444447] group-hover:text-[#666668]'}`}>
+                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#c4a35a]' : 'text-[#88888c] group-hover:text-[#b4b4b8]'}`}>
                         {section.icon}
                     </span>
 
@@ -122,8 +122,8 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
-                                        ? "bg-[#c4a35a]/10 text-white border-l-2 border-[#c4a35a] pl-2.5"
-                                        : "text-[#77777a] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
+                                    ? "bg-[#c4a35a]/10 text-white border-l-2 border-[#c4a35a] pl-2.5"
+                                    : "text-[#b4b4b8] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
                                 <span className={`shrink-0 ${isActive ? "text-[#c4a35a]" : ""}`}>
@@ -135,7 +135,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                     })}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -189,8 +189,8 @@ export default function Sidebar() {
                 <Link
                     href="/"
                     className={`group flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap ${pathname === "/"
-                            ? "bg-gradient-to-r from-[#c4a35a]/10 to-transparent border border-[#c4a35a]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
-                            : "text-[#77777a] hover:text-white hover:bg-[#1a1a1f]"
+                        ? "bg-gradient-to-r from-[#c4a35a]/10 to-transparent border border-[#c4a35a]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
+                        : "text-[#b4b4b8] hover:text-white hover:bg-[#1a1a1f]"
                         } ${collapsed ? "justify-center" : ""}`}
                     title={collapsed ? "Dashboard" : ""}
                 >
@@ -225,9 +225,9 @@ export default function Sidebar() {
                         }`}>
                         <div className="min-w-0">
                             <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">Mathijs Berkhout</p>
-                            <p className="text-[10px] text-[#555558] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
+                            <p className="text-[10px] text-[#a0a0a5] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
                         </div>
-                        <Settings className="w-4 h-4 shrink-0 text-[#444447] hover:text-white cursor-pointer transition-colors" />
+                        <Settings className="w-4 h-4 shrink-0 text-[#88888c] hover:text-white cursor-pointer transition-colors" />
                     </div>
                 </div>
             </div>
