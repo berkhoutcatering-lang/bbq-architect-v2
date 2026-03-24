@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
           <ConfirmProvider>
             <div className="flex min-h-screen bg-[#121215]">
               <Sidebar />
-              <main className="ml-[260px] flex-1 flex flex-col min-h-screen relative overflow-hidden">
+              <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
                 <div className="flex-1 w-full">
                   {children}
                 </div>
