@@ -7,7 +7,9 @@ import {
     Flame, LayoutDashboard, ChefHat, BookOpen, UtensilsCrossed, Calendar,
     PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
     ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette,
-    DollarSign, Camera, Settings, ChevronDown, ChevronRight, ChevronLeft
+    DollarSign, Camera, Settings, ChevronDown, ChevronRight, ChevronLeft,
+    Users, UserCheck, UserPlus, Lock, Mail, Inbox, Send, Archive, FolderOpen,
+    FilePlus, Star, HelpCircle, MessageCircle, Home, PieChart, TrendingUp
 } from "lucide-react";
 
 const navSections = [
@@ -70,7 +72,26 @@ const navSections = [
         type: "folder",
         children: [
             { label: "Foto-archief", icon: <Camera size={16} />, href: "/foto-archief" },
+            { label: "Gebruikers", icon: <Users size={16} />, href: "/gebruikers" },
             { label: "Instellingen", icon: <Settings size={16} />, href: "/instellingen" },
+        ],
+    },
+    {
+        title: "Communicatie",
+        icon: <Mail size={18} />,
+        type: "folder",
+        children: [
+            { label: "Berichten", icon: <Mail size={16} />, href: "/berichten" },
+            { label: "Mailbox", icon: <Inbox size={16} />, href: "/mailbox" },
+        ],
+    },
+    {
+        title: "Hulp & Support",
+        icon: <HelpCircle size={18} />,
+        type: "folder",
+        children: [
+            { label: "FAQ", icon: <BookOpen size={16} />, href: "/faq" },
+            { label: "Contact", icon: <MessageCircle size={16} />, href: "/contact" },
         ],
     },
 ];
@@ -95,7 +116,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 title={collapsed ? section.title : ""}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
-                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#c4a35a]' : 'text-[#88888c] group-hover:text-[#b4b4b8]'}`}>
+                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[#88888c] group-hover:text-[#b4b4b8]'}`}>
                         {section.icon}
                     </span>
 
@@ -122,11 +143,11 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 key={item.href}
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
-                                    ? "bg-[#c4a35a]/10 text-white border-l-2 border-[#c4a35a] pl-2.5"
+                                    ? "bg-[#3b82f6]/10 text-white border-l-2 border-[#3b82f6] pl-2.5"
                                     : "text-[#b4b4b8] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
-                                <span className={`shrink-0 ${isActive ? "text-[#c4a35a]" : ""}`}>
+                                <span className={`shrink-0 ${isActive ? "text-[#3b82f6]" : ""}`}>
                                     {item.icon}
                                 </span>
                                 <span className="text-[13px] font-medium truncate">{item.label}</span>
@@ -189,12 +210,12 @@ export default function Sidebar() {
                 <Link
                     href="/"
                     className={`group flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap ${pathname === "/"
-                        ? "bg-gradient-to-r from-[#c4a35a]/10 to-transparent border border-[#c4a35a]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
+                        ? "bg-[#3b82f6]/10 border border-[#3b82f6]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
                         : "text-[#b4b4b8] hover:text-white hover:bg-[#1a1a1f]"
                         } ${collapsed ? "justify-center" : ""}`}
                     title={collapsed ? "Dashboard" : ""}
                 >
-                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[#c4a35a]" : "group-hover:text-white"}`} />
+                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[#3b82f6]" : "group-hover:text-white"}`} />
                     <span className={`text-[13.5px] font-semibold transition-all duration-300 ${collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"}`}>
                         Dashboard
                     </span>
@@ -218,7 +239,7 @@ export default function Sidebar() {
             {/* Footer */}
             <div className="px-4 py-4 border-t border-[#141418] shrink-0 overflow-hidden">
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'justify-center mx-1' : ''}`}>
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-[#c4a35a]/20 to-[#c4a35a]/5 flex items-center justify-center text-[11px] font-bold text-[#c4a35a] border border-[#c4a35a]/20">
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-[#3b82f6] flex items-center justify-center text-[11px] font-bold text-white shadow-lg">
                         MB
                     </div>
                     <div className={`transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'
