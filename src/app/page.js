@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Calendar, ChefHat, Clock, FileText, TrendingUp, AlertTriangle, ArrowRight,
   Package, Users, Euro, Flame, CheckCircle2, Bell, Settings, Search, BarChart3,
-  MapPin, ChevronRight, Sparkles, Shield, Star,
+  MapPin, ChevronRight, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, MAANDEN_KORT } from '@/lib/utils';
