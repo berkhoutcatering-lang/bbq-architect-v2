@@ -84,7 +84,7 @@ export default function Gerechten() {
             allergenen: [], tags: [], kostprijs_pp: '',
             service_image: '', battle_plan_steps: [], target_prep_time: 0,
             hardware_items: [], ingredienten_winkels: {},
-            ingredient_costs: []
+            ingredient_costs: [], actief: false
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
@@ -117,7 +117,8 @@ export default function Gerechten() {
             target_prep_time: g.target_prep_time || 0,
             hardware_items: g.hardware_items || [],
             ingredienten_winkels: g.ingredienten_winkels || {},
-            ingredient_costs: g.ingredient_costs || []
+            ingredient_costs: g.ingredient_costs || [],
+            actief: g.actief !== false
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
@@ -316,7 +317,7 @@ export default function Gerechten() {
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    var gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang && g.actief !== false; });
+    var gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang; });
     var currentGang = gangen.find(function (g) { return g.slug === activeGang; });
 
     // ── Quick-add labels ──
@@ -370,11 +371,14 @@ export default function Gerechten() {
             <div className="dish-grid">
                 {gangGerechten.map(function (g) {
                     return (
-                        <div key={g.id} className="dish-card" onClick={function () { editGerecht(g); }}>
+                        <div key={g.id} className="dish-card" onClick={function () { editGerecht(g); }} style={{ opacity: g.actief === false ? 0.55 : 1 }}>
                             {g.foto_url && (
                                 <div className="dish-foto-preview" style={{ backgroundImage: 'url(' + g.foto_url + ')' }}></div>
                             )}
-                            <div className="dish-name">{g.naam}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
+                                {g.actief === false && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
+                            </div>
                             <div className="dish-desc">{g.beschrijving || '—'}</div>
 
                             {/* Tags + Allergenen */}
@@ -761,6 +765,28 @@ export default function Gerechten() {
                                 <div className="field">
                                     <label>Volgorde</label>
                                     <input type="number" value={form.volgorde != null ? form.volgorde : ''} onChange={function (e) { setForm(Object.assign({}, form, { volgorde: e.target.value === '' ? '' : parseInt(e.target.value) })); }} />
+                                </div>
+                            </div>
+
+                            {/* Actief status */}
+                            <div className="field">
+                                <label>Status</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        type="button"
+                                        onClick={function () { setForm(Object.assign({}, form, { actief: !form.actief })); }}
+                                        style={{
+                                            padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                            fontWeight: 700, fontSize: 12, transition: 'all .15s',
+                                            background: form.actief ? 'rgba(74,222,128,.15)' : 'rgba(239,68,68,.1)',
+                                            color: form.actief ? '#4ade80' : '#ef4444',
+                                        }}
+                                    >
+                                        {form.actief ? '✅ Actief' : '⏸ Inactief'}
+                                    </button>
+                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                        {form.actief ? 'Zichtbaar in offertes en menu' : 'Verborgen — niet beschikbaar voor offertes'}
+                                    </span>
                                 </div>
                             </div>
 

@@ -1,28 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --brand: #D5B262;
-  /* Hop & Bites Gold */
-  --brand-light: rgba(213, 178, 98, 0.08);
-  --bg: #2b2d31;
-  /* Anthracite Grey (Warm & Professional) */
-  --card: rgba(30, 31, 34, 0.8);
-  --card-solid: #1e1f22;
-  --border: rgba(255, 255, 255, 0.05);
-  --border-steel: rgba(213, 178, 98, 0.2);
-  /* Dunne gouden lijn */
-  --text: #f3f4f6;
-  --muted: #9ca3af;
-  --green: #10b981;
-  --red: #f43f5e;
+  --brand: #FFBF00;
+  --brand-light: rgba(255, 191, 0, .12);
+  --bg: #0D0D0D;
+  --card: rgba(24, 24, 27, .65);
+  --card-solid: #18181b;
+  --border: rgba(255, 255, 255, .06);
+  --text: #f4f4f5;
+  --muted: #71717a;
+  --green: #22c55e;
+  --red: #ef4444;
   --amber: #f59e0b;
-  --sidebar-w: 260px;
-  --header-h: 64px;
-  --font-artisan: 'Bebas Neue', cursive;
-  --font-main: 'Outfit', sans-serif;
-  --glass-blur: blur(10px);
-  --glass-border: 1px solid rgba(213, 178, 98, 0.1);
-  --lift-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  --cyan: #4ECDC4;
+  --purple: #a78bfa;
+  --blue: #3b82f6;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  --glass-blur: blur(18px);
+  --glass-border: 1px solid rgba(255, 191, 0, .08);
+  --lift-shadow: 0 8px 24px rgba(255, 191, 0, .06);
 }
 
 * {
@@ -35,20 +32,10 @@ html,
 body {
   height: 100%;
   background: var(--bg);
-  /* Schoon, premium effect zonder drukke texture */
   color: var(--text);
-  font-family: var(--font-main);
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
-}
-
-h1,
-h2,
-h3,
-.artisan-font {
-  font-family: var(--font-artisan);
-  letter-spacing: 1px;
-  text-transform: uppercase;
 }
 
 /* Layout */
@@ -131,78 +118,7 @@ h3,
 .sidebar-nav a i {
   width: 20px;
   text-align: center;
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-.sidebar-nav a.active i {
-  opacity: 1;
-}
-
-/* Nested Navigation Styles */
-.sidebar-group {
-  margin-bottom: 2px;
-}
-
-.sidebar-group-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  transition: all 0.2s;
-}
-
-.sidebar-group-header:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.sidebar-group-header i:first-child {
-  width: 20px;
-  text-align: center;
-  font-size: 14px;
-  color: var(--brand);
-}
-
-.sidebar-group-header span {
-  flex: 1;
-}
-
-.sidebar-group-header .chevron {
-  font-size: 10px;
-  transition: transform 0.3s;
-  opacity: 0.5;
-}
-
-.sidebar-group-header .chevron.open {
-  transform: rotate(180deg);
-}
-
-.sidebar-group-items {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease-out;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.sidebar-group.expanded .sidebar-group-items {
-  max-height: 500px;
-}
-
-.sidebar-group-items a {
-  padding-left: 50px !important;
-  font-size: 12.5px;
-  border-left: none !important;
-}
-
-.sidebar-group.has-active .sidebar-group-header {
-  color: var(--text);
+  font-size: 15px;
 }
 
 .sidebar-overlay {
@@ -1595,6 +1511,11 @@ h3,
   overflow: hidden;
   z-index: 9999;
   animation: chat-fade-in 0.2s ease-out forwards;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 @keyframes chat-fade-in {
@@ -4015,6 +3936,7 @@ h3,
   gap: 0;
 }
 
+/* Sidebar */
 .ai-studio-sidebar {
   width: 0;
   overflow: hidden;
@@ -4134,6 +4056,7 @@ h3,
   border-left: 2px solid var(--brand);
 }
 
+/* Hoofdvenster */
 .ai-studio-main {
   flex: 1;
   display: flex;
@@ -4152,6 +4075,7 @@ h3,
   flex-shrink: 0;
 }
 
+/* Modus tabs */
 .ai-mode-tabs {
   display: flex;
   background: rgba(255, 255, 255, .06);
@@ -4181,6 +4105,7 @@ h3,
   color: #000;
 }
 
+/* Berichten gebied */
 .ai-studio-messages {
   flex: 1;
   overflow-y: auto;
@@ -4260,6 +4185,7 @@ h3,
   font-weight: 600;
 }
 
+/* Suggestie chips */
 .ai-suggestion-chip {
   background: var(--card-solid);
   border: 1px solid var(--border);
@@ -4277,6 +4203,7 @@ h3,
   color: var(--brand);
 }
 
+/* Input gebied */
 .ai-studio-input-area {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
@@ -4284,10 +4211,12 @@ h3,
   flex-shrink: 0;
 }
 
+/* Opslaan dropdown */
 .ai-save-dropdown {
   position: relative;
 }
 
+/* Loading dots animatie in studio */
 .ai-studio-bubble.loading-dots {
   display: flex;
   gap: 5px;

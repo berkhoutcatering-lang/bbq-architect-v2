@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 // ── Gang-configuratie ───────────────────────────────────────────────────────
@@ -212,19 +212,30 @@ function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase }) {
 }
 
 // ── Map Station Kaart ───────────────────────────────────────────────────────
-function MapStation({ gang, gerechten, onRemove, onPublish }) {
+function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }) {
   var kleur = gang.kleur;
   var isEmpty = gerechten.length === 0;
+  var [dragOver, setDragOver] = React.useState(false);
 
   return (
-    <div style={{
-      background: 'var(--card)',
-      border: '1px solid var(--border)',
-      borderTop: '2px solid ' + kleur,
-      borderRadius: 12,
-      padding: '14px',
-      minHeight: 120,
-    }}>
+    <div
+      onDragOver={function (e) { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={function () { setDragOver(false); }}
+      onDrop={function (e) {
+        e.preventDefault();
+        setDragOver(false);
+        var id = e.dataTransfer.getData('gerecht_id');
+        if (id) onDrop(id);
+      }}
+      style={{
+        background: dragOver ? 'rgba(255,255,255,.04)' : 'var(--card)',
+        border: dragOver ? '1px solid ' + kleur + '80' : '1px solid var(--border)',
+        borderTop: '2px solid ' + kleur,
+        borderRadius: 12,
+        padding: '14px',
+        minHeight: 120,
+        transition: 'border-color .15s, background .15s',
+      }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 18 }}>{gang.icon}</span>
         <div>
@@ -352,7 +363,7 @@ export default function MenuEngineering() {
     if (!supabase) { setLoading(false); return; }
     Promise.all([
       supabase.from('gangen').select('*').order('volgorde'),
-      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief').order('volgorde'),
+      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze').order('volgorde'),
     ]).then(function (results) {
       var gangenData = results[0].data || [];
       var gerechtenData = results[1].data || [];
@@ -423,15 +434,45 @@ export default function MenuEngineering() {
     });
   }
 
-  // AI auto-sort: verplaats gerechten naar map op basis van huidige gang_slug
+  // AI auto-sort: categoriseert gerechten op basis van naam + beschrijving
   function aiAutoSort() {
+    var keywordMap = [
+      { slug: 'dessert',      words: ['dessert','panna cotta','mousse','ijs','sorbet','cake','tart','brownie','cheesecake','macaron','mille-feuille','sticky rice','crème brûlée','tiramisu','parfait','gelato','pudding','waffle','stroopwafel'] },
+      { slug: 'borrelhap',    words: ['borrelhap','borrel','amuse','nootje','chip','dip','spread','toast','crostini','bruschetta','blini'] },
+      { slug: 'bite',         words: ['bite','bites','gyoza','tataki','tartaar','tartare','carpaccio','skewer','sate','saté','lolly','slider','wrap','roll','rollup','spring roll','dumpling','bao','taco','pintxo','croqueta','kroket','bitterbal','fingerfood','finger food','mini ','hapje'] },
+      { slug: 'voorgerecht',  words: ['salade','soep','ceviche','gazpacho','bisque','carpaccio','voorgerecht','starter','amuse','poke','bowl'] },
+      { slug: 'vegetarisch',  words: ['vegan','vegetarisch','veggie','tofu','tempeh','halloumi','portobello','paddenstoel','bloemkool','aubergine','courgette','groenten','biet','linze','kikkererwt','falafel','gnocchi'] },
+      { slug: 'bijgerecht',   words: ['frites','friet','coleslaw','slaw','saus','relish','chutney','bread','brood','brioche','rice','rijst','pasta','noodle','aardappel','puree','tzatziki','guacamole','salsa','hummus','aioli','mayo'] },
+      { slug: 'hoofdgerecht', words: ['brisket','ribeye','entrecote','bavette','striploin','tomahawk','côte de boeuf','cote de boeuf','t-bone','picanha','pulled pork','spare rib','spareribs','rack','lam','lamskotelet','kip','kipfilet','kipdij','zalm','tonijn','zeebaars','ossenhaas','wagyu','burger','karbonnade','varkenshaas','eend','parelhoen'] },
+    ];
+
     var next = {};
     GANGEN.forEach(function (g) { next[g.slug] = []; });
+
     gerechten.forEach(function (g) {
-      var slug = g.gang_slug || 'anders';
-      if (!next[slug]) next[slug] = [];
-      next[slug].push(g);
+      var tekst = ((g.naam || '') + ' ' + (g.beschrijving || '')).toLowerCase();
+      var bestSlug = null;
+
+      for (var ki = 0; ki < keywordMap.length; ki++) {
+        var entry = keywordMap[ki];
+        for (var wi = 0; wi < entry.words.length; wi++) {
+          if (tekst.includes(entry.words[wi])) {
+            bestSlug = entry.slug;
+            break;
+          }
+        }
+        if (bestSlug) break;
+      }
+
+      // Fallback: gebruik bestaande gang_slug als die geldig is
+      if (!bestSlug) {
+        bestSlug = next.hasOwnProperty(g.gang_slug) ? g.gang_slug : 'anders';
+      }
+
+      if (!next[bestSlug]) next[bestSlug] = [];
+      next[bestSlug].push(g);
     });
+
     setMapData(next);
     showToast('✨ AI heeft ' + gerechten.length + ' gerechten gesorteerd op gang');
   }
@@ -677,7 +718,9 @@ export default function MenuEngineering() {
                   return (
                     <div
                       key={g.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer', transition: 'border-color .15s' }}
+                      draggable
+                      onDragStart={function (e) { e.dataTransfer.setData('gerecht_id', String(g.id)); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 9, cursor: 'grab', transition: 'border-color .15s' }}
                       onClick={function () { openGangPicker(g); }}
                     >
                       <span style={{ fontSize: 14 }}>{gang.icon}</span>
@@ -708,6 +751,10 @@ export default function MenuEngineering() {
                     gerechten={lijst}
                     onRemove={removeFromMap}
                     onPublish={publishGang}
+                    onDrop={function (gerechthId) {
+                      var g = gerechten.find(function (x) { return String(x.id) === String(gerechthId); });
+                      if (g) placeInMap(g, gang.slug);
+                    }}
                   />
                 );
               })}

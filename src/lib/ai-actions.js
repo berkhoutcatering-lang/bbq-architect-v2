@@ -20,46 +20,6 @@ export var ACTION_TYPES = {
         icon: 'fa-calendar-check',
         color: '#f59e0b',
     },
-    getUpcomingEvents: {
-        label: 'Aankomende events ophalen',
-        table: 'events',
-        op: 'select',
-        pages: ['/agenda', '/events'],
-        icon: 'fa-calendar-days',
-        color: '#3b82f6', // Blauw
-    },
-    get_weather_forecast: {
-        label: 'Weersvoorspelling Checken',
-        table: 'weer',
-        op: 'select',
-        pages: ['/agenda', '/events', '/ai-chat'],
-        icon: 'fa-cloud-sun-rain',
-        color: '#0ea5e9', // Luchtblauw
-    },
-    analyzeMenuBalance: {
-        label: 'Menu Balans Analyseren',
-        table: 'gerechten',
-        op: 'select',
-        pages: ['/menu-engineering', '/ai-chat'],
-        icon: 'fa-scale-balanced',
-        color: '#a855f7', // Purper
-    },
-    engineer_menu_profitability: {
-        label: 'Winstoptimalisatie Toepassen (Plowhorses)',
-        table: 'gerechten', // Optioneel updates direct op recepten/gerechten
-        op: 'update',
-        pages: ['/menu-engineering', '/recepten', '/ai-chat'],
-        icon: 'fa-money-bill-trend-up',
-        color: '#8b5cf6', // Violet for Genius Actions
-    },
-    plan_event_full: {
-        label: 'Event End-to-End Inplannen',
-        table: 'events',
-        op: 'insert',
-        pages: ['/agenda', '/events', '/ai-chat'],
-        icon: 'fa-calendar-check',
-        color: '#8b5cf6', // Violet for Genius Actions
-    },
     delete_event: {
         label: 'Event verwijderen',
         table: 'events',
@@ -100,7 +60,7 @@ export var ACTION_TYPES = {
         label: 'Gerecht aanmaken',
         table: 'gerechten',
         op: 'insert',
-        pages: ['/gerechten', '/menu-engineering'],
+        pages: ['/gerechten'],
         icon: 'fa-utensils',
         color: '#a78bfa',
     },
@@ -149,18 +109,10 @@ export var ACTION_TYPES = {
     process_receipt: {
         label: 'Bonnetje Verwerken & Voorraad Updaten',
         table: 'inventory',
-        op: 'insert', // Aangepaste backend logic neemt dit over
-        pages: ['/ai-chat', '/inkoop', '/voorraad'],
-        icon: 'fa-receipt',
-        color: '#8b5cf6', // Violet
-    },
-    optimize_shopping_list: {
-        label: 'Boodschappenlijst Genereren (Netto Inkoop)',
-        table: 'inkooplijsten',
-        op: 'insert',
-        pages: ['/inkoop', '/ai-chat', '/events'],
-        icon: 'fa-cart-shopping',
-        color: '#8b5cf6', // Violet for Genius Actions
+        op: 'delete',
+        pages: ['/voorraad'],
+        icon: 'fa-trash',
+        color: '#ef4444',
     },
 
     // ── Leveranciers ─────────────────────────────────────────────────────────
@@ -192,14 +144,6 @@ export var ACTION_TYPES = {
     },
 
     // ── Uren ─────────────────────────────────────────────────────────────────
-    predict_staff_needs: {
-        label: 'Formatie Voorspellen (AI Staff Planner)',
-        table: 'personeels_planning',
-        op: 'insert',
-        pages: ['/uren', '/events', '/ai-chat'],
-        icon: 'fa-users-gear',
-        color: '#8b5cf6', // Violet
-    },
     create_urenlog: {
         label: 'Uren registreren',
         table: 'time_logs',
@@ -240,34 +184,10 @@ export var ACTION_TYPES = {
         op: 'update',
         pages: ['/materieel'],
         icon: 'fa-pen-to-square',
-        color: '#f59e0b', // Amber
-    },
-    plan_logistics_route: {
-        label: 'Logistieke Route & Callsheet (AI Route Planner)',
-        table: 'timeline_events',
-        op: 'insert',
-        pages: ['/logistiek', '/ai-chat', '/events'],
-        icon: 'fa-route',
-        color: '#8b5cf6', // Violet
-    },
-    predict_hardware_needs: {
-        label: 'Hardware Voorspelling (Bus-Check)',
-        table: 'event_materieel',
-        op: 'insert',
-        pages: ['/logistiek', '/events', '/ai-chat'],
-        icon: 'fa-truck-fast',
-        color: '#8b5cf6', // Violet for Genius Actions
+        color: '#f59e0b',
     },
 
     // ── Prep-taken ───────────────────────────────────────────────────────────
-    shift_service_timeline: {
-        label: 'Service Planning Verschuiven (Floor Manager)',
-        table: 'timeline_events',
-        op: 'update',
-        pages: ['/service', '/events', '/ai-chat'],
-        icon: 'fa-clock-rotate-left',
-        color: '#8b5cf6', // Violet for Master AI Tools
-    },
     create_prep_task: {
         label: 'Prep-taak aanmaken',
         table: 'prep_tasks',
@@ -276,15 +196,39 @@ export var ACTION_TYPES = {
         icon: 'fa-list-check',
         color: '#22c55e',
     },
+    update_prep_task: {
+        label: 'Prep-taak bijwerken',
+        table: 'prep_tasks',
+        op: 'update',
+        pages: ['/agenda', '/service'],
+        icon: 'fa-pen-to-square',
+        color: '#f59e0b',
+    },
+    delete_prep_task: {
+        label: 'Prep-taak verwijderen',
+        table: 'prep_tasks',
+        op: 'delete',
+        pages: ['/agenda'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
 
     // ── Offertes ─────────────────────────────────────────────────────────────
-    generate_smart_quote: {
-        label: 'Slimme Offerte Genereren',
+    create_offerte: {
+        label: 'Offerte aanmaken',
         table: 'offertes',
         op: 'insert',
-        pages: ['/offertes', '/agenda', '/menu-engineering'],
-        icon: 'fa-brain',
-        color: '#8b5cf6', // Violet for Genius Actions
+        pages: ['/offertes'],
+        icon: 'fa-file-invoice',
+        color: '#22c55e',
+    },
+    update_offerte: {
+        label: 'Offerte bijwerken',
+        table: 'offertes',
+        op: 'update',
+        pages: ['/offertes'],
+        icon: 'fa-pen-to-square',
+        color: '#3b82f6',
     },
     update_offerte_status: {
         label: 'Offerte status bijwerken',
@@ -296,6 +240,22 @@ export var ACTION_TYPES = {
     },
 
     // ── Facturen ─────────────────────────────────────────────────────────────
+    create_factuur: {
+        label: 'Factuur aanmaken',
+        table: 'facturen',
+        op: 'insert',
+        pages: ['/facturen'],
+        icon: 'fa-receipt',
+        color: '#22c55e',
+    },
+    update_factuur: {
+        label: 'Factuur bijwerken',
+        table: 'facturen',
+        op: 'update',
+        pages: ['/facturen'],
+        icon: 'fa-pen-to-square',
+        color: '#3b82f6',
+    },
     update_factuur_status: {
         label: 'Factuur status bijwerken',
         table: 'facturen',
@@ -323,22 +283,41 @@ export var ACTION_TYPES = {
         color: '#FFBF00',
     },
 
-    // ── Smart Data Center ────────────────────────────────────────────────────
-    import_vault_recipe: {
-        label: 'Importeer naar Vault (Bedenk recept)',
-        table: 'recepten',
-        op: 'insert',
-        pages: ['/ai-chat', '/gerechten', '/recepten', '/menu-engineering'], // Beschikbaar in de Studio, Recepten, en Menu Engineering
-        icon: 'fa-file-import',
+    // ── System Operator Tools ────────────────────────────────────────────────
+    generate_prep_list: {
+        label: 'Prep-lijst genereren',
+        table: null,
+        op: 'tool',
+        pages: ['/', '/events', '/agenda', '/service'],
+        icon: 'fa-list-check',
         color: '#22c55e',
+        tool: 'generatePrepList',
     },
-    render_recipe_matrix: {
-        label: 'Interactieve Recepten Trechter',
-        table: 'recepten', // Virtual table handler
-        op: 'custom',
-        pages: ['/ai-chat', '/gerechten', '/recepten', '/menu-engineering'],
-        icon: 'fa-table-list',
-        color: '#8b5cf6', // Purple
+    bulk_create_gerechten: {
+        label: 'Gerechten toevoegen aan Menu Ontwikkelaar',
+        table: 'gerechten',
+        op: 'bulk_insert',
+        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-utensils',
+        color: '#a78bfa',
+        tool: 'bulkCreateGerechten',
+    },
+    filter_gerechten: {
+        label: 'Gerechten verwijderen/verbergen',
+        table: 'gerechten',
+        op: 'bulk_delete',
+        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-filter',
+        color: '#ef4444',
+        tool: 'filterGerechten',
+    },
+    mark_weak_dishes: {
+        label: 'Zwakke gerechten markeren',
+        table: null,
+        op: 'client_only',
+        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'fa-star-half-stroke',
+        color: '#f59e0b',
     },
 };
 
@@ -346,33 +325,8 @@ export var ACTION_TYPES = {
 export function getActionsForPage(pathname) {
     return Object.entries(ACTION_TYPES)
         .filter(function (entry) { return entry[1].pages.includes(pathname); })
-        .map(function (entry) { return Object.assign({ key: entry[0] }, entry[1]); });
+        .map(function (entry) { return { key: entry[0], ...entry[1] }; });
 }
-
-// ─── Veldschema's per actietype (voor expliciete AI-instructies) ─────────────
-var ACTION_SCHEMAS = {
-    create_gerecht: {
-        voorbeeld: '<<<ACTION:{"type":"create_gerecht","description":"Gerecht aanmaken: Pulled Pork Slider","data":{"naam":"Pulled Pork Slider","gang_slug":"bite","beschrijving":"Zacht, gerookt pulled pork op een briochebroodje met zelfgemaakte coleslaw en BBQ-glaze. Rokerig, zoet en licht pittig.","ingredienten":["200g varkensschouder","2 briochebroodjes","50g rode kool","30ml appelazijn","15ml honing","10g mosterd","5g zout","3g paprikapoeder","2g knoflookpoeder","1g cayennepeper"],"allergenen":["Gluten","Mosterd","Eieren"],"bereidingswijze":"1. Wrijf de varkensschouder in met paprika, knoflookpoeder, zout en cayenne. 2. Rook de schouder op 110°C gedurende 8-10 uur tot kerntemperatuur 93°C. 3. Trek het vlees met twee vorken uit elkaar en meng met BBQ-glaze. 4. Snijd rode kool fijn en marineer 30 min in appelazijn, honing en mosterd. 5. Serveer pulled pork op gesneden briochebroodje met coleslaw.","tags":["Populair","BBQ"],"kostprijs_pp":1.85}}>>>',
-        regels: [
-            'VERPLICHTE velden for create_gerecht:',
-            '  naam           → exacte gerechtnaam',
-            '  gang_slug      → één van: bite, borrelhapje, starter, voorgerecht, tussengerecht, hoofdgerecht, bijgerecht, dessert',
-            '  beschrijving   → 2-3 zinnen smaakprofiel (zuren, texturen, umami)',
-            '  ingredienten   → ARRAY van strings, minimaal 6 ingrediënten met hoeveelheid+eenheid+naam',
-            '  allergenen     → ARRAY volgens Nederlandse Warenwet (Gluten, Melk, Eieren, Vis, Noten, Soja, Selderij, Mosterd, etc.)',
-            '  bereidingswijze → GENUMMERD stappenplan, minimaal 4 stappen, professionele kokstaal',
-            '  kostprijs_pp   → foodcost per persoon in euro (getal)',
-        ],
-    },
-    update_gerecht: {
-        voorbeeld: '<<<ACTION:{"type":"update_gerecht","description":"Gerecht bijwerken: naam of id","data":{"id":"uuid-van-gerecht","naam":"Nieuwe Naam","beschrijving":"Bijgewerkt smaakprofiel...","ingredienten":["Ingrediënt 1","Ingrediënt 2"],"bereidingswijze":"1. Stap één. 2. Stap twee.","allergenen":["Gluten"],"kostprijs_pp":2.50}}>>>',
-        regels: [
-            'Geef altijd id mee (of naam als id onbekend is).',
-            'Vul alleen de velden in die gewijzigd worden.',
-            'ingredienten en bereidingswijze: geef ALTIJD volledige nieuwe waarde mee, nooit gedeeltelijk.',
-        ],
-    },
-};
 
 // ─── Geef actie-instructies voor systeem-prompt ───────────────────────────────
 export function getActionInstructions(pathname) {
@@ -383,84 +337,25 @@ export function getActionInstructions(pathname) {
         return '- ' + a.key + ': ' + a.label;
     }).join('\n');
 
-    var schemaBlocks = actions
-        .filter(function (a) { return ACTION_SCHEMAS[a.key]; })
-        .map(function (a) {
-            var s = ACTION_SCHEMAS[a.key];
-            return [
-                '',
-                '### Schema: ' + a.key,
-                s.regels.join('\n'),
-                'Voorbeeld (gebruik dit formaat exact):',
-                s.voorbeeld,
-            ].join('\n');
-        }).join('\n');
-
     return [
         '',
         '## Acties die jij kunt voorstellen',
         'Wanneer de gebruiker expliciet vraagt om iets aan te maken, bij te werken of te verwijderen,',
         'kun je een actieblok opnemen in je antwoord. ALLEEN bij expliciete verzoeken, NOOIT automatisch.',
         '',
-        'Algemeen formaat (exact overnemen, inclusief <<<>>> en ZONDER markdown backticks):',
-        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving","data":{...velden...}}>>>',
+        'Formaat (exact overnemen, inclusief <<<>>>):',
+        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving van wat er gaat gebeuren","data":{...velden...}}>>>',
         '',
         'Beschikbare actietypes voor deze pagina:',
         actionList,
-        schemaBlocks,
         '',
         'Regels:',
         '- Vraag ALTIJD eerst bevestiging via het actieblok — de gebruiker keurt goed of wijst af',
         '- Zet het actieblok ONDER je antwoordtekst',
         '- Gebruik exacte veldnamen uit de database',
-        '- VERBODEN: lege ingredienten-arrays, lege bereidingswijze, placeholder-tekst zoals "..." of "stap 1..."',
+        '- Vul alleen velden in die je zeker weet van de gebruiker',
         '- Gebruik geen acties voor informatie-vragen, enkel voor daadwerkelijke wijzigingen',
     ].join('\n');
-}
-
-// ─── Herstel veelvoorkomende LLM JSON-fouten ─────────────────────────────────
-function repairJson(str) {
-    // Stap 1: Vervang enkelvoudige aanhalingstekens door dubbele (bewust van context)
-    var result = '';
-    var i = 0;
-    var len = str.length;
-    var inDoubleQuote = false;
-
-    while (i < len) {
-        var ch = str[i];
-        if (inDoubleQuote) {
-            if (ch === '\\') { result += ch + (str[i + 1] || ''); i += 2; continue; }
-            if (ch === '"') inDoubleQuote = false;
-            result += ch; i++;
-        } else if (ch === '"') {
-            inDoubleQuote = true; result += ch; i++;
-        } else if (ch === "'") {
-            // Enkelvoudig aanhalingsteken → dubbel aanhalingsteken
-            result += '"'; i++;
-            while (i < len) {
-                var c = str[i];
-                if (c === "'") { result += '"'; i++; break; }
-                if (c === '"') { result += '\\"'; }
-                else if (c === '\\') { result += c; i++; if (i < len) { result += str[i]; i++; } continue; }
-                else { result += c; }
-                i++;
-            }
-        } else { result += ch; i++; }
-    }
-
-    // Stap 2: Fix sleutels zonder aanhalingstekens: {naam: → {"naam":
-    result = result.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
-
-    // Stap 3: Fix waarden zonder aanhalingstekens: "eenheid": stks → "eenheid": "stks"
-    result = result.replace(/:\s*([a-zA-Z_][a-zA-Z0-9_]*)(\s*[,}\]])/g, function (match, val, end) {
-        if (['true', 'false', 'null'].indexOf(val) >= 0) return match;
-        return ': "' + val + '"' + end;
-    });
-
-    // Stap 4: Verwijder trailing commas
-    result = result.replace(/,(\s*[}\]])/g, '$1');
-
-    return result;
 }
 
 // ─── Parseer actieblokken uit AI-responstekst ─────────────────────────────────
@@ -472,13 +367,7 @@ export function parseActions(text) {
 
     while ((match = pattern.exec(text)) !== null) {
         try {
-            var rawJsonString = match[1].trim();
-            // Verwijder markdown code blokken als de AI die per ongeluk toevoegt
-            rawJsonString = rawJsonString.replace(/^```(json)?\s*/i, '').replace(/\s*```$/i, '');
-
-            // Herstel veelvoorkomende LLM JSON-fouten (enkelvoudige quotes, ontbrekende quotes)
-            var repairedJsonString = repairJson(rawJsonString);
-            var parsed = JSON.parse(repairedJsonString);
+            var parsed = JSON.parse(match[1]);
             if (parsed.type && ACTION_TYPES[parsed.type]) {
                 actions.push({
                     id: Math.random().toString(36).slice(2, 8),
@@ -486,34 +375,28 @@ export function parseActions(text) {
                     description: parsed.description || ACTION_TYPES[parsed.type].label,
                     data: parsed.data || {},
                     meta: ACTION_TYPES[parsed.type],
-                    status: 'pending',
+                    status: 'pending', // 'pending' | 'approved' | 'rejected' | 'done' | 'error'
                 });
             }
         } catch (e) {
-            console.warn('[AI Actions] Kon actieblok niet parsen:', e.message);
-            console.warn('[AI Actions] Ontvangen string:', match[1]);
-            // Voeg een fake actie toe met een foutmelding zodat de UI (en developer) dit ziet
-            actions.push({
-                id: 'error-' + Math.random().toString(36).slice(2, 8),
-                type: 'error',
-                description: 'Parsen mislukt: ' + e.message,
-                data: { raw: match[1] },
-                status: 'failed'
-            });
+            console.warn('[AI Actions] Kon actieblok niet parsen:', match[1]);
         }
     }
 
     var cleanText = text.replace(/<<<ACTION:[\s\S]*?>>>/g, '').trim();
-    return { cleanText: cleanText, actions: actions };
+    return { cleanText, actions };
 }
 
 // ─── Voer een actie uit via Supabase ─────────────────────────────────────────
 export async function executeAction(action, supabase) {
     if (!supabase) throw new Error('Geen database-verbinding');
-    var type = action.type;
-    var data = action.data;
+    var { type, data } = action;
     var def = ACTION_TYPES[type];
     if (!def) throw new Error('Onbekend actietype: ' + type);
+
+    if (def.op === 'tool' || def.op === 'bulk_insert' || def.op === 'bulk_delete' || def.op === 'client_only') {
+        throw new Error('Actie "' + type + '" wordt afgehandeld via speciale handler, niet via executeAction');
+    }
 
     var result;
 
@@ -539,7 +422,7 @@ export async function executeAction(action, supabase) {
         if (res.error) throw res.error;
         result = res.data;
     } else if (def.op === 'update') {
-        if (!data.id) throw new Error('ID ontbreekt voor update-actie');
+        // Normaliseer: 'categorie' is alias voor 'gang_slug' (AI gebruikt soms categorie)
         var updateData = Object.assign({}, data);
         delete updateData.id;
 
@@ -580,23 +463,35 @@ export async function loadPageContextData(pathname, supabase) {
     try {
         var ctx = {};
 
-        // ── OMNISCIENT COPILOT: Laad altijd globale 'Vault' data ─────────────
-        var vaultInvRes = await supabase.from('inventory').select('id,naam,purchase_price,unit,yield_factor,categorie').order('naam');
-        var vaultRecRes = await supabase.from('recepten').select('id,naam,categorie,porties').order('naam');
-
-        if (vaultInvRes.data) ctx.vault_inventory = vaultInvRes.data;
-        if (vaultRecRes.data) ctx.vault_recepten = vaultRecRes.data;
+        // Bedrijfsinstellingen altijd laden (globaal voor alle pagina's)
+        var settRes = await supabase.from('settings').select('bedrijfsnaam,ondertitel,default_btw,betaaltermijn,offerte_geldig,factuur_prefix,offerte_prefix').limit(1);
+        if (settRes.data && settRes.data[0]) ctx.settings = settRes.data[0];
 
         if (pathname === '/' || pathname === '/dashboard') {
-            var evs = await supabase.from('events').select('id,name,date,guests,status,location').order('date', { ascending: true }).limit(10);
+            var evs = await supabase.from('events').select('id,name,date,guests,status,location,ppp').order('date', { ascending: true }).limit(10);
             ctx.events = evs.data || [];
             var invAll = await supabase.from('inventory').select('id,naam,current_stock,min_stock,unit');
             ctx.lowStock = (invAll.data || []).filter(function (i) { return i.current_stock <= i.min_stock; }).slice(0, 10);
+            var dashOffRes = await supabase.from('offertes').select('id,nummer,status,client_naam,aantal_gasten,basis_prijs_pp,korting,items,datum').order('datum', { ascending: false }).limit(20);
+            ctx.offertes = dashOffRes.data || [];
         }
 
         if (pathname === '/events') {
-            var evRes = await supabase.from('events').select('*').order('date', { ascending: true });
+            var todayEv = new Date().toISOString().slice(0, 10);
+            var evRes = await supabase.from('events')
+                .select('id,name,date,guests,location,ppp,status,menu,client_naam,notitie')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', todayEv)
+                .order('date', { ascending: true })
+                .limit(20);
             ctx.events = evRes.data || [];
+            ctx.volgendEvent = (evRes.data || [])[0] || null;
+            var pastEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status')
+                .eq('status', 'completed')
+                .order('date', { ascending: false })
+                .limit(5);
+            ctx.recenteEvents = pastEvRes.data || [];
         }
 
         if (pathname === '/recepten') {
@@ -612,33 +507,49 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/menu-engineering') {
-            var gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,ingredient_costs').order('naam');
+            var gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp').order('naam');
             ctx.gerechten = gerRes2.data || [];
         }
 
         if (pathname === '/offertes') {
-            var offRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp').order('datum', { ascending: false }).limit(20);
+            var offRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,korting,vaste_kosten,items').order('datum', { ascending: false }).limit(30);
             ctx.offertes = offRes.data || [];
-        }
-
-        if (pathname === '/financien') {
-            var fOff = await supabase.from('offertes').select('id,status,datum,aantal_gasten,basis_prijs_pp,vaste_kosten,menu_selectie').in('status', ['goedgekeurd', 'geaccepteerd', 'voltooid']);
-            var fGer = await supabase.from('gerechten').select('id,naam,ingredient_costs');
-            var fUr = await supabase.from('time_logs').select('id,start_time,end_time,status').in('status', ['completed', 'signed']);
-            ctx.financien_omzet_events = fOff.data || [];
-            ctx.financien_foodcosts = fGer.data || [];
-            ctx.financien_uren = fUr.data || [];
+            // Verloopwaarschuwingen: offertes waarvan geldig_tot binnen 7 dagen verloopt of al verlopen is
+            var nu = new Date();
+            var over7dagen = new Date(nu.getTime() + 7 * 24 * 60 * 60 * 1000);
+            ctx.verloopAlerts = (offRes.data || []).filter(function (o) {
+                if (!o.geldig_tot || o.status === 'geaccepteerd' || o.status === 'goedgekeurd' || o.status === 'betaald' || o.status === 'afgewezen') return false;
+                var geldigTot = new Date(o.geldig_tot);
+                return geldigTot <= over7dagen;
+            });
         }
 
         if (pathname === '/facturen') {
-            var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum').order('datum', { ascending: false }).limit(20);
+            var facRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(30);
             ctx.facturen = facRes.data || [];
+            // Vervaldatum-waarschuwingen: facturen die verlopen zijn of binnen 7 dagen vervallen (niet betaald)
+            var nu2 = new Date();
+            var over7d = new Date(nu2.getTime() + 7 * 24 * 60 * 60 * 1000);
+            ctx.vervalAlerts = (facRes.data || []).filter(function (f) {
+                if (!f.vervaldatum || f.status === 'betaald') return false;
+                var vd = new Date(f.vervaldatum);
+                return vd <= over7d;
+            });
         }
 
         if (pathname === '/voorraad') {
             var vRes = await supabase.from('inventory').select('*').order('naam');
             ctx.inventory = vRes.data || [];
             ctx.lowStock = (vRes.data || []).filter(function (i) { return i.current_stock <= i.min_stock; });
+            // Laad aankomende events zodat AI inkooplijst kan genereren zonder te vragen
+            var vEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status,menu')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', new Date().toISOString().split('T')[0])
+                .order('date', { ascending: true })
+                .limit(5);
+            ctx.events = vEvRes.data || [];
+            ctx.volgendEvent = (vEvRes.data || [])[0] || null;
         }
 
         if (pathname === '/inkoop') {
@@ -651,16 +562,45 @@ export async function loadPageContextData(pathname, supabase) {
         if (pathname === '/haccp') {
             var hacRes = await supabase.from('haccp_records').select('*').order('datum', { ascending: false }).limit(30);
             ctx.haccp_records = hacRes.data || [];
+            // Haal ook aankomende events op zodat AI kan zien welke events nog geen HACCP-registratie hebben
+            var hacToday = new Date().toISOString().slice(0, 10);
+            var hacEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests')
+                .in('status', ['pending', 'confirmed'])
+                .gte('date', hacToday)
+                .order('date', { ascending: true })
+                .limit(10);
+            ctx.events = hacEvRes.data || [];
+            ctx.volgendEvent = (hacEvRes.data || [])[0] || null;
         }
 
         if (pathname === '/uren') {
-            var urenRes = await supabase.from('time_logs').select('*').order('start_time', { ascending: false }).limit(20);
+            var urenRes = await supabase.from('time_logs').select('*').order('start_time', { ascending: false }).limit(50);
             ctx.time_logs = urenRes.data || [];
+            // Weekoverzicht: bereken totaal uren per medewerker voor de afgelopen 7 dagen
+            var weekGeleden = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            var weekLogs = (urenRes.data || []).filter(function (t) { return t.start_time >= weekGeleden; });
+            var medewerkerUren = {};
+            weekLogs.forEach(function (t) {
+                var naam = t.medewerker || 'Onbekend';
+                if (!medewerkerUren[naam]) medewerkerUren[naam] = 0;
+                if (t.start_time && t.end_time) {
+                    var uren = (new Date(t.end_time) - new Date(t.start_time)) / 3600000;
+                    medewerkerUren[naam] += Math.max(0, uren);
+                }
+            });
+            ctx.weekoverzicht = medewerkerUren;
         }
 
         if (pathname === '/materieel') {
             var matRes = await supabase.from('materieel').select('*').order('naam');
             ctx.materieel = matRes.data || [];
+            // Onderhoudswaarschuwingen: items met status 'defect' of 'onderhoud' of aanschaf_datum > 2 jaar
+            var grensJaar = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            ctx.onderhoudsAlerts = (matRes.data || []).filter(function (m) {
+                return m.status === 'defect' || m.status === 'onderhoud' ||
+                    (m.aanschaf_datum && m.aanschaf_datum < grensJaar);
+            });
         }
 
         if (pathname === '/logistiek') {
@@ -671,22 +611,93 @@ export async function loadPageContextData(pathname, supabase) {
         }
 
         if (pathname === '/agenda') {
-            var agEvRes = await supabase.from('events').select('id,name,date,status').order('date', { ascending: true }).limit(10);
-            var ptRes = await supabase.from('prep_tasks').select('*').order('id', { ascending: false }).limit(20);
+            var todayAg = new Date().toISOString().slice(0, 10);
+            var agEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests,location')
+                .in('status', ['optie', 'pending', 'confirmed'])
+                .gte('date', todayAg)
+                .order('date', { ascending: true })
+                .limit(10);
             ctx.events = agEvRes.data || [];
-            ctx.prep_tasks = ptRes.data || [];
+            ctx.volgendEvent = (agEvRes.data || [])[0] || null;
+            // Prep-taken gekoppeld aan aankomende events
+            var agEventIds = (agEvRes.data || []).map(function (e) { return e.id; });
+            if (agEventIds.length > 0) {
+                var ptRes = await supabase.from('prep_tasks').select('*').in('event_id', agEventIds).order('dagen').limit(50);
+                ctx.prep_tasks = ptRes.data || [];
+            } else {
+                // Fallback: recente taken
+                var ptFallback = await supabase.from('prep_tasks').select('*').order('id', { ascending: false }).limit(20);
+                ctx.prep_tasks = ptFallback.data || [];
+            }
         }
 
         if (pathname === '/service') {
-            var svcEvRes = await supabase.from('events').select('id,name,date,status,guests').eq('status', 'actief');
+            var vandaagSvc = new Date().toISOString().slice(0, 10);
+            var svcEvRes = await supabase.from('events')
+                .select('id,name,date,status,guests,location,client_naam')
+                .in('status', ['confirmed', 'optie', 'pending'])
+                .gte('date', vandaagSvc)
+                .order('date', { ascending: true })
+                .limit(5);
             ctx.active_events = svcEvRes.data || [];
+            ctx.volgendEvent = (svcEvRes.data || [])[0] || null;
+            // Haal prep-taken op voor actieve events
+            var activeIds = (svcEvRes.data || []).map(function (e) { return e.id; });
+            if (activeIds.length > 0) {
+                var svcPtRes = await supabase.from('prep_tasks').select('*').in('event_id', activeIds).order('id');
+                ctx.prep_tasks = svcPtRes.data || [];
+            }
+            // HACCP van vandaag
+            var vandaag = new Date().toISOString().slice(0, 10);
+            var svcHacRes = await supabase.from('haccp_records').select('*').eq('datum', vandaag).order('tijd');
+            ctx.haccp_vandaag = svcHacRes.data || [];
         }
 
         if (pathname === '/boekhouding') {
-            var offBRes = await supabase.from('offertes').select('id,status,basis_prijs_pp,aantal_gasten,datum').order('datum', { ascending: false }).limit(30);
-            var facBRes = await supabase.from('facturen').select('id,status,datum').order('datum', { ascending: false }).limit(30);
+            var offBRes = await supabase.from('offertes').select('id,nummer,status,client_naam,basis_prijs_pp,aantal_gasten,korting,items,datum').order('datum', { ascending: false }).limit(50);
+            var facBRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
             ctx.offertes = offBRes.data || [];
             ctx.facturen = facBRes.data || [];
+            // Bereken KPIs
+            var totaalOmzet = 0, totaalBetaald = 0, totaalOpenstaand = 0, totaalVerlopen = 0;
+            (facBRes.data || []).forEach(function (f) {
+                var t = calcFactuurTotaal(f);
+                totaalOmzet += t.totaal;
+                if (f.status === 'betaald') totaalBetaald += t.totaal;
+                if (f.status === 'concept' || f.status === 'verzonden' || f.status === 'verlopen') totaalOpenstaand += t.totaal;
+                if (f.status === 'verlopen') totaalVerlopen += t.totaal;
+            });
+            ctx.boekhoudingKPIs = { totaalOmzet: totaalOmzet, totaalBetaald: totaalBetaald, totaalOpenstaand: totaalOpenstaand, totaalVerlopen: totaalVerlopen };
+        }
+
+        if (pathname === '/financien') {
+            var offFinRes = await supabase.from('offertes').select('id,status,datum,basis_prijs_pp,aantal_gasten,items,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(100);
+            var urenFinRes = await supabase.from('time_logs').select('id,datum,uren,medewerker').order('datum', { ascending: false }).limit(200);
+            ctx.offertes = offFinRes.data || [];
+            ctx.urenLogs = urenFinRes.data || [];
+            // Bereken maandsamenvatting huidig jaar
+            var jaar = new Date().getFullYear();
+            var maanden = {};
+            for (var m = 1; m <= 12; m++) {
+                var mStr = String(m).padStart(2, '0');
+                maanden[mStr] = { maand: new Date(jaar, m - 1, 1).toLocaleString('nl-NL', { month: 'long' }), omzet: 0, offertes: 0, uren: 0 };
+            }
+            (offFinRes.data || []).filter(function (o) {
+                return ['goedgekeurd', 'geaccepteerd', 'voltooid'].includes(o.status || '') && (o.datum || '').startsWith(String(jaar));
+            }).forEach(function (o) {
+                var mStr = (o.datum || '').split('-')[1];
+                if (!maanden[mStr]) return;
+                maanden[mStr].omzet += calcOfferteTotaal(o).totaal;
+                maanden[mStr].offertes += 1;
+            });
+            (urenFinRes.data || []).filter(function (u) { return (u.datum || '').startsWith(String(jaar)); }).forEach(function (u) {
+                var mStr = (u.datum || '').split('-')[1];
+                if (!maanden[mStr]) return;
+                maanden[mStr].uren += (u.uren || 0);
+            });
+            ctx.financienMaanden = maanden;
+            ctx.financienJaar = jaar;
         }
 
         if (pathname === '/price-intelligence') {
@@ -701,40 +712,79 @@ export async function loadPageContextData(pathname, supabase) {
     }
 }
 
+// ─── Hulpfuncties voor financiële berekeningen ───────────────────────────────
+function fmtEur(n) {
+    if (!n || isNaN(n)) return '€0,00';
+    return '€' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calcOfferteTotaal(o) {
+    var korting = parseFloat(o.korting) || 0;
+    // Als er regelitems zijn, bereken via items (meest accuraat)
+    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+        var subtotaal = 0;
+        var btw = 0;
+        o.items.forEach(function (item) {
+            var line = (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
+            subtotaal += line;
+            btw += line * ((parseFloat(item.btw) || 0) / 100);
+        });
+        return { subtotaal: subtotaal, btw: btw, totaal: subtotaal + btw - korting, exBtw: subtotaal - korting };
+    }
+    // Fallback: gasten * prijs pp
+    var omzet = (parseFloat(o.aantal_gasten) || 0) * (parseFloat(o.basis_prijs_pp) || 0);
+    return { subtotaal: omzet, btw: 0, totaal: omzet - korting, exBtw: omzet - korting };
+}
+
+function calcFactuurTotaal(f) {
+    if (f.items && Array.isArray(f.items) && f.items.length > 0) {
+        var subtotaal = 0;
+        var btw = 0;
+        f.items.forEach(function (item) {
+            var line = (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
+            subtotaal += line;
+            btw += line * ((parseFloat(item.btw) || 0) / 100);
+        });
+        return { subtotaal: subtotaal, btw: btw, totaal: subtotaal + btw };
+    }
+    return { subtotaal: 0, btw: 0, totaal: 0 };
+}
+
 // ─── Formatteer context data als tekst voor systeem-prompt ───────────────────
 export function formatContextForPrompt(contextData) {
     if (!contextData) return '';
-    var lines = ['\n## DATA VAULT (ALTIJD BESCHIKBAAR)\n'];
+    var lines = ['\n## Huidige pagina data (live uit de database)\n'];
 
-    if (contextData.vault_inventory && contextData.vault_inventory.length > 0) {
-        lines.push('**INKOOP CSV (Prijs/Eenheid):**');
-        var invList = contextData.vault_inventory.map(function (i) {
-            return '- ' + i.naam + ': \u20AC' + (i.purchase_price || 0).toFixed(2) + ' per ' + i.unit + ' (Yield factor: ' + (i.yield_factor || 1.0) + ', Categorie: ' + (i.categorie || '?') + ')';
-        });
-        // We tonen de eerste 100 voor context
-        lines.push(invList.slice(0, 100).join('\n'));
+    if (contextData.settings) {
+        var s = contextData.settings;
+        lines.push('**Bedrijf:** ' + (s.bedrijfsnaam || '?') + (s.ondertitel ? ' — ' + s.ondertitel : ''));
+        lines.push('**Instellingen:** BTW ' + (s.default_btw || 21) + '% | Betaaltermijn ' + (s.betaaltermijn || 14) + ' dagen | Offerte geldig ' + (s.offerte_geldig || 30) + ' dagen');
         lines.push('');
     }
-
-    if (contextData.vault_recepten && contextData.vault_recepten.length > 0) {
-        lines.push('**HUIDIGE RECEPTEN LIJST:**');
-        lines.push(contextData.vault_recepten.map(function (r) { return r.naam; }).join(', '));
-        lines.push('');
-    }
-
-    lines.push('## Huidige pagina specifieke data\n');
 
     if (contextData.events && contextData.events.length > 0) {
-        lines.push('**Events (' + contextData.events.length + '):**');
-        contextData.events.slice(0, 8).forEach(function (e) {
-            lines.push('- [' + e.id + '] ' + e.name + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?'));
+        lines.push('**Aankomende events (' + contextData.events.length + '):**');
+        contextData.events.slice(0, 15).forEach(function (e) {
+            var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) + ' (' + fmtEur(e.ppp) + '/p.p.)' : (e.ppp ? ' | ' + fmtEur(e.ppp) + '/p.p.' : '');
+            var menuIds = e.menu || [];
+            if (typeof menuIds === 'string') { try { menuIds = JSON.parse(menuIds); } catch (_) { menuIds = []; } }
+            var menuStr = Array.isArray(menuIds) && menuIds.length > 0 ? ' | menu: ' + menuIds.length + ' recept(en)' : ' | ⚠️ geen menu gekoppeld';
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten | status: ' + (e.status || '?') + omzetStr + (e.location ? ' | ' + e.location : '') + (e.client_naam ? ' | klant: ' + e.client_naam : '') + menuStr);
+        });
+        lines.push('');
+    }
+    if (contextData.recenteEvents && contextData.recenteEvents.length > 0) {
+        lines.push('**Recent afgeronde events:**');
+        contextData.recenteEvents.forEach(function (e) {
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten');
         });
         lines.push('');
     }
     if (contextData.active_events && contextData.active_events.length > 0) {
         lines.push('**Actieve events:**');
         contextData.active_events.forEach(function (e) {
-            lines.push('- [' + e.id + '] ' + e.name + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten');
+            var omzetStr = (e.ppp && e.guests) ? ' | omzet: ' + fmtEur(e.ppp * e.guests) : '';
+            lines.push('- [' + e.id + '] ' + (e.name || '?') + ' | ' + (e.date || '?') + ' | ' + (e.guests || 0) + ' gasten' + omzetStr);
         });
         lines.push('');
     }
@@ -746,8 +796,8 @@ export function formatContextForPrompt(contextData) {
         lines.push('');
     }
     if (contextData.gerechten && contextData.gerechten.length > 0) {
-        lines.push('**Gerechten (' + contextData.gerechten.length + '):**');
-        contextData.gerechten.slice(0, 10).forEach(function (g) {
+        lines.push('**Gerechten (' + contextData.gerechten.length + ' totaal — gebruik ALTIJD de exacte [id] bij updates):**');
+        contextData.gerechten.forEach(function (g) {
             lines.push('- [' + g.id + '] ' + g.naam + ' | gang: ' + (g.gang_slug || '?') + ' | actief: ' + (g.actief ? 'ja' : 'nee'));
         });
         lines.push('');
@@ -757,31 +807,77 @@ export function formatContextForPrompt(contextData) {
         lines.push('');
     }
     if (contextData.offertes && contextData.offertes.length > 0) {
-        lines.push('**Offertes (' + contextData.offertes.length + '):**');
-        contextData.offertes.slice(0, 8).forEach(function (o) {
-            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | ' + (o.status || '?') + ' | ' + (o.aantal_gasten || 0) + ' gasten');
+        // Bereken totalen per status
+        var offTotaalOpen = 0, offTotaalBetaald = 0, offTotaalAlles = 0;
+        contextData.offertes.forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            offTotaalAlles += t.totaal;
+            if (o.status === 'betaald' || o.status === 'goedgekeurd' || o.status === 'geaccepteerd') offTotaalBetaald += t.totaal;
+            if (o.status === 'concept' || o.status === 'verzonden') offTotaalOpen += t.totaal;
+        });
+
+        lines.push('**Offertes (' + contextData.offertes.length + ') — Totaal omzet: ' + fmtEur(offTotaalAlles) + ' | Open: ' + fmtEur(offTotaalOpen) + ' | Betaald/goedgekeurd: ' + fmtEur(offTotaalBetaald) + '**');
+        contextData.offertes.slice(0, 15).forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            var pppInfo = o.basis_prijs_pp ? ' | ' + fmtEur(o.basis_prijs_pp) + '/p.p.' : '';
+            var kortingInfo = (parseFloat(o.korting) > 0) ? ' | korting: ' + fmtEur(o.korting) : '';
+            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | ' + (o.status || '?') + ' | ' + (o.aantal_gasten || 0) + ' gasten' + pppInfo + kortingInfo + ' | TOTAAL: ' + fmtEur(t.totaal));
         });
         lines.push('');
     }
     if (contextData.facturen && contextData.facturen.length > 0) {
-        lines.push('**Facturen (' + contextData.facturen.length + '):**');
-        contextData.facturen.slice(0, 8).forEach(function (f) {
-            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | ' + (f.status || '?'));
+        // Bereken totalen
+        var facTotaalOpen = 0, facTotaalBetaald = 0, facTotaalAlles = 0;
+        contextData.facturen.forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            facTotaalAlles += t.totaal;
+            if (f.status === 'betaald') facTotaalBetaald += t.totaal;
+            if (f.status === 'concept' || f.status === 'verzonden' || f.status === 'verlopen') facTotaalOpen += t.totaal;
+        });
+
+        lines.push('**Facturen (' + contextData.facturen.length + ') — Totaal: ' + fmtEur(facTotaalAlles) + ' | Openstaand: ' + fmtEur(facTotaalOpen) + ' | Betaald: ' + fmtEur(facTotaalBetaald) + '**');
+        contextData.facturen.slice(0, 15).forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            var totaalStr = t.totaal > 0 ? ' | TOTAAL: ' + fmtEur(t.totaal) : '';
+            var vervalStr = f.vervaldatum ? ' | vervalt: ' + f.vervaldatum : '';
+            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | ' + (f.status || '?') + vervalStr + totaalStr);
         });
         lines.push('');
     }
     if (contextData.inventory && contextData.inventory.length > 0) {
         lines.push('**Voorraad (' + contextData.inventory.length + ' items):**');
         contextData.inventory.slice(0, 10).forEach(function (i) {
-            var alert = i.current_stock <= i.min_stock ? ' \u26A0\uFE0F LAAG' : '';
+            var alert = i.current_stock <= i.min_stock ? ' ⚠️ LAAG' : '';
             lines.push('- [' + i.id + '] ' + i.naam + ' | ' + i.current_stock + ' ' + (i.unit || '') + ' (min: ' + i.min_stock + ')' + alert);
         });
         lines.push('');
     }
+    if (contextData.volgendEvent) {
+        var ev = contextData.volgendEvent;
+        lines.push('**Volgend event (gebruik dit bij inkoop-vragen):**');
+        lines.push('- ID: ' + ev.id + ' | ' + (ev.name || '?') + ' | ' + (ev.date || '?') + ' | ' + (ev.guests || ev.aantal_personen || '?') + ' gasten | status: ' + (ev.status || '?') + (ev.location ? ' | ' + ev.location : ''));
+        lines.push('');
+    }
     if (contextData.lowStock && contextData.lowStock.length > 0) {
-        lines.push('**\u26A0\uFE0F Lage voorraad (' + contextData.lowStock.length + ' items):**');
+        lines.push('**⚠️ Lage voorraad (' + contextData.lowStock.length + ' items):**');
         contextData.lowStock.forEach(function (i) {
             lines.push('- ' + i.naam + ': ' + i.current_stock + '/' + i.min_stock + ' ' + (i.unit || ''));
+        });
+        lines.push('');
+    }
+    if (contextData.vervalAlerts && contextData.vervalAlerts.length > 0) {
+        lines.push('**⚠️ Facturen die binnenkort vervallen of al verlopen zijn (' + contextData.vervalAlerts.length + '):**');
+        contextData.vervalAlerts.forEach(function (f) {
+            var t = calcFactuurTotaal(f);
+            lines.push('- [' + f.id + '] ' + (f.nummer || '?') + ' | ' + (f.client_naam || '?') + ' | vervalt: ' + (f.vervaldatum || '?') + ' | status: ' + (f.status || '?') + ' | TOTAAL: ' + fmtEur(t.totaal));
+        });
+        lines.push('');
+    }
+    if (contextData.verloopAlerts && contextData.verloopAlerts.length > 0) {
+        lines.push('**⚠️ Offertes die binnenkort verlopen of al verlopen zijn (' + contextData.verloopAlerts.length + '):**');
+        contextData.verloopAlerts.forEach(function (o) {
+            var t = calcOfferteTotaal(o);
+            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | geldig t/m: ' + (o.geldig_tot || '?') + ' | status: ' + (o.status || '?') + ' | TOTAAL: ' + fmtEur(t.totaal));
         });
         lines.push('');
     }
@@ -792,14 +888,14 @@ export function formatContextForPrompt(contextData) {
     if (contextData.haccp_records && contextData.haccp_records.length > 0) {
         lines.push('**HACCP records (' + contextData.haccp_records.length + ' recent):**');
         contextData.haccp_records.slice(0, 5).forEach(function (h) {
-            lines.push('- ' + (h.datum || '?') + ' ' + (h.tijd || '') + ' | ' + (h.wat || '?') + ' | ' + (h.temp || '?') + '\u00B0C | ' + (h.status || '?'));
+            lines.push('- ' + (h.datum || '?') + ' ' + (h.tijd || '') + ' | ' + (h.wat || '?') + ' | ' + (h.temp || '?') + '°C | ' + (h.status || '?'));
         });
         lines.push('');
     }
     if (contextData.time_logs && contextData.time_logs.length > 0) {
         lines.push('**Urenregistraties (' + contextData.time_logs.length + ' recent):**');
         contextData.time_logs.slice(0, 5).forEach(function (t) {
-            lines.push('- [' + t.id + '] ' + (t.start_time || '?') + ' \u2192 ' + (t.end_time || 'lopend') + ' | ' + (t.status || '?'));
+            lines.push('- [' + t.id + '] ' + (t.start_time || '?') + ' → ' + (t.end_time || 'lopend') + ' | ' + (t.status || '?'));
         });
         lines.push('');
     }
@@ -813,12 +909,53 @@ export function formatContextForPrompt(contextData) {
     if (contextData.prep_tasks && contextData.prep_tasks.length > 0) {
         lines.push('**Prep-taken (' + contextData.prep_tasks.length + '):**');
         contextData.prep_tasks.slice(0, 6).forEach(function (p) {
-            lines.push('- [' + p.id + '] Event ' + (p.event_id || '?') + ': ' + (p.text || '?') + ' | ' + (p.done ? '\u2713 klaar' : 'open') + ' | ' + (p.dagen || '?') + ' dagen voor');
+            lines.push('- [' + p.id + '] Event ' + (p.event_id || '?') + ': ' + (p.text || '?') + ' | ' + (p.done ? '✓ klaar' : 'open') + ' | ' + (p.dagen || '?') + ' dagen voor');
         });
         lines.push('');
     }
     if (contextData.rtr_items && contextData.rtr_items.length > 0) {
         lines.push('**Bus RTR-items (' + contextData.rtr_items.length + '):** ' + contextData.rtr_items.filter(function (r) { return r.done; }).length + '/' + contextData.rtr_items.length + ' afgevinkt');
+        lines.push('');
+    }
+    if (contextData.haccp_vandaag && contextData.haccp_vandaag.length > 0) {
+        lines.push('**HACCP registraties vandaag (' + contextData.haccp_vandaag.length + '):**');
+        contextData.haccp_vandaag.forEach(function (h) {
+            lines.push('- ' + (h.tijd || '?') + ' | ' + (h.wat || '?') + ' | ' + (h.temp || '?') + '°C | ' + (h.status || '?'));
+        });
+        lines.push('');
+    }
+    if (contextData.weekoverzicht && Object.keys(contextData.weekoverzicht).length > 0) {
+        lines.push('**Uren deze week per medewerker:**');
+        Object.entries(contextData.weekoverzicht).forEach(function (entry) {
+            lines.push('- ' + entry[0] + ': ' + entry[1].toFixed(1) + 'u');
+        });
+        lines.push('');
+    }
+    if (contextData.onderhoudsAlerts && contextData.onderhoudsAlerts.length > 0) {
+        lines.push('**⚠️ Materieel dat onderhoud nodig heeft (' + contextData.onderhoudsAlerts.length + '):**');
+        contextData.onderhoudsAlerts.forEach(function (m) {
+            lines.push('- [' + m.id + '] ' + m.naam + ' | aanschaf: ' + (m.aanschaf_datum || 'onbekend') + ' | status: ' + (m.status || '?') + (m.notitie ? ' | ' + m.notitie : ''));
+        });
+        lines.push('');
+    }
+    if (contextData.boekhoudingKPIs) {
+        var kpi = contextData.boekhoudingKPIs;
+        lines.push('**Boekhouding KPIs:**');
+        lines.push('- Totale omzet (facturen): ' + fmtEur(kpi.totaalOmzet));
+        lines.push('- Betaald: ' + fmtEur(kpi.totaalBetaald));
+        lines.push('- Openstaand: ' + fmtEur(kpi.totaalOpenstaand));
+        lines.push('- Verlopen (niet betaald): ' + fmtEur(kpi.totaalVerlopen));
+        lines.push('');
+    }
+    if (contextData.financienMaanden) {
+        lines.push('**Financiën ' + contextData.financienJaar + ' — maandoverzicht:**');
+        Object.values(contextData.financienMaanden).forEach(function (m) {
+            if (m.omzet > 0 || m.uren > 0) {
+                var arbeidskosten = m.uren * 35;
+                var netto = m.omzet - arbeidskosten;
+                lines.push('- ' + m.maand + ': omzet ' + fmtEur(m.omzet) + ' | ' + m.offertes + ' events | ' + m.uren + 'u arbeid (' + fmtEur(arbeidskosten) + ') | netto ~' + fmtEur(netto));
+            }
+        });
         lines.push('');
     }
     if (contextData.folders && contextData.folders.length > 0) {
