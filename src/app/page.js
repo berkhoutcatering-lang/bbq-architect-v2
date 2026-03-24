@@ -95,9 +95,11 @@ export default function DashboardPage() {
   var gerechtenData = ger.data || [];
 
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [greeting, setGreeting] = useState("");
+  const [greeting, setGreeting] = useState("Welkom");
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Goedemorgen");
@@ -184,6 +186,14 @@ export default function DashboardPage() {
     return { day, month: months[monthIndex >= 0 && monthIndex < 12 ? monthIndex : 0], year };
   };
 
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#08080a] flex items-center justify-center text-white/50">
+        <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#08080a] text-white selection:bg-[#c4a35a]/30">
       {/* ========== HEADER ========== */}
@@ -210,10 +220,10 @@ export default function DashboardPage() {
             </button>
             <div className="ml-2 text-right">
               <p className="text-[11px] text-[#555558] font-medium capitalize">
-                {currentTime.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" })}
+                {isMounted ? currentTime.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" }) : "Laden..."}
               </p>
               <p className="text-[13px] font-light text-[#888] tabular-nums">
-                {currentTime.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
+                {isMounted ? currentTime.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
               </p>
             </div>
           </div>
