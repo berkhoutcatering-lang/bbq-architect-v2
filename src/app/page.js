@@ -188,16 +188,16 @@ export default function DashboardPage() {
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-[#08080a] flex items-center justify-center text-white/50">
+      <div className="min-h-screen bg-[#121215] flex items-center justify-center text-white/50">
         <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#08080a] text-white selection:bg-[#c4a35a]/30">
+    <div className="min-h-screen bg-[#121215] text-white selection:bg-[#c4a35a]/30">
       {/* ========== HEADER ========== */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#08080a]/80 border-b border-[#151518]">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#121215]/80 border-b border-[#151518]">
         <div className="max-w-[1400px] mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -215,7 +215,7 @@ export default function DashboardPage() {
             <button className="relative p-2.5 rounded-xl bg-[#111115] border border-[#1e1e22] hover:border-[#2a2a30] transition-colors">
               <Bell className="w-4 h-4 text-[#555558]" />
               {liveActions.some((a) => a.urgency === "high") && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#08080a]" />
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#121215]" />
               )}
             </button>
             <div className="ml-2 text-right">

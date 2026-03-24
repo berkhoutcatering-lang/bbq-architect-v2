@@ -85,7 +85,7 @@ export default function Sidebar() {
     };
 
     return (
-        <aside className="fixed left-0 top-0 bottom-0 w-[260px] bg-[#0a0a0c] border-r border-[#141418] flex flex-col z-[100]">
+        <aside className="fixed left-0 top-0 bottom-0 w-[260px] bg-[#151518] border-r border-[#141418] flex flex-col z-[100]">
             {/* Logo */}
             <div className="px-6 py-5 border-b border-[#141418]">
                 <div className="flex items-center gap-3">
@@ -108,8 +108,8 @@ export default function Sidebar() {
                 <Link
                     href="/"
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${pathname === "/"
-                            ? "bg-[#c4a35a]/10 border border-[#c4a35a]/20 text-white"
-                            : "text-[#666] hover:text-white hover:bg-[#111115]"
+                        ? "bg-[#c4a35a]/10 border border-[#c4a35a]/20 text-white"
+                        : "text-[#666] hover:text-white hover:bg-[#111115]"
                         }`}
                 >
                     <LayoutDashboard className="w-4 h-4" />
@@ -144,8 +144,8 @@ export default function Sidebar() {
                                                 key={item.href}
                                                 href={item.href}
                                                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${isActive
-                                                        ? "bg-white/[0.04] text-white"
-                                                        : "text-[#555558] hover:text-[#999] hover:bg-white/[0.02]"
+                                                    ? "bg-white/[0.04] text-white"
+                                                    : "text-[#555558] hover:text-[#999] hover:bg-white/[0.02]"
                                                     }`}
                                             >
                                                 <span className={isActive ? "text-[#c4a35a]" : ""}>
