@@ -5070,3 +5070,50 @@ body {
 .ai-message-wrapper { display: flex; gap: 10px; width: 100%; }
 .ai-message-wrapper.user { flex-direction: row-reverse; }
 
+/* --- NEW MERCEDES-STYLE DASHBOARD THEME --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
+
+:root {
+  --color-bg-primary: #08080a;
+  --color-bg-card: #111113;
+  --color-bg-elevated: #151518;
+  --color-border: #1e1e22;
+  --color-border-hover: #2a2a30;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #888888;
+  --color-text-muted: #555558;
+  --color-text-ghost: #333338;
+  --color-accent-gold: #c4a35a;
+  --color-accent-silver: #8b8b8f;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  background: var(--color-bg-primary) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* Custom scrollbar - Mercedes subtle */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e1e22;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a2a30;
+}
+
+/* Smooth transitions globally */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tabular numbers for financial data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

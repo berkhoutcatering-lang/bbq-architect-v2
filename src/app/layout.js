@@ -25,10 +25,10 @@ export default function RootLayout({ children }) {
       <body>
         <ToastProvider>
           <ConfirmProvider>
-            <div className="app-layout">
+            <div className="flex min-h-screen bg-[#08080a]">
               <Sidebar />
-              <main className="main-area">
-                <div className="main-content">
+              <main className="ml-[260px] flex-1 flex flex-col min-h-screen relative overflow-hidden">
+                <div className="flex-1 w-full">
                   {children}
                 </div>
               </main>
