@@ -19,6 +19,9 @@ export default function AiAssistant() {
     var messagesEndRef = useRef(null);
     var inputRef = useRef(null);
     var fileInputRef = useRef(null);
+    var [activeConversation, setActiveConversation] = useState(null);
+    var [folders, setFolders] = useState([]);
+    var [conversations, setConversations] = useState([]);
 
     var pageName = (function () {
         var n = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
@@ -132,26 +135,78 @@ export default function AiAssistant() {
                     contextData: contextData,
                 }),
             });
-            var data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Fout opgetreden');
 
-            var rawReply = data.choices[0].message.content;
-            var parsed = parseActions(rawReply);
+            if (!res.ok) throw new Error('Netwerkfout');
 
-            setMessages(function (prev) {
-                return [...prev, {
-                    role: 'assistant',
-                    content: parsed.cleanText,
-                    actions: parsed.actions,
-                }];
-            });
+            // ── Streaming afhandeling ───────────────────────────────────────
+            var assistantMsg = { role: 'assistant', content: '', actions: [], isStreaming: true };
+            setMessages(function (prev) { return [...prev, assistantMsg]; });
+
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var accumulatedText = '';
+
+            while (true) {
+                var chunk = await reader.read();
+                if (chunk.done) break;
+                var text = decoder.decode(chunk.value);
+                var lines = text.split('\n');
+                for (var line of lines) {
+                    if (line.startsWith('data: ')) {
+                        var raw = line.slice(6);
+                        try {
+                            var parsedChunk = JSON.parse(raw);
+                            if (parsedChunk.delta) {
+                                accumulatedText += parsedChunk.delta;
+                                setMessages(function (prev) {
+                                    var last = prev[prev.length - 1];
+                                    if (last && last.role === 'assistant') {
+                                        return [...prev.slice(0, -1), Object.assign({}, last, { content: accumulatedText })];
+                                    }
+                                    return prev;
+                                });
+                            }
+                            if (parsedChunk.done) {
+                                var finalOutput = parseActions(accumulatedText);
+                                setMessages(function (prev) {
+                                    return [...prev.slice(0, -1), {
+                                        role: 'assistant',
+                                        content: finalOutput.cleanText,
+                                        actions: finalOutput.actions,
+                                    }];
+                                });
+                            }
+                        } catch (e) { }
+                    }
+                }
+            }
+
+            // Auto-save als dit gesprek al opgeslagen was
+            if (activeConversation) {
+                setTimeout(updateConversation, 500);
+            }
+
         } catch (error) {
             setMessages(function (prev) {
-                return [...prev, { role: 'assistant', content: '\u274C ' + error.message, actions: [] }];
+                return [...prev, { role: 'assistant', content: '❌ ' + error.message, actions: [] }];
             });
         } finally {
             setIsLoading(false);
+            // Auto-save nadat AI response verwerkt is (state is dan bijgewerkt)
+            if (activeConversation) {
+                setTimeout(updateConversation, 300);
+            }
         }
+    }
+
+    async function updateConversation() {
+        if (!activeConversation || !supabase) return;
+        try {
+            await supabase.from('ai_conversations').update({
+                messages: messages,
+                updated_at: new Date().toISOString()
+            }).eq('id', activeConversation.id);
+        } catch (e) { console.error('Auto-save error:', e); }
     }
 
     // ── Actie goedkeuren ─────────────────────────────────────────────────────
@@ -246,10 +301,121 @@ export default function AiAssistant() {
         });
     }
 
+    // ── Tool renders ────────────────────────────────────────────────────────
+    function renderInkooplijst(data) {
+        if (!data) return null;
+        return (
+            <div className="tool-card" style={{ background: 'rgba(255,191,0,0.05)', border: '1px solid rgba(255,191,0,0.2)' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: '#FFBF00' }}>
+                    <i className="fa-solid fa-cart-shopping" style={{ marginRight: 6 }}></i>
+                    Inkooplijst: {data.event?.naam}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                    {data.gasten} gasten &bull; {data.items?.length} ingrediënten &bull; Geschatte kosten: &euro;{data.geschatte_inkoop_kosten}
+                </div>
+                <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                            <th style={{ padding: '4px 0' }}>Item</th>
+                            <th style={{ padding: '4px 0' }}>Nodig</th>
+                            <th style={{ padding: '4px 0' }}>Bestellen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(data.items || []).slice(0, 8).map(function (item, k) {
+                            return (
+                                <tr key={k} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                    <td style={{ padding: '4px 0' }}>{item.naam}</td>
+                                    <td style={{ padding: '4px 0' }}>{item.benodigdheid} {item.eenheid}</td>
+                                    <td style={{ padding: '4px 0', fontWeight: item.te_bestellen > 0 ? 700 : 400, color: item.te_bestellen > 0 ? '#FFBF00' : '#22c55e' }}>
+                                        {item.te_bestellen > 0 ? item.te_bestellen + ' ' + item.eenheid : '\u2713'}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+                {data.items?.length > 8 && <div style={{ fontSize: 10, marginTop: 6, opacity: .6 }}>+ {data.items.length - 8} meer items...</div>}
+                <button onClick={function () { window.location.href = '/inkoop?event=' + data.event?.id; }} className="btn btn-xs btn-primary" style={{ marginTop: 12, width: '100%' }}>
+                    Open in Inkoop Module
+                </button>
+            </div>
+        );
+    }
+
+    function renderEventBriefing(data) {
+        if (!data) return null;
+        return (
+            <div className="tool-card" style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.2)' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: '#38bdf8' }}>
+                    <i className="fa-solid fa-file-lines" style={{ marginRight: 6 }}></i>
+                    Event Briefing: {data.event?.naam}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 11 }}>
+                    <div><strong>Datum:</strong> {data.event?.datum}</div>
+                    <div><strong>Gasten:</strong> {data.event?.gasten}</div>
+                    <div><strong>Locatie:</strong> {data.event?.locatie}</div>
+                    <div><strong>Status:</strong> {data.event?.status}</div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 4 }}>Menu Progress</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                        {(data.menu || []).map(function (m, i) {
+                            return <span key={i} title={m.naam} style={{ padding: '2px 6px', background: 'rgba(56,189,248,0.15)', borderRadius: 4, fontSize: 9 }}>{m.naam}</span>;
+                        })}
+                    </div>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11 }}>
+                    <i className="fa-solid fa-list-check" style={{ marginRight: 4 }}></i> {data.prep_taken_open} open prep taken
+                </div>
+            </div>
+        );
+    }
+
+    function renderWinstgevendheid(data) {
+        if (!data) return null;
+        var isGood = data.nettoMargePerc > 40;
+        return (
+            <div className="tool-card" style={{ background: isGood ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)', border: isGood ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(239,68,68,0.2)' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: isGood ? '#22c55e' : '#ef4444' }}>
+                    <i className="fa-solid fa-chart-pie" style={{ marginRight: 6 }}></i>
+                    Rendement: {data.event?.naam}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div className="stat-mini">
+                        <div className="label">Omzet</div>
+                        <div className="val">&euro;{data.omzet}</div>
+                    </div>
+                    <div className="stat-mini">
+                        <div className="label">Inkoop</div>
+                        <div className="val">&euro;{data.inkoopKosten}</div>
+                    </div>
+                    <div className="stat-mini">
+                        <div className="label">Arbeid</div>
+                        <div className="val">&euro;{data.arbeidskosten}</div>
+                    </div>
+                    <div className="stat-mini">
+                        <div className="label">Netto Winst</div>
+                        <div className="val" style={{ color: isGood ? '#22c55e' : '#ef4444' }}>&euro;{data.nettoMarge}</div>
+                    </div>
+                </div>
+                <div style={{ height: 6, background: 'rgba(0,0,0,0.2)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: data.nettoMargePerc + '%', height: '100%', background: isGood ? '#22c55e' : '#ef4444' }}></div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: 10, marginTop: 4, fontWeight: 700 }}>{data.nettoMargePerc}% Netto Marge</div>
+            </div>
+        );
+    }
+
     // ── Render actiekaart ─────────────────────────────────────────────────────
     function renderActionCard(action, msgIdx) {
         if (action.type === 'render_recipe_matrix') {
             return <RecipeMatrix key={action.id} action={action} supabase={supabase} />;
+        }
+        if (action.type === 'tool_result') {
+            if (action.tool === 'generateInkooplijst') return renderInkooplijst(action.result);
+            if (action.tool === 'generateEventBriefing') return renderEventBriefing(action.result);
+            if (action.tool === 'getEventWinstgevendheid') return renderWinstgevendheid(action.result);
         }
 
         var isPending = action.status === 'pending';

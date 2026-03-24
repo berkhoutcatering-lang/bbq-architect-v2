@@ -4,6 +4,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt } from '@/lib/utils';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 
 var CATEGORIEEN = ['Alles', 'Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Overig'];
 var EENHEDEN = ['kg', 'g', 'L', 'ml', 'stuks', 'bos', 'pot', 'fles', 'zak'];
@@ -22,7 +23,7 @@ export default function Voorraad() {
     // Filtered items
     var filtered = inventory.filter(function (item) {
         var matchCat = filter === 'Alles' || item.categorie === filter;
-        var matchSearch = !search || item.naam.toLowerCase().indexOf(search.toLowerCase()) >= 0;
+        var matchSearch = !search || (item.naam || '').toLowerCase().indexOf(search.toLowerCase()) >= 0;
         return matchCat && matchSearch;
     });
 
@@ -31,6 +32,14 @@ export default function Voorraad() {
     var lowStock = inventory.filter(function (i) { return i.current_stock < i.min_stock; });
     var totalValue = 0;
     inventory.forEach(function (i) { totalValue += (i.current_stock || 0) * (i.purchase_price || 0); });
+
+    // Category breakdown chart
+    var catKleuren = { Vlees: '#ef4444', Vis: '#3b82f6', Groenten: '#22c55e', Zuivel: '#f59e0b', Kruiden: '#a78bfa', Sauzen: '#f97316', Dranken: '#06b6d4', Overig: '#71717a' };
+    var catData = CATEGORIEEN.filter(function (c) { return c !== 'Alles'; }).map(function (cat) {
+        var items = inventory.filter(function (i) { return i.categorie === cat; });
+        var waarde = items.reduce(function (s, i) { return s + (i.current_stock || 0) * (i.purchase_price || 0); }, 0);
+        return { naam: cat, items: items.length, waarde: Math.round(waarde), color: catKleuren[cat] || '#71717a' };
+    }).filter(function (d) { return d.items > 0; });
 
     function newItem() {
         setEditing('new');
@@ -58,7 +67,7 @@ export default function Voorraad() {
 
     // Find which recipes use this inventory item
     function recipesUsingItem(itemNaam) {
-        return recepten.filter(function (r) {
+        return (recepten || []).filter(function (r) {
             return (r.ingredienten || []).some(function (ing) {
                 return ing.naam && ing.naam.toLowerCase().indexOf(itemNaam.toLowerCase()) >= 0;
             });
@@ -110,7 +119,6 @@ export default function Voorraad() {
                             <input value={form.supplier} onChange={function (e) { setField('supplier', e.target.value); }} placeholder="bijv. Sligro, Hanos..." /></div>
                     </div>
 
-                    {/* Stock value */}
                     <div style={{ marginTop: 20, padding: 16, borderRadius: 14, border: '1px solid var(--border)', background: isLow ? 'rgba(239,68,68,.06)' : 'var(--bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Voorraadwaarde</div>
@@ -119,21 +127,17 @@ export default function Voorraad() {
                         {isLow && <span className="pill pill-red" style={{ fontSize: 11 }}>⚠ Onder par-level!</span>}
                     </div>
 
-                    {/* Profit-Guard: recipes using this item */}
                     {usedIn.length > 0 && (
                         <div style={{ marginTop: 20 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
                                 <i className="fa-solid fa-link" style={{ marginRight: 6 }}></i> Profit-Guard — Gebruikt in {usedIn.length} recept(en)
                             </div>
                             {usedIn.map(function (r) {
-                                // Calculate cost contribution
                                 var ing = (r.ingredienten || []).find(function (i) { return i.naam && i.naam.toLowerCase().indexOf(form.naam.toLowerCase()) >= 0; });
-                                var costContrib = ing ? (parseFloat(ing.hoeveelheid) || 0) * (form.purchase_price || 0) : 0;
-                                // Convert units if needed
                                 var unitFactor = 1;
                                 if (ing && ing.eenheid === 'gram' && form.unit === 'kg') unitFactor = 0.001;
                                 if (ing && ing.eenheid === 'ml' && form.unit === 'L') unitFactor = 0.001;
-                                costContrib = (parseFloat(ing ? ing.hoeveelheid : 0) || 0) * unitFactor * (form.purchase_price || 0);
+                                var costContrib = (parseFloat(ing ? ing.hoeveelheid : 0) || 0) * unitFactor * (form.purchase_price || 0);
                                 var perPortie = r.porties ? costContrib / r.porties : 0;
                                 return (
                                     <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'rgba(167,139,250,.06)', border: '1px solid rgba(167,139,250,.15)', borderRadius: 10, marginBottom: 6 }}>
@@ -220,9 +224,8 @@ export default function Voorraad() {
         );
     }
 
-    // Main dashboard
     return (
-        <>
+        <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div>
@@ -244,7 +247,7 @@ export default function Voorraad() {
             </div>
 
             {/* Stats */}
-            <div className="stat-grid">
+            <div className="stat-grid mb-24">
                 <div className="stat-card inv-glass">
                     <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><i className="fa-solid fa-boxes-stacked"></i></div>
                     <div className="stat-val">{totalItems}</div>
@@ -261,6 +264,49 @@ export default function Voorraad() {
                     <div className="stat-label">Voorraadwaarde</div>
                 </div>
             </div>
+
+            {/* Category Charts */}
+            {catData.length > 1 && (
+                <div className="analytics-grid mb-24">
+                    <div className="panel inv-glass">
+                        <div className="panel-head">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <i className="fa-solid fa-chart-pie" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Waarde per Categorie
+                            </h3>
+                        </div>
+                        <div style={{ height: 160, marginTop: 12 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={catData} dataKey="waarde" nameKey="naam" cx="45%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3}>
+                                        {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
+                                    </Pie>
+                                    <Tooltip formatter={function (v, n) { return ['€' + v.toLocaleString('nl-NL'), n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: '#71717a' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="panel inv-glass">
+                        <div className="panel-head">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <i className="fa-solid fa-boxes-stacked" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Items per Categorie
+                            </h3>
+                        </div>
+                        <div style={{ height: 160, marginTop: 12 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={catData} layout="vertical" margin={{ top: 4, right: 8, left: 56, bottom: 4 }} barCategoryGap="25%">
+                                    <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
+                                    <Tooltip formatter={function (v) { return [v + ' items', 'Aantal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
+                                    <Bar dataKey="items" radius={[0, 4, 4, 0]}>
+                                        {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Filter + Search */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
@@ -323,6 +369,6 @@ export default function Voorraad() {
                     </table>
                 </div>
             )}
-        </>
+        </div>
     );
 }

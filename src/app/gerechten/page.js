@@ -93,17 +93,22 @@ export default function Gerechten() {
     }
     async function editGerecht(g) {
         setEditing(g.id);
+
+        // Normaliseer ingrediënten bij het laden (handelt string en array af)
+        var rawIngs = g.ingredients_list || g.ingredienten || [];
+        var mappedIngs = Array.isArray(rawIngs) ? rawIngs : (typeof rawIngs === 'string' ? rawIngs.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : []);
+
         setForm({
             naam: g.naam,
             beschrijving: g.beschrijving || '',
             gang_slug: g.gang_slug,
             volgorde: g.volgorde,
             foto_url: g.foto_url || '',
-            ingredienten: (g.ingredienten || []).map(function (i) {
+            ingredienten: mappedIngs.map(function (i) {
                 if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
-                return i;
+                return String(i);
             }),
-            bereidingswijze: g.bereidingswijze || '',
+            bereidingswijze: g.preparation_steps || g.bereidingswijze || '',
             allergenen: g.allergenen || [],
             tags: g.tags || [],
             kostprijs_pp: g.kostprijs_pp || '',
@@ -160,12 +165,21 @@ export default function Gerechten() {
         if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
         else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
 
+        // Map form data naar de juiste database kolommen
+        var dbData = Object.assign({}, saveData);
+        dbData.ingredients_list = (saveData.ingredienten || []).join(', ');
+        dbData.preparation_steps = saveData.bereidingswijze || '';
+
+        // Verwijder frontend-only of oude veldnamen om DB consistentie te bewaren
+        delete dbData.ingredienten;
+        delete dbData.bereidingswijze;
+
         if (editing === 'new') {
-            var { error } = await supabase.from('gerechten').insert([saveData]);
+            var { error } = await supabase.from('gerechten').insert([dbData]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht toegevoegd!');
         } else {
-            var { error } = await supabase.from('gerechten').update(saveData).eq('id', editing);
+            var { error } = await supabase.from('gerechten').update(dbData).eq('id', editing);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht bijgewerkt!');
         }

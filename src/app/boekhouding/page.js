@@ -1,30 +1,77 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, MAANDEN_KORT } from '@/lib/utils';
+import {
+    BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+    ComposedChart, Line, PieChart, Pie, Legend,
+} from 'recharts';
 
 export default function Boekhouding() {
     var { data: facturen } = useSupabase('facturen', []);
     var { data: events } = useSupabase('events', []);
     var [tab, setTab] = useState('wv');
-    var canvasRef = useRef(null);
 
     // Calculations
     var betaald = facturen.filter(function (f) { return f.status === 'betaald'; });
-    var open = facturen.filter(function (f) { return f.status !== 'betaald'; });
+    var open = facturen.filter(function (f) { return f.status !== 'betaald' && f.status !== 'geannuleerd'; });
 
-    function sumItems(facs) {
-        var total = 0;
-        facs.forEach(function (f) {
-            (f.items || []).forEach(function (item) { total += (item.qty || 0) * (item.prijs || 0); });
-        });
-        return total;
-    }
+    var omzet = 0;
+    betaald.forEach(function (f) {
+        (f.items || []).forEach(function (item) { omzet += (item.qty || 0) * (item.prijs || 0); });
+    });
 
-    var omzet = sumItems(betaald);
-    var openstaand = sumItems(open);
+    var openstaand = 0;
+    open.forEach(function (f) {
+        (f.items || []).forEach(function (item) { openstaand += (item.qty || 0) * (item.prijs || 0); });
+    });
+
     var prognose = 0;
-    events.forEach(function (e) { prognose += (e.guests || 0) * (e.ppp || 0); });
+    events.forEach(function (e) {
+        if (e.status === 'confirmed' || e.status === 'optie') {
+            prognose += (e.guests || 0) * (e.ppp || 0);
+        }
+    });
+
+    // Monthly data for chart
+    var monthlyData = new Array(12).fill(0);
+    var yearStr = new Date().getFullYear().toString();
+    betaald.forEach(function (f) {
+        if (!f.datum || !f.datum.startsWith(yearStr)) return;
+        var month = parseInt(f.datum.split('-')[1], 10) - 1;
+        (f.items || []).forEach(function (item) { monthlyData[month] += (item.qty || 0) * (item.prijs || 0); });
+    });
+
+    // Build chart data with cumulative line
+    var cumulative = 0;
+    var omzetChartData = MAANDEN_KORT.map(function (naam, i) {
+        cumulative += monthlyData[i];
+        return { naam: naam, omzet: Math.round(monthlyData[i]), cumulatief: Math.round(cumulative) };
+    });
+
+    // Facturen status distribution
+    var statusCounts = {};
+    facturen.forEach(function (f) {
+        var s = f.status || 'onbekend';
+        statusCounts[s] = (statusCounts[s] || 0) + 1;
+    });
+    var statusKleuren = { betaald: '#22c55e', verzonden: '#FFBF00', concept: '#71717a', vervallen: '#ef4444' };
+    var statusLabels = { betaald: 'Betaald', verzonden: 'Verzonden', concept: 'Concept', vervallen: 'Vervallen' };
+    var statusPieData = Object.keys(statusCounts).map(function (s) {
+        return { name: statusLabels[s] || s, value: statusCounts[s], color: statusKleuren[s] || '#a78bfa' };
+    }).filter(function (d) { return d.value > 0; });
+
+    // Top clients
+    var clientTotals = {};
+    betaald.forEach(function (f) {
+        var naam = f.client_naam || 'Onbekend';
+        if (!clientTotals[naam]) clientTotals[naam] = 0;
+        (f.items || []).forEach(function (item) { clientTotals[naam] += (item.qty || 0) * (item.prijs || 0); });
+    });
+    var topClients = Object.keys(clientTotals)
+        .map(function (naam) { return { naam: naam, omzet: clientTotals[naam] }; })
+        .sort(function (a, b) { return b.omzet - a.omzet; })
+        .slice(0, 5);
 
     // BTW breakdown
     var btwMap = {};
@@ -39,89 +86,94 @@ export default function Boekhouding() {
         });
     });
 
-    // Monthly revenue for chart
-    var monthlyData = new Array(12).fill(0);
-    betaald.forEach(function (f) {
-        var month = f.datum ? parseInt(f.datum.split('-')[1]) - 1 : 0;
-        (f.items || []).forEach(function (item) { monthlyData[month] += (item.qty || 0) * (item.prijs || 0); });
-    });
-
-    // Draw chart
-    useEffect(function () {
-        if (tab !== 'wv' || !canvasRef.current) return;
-        var canvas = canvasRef.current;
-        var ctx = canvas.getContext('2d');
-        var w = canvas.width = canvas.offsetWidth * 2;
-        var h = canvas.height = 300;
-        ctx.scale(2, 1);
-        var realW = w / 2;
-
-        ctx.clearRect(0, 0, realW, h);
-        var max = Math.max.apply(null, monthlyData) || 1;
-        var barW = (realW - 60) / 12;
-        var barGap = 4;
-
-        ctx.fillStyle = '#71717a';
-        ctx.font = '10px DM Sans,sans-serif';
-        ctx.textAlign = 'center';
-
-        for (var i = 0; i < 12; i++) {
-            var val = monthlyData[i];
-            var barH = (val / max) * (h - 50);
-            var x = 30 + i * barW;
-            var y = h - 30 - barH;
-
-            ctx.fillStyle = val > 0 ? '#FF8C00' : '#27272a';
-            ctx.beginPath();
-            ctx.roundRect(x + barGap, y, barW - barGap * 2, barH, [4, 4, 0, 0]);
-            ctx.fill();
-
-            ctx.fillStyle = '#71717a';
-            ctx.fillText(MAANDEN_KORT[i], x + barW / 2, h - 10);
-            if (val > 0) {
-                ctx.fillStyle = '#f4f4f5';
-                ctx.fillText(Math.round(val), x + barW / 2, y - 6);
-            }
-        }
-    }, [tab, monthlyData]);
-
     return (
-        <>
+        <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'wv' ? ' active' : '')} onClick={function () { setTab('wv'); }}>Winst &amp; Verlies</button>
                 <button className={'tab-btn' + (tab === 'btw' ? ' active' : '')} onClick={function () { setTab('btw'); }}>BTW Overzicht</button>
+                <button className={'tab-btn' + (tab === 'clients' ? ' active' : '')} onClick={function () { setTab('clients'); }}>Top Klanten</button>
             </div>
 
             {tab === 'wv' && (
                 <>
-                    <div className="stat-grid">
+                    <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><i className="fa-solid fa-euro-sign"></i></div>
                             <div className="stat-val">{fmt(omzet)}</div>
                             <div className="stat-label">Omzet (betaald)</div>
+                            <div className="stat-sub">{betaald.length} facturen</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(245,158,11,.12)', color: 'var(--amber)' }}><i className="fa-solid fa-clock"></i></div>
                             <div className="stat-val">{fmt(openstaand)}</div>
                             <div className="stat-label">Openstaand</div>
+                            <div className="stat-sub">{open.length} facturen</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><i className="fa-solid fa-chart-line"></i></div>
                             <div className="stat-val">{fmt(prognose)}</div>
                             <div className="stat-label">Prognose (events)</div>
+                            <div className="stat-sub">{events.length} events</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-icon" style={{ background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><i className="fa-solid fa-percent"></i></div>
+                            <div className="stat-val">{omzet + openstaand > 0 ? Math.round((omzet / (omzet + openstaand)) * 100) + '%' : '—'}</div>
+                            <div className="stat-label">Betaald Ratio</div>
+                            <div className="stat-sub">{facturen.length} facturen totaal</div>
                         </div>
                     </div>
-                    <div className="panel">
-                        <div className="panel-head"><h3>Maandomzet</h3></div>
-                        <div className="panel-body">
-                            <canvas ref={canvasRef} style={{ width: '100%', height: 150 }}></canvas>
+
+                    <div className="analytics-grid">
+                        <div className="panel">
+                            <div className="panel-head">
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <i className="fa-solid fa-chart-column" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Maandomzet &amp; Cumulatief
+                                </h3>
+                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
+                            </div>
+                            <div className="panel-body" style={{ height: 200, marginTop: 12 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={omzetChartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barCategoryGap="30%">
+                                        <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <YAxis yAxisId="left" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <Tooltip formatter={function (v, name) { return ['€' + v.toLocaleString('nl-NL'), name === 'omzet' ? 'Maandomzet' : 'Cumulatief']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
+                                        <Bar yAxisId="left" dataKey="omzet" radius={[4, 4, 0, 0]}>
+                                            {omzetChartData.map(function (d, i) { return <Cell key={i} fill={d.omzet > 0 ? '#FFBF00' : '#27272a'} />; })}
+                                        </Bar>
+                                        <Line yAxisId="right" type="monotone" dataKey="cumulatief" stroke="#a78bfa" strokeWidth={2} dot={false} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
+
+                        {statusPieData.length > 0 && (
+                            <div className="panel">
+                                <div className="panel-head">
+                                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <i className="fa-solid fa-chart-pie" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Facturen Status
+                                    </h3>
+                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{facturen.length} totaal</span>
+                                </div>
+                                <div style={{ height: 200, marginTop: 12 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={statusPieData} dataKey="value" cx="45%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
+                                                {statusPieData.map(function (entry, i) { return <Cell key={i} fill={entry.color} />; })}
+                                            </Pie>
+                                            <Tooltip formatter={function (v, n) { return [v + ' facturen', n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} />
+                                            <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: '#71717a' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
 
             {tab === 'btw' && (
-                <div className="panel">
+                <div className="panel" style={{ marginTop: 16 }}>
                     <div className="panel-head"><h3>BTW Overzicht</h3></div>
                     <div className="panel-body">
                         {Object.keys(btwMap).length === 0 && <div className="empty-state"><i className="fa-solid fa-calculator"></i><p>Geen BTW data beschikbaar</p></div>}
@@ -150,6 +202,45 @@ export default function Boekhouding() {
                     </div>
                 </div>
             )}
-        </>
+
+            {tab === 'clients' && (
+                <div className="panel" style={{ marginTop: 16 }}>
+                    <div className="panel-head">
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <i className="fa-solid fa-star" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Top Klanten
+                        </h3>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
+                    </div>
+                    {topClients.length === 0 && <div className="empty-state"><i className="fa-solid fa-users"></i><p>Geen data beschikbaar</p></div>}
+                    {topClients.length > 0 && (
+                        <>
+                            <div style={{ height: 250, padding: '16px 0' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={topClients} layout="vertical" margin={{ top: 4, right: 32, left: 80, bottom: 4 }} barCategoryGap="25%">
+                                        <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={76} />
+                                        <Tooltip formatter={function (v) { return ['€' + v.toLocaleString('nl-NL'), 'Omzet']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
+                                        <Bar dataKey="omzet" radius={[0, 4, 4, 0]} fill="#FFBF00" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div style={{ padding: '0 16px 16px' }}>
+                                {topClients.map(function (c, i) {
+                                    var pct = omzet > 0 ? (c.omzet / omzet) * 100 : 0;
+                                    return (
+                                        <div key={c.naam} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 900, color: 'var(--brand)', width: 20 }}>#{i + 1}</span>
+                                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{c.naam}</span>
+                                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{pct.toFixed(1)}%</span>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)' }}>{fmt(c.omzet)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }

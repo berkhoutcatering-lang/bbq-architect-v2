@@ -114,8 +114,14 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails }) {
 function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase }) {
   if (!gerecht) return null;
 
+  function normalizeIngs(val) {
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) return stringifyArray(val);
+    return '';
+  }
+
   function stringifyArray(arr) {
-    if (!Array.isArray(arr)) return '';
+    if (!Array.isArray(arr)) return typeof arr === 'string' ? arr : '';
     return arr.map(function (i) {
       if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
       return i;
@@ -125,8 +131,8 @@ function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase }) {
   var [form, setForm] = useState({
     naam: gerecht.naam || '',
     beschrijving: gerecht.beschrijving || '',
-    ingredienten: stringifyArray(gerecht.ingredienten),
-    bereidingswijze: gerecht.bereidingswijze || '',
+    ingredienten: normalizeIngs(gerecht.ingredients_list || gerecht.ingredienten),
+    bereidingswijze: gerecht.preparation_steps || gerecht.bereidingswijze || '',
     allergenen: stringifyArray(gerecht.allergenen),
     kostprijs_pp: gerecht.kostprijs_pp || '',
   });
@@ -137,8 +143,8 @@ function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase }) {
     var updateData = {
       naam: form.naam,
       beschrijving: form.beschrijving,
-      ingredienten: form.ingredienten.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-      bereidingswijze: form.bereidingswijze,
+      ingredients_list: form.ingredienten,
+      preparation_steps: form.bereidingswijze,
       allergenen: form.allergenen.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
       kostprijs_pp: parseFloat(form.kostprijs_pp) || 0,
     };

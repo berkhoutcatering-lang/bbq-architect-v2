@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useToast } from '@/components/Toast';
+import { normalizeIngredienten, normalizeBereidingswijze } from '@/lib/utils';
 
 export default function RecipeMatrix({ action, supabase }) {
     var showToast = useToast();
@@ -36,24 +37,18 @@ export default function RecipeMatrix({ action, supabase }) {
 
         setImporting(true);
         try {
-            // Haal gangen op voor validatie om Foreign Key crashes te voorkomen
+            // Hardcoded fallback zodat we nooit een ongeldige slug gebruiken als de DB niet reageert
+            var KNOWN_SLUGS = ['bite', 'voorgerecht', 'hoofdgerecht', 'vegetarisch', 'dessert', 'bijgerecht', 'borrelhap', 'anders'];
             var { data: gangenData } = await supabase.from('gangen').select('slug');
-            var validSlugs = (gangenData || []).map(function (g) { return g.slug; });
-            var fallbackSlug = validSlugs[0] || 'onbekend';
+            var validSlugs = (gangenData && gangenData.length > 0) ? gangenData.map(function (g) { return g.slug; }) : KNOWN_SLUGS;
+            var fallbackSlug = validSlugs[0];
 
             var toImport = selected.map(function (index) {
                 var r = recipes[index];
 
-                // Normaliseer ingredienten
-                var mappedIngs = [];
-                if (Array.isArray(r.ingredienten)) {
-                    mappedIngs = r.ingredienten.map(function (i) {
-                        if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
-                        return String(i);
-                    });
-                } else if (typeof r.ingredienten === 'string') {
-                    mappedIngs = r.ingredienten.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-                }
+                // Normaliseer ingredienten & bereiding via centrale utils
+                var mappedIngs = normalizeIngredienten(r.ingredienten || r.ingredients || r.ingredients_list || []);
+                var mappedBereiding = normalizeBereidingswijze(r);
 
                 // Normaliseer allergenen
                 var mappedAllergs = [];
@@ -64,7 +59,6 @@ export default function RecipeMatrix({ action, supabase }) {
                 }
 
                 // Vang aliassen op
-                var safeBereiding = r.bereidingswijze || r.bereiding || r.stappenplan || r.instructies || '';
                 var safeKostprijs = r.inkoop || r.kostprijs_pp || r.kostprijs || r.foodcost || 0;
 
                 // Match Gang Slug veilig
@@ -84,8 +78,8 @@ export default function RecipeMatrix({ action, supabase }) {
                     naam: r.naam || 'Naamloos gerecht',
                     gang_slug: safeSlug,
                     beschrijving: r.beschrijving || 'Geen beschrijving gegenereerd',
-                    bereidingswijze: safeBereiding,
-                    ingredienten: mappedIngs,
+                    preparation_steps: mappedBereiding,
+                    ingredients_list: mappedIngs,
                     allergenen: mappedAllergs,
                     kostprijs_pp: parseFloat(safeKostprijs) || 0,
                     actief: false,
@@ -131,18 +125,22 @@ export default function RecipeMatrix({ action, supabase }) {
                         disabled={imported}
                         style={{ fontSize: 11 }}
                     >
-                        {selected.length === recipes.length ? 'Deselecteer geselecteerd' : 'Selecteer alles'}
+                        {selected.length === recipes.length ? 'Deselecteer alles' : 'Selecteer alles'}
                     </button>
                     {imported && (
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-check-circle"></i> Ge\u00EFmporteerd
+                            <i className="fa-solid fa-check-circle"></i> Geïmporteerd
                         </div>
                     )}
                 </div>
             </div>
 
             {/* Grid */}
-            <div className="dish-select-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+            <div className="dish-select-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: 12
+            }}>
                 {recipes.map(function (r, idx) {
                     var isSelected = selected.includes(idx);
 
@@ -165,12 +163,17 @@ export default function RecipeMatrix({ action, supabase }) {
                                 alignItems: 'flex-start',
                                 textAlign: 'left',
                                 gap: 6,
-                                opacity: imported && !isSelected ? 0.3 : 1
+                                borderRadius: 10,
+                                border: isSelected ? '1px solid var(--brand)' : '1px solid var(--border)',
+                                background: isSelected ? 'rgba(180,140,20,0.05)' : 'var(--panel)',
+                                opacity: imported && !isSelected ? 0.3 : 1,
+                                cursor: imported ? 'default' : 'pointer',
+                                transition: 'all 0.2s ease'
                             }}
                         >
                             <div className="dish-select-name" style={{ fontSize: 14, marginBottom: 2, width: '100%' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <span style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{r.naam}</span>
+                                    <span style={{ whiteSpace: 'normal', lineHeight: 1.2, fontWeight: isSelected ? 800 : 500 }}>{r.naam}</span>
                                     {isSelected && <i className="fa-solid fa-circle-check" style={{ color: 'var(--brand)', fontSize: 14, marginLeft: 8, marginTop: 2 }}></i>}
                                 </div>
                             </div>
@@ -191,7 +194,7 @@ export default function RecipeMatrix({ action, supabase }) {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, alignItems: 'center' }}>
                                     <span style={{ color: 'var(--muted)' }}>Marge:</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <div style={{ width: 40, height: 6, borderRadius: 3, background: margeBg, overflow: 'hidden' }}>
+                                        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                                             <div style={{ width: Math.min(100, Math.max(0, r.marge)) + '%', height: '100%', background: margeColor }}></div>
                                         </div>
                                         <span style={{ fontWeight: 700, color: margeColor }}>{Number(r.marge).toFixed(0)}%</span>

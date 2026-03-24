@@ -273,10 +273,12 @@ async function handleGetGangen(sb) {
 }
 
 // ── Helper to resolve AI-hallucinated gang_slugs ─────────
+// Hardcoded bekende slugs als veilige fallback als de DB niet beschikbaar is
+var KNOWN_GANG_SLUGS = ['bite', 'voorgerecht', 'hoofdgerecht', 'vegetarisch', 'dessert', 'bijgerecht', 'borrelhap', 'anders'];
+
 async function resolveGangSlug(sb, providedSlug) {
     var { data } = await sb.from('gangen').select('slug');
-    if (!data || data.length === 0) return providedSlug;
-    var slugs = data.map(function (d) { return d.slug; });
+    var slugs = (data && data.length > 0) ? data.map(function (d) { return d.slug; }) : KNOWN_GANG_SLUGS;
 
     if (slugs.includes(providedSlug)) return providedSlug;
 
@@ -293,15 +295,33 @@ async function resolveGangSlug(sb, providedSlug) {
     return slugs[0];
 }
 
+// Fix 1 & 2: Normaliseer ingredienten-veld — ondersteun Engelse aliassen en converteer objecten naar strings
+function normalizeIngredienten(raw) {
+    var source = raw || [];
+    if (typeof source === 'string') return source.split(',').map(function (s) { return s.trim(); }).filter(Boolean).join(', ');
+    if (!Array.isArray(source)) return '';
+    return source.map(function (i) {
+        if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
+        return String(i);
+    }).join(', ');
+}
+
+// Fix 3: Bereidingswijze — vang aliassen op én converteer array-van-stappen naar tekst met harde returns
+function normalizeBereidingswijze(params) {
+    var raw = params.bereidingswijze || params.bereiding || params.stappenplan || params.instructies || params.preparation_steps || '';
+    return Array.isArray(raw) ? raw.join('\n') : String(raw || '');
+}
+
 async function handleCreateGerecht(sb, params) {
     var safeSlug = await resolveGangSlug(sb, params.gang_slug);
+    var rawIngs = params.ingredienten || params.ingredients || params.ingredients_list || [];
 
     var { data, error } = await sb.from('gerechten').insert([{
         naam: params.naam,
         gang_slug: safeSlug,
         beschrijving: params.beschrijving || '',
-        bereidingswijze: params.bereidingswijze || '',
-        ingredienten: params.ingredienten || [],
+        preparation_steps: normalizeBereidingswijze(params),
+        ingredients_list: normalizeIngredienten(rawIngs),
         tags: params.tags || [],
         allergenen: params.allergenen || [],
         actief: false,
@@ -320,12 +340,13 @@ async function handleCreateGerechtBulk(sb, params) {
     for (var i = 0; i < gerechten.length; i++) {
         var g = gerechten[i];
         var safeSlug = await resolveGangSlug(sb, g.gang_slug);
+        var rawIngs = g.ingredienten || g.ingredients || g.ingredients_list || [];
         rows.push({
             naam: g.naam,
             gang_slug: safeSlug,
             beschrijving: g.beschrijving || '',
-            bereidingswijze: g.bereidingswijze || '',
-            ingredienten: g.ingredienten || [],
+            preparation_steps: normalizeBereidingswijze(g),
+            ingredients_list: normalizeIngredienten(rawIngs),
             tags: g.tags || [],
             allergenen: g.allergenen || [],
             actief: false,
@@ -374,11 +395,17 @@ async function handleUpdateGerecht(sb, params) {
     var update = {};
     if (params.naam !== undefined) update.naam = params.naam;
     if (params.beschrijving !== undefined) update.beschrijving = params.beschrijving;
-    if (params.bereidingswijze !== undefined) update.bereidingswijze = params.bereidingswijze;
+
+    var hasBereiding = params.bereidingswijze !== undefined || params.bereiding !== undefined || params.stappenplan !== undefined || params.instructies !== undefined || params.preparation_steps !== undefined;
+    if (hasBereiding) update.preparation_steps = normalizeBereidingswijze(params);
+
     if (params.gang_slug !== undefined) update.gang_slug = params.gang_slug;
     if (params.tags !== undefined) update.tags = params.tags;
     if (params.allergenen !== undefined) update.allergenen = params.allergenen;
-    if (params.ingredienten !== undefined) update.ingredienten = params.ingredienten;
+
+    var rawUpdateIngs = params.ingredienten || params.ingredients || params.ingredients_list;
+    if (rawUpdateIngs !== undefined) update.ingredients_list = normalizeIngredienten(rawUpdateIngs);
+
     if (params.kostprijs_pp !== undefined) update.kostprijs_pp = params.kostprijs_pp;
     if (params.actief !== undefined) update.actief = params.actief;
 

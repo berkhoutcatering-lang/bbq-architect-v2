@@ -1,6 +1,6 @@
-// ─── AI Actie-definities ──────────────────────────────────────────────────────
 // Elke actie beschrijft een database-operatie die de AI kan voorstellen.
 // De gebruiker moet altijd bevestigen voor uitvoering.
+import { normalizeIngredienten, normalizeBereidingswijze } from './utils';
 
 export var ACTION_TYPES = {
     // ── Events ──────────────────────────────────────────────────────────────
@@ -86,6 +86,14 @@ export var ACTION_TYPES = {
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
+    delete_recept: {
+        label: 'Recept verwijderen',
+        table: 'recepten',
+        op: 'delete',
+        pages: ['/recepten'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
 
     // ── Gerechten ────────────────────────────────────────────────────────────
     create_gerecht: {
@@ -104,6 +112,14 @@ export var ACTION_TYPES = {
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
     },
+    delete_gerecht: {
+        label: 'Gerecht verwijderen',
+        table: 'gerechten',
+        op: 'delete',
+        pages: ['/gerechten'],
+        icon: 'fa-trash',
+        color: '#ef4444',
+    },
 
     // ── Voorraad ─────────────────────────────────────────────────────────────
     create_voorraad: {
@@ -115,12 +131,20 @@ export var ACTION_TYPES = {
         color: '#4ECDC4',
     },
     update_voorraad: {
-        label: 'Voorraad bijwerken',
+        label: 'Voorraad item bijwerken',
         table: 'inventory',
         op: 'update',
-        pages: ['/voorraad', '/inkoop', '/service'],
+        pages: ['/voorraad'],
         icon: 'fa-boxes-stacked',
         color: '#f59e0b',
+    },
+    delete_voorraad: {
+        label: 'Voorraad item verwijderen',
+        table: 'inventory',
+        op: 'delete',
+        pages: ['/voorraad'],
+        icon: 'fa-trash',
+        color: '#ef4444',
     },
     process_receipt: {
         label: 'Bonnetje Verwerken & Voorraad Updaten',
@@ -191,6 +215,14 @@ export var ACTION_TYPES = {
         pages: ['/uren'],
         icon: 'fa-pen-to-square',
         color: '#f59e0b',
+    },
+    delete_urenlog: {
+        label: 'Urenregistratie verwijderen',
+        table: 'time_logs',
+        op: 'delete',
+        pages: ['/uren'],
+        icon: 'fa-trash',
+        color: '#ef4444',
     },
 
     // ── Materieel ────────────────────────────────────────────────────────────
@@ -486,13 +518,48 @@ export async function executeAction(action, supabase) {
     var result;
 
     if (def.op === 'insert') {
-        var res = await supabase.from(def.table).insert(data).select().single();
+        var insertData = Object.assign({}, data);
+        if (def.table === 'gerechten') {
+            var rawIngs = data.ingredienten || data.ingredients || data.ingredients_list;
+            if (rawIngs !== undefined) {
+                insertData.ingredients_list = normalizeIngredienten(rawIngs);
+                delete insertData.ingredienten;
+                delete insertData.ingredients;
+            }
+            var hasBereiding = data.bereidingswijze || data.bereiding || data.stappenplan || data.instructies || data.preparation_steps;
+            if (hasBereiding !== undefined) {
+                insertData.preparation_steps = normalizeBereidingswijze(data);
+                delete insertData.bereidingswijze;
+                delete insertData.bereiding;
+                delete insertData.stappenplan;
+                delete insertData.instructies;
+            }
+        }
+        var res = await supabase.from(def.table).insert(insertData).select().single();
         if (res.error) throw res.error;
         result = res.data;
     } else if (def.op === 'update') {
         if (!data.id) throw new Error('ID ontbreekt voor update-actie');
         var updateData = Object.assign({}, data);
         delete updateData.id;
+
+        if (def.table === 'gerechten') {
+            var rawIngsUpdate = data.ingredienten || data.ingredients || data.ingredients_list;
+            if (rawIngsUpdate !== undefined) {
+                updateData.ingredients_list = normalizeIngredienten(rawIngsUpdate);
+                delete updateData.ingredienten;
+                delete updateData.ingredients;
+            }
+            var hasBereidingUpdate = data.bereidingswijze || data.bereiding || data.stappenplan || data.instructies || data.preparation_steps;
+            if (hasBereidingUpdate !== undefined) {
+                updateData.preparation_steps = normalizeBereidingswijze(data);
+                delete updateData.bereidingswijze;
+                delete updateData.bereiding;
+                delete updateData.stappenplan;
+                delete updateData.instructies;
+            }
+        }
+
         var res2 = await supabase.from(def.table).update(updateData).eq('id', data.id).select().single();
         if (res2.error) throw res2.error;
         result = res2.data;

@@ -208,7 +208,7 @@ var BASE_INSTRUCTIONS = [
     '',
     '## CULINAIRE ROUTING & STANDAARDEN',
     '- **Amuse/Bite:** 20g - 30g proteïne per stuk. Focus op één intense smaakexplosie.',
-    '- **Voorgerecht:** 70g - 80g proteïne per stuk. Fris, opbouwend, vaak zuren.',
+    '- **Voorgerecht:** 70g - 80g proteïne per stuk. Fris, opbouwed, vaak zuren.',
     '- **Hoofdgerecht:** 150g - 180g proteïne per stuk. Rijk, aards, show-element (Smoker/Open Vuur).',
     '- **Marge Doelstelling:** >70% Brutomarge op food. <60% is absoluut verboden tenzij het een low-volume loss-leader is.',
     '',
@@ -239,6 +239,34 @@ var BASE_INSTRUCTIONS = [
     '- Als de gebruiker zegt "Zet dit in mijn systeem" of "Importeer dit", genereer dan MOEITELOOS een actieblok om het recept op te slaan.',
     '- Het formaat van je actieblok data is (ZONDER markdown backticks):',
     '  <<<ACTION:{"type":"import_vault_recipe","description":"Recept opslaan","data":{"naam": "Naam Gerecht", "categorie": "bites/voorgerechten/hoofdgerechten/desserts", "porties": 10, "ingredienten": [{"naam": "Zalm", "hoeveelheid": 150, "eenheid": "gram"}], "allergenen":["Vis"], "bereiding": "Stap 1...", "geschatte_kostprijs": 5.40}}>>>',
+    '',
+    '## Regels voor generate_prep_list',
+    'Wanneer gevraagd om een prep-lijst, taakoverzicht of "wat moet ik nog doen voor event X":',
+    '- Gebruik generate_prep_list met het event_id als je dat weet, anders zonder (dan pakt het systeem het volgende event)',
+    '- Voorbeeld: <<<ACTION:{"type":"generate_prep_list","description":"Prep-lijst genereren voor het aankomende event","data":{"event_id":5}}>>>',
+    '',
+    '## Regels voor generate_inkooplijst',
+    'Wanneer gevraagd om een inkooplijst, boodschappenlijst of "wat moet ik inkopen voor event X":',
+    '- Gebruik generate_inkooplijst met het event_id',
+    '- Het systeem berekent AUTOMATISCH hoeveelheden op basis van gasten × recepten',
+    '- Benoem altijd dat je de inkoop berekent op basis van het menu en de huidige voorraad',
+    '- Voorbeeld: <<<ACTION:{"type":"generate_inkooplijst","description":"Inkooplijst berekenen voor event","data":{"event_id":5}}>>>',
+    '',
+    '## Regels voor generate_event_briefing',
+    'Wanneer gevraagd om een briefing, overzicht of samenvatting van een event voor het team:',
+    '- Gebruik generate_event_briefing met het event_id',
+    '- De briefing bevat: event-info, menu, prep-taken, offerte-data en HACCP-status',
+    '- Voorbeeld: <<<ACTION:{"type":"generate_event_briefing","description":"Team briefing voor event genereren","data":{"event_id":5}}>>>',
+    '',
+    '## Regels voor get_event_winstgevendheid',
+    'Wanneer gevraagd naar winst, marge, rendement of financieel resultaat van een specifiek event:',
+    '- Gebruik get_event_winstgevendheid met het event_id',
+    '- Het systeem koppelt facturen + inkoop + uren automatisch aan het event',
+    '- Voorbeeld: <<<ACTION:{"type":"get_event_winstgevendheid","description":"Winstgevendheid berekenen voor event","data":{"event_id":5}}>>>',
+    '',
+    '## Regels voor mark_weak_dishes',
+    'Wanneer gevraagd welke gerechten minder sterk zijn uit een bulk-selectie:',
+    '- Analyseer de gerechten op: originaliteit, smaakvariatie, uitvoerbaarheid, markt-appeal',
 ].join('\n');
 
 // ─── Brainstorm modus instructies ─────────────────────────────────────────────
@@ -431,6 +459,7 @@ export async function POST(req) {
                 messages: groqMessages,
                 temperature: hasImage ? 0.05 : (mode === 'brainstorm' ? 0.85 : 0.7),
                 max_tokens: hasImage ? 8192 : (mode === 'brainstorm' ? 6000 : 4000),
+                stream: true,
             }),
         });
 
@@ -440,9 +469,50 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Groq API fout: ' + errText }, { status: response.status });
         }
 
-        var data = await response.json();
-        if (hasImage) console.log('[AI] Vision Raw Result:', data.choices?.[0]?.message?.content?.slice(0, 500) + '...');
-        return NextResponse.json(data);
+        // ── Stream SSE tokens terug naar de client ─────────────────────────
+        var encoder = new TextEncoder();
+        var readable = new ReadableStream({
+            async start(controller) {
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var fullText = '';
+                var lineBuffer = '';
+                try {
+                    while (true) {
+                        var chunk = await reader.read();
+                        if (chunk.done) break;
+                        lineBuffer += decoder.decode(chunk.value, { stream: true });
+                        var lines = lineBuffer.split('\n');
+                        lineBuffer = lines.pop();
+                        for (var line of lines) {
+                            line = line.trim();
+                            if (!line.startsWith('data: ')) continue;
+                            var raw = line.slice(6);
+                            if (raw === '[DONE]') continue;
+                            try {
+                                var parsed = JSON.parse(raw);
+                                var delta = (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) || '';
+                                if (delta) {
+                                    fullText += delta;
+                                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta: delta }) + '\n\n'));
+                                }
+                            } catch (e) { /* ongeldige chunk — negeer */ }
+                        }
+                    }
+                } finally {
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, full: fullText }) + '\n\n'));
+                    controller.close();
+                }
+            },
+        });
+
+        return new Response(readable, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
 
     } catch (err) {
         console.error('[Chat API] Fout:', err);

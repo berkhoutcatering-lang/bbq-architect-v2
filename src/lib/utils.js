@@ -23,6 +23,13 @@ export function today() {
     return new Date().toISOString().slice(0, 10);
 }
 
+// Safe JSON Parse
+export function safeJsonParse(val, fallback = {}) {
+    if (!val) return fallback;
+    if (typeof val !== 'string') return val;
+    try { return JSON.parse(val); } catch (e) { return fallback; }
+}
+
 // Add days to ISO date string
 export function addDays(dateStr, days) {
     var d = new Date(dateStr);
@@ -84,4 +91,71 @@ export function resizeImage(base64Str, maxWidth = 1200, maxHeight = 1200, qualit
         };
         img.onerror = function () { resolve(base64Str); }; // Fallback
     });
+}
+
+// ── Marge Calculation Engine ──
+export function calcMargeForOfferte(offerte, gerechtenData, inventoryData) {
+    if (!offerte) return { omzet: 0, foodcostTotaal: 0, winst: 0, nettoWinst: 0, margePct: 0 };
+
+    function getInv(naam) {
+        if (!naam) return null;
+        return (inventoryData || []).find(function (i) { return i.naam && i.naam.toLowerCase() === String(naam).toLowerCase(); });
+    }
+
+    function dishCost(name) {
+        var g = (gerechtenData || []).find(function (x) { return x.naam === name; });
+        if (!g || !g.ingredient_costs) return 0;
+        return (g.ingredient_costs || []).reduce(function (sum, it) {
+            var inv = getInv(it.naam);
+            var p = inv ? inv.purchase_price : 0;
+            var y = it.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
+            var f = 1;
+            if (it.unit === 'g' && inv && inv.unit === 'kg') f = 0.001;
+            if (it.unit === 'ml' && inv && inv.unit === 'L') f = 0.001;
+            return sum + ((it.qty_pp || 0) * f / y) * p;
+        }, 0);
+    }
+
+    var gasten = offerte.aantal_gasten || 0;
+    var omzet = gasten * (offerte.basis_prijs_pp || 0);
+    var foodcostTotaal = (offerte.menu_selectie || []).reduce(function (sum, sel) {
+        return sum + dishCost(sel.gerecht_naam || sel.naam) * gasten;
+    }, 0);
+    var vk = (offerte.vaste_kosten || []).reduce(function (sum, k) { return sum + (parseFloat(k.bedrag) || 0); }, 0);
+
+    var nettoWinst = omzet - foodcostTotaal - vk;
+    var margePct = omzet > 0 ? (nettoWinst / omzet) * 100 : 0;
+
+    return {
+        omzet: omzet,
+        foodcostTotaal: foodcostTotaal,
+        winst: nettoWinst,
+        nettoWinst: nettoWinst,
+        margePct: margePct
+    };
+}
+
+export function margeColor(pct) {
+    if (pct > 70) return 'green';
+    if (pct >= 60) return 'orange';
+    return 'red';
+}
+
+// Normalize ingredients for DB storage
+export function normalizeIngredienten(raw) {
+    if (!raw) return '';
+    var source = raw;
+    if (typeof source === 'string') return source.split(',').map(function (s) { return s.trim(); }).filter(Boolean).join(', ');
+    if (!Array.isArray(source)) return '';
+    return source.map(function (i) {
+        if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
+        return String(i);
+    }).join(', ');
+}
+
+// Normalize preparation steps for DB storage
+export function normalizeBereidingswijze(data) {
+    if (!data) return '';
+    var raw = typeof data === 'object' ? (data.bereidingswijze || data.bereiding || data.stappenplan || data.instructies || data.preparation_steps || '') : data;
+    return Array.isArray(raw) ? raw.join('\n') : String(raw || '');
 }
