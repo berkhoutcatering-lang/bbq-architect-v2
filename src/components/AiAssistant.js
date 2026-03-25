@@ -383,6 +383,19 @@ export default function AiAssistant() {
 
             // ── Mark weak dishes (client-only, past selectie aan) ─────────
             if (action.type === 'mark_weak_dishes') {
+
+            // ── Enkel gerecht aanmaken (create_gerecht) ──────────────────────
+            if (action.type === 'create_gerecht') {
+                if (!supabase) throw new Error('Supabase niet beschikbaar');
+                var gd = action.data || {};
+                var insertRow = { naam: gd.naam || 'Nieuw Gerecht', gang_slug: gd.gang_slug || 'anders', beschrijving: gd.beschrijving || '', bereidingswijze: gd.bereidingswijze || '', ingredienten: gd.ingredienten || [], allergenen: gd.allergenen || [], actief: false, tenant_id: 'tenant_bbq_nl_001' };
+                var ins = await supabase.from('gerechten').insert(insertRow).select().single();
+                if (ins.error) throw new Error(ins.error.message);
+                setActionStatus(msgIdx, actionId, 'done');
+                setMessages(function (prev) { return [...prev, { role: 'assistant', content: '\u2705 **' + insertRow.naam + '** is toegevoegd! Activeer het in Menu Engineering en stel een kostprijs in.', actions: [], successBadge: 'Open Menu Engineering \u2192', successLink: '/menu-engineering' }]; });
+                return;
+            }
+
                 setActionStatus(msgIdx, actionId, 'done');
                 // Zoek het bericht met de bulk dishes en pas de selectie aan
                 var weakIndices = action.data.weak_indices || [];
@@ -595,8 +608,77 @@ export default function AiAssistant() {
     }
 
     // ── Render actiekaart ─────────────────────────────────────────────────────
+    // ── Receptuurkaartje ─────────────────────────────────────────────────────
+    function renderReceptuurKaartje(action, msgIdx) {
+        var d = action.data || {};
+        var isPending = action.status === 'pending';
+        var isDone = action.status === 'done';
+        var isExecuting = action.status === 'executing';
+        var CAT_COLORS = { bite: '#f59e0b', voorgerecht: '#3b82f6', hoofdgerecht: '#ef4444', vegetarisch: '#22c55e', dessert: '#ec4899', bijgerecht: '#8b5cf6', borrelhap: '#f97316', anders: '#64748b' };
+        var catColor = CAT_COLORS[d.gang_slug] || '#FFBF00';
+        var ingredienten = Array.isArray(d.ingredienten) ? d.ingredienten : [];
+        var allergenen = Array.isArray(d.allergenen) ? d.allergenen : [];
+        var rawStappen = typeof d.bereidingswijze === 'string' ? d.bereidingswijze : '';
+        var stappen = rawStappen.split(/\n|(?=Stap \d)/g).map(function(s){return s.replace(/^Stap \d+[:.\s]+/,'').trim();}).filter(Boolean);
+        return (
+            <div key={action.id} style={{ margin: '10px 0 0 0', borderRadius: 12, overflow: 'hidden', border: isDone ? '1px solid rgba(34,197,94,.4)' : '1px solid rgba(255,191,0,.3)', background: 'rgba(0,0,0,.25)', fontSize: 12 }}>
+                <div style={{ background: isDone ? 'rgba(34,197,94,.1)' : 'rgba(255,191,0,.07)', padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 18 }}>&#127830;</span>
+                        <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', flex: 1 }}>{d.naam || 'Nieuw Gerecht'}</span>
+                        <span style={{ background: catColor + '22', color: catColor, border: '1px solid ' + catColor + '55', borderRadius: 20, padding: '2px 8px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>{d.gang_slug || 'gerecht'}</span>
+                    </div>
+                    {d.beschrijving && <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5, fontSize: 11 }}>{d.beschrijving}</p>}
+                </div>
+                <div style={{ padding: '10px 12px' }}>
+                    {ingredienten.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#FFBF00', marginBottom: 5 }}>Ingredi&#235;nten</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {ingredienten.slice(0, 8).map(function (ing, i) { return <span key={i} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 5, padding: '2px 6px', fontSize: 10 }}>{ing}</span>; })}
+                                {ingredienten.length > 8 && <span style={{ fontSize: 10, color: 'var(--muted)' }}>+{ingredienten.length - 8} meer</span>}
+                            </div>
+                        </div>
+                    )}
+                    {stappen.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#FFBF00', marginBottom: 5 }}>Bereiding</div>
+                            {stappen.slice(0, 4).map(function (stap, i) {
+                                return <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 4 }}><span style={{ minWidth: 18, height: 18, background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#FFBF00', flexShrink: 0 }}>{i+1}</span><span style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{stap}</span></div>;
+                            })}
+                            {stappen.length > 4 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>+ {stappen.length - 4} stappen meer&#8230;</div>}
+                        </div>
+                    )}
+                    {allergenen.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#ef4444', marginBottom: 4 }}>Allergenen</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                                {allergenen.map(function (a, i) { return <span key={i} style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#ef4444', borderRadius: 4, padding: '1px 5px', fontSize: 9 }}>{a}</span>; })}
+                            </div>
+                        </div>
+                    )}
+                    {isPending && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                            <button onClick={function () { approveAction(msgIdx, action.id); }} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', background: '#FFBF00', color: '#000', fontWeight: 800, fontSize: 11, cursor: 'pointer' }}>
+                                <i className="fa-solid fa-plus" style={{ marginRight: 5 }}></i>Toevoegen aan Menu
+                            </button>
+                            <button onClick={function () { rejectAction(msgIdx, action.id); }} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    )}
+                    {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, textAlign: 'center', padding: '4px 0' }}><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 4 }}></i>Toevoegen&#8230;</div>}
+                    {isDone && <div style={{ color: '#22c55e', fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px 0' }}><i className="fa-solid fa-check" style={{ marginRight: 4 }}></i>Toegevoegd aan Menu!</div>}
+                </div>
+            </div>
+        );
+    }
+
     function renderActionCard(action, msgIdx) {
         // Speciale renderers
+        if (action.type === 'create_gerecht') {
+            return renderReceptuurKaartje(action, msgIdx);
+        }
         if (action.type === 'bulk_create_gerechten') {
             return <div key={action.id}>{renderDishCards(action, msgIdx)}</div>;
         }

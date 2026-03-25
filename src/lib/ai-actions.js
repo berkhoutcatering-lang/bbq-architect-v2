@@ -60,7 +60,7 @@ export var ACTION_TYPES = {
         label: 'Gerecht aanmaken',
         table: 'gerechten',
         op: 'insert',
-        pages: ['/gerechten'],
+        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
         icon: 'fa-utensils',
         color: '#a78bfa',
     },
