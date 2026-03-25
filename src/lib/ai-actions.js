@@ -340,21 +340,20 @@ export function getActionInstructions(pathname) {
     return [
         '',
         '## Acties die jij kunt voorstellen',
-        'Wanneer de gebruiker expliciet vraagt om iets aan te maken, bij te werken of te verwijderen,',
-        'kun je een actieblok opnemen in je antwoord. ALLEEN bij expliciete verzoeken, NOOIT automatisch.',
+        'Je kunt een actieblok opnemen in je antwoord om de gebruiker in staat te stellen data op te slaan.',
         '',
         'Formaat (exact overnemen, inclusief <<<>>>):',
-        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving van wat er gaat gebeuren","data":{...velden...}}>>>',
+        '<<<ACTION:{"type":"ACTION_TYPE","description":"Mensleesbare omschrijving","data":{...velden...}}>>>',
         '',
         'Beschikbare actietypes voor deze pagina:',
         actionList,
         '',
         'Regels:',
-        '- Vraag ALTIJD eerst bevestiging via het actieblok — de gebruiker keurt goed of wijst af',
+        '- Vraag ALTIJD bevestiging via het actieblok — de gebruiker keurt goed of wijst af',
         '- Zet het actieblok ONDER je antwoordtekst',
         '- Gebruik exacte veldnamen uit de database',
-        '- Vul alleen velden in die je zeker weet van de gebruiker',
-        '- Gebruik geen acties voor informatie-vragen, enkel voor daadwerkelijke wijzigingen',
+        '- Op menu-engineering: voeg bij elk beschreven gerecht AUTOMATISCH een create_gerecht actieblok toe',
+        '- Zorg dat alle strings in het JSON-blok op één regel staan — geen letterlijke newlines binnen strings',
     ].join('\n');
 }
 
@@ -362,12 +361,21 @@ export function getActionInstructions(pathname) {
 export function parseActions(text) {
     if (!text) return { cleanText: '', actions: [] };
     var actions = [];
-    var pattern = /<<<ACTION:([\s\S]*?)>>>/g;
+    var pattern = /<<<ACTION:([\.\s\S]*?)>>>/g;
     var match;
 
     while ((match = pattern.exec(text)) !== null) {
         try {
-            var parsed = JSON.parse(match[1]);
+            // Saniteer de JSON: verwijder letterlijke newlines binnen strings
+            var raw = match[1]
+                .replace(/:\s*"([\s\S]*?)"/g, function (m, s) {
+                    return ': "' + s.replace(/\n/g, '\\n').replace(/\r/g, '') + '"';
+                })
+                .replace(/[\x00-\x1F\x7F]/g, function (c) {
+                    // Behoud \n (0x0A) als \\n in string context is al gedaan
+                    return c === '\n' || c === '\r' || c === '\t' ? '' : '';
+                });
+            var parsed = JSON.parse(raw);
             if (parsed.type && ACTION_TYPES[parsed.type]) {
                 actions.push({
                     id: Math.random().toString(36).slice(2, 8),
@@ -375,15 +383,17 @@ export function parseActions(text) {
                     description: parsed.description || ACTION_TYPES[parsed.type].label,
                     data: parsed.data || {},
                     meta: ACTION_TYPES[parsed.type],
-                    status: 'pending', // 'pending' | 'approved' | 'rejected' | 'done' | 'error'
+                    status: 'pending',
                 });
+            } else if (parsed.type) {
+                console.warn('[AI Actions] Onbekend actie-type:', parsed.type);
             }
         } catch (e) {
-            console.warn('[AI Actions] Kon actieblok niet parsen:', match[1]);
+            console.warn('[AI Actions] Kon actieblok niet parsen:', match[1].slice(0, 80), e.message);
         }
     }
 
-    var cleanText = text.replace(/<<<ACTION:[\s\S]*?>>>/g, '').trim();
+    var cleanText = text.replace(/<<<ACTION:[\.\s\S]*?>>>/g, '').trim();
     return { cleanText, actions };
 }
 
