@@ -121,12 +121,18 @@ export default function AiAssistant() {
         setInput('');
 
         var userMsg = { role: 'user', content: text };
-        var apiMessages = [...messages.map(function (m) { return { role: m.role, content: m.content }; }), { role: 'user', content: text }];
 
-        // Voeg user msg + streaming placeholder in één keer toe
-        var newMsgIdx = messages.length + 1; // AI-bericht index
+        // Bouw schone message history voor de API (geen placeholders of lege berichten)
+        var apiMessages = [
+            ...messages
+                .filter(function (m) { return m.content && m.content.trim() !== ''; })
+                .map(function (m) { return { role: m.role, content: m.content }; }),
+            { role: 'user', content: text }
+        ];
+
+        // Voeg user message + 1 streaming placeholder toe
         setMessages(function (prev) {
-            return [...prev, userMsg, { role: 'assistant', content: '', actions: [], streaming: true }];
+            return [...prev, userMsg, { role: 'assistant', content: '', actions: [], isStreaming: true }];
         });
         setIsLoading(true);
 
@@ -142,12 +148,9 @@ export default function AiAssistant() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Netwerkfout');
+            if (!res.ok) throw new Error('Netwerkfout (' + res.status + ')');
 
             // ── Streaming afhandeling ───────────────────────────────────────
-            var assistantMsg = { role: 'assistant', content: '', actions: [], isStreaming: true };
-            setMessages(function (prev) { return [...prev, assistantMsg]; });
-
             var reader = res.body.getReader();
             var decoder = new TextDecoder();
             var accumulatedText = '';
@@ -155,8 +158,8 @@ export default function AiAssistant() {
             while (true) {
                 var chunk = await reader.read();
                 if (chunk.done) break;
-                var text = decoder.decode(chunk.value);
-                var lines = text.split('\n');
+                var chunkText = decoder.decode(chunk.value);
+                var lines = chunkText.split('\n');
                 for (var line of lines) {
                     if (line.startsWith('data: ')) {
                         var raw = line.slice(6);
@@ -193,12 +196,12 @@ export default function AiAssistant() {
             }
 
         } catch (error) {
+            // Vervang de streaming placeholder door de foutmelding
             setMessages(function (prev) {
-                return [...prev, { role: 'assistant', content: '❌ ' + error.message, actions: [] }];
+                return [...prev.slice(0, -1), { role: 'assistant', content: '\u274C ' + error.message, actions: [] }];
             });
         } finally {
             setIsLoading(false);
-            // Auto-save nadat AI response verwerkt is (state is dan bijgewerkt)
             if (activeConversation) {
                 setTimeout(updateConversation, 300);
             }
