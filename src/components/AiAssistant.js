@@ -384,17 +384,26 @@ export default function AiAssistant() {
             // ── Mark weak dishes (client-only, past selectie aan) ─────────
             if (action.type === 'mark_weak_dishes') {
 
-            // ── Enkel gerecht aanmaken (create_gerecht) ──────────────────────
-            if (action.type === 'create_gerecht') {
-                if (!supabase) throw new Error('Supabase niet beschikbaar');
-                var gd = action.data || {};
-                var insertRow = { naam: gd.naam || 'Nieuw Gerecht', gang_slug: gd.gang_slug || 'anders', beschrijving: gd.beschrijving || '', bereidingswijze: gd.bereidingswijze || '', ingredienten: gd.ingredienten || [], allergenen: gd.allergenen || [], actief: false, tenant_id: 'tenant_bbq_nl_001' };
-                var ins = await supabase.from('gerechten').insert(insertRow).select().single();
-                if (ins.error) throw new Error(ins.error.message);
-                setActionStatus(msgIdx, actionId, 'done');
-                setMessages(function (prev) { return [...prev, { role: 'assistant', content: '\u2705 **' + insertRow.naam + '** is toegevoegd! Activeer het in Menu Engineering en stel een kostprijs in.', actions: [], successBadge: 'Open Menu Engineering \u2192', successLink: '/menu-engineering' }]; });
-                return;
-            }
+                // ── Enkel gerecht aanmaken (create_gerecht) ──────────────────────
+                if (action.type === 'create_gerecht') {
+                    if (!supabase) throw new Error('Supabase niet beschikbaar');
+                    var gd = action.data || {};
+                    var insertRow = {
+                        naam: gd.naam || 'Nieuw Gerecht',
+                        gang_slug: gd.gang_slug || 'anders',
+                        beschrijving: gd.beschrijving || '',
+                        preparation_steps: Array.isArray(gd.bereidingswijze) ? gd.bereidingswijze.join('\n') : (gd.bereidingswijze || ''),
+                        ingredients_list: Array.isArray(gd.ingredienten) ? gd.ingredienten.map(function (i) { return typeof i === 'string' ? { naam: i, qty_pp: 0, unit: 'g' } : i; }) : [],
+                        allergenen: gd.allergenen || [],
+                        actief: false,
+                        tenant_id: 'tenant_bbq_nl_001'
+                    };
+                    var ins = await supabase.from('gerechten').insert(insertRow).select().single();
+                    if (ins.error) throw new Error(ins.error.message);
+                    setActionStatus(msgIdx, actionId, 'done');
+                    setMessages(function (prev) { return [...prev, { role: 'assistant', content: '\u2705 **' + insertRow.naam + '** is toegevoegd! Activeer het in Menu Engineering en stel een kostprijs in.', actions: [], successBadge: 'Open Menu Engineering \u2192', successLink: '/menu-engineering' }]; });
+                    return;
+                }
 
                 setActionStatus(msgIdx, actionId, 'done');
                 // Zoek het bericht met de bulk dishes en pas de selectie aan
@@ -619,7 +628,7 @@ export default function AiAssistant() {
         var ingredienten = Array.isArray(d.ingredienten) ? d.ingredienten : [];
         var allergenen = Array.isArray(d.allergenen) ? d.allergenen : [];
         var rawStappen = typeof d.bereidingswijze === 'string' ? d.bereidingswijze : '';
-        var stappen = rawStappen.split(/\n|(?=Stap \d)/g).map(function(s){return s.replace(/^Stap \d+[:.\s]+/,'').trim();}).filter(Boolean);
+        var stappen = rawStappen.split(/\n|(?=Stap \d)/g).map(function (s) { return s.replace(/^Stap \d+[:.\s]+/, '').trim(); }).filter(Boolean);
         return (
             <div key={action.id} style={{ margin: '10px 0 0 0', borderRadius: 12, overflow: 'hidden', border: isDone ? '1px solid rgba(34,197,94,.4)' : '1px solid rgba(255,191,0,.3)', background: 'rgba(0,0,0,.25)', fontSize: 12 }}>
                 <div style={{ background: isDone ? 'rgba(34,197,94,.1)' : 'rgba(255,191,0,.07)', padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
@@ -644,7 +653,7 @@ export default function AiAssistant() {
                         <div style={{ marginBottom: 10 }}>
                             <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#FFBF00', marginBottom: 5 }}>Bereiding</div>
                             {stappen.slice(0, 4).map(function (stap, i) {
-                                return <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 4 }}><span style={{ minWidth: 18, height: 18, background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#FFBF00', flexShrink: 0 }}>{i+1}</span><span style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{stap}</span></div>;
+                                return <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 4 }}><span style={{ minWidth: 18, height: 18, background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#FFBF00', flexShrink: 0 }}>{i + 1}</span><span style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{stap}</span></div>;
                             })}
                             {stappen.length > 4 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>+ {stappen.length - 4} stappen meer&#8230;</div>}
                         </div>
