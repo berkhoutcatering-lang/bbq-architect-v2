@@ -687,17 +687,17 @@ export default function MenuEngineering() {
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           <button
             onClick={function () { setGangFilter('alle'); }}
-            style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(255,255,255,.12)' : 'transparent', color: gangFilter === 'alle' ? '#fff' : 'rgba(255,255,255,.5)' }}
+            style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
           >
             Alle
           </button>
-          {gangOptions.map(function (g) {
+          {GANGEN.map(function (g) {
             var active = gangFilter === g.slug;
             return (
               <button
                 key={g.slug}
                 onClick={function () { setGangFilter(active ? 'alle' : g.slug); }}
-                style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? g.kleur + '50' : 'var(--border)'), background: active ? g.kleur + '14' : 'transparent', color: active ? g.kleur : 'rgba(255,255,255,.5)' }}
+                style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? '#3b82f6' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
               >
                 {g.icon} {g.label}
               </button>
