@@ -26,33 +26,56 @@ function scoreColor(pct) {
 }
 
 // ── Gerecht Kaart ───────────────────────────────────────────────────────────
-function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails }) {
+function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selectionMode, isSelected, onToggleSelect }) {
   var gang = getGang(gerecht.gang_slug);
   var marge = gerecht.kostprijs_pp
     ? Math.round((1 - gerecht.kostprijs_pp / 45) * 100)
     : null;
 
+  var selected = selectionMode && isSelected(gerecht.id);
+
   return (
     <div
-      onClick={function () { if (onViewDetails) onViewDetails(gerecht); }}
+      onClick={function () {
+        if (selectionMode) onToggleSelect(gerecht.id);
+        else if (onViewDetails) onViewDetails(gerecht);
+      }}
       style={{
-        background: geselecteerd ? 'rgba(167,139,250,.05)' : 'var(--card)',
-        border: geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)',
+        background: selected ? 'rgba(59,130,246,.1)' : (geselecteerd ? 'rgba(167,139,250,.05)' : 'var(--card)'),
+        border: selected ? '1px solid #3b82f6' : (geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)'),
         borderRadius: 12,
         padding: '16px',
         transition: 'all .15s',
         position: 'relative',
-        cursor: 'pointer' /* Made clickable */
+        cursor: 'pointer'
       }}
-      onMouseEnter={function (e) { e.currentTarget.style.borderColor = 'rgba(255,255,255,.2)'; }}
-      onMouseLeave={function (e) { e.currentTarget.style.borderColor = geselecteerd ? 'rgba(167,139,250,.25)' : 'var(--border)'; }}
+      onMouseEnter={function (e) { e.currentTarget.style.borderColor = selected ? '#3b82f6' : 'rgba(255,255,255,.2)'; }}
+      onMouseLeave={function (e) { e.currentTarget.style.borderColor = selected ? '#3b82f6' : (geselecteerd ? 'rgba(167,139,250,.25)' : 'var(--border)'); }}
     >
+      {/* Selection Checkbox */}
+      {selectionMode && (
+        <div
+          onClick={function (e) { e.stopPropagation(); onToggleSelect(gerecht.id); }}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
+        >
+          <div style={{
+            width: 20, height: 20, borderRadius: 6,
+            border: selected ? 'none' : '1px solid rgba(255,255,255,.2)',
+            background: selected ? '#3b82f6' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: 12
+          }}>
+            {selected && <i className="fa-solid fa-check"></i>}
+          </div>
+        </div>
+      )}
+
       {/* Gang badge — subtiel */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
         <span style={{ fontSize: 11, color: gang.kleur, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
           {gang.icon} {gang.label}
         </span>
-        {gerecht.actief && (
+        {gerecht.actief && !selectionMode && (
           <span style={{ marginLeft: 'auto', fontSize: 10, color: '#4ade80', background: 'rgba(74,222,128,.1)', padding: '1px 6px', borderRadius: 4 }}>actief</span>
         )}
       </div>
@@ -94,18 +117,20 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails }) {
       )}
 
       {/* Map knop */}
-      <button
-        onClick={function (e) { e.stopPropagation(); onMoveToMap(gerecht); }}
-        style={{
-          width: '100%', background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.15)',
-          color: '#a78bfa', padding: '6px', borderRadius: 7, fontSize: 11, fontWeight: 600,
-          cursor: 'pointer', transition: 'all .15s', marginTop: 4
-        }}
-        onMouseEnter={function (e) { e.target.style.background = 'rgba(167,139,250,.16)'; }}
-        onMouseLeave={function (e) { e.target.style.background = 'rgba(167,139,250,.08)'; }}
-      >
-        → Zet in map
-      </button>
+      {!selectionMode && (
+        <button
+          onClick={function (e) { e.stopPropagation(); onMoveToMap(gerecht); }}
+          style={{
+            width: '100%', background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.15)',
+            color: '#a78bfa', padding: '6px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+            cursor: 'pointer', transition: 'all .15s', marginTop: 4
+          }}
+          onMouseEnter={function (e) { e.target.style.background = 'rgba(167,139,250,.16)'; }}
+          onMouseLeave={function (e) { e.target.style.background = 'rgba(167,139,250,.08)'; }}
+        >
+          → Zet in map
+        </button>
+      )}
     </div>
   );
 }
@@ -355,8 +380,54 @@ export default function MenuEngineering() {
   // Gerecht details modal
   var [viewingGerecht, setViewingGerecht] = useState(null);
 
+  // Selection Mode
+  var [selectionMode, setSelectionMode] = useState(false);
+  var [selectedIds, setSelectedIds] = useState([]);
+  var [selectLimit, setSelectLimit] = useState(20);
+
   // Publish toast
   var [toast, setToast] = useState(null);
+
+  // ── Bulk Acties ───────────────────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds(function (prev) {
+      if (prev.includes(id)) return prev.filter(function (x) { return x !== id; });
+      if (prev.length >= selectLimit) return prev;
+      return prev.concat([id]);
+    });
+  }
+
+  function selectVisible() {
+    setSelectedIds(function (prev) {
+      var next = prev.slice();
+      for (var i = 0; i < filtered.length; i++) {
+        if (next.length >= selectLimit) break;
+        if (!next.includes(filtered[i].id)) next.push(filtered[i].id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    if (!confirm('Let op: weet je zeker dat je ' + selectedIds.length + ' geselecteerde gerechten permanent wilt verwijderen?')) return;
+
+    setLoading(true);
+    var { error } = await supabase.from('gerechten').delete().in('id', selectedIds);
+    setLoading(false);
+
+    if (!error) {
+      setGerechten(function (prev) { return prev.filter(function (g) { return !selectedIds.includes(g.id); }); });
+      clearSelection();
+      showToast('✅ ' + selectedIds.length + ' gerechten verwijderd!');
+    } else {
+      showToast('❌ Fout bij verwijderen: ' + error.message);
+    }
+  }
 
   // ── Data laden ─────────────────────────────────────────────────────────
   useEffect(function () {
@@ -437,13 +508,13 @@ export default function MenuEngineering() {
   // AI auto-sort: categoriseert gerechten op basis van naam + beschrijving
   function aiAutoSort() {
     var keywordMap = [
-      { slug: 'dessert',      words: ['dessert','panna cotta','mousse','ijs','sorbet','cake','tart','brownie','cheesecake','macaron','mille-feuille','sticky rice','crème brûlée','tiramisu','parfait','gelato','pudding','waffle','stroopwafel'] },
-      { slug: 'borrelhap',    words: ['borrelhap','borrel','amuse','nootje','chip','dip','spread','toast','crostini','bruschetta','blini'] },
-      { slug: 'bite',         words: ['bite','bites','gyoza','tataki','tartaar','tartare','carpaccio','skewer','sate','saté','lolly','slider','wrap','roll','rollup','spring roll','dumpling','bao','taco','pintxo','croqueta','kroket','bitterbal','fingerfood','finger food','mini ','hapje'] },
-      { slug: 'voorgerecht',  words: ['salade','soep','ceviche','gazpacho','bisque','carpaccio','voorgerecht','starter','amuse','poke','bowl'] },
-      { slug: 'vegetarisch',  words: ['vegan','vegetarisch','veggie','tofu','tempeh','halloumi','portobello','paddenstoel','bloemkool','aubergine','courgette','groenten','biet','linze','kikkererwt','falafel','gnocchi'] },
-      { slug: 'bijgerecht',   words: ['frites','friet','coleslaw','slaw','saus','relish','chutney','bread','brood','brioche','rice','rijst','pasta','noodle','aardappel','puree','tzatziki','guacamole','salsa','hummus','aioli','mayo'] },
-      { slug: 'hoofdgerecht', words: ['brisket','ribeye','entrecote','bavette','striploin','tomahawk','côte de boeuf','cote de boeuf','t-bone','picanha','pulled pork','spare rib','spareribs','rack','lam','lamskotelet','kip','kipfilet','kipdij','zalm','tonijn','zeebaars','ossenhaas','wagyu','burger','karbonnade','varkenshaas','eend','parelhoen'] },
+      { slug: 'dessert', words: ['dessert', 'panna cotta', 'mousse', 'ijs', 'sorbet', 'cake', 'tart', 'brownie', 'cheesecake', 'macaron', 'mille-feuille', 'sticky rice', 'crème brûlée', 'tiramisu', 'parfait', 'gelato', 'pudding', 'waffle', 'stroopwafel'] },
+      { slug: 'borrelhap', words: ['borrelhap', 'borrel', 'amuse', 'nootje', 'chip', 'dip', 'spread', 'toast', 'crostini', 'bruschetta', 'blini'] },
+      { slug: 'bite', words: ['bite', 'bites', 'gyoza', 'tataki', 'tartaar', 'tartare', 'carpaccio', 'skewer', 'sate', 'saté', 'lolly', 'slider', 'wrap', 'roll', 'rollup', 'spring roll', 'dumpling', 'bao', 'taco', 'pintxo', 'croqueta', 'kroket', 'bitterbal', 'fingerfood', 'finger food', 'mini ', 'hapje'] },
+      { slug: 'voorgerecht', words: ['salade', 'soep', 'ceviche', 'gazpacho', 'bisque', 'carpaccio', 'voorgerecht', 'starter', 'amuse', 'poke', 'bowl'] },
+      { slug: 'vegetarisch', words: ['vegan', 'vegetarisch', 'veggie', 'tofu', 'tempeh', 'halloumi', 'portobello', 'paddenstoel', 'bloemkool', 'aubergine', 'courgette', 'groenten', 'biet', 'linze', 'kikkererwt', 'falafel', 'gnocchi'] },
+      { slug: 'bijgerecht', words: ['frites', 'friet', 'coleslaw', 'slaw', 'saus', 'relish', 'chutney', 'bread', 'brood', 'brioche', 'rice', 'rijst', 'pasta', 'noodle', 'aardappel', 'puree', 'tzatziki', 'guacamole', 'salsa', 'hummus', 'aioli', 'mayo'] },
+      { slug: 'hoofdgerecht', words: ['brisket', 'ribeye', 'entrecote', 'bavette', 'striploin', 'tomahawk', 'côte de boeuf', 'cote de boeuf', 't-bone', 'picanha', 'pulled pork', 'spare rib', 'spareribs', 'rack', 'lam', 'lamskotelet', 'kip', 'kipfilet', 'kipdij', 'zalm', 'tonijn', 'zeebaars', 'ossenhaas', 'wagyu', 'burger', 'karbonnade', 'varkenshaas', 'eend', 'parelhoen'] },
     ];
 
     var next = {};
@@ -649,6 +720,70 @@ export default function MenuEngineering() {
             );
           })}
         </div>
+
+        {/* Selection mode toggle */}
+        <button
+          onClick={function () {
+            setSelectionMode(!selectionMode);
+            if (selectionMode) setSelectedIds([]);
+          }}
+          style={{
+            padding: '7px 14px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            border: '1px solid ' + (selectionMode ? '#3b82f6' : 'var(--border)'),
+            background: selectionMode ? 'rgba(59,130,246,.15)' : 'transparent',
+            color: selectionMode ? '#3b82f6' : 'rgba(255,255,255,.5)',
+            display: 'flex', alignItems: 'center', gap: 6, transition: '0.2s'
+          }}
+        >
+          <i className={`fa-solid ${selectionMode ? 'fa-check-double' : 'fa-square-check'}`}></i>
+          {selectionMode ? 'Selectie aan' : 'Selectiemodus'}
+        </button>
+
+        {selectionMode && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.05)',
+              border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 32
+            }}>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', fontWeight: 700 }}>Max</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={selectLimit}
+                onChange={function (e) { setSelectLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1))); }}
+                style={{
+                  width: 40, background: 'transparent', border: 'none', color: '#fff',
+                  fontSize: 12, fontWeight: 700, outline: 'none', textAlign: 'center'
+                }}
+              />
+            </div>
+
+            <button
+              onClick={selectVisible}
+              style={{ padding: '0 12px', height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Selecteer {selectLimit}
+            </button>
+
+            <button
+              onClick={clearSelection}
+              style={{ padding: '0 12px', height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Deselecteer
+            </button>
+
+            {selectedIds.length > 0 && (
+              <button
+                onClick={deleteSelected}
+                style={{ padding: '0 12px', height: 32, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <i className="fa-solid fa-trash" style={{ marginRight: 6 }}></i>
+                Verwijder ({selectedIds.length})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── KAARTEN VIEW ──────────────────────────────────────────── */}
@@ -667,6 +802,9 @@ export default function MenuEngineering() {
                   geselecteerd={inMap.has(g.id)}
                   onMoveToMap={openGangPicker}
                   onViewDetails={setViewingGerecht}
+                  selectionMode={selectionMode}
+                  isSelected={function (id) { return selectedIds.includes(id); }}
+                  onToggleSelect={toggleSelect}
                 />
               );
             })}
