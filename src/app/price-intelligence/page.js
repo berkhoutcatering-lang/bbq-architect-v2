@@ -15,6 +15,7 @@ export default function PriceIntelligence() {
     var [importing, setImporting] = useState(false);
     var [preview, setPreview] = useState(null);
     var [dragOver, setDragOver] = useState(false);
+    var [showInfo, setShowInfo] = useState(false);
     var fileRef = useRef();
 
     function detectSeparator(line) {
@@ -178,6 +179,13 @@ export default function PriceIntelligence() {
                     {alerts.length > 0 && (
                         <span style={{ background: 'var(--red)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 5, fontWeight: 700 }}>{alerts.length}</span>
                     )}
+                </button>
+                <button
+                    onClick={function () { setShowInfo(true); }}
+                    style={{ marginLeft: 'auto', background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', color: '#3b82f6', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                    <i className="fa-solid fa-circle-info"></i>
+                    Hoe werkt dit?
                 </button>
             </div>
 
@@ -380,6 +388,65 @@ export default function PriceIntelligence() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* Info Modal */}
+            {showInfo && (
+                <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+                    onClick={function () { setShowInfo(false); }}
+                >
+                    <div
+                        style={{ background: '#121215', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: 32, maxWidth: 600, width: '100%', position: 'relative' }}
+                        onClick={function (e) { e.stopPropagation(); }}
+                    >
+                        <button
+                            onClick={function () { setShowInfo(false); }}
+                            style={{ position: 'absolute', top: 20, right: 20, background: 'none', border: 'none', color: 'rgba(255,255,255,.3)', fontSize: 24, cursor: 'pointer' }}
+                        >
+                            ×
+                        </button>
+
+                        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 20, color: '#3b82f6' }}>
+                            <i className="fa-solid fa-file-csv" style={{ marginRight: 10 }}></i>
+                            Inkoopprijzen importeren
+                        </h2>
+
+                        <div style={{ fontSize: 14, lineHeight: 1.6, color: 'rgba(255,255,255,.7)' }}>
+                            <p style={{ marginBottom: 12 }}>
+                                Met deze tool kun je prijzen van de Sligro, Hanos of Bidfood inladen. Dit helpt je om altijd de meest actuele marge-berekening te hebben.
+                            </p>
+
+                            <div style={{ background: 'rgba(255,255,255,.03)', padding: 16, borderRadius: 12, marginBottom: 12 }}>
+                                <strong style={{ display: 'block', color: '#fff', marginBottom: 8, fontSize: 12, textTransform: 'uppercase' }}>
+                                    Hoe kom ik aan een CSV?
+                                </strong>
+                                <ul style={{ paddingLeft: 18 }}>
+                                    <li style={{ marginBottom: 4 }}><strong>Sligro:</strong> Ga naar 'Mijn Sligro' &gt; Bestelgeschiedenis &gt; Export (kies CSV).</li>
+                                    <li style={{ marginBottom: 4 }}><strong>Hanos:</strong> In de webshop bij 'Mijn Hanos' kun je prijslijsten downloaden als CSV.</li>
+                                    <li style={{ marginBottom: 4 }}><strong>Bidfood:</strong> Gebruik 'Mijn Bidfood' &gt; Downloads &gt; Prijslijsten.</li>
+                                </ul>
+                            </div>
+
+                            <div style={{ background: 'rgba(59,130,246,.05)', padding: 16, borderRadius: 12 }}>
+                                <strong style={{ display: 'block', color: '#3b82f6', marginBottom: 8, fontSize: 12, textTransform: 'uppercase' }}>
+                                    Wist je dat?
+                                </strong>
+                                <p>
+                                    De AI leert de CSV kolommen automatisch. Het systeem herkent zelf waar de productnaam en de prijs staan, ook als de volgorde anders is.
+                                    Na de import vergelijkt het systeem de nieuwe prijzen met de oude en krijg je een melding bij prijsstijgingen &gt;5%.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={function () { setShowInfo(false); }}
+                            style={{ marginTop: 24, width: '100%', background: '#3b82f6', color: '#000', border: 'none', borderRadius: 10, padding: '12px', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                            Begrepen, aan de slag!
+                        </button>
+                    </div>
+                </div>
             )}
         </>
     );
