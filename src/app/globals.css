@@ -4,12 +4,12 @@
 :root {
   --brand: #FFBF00;
   --brand-light: rgba(255, 191, 0, .12);
-  --bg: #0D0D0D;
-  --card: rgba(24, 24, 27, .65);
-  --card-solid: #18181b;
-  --border: rgba(255, 255, 255, .06);
-  --text: #f4f4f5;
-  --muted: #71717a;
+  --bg: #121214;
+  --card: rgba(30, 30, 34, .7);
+  --card-solid: #1e1e22;
+  --border: rgba(255, 255, 255, .1);
+  --text: #f8f8f8;
+  --muted: #94949b;
   --green: #22c55e;
   --red: #ef4444;
   --amber: #f59e0b;
