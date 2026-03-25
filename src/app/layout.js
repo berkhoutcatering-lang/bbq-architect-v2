@@ -1,11 +1,11 @@
 import './globals.css';
-import { Inter } from "next/font/google";
 import Script from "next/script";
 import Sidebar from "@/components/Sidebar";
 import AiAssistant from "@/components/AiAssistant";
-
 import ToastProvider from "@/components/Toast";
 import ConfirmProvider from "@/components/ConfirmDialog";
+import { AppProvider } from "@/lib/AppContext";
+import GlobalToast from "@/components/GlobalToast";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
@@ -23,19 +23,22 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: `tailwind.config = { corePlugins: { preflight: false } };` }} />
       </head>
       <body>
-        <ToastProvider>
-          <ConfirmProvider>
-            <div className="flex min-h-screen bg-[#121215]">
-              <Sidebar />
-              <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
-                <div className="flex-1 w-full">
-                  {children}
-                </div>
-              </main>
-              <AiAssistant />
-            </div>
-          </ConfirmProvider>
-        </ToastProvider>
+        <AppProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <div className="flex min-h-screen bg-[var(--bg)]">
+                <Sidebar />
+                <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
+                  <div className="flex-1 w-full">
+                    {children}
+                  </div>
+                </main>
+                <AiAssistant />
+              </div>
+              <GlobalToast />
+            </ConfirmProvider>
+          </ToastProvider>
+        </AppProvider>
       </body>
     </html>
   );

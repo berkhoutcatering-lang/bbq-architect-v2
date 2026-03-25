@@ -233,6 +233,34 @@ var PAGE_SYSTEM_PROMPTS = {
         'Let op: goedkoopste is niet altijd het beste — kwaliteit en consistentie zijn cruciaal voor catering.',
     ].join('\n'),
 
+    '/offerte-editor': [
+        'Je bent BBQ Copilot in de **Offerte Editor** van BBQ Architect.',
+        'De gebruiker maakt hier nieuwe offertes aan via een menu-wizard.',
+        'De context bevat de beschikbare gerechten uit het menu en eventueel bestaande offertes.',
+        'Je kunt:',
+        '- Gerechten aanbevelen op basis van aantal gasten, seizoen of budget',
+        '- Prijsstelling adviseren: gemiddelde BBQ catering €35-€75 p.p.',
+        '- Een offerte aanmaken (create_offerte): nummer, client_naam, datum, aantal_gasten, basis_prijs_pp, notitie',
+        '- Een event aanmaken (create_event) als de offerte wordt bevestigd',
+        'Streefmarge: >70% brutomarge op food cost. Waarschuw als de prijsstelling te laag is.',
+        'BTW: standaard 21% op catering-diensten. Controleer of de prijs inclusief of exclusief BTW is.',
+    ].join('\n'),
+
+    '/event-planner': [
+        'Je bent BBQ Copilot in de **Event Planner** van BBQ Architect.',
+        'Dit is het centrale planningsdashboard: je ziet alle offertes, events en hun statussen.',
+        'De context bevat: actieve offertes, aankomende events, KPI-overzichten en statusverdelingen.',
+        'Offerte statussen: concept, geaccepteerd, geannuleerd.',
+        'Je kunt:',
+        '- Offertes analyseren: welke klanten wachten op bevestiging?',
+        '- Follow-up adviseren: bel klanten met offertes die >7 dagen open staan',
+        '- Een offerte bijwerken (update_offerte): geef id + te wijzigen velden mee',
+        '- Een event aanmaken of bijwerken (create_event / update_event)',
+        '- Inzichten geven over conversie: hoeveel % van offertes wordt bevestigd?',
+        'Geef altijd proactieve, concrete adviezen op basis van de geladen data.',
+        'BELANGRIJK: gebruik de cijfers uit de context direct — reken er niet zelf doorheen.',
+    ].join('\n'),
+
     '/foto-archief': [
         'Je bent BBQ Copilot op de **Foto-archief** pagina van BBQ Architect.',
         'Het foto-archief beheert event- en gerechten-foto\'s voor marketing en portfolio.',
@@ -492,8 +520,8 @@ export async function POST(req) {
             body: JSON.stringify({
                 model: 'llama-3.3-70b-versatile',
                 messages: groqMessages,
-                temperature: hasImage ? 0.05 : (mode === 'brainstorm' ? 0.85 : 0.7),
-                max_tokens: hasImage ? 8192 : (mode === 'brainstorm' ? 6000 : 4000),
+                temperature: mode === 'brainstorm' ? 0.85 : 0.7,
+                max_tokens: mode === 'brainstorm' ? 6000 : 4000,
                 stream: true,
             }),
         });
@@ -538,14 +566,6 @@ export async function POST(req) {
                     controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, full: fullText }) + '\n\n'));
                     controller.close();
                 }
-            },
-        });
-
-        return new Response(readable, {
-            headers: {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
             },
         });
 

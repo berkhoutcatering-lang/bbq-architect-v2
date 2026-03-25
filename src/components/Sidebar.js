@@ -30,6 +30,7 @@ const navSections = [
         children: [
             { label: "Agenda", icon: <Calendar size={16} />, href: "/agenda" },
             { label: "Events", icon: <PartyPopper size={16} />, href: "/events" },
+            { label: "Event Planner", icon: <PieChart size={16} />, href: "/event-planner" },
             { label: "Service", icon: <HeartHandshake size={16} />, href: "/service" },
         ],
     },
@@ -39,6 +40,7 @@ const navSections = [
         type: "folder",
         children: [
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes" },
+            { label: "Snel Aanmaken", icon: <FilePlus size={16} />, href: "/offerte-editor" },
             { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen" },
             { label: "Analytics", icon: <BarChart3 size={16} />, href: "/financien" },
             { label: "Boekhouding", icon: <Calculator size={16} />, href: "/boekhouding" },
@@ -112,11 +114,11 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                         toggleSection(section.title);
                     }
                 }}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#a0a0a5] hover:text-white transition-colors group"
+                className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)] hover:text-white transition-colors group"
                 title={collapsed ? section.title : ""}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
-                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[#88888c] group-hover:text-[#b4b4b8]'}`}>
+                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[var(--muted)] group-hover:text-white'}`}>
                         {section.icon}
                     </span>
 
@@ -144,7 +146,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 href={item.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
                                     ? "bg-[#3b82f6]/10 text-white border-l-2 border-[#3b82f6] pl-2.5"
-                                    : "text-[#b4b4b8] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
+                                    : "text-[var(--muted)] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
                                 <span className={`shrink-0 ${isActive ? "text-[#3b82f6]" : ""}`}>
@@ -189,7 +191,7 @@ export default function Sidebar() {
                         <p className="text-[13px] font-semibold tracking-[0.08em] text-white font-['Outfit'] truncate">
                             BBQ ARCHITECT
                         </p>
-                        <p className="text-[9px] tracking-[0.25em] text-[#555558] uppercase truncate mt-0.5">
+                        <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase truncate mt-0.5">
                             Hop & Bites
                         </p>
                     </div>
@@ -197,7 +199,7 @@ export default function Sidebar() {
 
                 <button
                     onClick={() => setCollapsed(!collapsed)}
-                    className={`shrink-0 p-1.5 rounded-lg hover:bg-[#1a1a20] text-[#555] hover:text-white transition-colors ${collapsed ? 'absolute right-[22px]' : ''}`}
+                    className={`shrink-0 p-1.5 rounded-lg hover:bg-[#1a1a20] text-[var(--muted-light)] hover:text-white transition-colors ${collapsed ? 'absolute right-[22px]' : ''}`}
                 >
                     {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                 </button>
@@ -209,7 +211,7 @@ export default function Sidebar() {
                     href="/"
                     className={`group flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap ${pathname === "/"
                         ? "bg-[#3b82f6]/10 border border-[#3b82f6]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
-                        : "text-[#b4b4b8] hover:text-white hover:bg-[#1a1a1f]"
+                        : "text-[var(--muted)] hover:text-white hover:bg-[#1a1a1f]"
                         } ${collapsed ? "justify-center" : ""}`}
                     title={collapsed ? "Dashboard" : ""}
                 >
@@ -244,9 +246,9 @@ export default function Sidebar() {
                         }`}>
                         <div className="min-w-0">
                             <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">Mathijs Berkhout</p>
-                            <p className="text-[10px] text-[#a0a0a5] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
+                            <p className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
                         </div>
-                        <Settings className="w-4 h-4 shrink-0 text-[#88888c] hover:text-white cursor-pointer transition-colors" />
+                        <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-white cursor-pointer transition-colors" />
                     </div>
                 </div>
             </div>

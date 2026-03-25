@@ -50,7 +50,7 @@ const StatusDot = ({ status }) => {
   );
 };
 
-const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "#8b8b8f" }) => (
+const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "var(--muted)" }) => (
   <MetallicCard className="p-6 group">
     <div className="flex items-start justify-between mb-4">
       <div
@@ -69,9 +69,9 @@ const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "#8b8b8f" 
         </span>
       )}
     </div>
-    <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-[#555558] mb-1.5">{label}</p>
+    <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-[var(--muted)] mb-1.5">{label}</p>
     <p className="text-2xl font-light text-white tracking-tight">{value}</p>
-    {subtitle && <p className="text-[12px] text-[#444447] mt-1">{subtitle}</p>}
+    {subtitle && <p className="text-[12px] text-[var(--muted-light)] mt-1">{subtitle}</p>}
   </MetallicCard>
 );
 
@@ -217,7 +217,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="text-[15px] font-semibold tracking-[0.08em] text-white font-['Outfit']">BBQ ARCHITECT</h1>
-              <p className="text-[10px] tracking-[0.25em] text-[#555558] uppercase">Hop & Bites • Ambacht</p>
+              <p className="text-[10px] tracking-[0.25em] text-[var(--muted)] uppercase">Hop & Bites • Ambacht</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -228,10 +228,10 @@ export default function DashboardPage() {
               )}
             </button>
             <div className="ml-2 text-right">
-              <p className="text-[11px] text-[#555558] font-medium capitalize">
+              <p className="text-[11px] text-[var(--muted)] font-medium capitalize">
                 {isMounted ? currentTime.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" }) : "Laden..."}
               </p>
-              <p className="text-[13px] font-light text-[#888] tabular-nums">
+              <p className="text-[13px] font-light text-[var(--muted)] tabular-nums">
                 {isMounted ? currentTime.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
               </p>
             </div>
@@ -246,7 +246,7 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-extralight text-white tracking-tight mb-1">
             {greeting}, <span className="font-normal">Pitmaster</span>
           </h2>
-          <p className="text-[14px] text-[#555558] font-light">Command Center — alles onder controle.</p>
+          <p className="text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
         </div>
 
         {/* ========== ACTION ALERTS ========== */}
@@ -318,10 +318,10 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h3 className="text-[15px] font-medium text-white tracking-tight">Aankomende Events</h3>
-                    <p className="text-[11px] text-[#444447]">Geplande reserveringen en opties</p>
+                    <p className="text-[11px] text-[var(--muted-light)]">Geplande reserveringen en opties</p>
                   </div>
                 </div>
-                <Link href="/events" className="flex items-center gap-1.5 text-[11px] font-medium text-[#555558] hover:text-white transition-colors uppercase tracking-[0.1em]">
+                <Link href="/events" className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted)] hover:text-white transition-colors uppercase tracking-[0.1em]">
                   Alle events <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -336,22 +336,22 @@ export default function DashboardPage() {
                       <Link key={event.id} href={`/agenda`} className="group flex items-center gap-5 p-4 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300">
                         <div className="flex-shrink-0 w-14 text-center">
                           <p className="text-[22px] font-light text-white leading-none">{date.day}</p>
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-[#555558] mt-1">{date.month}</p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)] mt-1">{date.month}</p>
                         </div>
-                        <div className="w-px h-10 bg-[#1e1e22]" />
+                        <div className="w-px h-10 bg-[var(--border)]" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <StatusDot status={event.status} />
                             <p className="text-[13.5px] font-medium text-white truncate">{event.name}</p>
                           </div>
-                          <div className="flex items-center gap-4 text-[11.5px] text-[#66666b]">
+                          <div className="flex items-center gap-4 text-[11.5px] text-[var(--muted)]">
                             <span className="flex items-center gap-1.5"><Users className="w-3 h-3" /> {event.guests}p</span>
                             <span className="flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {event.location || 'Onbekend'}</span>
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-[15px] font-light text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</p>
-                          <p className="text-[10px] uppercase tracking-[0.15em] text-[#555558] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : 'Pending'}</p>
+                          <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : 'Pending'}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0 ml-1" />
                       </Link>
@@ -401,9 +401,9 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex-1">
                               <p className="text-[13px] text-white font-medium">{item.dish}</p>
-                              <p className="text-[11px] text-[#444447]">{item.gang}</p>
+                              <p className="text-[11px] text-[var(--muted-light)]">{item.gang}</p>
                             </div>
-                            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full text-[#555558] bg-[#1a1a1e] border border-[#222]">
+                            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full text-[var(--muted)] bg-[#1a1a1e] border border-[var(--border)]">
                               Prep To Do
                             </span>
                           </div>
@@ -426,7 +426,7 @@ export default function DashboardPage() {
 
             {/* QUICK ACTIONS */}
             <MetallicCard className="p-6" hover={false}>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#555558] mb-4">Snelle Acties</h3>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)] mb-4">Snelle Acties</h3>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { icon: <FileText className="w-4 h-4" />, label: "Offertes", href: "/offertes" },
@@ -455,8 +455,8 @@ export default function DashboardPage() {
                   {liveActions.map((action, i) => (
                     <Link key={i} href={action.link} className="flex items-center gap-3 p-3 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300 group">
                       <StatusDot status={action.urgency} />
-                      <span className="text-[12.5px] font-medium text-[#888] group-hover:text-white transition-colors flex-1 line-clamp-1">{action.message}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-[#333] group-hover:text-[#666] transition-colors" />
+                      <span className="text-[12.5px] font-medium text-[var(--muted)] group-hover:text-white transition-colors flex-1 line-clamp-1">{action.message}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-[var(--muted-light)] group-hover:text-white transition-colors" />
                     </Link>
                   ))}
                 </div>
@@ -501,8 +501,8 @@ export default function DashboardPage() {
                       return (
                         <div key={off.id}>
                           <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] text-[#888] truncate max-w-[140px] font-medium">{off.client_naam || off.nummer}</span>
-                            <span className="text-[11px] text-[#888] tabular-nums">{formatCurrency(eventTotal)}</span>
+                            <span className="text-[11px] text-[var(--muted)] truncate max-w-[140px] font-medium">{off.client_naam || off.nummer}</span>
+                            <span className="text-[11px] text-[var(--muted)] tabular-nums">{formatCurrency(eventTotal)}</span>
                           </div>
                           <div className="h-1 bg-[#151518] rounded-full overflow-hidden">
                             <div className="h-full rounded-full bg-gradient-to-r from-[#c4a35a] to-[#d4b36a] transition-all duration-700" style={{ width: `${percentage}%` }} />
@@ -525,10 +525,10 @@ export default function DashboardPage() {
             <div className="relative px-6 py-5">
               <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#c4a35a]/30 to-transparent" />
               <blockquote className="pl-5">
-                <p className="text-[12px] text-[#555558] italic leading-relaxed font-light">
+                <p className="text-[12px] text-[var(--muted)] italic leading-relaxed font-light">
                   &ldquo;A perfect dish is no accident. It’s the seamless execution of logistics, craft, and fire.&rdquo;
                 </p>
-                <footer className="mt-2 text-[10px] uppercase tracking-[0.2em] text-[#333338]">— Mathijs Berkhout</footer>
+                <footer className="mt-2 text-[10px] uppercase tracking-[0.2em] text-[var(--muted-light)]">— Mathijs Berkhout</footer>
               </blockquote>
             </div>
 

@@ -8,7 +8,7 @@ export var ACTION_TYPES = {
         label: 'Event aanmaken',
         table: 'events',
         op: 'insert',
-        pages: ['/', '/events', '/agenda', '/offertes'],
+        pages: ['/', '/events', '/agenda', '/offertes', '/offerte-editor', '/event-planner'],
         icon: 'fa-calendar-plus',
         color: '#3b82f6',
     },
@@ -16,7 +16,7 @@ export var ACTION_TYPES = {
         label: 'Event bijwerken',
         table: 'events',
         op: 'update',
-        pages: ['/events', '/agenda', '/service'],
+        pages: ['/events', '/agenda', '/service', '/event-planner'],
         icon: 'fa-calendar-check',
         color: '#f59e0b',
     },
@@ -218,7 +218,7 @@ export var ACTION_TYPES = {
         label: 'Offerte aanmaken',
         table: 'offertes',
         op: 'insert',
-        pages: ['/offertes'],
+        pages: ['/offertes', '/offerte-editor', '/event-planner'],
         icon: 'fa-file-invoice',
         color: '#22c55e',
     },
@@ -226,7 +226,7 @@ export var ACTION_TYPES = {
         label: 'Offerte bijwerken',
         table: 'offertes',
         op: 'update',
-        pages: ['/offertes'],
+        pages: ['/offertes', '/event-planner'],
         icon: 'fa-pen-to-square',
         color: '#3b82f6',
     },
@@ -234,7 +234,7 @@ export var ACTION_TYPES = {
         label: 'Offerte status bijwerken',
         table: 'offertes',
         op: 'update',
-        pages: ['/offertes'],
+        pages: ['/offertes', '/event-planner'],
         icon: 'fa-file-invoice',
         color: '#f59e0b',
     },
@@ -705,6 +705,39 @@ export async function loadPageContextData(pathname, supabase) {
             ctx.leveranciers = levPiRes.data || [];
         }
 
+        if (pathname === '/offerte-editor') {
+            // Gerechten voor de menu-wizard
+            var gerEdRes = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp').eq('actief', true).order('gang_slug').limit(50);
+            ctx.gerechten = gerEdRes.data || [];
+            // Gangen zodat AI de structuur kent
+            var gangEdRes = await supabase.from('gangen').select('id,naam,slug').eq('actief', true).order('volgorde');
+            ctx.gangen = gangEdRes.data || [];
+            // Recente offertes ter referentie
+            var offEdRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp').order('datum', { ascending: false }).limit(5);
+            ctx.recenteOffertes = offEdRes.data || [];
+        }
+
+        if (pathname === '/event-planner') {
+            // Alle actieve offertes
+            var offPlanRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,korting,items').order('datum', { ascending: false }).limit(30);
+            ctx.offertes = offPlanRes.data || [];
+            // Aankomende events
+            var todayPlan = new Date().toISOString().slice(0, 10);
+            var evPlanRes = await supabase.from('events')
+                .select('id,name,date,guests,status,location,client_naam,ppp')
+                .gte('date', todayPlan)
+                .order('date', { ascending: true })
+                .limit(15);
+            ctx.events = evPlanRes.data || [];
+            ctx.volgendEvent = (evPlanRes.data || [])[0] || null;
+            // Statusverdeling als samenvatting
+            var statussen = {};
+            (offPlanRes.data || []).forEach(function (o) {
+                statussen[o.status] = (statussen[o.status] || 0) + 1;
+            });
+            ctx.offerteSamenvatting = statussen;
+        }
+
         return Object.keys(ctx).length > 0 ? ctx : null;
     } catch (e) {
         console.warn('[AI Context] Fout bij laden context data:', e.message);
@@ -962,6 +995,21 @@ export function formatContextForPrompt(contextData) {
         lines.push('**Gespreksmappen:**');
         contextData.folders.forEach(function (f) {
             lines.push('- [' + f.id + '] ' + f.naam + ' (' + (f.gesprekken || 0) + ' gesprekken)');
+        });
+        lines.push('');
+    }
+
+    if (contextData.recenteOffertes && contextData.recenteOffertes.length > 0) {
+        lines.push('**Recente offertes (ter referentie — ' + contextData.recenteOffertes.length + '):**');
+        contextData.recenteOffertes.forEach(function (o) {
+            lines.push('- [' + o.id + '] ' + (o.nummer || '?') + ' | ' + (o.client_naam || '?') + ' | ' + (o.status || '?') + ' | ' + (o.aantal_gasten || 0) + ' gasten | ' + (o.basis_prijs_pp ? '€' + o.basis_prijs_pp + '/p.p.' : 'geen prijs'));
+        });
+        lines.push('');
+    }
+    if (contextData.offerteSamenvatting && Object.keys(contextData.offerteSamenvatting).length > 0) {
+        lines.push('**Offerte statusverdeling:**');
+        Object.entries(contextData.offerteSamenvatting).forEach(function (entry) {
+            lines.push('- ' + entry[0] + ': ' + entry[1] + ' offerte(s)');
         });
         lines.push('');
     }
