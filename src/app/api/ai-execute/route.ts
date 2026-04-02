@@ -188,6 +188,35 @@ async function getEventWinstgevendheid(params: Record<string, any>): Promise<Rec
     };
 }
 
+async function getCrossModuleContext(): Promise<Record<string, any>> {
+    if (!supabase) return { error: 'Geen database verbinding' };
+
+    const [eventsRes, offertesRes, facturenRes, invRes, settingsRes] = await Promise.all([
+        supabase.from('events').select('*').order('date', { ascending: true }).limit(10),
+        supabase.from('offertes').select('*').order('id', { ascending: false }).limit(20),
+        supabase.from('facturen').select('*').order('id', { ascending: false }).limit(20),
+        supabase.from('inventory').select('*'),
+        supabase.from('settings').select('*').single(),
+    ]);
+
+    // Return in het format dat formatContextForPrompt verwacht
+    var events = (eventsRes.data || []).map(function (e: any) {
+        return { id: e.id, name: e.name, date: e.date, guests: e.guests, status: e.status, location: e.location, client_naam: e.client_naam, ppp: e.ppp, menu: e.menu };
+    });
+    var lowStock = (invRes.data || []).filter(function (i: any) {
+        return i.current_stock !== null && i.min_stock !== null && i.current_stock < i.min_stock;
+    });
+
+    return {
+        settings: settingsRes.data || {},
+        events: events,
+        offertes: offertesRes.data || [],
+        facturen: facturenRes.data || [],
+        inventory: invRes.data || [],
+        lowStock: lowStock.map(function (i: any) { return { naam: i.naam, current_stock: i.current_stock, min_stock: i.min_stock, unit: i.unit }; }),
+    };
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
         const body = await req.json();
@@ -203,6 +232,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 break;
             case 'getEventWinstgevendheid':
                 result = await getEventWinstgevendheid(params || {});
+                break;
+            case 'getCrossModuleContext':
+                result = await getCrossModuleContext();
                 break;
             default:
                 return NextResponse.json({ error: 'Onbekende tool: ' + tool }, { status: 400 });

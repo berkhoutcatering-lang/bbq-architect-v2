@@ -172,7 +172,7 @@ export default function AiAssistant(): React.ReactElement {
                 }),
             });
 
-            if (!res.ok) throw new Error('Netwerkfout (' + res.status + ')');
+            if (!res.ok) throw new Error(res.status === 429 ? 'AI is even overbelast — probeer het over 15 seconden opnieuw.' : 'Netwerkfout (' + res.status + ')');
 
             // ── Streaming afhandeling ───────────────────────────────────────
             const reader = res.body!.getReader();

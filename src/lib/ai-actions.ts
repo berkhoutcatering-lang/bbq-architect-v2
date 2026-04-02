@@ -373,6 +373,33 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         color: '#22c55e',
         tool: 'generatePrepList',
     },
+    generate_inkooplijst: {
+        label: 'Inkooplijst berekenen',
+        table: null,
+        op: 'tool',
+        pages: ['/', '/events', '/inkoop', '/voorraad'],
+        icon: 'fa-cart-shopping',
+        color: '#3b82f6',
+        tool: 'generateInkooplijst',
+    },
+    generate_event_briefing: {
+        label: 'Event briefing genereren',
+        table: null,
+        op: 'tool',
+        pages: ['/', '/events', '/agenda', '/service'],
+        icon: 'fa-clipboard-list',
+        color: '#a78bfa',
+        tool: 'generateEventBriefing',
+    },
+    get_event_winstgevendheid: {
+        label: 'Winstgevendheid berekenen',
+        table: null,
+        op: 'tool',
+        pages: ['/', '/events', '/facturen', '/boekhouding'],
+        icon: 'fa-chart-line',
+        color: '#22c55e',
+        tool: 'getEventWinstgevendheid',
+    },
     bulk_create_gerechten: {
         label: 'Gerechten toevoegen aan Menu Ontwikkelaar',
         table: 'gerechten',
@@ -441,7 +468,7 @@ export function getActionInstructions(pathname: string): string {
 export function parseActions(text: string | null | undefined): ParseActionsResult {
     if (!text) return { cleanText: '', actions: [] };
     const actions: ParsedAction[] = [];
-    const pattern = /<<<ACTION:([\.\s\S]*?)>>>/g;
+    const pattern = /<<<ACTION:([\.\s\S]*?)>{2,3}/g;
     let match: RegExpExecArray | null;
 
     while ((match = pattern.exec(text)) !== null) {
@@ -471,7 +498,7 @@ export function parseActions(text: string | null | undefined): ParseActionsResul
         }
     }
 
-    const cleanText = text.replace(/<<<ACTION:[\.\s\S]*?>>>/g, '').trim();
+    const cleanText = text.replace(/<<<ACTION:[\.\s\S]*?>{2,3}/g, '').trim();
     return { cleanText, actions };
 }
 

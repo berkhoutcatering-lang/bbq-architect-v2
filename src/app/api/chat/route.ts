@@ -547,7 +547,10 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
 
         if (!response.ok) {
             const errorData = await response.text();
-            console.error('Groq API Error:', errorData);
+            console.error('Groq API Error:', response.status, errorData);
+            if (response.status === 429) {
+                return NextResponse.json({ error: 'AI rate limit bereikt — wacht even en probeer opnieuw.' }, { status: 429 });
+            }
             return NextResponse.json({ error: 'Fout bij communicatie met Groq API' }, { status: response.status });
         }
 
