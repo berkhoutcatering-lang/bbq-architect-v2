@@ -29,13 +29,13 @@ const MetallicCard = ({ children, className = "", hover = false, onClick }: { ch
         onClick={onClick}
         className={`
       relative rounded-2xl overflow-hidden
-      bg-gradient-to-br from-[#111113] to-[#0c0c0e]
-      border border-[#1e1e22]
-      ${hover ? "hover:border-[#2a2a30] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 cursor-pointer" : ""}
+      bg-gradient-to-br from-[#0a0a0a] to-[#050505]
+      border border-[rgba(212,175,55,.12)]
+      ${hover ? "hover:border-[rgba(212,175,55,.3)] hover:shadow-lg hover:shadow-[rgba(212,175,55,.08)] transition-all duration-500 cursor-pointer" : ""}
       ${className}
     `}
     >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4af37] to-transparent opacity-30" />
         {children}
     </div>
 );
@@ -270,15 +270,16 @@ export default function OfferCreationDashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-[var(--bg)] text-white">
-            <header className="border-b border-[var(--border)] bg-[#111113]/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="hopbites-theme min-h-screen bg-[#050505] text-[#f5f0e6]">
+            <header className="border-b border-[rgba(212,175,55,.15)] bg-[#0a0a0a]/90 backdrop-blur-md sticky top-0 z-40">
                 <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
                     <div className="flex items-center gap-4">
-                        <Link href="/offertes" className="p-2 hover:bg-white/5 rounded-lg transition-colors">
-                            <ArrowLeft className="h-5 w-5 text-[var(--muted)]" />
+                        <Link href="/offertes" className="p-2 hover:bg-[rgba(212,175,55,.08)] rounded-lg transition-colors">
+                            <ArrowLeft className="h-5 w-5 text-[#d4af37]" />
                         </Link>
                         <div>
-                            <h1 className="text-lg font-semibold sm:text-xl tracking-tight">Nieuwe Offerte</h1>
+                            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 300, textTransform: 'uppercase', letterSpacing: 3, color: '#8a8272', marginBottom: 2 }}>BBQ Architect</div>
+                            <h1 className="text-lg font-semibold sm:text-xl tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>Nieuwe Offerte</h1>
                             <p className="text-[11px] text-[var(--muted)] uppercase tracking-widest font-medium">Design & Logistics</p>
                         </div>
                     </div>

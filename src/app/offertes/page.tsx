@@ -8,6 +8,7 @@ import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/uti
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import MenuWizard from '@/components/MenuWizard';
+import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
 export default function Offertes() {
@@ -117,35 +118,27 @@ export default function Offertes() {
     function editOfferte(o: Offerte) { setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
-    function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>) {
+    async function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>): Promise<number | null> {
         console.log('[SYNC] ═══════════════════════════════════════');
-        console.log('[SYNC] syncQuoteToEvent v2 called');
+        console.log('[SYNC] syncQuoteToEvent v3 (async) called');
         console.log('[SYNC] Quote ID:', quoteId, '(type:', typeof quoteId + ')');
         console.log('[SYNC] Quote status:', quoteData.status);
-        console.log('[SYNC] Quote client:', quoteData.client_naam);
-        console.log('[SYNC] Quote datum:', quoteData.datum);
 
-        if (!quoteId) {
-            console.error('[SYNC] ABORT: No quote ID provided');
-            return;
-        }
+        if (!quoteId) { console.error('[SYNC] ABORT: No quote ID'); return null; }
 
         const qid = parseInt(String(quoteId), 10);
-        if (isNaN(qid)) {
-            console.error('[SYNC] ABORT: Invalid quote ID:', quoteId);
-            return;
-        }
+        if (isNaN(qid)) { console.error('[SYNC] ABORT: Invalid ID:', quoteId); return null; }
 
         const newStatus = quoteData.status;
 
         let totalBedrag = 0;
-        let estimatedGuests = 0;
+        let estimatedGuests = quoteData.aantal_gasten || 0;
         (quoteData.items || []).forEach(function (item: any) {
             totalBedrag += (item.qty || 0) * (item.prijs || 0);
-            if ((item.qty || 0) > estimatedGuests) estimatedGuests = item.qty || 0;
+            if (!estimatedGuests && (item.qty || 0) > estimatedGuests) estimatedGuests = item.qty || 0;
         });
         const ppp = estimatedGuests > 0 ? totalBedrag / estimatedGuests : 45;
-        console.log('[SYNC] Calculated: guests=' + estimatedGuests + ', ppp=€' + ppp.toFixed(2) + ', totaal=€' + totalBedrag.toFixed(2));
+        console.log('[SYNC] Calculated: guests=' + estimatedGuests + ', ppp=' + ppp.toFixed(2));
 
         let eventStatus: string;
         if (newStatus === 'geaccepteerd' || newStatus === 'akkoord' || newStatus === 'betaald') {
@@ -155,155 +148,155 @@ export default function Offertes() {
         } else {
             eventStatus = 'optie';
         }
-        console.log('[SYNC] Status mapping:', newStatus, '→', eventStatus);
 
-        console.log('[SYNC] Step 1: Querying events WHERE offerte_id=' + qid);
-        Promise.resolve(supabase.from('events').select('id, status, name').eq('offerte_id', qid))
-            .then(function (res: any) {
-                if (res.error) {
-                    console.error('[SYNC] Step 1 FAILED:', res.error.message);
-                    showToast('Sync fout: ' + res.error.message, 'error');
-                    return;
+        try {
+            const res = await supabase.from('events').select('id, status, name').eq('offerte_id', qid);
+            if (res.error) {
+                console.error('[SYNC] Query failed:', res.error.message);
+                showToast('Sync fout: ' + res.error.message, 'error');
+                return null;
+            }
+
+            const rows = res.data || [];
+            console.log('[SYNC] Found ' + rows.length + ' event(s)');
+
+            // Clean duplicates
+            if (rows.length > 1) {
+                for (let i = 1; i < rows.length; i++) {
+                    await supabase.from('events').delete().eq('id', rows[i].id);
                 }
+            }
 
-                const rows = res.data || [];
-                console.log('[SYNC] Step 1 result: ' + rows.length + ' event(s) found', JSON.stringify(rows));
+            const existing = rows.length > 0 ? rows[0] : null;
 
-                if (rows.length > 1) {
-                    console.warn('[SYNC] Multiple events found for offerte_id=' + qid + ', cleaning duplicates');
-                    for (let i = 1; i < rows.length; i++) {
-                        supabase.from('events').delete().eq('id', rows[i].id).then(function () { });
-                    }
-                }
-
-                const existing = rows.length > 0 ? rows[0] : null;
-                console.log('[SYNC] Step 2: Existing event?', existing ? 'YES (id=' + existing.id + ', status=' + existing.status + ')' : 'NO');
-
-                if (eventStatus === '__DELETE__') {
-                    if (existing) {
-                        console.log('[SYNC] Step 3: DELETING event for afgewezen/verlopen offerte');
-                        Promise.resolve(supabase.from('events').delete().eq('offerte_id', qid))
-                            .then(function (d: any) {
-                                if (d.error) {
-                                    console.error('[SYNC] Delete failed:', d.error.message);
-                                } else {
-                                    console.log('[SYNC] Event deleted successfully');
-                                    showToast('🗑️ Optie verwijderd uit Agenda', 'info');
-                                }
-                            })
-                            .catch(function (e: any) { console.error('[SYNC] Delete catch:', e); });
-                    } else {
-                        console.log('[SYNC] No event to delete — skip');
-                    }
-                    console.log('[SYNC] ═══════════════════════════════════════');
-                    return;
-                }
-
-                const payload: Record<string, any> = {
-                    name: 'Offerte: ' + (quoteData.client_naam || quoteData.nummer || 'Onbekend'),
-                    date: quoteData.datum || new Date().toISOString().slice(0, 10),
-                    guests: estimatedGuests || 50,
-                    ppp: Math.round(ppp * 100) / 100,
-                    location: quoteData.client_adres || '',
-                    client_naam: quoteData.client_naam || '',
-                    client_adres: quoteData.client_adres || '',
-                    status: eventStatus,
-                    notitie: quoteData.notitie || ''
-                };
-                console.log('[SYNC] Step 3: Event payload:', JSON.stringify(payload));
-
+            // Delete event if offerte rejected/expired
+            if (eventStatus === '__DELETE__') {
                 if (existing) {
-                    console.log('[SYNC] Step 4: UPDATING event id=' + existing.id);
-                    Promise.resolve(supabase.from('events').update(payload).eq('id', existing.id).select())
-                        .then(function (u: any) {
-                            if (u.error) {
-                                console.error('[SYNC] Update FAILED:', u.error.message, JSON.stringify(u.error));
-                                showToast('Sync fout bij update: ' + u.error.message, 'error');
-                            } else {
-                                console.log('[SYNC] Event UPDATED successfully:', JSON.stringify(u.data));
-                                const msg = eventStatus === 'confirmed'
-                                    ? '✅ Agenda gesynchroniseerd — Event bevestigd!'
-                                    : '📅 Agenda gesynchroniseerd met Offerte';
-                                showToast(msg, 'success');
-                            }
-                        })
-                        .catch(function (e: any) { console.error('[SYNC] Update catch:', e); });
-                } else {
-                    payload.offerte_id = qid;
-                    payload.type = 'Zakelijk';
-                    payload.menu = [];
-                    console.log('[SYNC] Step 4: INSERTING new event');
-                    console.log('[SYNC] Full insert payload:', JSON.stringify(payload));
-                    Promise.resolve(supabase.from('events').insert(payload).select())
-                        .then(function (ins: any) {
-                            if (ins.error) {
-                                console.error('[SYNC] Insert FAILED:', ins.error.message, JSON.stringify(ins.error));
-                                showToast('Sync fout bij insert: ' + ins.error.message, 'error');
-                            } else {
-                                console.log('[SYNC] New event INSERTED:', JSON.stringify(ins.data));
-                                showToast('📅 Agenda gesynchroniseerd — Optie toegevoegd!', 'success');
-                            }
-                        })
-                        .catch(function (e: any) { console.error('[SYNC] Insert catch:', e); });
+                    await supabase.from('events').delete().eq('offerte_id', qid);
+                    showToast('🗑️ Optie verwijderd uit Agenda', 'info');
                 }
-                console.log('[SYNC] ═══════════════════════════════════════');
-            })
-            .catch(function (e: any) {
-                console.error('[SYNC] Step 1 CATCH:', e);
-                showToast('Sync fout: kon events niet ophalen', 'error');
-            });
+                return null;
+            }
+
+            const payload: Record<string, any> = {
+                name: 'Offerte: ' + (quoteData.client_naam || quoteData.nummer || 'Onbekend'),
+                date: quoteData.datum || new Date().toISOString().slice(0, 10),
+                guests: estimatedGuests || 50,
+                ppp: Math.round(ppp * 100) / 100,
+                location: quoteData.client_adres || '',
+                client_naam: quoteData.client_naam || '',
+                client_adres: quoteData.client_adres || '',
+                status: eventStatus,
+                notitie: quoteData.notitie || ''
+            };
+
+            if (existing) {
+                const u = await supabase.from('events').update(payload).eq('id', existing.id).select();
+                if (u.error) {
+                    console.error('[SYNC] Update FAILED:', u.error.message);
+                    showToast('Sync fout bij update: ' + u.error.message, 'error');
+                    return existing.id;
+                }
+                const msg = eventStatus === 'confirmed'
+                    ? '✅ Agenda gesynchroniseerd — Event bevestigd!'
+                    : '📅 Agenda gesynchroniseerd met Offerte';
+                showToast(msg, 'success');
+                console.log('[SYNC] Event UPDATED id=' + existing.id);
+                return existing.id;
+            } else {
+                payload.offerte_id = qid;
+                payload.type = 'Zakelijk';
+                payload.menu = [];
+                const ins = await supabase.from('events').insert(payload).select();
+                if (ins.error) {
+                    console.error('[SYNC] Insert FAILED:', ins.error.message);
+                    showToast('Sync fout bij insert: ' + ins.error.message, 'error');
+                    return null;
+                }
+                const newEventId = ins.data && ins.data[0] ? ins.data[0].id : null;
+                showToast('📅 Agenda gesynchroniseerd — Optie toegevoegd!', 'success');
+                console.log('[SYNC] Event INSERTED id=' + newEventId);
+                return newEventId;
+            }
+        } catch (e: any) {
+            console.error('[SYNC] Error:', e);
+            showToast('Sync fout: kon events niet ophalen', 'error');
+            return null;
+        }
     }
 
-    function saveOfferte() {
+    async function triggerWorkflowIfAccepted(eventId: number | null, formData: Record<string, any>) {
+        const isAccepted = formData.status === 'geaccepteerd' || formData.status === 'akkoord' || formData.status === 'betaald';
+        if (!isAccepted || !eventId) return;
+
+        console.log('[SAVE] Status is ' + formData.status + ' — triggering acceptance workflow for event ' + eventId);
+        try {
+            const result = await runAcceptanceWorkflow({
+                eventId: eventId,
+                offerteData: formData,
+                settings: settings,
+                facturenCount: facturen.data.length
+            });
+
+            // Show toast per sub-task
+            if (result.factuur.success) showToast('✅ ' + result.factuur.message, 'success');
+            else showToast('⚠️ ' + result.factuur.message, 'error');
+
+            if (result.prep.success && result.prep.count > 0) showToast('✅ ' + result.prep.message, 'success');
+            else if (!result.prep.success) showToast('⚠️ ' + result.prep.message, 'error');
+
+            if (result.inkoop.success) showToast('✅ ' + result.inkoop.message, 'success');
+            else showToast('⚠️ ' + result.inkoop.message, 'error');
+
+            if (result.haccp.success && result.haccp.count > 0) showToast('✅ ' + result.haccp.message, 'success');
+            else if (!result.haccp.success) showToast('⚠️ ' + result.haccp.message, 'error');
+        } catch (e: any) {
+            console.error('[SAVE] Workflow error:', e);
+            showToast('Workflow fout: ' + (e.message || ''), 'error');
+        }
+    }
+
+    async function saveOfferte() {
         if (!form!.client_naam) { showToast('Vul een klantnaam in', 'error'); return; }
         if (!form!.items || form!.items.length === 0) { showToast('Voeg minstens één regel toe', 'error'); return; }
         if (!form!.datum) { showToast('Vul een datum in', 'error'); return; }
         console.log('[SAVE] ═══════════════════════════════════════');
         console.log('[SAVE] editing=', editing, 'status=', form!.status);
 
-        if (editing === 'new') {
-            console.log('[SAVE] Inserting new offerte...');
-            insert(form!).then(function (insertedRow: any) {
-                console.log('[SAVE] Insert returned:', JSON.stringify(insertedRow));
+        try {
+            let quoteId: number | string | null = null;
+
+            if (editing === 'new') {
+                console.log('[SAVE] Inserting new offerte...');
+                const insertedRow: any = await insert(form!);
                 showToast('Offerte aangemaakt', 'success');
 
-                const newId = insertedRow && insertedRow.id ? insertedRow.id : null;
-                console.log('[SAVE] Extracted ID:', newId);
-
-                if (newId) {
-                    syncQuoteToEvent(newId, form!);
-                } else {
-                    console.log('[SAVE] No ID from insert — trying direct DB lookup');
-                    Promise.resolve(supabase.from('offertes').select('id').eq('nummer', form!.nummer).order('id', { ascending: false }).limit(1))
-                        .then(function (lookup: any) {
-                            console.log('[SAVE] Lookup result:', JSON.stringify(lookup.data), 'error:', lookup.error);
-                            if (lookup.data && lookup.data.length > 0) {
-                                console.log('[SAVE] Found offerte via lookup, id=' + lookup.data[0].id);
-                                syncQuoteToEvent(lookup.data[0].id, form!);
-                            } else {
-                                console.error('[SAVE] Could not find offerte ID — sync skipped');
-                            }
-                        })
-                        .catch(function (e: any) { console.error('[SAVE] Lookup catch:', e); });
+                quoteId = insertedRow && insertedRow.id ? insertedRow.id : null;
+                if (!quoteId) {
+                    console.log('[SAVE] No ID from insert — trying DB lookup');
+                    const lookup: any = await supabase.from('offertes').select('id').eq('nummer', form!.nummer).order('id', { ascending: false }).limit(1);
+                    if (lookup.data && lookup.data.length > 0) {
+                        quoteId = lookup.data[0].id;
+                    }
                 }
-
-                setEditing(null); setForm(null);
-            }).catch(function (err: any) {
-                console.error('[SAVE] Insert error:', err);
-                showToast('Fout bij aanmaken: ' + (err.message || ''), 'error');
-            });
-        } else {
-            console.log('[SAVE] Updating offerte id=', editing);
-            const { id, created_at, ...rest } = form!;
-            update(editing as number, rest).then(function () {
+            } else {
+                console.log('[SAVE] Updating offerte id=', editing);
+                const { id, created_at, ...rest } = form!;
+                await update(editing as number, rest);
                 showToast('Offerte bijgewerkt', 'success');
-                console.log('[SAVE] Update done, calling syncQuoteToEvent with id=', editing);
-                syncQuoteToEvent(editing as number, form!);
-                setEditing(null); setForm(null);
-            }).catch(function (err: any) {
-                console.error('[SAVE] Update error:', err);
-                showToast('Fout bij opslaan: ' + (err.message || ''), 'error');
-            });
+                quoteId = editing as number;
+            }
+
+            // Sync to event and get event_id back
+            const eventId = quoteId ? await syncQuoteToEvent(quoteId, form!) : null;
+
+            // Trigger acceptance workflow if status warrants it
+            await triggerWorkflowIfAccepted(eventId, form!);
+
+            setEditing(null); setForm(null);
+        } catch (err: any) {
+            console.error('[SAVE] Error:', err);
+            showToast('Fout bij opslaan: ' + (err.message || ''), 'error');
         }
         console.log('[SAVE] ═══════════════════════════════════════');
     }
@@ -319,7 +312,7 @@ export default function Offertes() {
         });
     }
 
-    function convertToFactuur() {
+    async function convertToFactuur() {
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
         const factuurNum = genNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.data.length + 1);
         const factuurData = {
@@ -331,14 +324,16 @@ export default function Offertes() {
             vervaldatum: addDays(today(), betaaltermijn),
             items: form!.items
         };
-        facturen.insert(factuurData).then(function () {
-            const { id, created_at, ...rest } = Object.assign({}, form, { status: 'geaccepteerd' as const });
-            update(editing as number, rest).then(function () {
-                showToast('Factuur aangemaakt vanuit offerte', 'success');
-                syncQuoteToEvent(editing as number, Object.assign({}, form, { status: 'geaccepteerd' }));
-                setEditing(null); setForm(null);
-            });
-        });
+        await facturen.insert(factuurData);
+        const { id, created_at, ...rest } = Object.assign({}, form, { status: 'geaccepteerd' as const });
+        await update(editing as number, rest);
+        showToast('Factuur aangemaakt vanuit offerte', 'success');
+        const eventId = await syncQuoteToEvent(editing as number, Object.assign({}, form, { status: 'geaccepteerd' }));
+        // Trigger remaining workflow tasks (prep, inkoop, haccp) — factuur already created manually
+        if (eventId) {
+            await triggerWorkflowIfAccepted(eventId, Object.assign({}, form, { status: 'geaccepteerd' }));
+        }
+        setEditing(null); setForm(null);
     }
 
     function addItem() { setField('items', (form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
@@ -362,7 +357,7 @@ export default function Offertes() {
         else if (form.status === 'afgewezen' || form.status === 'verlopen') syncMsg = '🗑️ Optie wordt verwijderd uit Agenda bij opslaan';
 
         return (
-            <div className="panel">
+            <div className="hopbites-theme panel">
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuwe Offerte' : 'Offerte Bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
@@ -414,8 +409,8 @@ export default function Offertes() {
                         </div>
                     </div>
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn" style={{ background: '#B48C14', color: '#000' }} onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Samenstellen</button>
+                        <button className="btn-gold" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
+                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Samenstellen</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         {editing !== 'new' && (
                             <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
@@ -516,12 +511,15 @@ export default function Offertes() {
     }
 
     return (
-        <>
+        <div className="hopbites-theme">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Offertes ({offertes.length})</h3>
+                <div>
+                    <div className="hb-subtitle" style={{ marginBottom: 4 }}>BBQ Architect</div>
+                    <h3 className="hb-title" style={{ fontSize: 20 }}>Offertes ({offertes.length})</h3>
+                </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-brand" onClick={function () { setShowWizard(true); }} style={{ background: '#B48C14' }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
-                    <button className="btn btn-brand" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
+                    <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
+                    <button className="btn-gold" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
                 </div>
             </div>
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
@@ -540,7 +538,12 @@ export default function Offertes() {
                                     {hasMenu && m.gasten > 0 && <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {m.margePct.toFixed(0)}%</span>}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.client_naam} — {fmtNl(o.datum)}</div>
-                                {o.notitie && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{o.notitie}</div>}
+                                {o.notitie && (function () {
+                                    const txt = String(o.notitie);
+                                    const gangIdx = txt.search(/GANG\s*\d|Normaal Menu:|Dieet Menu:|Totaalprijs/i);
+                                    const opmerking = gangIdx > 0 ? txt.substring(0, gangIdx).trim() : (gangIdx === 0 ? '' : txt.trim());
+                                    return opmerking ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{opmerking.length > 80 ? opmerking.substring(0, 80) + '...' : opmerking}</div> : null;
+                                })()}
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
@@ -550,6 +553,6 @@ export default function Offertes() {
                     );
                 })}
             </div>
-        </>
+        </div>
     );
 }

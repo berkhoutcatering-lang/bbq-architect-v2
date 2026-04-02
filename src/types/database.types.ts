@@ -149,7 +149,7 @@ export interface HaccpRecord {
   tijd: string;
   wat: string;
   temp: number;
-  type: 'kern' | 'opslag' | 'ontvangst';
+  type: 'kern' | 'opslag' | 'ontvangst' | 'bereiding' | 'uitgifte';
   notitie: string;
   status: 'ok' | 'warn' | 'danger' | 'afwijking';
   created_at: string;
@@ -287,4 +287,17 @@ export interface Gang {
   slug: string;
   volgorde: number;
   created_at?: string;
+}
+
+export interface EventReflectie {
+  id: number;
+  event_id: number;
+  overschot: string;
+  tekort: string;
+  kwaliteit: string;
+  verbeterpunten: string;
+  score: number;
+  notities: string;
+  fotos: string[];
+  created_at: string;
 }

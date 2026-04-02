@@ -78,13 +78,60 @@ function nlDate(d: string | null | undefined): string {
 }
 
 // ── Brand Colors ──
-const GOLD: [number, number, number] = [180, 140, 20];
-const DARK_GOLD: [number, number, number] = [140, 105, 10];
-const BLACK: [number, number, number] = [35, 35, 35];
-const DARK_GRAY: [number, number, number] = [80, 80, 80];
-const MID_GRAY: [number, number, number] = [130, 130, 130];
+const GOLD: [number, number, number] = [158, 120, 28];
+const DARK_GOLD: [number, number, number] = [130, 95, 15];
+const BLACK: [number, number, number] = [30, 30, 30];
+const NEAR_BLACK: [number, number, number] = [15, 15, 15];
+const DARK_PANEL: [number, number, number] = [245, 242, 235];
+const DARK_GRAY: [number, number, number] = [70, 70, 70];
+const MID_GRAY: [number, number, number] = [120, 115, 105];
+const LIGHT_TEXT: [number, number, number] = [245, 240, 230];
 const LIGHT_BG: [number, number, number] = [250, 248, 244];
 const WHITE: [number, number, number] = [255, 255, 255];
+
+// ── Corner decorations helper ──
+function drawCornerDecorations(doc: any, x: number, y: number, w: number, h: number, len: number, color: [number, number, number], lineW: number) {
+    doc.setDrawColor(...color);
+    doc.setLineWidth(lineW);
+    // Top-left
+    doc.line(x, y, x + len, y);
+    doc.line(x, y, x, y + len);
+    // Top-right
+    doc.line(x + w - len, y, x + w, y);
+    doc.line(x + w, y, x + w, y + len);
+    // Bottom-left
+    doc.line(x, y + h - len, x, y + h);
+    doc.line(x, y + h, x + len, y + h);
+    // Bottom-right
+    doc.line(x + w, y + h - len, x + w, y + h);
+    doc.line(x + w - len, y + h, x + w, y + h);
+}
+
+// ── Parse menu_selectie into structured gang data ──
+function parseMenuGangen(menuSel: any): { gang: string; gerechten: string[] }[] {
+    if (!menuSel) return [];
+    const result: { gang: string; gerechten: string[] }[] = [];
+
+    if (typeof menuSel === 'object' && !Array.isArray(menuSel)) {
+        // Object format: { "Gang 1": [{naam: "..."}, ...], ... }
+        Object.keys(menuSel).forEach(function (gangName) {
+            const items = menuSel[gangName];
+            if (Array.isArray(items)) {
+                result.push({
+                    gang: gangName,
+                    gerechten: items.map(function (i: any) { return typeof i === 'string' ? i : (i.gerecht_naam || i.naam || ''); }).filter(Boolean)
+                });
+            }
+        });
+    } else if (Array.isArray(menuSel)) {
+        // Flat array — group into single gang
+        const names = menuSel.map(function (i: any) { return typeof i === 'string' ? i : (i.gerecht_naam || i.naam || ''); }).filter(Boolean);
+        if (names.length > 0) {
+            result.push({ gang: 'Menu', gerechten: names });
+        }
+    }
+    return result;
+}
 
 /**
  * Generate a premium PDF invoice or quote
@@ -223,7 +270,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             return;
         }
 
-        // ═══ INVOICE / QUOTE PDF ═══
+        // ═══ INVOICE / QUOTE PDF — HOPBITES WHITE LUXURY STYLE ═══
         const form = opts.form!;
         const s = opts.settings || {};
         const totals = opts.totals!;
@@ -239,127 +286,129 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         const rightX = pageW - mR;
         const contentW = pageW - mL - mR;
 
-        doc.setFillColor(...GOLD);
-        doc.rect(0, 0, pageW, 3, 'F');
+        // ── White background (default) ──
 
+        // ── Single page corner frame ──
+        drawCornerDecorations(doc, 10, 10, pageW - 20, pageH - 20, 16, GOLD, 0.4);
+
+        // ── Top gold accent bar ──
+        doc.setFillColor(...GOLD);
+        doc.rect(0, 0, pageW, 2.5, 'F');
+
+        // ── Logo ──
         const logoResult = await loadLogoAsBase64();
-        let logoBottomY = 18;
+        let logoBottomY = 22;
 
         if (logoResult && logoResult.data) {
-            const logoMaxW = 65;
-            const logoMaxH = 40;
+            const logoMaxW = 60;
+            const logoMaxH = 38;
             let logoW = logoMaxW;
             let logoH = logoW * (logoResult.h / logoResult.w);
-            if (logoH > logoMaxH) {
-                logoH = logoMaxH;
-                logoW = logoH * (logoResult.w / logoResult.h);
-            }
+            if (logoH > logoMaxH) { logoH = logoMaxH; logoW = logoH * (logoResult.w / logoResult.h); }
             const logoX = (pageW - logoW) / 2;
-            const logoY = 8;
-            doc.addImage(logoResult.data, 'PNG', logoX, logoY, logoW, logoH);
-            logoBottomY = logoY + logoH + 3;
+            doc.addImage(logoResult.data, 'PNG', logoX, 8, logoW, logoH);
+            logoBottomY = 8 + logoH + 3;
         } else {
-            doc.setFontSize(24);
-            doc.setTextColor(...GOLD);
+            doc.setFontSize(26);
+            doc.setTextColor(...DARK_GOLD);
             doc.setFont('helvetica', 'bold');
-            doc.text('HOP & BITES', pageW / 2, 25, { align: 'center' });
-            doc.setFontSize(10);
+            doc.text('HOP & BITES', pageW / 2, 24, { align: 'center' });
+            doc.setFontSize(8);
             doc.setTextColor(...MID_GRAY);
             doc.setFont('helvetica', 'normal');
-            doc.text(s.ondertitel || 'BBQ Catering', pageW / 2, 32, { align: 'center' });
-            logoBottomY = 38;
+            doc.text('B B Q   C A T E R I N G', pageW / 2, 30, { align: 'center' });
+            logoBottomY = 36;
         }
 
+        // ── Simple gold divider under logo ──
         doc.setDrawColor(...GOLD);
         doc.setLineWidth(0.4);
         doc.line(mL + 30, logoBottomY, pageW - mR - 30, logoBottomY);
 
+        // ── Company info ──
         let compY = logoBottomY + 5;
-        doc.setFontSize(7.5);
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...MID_GRAY);
 
         const compParts: string[] = [];
         if (s.adres) compParts.push(s.adres);
-        if (s.telefoon) compParts.push('Tel: ' + s.telefoon);
+        if (s.telefoon) compParts.push(s.telefoon);
         if (s.email) compParts.push(s.email);
         if (compParts.length > 0) {
-            doc.text(compParts.join('   \u2022   '), pageW / 2, compY, { align: 'center' });
-            compY += 4;
+            doc.text(compParts.join('    \u2022    '), pageW / 2, compY, { align: 'center' });
+            compY += 3.5;
         }
         const compParts2: string[] = [];
-        if (s.kvk) compParts2.push('KVK: ' + s.kvk);
-        if (s.btw) compParts2.push('BTW: ' + s.btw);
-        if (s.iban) compParts2.push('IBAN: ' + s.iban);
+        if (s.kvk) compParts2.push('KVK ' + s.kvk);
+        if (s.btw) compParts2.push('BTW ' + s.btw);
+        if (s.iban) compParts2.push('IBAN ' + s.iban);
         if (compParts2.length > 0) {
-            doc.text(compParts2.join('   \u2022   '), pageW / 2, compY, { align: 'center' });
-            compY += 4;
-        }
-        if ((s as any).website) {
-            doc.text((s as any).website, pageW / 2, compY, { align: 'center' });
-            compY += 4;
+            doc.text(compParts2.join('    \u2022    '), pageW / 2, compY, { align: 'center' });
+            compY += 3.5;
         }
 
+        // ── Document type badge ──
         const badgeY = compY + 4;
-        const badgeText = isFactuur ? 'FACTUUR' : 'OFFERTE';
-
-        const badgeW = 50;
+        const badgeText = isFactuur ? 'F A C T U U R' : 'O F F E R T E';
+        const badgeW = 54;
         const badgeH = 10;
         const badgeX = (pageW - badgeW) / 2;
-        doc.setFillColor(...GOLD);
-        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'F');
 
-        doc.setFontSize(14);
+        doc.setFillColor(...GOLD);
+        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, 'F');
+
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...WHITE);
-        doc.text(badgeText, pageW / 2, badgeY + 7.3, { align: 'center' });
+        doc.text(badgeText, pageW / 2, badgeY + 7, { align: 'center' });
 
-        let y = badgeY + badgeH + 10;
+        let y = badgeY + badgeH + 12;
 
+        // ── Client & document details ──
         const colLeftX = mL;
         const colRightLabelX = pageW / 2 + 15;
         const colRightValX = rightX;
 
-        doc.setFontSize(7);
+        // Left: client
+        doc.setFontSize(6.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GOLD);
-        doc.text('FACTUUR AAN', colLeftX, y);
+        doc.text(isFactuur ? 'F A C T U U R   A A N' : 'O F F E R T E   A A N', colLeftX, y);
         y += 5;
 
-        doc.setFontSize(12);
+        doc.setFontSize(13);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...BLACK);
         doc.text(form.client_naam || '', colLeftX, y);
 
+        // Right: details (same Y baseline)
         let detY = y - 5;
-        doc.setFontSize(7);
+        doc.setFontSize(6.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GOLD);
-        doc.text('GEGEVENS', colRightLabelX, detY);
+        doc.text('G E G E V E N S', colRightLabelX, detY);
         detY += 5;
 
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
+        const details = [
+            { label: 'Nummer', value: form.nummer || '' },
+            { label: isFactuur ? 'Factuurdatum' : 'Datum', value: nlDate(form.datum) },
+            { label: isFactuur ? 'Vervaldatum' : 'Geldig tot', value: nlDate(isFactuur ? form.vervaldatum : form.geldig_tot) }
+        ];
+        if (form.aantal_gasten) {
+            details.push({ label: 'Gasten', value: String(form.aantal_gasten) });
+        }
 
-        doc.setTextColor(...MID_GRAY);
-        doc.text('Nummer:', colRightLabelX, detY);
-        doc.setTextColor(...BLACK);
-        doc.setFont('helvetica', 'bold');
-        doc.text(form.nummer || '', colRightValX, detY, { align: 'right' });
-        detY += 5;
-
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...MID_GRAY);
-        doc.text(isFactuur ? 'Factuurdatum:' : 'Datum:', colRightLabelX, detY);
-        doc.setTextColor(...BLACK);
-        doc.text(nlDate(form.datum), colRightValX, detY, { align: 'right' });
-        detY += 5;
-
-        doc.setTextColor(...MID_GRAY);
-        doc.text(isFactuur ? 'Vervaldatum:' : 'Geldig tot:', colRightLabelX, detY);
-        doc.setTextColor(...BLACK);
-        doc.text(nlDate(isFactuur ? form.vervaldatum : form.geldig_tot), colRightValX, detY, { align: 'right' });
-        detY += 5;
+        details.forEach(function (d) {
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...MID_GRAY);
+            doc.text(d.label + ':', colRightLabelX, detY);
+            doc.setTextColor(...BLACK);
+            doc.setFont('helvetica', 'bold');
+            doc.text(d.value, colRightValX, detY, { align: 'right' });
+            detY += 5;
+        });
 
         y += 5;
         if (form.client_adres) {
@@ -371,21 +420,125 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             y += adresLines.length * 4.5;
         }
 
-        y = Math.max(y + 8, detY + 8);
+        y = Math.max(y + 6, detY + 6);
 
+        // ── Opmerking / Notitie ──
         if (form.notitie) {
-            doc.setFontSize(9);
-            doc.setTextColor(...DARK_GRAY);
-            doc.setFont('helvetica', 'italic');
-            doc.text('Betreft: ' + form.notitie, colLeftX, y);
-            y += 7;
+            // Split notitie: text before first "GANG" is the remark, rest is menu (handled separately)
+            const notitieText = String(form.notitie);
+            const gangIdx = notitieText.search(/GANG\s*\d/i);
+            const hasGangen = gangIdx >= 0;
+            const opmerking = hasGangen && gangIdx > 0 ? notitieText.substring(0, gangIdx).trim() : (!hasGangen ? notitieText.trim() : '');
+
+            if (opmerking) {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'italic');
+                doc.setTextColor(...DARK_GRAY);
+                const opmLines = doc.splitTextToSize('Opmerking: ' + opmerking, contentW);
+                doc.text(opmLines, colLeftX, y);
+                y += opmLines.length * 4.5 + 4;
+            }
         }
 
+        // ── Menu / Gang Section ──
+        // Try structured menu_selectie first, fallback to parsing notitie text
+        let gangen: { gang: string; gerechten: string[] }[] = parseMenuGangen(form.menu_selectie);
+
+        // Fallback: parse gang info from notitie if no structured menu_selectie
+        if (gangen.length === 0 && form.notitie) {
+            const notitieText = String(form.notitie);
+            const gangRegex = /GANG\s*(\d+)\s*:\s*([\s\S]*?)(?=GANG\s*\d|$)/gi;
+            let match;
+            while ((match = gangRegex.exec(notitieText)) !== null) {
+                const gangNum = match[1];
+                const gerechtenStr = match[2].trim();
+                const gerechten = gerechtenStr.split(/\s*-\s*/).map(function (g: string) { return g.trim(); }).filter(Boolean);
+                if (gerechten.length > 0) {
+                    gangen.push({ gang: 'Gang ' + gangNum, gerechten: gerechten });
+                }
+            }
+        }
+
+        // ── Render menu gangen (2-column compact layout) ──
+        if (gangen.length > 0) {
+            const menuStartY = y - 2;
+            const colW = (contentW - 8) / 2; // two columns with gap
+            const col1X = mL + 5;
+            const col2X = mL + colW + 8;
+            const lineH = 3.2;
+
+            // Build lines per gang for height calculation
+            const gangLines: { text: string; bold: boolean }[][] = [];
+            gangen.forEach(function (gang) {
+                const lines: { text: string; bold: boolean }[] = [];
+                lines.push({ text: gang.gang.toUpperCase(), bold: true });
+                gang.gerechten.forEach(function (g) { lines.push({ text: g, bold: false }); });
+                gangLines.push(lines);
+            });
+
+            // Split gangen into 2 columns (left gets first half)
+            const mid = Math.ceil(gangen.length / 2);
+            const leftGangen = gangLines.slice(0, mid);
+            const rightGangen = gangLines.slice(mid);
+
+            let leftH = 0;
+            leftGangen.forEach(function (lines) { leftH += lines.length * lineH + 2; });
+            let rightH = 0;
+            rightGangen.forEach(function (lines) { rightH += lines.length * lineH + 2; });
+            const menuH = Math.max(leftH, rightH) + 10;
+
+            // Background panel
+            doc.setFillColor(...DARK_PANEL);
+            doc.roundedRect(mL, menuStartY, contentW, menuH, 2, 2, 'F');
+            doc.setDrawColor(...GOLD);
+            doc.setLineWidth(0.15);
+            doc.roundedRect(mL, menuStartY, contentW, menuH, 2, 2, 'S');
+
+            // Header
+            doc.setFontSize(5.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...GOLD);
+            doc.text('M E N U', mL + 5, y + 1.5);
+
+            // Render column helper
+            function renderColumn(colGangen: { text: string; bold: boolean }[][], startX: number) {
+                let cy = y + 5;
+                colGangen.forEach(function (lines) {
+                    lines.forEach(function (line) {
+                        if (line.bold) {
+                            doc.setFontSize(7);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(...DARK_GOLD);
+                            doc.text(line.text, startX, cy);
+                        } else {
+                            doc.setFontSize(7);
+                            doc.setFont('helvetica', 'italic');
+                            doc.setTextColor(...DARK_GRAY);
+                            doc.text(line.text, startX + 3, cy);
+                        }
+                        cy += lineH;
+                    });
+                    cy += 1.5;
+                });
+            }
+
+            renderColumn(leftGangen, col1X);
+            renderColumn(rightGangen, col2X);
+
+            // Vertical divider between columns
+            doc.setDrawColor(...GOLD);
+            doc.setLineWidth(0.1);
+            doc.line(mL + colW + 3, menuStartY + 4, mL + colW + 3, menuStartY + menuH - 4);
+
+            y = menuStartY + menuH + 6;
+        }
+
+        // ── Items table ──
         const tableHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW%', 'Totaal']];
         const tableBody = (form.items || []).map(function (item: any) {
             const lineTotal = (item.qty || 0) * (item.prijs || 0);
             return [
-                item.desc || '',
+                item.desc || item.omschrijving || '',
                 String(item.qty || 0),
                 eur(item.prijs),
                 (item.btw || 0) + '%',
@@ -402,15 +555,15 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 fontSize: 9,
                 cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
                 textColor: BLACK,
-                lineColor: [220, 215, 205],
+                lineColor: [210, 205, 195],
                 lineWidth: 0.2,
                 overflow: 'linebreak'
             },
             headStyles: {
-                fillColor: LIGHT_BG,
+                fillColor: DARK_PANEL,
                 textColor: DARK_GOLD,
                 fontStyle: 'bold',
-                fontSize: 8,
+                fontSize: 7.5,
                 lineColor: GOLD,
                 lineWidth: 0.3
             },
@@ -422,14 +575,15 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: { fillColor: [255, 255, 255] },
-            bodyStyles: { fillColor: [255, 255, 255] },
+            bodyStyles: { fillColor: [252, 250, 247] },
             theme: 'grid',
-            tableLineColor: [220, 215, 205],
+            tableLineColor: [210, 205, 195],
             tableLineWidth: 0.2
         });
 
         y = doc.lastAutoTable.finalY + 8;
 
+        // ── Totals section ──
         const totBoxX = rightX - 75;
         const totValX = rightX;
 
@@ -447,14 +601,16 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         doc.text(eur(totals.btw), totValX, y, { align: 'right' });
         y += 3;
 
+        // Gold divider
         doc.setDrawColor(...GOLD);
-        doc.setLineWidth(0.8);
+        doc.setLineWidth(0.6);
         doc.line(totBoxX, y, totValX, y);
         y += 6;
 
-        const totBoxW = 75;
+        // Total amount bar
+        const totBarW = 81;
         doc.setFillColor(...GOLD);
-        doc.roundedRect(totBoxX - 3, y - 5, totBoxW + 6, 10, 1.5, 1.5, 'F');
+        doc.roundedRect(totBoxX - 3, y - 5, totBarW, 10, 1.5, 1.5, 'F');
 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
@@ -463,29 +619,29 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         doc.text(eur(totals.totaal), totValX, y + 1.5, { align: 'right' });
         y += 18;
 
+        // ── Payment details (factuur only) ──
         if (isFactuur) {
             const payH = 20;
-            doc.setFillColor(252, 250, 245);
+            doc.setFillColor(...DARK_PANEL);
             doc.roundedRect(mL, y - 2, contentW, payH, 2, 2, 'F');
             doc.setDrawColor(...GOLD);
-            doc.setLineWidth(0.3);
+            doc.setLineWidth(0.25);
             doc.roundedRect(mL, y - 2, contentW, payH, 2, 2, 'S');
 
-            doc.setFontSize(7);
+            doc.setFontSize(6.5);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...GOLD);
-            doc.text('BETALINGSGEGEVENS', mL + 5, y + 3);
+            doc.text('B E T A L I N G S G E G E V E N S', mL + 5, y + 3);
 
             doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(...DARK_GRAY);
 
             if ((s as any).betaalvoorwaarden) {
-                const betLines = doc.splitTextToSize((s as any).betaalvoorwaarden, contentW - 12);
+                const betLines = doc.splitTextToSize((s as any).betaalvoorwaarden, contentW - 14);
                 doc.text(betLines, mL + 5, y + 8);
             } else {
-                const defText = 'Gelieve ' + eur(totals.totaal) + ' over te maken voor ' + nlDate(form.vervaldatum) + ' op:';
-                doc.text(defText, mL + 5, y + 8);
+                doc.text('Gelieve ' + eur(totals.totaal) + ' over te maken voor ' + nlDate(form.vervaldatum) + ' op:', mL + 5, y + 8);
             }
 
             if (s.iban) {
@@ -494,11 +650,18 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 doc.text(s.iban + ' t.n.v. ' + (s.bedrijfsnaam || 'Hop & Bites') + ' o.v.v. "' + (form.nummer || '') + '"', mL + 5, y + 13);
             }
 
-            y += payH + 8;
+            y += payH + 6;
         }
 
+        // ── Footer ──
+        // Bottom gold bar
         doc.setFillColor(...GOLD);
-        doc.rect(0, pageH - 3, pageW, 3, 'F');
+        doc.rect(0, pageH - 2.5, pageW, 2.5, 'F');
+
+        // Footer divider
+        doc.setDrawColor(...GOLD);
+        doc.setLineWidth(0.3);
+        doc.line(mL + 25, pageH - 16, pageW - mR - 25, pageH - 16);
 
         doc.setFontSize(6.5);
         doc.setFont('helvetica', 'normal');
@@ -510,7 +673,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         if (s.telefoon) footItems.push(s.telefoon);
         if ((s as any).website) footItems.push((s as any).website);
         if (footItems.length > 0) {
-            doc.text(footItems.join('   \u2022   '), pageW / 2, pageH - 6, { align: 'center' });
+            doc.text(footItems.join('    \u2022    '), pageW / 2, pageH - 11, { align: 'center' });
         }
 
         const prefix = isFactuur ? 'Factuur' : 'Offerte';

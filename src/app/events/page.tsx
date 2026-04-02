@@ -1,22 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion } from '@/types';
+import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion, EventReflectie } from '@/types';
 
 export default function Events() {
     const { data: events, insert, update, remove } = useSupabase<DbEvent>('events', []);
     const { data: recepten } = useSupabase<Recept>('recepten', []);
+    const { data: reflecties } = useSupabase<EventReflectie>('event_reflecties', []);
     const offertes = useSupabase<Offerte>('offertes', []);
     const { settings } = useSettings();
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const router = useRouter();
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
+
+    function getReflectie(eventId: number): EventReflectie | undefined {
+        return reflecties.find(function (r) { return r.event_id === eventId; });
+    }
 
     function newEvent() {
         setEditing('new');
@@ -276,26 +283,54 @@ export default function Events() {
                     const rowGlow = ev.status === 'optie' ? ' ev-row-optie' : ev.status === 'confirmed' ? ' ev-row-confirmed' : '';
                     const pillClass = ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : ev.status === 'optie' ? 'pill-optie' : 'pill-amber';
                     const pillLabel = ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? '✅ Bevestigd' : ev.status === 'optie' ? '🟠 Optie' : 'In afwachting';
+                    const ref = getReflectie(ev.id);
+                    const needsReflectie = ev.status === 'completed' && !ref;
                     return (
-                        <div key={ev.id} className={'ev-row' + rowGlow} onClick={function () { editEvent(ev); }}>
-                            <div className="ev-date-block">
-                                <span className="ev-month">{month}</span>
-                                <span className="ev-day">{day}</span>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                                    {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 9, color: 'var(--brand)', marginRight: 6 }}></i>}
-                                    {ev.name}
+                        <div key={ev.id}>
+                            <div className={'ev-row' + rowGlow} onClick={function () { editEvent(ev); }}>
+                                <div className="ev-date-block">
+                                    <span className="ev-month">{month}</span>
+                                    <span className="ev-day">{day}</span>
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                    <i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}
-                                    <span style={{ marginLeft: 12 }}><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 9, color: 'var(--brand)' }}></i>}
+                                        {ev.name}
+                                        {ref && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 6, fontSize: 10, fontWeight: 800, background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><i className="fa-solid fa-star" style={{ fontSize: 8 }}></i> {ref.score}/10</span>}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                        <i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}
+                                        <span style={{ marginLeft: 12 }}><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
+                                    <span className={'pill ' + pillClass}>{pillLabel}</span>
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
-                                <span className={'pill ' + pillClass}>{pillLabel}</span>
-                            </div>
+                            {needsReflectie && (
+                                <div
+                                    onClick={function (e) { e.stopPropagation(); router.push('/events/' + ev.id + '/reflectie'); }}
+                                    style={{
+                                        margin: '-1px 0 8px',
+                                        padding: '10px 16px',
+                                        background: 'linear-gradient(90deg, rgba(255,191,0,.08), rgba(255,191,0,.02))',
+                                        border: '1px solid rgba(255,191,0,.2)',
+                                        borderTop: 'none',
+                                        borderRadius: '0 0 12px 12px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        transition: 'background 0.2s'
+                                    }}
+                                >
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <i className="fa-solid fa-clipboard-check"></i> Reflectie invullen voor dit event
+                                    </span>
+                                    <i className="fa-solid fa-arrow-right" style={{ fontSize: 11, color: 'var(--brand)' }}></i>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

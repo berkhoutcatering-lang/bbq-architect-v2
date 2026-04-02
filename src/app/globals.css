@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Oswald:wght@300;400;500;600&display=swap');
 
 :root {
   --brand: #FFBF00;
@@ -5335,4 +5336,241 @@ body {
 /* Tabular numbers for financial data */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* ════════════════════════════════════════════
+   HOPBITES LUXURY THEME — Offerte Pages
+   Gold/Black premium aesthetic
+   ════════════════════════════════════════════ */
+
+.hopbites-theme {
+  --hb-gold: #d4af37;
+  --hb-gold-light: rgba(212, 175, 55, .12);
+  --hb-gold-glow: rgba(212, 175, 55, .25);
+  --hb-bg: #050505;
+  --hb-card: rgba(15, 15, 15, .9);
+  --hb-border: rgba(212, 175, 55, .15);
+  --hb-border-strong: rgba(212, 175, 55, .3);
+  --hb-text: #f5f0e6;
+  --hb-muted: #8a8272;
+}
+
+.hopbites-theme h1,
+.hopbites-theme h2,
+.hopbites-theme h3 {
+  font-family: 'Playfair Display', serif;
+  letter-spacing: 0.5px;
+}
+
+.hopbites-theme .panel {
+  background: var(--hb-card);
+  border: 1px solid var(--hb-border);
+  backdrop-filter: blur(20px);
+}
+
+.hopbites-theme .panel-head {
+  border-bottom-color: var(--hb-border);
+}
+
+.hopbites-theme .panel-head h3 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  color: var(--hb-gold);
+}
+
+/* Luxury card with corner decorations */
+.hb-card {
+  position: relative;
+  background: var(--hb-card);
+  border: 1px solid var(--hb-border);
+  border-radius: 12px;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.hb-card::before,
+.hb-card::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: var(--hb-gold);
+  border-style: solid;
+  opacity: 0.4;
+}
+
+.hb-card::before {
+  top: 8px;
+  left: 8px;
+  border-width: 1px 0 0 1px;
+}
+
+.hb-card::after {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 1px 1px 0;
+}
+
+/* Gold gradient button */
+.btn-gold {
+  background: linear-gradient(135deg, #d4af37, #b8942d);
+  color: #050505;
+  font-weight: 700;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 12px;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #e0c04a, #d4af37);
+  box-shadow: 0 4px 20px rgba(212, 175, 55, .3);
+  transform: translateY(-1px);
+}
+
+/* Gold outline button */
+.btn-gold-outline {
+  background: transparent;
+  color: var(--hb-gold);
+  border: 1px solid var(--hb-border-strong);
+  font-weight: 600;
+  font-family: 'Oswald', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-gold-outline:hover {
+  background: var(--hb-gold-light);
+  border-color: var(--hb-gold);
+}
+
+/* Offerte row in hopbites style */
+.hopbites-theme .ev-row {
+  border-color: var(--hb-border);
+  transition: all 0.3s ease;
+}
+
+.hopbites-theme .ev-row:hover {
+  background: var(--hb-gold-light);
+  border-color: var(--hb-border-strong);
+}
+
+/* Luxury stat cards */
+.hb-stat {
+  background: linear-gradient(135deg, rgba(212, 175, 55, .06), rgba(212, 175, 55, .01));
+  border: 1px solid var(--hb-border);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.hb-stat-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--hb-gold);
+  line-height: 1.1;
+}
+
+.hb-stat-label {
+  font-family: 'Oswald', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--hb-muted);
+  margin-top: 6px;
+}
+
+/* Luxury divider */
+.hb-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hb-gold), transparent);
+  opacity: 0.3;
+  margin: 20px 0;
+}
+
+/* Gold pill */
+.pill-gold {
+  background: var(--hb-gold-light);
+  color: var(--hb-gold);
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* Hopbites header text */
+.hb-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 800;
+  color: var(--hb-text);
+}
+
+.hb-subtitle {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 300;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--hb-muted);
+  font-size: 11px;
+}
+
+/* Menu wizard in hopbites style */
+.hopbites-theme .wizard-step-indicator {
+  color: var(--hb-gold);
+}
+
+.hopbites-theme .form-grid label {
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+  color: var(--hb-muted);
+}
+
+.hopbites-theme input,
+.hopbites-theme select,
+.hopbites-theme textarea {
+  background: rgba(212, 175, 55, .04);
+  border-color: var(--hb-border);
+  color: var(--hb-text);
+}
+
+.hopbites-theme input:focus,
+.hopbites-theme select:focus,
+.hopbites-theme textarea:focus {
+  border-color: var(--hb-gold);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, .15);
+}
+
+/* Hopbites table */
+.hopbites-theme .tbl th {
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
+  color: var(--hb-gold);
+  border-bottom-color: var(--hb-border);
+}
+
+.hopbites-theme .tbl td {
+  border-bottom-color: var(--hb-border);
+}
+
+/* Profit breakdown hopbites */
+.hopbites-theme .profit-breakdown {
+  background: linear-gradient(135deg, rgba(212, 175, 55, .04), rgba(0,0,0,.3));
+  border-color: var(--hb-border);
+}
+
+.hopbites-theme .profit-breakdown-head {
+  font-family: 'Playfair Display', serif;
 }
