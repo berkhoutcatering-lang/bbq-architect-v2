@@ -438,18 +438,104 @@ export default function AiStudioPage() {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     }
 
+    function renderInline(text: string) {
+        // Bold, italic, inline code
+        var parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
+        return parts.map(function (part: string, j: number) {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={j}>{part.slice(2, -2)}</strong>;
+            }
+            if (part.startsWith('`') && part.endsWith('`')) {
+                return <code key={j} style={{ background: 'rgba(255,191,0,.1)', padding: '1px 5px', borderRadius: 4, fontSize: '0.9em', fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
+            }
+            if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+                return <em key={j}>{part.slice(1, -1)}</em>;
+            }
+            return part;
+        });
+    }
+
     function renderText(content: string) {
         if (!content) return null;
-        return content.split('\n').map(function (line: string, i: number) {
-            const parts = line.split(/(\*\*[^*]+\*\*)/g);
-            const rendered = parts.map(function (part: string, j: number) {
-                if (part.startsWith('**') && part.endsWith('**')) {
-                    return <strong key={j}>{part.slice(2, -2)}</strong>;
+        var lines = content.split('\n');
+        var elements: React.ReactNode[] = [];
+        var listBuffer: { type: 'ul' | 'ol'; items: string[] } | null = null;
+
+        function flushList() {
+            if (!listBuffer) return;
+            var Tag = listBuffer.type;
+            var items = listBuffer.items;
+            elements.push(
+                <Tag key={'list-' + elements.length} style={{ margin: '6px 0', paddingLeft: 20, lineHeight: 1.7 }}>
+                    {items.map(function (item, idx) { return <li key={idx}>{renderInline(item)}</li>; })}
+                </Tag>
+            );
+            listBuffer = null;
+        }
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var trimmed = line.trim();
+
+            // Headings
+            if (trimmed.startsWith('#### ')) {
+                flushList();
+                elements.push(<h5 key={i} style={{ fontSize: 13, fontWeight: 800, margin: '14px 0 4px', color: 'var(--text)' }}>{renderInline(trimmed.slice(5))}</h5>);
+                continue;
+            }
+            if (trimmed.startsWith('### ')) {
+                flushList();
+                elements.push(<h4 key={i} style={{ fontSize: 14, fontWeight: 800, margin: '16px 0 6px', color: 'var(--text)' }}>{renderInline(trimmed.slice(4))}</h4>);
+                continue;
+            }
+            if (trimmed.startsWith('## ')) {
+                flushList();
+                elements.push(<h3 key={i} style={{ fontSize: 15, fontWeight: 900, margin: '18px 0 6px', color: 'var(--text)' }}>{renderInline(trimmed.slice(3))}</h3>);
+                continue;
+            }
+
+            // Unordered list
+            if (/^[-*]\s/.test(trimmed)) {
+                var itemText = trimmed.replace(/^[-*]\s+/, '');
+                if (!listBuffer || listBuffer.type !== 'ul') {
+                    flushList();
+                    listBuffer = { type: 'ul', items: [] };
                 }
-                return part;
-            });
-            return <span key={i} style={{ display: 'block' }}>{rendered.length ? rendered : '\u00A0'}</span>;
-        });
+                listBuffer.items.push(itemText);
+                continue;
+            }
+
+            // Ordered list
+            if (/^\d+\.\s/.test(trimmed)) {
+                var olText = trimmed.replace(/^\d+\.\s+/, '');
+                if (!listBuffer || listBuffer.type !== 'ol') {
+                    flushList();
+                    listBuffer = { type: 'ol', items: [] };
+                }
+                listBuffer.items.push(olText);
+                continue;
+            }
+
+            // Horizontal rule
+            if (/^-{3,}$/.test(trimmed) || /^\*{3,}$/.test(trimmed)) {
+                flushList();
+                elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0' }} />);
+                continue;
+            }
+
+            // Empty line
+            if (!trimmed) {
+                flushList();
+                elements.push(<span key={i} style={{ display: 'block', height: 6 }}>{'\u00A0'}</span>);
+                continue;
+            }
+
+            // Regular paragraph
+            flushList();
+            elements.push(<span key={i} style={{ display: 'block', lineHeight: 1.7 }}>{renderInline(trimmed)}</span>);
+        }
+        flushList();
+        return elements;
     }
 
     function renderActionCard(action: any, msgIdx: number) {
