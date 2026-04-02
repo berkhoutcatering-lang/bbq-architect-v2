@@ -244,19 +244,60 @@ export default function AiStudioPage() {
                     contextData: ctxData,
                 }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Fout opgetreden');
 
-            const rawReply = data.choices[0].message.content;
-            const parsed = parseActions(rawReply);
+            if (!res.ok) {
+                var errBody = await res.text();
+                try { errBody = JSON.parse(errBody).error || errBody; } catch (_e) { /* plain text */ }
+                throw new Error(errBody || 'Fout opgetreden');
+            }
 
-            const assistantMsg: ChatMsg = {
-                role: 'assistant',
-                content: parsed.cleanText,
-                actions: parsed.actions,
-            };
+            // Stream SSE response
+            var rawReply = '';
+            var reader = res.body!.getReader();
+            var decoder = new TextDecoder();
+            var streamBuffer = '';
 
-            setMessages(function (prev) { return [...prev, assistantMsg]; });
+            // Add placeholder assistant message for streaming
+            var streamMsgIdx = messages.length + 1; // +1 because user msg was already added
+            setMessages(function (prev) { return [...prev, { role: 'assistant' as const, content: '', actions: [] }]; });
+
+            while (true) {
+                var chunk = await reader.read();
+                if (chunk.done) break;
+                streamBuffer += decoder.decode(chunk.value, { stream: true });
+                var sseLines = streamBuffer.split('\n');
+                streamBuffer = sseLines.pop()!;
+                for (var si = 0; si < sseLines.length; si++) {
+                    var sseLine = sseLines[si].trim();
+                    if (!sseLine.startsWith('data: ')) continue;
+                    var sseRaw = sseLine.slice(6);
+                    try {
+                        var sseData = JSON.parse(sseRaw);
+                        if (sseData.delta) {
+                            rawReply += sseData.delta;
+                            var streamParsed = parseActions(rawReply);
+                            setMessages(function (prev) {
+                                return prev.map(function (m, i) {
+                                    if (i !== streamMsgIdx) return m;
+                                    return { role: 'assistant' as const, content: streamParsed.cleanText, actions: streamParsed.actions };
+                                });
+                            });
+                        }
+                        if (sseData.done && sseData.full) {
+                            rawReply = sseData.full;
+                        }
+                    } catch (_e) { /* invalid chunk */ }
+                }
+            }
+
+            // Final parse with complete text
+            var finalParsed = parseActions(rawReply);
+            setMessages(function (prev) {
+                return prev.map(function (m, i) {
+                    if (i !== streamMsgIdx) return m;
+                    return { role: 'assistant' as const, content: finalParsed.cleanText, actions: finalParsed.actions };
+                });
+            });
 
         } catch (error: any) {
             setMessages(function (prev) {

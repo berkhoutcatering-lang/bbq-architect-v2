@@ -1,6 +1,21 @@
-import { normalizeIngredienten, normalizeBereidingswijze } from './utils';
+import { normalizeBereidingswijze } from './utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FactuurItem, OfferteItem } from '@/types';
+
+// Converteer AI ingredienten data naar text[] array voor Supabase
+function normalizeIngredientenArray(raw: unknown): string[] {
+    if (!raw) return [];
+    if (typeof raw === 'string') return raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function (i: unknown): string {
+        if (typeof i === 'string') return i;
+        if (typeof i === 'object' && i !== null) {
+            var obj = i as { hoeveelheid?: string | number; eenheid?: string; naam?: string };
+            return (obj.hoeveelheid ? obj.hoeveelheid + (obj.eenheid ? ' ' + obj.eenheid + ' ' : ' ') : '') + (obj.naam || JSON.stringify(i));
+        }
+        return String(i);
+    }).filter(Boolean);
+}
 
 interface ActionTypeDef {
     label: string;
@@ -476,20 +491,34 @@ export async function executeAction(action: { type: string; data: Record<string,
     if (def.op === 'insert') {
         const insertData: Record<string, unknown> = Object.assign({}, data);
         if (def.table === 'gerechten') {
-            const rawIngs = data.ingredienten || data.ingredients || data.ingredients_list;
+            // Normaliseer ingredienten: AI kan sturen als ingredienten, ingredients, ingredients_list, ingrediënten
+            const rawIngs = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
             if (rawIngs !== undefined) {
-                insertData.ingredients_list = normalizeIngredienten(rawIngs as string | Array<Record<string, unknown>> | null);
-                delete insertData.ingredienten;
+                // gerechten.ingredienten is een text[] ARRAY in Supabase
+                insertData.ingredienten = normalizeIngredientenArray(rawIngs);
                 delete insertData.ingredients;
+                delete insertData.ingredients_list;
+                delete (insertData as any)['ingrediënten'];
             }
+            // Normaliseer bereidingswijze: AI kan sturen als diverse namen
             const hasBereiding = data.bereidingswijze || data.bereiding || data.stappenplan || data.instructies || data.preparation_steps;
             if (hasBereiding !== undefined) {
-                insertData.preparation_steps = normalizeBereidingswijze(data as unknown as string | Record<string, unknown> | null);
-                delete insertData.bereidingswijze;
+                insertData.bereidingswijze = normalizeBereidingswijze(data as unknown as string | Record<string, unknown> | null);
                 delete insertData.bereiding;
                 delete insertData.stappenplan;
                 delete insertData.instructies;
+                delete insertData.preparation_steps;
             }
+            // Allowlist: alleen kolommen die daadwerkelijk in de gerechten tabel bestaan
+            var allowedGerechtCols: Record<string, boolean> = {
+                naam: true, beschrijving: true, gang_slug: true, volgorde: true, actief: true,
+                foto_url: true, ingredienten: true, bereidingswijze: true, allergenen: true, tags: true,
+                kostprijs_pp: true, service_image: true, battle_plan_steps: true, target_prep_time: true,
+                hardware_items: true, ingredienten_winkels: true, ingredient_costs: true,
+                verkoopprijs: true, pos_enabled: true, pos_categorie: true, pos_prijs: true,
+                pos_volgorde: true, btw_tarief: true
+            };
+            Object.keys(insertData).forEach(function (k) { if (!allowedGerechtCols[k]) delete insertData[k]; });
         }
         const res = await supabase.from(def.table!).insert(insertData).select().single();
         if (res.error) throw res.error;
@@ -499,20 +528,30 @@ export async function executeAction(action: { type: string; data: Record<string,
         delete updateData.id;
 
         if (def.table === 'gerechten') {
-            const rawIngsUpdate = data.ingredienten || data.ingredients || data.ingredients_list;
+            const rawIngsUpdate = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
             if (rawIngsUpdate !== undefined) {
-                updateData.ingredients_list = normalizeIngredienten(rawIngsUpdate as string | Array<Record<string, unknown>> | null);
-                delete updateData.ingredienten;
+                updateData.ingredienten = normalizeIngredientenArray(rawIngsUpdate);
                 delete updateData.ingredients;
+                delete updateData.ingredients_list;
+                delete (updateData as any)['ingrediënten'];
             }
             const hasBereidingUpdate = data.bereidingswijze || data.bereiding || data.stappenplan || data.instructies || data.preparation_steps;
             if (hasBereidingUpdate !== undefined) {
-                updateData.preparation_steps = normalizeBereidingswijze(data as unknown as string | Record<string, unknown> | null);
-                delete updateData.bereidingswijze;
+                updateData.bereidingswijze = normalizeBereidingswijze(data as unknown as string | Record<string, unknown> | null);
                 delete updateData.bereiding;
                 delete updateData.stappenplan;
                 delete updateData.instructies;
+                delete updateData.preparation_steps;
             }
+            var allowedGerechtColsUpd: Record<string, boolean> = {
+                naam: true, beschrijving: true, gang_slug: true, volgorde: true, actief: true,
+                foto_url: true, ingredienten: true, bereidingswijze: true, allergenen: true, tags: true,
+                kostprijs_pp: true, service_image: true, battle_plan_steps: true, target_prep_time: true,
+                hardware_items: true, ingredienten_winkels: true, ingredient_costs: true,
+                verkoopprijs: true, pos_enabled: true, pos_categorie: true, pos_prijs: true,
+                pos_volgorde: true, btw_tarief: true
+            };
+            Object.keys(updateData).forEach(function (k) { if (!allowedGerechtColsUpd[k]) delete updateData[k]; });
         }
 
         const res2 = await supabase.from(def.table!).update(updateData).eq('id', data.id as string | number).select().single();

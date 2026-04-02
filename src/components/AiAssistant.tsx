@@ -397,11 +397,10 @@ export default function AiAssistant(): React.ReactElement {
                         naam: gd.naam || 'Nieuw Gerecht',
                         gang_slug: gd.gang_slug || 'anders',
                         beschrijving: gd.beschrijving || '',
-                        preparation_steps: Array.isArray(gd.bereidingswijze) ? gd.bereidingswijze.join('\n') : (gd.bereidingswijze || ''),
-                        ingredients_list: Array.isArray(gd.ingredienten) ? gd.ingredienten.map(function (i: any): { naam: string; qty_pp: number; unit: string } { return typeof i === 'string' ? { naam: i, qty_pp: 0, unit: 'g' } : i; }) : [],
+                        bereidingswijze: Array.isArray(gd.bereidingswijze) ? gd.bereidingswijze.join('\n') : (gd.bereidingswijze || ''),
+                        ingredienten: Array.isArray(gd.ingredienten) ? gd.ingredienten.map(function (i: any): { naam: string; qty_pp: number; unit: string } { return typeof i === 'string' ? { naam: i, qty_pp: 0, unit: 'g' } : i; }) : [],
                         allergenen: gd.allergenen || [],
                         actief: false,
-                        tenant_id: 'tenant_bbq_nl_001'
                     };
                     const ins = await supabase.from('gerechten').insert(insertRow).select().single();
                     if (ins.error) throw new Error(ins.error.message);
