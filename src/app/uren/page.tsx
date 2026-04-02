@@ -149,7 +149,7 @@ export default function Uren() {
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                             <BarChart data={weekData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="25%">
                                 <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />
@@ -168,7 +168,7 @@ export default function Uren() {
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                             <BarChart data={monthlyChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="30%">
                                 <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />

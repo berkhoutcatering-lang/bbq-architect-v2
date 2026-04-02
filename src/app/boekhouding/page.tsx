@@ -136,7 +136,7 @@ export default function Boekhouding() {
                                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
                             </div>
                             <div className="panel-body" style={{ height: 200, marginTop: 12 }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                                     <ComposedChart data={omzetChartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barCategoryGap="30%">
                                         <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                         <YAxis yAxisId="left" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
@@ -160,7 +160,7 @@ export default function Boekhouding() {
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{facturen.length} totaal</span>
                                 </div>
                                 <div style={{ height: 200, marginTop: 12 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                                         <PieChart>
                                             <Pie data={statusPieData} dataKey="value" cx="45%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
                                                 {statusPieData.map(function (entry, i) { return <Cell key={i} fill={entry.color} />; })}
@@ -219,7 +219,7 @@ export default function Boekhouding() {
                     {topClients.length > 0 && (
                         <>
                             <div style={{ height: 250, padding: '16px 0' }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                                     <BarChart data={topClients} layout="vertical" margin={{ top: 4, right: 32, left: 80, bottom: 4 }} barCategoryGap="25%">
                                         <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
                                         <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={76} />

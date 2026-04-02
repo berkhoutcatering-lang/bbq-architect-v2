@@ -201,7 +201,7 @@ export default function Voorraad() {
                                         return (
                                             <tr key={t.item.id}>
                                                 <td style={{ fontWeight: 700 }}>{t.item.naam}</td>
-                                                <td><span className="pill pill-red">{t.item.current_stock} {t.item.unit}</span></td>
+                                                <td><span className="pill pill-red">{parseFloat(Number(t.item.current_stock).toFixed(2))} {t.item.unit}</span></td>
                                                 <td>{t.item.min_stock} {t.item.unit}</td>
                                                 <td style={{ fontWeight: 800, color: 'var(--red)' }}>+{t.tekort.toFixed(1)} {t.item.unit}</td>
                                                 <td>{fmt(t.item.purchase_price)}/{t.item.unit}</td>
@@ -267,7 +267,7 @@ export default function Voorraad() {
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                                 <PieChart>
                                     <Pie data={catData} dataKey="waarde" nameKey="naam" cx="45%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3}>
                                         {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
@@ -285,7 +285,7 @@ export default function Voorraad() {
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100}>
                                 <BarChart data={catData} layout="vertical" margin={{ top: 4, right: 8, left: 56, bottom: 4 }} barCategoryGap="25%">
                                     <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
                                     <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
@@ -338,7 +338,7 @@ export default function Voorraad() {
                                                 <div style={{ width: 60, height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
                                                     <div style={{ width: pct + '%', height: '100%', borderRadius: 3, background: isLow ? 'var(--red)' : pct < 50 ? 'var(--amber)' : 'var(--green)', transition: 'width .3s' }}></div>
                                                 </div>
-                                                <span style={{ fontWeight: 700, color: isLow ? 'var(--red)' : 'var(--text)', fontSize: 13 }}>{item.current_stock}</span>
+                                                <span style={{ fontWeight: 700, color: isLow ? 'var(--red)' : 'var(--text)', fontSize: 13 }}>{parseFloat(Number(item.current_stock).toFixed(2))}</span>
                                                 <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.unit}</span>
                                             </div>
                                         </td>

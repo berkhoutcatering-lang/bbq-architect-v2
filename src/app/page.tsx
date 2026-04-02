@@ -9,7 +9,7 @@ import {
   MapPin, ChevronRight, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
-import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, MAANDEN_KORT } from '@/lib/utils';
+import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 
 const MetallicCard = ({ children, className = "", hover = true, onClick }: { children: React.ReactNode; className?: string; hover?: boolean; onClick?: () => void }) => (
@@ -125,7 +125,8 @@ export default function DashboardPage() {
 
   const openOffertes = offertes.filter((o: any) => o.status === 'concept' || o.status === 'verzonden');
   const prognose = openOffertes.reduce((sum: number, o: any) => {
-    return sum + (o.aantal_gasten || 0) * (o.basis_prijs_pp || 0);
+    const fromItems = calcLineTotals(o.items).totaal;
+    return sum + (fromItems > 0 ? fromItems : (o.aantal_gasten || 0) * (o.basis_prijs_pp || 0));
   }, 0);
 
   function _calcMarge(o: any) {
@@ -470,8 +471,9 @@ export default function DashboardPage() {
               {openOffertes.length > 0 ? (
                 <>
                   <div className="space-y-3">
-                    {openOffertes.sort((a: any, b: any) => ((b.aantal_gasten || 0) * (b.basis_prijs_pp || 0)) - ((a.aantal_gasten || 0) * (a.basis_prijs_pp || 0))).slice(0, 4).map((off: any) => {
-                      const eventTotal = (off.aantal_gasten || 0) * (off.basis_prijs_pp || 0);
+                    {openOffertes.sort((a: any, b: any) => { const ta = calcLineTotals(a.items).totaal || (a.aantal_gasten || 0) * (a.basis_prijs_pp || 0); const tb = calcLineTotals(b.items).totaal || (b.aantal_gasten || 0) * (b.basis_prijs_pp || 0); return tb - ta; }).slice(0, 4).map((off: any) => {
+                      const fromItems = calcLineTotals(off.items).totaal;
+                      const eventTotal = fromItems > 0 ? fromItems : (off.aantal_gasten || 0) * (off.basis_prijs_pp || 0);
                       const percentage = prognose > 0 ? (eventTotal / prognose) * 100 : 0;
                       return (
                         <div key={off.id}>
