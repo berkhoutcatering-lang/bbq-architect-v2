@@ -306,7 +306,7 @@ export default function ServiceMode() {
                         <button className="tab-btn" onClick={function () { setSelectedId(null); }}>← EVENT SELECTIE</button>
                     </div>
 
-                    <div className="bon-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+                    <div className="bon-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20 }}>
                         {gangen.map(function (gang: any, idx: number) {
                             const state = bonStates[gang.slug] || 'idle';
                             const dishNames = menuSelectie[gang.slug] || [];
@@ -356,7 +356,7 @@ export default function ServiceMode() {
                         <button className="tab-btn" onClick={function () { setActiveModal(null); }}>SLUITEN</button>
                     </div>
 
-                    <div className="architect-body" style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, padding: 40, overflowY: 'auto' }}>
+                    <div className="architect-body grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 p-4 md:p-10 flex-1 overflow-y-auto">
                         <div className="arch-left">
                             {currentImage && <img src={currentImage} style={{ width: '100%', height: 400, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-steel)' }} />}
                             <div style={{ marginTop: 24 }}>

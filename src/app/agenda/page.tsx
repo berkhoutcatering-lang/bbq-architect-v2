@@ -115,7 +115,7 @@ export default function Agenda() {
                 </div>
             </div>
 
-            <div className="agenda-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 24 }}>
+            <div className="agenda-layout grid gap-6 grid-cols-1 md:grid-cols-[minmax(0,1fr)_380px]">
                 <div className="panel" style={{ height: 'fit-content' }}>
                     <div className="calendar">
                         <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

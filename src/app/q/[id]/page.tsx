@@ -70,7 +70,7 @@ export default function QuotePage({ params }: { params: { id: string } }) {
                 </div>
 
                 {/* Details */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 40 }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                     <div style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 16 }}>
                         <div style={{ color: '#737373', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Gasten</div>
                         <div style={{ fontSize: 20, color: '#fff', fontWeight: 600 }}>{pax} personen</div>

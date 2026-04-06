@@ -123,6 +123,7 @@ export default function Facturen() {
                             <h4 style={{ fontSize: 14, fontWeight: 600 }}>Regels</h4>
                             <button className="btn btn-brand btn-sm" onClick={addItem}><i className="fa-solid fa-plus"></i> Regel</button>
                         </div>
+                        <div className="tbl-wrap">
                         <table className="tbl">
                             <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%</th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
                             <tbody>
@@ -140,6 +141,7 @@ export default function Facturen() {
                                 })}
                             </tbody>
                         </table>
+                        </div>
                         <div style={{ textAlign: 'right', marginTop: 12, fontSize: 14 }}>
                             <div style={{ color: 'var(--muted)' }}>Subtotaal: {fmt(totals.subtotaal)}</div>
                             <div style={{ color: 'var(--muted)' }}>BTW: {fmt(totals.btw)}</div>

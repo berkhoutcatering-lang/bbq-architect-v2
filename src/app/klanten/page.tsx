@@ -118,7 +118,7 @@ function Klanten() {
                             <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginBottom: 12 }}>
                                 <i className="fa-solid fa-chart-bar" style={{ marginRight: 6 }}></i>Klant Overzicht
                             </h4>
-                            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                            <div className="stat-grid grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="stat-card">
                                     <div className="stat-label">Offertes</div>
                                     <div className="stat-val">{stats.offertes}</div>

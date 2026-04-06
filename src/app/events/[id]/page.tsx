@@ -274,7 +274,7 @@ export default function EventFlowPage() {
 
                                         {/* ═══ STAGE 2: ACCEPTATIE ═══ */}
                                         {stage.key === 'acceptatie' && (
-                                            <div style={{ paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" style={{ paddingTop: 14 }}>
                                                 {[
                                                     { label: 'Factuur', icon: 'fa-file-invoice', count: factuur ? 1 : 0, detail: factuur ? factuur.nummer : 'Niet aangemaakt', ok: !!factuur },
                                                     { label: 'Prep Tasks', icon: 'fa-list-check', count: prepTasks.length, detail: prepTasks.length + ' taken', ok: prepTasks.length > 0 },

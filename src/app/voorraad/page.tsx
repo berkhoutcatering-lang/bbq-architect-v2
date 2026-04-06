@@ -191,7 +191,7 @@ export default function Voorraad() {
                             <h3>{tekorten.length} items bestellen</h3>
                             <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--brand)' }}>{fmt(totaalInkoop)}</div>
                         </div>
-                        <div style={{ padding: 0 }}>
+                        <div style={{ padding: 0 }} className="tbl-wrap">
                             <table className="tbl">
                                 <thead><tr>
                                     <th>Item</th><th>Voorraad</th><th>Par-Level</th><th>Tekort</th><th>Prijs</th><th>Kosten</th><th>Leverancier</th>
@@ -318,6 +318,7 @@ export default function Voorraad() {
 
             {filtered.length > 0 && (
                 <div className="panel inv-glass" style={{ overflow: 'hidden' }}>
+                    <div className="tbl-wrap">
                     <table className="tbl">
                         <thead><tr>
                             <th>Item</th><th>Voorraad</th><th>Par-Level</th><th>Prijs</th><th>Waarde</th><th>Leverancier</th><th style={{ width: 100 }}></th>
@@ -357,6 +358,7 @@ export default function Voorraad() {
                             })}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             )}
         </div>

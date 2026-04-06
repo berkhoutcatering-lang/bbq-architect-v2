@@ -401,7 +401,7 @@ export default function Gerechten() {
 
             {editing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>
-                    <div className="modal-box" style={{ maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+                    <div className="modal-box" style={{ maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
                         <h3>{editing === 'new' ? '➕ Nieuw Gerecht' : '✏️ Gerecht Bewerken'}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
 
@@ -555,19 +555,19 @@ export default function Gerechten() {
                                             onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === 'Enter') { e.preventDefault(); addHardwareItem(); } }}
                                             placeholder="bijv. Churchill Dessertbord" style={{ fontSize: 12, padding: '7px 10px' }} />
                                     </div>
-                                    <div className="field" style={{ width: 70 }}>
+                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
                                         <label>Ratio</label>
                                         <input type="number" step="0.1" min="0" value={hwInput.ratio}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setHwInput(Object.assign({}, hwInput, { ratio: parseFloat(e.target.value) || 0 })); }}
                                             style={{ fontSize: 12, padding: '7px 10px' }} />
                                     </div>
-                                    <div className="field" style={{ width: 70 }}>
+                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
                                         <label>Buffer%</label>
                                         <input type="number" min="0" value={hwInput.buffer_pct}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setHwInput(Object.assign({}, hwInput, { buffer_pct: parseInt(e.target.value) || 0 })); }}
                                             style={{ fontSize: 12, padding: '7px 10px' }} />
                                     </div>
-                                    <div className="field" style={{ width: 80 }}>
+                                    <div className="field" style={{ minWidth: 70, flex: '0 1 80px' }}>
                                         <label>Categorie</label>
                                         <select value={hwInput.categorie} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setHwInput(Object.assign({}, hwInput, { categorie: e.target.value })); }}
                                             style={{ fontSize: 12, padding: '7px 6px' }}>
@@ -649,20 +649,20 @@ export default function Gerechten() {
                                             {inventoryData.map(function (inv) { return <option key={inv.id} value={inv.naam} />; })}
                                         </datalist>
                                     </div>
-                                    <div className="field" style={{ width: 80 }}>
+                                    <div className="field" style={{ minWidth: 70, flex: '0 1 80px' }}>
                                         <label>Qty p.p.</label>
                                         <input type="number" step="0.01" min="0" value={costInput.qty_pp}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCostInput(Object.assign({}, costInput, { qty_pp: e.target.value })); }}
                                             placeholder="0.08" style={{ fontSize: 12, padding: '7px 10px' }} />
                                     </div>
-                                    <div className="field" style={{ width: 70 }}>
+                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
                                         <label>Eenheid</label>
                                         <select value={costInput.unit} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setCostInput(Object.assign({}, costInput, { unit: e.target.value })); }}
                                             style={{ fontSize: 12, padding: '7px 6px' }}>
                                             {COST_UNITS.map(function (u) { return <option key={u} value={u}>{u}</option>; })}
                                         </select>
                                     </div>
-                                    <div className="field" style={{ width: 70 }}>
+                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
                                         <label>Yield</label>
                                         <input type="number" step="0.05" min="0.1" max="1" value={costInput.yield}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCostInput(Object.assign({}, costInput, { yield: parseFloat(e.target.value) || 1.0 })); }}
@@ -797,7 +797,7 @@ export default function Gerechten() {
 
             {gangEditing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setGangEditing(null); }}>
-                    <div className="modal-box" style={{ maxWidth: 440 }}>
+                    <div className="modal-box" style={{ maxWidth: 440, width: '100%' }}>
                         <h3>{gangEditing === 'new' ? '➕ Nieuwe Gang' : '⚙️ Gang Bewerken'}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                             <div className="field">

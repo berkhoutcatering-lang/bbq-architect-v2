@@ -367,7 +367,7 @@ function GangPickerModal({ gerecht, onPick, onClose }: {
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
           Zet <span style={{ color: 'var(--brand)' }}>{gerecht.naam}</span> in:
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="grid grid-cols-2 gap-2">
           {GANGEN.map(function (g) {
             return (
               <button
@@ -659,7 +659,7 @@ export default function MenuEngineering() {
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,.4)' }}>Beoordeel, sorteer en publiceer je gerechten via het Map Station</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Totaal', value: stats.totaal, sub: 'gerechten' },
           { label: 'Actief', value: stats.actief, sub: 'gepubliceerd' },
@@ -798,7 +798,7 @@ export default function MenuEngineering() {
             {filtered.length} gerechten
             {inMap.size > 0 && <span style={{ marginLeft: 8 }}>• <span style={{ color: '#a78bfa' }}>{inMap.size} in Map Station</span></span>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
             {filtered.map(function (g) {
               return (
                 <GerechtKaart
@@ -847,7 +847,7 @@ export default function MenuEngineering() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.35)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
                 Pool — {ongemapt.length} gerechten

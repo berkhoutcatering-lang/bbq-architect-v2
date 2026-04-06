@@ -298,7 +298,7 @@ export default function FotoArchief() {
                             <p>{filterCat === 'Alle' ? "Nog geen foto's — upload via het Upload tabblad" : 'Geen foto\'s in categorie ' + filterCat}</p>
                         </div>
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
                             {filtered.map(function (foto, idx) {
                                 const isSelected = !!selected[foto.id];
                                 return (

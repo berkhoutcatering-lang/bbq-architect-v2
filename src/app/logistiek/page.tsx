@@ -287,7 +287,7 @@ export default function Logistiek() {
                                         <div style={{ display: 'flex', gap: 8, padding: '12px 0 0' }}>
                                             <input style={{ flex: 2, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
                                                 placeholder="Item..." value={newPackItem.text} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { text: e.target.value })); }} />
-                                            <input type="number" style={{ width: 60, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
+                                            <input type="number" style={{ width: 60, minWidth: 50, flex: '0 0 auto', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
                                                 value={newPackItem.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { qty: parseInt(e.target.value) || 1 })); }} />
                                             <button className="btn btn-brand btn-sm" onClick={function () { addPackItem(pack); }}><i className="fa-solid fa-plus"></i></button>
                                         </div>

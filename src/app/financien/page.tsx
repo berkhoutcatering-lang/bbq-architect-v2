@@ -173,13 +173,13 @@ export default function Financien() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 20, alignItems: 'flex-start' }}>
+            <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" style={{ alignItems: 'flex-start' }}>
 
-                <div className="panel uren-glass" style={{ padding: 24 }}>
+                <div className="panel uren-glass" style={{ padding: 24, overflow: 'hidden' }}>
                     <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <i className="fa-solid fa-chart-simple" style={{ color: 'var(--brand)' }}></i> Cashflow per Maand
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 260, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 260, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
                         {financialData.months.map((m: any, idx: number) => {
                             const heightPct = (m.omzet / maxOmzet) * 100;
                             const profitHeightPct = m.omzet > 0 ? (m.nettoWinst / m.omzet) * 100 : 0;

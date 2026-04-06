@@ -181,6 +181,7 @@ export default function Boekhouding() {
                     <div className="panel-head"><h3>BTW Overzicht</h3></div>
                     <div className="panel-body">
                         {Object.keys(btwMap).length === 0 && <div className="empty-state"><i className="fa-solid fa-calculator"></i><p>Geen BTW data beschikbaar</p></div>}
+                        <div className="tbl-wrap">
                         <table className="tbl">
                             <thead><tr><th>BTW %</th><th style={{ textAlign: 'right' }}>Netto Omzet</th><th style={{ textAlign: 'right' }}>BTW Bedrag</th><th style={{ textAlign: 'right' }}>Bruto</th></tr></thead>
                             <tbody>
@@ -197,6 +198,7 @@ export default function Boekhouding() {
                                 })}
                             </tbody>
                         </table>
+                        </div>
                         <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)', textAlign: 'right' }}>
                             <span style={{ color: 'var(--muted)', marginRight: 12 }}>Totaal af te dragen BTW:</span>
                             <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>
