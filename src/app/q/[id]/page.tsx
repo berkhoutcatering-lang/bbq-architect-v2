@@ -29,11 +29,20 @@ export default function QuotePage({ params }: { params: { id: string } }) {
     async function handleAccept() {
         if (!offer) return;
         setLoading(true);
-        const { error } = await supabase.from('offertes').update({ status: 'geaccepteerd' }).eq('id', offer.id);
-        if (!error) {
-            setAccepted(true);
-        } else {
-            alert('Fout bij accepteren: ' + error.message);
+        try {
+            const res = await fetch('/api/accept-offerte', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ offerteId: offer.id })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setAccepted(true);
+            } else {
+                alert('Fout bij accepteren: ' + (data.error || 'Onbekende fout'));
+            }
+        } catch (e: any) {
+            alert('Fout bij accepteren: ' + (e.message || 'Netwerk fout'));
         }
         setLoading(false);
     }

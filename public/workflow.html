@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BBQ Architect — Workflow Diagrammen</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', sans-serif; padding: 40px; }
+h1 { color: #b2913e; font-size: 28px; margin-bottom: 40px; text-align: center; }
+.diagram-section { background: #1e1e22; border: 1px solid #333; border-radius: 16px; padding: 30px; margin-bottom: 40px; }
+.diagram-section h2 { color: #b2913e; font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+.mermaid { display: flex; justify-content: center; }
+.mermaid svg { max-width: 100%; }
+@media print { body { background: #fff; color: #000; } .diagram-section { border-color: #ccc; } }
+</style>
+</head>
+<body>
+<h1>BBQ Architect — Workflow Diagrammen</h1>
+
+<div class="diagram-section">
+<h2>1. Compleet Overzicht — Van Verkoop tot Betaling</h2>
+<pre class="mermaid">
+flowchart TB
+    subgraph SALES["VERKOOP"]
+        direction TB
+        K["Klanten DB"] --> O["Offerte Aanmaken"]
+        O --> MW["Menu Wizard / Builder"]
+        MW --> G["Gerechten & Gangen"]
+        O --> PDF["Offerte PDF"]
+        O --> ML["Magic Link naar klant"]
+    end
+    subgraph ACCEPT["ACCEPTATIE WORKFLOW"]
+        direction TB
+        ML --> ACC{"Klant accepteert?"}
+        ACC -->|"Ja"| API["/api/accept-offerte"]
+        ACC -->|"Nee"| AFG["Afgewezen / Verlopen"]
+        API --> EV["Event aanmaken
+        status: confirmed"]
+        API --> FA["Factuur concept
+        aanmaken"]
+        API --> PT["Prep Tasks
+        D-3 t/m D-0"]
+        API --> IL["Inkooplijst
+        genereren"]
+        API --> HC["HACCP Templates
+        aanmaken"]
+    end
+    subgraph PREP["VOORBEREIDING"]
+        direction TB
+        PT --> AG["Agenda & Kalender"]
+        IL --> INK["Inkoop bij leveranciers"]
+        INK --> BON["Bon Scannen via AI"]
+        BON --> VR["Voorraad bijwerken"]
+        AG --> D3["D-3: Bestellen & checken"]
+        AG --> D2["D-2: Marineren & rubben"]
+        AG --> D1["D-1: Inladen & mise-en-place"]
+        AG --> D0["D-0: Event dag"]
+    end
+    subgraph EVENT["EVENT DAG"]
+        direction TB
+        D0 --> LOG["Logistiek: Bus Check"]
+        D0 --> SRV["Service Mode"]
+        SRV --> GANG["Per Gang: Start - Timer - Finish"]
+        GANG --> TEMP["Temperatuur registratie"]
+        TEMP --> HACCP["HACCP Dossier"]
+    end
+    subgraph POST["NA HET EVENT"]
+        direction TB
+        SRV --> COMPL["Event voltooid"]
+        COMPL --> DRAIN["Voorraad afboeken"]
+        COMPL --> REFL["Reflectie invullen"]
+        FA --> VERZ["Factuur verzenden"]
+        VERZ --> BET["Klant betaalt"]
+        BET --> FIN["Financien & Boekhouding"]
+    end
+    SALES --> ACCEPT
+    ACCEPT --> PREP
+    PREP --> EVENT
+    EVENT --> POST
+</pre>
+</div>
+
+<div class="diagram-section">
+<h2>2. Offerte Lifecycle — Alle Statussen</h2>
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> Concept: Nieuwe offerte aangemaakt
+    Concept --> Verzonden: PDF versturen of Magic Link
+    Verzonden --> Geaccepteerd: Klant accepteert
+    Verzonden --> Afgewezen: Klant wijst af
+    Verzonden --> Verlopen: Geldig tot verstreken
+    Geaccepteerd --> Akkoord: Admin bevestigt
+    Geaccepteerd --> Betaald: Factuur betaald
+    Akkoord --> Betaald: Factuur betaald
+    Afgewezen --> [*]
+    Verlopen --> [*]
+    Betaald --> [*]
+
+    state Geaccepteerd {
+        [*] --> EventAangemaakt: Auto Event in agenda
+        [*] --> FactuurAangemaakt: Auto Concept factuur
+        [*] --> PrepTasks: Auto 12 prep taken
+        [*] --> Inkooplijst: Auto Ingredienten berekend
+        [*] --> HACCP: Auto Templates per gerecht
+    }
+</pre>
+</div>
+
+<div class="diagram-section">
+<h2>3. Database Relaties — Alle Tabellen</h2>
+<pre class="mermaid">
+flowchart LR
+    subgraph CORE["Kern"]
+        OFF["offertes"]
+        EVT["events"]
+        FAC["facturen"]
+        KLA["klanten"]
+    end
+    subgraph MENU["Menu Systeem"]
+        GAN["gangen"]
+        GER["gerechten"]
+        REC["recepten"]
+    end
+    subgraph OPS["Operatie"]
+        PRT["prep_tasks"]
+        SRV["service_logs"]
+        HAC["haccp_records"]
+    end
+    subgraph SUPPLY["Voorraad"]
+        INV["inventory"]
+        INK["inkooplijsten"]
+        LEV["leveranciers"]
+    end
+    OFF -->|"offerte_id"| EVT
+    OFF -->|"client_naam"| KLA
+    OFF -->|"menu_selectie"| GER
+    OFF -->|"items"| FAC
+    EVT -->|"event_id"| PRT
+    EVT -->|"event_id"| HAC
+    EVT -->|"event_id"| INK
+    EVT -->|"menu"| REC
+    GER -->|"gang_slug"| GAN
+    GER -->|"ingredient_costs"| INV
+    REC -->|"ingredienten"| INV
+    OFF -->|"offerte_id"| SRV
+    INK -->|"leverancier"| LEV
+</pre>
+</div>
+
+<div class="diagram-section">
+<h2>4. Alle Paginas & Navigatie</h2>
+<pre class="mermaid">
+flowchart TB
+    DASH["Dashboard"]
+    subgraph KEUKEN["DE KEUKEN"]
+        ME["Menu Engineering"]
+        RE["Recepten"]
+        GR["Gerechten"]
+    end
+    subgraph OPERATIE["OPERATIE"]
+        AG["Agenda"]
+        EV["Events"]
+        EP["Event Planner"]
+        SR["Service Mode"]
+    end
+    subgraph ZAAK["DE ZAAK"]
+        OF["Offertes"]
+        OE["Offerte Editor"]
+        FA["Facturen"]
+        KL["Klanten"]
+        AN["Analytics"]
+        BK["Boekhouding"]
+    end
+    subgraph BEHEER["BEHEER & LOGISTIEK"]
+        IK["Inkoop"]
+        VR["Voorraad"]
+        LO["Logistiek"]
+        MA["Materieel"]
+        UR["Uren"]
+        HA["HACCP"]
+    end
+    DASH --> KEUKEN
+    DASH --> OPERATIE
+    DASH --> ZAAK
+    DASH --> BEHEER
+    OF -->|"Menu Wizard"| GR
+    OF -->|"Sync"| EV
+    OF -->|"Acceptatie"| FA
+    OF -->|"Magic Link"| Q["Klant pagina"]
+    EV -->|"Prep tasks"| AG
+    EV -->|"Service dag"| SR
+    SR -->|"Temperatuur"| HA
+    FA -->|"Betaald"| VR
+    IK -->|"Bon scan"| VR
+    EV -->|"Voltooid"| VR
+</pre>
+</div>
+
+<script>
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+        primaryColor: '#b2913e',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#b2913e',
+        lineColor: '#b2913e',
+        secondaryColor: '#1e1e22',
+        tertiaryColor: '#2a2a2e',
+        fontFamily: 'Segoe UI, sans-serif'
+    }
+});
+</script>
+</body>
+</html>

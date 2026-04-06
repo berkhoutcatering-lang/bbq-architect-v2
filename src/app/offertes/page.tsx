@@ -377,6 +377,9 @@ export default function Offertes() {
         const totals = calcLineTotals(form!.items);
         generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals });
     }
+    function downloadMenukaart() {
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData });
+    }
 
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
@@ -445,22 +448,23 @@ export default function Offertes() {
                         </div>
                     </div>
                     <div className="editor-actions">
-                        <button className="btn-gold" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Wizard</button>
-                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }}><i className="fa-solid fa-grip"></i> Menu Builder</button>
-                        <button className="btn btn-cyan" onClick={downloadOfferte}><i className="fa-solid fa-file-pdf"></i> PDF</button>
+                        <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><i className="fa-solid fa-save"></i> Opslaan</button>
+                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><i className="fa-solid fa-utensils"></i> Menu Wizard</button>
+                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><i className="fa-solid fa-grip"></i> Menu Builder</button>
+                        <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><i className="fa-solid fa-file-pdf"></i> PDF</button>
+                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><i className="fa-solid fa-utensils"></i> Menukaart</button>
                         {editing !== 'new' && (
                             <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
                                 navigator.clipboard.writeText(link);
                                 showToast('Magic Link gekopieerd!', 'success');
-                            }}>
+                            }} title="Kopieer een link die de klant kan openen om de offerte te bekijken">
                                 <i className="fa-solid fa-link"></i> Magic Link
                             </button>
                         )}
-                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur}><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
-                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }}><i className="fa-solid fa-copy"></i> Dupliceer</button>}
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
+                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><i className="fa-solid fa-copy"></i> Dupliceer</button>}
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
 
                     <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>

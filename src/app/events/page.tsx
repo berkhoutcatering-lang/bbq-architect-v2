@@ -369,9 +369,14 @@ export default function Events() {
                                         <span><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
                                     </div>
                                 </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
-                                    <span className={'pill ' + pillClass}>{pillLabel}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button className="btn btn-ghost btn-sm" title="Bekijk de volledige event workflow" onClick={function (e) { e.stopPropagation(); router.push('/events/' + ev.id); }} style={{ padding: '4px 10px', fontSize: 11 }}>
+                                        <i className="fa-solid fa-route"></i> Flow
+                                    </button>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
+                                        <span className={'pill ' + pillClass}>{pillLabel}</span>
+                                    </div>
                                 </div>
                             </div>
                             {needsReflectie && (

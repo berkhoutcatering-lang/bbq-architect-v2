@@ -12,7 +12,7 @@ interface LogoResult {
 }
 
 interface PDFOptions {
-    type: 'factuur' | 'offerte' | 'haccp' | 'receipt';
+    type: 'factuur' | 'offerte' | 'haccp' | 'receipt' | 'menukaart';
     form?: Record<string, any>;
     settings?: Partial<Settings>;
     totals?: LineTotals;
@@ -27,6 +27,8 @@ interface PDFOptions {
     totaal_bedrag?: number;
     items?: Array<Record<string, any>>;
     imageData?: string;
+    // Menukaart specific
+    gerechten?: Array<{ naam: string; beschrijving?: string }>;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -63,6 +65,24 @@ function loadLogoAsBase64(): Promise<LogoResult | null> {
         };
         img.onerror = function () { console.warn('[PDF] Logo niet gevonden'); resolve(null); };
         img.src = '/logo.png';
+    });
+}
+
+function loadDarkLogoAsBase64(): Promise<LogoResult | null> {
+    return new Promise(function (resolve) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0);
+            console.log('[PDF] Dark logo geladen:', img.naturalWidth + 'x' + img.naturalHeight);
+            resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+        };
+        img.onerror = function () { console.warn('[PDF] Dark logo niet gevonden, fallback naar tekst'); resolve(null); };
+        img.src = '/logo-dark.jpeg';
     });
 }
 
@@ -105,6 +125,24 @@ function drawCornerDecorations(doc: any, x: number, y: number, w: number, h: num
     // Bottom-right
     doc.line(x + w, y + h - len, x + w, y + h);
     doc.line(x + w - len, y + h, x + w, y + h);
+}
+
+// ── Gang name mappings (module-level for reuse) ──
+const courseNames: Record<string, string> = {
+    '1': 'Amuse', '2': 'Voorgerecht', '3': 'Hoofdgerecht', '4': 'Dessert',
+    '5': 'Nagerecht', '6': 'Petit Four'
+};
+const slugNames: Record<string, string> = {
+    'bite': 'Bites', 'voorgerecht': 'Voorgerechten', 'hoofdgerecht': 'Hoofdgerechten',
+    'vegetarisch': 'Vegetarisch', 'dessert': 'Dessert', 'bijgerecht': 'Bijgerechten',
+    'borrelhap': 'Borrelhapjes', 'anders': 'Overig'
+};
+function gangToDisplayName(gangLabel: string): string {
+    const lower = gangLabel.toLowerCase().trim();
+    if (slugNames[lower]) return slugNames[lower];
+    const m = gangLabel.match(/\d+/);
+    if (m && courseNames[m[0]]) return courseNames[m[0]];
+    return gangLabel;
 }
 
 // ── Parse menu_selectie into structured gang data ──
@@ -267,6 +305,168 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             }
 
             doc3.save('BON_' + (opts.winkel || 'scan').replace(/[^a-zA-Z0-9]/g, '_') + '_' + (opts.datum || 'nu') + '.pdf');
+            return;
+        }
+
+        // ═══ MENUKAART PDF — DARK ELEGANT RESTAURANT STYLE ═══
+        if (type === 'menukaart') {
+            const form = opts.form || {};
+            const jspdfM = await loadJsPDF();
+            const docM = new jspdfM.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageW = 210;
+            const pageH = 297;
+            const centerX = pageW / 2;
+
+            // Color palette for dark menu
+            const MENU_BG: [number, number, number] = [18, 18, 18];
+            const MENU_GOLD: [number, number, number] = [178, 145, 62];
+            const MENU_CREAM: [number, number, number] = [245, 240, 230];
+            const MENU_GRAY: [number, number, number] = [160, 155, 145];
+
+            // Gang sort order for correct menu sequence
+            const gangOrder: Record<string, number> = {
+                'bites': 0, 'amuse': 1, 'voorgerechten': 2, 'voorgerecht': 2,
+                'hoofdgerechten': 3, 'hoofdgerecht': 3, 'vegetarisch': 4,
+                'bijgerechten': 5, 'dessert': 6, 'nagerecht': 7, 'petit four': 8
+            };
+
+            function drawMenuBackground(d: any) {
+                d.setFillColor(...MENU_BG);
+                d.rect(0, 0, pageW, pageH, 'F');
+            }
+
+            function drawMenuBorder(d: any) {
+                // Outer border
+                d.setDrawColor(...MENU_GOLD);
+                d.setLineWidth(0.5);
+                d.roundedRect(12, 12, pageW - 24, pageH - 24, 3, 3, 'S');
+                // Inner border
+                d.setLineWidth(0.15);
+                d.roundedRect(15, 15, pageW - 30, pageH - 30, 2, 2, 'S');
+            }
+
+            // -- Draw first page background + border
+            drawMenuBackground(docM);
+            drawMenuBorder(docM);
+
+            // -- Logo (try dark logo, fallback to text-only)
+            let y = 28;
+            const logoDark = await loadDarkLogoAsBase64();
+            if (logoDark && logoDark.data) {
+                let lw = 50; let lh = lw * (logoDark.h / logoDark.w);
+                if (lh > 45) { lh = 45; lw = lh * (logoDark.w / logoDark.h); }
+                docM.addImage(logoDark.data, 'PNG', centerX - lw / 2, y, lw, lh);
+                y += lh + 8;
+            } else {
+                // Text-only fallback
+                y = 45;
+                docM.setFontSize(22);
+                docM.setFont('helvetica', 'bold');
+                docM.setTextColor(...MENU_GOLD);
+                docM.text('H O P   &   B I T E S', centerX, y, { align: 'center' });
+                y += 8;
+            }
+
+            // Gold divider
+            docM.setDrawColor(...MENU_GOLD);
+            docM.setLineWidth(0.3);
+            docM.line(centerX - 30, y, centerX + 30, y);
+            y += 14;
+
+            // -- Parse menu data
+            let gangen = parseMenuGangen(form.menu_selectie);
+            if (gangen.length === 0 && form.notitie) {
+                const notitieText = String(form.notitie);
+                const gangRegex = /GANG\s*(\d+)\s*:\s*([\s\S]*?)(?=GANG\s*\d|$)/gi;
+                let match;
+                while ((match = gangRegex.exec(notitieText)) !== null) {
+                    const gangNum = match[1];
+                    const gerechtenStr = match[2].trim();
+                    const gerechtenList = gerechtenStr.split(/\s*-\s*/).map(function (g: string) { return g.trim(); }).filter(Boolean);
+                    if (gerechtenList.length > 0) {
+                        gangen.push({ gang: 'Gang ' + gangNum, gerechten: gerechtenList });
+                    }
+                }
+            }
+            gangen = gangen.map(function (g) {
+                return { gang: gangToDisplayName(g.gang), gerechten: g.gerechten };
+            });
+            // Sort gangen in correct menu order
+            gangen.sort(function (a, b) {
+                const oa = gangOrder[a.gang.toLowerCase()] ?? 99;
+                const ob = gangOrder[b.gang.toLowerCase()] ?? 99;
+                return oa - ob;
+            });
+
+            // Build beschrijving lookup from gerechten data
+            const beschrijvingMap: Record<string, string> = {};
+            if (opts.gerechten) {
+                opts.gerechten.forEach(function (gr) {
+                    if (gr.naam && gr.beschrijving) beschrijvingMap[gr.naam.toLowerCase()] = gr.beschrijving;
+                });
+            }
+
+            // -- Render gangen
+            gangen.forEach(function (gang, gi) {
+                // Check page overflow
+                if (y > pageH - 50) {
+                    docM.addPage();
+                    drawMenuBackground(docM);
+                    drawMenuBorder(docM);
+                    y = 30;
+                }
+
+                // Gang title: "— VOORGERECHTEN —"
+                docM.setFontSize(13);
+                docM.setFont('helvetica', 'bold');
+                docM.setTextColor(...MENU_GOLD);
+                docM.text('\u2014  ' + gang.gang.toUpperCase() + '  \u2014', centerX, y, { align: 'center' });
+                y += 9;
+
+                // Dishes: even index = name, odd = description
+                for (let i = 0; i < gang.gerechten.length; i += 2) {
+                    if (y > pageH - 40) {
+                        docM.addPage();
+                        drawMenuBackground(docM);
+                        drawMenuBorder(docM);
+                        y = 30;
+                    }
+
+                    const dishName = gang.gerechten[i];
+                    // Description: try beschrijvingMap first, then odd-index entry
+                    let desc = beschrijvingMap[dishName.toLowerCase()] || '';
+                    if (!desc && i + 1 < gang.gerechten.length) {
+                        desc = gang.gerechten[i + 1];
+                    }
+
+                    // Dish name
+                    docM.setFontSize(12);
+                    docM.setFont('helvetica', 'bold');
+                    docM.setTextColor(...MENU_CREAM);
+                    docM.text(dishName, centerX, y, { align: 'center' });
+                    y += 5;
+
+                    // Description
+                    if (desc) {
+                        docM.setFontSize(9);
+                        docM.setFont('helvetica', 'italic');
+                        docM.setTextColor(...MENU_GRAY);
+                        const descLines = docM.splitTextToSize(desc, 130);
+                        descLines.forEach(function (line: string) {
+                            docM.text(line, centerX, y, { align: 'center' });
+                            y += 3.8;
+                        });
+                    }
+                    y += 4;
+                }
+
+                // Spacing between gangen (no dots)
+                if (gi < gangen.length - 1) {
+                    y += 6;
+                }
+            });
+
+            docM.save('Menukaart_' + (form.nummer || 'menu').replace(/[^a-zA-Z0-9-]/g, '_') + '.pdf');
             return;
         }
 
@@ -441,18 +641,6 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         }
 
         // ── Menu / Gang Section ──
-        // Gang number to course name mapping
-        const courseNames: Record<string, string> = {
-            '1': 'Amuse', '2': 'Voorgerecht', '3': 'Hoofdgerecht', '4': 'Dessert',
-            '5': 'Nagerecht', '6': 'Petit Four'
-        };
-        function gangToCourseName(gangLabel: string): string {
-            // Extract number from "Gang 1", "Gang 2" etc.
-            const m = gangLabel.match(/\d+/);
-            if (m && courseNames[m[0]]) return courseNames[m[0]];
-            return gangLabel; // fallback: keep original
-        }
-
         // Try structured menu_selectie first, fallback to parsing notitie text
         let gangen: { gang: string; gerechten: string[] }[] = parseMenuGangen(form.menu_selectie);
 
@@ -473,7 +661,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
 
         // Rename gang labels to course names
         gangen = gangen.map(function (g) {
-            return { gang: gangToCourseName(g.gang), gerechten: g.gerechten };
+            return { gang: gangToDisplayName(g.gang), gerechten: g.gerechten };
         });
 
         // ── Render menu gangen (2-column compact layout) ──
