@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, type ReactNode } from "react";
+import React, { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -8,7 +8,7 @@ import {
     PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
     ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette,
     DollarSign, Camera, Settings, ChevronDown, ChevronRight, ChevronLeft,
-    Users, Mail, Inbox,
+    Users, Mail, Inbox, Globe, Menu, X,
     FilePlus, HelpCircle, MessageCircle, PieChart
 } from "lucide-react";
 
@@ -55,6 +55,7 @@ const navSections: NavSection[] = [
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes" },
             { label: "Snel Aanmaken", icon: <FilePlus size={16} />, href: "/offerte-editor" },
             { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen" },
+            { label: "Klanten", icon: <Users size={16} />, href: "/klanten" },
             { label: "Analytics", icon: <BarChart3 size={16} />, href: "/financien" },
             { label: "Boekhouding", icon: <Calculator size={16} />, href: "/boekhouding" },
         ],
@@ -101,6 +102,14 @@ const navSections: NavSection[] = [
         ],
     },
     {
+        title: "Website",
+        icon: <Globe size={18} />,
+        type: "folder",
+        children: [
+            { label: "Website Beheer", icon: <Globe size={16} />, href: "/website" },
+        ],
+    },
+    {
         title: "Hulp & Support",
         icon: <HelpCircle size={18} />,
         type: "folder",
@@ -117,9 +126,10 @@ interface SidebarFolderProps {
     pathname: string;
     expandedSections: string[];
     toggleSection: (title: string) => void;
+    onNavigate?: () => void;
 }
 
-function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleSection }: SidebarFolderProps) {
+function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleSection, onNavigate }: SidebarFolderProps) {
     const isExpanded = expandedSections.includes(section.title);
     const isActiveFolder = section.children.some(child => pathname === child.href || (child.href !== '/' && pathname.startsWith(child.href)));
 
@@ -131,7 +141,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                         toggleSection(section.title);
                     }
                 }}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)] hover:text-white transition-colors group"
+                className="w-full flex items-center justify-between px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)] hover:text-white transition-colors group"
                 title={collapsed ? section.title : ""}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
@@ -156,7 +166,8 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
+                                onClick={onNavigate}
+                                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
                                     ? "bg-[#3b82f6]/10 text-white border-l-2 border-[#3b82f6] pl-2.5"
                                     : "text-[var(--muted)] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
                                     }`}
@@ -177,7 +188,13 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
 export default function Sidebar() {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>([]);
+
+    // Auto-close mobile sidebar on route change
+    useEffect(() => {
+        setMobileOpen(false);
+    }, [pathname]);
 
     const toggleSection = (title: string) => {
         setExpandedSections((prev) =>
@@ -187,43 +204,63 @@ export default function Sidebar() {
         );
     };
 
-    return (
-        <aside
-            className={`sticky top-0 h-screen bg-[#151518] border-r border-[#141418] flex flex-col z-50 transition-all duration-300 ease-in-out shrink-0 overflow-hidden ${collapsed ? "w-[80px]" : "w-[260px]"}`}
-        >
-            <div className="flex items-center justify-between px-5 py-5 border-b border-[#141418] shrink-0">
+    const [isDesktop, setIsDesktop] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsDesktop(window.innerWidth >= 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    const closeMobile = () => setMobileOpen(false);
+
+    const sidebarContent = (
+        <>
+            <div className="flex items-center justify-between px-5 py-5 border-b border-[#1e1e22] shrink-0">
                 <div className="flex items-center gap-3 overflow-hidden">
                     <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#1a1a20] to-[#0e0e12] flex items-center justify-center border border-[#222228]">
                         <Flame className="w-4 h-4 text-[#c4a35a]" />
                     </div>
-                    <div className={`transition-all duration-300 whitespace-nowrap flex flex-col justify-center ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-[120px]'}`}>
-                        <p className="text-[13px] font-semibold tracking-[0.08em] text-white font-['Outfit'] truncate">
+                    <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
+                        <p className="text-[13px] font-semibold tracking-[0.08em] text-white font-['Outfit']">
                             BBQ ARCHITECT
                         </p>
-                        <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase truncate mt-0.5">
+                        <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase mt-0.5">
                             Hop & Bites
                         </p>
                     </div>
                 </div>
+                {/* Desktop: collapse toggle. Mobile: close button */}
                 <button
-                    onClick={() => setCollapsed(!collapsed)}
-                    className={`shrink-0 p-1.5 rounded-lg hover:bg-[#1a1a20] text-[var(--muted-light)] hover:text-white transition-colors ${collapsed ? 'absolute right-[22px]' : ''}`}
+                    onClick={() => {
+                        if (window.innerWidth < 768) {
+                            setMobileOpen(false);
+                        } else {
+                            setCollapsed(!collapsed);
+                        }
+                    }}
+                    className="shrink-0 p-2 rounded-lg hover:bg-[#1a1a20] text-[var(--muted-light)] hover:text-white transition-colors"
+                    style={collapsed && isDesktop ? { position: 'absolute', right: 22 } : {}}
                 >
-                    {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                    {!isDesktop && <X size={18} />}
+                    {isDesktop && (collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />)}
                 </button>
             </div>
 
             <div className="px-3 pt-5 pb-3 shrink-0">
                 <Link
                     href="/"
+                    onClick={closeMobile}
                     className={`group flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap ${pathname === "/"
                         ? "bg-[#3b82f6]/10 border border-[#3b82f6]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
                         : "text-[var(--muted)] hover:text-white hover:bg-[#1a1a1f]"
-                        } ${collapsed ? "justify-center" : ""}`}
+                        }`}
+                    style={collapsed && isDesktop ? { justifyContent: 'center' } : {}}
                     title={collapsed ? "Dashboard" : ""}
                 >
                     <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[#3b82f6]" : "group-hover:text-white"}`} />
-                    <span className={`text-[13.5px] font-semibold transition-all duration-300 ${collapsed ? "opacity-0 w-0" : "opacity-100 w-auto"}`}>
+                    <span className="text-[13.5px] font-semibold transition-all duration-300" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         Dashboard
                     </span>
                 </Link>
@@ -238,16 +275,17 @@ export default function Sidebar() {
                         pathname={pathname}
                         expandedSections={expandedSections}
                         toggleSection={toggleSection}
+                        onNavigate={closeMobile}
                     />
                 ))}
             </nav>
 
             <div className="px-4 py-4 border-t border-[#141418] shrink-0 overflow-hidden">
-                <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'justify-center mx-1' : ''}`}>
+                <div className="flex items-center gap-3 transition-all duration-300" style={collapsed && isDesktop ? { justifyContent: 'center', margin: '0 4px' } : {}}>
                     <div className="w-8 h-8 shrink-0 rounded-full bg-[#3b82f6] flex items-center justify-center text-[11px] font-bold text-white shadow-lg">
                         MB
                     </div>
-                    <div className={`transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
+                    <div className="transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         <div className="min-w-0">
                             <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">Mathijs Berkhout</p>
                             <p className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
@@ -256,6 +294,45 @@ export default function Sidebar() {
                     </div>
                 </div>
             </div>
-        </aside>
+        </>
+    );
+
+    return (
+        <>
+            {/* Mobile hamburger button */}
+            {!mobileOpen && !isDesktop && (
+                <button
+                    onClick={() => setMobileOpen(true)}
+                    className="fixed top-3 left-3 z-[60] w-11 h-11 rounded-xl bg-[#18181c]/90 backdrop-blur-md border border-[#2a2a30] flex items-center justify-center text-[#999] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+                    aria-label="Open menu"
+                >
+                    <Menu size={20} />
+                </button>
+            )}
+
+            {/* Mobile backdrop */}
+            {mobileOpen && !isDesktop && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55]"
+                    onClick={closeMobile}
+                />
+            )}
+
+            {/* Sidebar - desktop: sticky, mobile: fixed overlay */}
+            <aside
+                className="bg-[#151518] border-r border-[#141418] flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden"
+                style={{
+                    position: isDesktop ? 'sticky' : 'fixed',
+                    top: 0,
+                    left: 0,
+                    height: isDesktop ? '100vh' : '100%',
+                    zIndex: isDesktop ? 50 : 60,
+                    width: isDesktop ? (collapsed ? 80 : 260) : 280,
+                    transform: isDesktop ? 'translateX(0)' : (mobileOpen ? 'translateX(0)' : 'translateX(-100%)'),
+                }}
+            >
+                {sidebarContent}
+            </aside>
+        </>
     );
 }

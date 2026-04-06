@@ -25,7 +25,7 @@ export default function GlobalToast() {
     return (
         <div style={{
             position: 'fixed',
-            bottom: '1.5rem',
+            bottom: '5rem',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 9999,
@@ -34,6 +34,8 @@ export default function GlobalToast() {
             gap: '0.5rem',
             alignItems: 'center',
             pointerEvents: 'none' as const,
+            width: '92%',
+            maxWidth: '480px',
         }}>
             {notifications.map(function (n: Notification) {
                 const cfg = typeConfig[n.type] || typeConfig.info;
@@ -48,8 +50,9 @@ export default function GlobalToast() {
                         borderLeft: '4px solid ' + cfg.border,
                         borderRadius: '0.75rem',
                         padding: '0.75rem 1.25rem',
-                        minWidth: '280px',
-                        maxWidth: '480px',
+                        minWidth: 0,
+                        maxWidth: '100%',
+                        width: '100%',
                         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         animation: 'slideUp 0.25s ease',
                         backdropFilter: 'blur(8px)',
@@ -69,7 +72,7 @@ export default function GlobalToast() {
                                 padding: '0 0.25rem',
                                 flexShrink: 0,
                             }}
-                        >\u00d7</button>
+                        >&times;</button>
                     </div>
                 );
             })}

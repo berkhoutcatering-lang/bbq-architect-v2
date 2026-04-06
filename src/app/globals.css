@@ -1518,6 +1518,30 @@ body {
   animation: chat-fade-in 0.2s ease-out forwards;
 }
 
+/* Mobile AI assistant */
+@media (max-width: 767px) {
+  .ai-assistant-container {
+    bottom: 16px;
+    right: 16px;
+  }
+  .ai-toggle-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 17px;
+  }
+  .ai-chat-window {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+  }
+}
+
 @keyframes blink {
 
   0%,
@@ -5353,6 +5377,13 @@ body {
   --hb-border-strong: rgba(212, 175, 55, .3);
   --hb-text: #f5f0e6;
   --hb-muted: #8a8272;
+  padding: 16px;
+}
+
+@media (min-width: 768px) {
+  .hopbites-theme {
+    padding: 24px;
+  }
 }
 
 .hopbites-theme h1,
@@ -5573,4 +5604,79 @@ body {
 
 .hopbites-theme .profit-breakdown-head {
   font-family: 'Playfair Display', serif;
+}
+
+/* Dashboard: hide duplicate logo/spacer when sidebar visible on desktop */
+@media (min-width: 768px) {
+  .sidebar-hidden-spacer,
+  .sidebar-hidden-logo {
+    display: none !important;
+  }
+}
+
+/* Dashboard responsive grid layouts */
+.dash-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.dash-content-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding-bottom: 80px;
+}
+.dash-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dash-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dash-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (min-width: 768px) {
+  .dash-kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .dash-content-grid {
+    gap: 24px;
+  }
+  .dash-main-col,
+  .dash-side-col {
+    gap: 24px;
+  }
+}
+@media (min-width: 1024px) {
+  .dash-content-grid {
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .dash-main-col {
+    grid-column: span 8;
+  }
+  .dash-side-col {
+    grid-column: span 4;
+  }
+  .dash-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Breadcrumb: extra top padding on mobile for hamburger, less on desktop */
+.breadcrumb-nav {
+  padding-top: 52px;
+}
+@media (min-width: 768px) {
+  .breadcrumb-nav {
+    padding-top: 10px;
+  }
 }

@@ -17,6 +17,8 @@ export default function Facturen() {
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
+    const [filterStatus, setFilterStatus] = useState<string>('alle');
+    const [searchQuery, setSearchQuery] = useState('');
 
     function newFactuur() {
         const nummer = genNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.length + 1);
@@ -154,15 +156,37 @@ export default function Facturen() {
         );
     }
 
+    const filteredFacturen = facturen.filter(function (f) {
+        if (filterStatus !== 'alle' && f.status !== filterStatus) return false;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            return (f.client_naam || '').toLowerCase().includes(q) || (f.nummer || '').toLowerCase().includes(q);
+        }
+        return true;
+    }).sort(function (a, b) { return (b.datum || '').localeCompare(a.datum || ''); });
+
     return (
         <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Facturen ({facturen.length})</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Facturen ({filteredFacturen.length}{filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})</h3>
                 <button className="btn btn-brand" onClick={newFactuur}><i className="fa-solid fa-plus"></i> Nieuwe Factuur</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                    value={searchQuery}
+                    onChange={function (e) { setSearchQuery(e.target.value); }}
+                    placeholder="Zoek op klant of nummer..."
+                    style={{ flex: 1, minWidth: 180, padding: '7px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
+                />
+                {['alle', 'concept', 'verzonden', 'betaald', 'vervallen'].map(function (s) {
+                    return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
+                        onClick={function () { setFilterStatus(s); }}
+                        style={{ fontSize: 11, textTransform: 'capitalize' }}>{s}</button>;
+                })}
             </div>
             <div className="panel">
                 {facturen.length === 0 && <div className="empty-state"><i className="fa-solid fa-file-invoice"></i><p>Nog geen facturen aangemaakt</p></div>}
-                {facturen.map(function (f) {
+                {filteredFacturen.map(function (f) {
                     let total = 0;
                     (f.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
                     const pill = f.status === 'betaald' ? 'pill-green' : f.status === 'verzonden' ? 'pill-amber' : f.status === 'vervallen' ? 'pill-red' : 'pill-blue';

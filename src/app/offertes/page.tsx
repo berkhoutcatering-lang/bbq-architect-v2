@@ -8,6 +8,8 @@ import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/uti
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import MenuWizard from '@/components/MenuWizard';
+import MenuBuilder from '@/components/MenuBuilder';
+import KlantAutocomplete from '@/components/KlantAutocomplete';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
@@ -23,7 +25,13 @@ export default function Offertes() {
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [showWizard, setShowWizard] = useState(false);
     const [showWizardForExisting, setShowWizardForExisting] = useState(false);
+    const [showMenuBuilder, setShowMenuBuilder] = useState(false);
     const [vasteKostenInput, setVasteKostenInput] = useState<Record<string, any>>({ naam: '', bedrag: '' });
+    const [filterStatus, setFilterStatus] = useState<string>('alle');
+    const [sortField, setSortField] = useState<string>('datum');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     function getInvPrice(naam: string) {
         const inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
@@ -256,10 +264,17 @@ export default function Offertes() {
         }
     }
 
+    function validateOfferte(): boolean {
+        const e: Record<string, string> = {};
+        if (!form!.client_naam) e.client_naam = 'Vul een klantnaam in';
+        if (!form!.datum) e.datum = 'Vul een datum in';
+        if (!form!.items || form!.items.length === 0) e.items = 'Voeg minstens één regel toe';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    }
+
     async function saveOfferte() {
-        if (!form!.client_naam) { showToast('Vul een klantnaam in', 'error'); return; }
-        if (!form!.items || form!.items.length === 0) { showToast('Voeg minstens één regel toe', 'error'); return; }
-        if (!form!.datum) { showToast('Vul een datum in', 'error'); return; }
+        if (!validateOfferte()) return;
         console.log('[SAVE] ═══════════════════════════════════════');
         console.log('[SAVE] editing=', editing, 'status=', form!.status);
 
@@ -299,6 +314,21 @@ export default function Offertes() {
             showToast('Fout bij opslaan: ' + (err.message || ''), 'error');
         }
         console.log('[SAVE] ═══════════════════════════════════════');
+    }
+
+    function duplicateOfferte(o: Record<string, any>) {
+        const geldigDagen = (settings && settings.offerte_geldig) || 30;
+        const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+        const copy = JSON.parse(JSON.stringify(o));
+        delete copy.id;
+        delete copy.created_at;
+        copy.nummer = nummer;
+        copy.status = 'concept';
+        copy.datum = today();
+        copy.geldig_tot = addDays(today(), geldigDagen);
+        setEditing('new');
+        setForm(copy);
+        showToast('Offerte gedupliceerd — pas details aan en sla op', 'info');
     }
 
     function deleteOfferte() {
@@ -370,9 +400,15 @@ export default function Offertes() {
                                 {['concept', 'verzonden', 'geaccepteerd', 'akkoord', 'betaald', 'afgewezen', 'verlopen'].map(function (s) { return <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>; })}
                             </select>
                         </div>
-                        <div className="field"><label>Klantnaam</label><input value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_naam', e.target.value); }} /></div>
+                        <KlantAutocomplete
+                            label="Klantnaam"
+                            value={form.client_naam}
+                            onChange={function (v) { setField('client_naam', v); setErrors(Object.assign({}, errors, { client_naam: '' })); }}
+                            onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); }}
+                            error={errors.client_naam}
+                        />
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); }} /></div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); setErrors(Object.assign({}, errors, { datum: '' })); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />{errors.datum && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.datum}</span>}</div>
                         <div className="field"><label>Geldig Tot</label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
                     </div>
@@ -410,7 +446,8 @@ export default function Offertes() {
                     </div>
                     <div className="editor-actions">
                         <button className="btn-gold" onClick={saveOfferte}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Samenstellen</button>
+                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }}><i className="fa-solid fa-utensils"></i> Menu Wizard</button>
+                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }}><i className="fa-solid fa-grip"></i> Menu Builder</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         {editing !== 'new' && (
                             <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
@@ -422,6 +459,7 @@ export default function Offertes() {
                             </button>
                         )}
                         {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur}><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
+                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }}><i className="fa-solid fa-copy"></i> Dupliceer</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
 
@@ -505,6 +543,15 @@ export default function Offertes() {
                     })()}
 
                     {showWizardForExisting && <MenuWizard onComplete={handleWizardUpdateExisting} onClose={function () { setShowWizardForExisting(false); }} settings={settings} existingOfferte={form} />}
+                    <MenuBuilder
+                        open={showMenuBuilder}
+                        onClose={function () { setShowMenuBuilder(false); }}
+                        onApply={function (menuSel) {
+                            setField('menu_selectie', menuSel);
+                            showToast('Menu bijgewerkt via Builder', 'success');
+                        }}
+                        initialMenu={typeof form.menu_selectie === 'object' && !Array.isArray(form.menu_selectie) ? form.menu_selectie : {}}
+                    />
                 </div>
             </div>
         );
@@ -512,20 +559,65 @@ export default function Offertes() {
 
     return (
         <div className="hopbites-theme">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 12 }}>
                 <div>
                     <div className="hb-subtitle" style={{ marginBottom: 4 }}>BBQ Architect</div>
                     <h3 className="hb-title" style={{ fontSize: 20 }}>Offertes ({offertes.length})</h3>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                     <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
                     <button className="btn-gold" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
                 </div>
             </div>
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
+            <div style={{ marginBottom: 12 }}>
+                <input
+                    value={searchQuery}
+                    onChange={function (e) { setSearchQuery(e.target.value); }}
+                    placeholder="Zoek op klant of nummer..."
+                    style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginBottom: 8 }}
+                />
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
+                    {['alle', 'concept', 'verzonden', 'geaccepteerd', 'betaald', 'afgewezen'].map(function (s) {
+                        return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
+                            onClick={function () { setFilterStatus(s); }}
+                            style={{ fontSize: 11, textTransform: 'capitalize', whiteSpace: 'nowrap', flexShrink: 0 }}>{s}</button>;
+                    })}
+                </div>
+                <select value={sortField + '_' + sortDir} onChange={function (e) {
+                    const [f, d] = e.target.value.split('_');
+                    setSortField(f); setSortDir(d as 'asc' | 'desc');
+                }} style={{ padding: '6px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginTop: 6 }}>
+                    <option value="datum_desc">Datum (nieuwste eerst)</option>
+                    <option value="datum_asc">Datum (oudste eerst)</option>
+                    <option value="totaal_desc">Bedrag (hoog-laag)</option>
+                    <option value="totaal_asc">Bedrag (laag-hoog)</option>
+                    <option value="client_naam_asc">Klant (A-Z)</option>
+                </select>
+            </div>
             <div className="panel">
                 {offertes.length === 0 && <div className="empty-state"><i className="fa-solid fa-file-signature"></i><p>Nog geen offertes aangemaakt</p></div>}
-                {offertes.map(function (o) {
+                {offertes.filter(function (o) {
+                    if (filterStatus !== 'alle' && o.status !== filterStatus) return false;
+                    if (searchQuery) {
+                        const q = searchQuery.toLowerCase();
+                        return (o.client_naam || '').toLowerCase().includes(q) || (o.nummer || '').toLowerCase().includes(q);
+                    }
+                    return true;
+                }).sort(function (a, b) {
+                    if (sortField === 'datum') {
+                        return sortDir === 'asc' ? (a.datum || '').localeCompare(b.datum || '') : (b.datum || '').localeCompare(a.datum || '');
+                    }
+                    if (sortField === 'client_naam') {
+                        return (a.client_naam || '').localeCompare(b.client_naam || '');
+                    }
+                    if (sortField === 'totaal') {
+                        const ta = (a.items || []).reduce(function (s: number, i: any) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
+                        const tb = (b.items || []).reduce(function (s: number, i: any) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
+                        return sortDir === 'asc' ? ta - tb : tb - ta;
+                    }
+                    return 0;
+                }).map(function (o) {
                     let total = 0;
                     (o.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
                     const pillMap: Record<string, string> = { concept: 'pill-blue', verzonden: 'pill-amber', geaccepteerd: 'pill-green', akkoord: 'pill-green', betaald: 'pill-green', afgewezen: 'pill-red', verlopen: 'pill-red' };

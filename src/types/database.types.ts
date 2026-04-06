@@ -289,6 +289,77 @@ export interface Gang {
   created_at?: string;
 }
 
+// ── Website CMS Types ──
+export interface WebsiteHero {
+  id: number;
+  src: string;
+  alt: string;
+  volgorde: number;
+  actief: boolean;
+}
+
+export interface WebsiteFaq {
+  id: number;
+  vraag: string;
+  antwoord: string;
+  volgorde: number;
+  actief: boolean;
+}
+
+export interface WebsiteGallery {
+  id: number;
+  src: string;
+  label: string;
+  categorie: string;
+  volgorde: number;
+  actief: boolean;
+}
+
+export interface WebsiteGerecht {
+  id: any;
+  naam: string;
+  beschrijving: string;
+  gang_slug: string;
+  volgorde: number;
+  actief: boolean;
+  foto: string | null;
+  extra_info: string | null;
+  allergenen: string[];
+}
+
+export interface WebsiteGang {
+  id: any;
+  naam: string;
+  slug: string;
+  volgorde: number;
+  minimum: number;
+  extra_prijs_pp: number;
+  actief: boolean;
+}
+
+export interface WebsiteSettings {
+  id: number;
+  email: string;
+  telefoon: string;
+  adres: string;
+  kvk: string;
+  btw_nummer: string;
+}
+
+export interface Klant {
+  id: number;
+  naam: string;
+  bedrijf: string;
+  adres: string;
+  postcode: string;
+  plaats: string;
+  telefoon: string;
+  email: string;
+  type: string;
+  notities: string;
+  created_at: string;
+}
+
 export interface EventReflectie {
   id: number;
   event_id: number;

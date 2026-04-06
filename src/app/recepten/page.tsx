@@ -236,13 +236,13 @@ export default function Recepten() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {categories.map(function (c) {
                         return <button key={c} className={'btn btn-sm ' + (filter === c ? 'btn-brand' : 'btn-ghost')} onClick={function () { setFilter(c); }}>{c}</button>;
                     })}
                 </div>
-                <button className="btn btn-brand" onClick={newRecept}>
+                <button className="btn btn-brand" onClick={newRecept} style={{ flexShrink: 0 }}>
                     <i className="fa-solid fa-plus"></i> Nieuw Recept
                 </button>
             </div>

@@ -441,6 +441,18 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         }
 
         // ── Menu / Gang Section ──
+        // Gang number to course name mapping
+        const courseNames: Record<string, string> = {
+            '1': 'Amuse', '2': 'Voorgerecht', '3': 'Hoofdgerecht', '4': 'Dessert',
+            '5': 'Nagerecht', '6': 'Petit Four'
+        };
+        function gangToCourseName(gangLabel: string): string {
+            // Extract number from "Gang 1", "Gang 2" etc.
+            const m = gangLabel.match(/\d+/);
+            if (m && courseNames[m[0]]) return courseNames[m[0]];
+            return gangLabel; // fallback: keep original
+        }
+
         // Try structured menu_selectie first, fallback to parsing notitie text
         let gangen: { gang: string; gerechten: string[] }[] = parseMenuGangen(form.menu_selectie);
 
@@ -459,33 +471,56 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             }
         }
 
+        // Rename gang labels to course names
+        gangen = gangen.map(function (g) {
+            return { gang: gangToCourseName(g.gang), gerechten: g.gerechten };
+        });
+
         // ── Render menu gangen (2-column compact layout) ──
         if (gangen.length > 0) {
             const menuStartY = y - 2;
-            const colW = (contentW - 8) / 2; // two columns with gap
+            const colW = (contentW - 8) / 2;
             const col1X = mL + 5;
             const col2X = mL + colW + 8;
-            const lineH = 3.2;
+            const titleH = 5.5;   // height for gang title line
+            const dishH = 3.2;    // height for dish line
+            const gangGap = 4;    // gap between gangen
 
-            // Build lines per gang for height calculation
-            const gangLines: { text: string; bold: boolean }[][] = [];
+            // Build structured lines per gang: title, then alternating dish name + description
+            const gangLines: { text: string; role: 'title' | 'dish' | 'desc' }[][] = [];
             gangen.forEach(function (gang) {
-                const lines: { text: string; bold: boolean }[] = [];
-                lines.push({ text: gang.gang.toUpperCase(), bold: true });
-                gang.gerechten.forEach(function (g) { lines.push({ text: g, bold: false }); });
+                const lines: { text: string; role: 'title' | 'dish' | 'desc' }[] = [];
+                lines.push({ text: gang.gang.toUpperCase(), role: 'title' });
+                gang.gerechten.forEach(function (g, i) {
+                    // Even index (0, 2, 4...) = dish name, odd index (1, 3, 5...) = description
+                    lines.push({ text: g, role: i % 2 === 0 ? 'dish' : 'desc' });
+                });
                 gangLines.push(lines);
             });
 
-            // Split gangen into 2 columns (left gets first half)
+            // Split gangen into 2 columns
             const mid = Math.ceil(gangen.length / 2);
             const leftGangen = gangLines.slice(0, mid);
             const rightGangen = gangLines.slice(mid);
 
-            let leftH = 0;
-            leftGangen.forEach(function (lines) { leftH += lines.length * lineH + 2; });
-            let rightH = 0;
-            rightGangen.forEach(function (lines) { rightH += lines.length * lineH + 2; });
-            const menuH = Math.max(leftH, rightH) + 10;
+            const dishNameH = 4;  // height for dish name (bold)
+            const dishDescH = 3;  // height for description (subtle)
+            const dishPairGap = 1.5; // extra gap between dish pairs
+
+            // Calculate height per column
+            function calcColH(col: { text: string; role: 'title' | 'dish' | 'desc' }[][]) {
+                let h = 0;
+                col.forEach(function (lines, gi) {
+                    lines.forEach(function (line, li) {
+                        if (line.role === 'title') h += titleH;
+                        else if (line.role === 'dish') h += dishNameH;
+                        else { h += dishDescH; h += dishPairGap; } // add gap after each desc (end of pair)
+                    });
+                    if (gi < col.length - 1) h += gangGap;
+                });
+                return h;
+            }
+            const menuH = Math.max(calcColH(leftGangen), calcColH(rightGangen)) + 14;
 
             // Background panel
             doc.setFillColor(...DARK_PANEL);
@@ -501,24 +536,37 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             doc.text('M E N U', mL + 5, y + 1.5);
 
             // Render column helper
-            function renderColumn(colGangen: { text: string; bold: boolean }[][], startX: number) {
-                let cy = y + 5;
-                colGangen.forEach(function (lines) {
+            function renderColumn(colGangen: { text: string; role: 'title' | 'dish' | 'desc' }[][], startX: number) {
+                let cy = y + 6;
+                colGangen.forEach(function (lines, gi) {
                     lines.forEach(function (line) {
-                        if (line.bold) {
-                            doc.setFontSize(7);
+                        if (line.role === 'title') {
+                            // Course title — bold, gold, with underline accent
+                            doc.setFontSize(9.5);
                             doc.setFont('helvetica', 'bold');
                             doc.setTextColor(...DARK_GOLD);
                             doc.text(line.text, startX, cy);
-                        } else {
-                            doc.setFontSize(7);
-                            doc.setFont('helvetica', 'italic');
-                            doc.setTextColor(...DARK_GRAY);
+                            doc.setDrawColor(...GOLD);
+                            doc.setLineWidth(0.2);
+                            doc.line(startX, cy + 1, startX + 20, cy + 1);
+                            cy += titleH;
+                        } else if (line.role === 'dish') {
+                            // Dish name — bold, dark
+                            doc.setFontSize(8);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(...BLACK);
                             doc.text(line.text, startX + 3, cy);
+                            cy += dishNameH;
+                        } else {
+                            // Description — italic, subtle, smaller
+                            doc.setFontSize(6.5);
+                            doc.setFont('helvetica', 'italic');
+                            doc.setTextColor(...MID_GRAY);
+                            doc.text(line.text, startX + 3, cy);
+                            cy += dishDescH + dishPairGap;
                         }
-                        cy += lineH;
                     });
-                    cy += 1.5;
+                    if (gi < colGangen.length - 1) cy += gangGap;
                 });
             }
 

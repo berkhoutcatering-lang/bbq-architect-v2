@@ -76,6 +76,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setNotifications(function (prev) { return prev.filter(function (n) { return n.id !== id; }); });
     }, []);
 
+    // ── Proactieve Notificaties ──
+    const checkedRef = useRef(false);
+    useEffect(function () {
+        if (!loaded || checkedRef.current) return;
+        checkedRef.current = true;
+
+        const today = new Date().toISOString().slice(0, 10);
+        const in3Days = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+
+        // Check: events in de komende 3 dagen
+        const soonEvents = upcomingEvents.filter(function (e) { return e.date >= today && e.date <= in3Days && e.status === 'confirmed'; });
+        soonEvents.forEach(function (ev) {
+            const daysUntil = Math.ceil((new Date(ev.date).getTime() - Date.now()) / 86400000);
+            const label = daysUntil === 0 ? 'Vandaag' : daysUntil === 1 ? 'Morgen' : 'Over ' + daysUntil + ' dagen';
+            pushNotification(label + ': ' + ev.name + ' (' + ev.guests + ' gasten)', 'warning', 8000);
+        });
+
+        // Check: verlopen offertes
+        const verlopenOffertes = activeOffertes.filter(function (o) {
+            return (o.status === 'concept' || o.status === 'verzonden') && o.geldig_tot && o.geldig_tot < today;
+        });
+        if (verlopenOffertes.length > 0) {
+            pushNotification(verlopenOffertes.length + ' offerte(s) verlopen — controleer of klant heeft gereageerd', 'warning', 8000);
+        }
+
+        // Check: onbetaalde facturen voorbij vervaldatum
+        const overdueFacturen = openFacturen.filter(function (f) {
+            return f.vervaldatum && f.vervaldatum < today && f.status !== 'betaald';
+        });
+        if (overdueFacturen.length > 0) {
+            pushNotification(overdueFacturen.length + ' factuur/facturen over vervaldatum — neem actie', 'error', 8000);
+        }
+
+        // Check: lage voorraad
+        if (lowStockItems.length > 0) {
+            pushNotification(lowStockItems.length + ' item(s) onder minimum voorraad', 'warning', 6000);
+        }
+    }, [loaded, upcomingEvents, activeOffertes, openFacturen, lowStockItems, pushNotification]);
+
     const kpis: KPIs = {
         actieveOffertes: activeOffertes.length,
         aankomendEvents: upcomingEvents.length,

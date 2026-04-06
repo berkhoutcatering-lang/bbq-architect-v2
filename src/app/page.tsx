@@ -48,30 +48,33 @@ const StatusDot = ({ status }: { status: string }) => {
   );
 };
 
-const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "var(--muted)" }: { icon: React.ReactNode; label: string; value: string; subtitle?: string; trend?: string; accentColor?: string }) => (
-  <MetallicCard className="p-6 group">
-    <div className="flex items-start justify-between mb-4">
-      <div
-        className="p-2.5 rounded-xl"
-        style={{
-          background: `linear-gradient(135deg, ${accentColor}15, ${accentColor}08)`,
-          border: `1px solid ${accentColor}20`,
-        }}
-      >
-        {icon}
+const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "var(--muted)", href }: { icon: React.ReactNode; label: string; value: string; subtitle?: string; trend?: string; accentColor?: string; href?: string }) => {
+  const card = (
+    <MetallicCard className="p-4 md:p-6 group">
+      <div className="flex items-start justify-between mb-3 md:mb-4">
+        <div
+          className="p-2 md:p-2.5 rounded-xl"
+          style={{
+            background: `linear-gradient(135deg, ${accentColor}15, ${accentColor}08)`,
+            border: `1px solid ${accentColor}20`,
+          }}
+        >
+          {icon}
+        </div>
+        {trend && (
+          <span className={`text-[10px] md:text-[11px] font-medium px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${trend.startsWith('+') ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
+            }`}>
+            {trend}
+          </span>
+        )}
       </div>
-      {trend && (
-        <span className={`text-[11px] font-medium px-2 py-1 rounded-full ${trend.startsWith('+') ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
-          }`}>
-          {trend}
-        </span>
-      )}
-    </div>
-    <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-[var(--muted)] mb-1.5">{label}</p>
-    <p className="text-2xl font-light text-white tracking-tight">{value}</p>
-    {subtitle && <p className="text-[12px] text-[var(--muted-light)] mt-1">{subtitle}</p>}
-  </MetallicCard>
-);
+      <p className="text-[10px] md:text-[11px] font-medium uppercase tracking-[0.12em] md:tracking-[0.15em] text-[var(--muted)] mb-1">{label}</p>
+      <p className="text-xl md:text-2xl font-light text-white tracking-tight">{value}</p>
+      {subtitle && <p className="text-[11px] md:text-[12px] text-[var(--muted-light)] mt-1 line-clamp-2">{subtitle}</p>}
+    </MetallicCard>
+  );
+  return href ? <Link href={href}>{card}</Link> : card;
+};
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -196,32 +199,34 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#121215] text-white selection:bg-[#c4a35a]/30">
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#121215]/80 border-b border-[#151518]">
-        <div className="max-w-[1400px] mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#121215]/80 border-b border-[#151518]">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Spacer for hamburger on mobile */}
+            <div className="w-8 shrink-0 sidebar-hidden-spacer" />
+            <div className="relative sidebar-hidden-logo">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[#2a2a30]">
                 <Flame className="w-5 h-5 text-[#c4a35a]" />
               </div>
               <div className="absolute inset-0 rounded-full bg-[#c4a35a]/5 blur-md" />
             </div>
-            <div>
-              <h1 className="text-[15px] font-semibold tracking-[0.08em] text-white font-['Outfit']">BBQ ARCHITECT</h1>
-              <p className="text-[10px] tracking-[0.25em] text-[var(--muted)] uppercase">Hop & Bites • Ambacht</p>
+            <div className="sidebar-hidden-logo">
+              <h1 className="text-[14px] font-semibold tracking-[0.08em] text-white font-['Outfit']">BBQ ARCHITECT</h1>
+              <p className="text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">Hop & Bites • Ambacht</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="relative p-2.5 rounded-xl bg-[#111115] border border-[#1e1e22] hover:border-[#2a2a30] transition-colors">
+          <div className="flex items-center gap-2 md:gap-3">
+            <button className="relative p-2 md:p-2.5 rounded-xl bg-[#111115] border border-[#1e1e22] hover:border-[#2a2a30] transition-colors">
               <Bell className="w-4 h-4 text-[#555558]" />
               {liveActions.some((a) => a.urgency === "high") && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#121215]" />
               )}
             </button>
-            <div className="ml-2 text-right">
-              <p className="text-[11px] text-[var(--muted)] font-medium capitalize">
+            <div className="ml-1 md:ml-2 text-right">
+              <p className="text-[10px] md:text-[11px] text-[var(--muted)] font-medium capitalize">
                 {isMounted ? currentTime.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" }) : "Laden..."}
               </p>
-              <p className="text-[13px] font-light text-[var(--muted)] tabular-nums">
+              <p className="text-[12px] md:text-[13px] font-light text-[var(--muted)] tabular-nums">
                 {isMounted ? currentTime.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) : "--:--"}
               </p>
             </div>
@@ -229,12 +234,12 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-8 py-8 font-['Outfit']">
-        <div className="mb-10">
-          <h2 className="text-3xl font-extralight text-white tracking-tight mb-1">
+      <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit']">
+        <div className="mb-6 md:mb-10">
+          <h2 className="text-2xl md:text-3xl font-extralight text-white tracking-tight mb-1">
             {greeting}, <span className="font-normal">Pitmaster</span>
           </h2>
-          <p className="text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
+          <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
         </div>
 
         {liveActions.some((a) => a.urgency === "high") && (
@@ -255,7 +260,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="dash-kpi-grid">
           <KPICard
             icon={<Calendar className="w-4 h-4 text-[#3b82f6]" />}
             label="Bevestigde Events"
@@ -263,6 +268,7 @@ export default function DashboardPage() {
             subtitle={`totaal geregistreerd dit jaar`}
             accentColor="#3b82f6"
             trend="+12%"
+            href="/events"
           />
           <KPICard
             icon={<Euro className="w-4 h-4 text-emerald-400" />}
@@ -271,6 +277,7 @@ export default function DashboardPage() {
             subtitle={`${betaaldFacturen.length} betaalde facturen`}
             accentColor="#34d399"
             trend="+8.2%"
+            href="/financien"
           />
           <KPICard
             icon={<FileText className="w-4 h-4 text-[#8b8bf0]" />}
@@ -279,6 +286,7 @@ export default function DashboardPage() {
             subtitle={`€${openFacturenBedrag} facturen / €${prognose} open offertes`}
             accentColor="#8b8bf0"
             trend="-3%"
+            href="/facturen"
           />
           <KPICard
             icon={<Users className="w-4 h-4 text-sky-400" />}
@@ -287,13 +295,14 @@ export default function DashboardPage() {
             subtitle="over alle geregistreerde events"
             accentColor="#38bdf8"
             trend="+24%"
+            href="/events"
           />
         </div>
 
-        <div className="grid grid-cols-12 gap-6 pb-20">
-          <div className="col-span-8 space-y-6">
+        <div className="dash-content-grid">
+          <div className="dash-main-col">
 
-            <MetallicCard className="p-6" hover={false}>
+            <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-[#c4a35a]/10 border border-[#c4a35a]/20">
@@ -316,27 +325,27 @@ export default function DashboardPage() {
                   {nextEventsList.map((event: any) => {
                     const date = formatDate(event.date);
                     return (
-                      <Link key={event.id} href={`/agenda`} className="group flex items-center gap-5 p-4 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300">
-                        <div className="flex-shrink-0 w-14 text-center">
-                          <p className="text-[22px] font-light text-white leading-none">{date.day}</p>
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)] mt-1">{date.month}</p>
+                      <Link key={event.id} href={`/agenda`} className="group flex items-center gap-3 md:gap-5 p-3 md:p-4 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300">
+                        <div className="flex-shrink-0 w-11 md:w-14 text-center">
+                          <p className="text-[18px] md:text-[22px] font-light text-white leading-none">{date.day}</p>
+                          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.15em] md:tracking-[0.2em] text-[var(--muted)] mt-0.5">{date.month}</p>
                         </div>
-                        <div className="w-px h-10 bg-[var(--border)]" />
+                        <div className="w-px h-8 md:h-10 bg-[var(--border)]" />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-0.5 md:mb-1">
                             <StatusDot status={event.status} />
-                            <p className="text-[13.5px] font-medium text-white truncate">{event.name}</p>
+                            <p className="text-[12px] md:text-[13.5px] font-medium text-white truncate">{event.name}</p>
                           </div>
-                          <div className="flex items-center gap-4 text-[11.5px] text-[var(--muted)]">
-                            <span className="flex items-center gap-1.5"><Users className="w-3 h-3" /> {event.guests}p</span>
-                            <span className="flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {event.location || 'Onbekend'}</span>
+                          <div className="flex items-center gap-3 md:gap-4 text-[10px] md:text-[11.5px] text-[var(--muted)]">
+                            <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {event.guests}p</span>
+                            <span className="flex items-center gap-1 truncate"><MapPin className="w-3 h-3 shrink-0" /> {event.location || 'Onbekend'}</span>
                           </div>
                         </div>
-                        <div className="text-right flex-shrink-0">
+                        <div className="text-right flex-shrink-0 hidden sm:block">
                           <p className="text-[15px] font-light text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</p>
                           <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : 'Pending'}</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0 ml-1" />
+                        <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0" />
                       </Link>
                     );
                   })}
@@ -344,7 +353,7 @@ export default function DashboardPage() {
               )}
             </MetallicCard>
 
-            <MetallicCard className="p-6" hover={false}>
+            <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-emerald-400/10 border border-emerald-400/20">
@@ -402,26 +411,26 @@ export default function DashboardPage() {
 
           </div>
 
-          <div className="col-span-4 space-y-6">
+          <div className="dash-side-col">
 
-            <MetallicCard className="p-6" hover={false}>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)] mb-4">Snelle Acties</h3>
-              <div className="grid grid-cols-2 gap-2">
+            <MetallicCard className="p-4 md:p-6" hover={false}>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)] mb-3 md:mb-4">Snelle Acties</h3>
+              <div className="dash-actions-grid">
                 {[
                   { icon: <FileText className="w-4 h-4" />, label: "Offertes", href: "/offertes" },
                   { icon: <Calendar className="w-4 h-4" />, label: "Agenda", href: "/agenda" },
                   { icon: <ShoppingCart className="w-4 h-4" />, label: "Inkoop", href: "/inkoop" },
-                  { icon: <UtensilsCrossed className="w-4 h-4" />, label: "Menu Engineering", href: "/menu-engineering" },
+                  { icon: <UtensilsCrossed className="w-4 h-4" />, label: "Menu", href: "/menu-engineering" },
                 ].map((action) => (
-                  <Link key={action.label} href={action.href} className="flex flex-col items-center gap-2.5 p-4 rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#3b82f6]/30 hover:bg-[#121216] transition-all duration-300 group">
-                    <div className="text-[#444447] group-hover:text-[#3b82f6] transition-colors">{action.icon}</div>
-                    <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#444447] group-hover:text-[#888] transition-colors text-center">{action.label}</span>
+                  <Link key={action.label} href={action.href} className="flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[64px] rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#3b82f6]/30 hover:bg-[#121216] active:scale-95 transition-all duration-200 group">
+                    <div className="text-[#555] group-hover:text-[#3b82f6] transition-colors">{action.icon}</div>
+                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] group-hover:text-[#888] transition-colors text-center leading-tight">{action.label}</span>
                   </Link>
                 ))}
               </div>
             </MetallicCard>
 
-            <MetallicCard className="p-6" hover={false}>
+            <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex items-center gap-3 mb-5">
                 <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/20">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -443,7 +452,7 @@ export default function DashboardPage() {
               )}
             </MetallicCard>
 
-            <MetallicCard className="p-6" hover={false}>
+            <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex flex-col mb-5">
                 <h3 className="text-[15px] font-medium text-white tracking-tight leading-none">Recente activiteit</h3>
                 <p className="text-[10px] text-[#444447] mt-1.5 uppercase tracking-wider">Laatste updates van vandaag</p>
@@ -466,7 +475,7 @@ export default function DashboardPage() {
               </div>
             </MetallicCard>
 
-            <MetallicCard className="p-6" hover={false}>
+            <MetallicCard className="p-4 md:p-6" hover={false}>
               <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#555558] mb-4">Pipeline Top Offertes</h3>
               {openOffertes.length > 0 ? (
                 <>

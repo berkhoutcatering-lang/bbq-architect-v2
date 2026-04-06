@@ -7,6 +7,8 @@ import ToastProvider from "@/components/Toast";
 import ConfirmProvider from "@/components/ConfirmDialog";
 import { AppProvider } from "@/lib/AppContext";
 import GlobalToast from "@/components/GlobalToast";
+import Breadcrumbs from "@/components/Breadcrumbs";
+import CommandPalette from "@/components/CommandPalette";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
@@ -30,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="flex min-h-screen bg-[var(--bg)]">
                 <Sidebar />
                 <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
+                  <Breadcrumbs />
                   <div className="flex-1 w-full">
                     {children}
                   </div>
@@ -37,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <AiAssistant />
               </div>
               <GlobalToast />
+              <CommandPalette />
             </ConfirmProvider>
           </ToastProvider>
         </AppProvider>

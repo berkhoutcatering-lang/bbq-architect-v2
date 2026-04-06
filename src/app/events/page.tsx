@@ -7,12 +7,16 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import KlantAutocomplete from '@/components/KlantAutocomplete';
+import EventTimeline from '@/components/EventTimeline';
 import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion, EventReflectie } from '@/types';
 
 export default function Events() {
     const { data: events, insert, update, remove } = useSupabase<DbEvent>('events', []);
     const { data: recepten } = useSupabase<Recept>('recepten', []);
     const { data: reflecties } = useSupabase<EventReflectie>('event_reflecties', []);
+    const { data: prepTasks } = useSupabase<any>('prep_tasks', []);
+    const { data: facturen } = useSupabase<any>('facturen', []);
     const offertes = useSupabase<Offerte>('offertes', []);
     const { settings } = useSettings();
     const showToast = useToast();
@@ -20,6 +24,9 @@ export default function Events() {
     const router = useRouter();
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
+    const [filterStatus, setFilterStatus] = useState<string>('alle');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     function getReflectie(eventId: number): EventReflectie | undefined {
         return reflecties.find(function (r) { return r.event_id === eventId; });
@@ -33,10 +40,17 @@ export default function Events() {
     function editEvent(ev: DbEvent) { setEditing(ev.id); setForm(JSON.parse(JSON.stringify(ev))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
+    function validateEvent(): boolean {
+        const e: Record<string, string> = {};
+        if (!form!.name) e.name = 'Vul een naam in';
+        if (!form!.date) e.date = 'Vul een datum in';
+        if (!form!.guests || form!.guests <= 0) e.guests = 'Vul het aantal gasten in';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    }
+
     function saveEvent() {
-        if (!form!.name) { showToast('Vul een naam in', 'error'); return; }
-        if (!form!.date) { showToast('Vul een datum in', 'error'); return; }
-        if (!form!.guests || form!.guests <= 0) { showToast('Vul het aantal gasten in', 'error'); return; }
+        if (!validateEvent()) return;
         if (editing === 'new') {
             insert(form!).then(function () {
                 showToast('Event aangemaakt 🔥', 'success');
@@ -153,6 +167,19 @@ export default function Events() {
         }
     }
 
+    function duplicateEvent(ev: DbEvent) {
+        const copy = JSON.parse(JSON.stringify(ev));
+        delete copy.id;
+        delete copy.created_at;
+        delete copy.offerte_id;
+        copy.name = (copy.name || '') + ' (kopie)';
+        copy.date = today();
+        copy.status = 'pending';
+        setEditing('new');
+        setForm(copy);
+        showToast('Event gedupliceerd — pas datum en details aan', 'info');
+    }
+
     function deleteEvent() {
         showConfirm('Weet je zeker dat je dit event wilt verwijderen?', function () {
             remove(editing as number).then(function () { showToast('Event verwijderd', 'success'); setEditing(null); setForm(null); });
@@ -186,12 +213,21 @@ export default function Events() {
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
                 </div>
                 <div className="panel-body">
+                    {editing !== 'new' && (
+                        <EventTimeline
+                            eventStatus={form.status}
+                            hasOfferte={!!form.offerte_id}
+                            hasFactuur={facturen.some(function (f: any) { return f.client_naam === form.client_naam && f.status !== 'geannuleerd'; })}
+                            hasReflectie={!!getReflectie(editing as number)}
+                            hasPrep={prepTasks.some(function (p: any) { return p.event_id === editing; })}
+                        />
+                    )}
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Eventgegevens</h4>
                     <div className="form-grid">
-                        <div className="field full"><label>Event Naam</label><input value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); }} /></div>
+                        <div className="field full"><label>Event Naam</label><input value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); setErrors(Object.assign({}, errors, { name: '' })); }} style={errors.name ? { borderColor: 'var(--red)' } : {}} />{errors.name && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.name}</span>}</div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); setErrors(Object.assign({}, errors, { date: '' })); }} style={errors.date ? { borderColor: 'var(--red)' } : {}} />{errors.date && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.date}</span>}</div>
                         <div className="field"><label>Locatie</label><input value={form.location} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('location', e.target.value); }} /></div>
-                        <div className="field"><label>Aantal Gasten</label><input type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); }} /></div>
+                        <div className="field"><label>Aantal Gasten</label><input type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); setErrors(Object.assign({}, errors, { guests: '' })); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} />{errors.guests && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.guests}</span>}</div>
                         <div className="field"><label>Prijs per Persoon</label><input type="number" step="0.50" value={form.ppp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('ppp', parseFloat(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('type', e.target.value); }}>
@@ -210,7 +246,12 @@ export default function Events() {
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>Klantgegevens</h4>
                     <div className="form-grid">
-                        <div className="field"><label>Naam</label><input value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_naam', e.target.value); }} /></div>
+                        <KlantAutocomplete
+                            label="Naam"
+                            value={form.client_naam}
+                            onChange={function (v) { setField('client_naam', v); }}
+                            onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); setField('client_tel', k.telefoon || form.client_tel); setField('client_email', k.email || form.client_email); }}
+                        />
                         <div className="field"><label>Adres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
                         <div className="field"><label>Telefoon</label><input value={form.client_tel} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_tel', e.target.value); }} /></div>
                         <div className="field"><label>Email</label><input type="email" value={form.client_email} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_email', e.target.value); }} /></div>
@@ -257,6 +298,7 @@ export default function Events() {
                     <div className="editor-actions">
                         <button className="btn btn-brand" onClick={saveEvent}><i className="fa-solid fa-save"></i> Opslaan</button>
                         <button className="btn btn-cyan" onClick={createOfferte}><i className="fa-solid fa-file-signature"></i> Offerte Maken</button>
+                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateEvent(form as unknown as DbEvent); }}><i className="fa-solid fa-copy"></i> Dupliceer</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteEvent}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
                 </div>
@@ -264,14 +306,38 @@ export default function Events() {
         );
     }
 
-    const sorted = events.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     const monthNames = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
+    const filtered = events.filter(function (ev) {
+        if (filterStatus !== 'alle' && ev.status !== filterStatus) return false;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            return (ev.name || '').toLowerCase().includes(q) || (ev.location || '').toLowerCase().includes(q) || (ev.client_naam || '').toLowerCase().includes(q);
+        }
+        return true;
+    });
+    const sorted = filtered.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Events ({events.length})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Events ({filtered.length}{filtered.length !== events.length ? ' / ' + events.length : ''})</h3>
                 <button className="btn btn-brand" onClick={newEvent}><i className="fa-solid fa-plus"></i> Nieuw Event</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+                <input
+                    value={searchQuery}
+                    onChange={function (e) { setSearchQuery(e.target.value); }}
+                    placeholder="Zoek op naam, locatie of klant..."
+                    style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginBottom: 8 }}
+                />
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
+                    {['alle', 'pending', 'optie', 'confirmed', 'completed'].map(function (s) {
+                        const labels: Record<string, string> = { alle: 'Alle', pending: 'Pending', optie: 'Optie', confirmed: 'Bevestigd', completed: 'Voltooid' };
+                        return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
+                            onClick={function () { setFilterStatus(s); }}
+                            style={{ fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{labels[s]}</button>;
+                    })}
+                </div>
             </div>
             <div className="panel">
                 {events.length === 0 && <div className="empty-state"><i className="fa-solid fa-fire"></i><p>Nog geen events aangemaakt</p><button className="btn btn-brand btn-sm" onClick={newEvent}>Eerste Event Toevoegen</button></div>}
@@ -298,9 +364,9 @@ export default function Events() {
                                         {ev.name}
                                         {ref && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 6, fontSize: 10, fontWeight: 800, background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><i className="fa-solid fa-star" style={{ fontSize: 8 }}></i> {ref.score}/10</span>}
                                     </div>
-                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                        <i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}
-                                        <span style={{ marginLeft: 12 }}><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', flexWrap: 'wrap' as const, gap: '2px 10px' }}>
+                                        <span><i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}</span>
+                                        <span><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
