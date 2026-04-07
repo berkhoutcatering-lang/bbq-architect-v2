@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
+import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 
 const routeMap: Record<string, { label: string; section: string }> = {
     '/menu-engineering': { label: 'Menu Engineering', section: 'De Keuken' },
@@ -41,11 +42,48 @@ export default function Breadcrumbs() {
 
     if (pathname === '/') return null;
 
+    // Handle section overview pages (/sectie/[slug])
+    if (pathname.startsWith('/sectie/')) {
+        const slug = pathname.split('/')[2];
+        const section = getSectionBySlug(slug);
+        if (!section) return null;
+
+        return (
+            <nav
+                aria-label="Breadcrumb"
+                className="breadcrumb-nav"
+                style={{
+                    paddingBottom: 10,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 11,
+                    flexWrap: 'wrap' as const,
+                    color: 'var(--muted)',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'rgba(18,18,21,0.6)',
+                    backdropFilter: 'blur(8px)',
+                }}
+            >
+                <Link href="/" style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+                    <Home size={13} />
+                </Link>
+                <ChevronRight size={11} style={{ opacity: 0.4 }} />
+                <span style={{ color: 'var(--text)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10 }}>
+                    {section.title}
+                </span>
+            </nav>
+        );
+    }
+
     const basePath = '/' + pathname.split('/').filter(Boolean)[0];
     const route = routeMap[basePath];
 
     if (!route) return null;
 
+    const sectionSlug = getSectionSlugByTitle(route.section);
     const isSubPage = pathname !== basePath;
     const subSegments = pathname.split('/').filter(Boolean).slice(1);
 
@@ -72,9 +110,23 @@ export default function Breadcrumbs() {
                 <Home size={13} />
             </Link>
             <ChevronRight size={11} style={{ opacity: 0.4 }} />
-            <span style={{ color: 'var(--muted-light)', fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10 }}>
+            <Link
+                href={sectionSlug ? `/sectie/${sectionSlug}` : '/'}
+                className="breadcrumb-section-link"
+                style={{
+                    color: 'var(--muted-light)',
+                    fontWeight: 500,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    fontSize: 10,
+                    textDecoration: 'none',
+                    transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-light)'; }}
+            >
                 {route.section}
-            </span>
+            </Link>
             <ChevronRight size={11} style={{ opacity: 0.4 }} />
             {isSubPage ? (
                 <Link href={basePath} style={{ color: 'var(--muted)', textDecoration: 'none' }}>

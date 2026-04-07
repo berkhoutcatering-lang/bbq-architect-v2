@@ -1,124 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, type ReactNode } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-    Flame, LayoutDashboard, ChefHat, BookOpen, UtensilsCrossed, Calendar,
-    PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
-    ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette,
-    DollarSign, Camera, Settings, ChevronDown, ChevronRight, ChevronLeft,
-    Users, Mail, Inbox, Globe, Menu, X,
-    FilePlus, HelpCircle, MessageCircle, PieChart
+    Flame, LayoutDashboard,
+    ChevronDown, ChevronRight, ChevronLeft,
+    Menu, X, Settings
 } from "lucide-react";
-
-interface NavChild {
-    label: string;
-    icon: ReactNode;
-    href: string;
-}
-
-interface NavSection {
-    title: string;
-    icon: ReactNode;
-    type: string;
-    children: NavChild[];
-}
-
-const navSections: NavSection[] = [
-    {
-        title: "De Keuken",
-        icon: <ChefHat size={18} />,
-        type: "folder",
-        children: [
-            { label: "Menu Engineering", icon: <UtensilsCrossed size={16} />, href: "/menu-engineering" },
-            { label: "Recepten", icon: <BookOpen size={16} />, href: "/recepten" },
-            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten" },
-        ],
-    },
-    {
-        title: "Operatie",
-        icon: <Calendar size={18} />,
-        type: "folder",
-        children: [
-            { label: "Agenda", icon: <Calendar size={16} />, href: "/agenda" },
-            { label: "Events", icon: <PartyPopper size={16} />, href: "/events" },
-            { label: "Event Planner", icon: <PieChart size={16} />, href: "/event-planner" },
-            { label: "Service", icon: <HeartHandshake size={16} />, href: "/service" },
-        ],
-    },
-    {
-        title: "De Zaak",
-        icon: <Receipt size={18} />,
-        type: "folder",
-        children: [
-            { label: "Offertes", icon: <FileText size={16} />, href: "/offertes" },
-            { label: "Snel Aanmaken", icon: <FilePlus size={16} />, href: "/offerte-editor" },
-            { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen" },
-            { label: "Klanten", icon: <Users size={16} />, href: "/klanten" },
-            { label: "Analytics", icon: <BarChart3 size={16} />, href: "/financien" },
-            { label: "Boekhouding", icon: <Calculator size={16} />, href: "/boekhouding" },
-        ],
-    },
-    {
-        title: "Beheer & Logistiek",
-        icon: <Package size={18} />,
-        type: "folder",
-        children: [
-            { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop" },
-            { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad" },
-            { label: "Logistiek", icon: <Truck size={16} />, href: "/logistiek" },
-            { label: "Materieel", icon: <Wrench size={16} />, href: "/materieel" },
-            { label: "Uren", icon: <Clock size={16} />, href: "/uren" },
-            { label: "HACCP", icon: <ShieldCheck size={16} />, href: "/haccp" },
-        ],
-    },
-    {
-        title: "Digital Pitmaster",
-        icon: <Palette size={18} />,
-        type: "folder",
-        children: [
-            { label: "Pitmaster Studio", icon: <Palette size={16} />, href: "/ai-chat" },
-            { label: "Prijsintelligentie", icon: <DollarSign size={16} />, href: "/price-intelligence" },
-        ],
-    },
-    {
-        title: "Systeem",
-        icon: <Settings size={18} />,
-        type: "folder",
-        children: [
-            { label: "Foto-archief", icon: <Camera size={16} />, href: "/foto-archief" },
-            { label: "Gebruikers", icon: <Users size={16} />, href: "/gebruikers" },
-            { label: "Instellingen", icon: <Settings size={16} />, href: "/instellingen" },
-        ],
-    },
-    {
-        title: "Communicatie",
-        icon: <Mail size={18} />,
-        type: "folder",
-        children: [
-            { label: "Berichten", icon: <Mail size={16} />, href: "/berichten" },
-            { label: "Mailbox", icon: <Inbox size={16} />, href: "/mailbox" },
-        ],
-    },
-    {
-        title: "Website",
-        icon: <Globe size={18} />,
-        type: "folder",
-        children: [
-            { label: "Website Beheer", icon: <Globe size={16} />, href: "/website" },
-        ],
-    },
-    {
-        title: "Hulp & Support",
-        icon: <HelpCircle size={18} />,
-        type: "folder",
-        children: [
-            { label: "FAQ", icon: <BookOpen size={16} />, href: "/faq" },
-            { label: "Contact", icon: <MessageCircle size={16} />, href: "/contact" },
-        ],
-    },
-];
+import { navSections, type NavSection } from "@/lib/navigation";
 
 interface SidebarFolderProps {
     section: NavSection;
