@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useConfirm } from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
 
 const GANGEN = [
   { slug: 'bite', label: 'Bites', icon: '🍢', kleur: '#a78bfa' },
@@ -158,13 +160,15 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selec
   );
 }
 
-function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase: sb }: {
+function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, onError, supabase: sb }: {
   gerecht: GerechtData | null;
   onSave: (id: number, data: any) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
+  onError: (msg: string) => void;
   supabase: any;
 }) {
+  const showConfirm = useConfirm();
   if (!gerecht) return null;
 
   function normalizeIngs(val: any): string {
@@ -204,16 +208,17 @@ function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, supabase: sb 
     const { error } = await sb.from('gerechten').update(updateData).eq('id', gerecht.id);
     setSaving(false);
     if (!error) onSave(gerecht.id, updateData);
-    else alert('Fout bij opslaan: ' + error.message);
+    else onError('Fout bij opslaan: ' + error.message);
   }
 
-  async function handleDelete() {
-    if (!confirm('Let op: weet je zeker dat je dit gerecht permanent wilt verwijderen?')) return;
-    setSaving(true);
-    const { error } = await sb.from('gerechten').delete().eq('id', gerecht.id);
-    setSaving(false);
-    if (!error) onDelete(gerecht.id);
-    else alert('Fout bij verwijderen: ' + error.message);
+  function handleDelete() {
+    showConfirm('Let op: weet je zeker dat je dit gerecht permanent wilt verwijderen?', async function () {
+      setSaving(true);
+      const { error } = await sb.from('gerechten').delete().eq('id', gerecht.id);
+      setSaving(false);
+      if (!error) onDelete(gerecht.id);
+      else onError('Fout bij verwijderen: ' + error.message);
+    });
   }
 
   return (
@@ -399,6 +404,8 @@ function GangPickerModal({ gerecht, onPick, onClose }: {
 }
 
 export default function MenuEngineering() {
+  const showConfirm = useConfirm();
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [gerechten, setGerechten] = useState<GerechtData[]>([]);
   const [gangen, setGangen] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -441,21 +448,21 @@ export default function MenuEngineering() {
     setSelectedIds([]);
   }
 
-  async function deleteSelected() {
+  function deleteSelected() {
     if (selectedIds.length === 0) return;
-    if (!confirm('Let op: weet je zeker dat je ' + selectedIds.length + ' geselecteerde gerechten permanent wilt verwijderen?')) return;
+    showConfirm('Let op: weet je zeker dat je ' + selectedIds.length + ' geselecteerde gerechten permanent wilt verwijderen?', async function () {
+      setLoading(true);
+      const { error } = await supabase.from('gerechten').delete().in('id', selectedIds);
+      setLoading(false);
 
-    setLoading(true);
-    const { error } = await supabase.from('gerechten').delete().in('id', selectedIds);
-    setLoading(false);
-
-    if (!error) {
-      setGerechten(function (prev) { return prev.filter(function (g) { return !selectedIds.includes(g.id); }); });
-      clearSelection();
-      showToast('✅ ' + selectedIds.length + ' gerechten verwijderd!');
-    } else {
-      showToast('❌ Fout bij verwijderen: ' + error.message);
-    }
+      if (!error) {
+        setGerechten(function (prev) { return prev.filter(function (g) { return !selectedIds.includes(g.id); }); });
+        clearSelection();
+        showToast('✅ ' + selectedIds.length + ' gerechten verwijderd!');
+      } else {
+        showToast('❌ Fout bij verwijderen: ' + error.message);
+      }
+    });
   }
 
   useEffect(function () {
@@ -476,6 +483,9 @@ export default function MenuEngineering() {
       setGerechten(gerechtenData);
       setLoading(false);
     });
+    return function () {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
   }, []);
 
   const filtered = useMemo(function () {
@@ -603,8 +613,9 @@ export default function MenuEngineering() {
   }
 
   function showToast(msg: string) {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToast(msg);
-    setTimeout(function () { setToast(null); }, 3500);
+    toastTimeoutRef.current = setTimeout(function () { setToast(null); toastTimeoutRef.current = null; }, 3500);
   }
 
   const alleMapGerechten = useMemo(function () {
@@ -815,9 +826,7 @@ export default function MenuEngineering() {
             })}
           </div>
           {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,.25)', fontSize: 14 }}>
-              Geen gerechten gevonden
-            </div>
+            <EmptyState page="/menu-engineering" />
           )}
         </div>
       )}
@@ -913,6 +922,7 @@ export default function MenuEngineering() {
         onSave={handleSaveDetails}
         onDelete={handleDeleteDetails}
         onClose={function () { setViewingGerecht(null); }}
+        onError={function (msg: string) { showToast('❌ ' + msg); }}
         supabase={supabase}
       />
     </div>

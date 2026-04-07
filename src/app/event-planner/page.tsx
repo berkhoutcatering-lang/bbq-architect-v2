@@ -25,35 +25,8 @@ import { useSupabase } from "@/lib/useSupabase";
 import { fmt, fmtNl } from "@/lib/utils";
 import { useApp } from "@/lib/AppContext";
 import { acceptOfferte } from "@/lib/syncEngine";
-
-const MetallicCard = ({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) => (
-    <div
-        onClick={onClick}
-        className={`relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#111113] to-[#0c0c0e] border border-[#1e1e22] ${className}`}
-    >
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />
-        {children}
-    </div>
-);
-
-const StatusChip = ({ status }: { status: string }) => {
-    const styles: Record<string, string> = {
-        concept: "bg-[var(--muted)]/20 text-[var(--muted-light)] border-[var(--muted)]/30",
-        "Awaiting Approval": "bg-amber-500/15 text-amber-300 border-amber-500/30",
-        Confirmed: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-        Draft: "bg-[var(--muted)]/20 text-[var(--muted-light)] border-[var(--muted)]/30",
-        optie: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-        confirmed: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-        geaccepteerd: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-        geannuleerd: "bg-red-500/15 text-red-300 border-red-500/30",
-    };
-    const s = styles[status] || "bg-[var(--muted)]/20 text-[var(--muted-light)] border-[var(--muted)]/30";
-    return (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${s}`}>
-            {status}
-        </span>
-    );
-};
+import MetallicCard from '@/components/MetallicCard';
+import StatusBadge from '@/components/StatusBadge';
 
 const KPICard = ({ icon: Icon, label, value, accent = "var(--brand)" }: { icon: any; label: string; value: string | number; accent?: string }) => (
     <MetallicCard className="p-5">
@@ -298,7 +271,7 @@ export default function EventPlannerDashboard() {
                                                         >
                                                             <td className="py-3 pr-3 text-xs font-mono font-bold text-[var(--brand)]">{o.nummer}</td>
                                                             <td className="py-3 pr-3 text-sm font-medium">{o.client_naam}</td>
-                                                            <td className="py-3 pr-3"><StatusChip status={o.status} /></td>
+                                                            <td className="py-3 pr-3"><StatusBadge status={o.status} size="sm" /></td>
                                                             <td className="py-3 pr-3 text-xs text-[var(--muted)]">{fmtNl(o.datum)}</td>
                                                             <td className="py-3">
                                                                 <div className="flex gap-2">
@@ -326,7 +299,7 @@ export default function EventPlannerDashboard() {
                                                 >
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="text-[10px] font-mono font-black text-[var(--brand)]">{o.nummer}</span>
-                                                        <StatusChip status={o.status} />
+                                                        <StatusBadge status={o.status} size="sm" />
                                                     </div>
                                                     <p className="font-bold text-sm">{o.client_naam}</p>
                                                     <p className="text-[10px] text-[var(--muted)] mt-1">{fmtNl(o.datum)}</p>

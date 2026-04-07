@@ -9,6 +9,7 @@ import { AppProvider } from "@/lib/AppContext";
 import GlobalToast from "@/components/GlobalToast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import CommandPalette from "@/components/CommandPalette";
+import OnboardingWizard from "@/components/OnboardingWizard";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
               <GlobalToast />
               <CommandPalette />
+              <OnboardingWizard />
             </ConfirmProvider>
           </ToastProvider>
         </AppProvider>

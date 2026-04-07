@@ -6,13 +6,20 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Papa from 'papaparse';
 
-const LEVERANCIERS = ['Sligro', 'Hanos', 'Bidfood'];
+const DEFAULT_LEVERANCIERS = ['Sligro', 'Hanos', 'Bidfood'];
 
 export default function PriceIntelligence() {
     const { data: prijzen, insert: insertPrijs, remove: removePrijs } = useSupabase('supplier_prices', []);
+    const { data: inventory } = useSupabase('inventory', []);
     const showToast: (msg: string, type?: string) => void = useToast();
     const showConfirm: (msg: string, onConfirm: () => void) => void = useConfirm();
     const [tab, setTab] = useState('overzicht');
+    const [newLeverancier, setNewLeverancier] = useState('');
+
+    // Dynamic leveranciers: defaults + any from imported data + custom added
+    const [customLevs, setCustomLevs] = useState<string[]>([]);
+    const importedLevs = [...new Set((prijzen || []).map((p: any) => p.leverancier).filter(Boolean))];
+    const LEVERANCIERS = [...new Set([...DEFAULT_LEVERANCIERS, ...importedLevs, ...customLevs])];
 
     const [importStep, setImportStep] = useState(1);
     const [importLev, setImportLev] = useState('Sligro');
@@ -26,7 +33,23 @@ export default function PriceIntelligence() {
     const [showInfo, setShowInfo] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
+    // Remember last mapping per leverancier for quick re-import
+    const MAPPING_STORAGE_KEY = 'bbq_price_mappings';
+    function getSavedMapping(lev: string): { product_naam: string; prijs: string; eenheid: string } | null {
+        try { const saved = JSON.parse(localStorage.getItem(MAPPING_STORAGE_KEY) || '{}'); return saved[lev] || null; } catch { return null; }
+    }
+    function saveMappingForLev(lev: string, m: { product_naam: string; prijs: string; eenheid: string }) {
+        try { const saved = JSON.parse(localStorage.getItem(MAPPING_STORAGE_KEY) || '{}'); saved[lev] = m; localStorage.setItem(MAPPING_STORAGE_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
+    }
+
     function autoMap(headers: string[]) {
+        // First try saved mapping for this leverancier
+        const saved = getSavedMapping(importLev);
+        if (saved && headers.includes(saved.product_naam) && headers.includes(saved.prijs)) {
+            setMapping(saved);
+            return true; // Indicates we can skip the mapping step
+        }
+        // Fallback to auto-detect
         const map = { product_naam: '', prijs: '', eenheid: '' };
         headers.forEach(function (h) {
             const low = h.toLowerCase().trim();
@@ -35,6 +58,7 @@ export default function PriceIntelligence() {
             if (['eenheid', 'unit', 'per', 'verpakking'].some(k => low.includes(k))) map.eenheid = h;
         });
         setMapping(map);
+        return false;
     }
 
     function handleFile(file: File | undefined) {
@@ -55,8 +79,8 @@ export default function PriceIntelligence() {
                     headers: results.meta.fields,
                     rows: results.data
                 });
-                autoMap(results.meta.fields);
-                setImportStep(2);
+                const hasSavedMapping = autoMap(results.meta.fields);
+                setImportStep(hasSavedMapping ? 3 : 2); // Skip mapping step if we remember it
             }
         });
     }
@@ -96,6 +120,7 @@ export default function PriceIntelligence() {
             setImportProgress(Math.round(((i + 1) / rows.length) * 100));
         }
         setImporting(false);
+        saveMappingForLev(importLev, mapping);
         showToast('Import voltooid!', 'success');
     }
 
@@ -193,13 +218,25 @@ export default function PriceIntelligence() {
                             <tbody>
                                 {products.map(p => {
                                     const row = comparison[p];
+                                    // Find cheapest supplier
+                                    let cheapest = Infinity;
+                                    let cheapestLev = '';
+                                    LEVERANCIERS.forEach(l => { if (row[l] && row[l].prijs < cheapest) { cheapest = row[l].prijs; cheapestLev = l; } });
+                                    // Check if product is in inventory
+                                    const inVoorraad = (inventory || []).some((inv: any) => inv.naam && p.toLowerCase().includes(inv.naam.toLowerCase()));
                                     return (
-                                        <tr key={p}>
-                                            <td style={{ fontWeight: 800 }}>{p.toUpperCase()}</td>
+                                        <tr key={p} style={inVoorraad ? { background: 'rgba(196,163,90,.04)' } : {}}>
+                                            <td style={{ fontWeight: 800 }}>
+                                                {p.toUpperCase()}
+                                                {inVoorraad && <span style={{ marginLeft: 6, fontSize: 9, color: '#c4a35a', background: 'rgba(196,163,90,.12)', padding: '1px 5px', borderRadius: 4 }}>VOORRAAD</span>}
+                                            </td>
                                             {LEVERANCIERS.map(l => (
-                                                <td key={l} style={{ textAlign: 'right' }}>
+                                                <td key={l} style={{ textAlign: 'right', background: (row[l] && l === cheapestLev && Object.keys(row).length > 1) ? 'rgba(16,185,129,.06)' : 'transparent' }}>
                                                     {row[l] ? (
-                                                        <span style={{ color: 'var(--white)' }}>{fmt2(row[l].prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/{row[l].eenheid}</span></span>
+                                                        <span style={{ color: l === cheapestLev ? '#10b981' : 'var(--white)', fontWeight: l === cheapestLev ? 700 : 400 }}>
+                                                            {l === cheapestLev && Object.keys(row).length > 1 && <span style={{ fontSize: 9, marginRight: 4 }}>&#x2714;</span>}
+                                                            {fmt2(row[l].prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/{row[l].eenheid}</span>
+                                                        </span>
                                                     ) : <span style={{ color: 'var(--muted)' }}>—</span>}
                                                 </td>
                                             ))}
@@ -220,11 +257,18 @@ export default function PriceIntelligence() {
                             <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 16 }}>UPLOAD PRIJSLIJST</h2>
                             <p style={{ color: 'var(--muted)', marginBottom: 32 }}>Sleep je Sligro, Hanos of Bidfood CSV hierheen om te beginnen.</p>
 
-                            <div className="field mb-24" style={{ maxWidth: 300, margin: '0 auto 24px' }}>
+                            <div className="field mb-24" style={{ maxWidth: 400, margin: '0 auto 24px' }}>
                                 <label>SELECTEER LEVERANCIER</label>
                                 <select value={importLev} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setImportLev(e.target.value)}>
-                                    {LEVERANCIERS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+                                    {LEVERANCIERS.map(l => <option key={l} value={l}>{l}</option>)}
                                 </select>
+                                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                                    <input value={newLeverancier} onChange={(e) => setNewLeverancier(e.target.value)} placeholder="Eigen leverancier toevoegen..." style={{ flex: 1, padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                    {newLeverancier.trim() && (
+                                        <button onClick={() => { setCustomLevs(prev => [...prev, newLeverancier.trim()]); setImportLev(newLeverancier.trim()); setNewLeverancier(''); showToast('Leverancier toegevoegd'); }}
+                                            style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, background: 'rgba(196,163,90,.15)', border: '1px solid rgba(196,163,90,.3)', borderRadius: 6, color: '#c4a35a', cursor: 'pointer' }}>+ Toevoegen</button>
+                                    )}
+                                </div>
                             </div>
 
                             <div

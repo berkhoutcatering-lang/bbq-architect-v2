@@ -33,12 +33,17 @@ export async function POST(req: NextRequest) {
         const { error: updateErr } = await sb.from('offertes').update({ status: 'geaccepteerd' }).eq('id', offerteId);
         if (updateErr) return NextResponse.json({ error: 'Status update mislukt: ' + updateErr.message }, { status: 500 });
 
-        // 3. Sync to event (create or update)
+        // 3. Parse items safely
+        let items = offerte.items;
+        if (typeof items === 'string') { try { items = JSON.parse(items); } catch { items = []; } }
+        if (!Array.isArray(items)) { items = []; }
+
+        // 3b. Sync to event (create or update)
         let eventId: number | null = null;
         try {
             let totalBedrag = 0;
             let estimatedGuests = offerte.aantal_gasten || 0;
-            (offerte.items || []).forEach(function (item: any) {
+            (items).forEach(function (item: any) {
                 totalBedrag += (item.qty || 0) * (item.prijs || 0);
                 if (!estimatedGuests && (item.qty || 0) > estimatedGuests) estimatedGuests = item.qty || 0;
             });
@@ -110,7 +115,7 @@ export async function POST(req: NextRequest) {
                     client_adres: offerte.client_adres || '',
                     datum: todayStr(),
                     vervaldatum: addDaysStr(todayStr(), betaaltermijn),
-                    items: offerte.items || []
+                    items: items
                 });
                 results.factuur = { success: true, message: 'Factuur ' + nummer + ' aangemaakt' };
             } else {

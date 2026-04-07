@@ -11,42 +11,10 @@ import {
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-
-const MetallicCard = ({ children, className = "", hover = true, onClick }: { children: React.ReactNode; className?: string; hover?: boolean; onClick?: () => void }) => (
-  <div
-    onClick={onClick}
-    className={`
-      relative rounded-2xl overflow-hidden
-      bg-gradient-to-br from-[#111113] to-[#0c0c0e]
-      border border-[#1e1e22]
-      ${hover ? "hover:border-[#2a2a30] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 cursor-pointer" : ""}
-      ${className}
-    `}
-  >
-    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />
-    {children}
-  </div>
-);
-
-const StatusDot = ({ status }: { status: string }) => {
-  const colors: Record<string, string> = {
-    confirmed: "bg-emerald-400",
-    pending: "bg-amber-400",
-    concept: "bg-zinc-500",
-    optie: "bg-amber-400",
-    geannuleerd: "bg-red-400",
-    completed: "bg-[#3b82f6]",
-    high: "bg-red-400",
-    medium: "bg-amber-400",
-    low: "bg-emerald-400",
-  };
-  return (
-    <span className="relative flex h-2 w-2">
-      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-40 ${colors[status] || "bg-zinc-500"}`} />
-      <span className={`relative inline-flex rounded-full h-2 w-2 ${colors[status] || "bg-zinc-500"}`} />
-    </span>
-  );
-};
+import MetallicCard from '@/components/MetallicCard';
+import { StatusDot } from '@/components/StatusBadge';
+import WeekStrip from '@/components/WeekStrip';
+import EventWizard from '@/components/EventWizard';
 
 const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "var(--muted)", href }: { icon: React.ReactNode; label: string; value: string; subtitle?: string; trend?: string; accentColor?: string; href?: string }) => {
   const card = (
@@ -96,6 +64,7 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("Welkom");
   const [isMounted, setIsMounted] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -235,31 +204,68 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit']">
-        <div className="mb-6 md:mb-10">
-          <h2 className="text-2xl md:text-3xl font-extralight text-white tracking-tight mb-1">
-            {greeting}, <span className="font-normal">Pitmaster</span>
-          </h2>
-          <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
+        <div className="mb-6 md:mb-10 flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-extralight text-white tracking-tight mb-1">
+              {greeting}, <span className="font-normal">Pitmaster</span>
+            </h2>
+            <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
+          </div>
+          <button
+            onClick={() => setWizardOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-semibold transition-all active:scale-95"
+            style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)', color: '#000' }}
+          >
+            <span className="text-lg leading-none">+</span>
+            <span className="hidden md:inline">Nieuw Event</span>
+          </button>
         </div>
 
-        {liveActions.some((a) => a.urgency === "high") && (
-          <div className="mb-8">
-            <div className="flex items-start gap-4 px-5 py-4 rounded-xl bg-red-500/[0.04] border border-red-500/[0.12]">
-              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 space-y-2">
-                {liveActions.filter((a) => a.urgency === "high").map((action) => (
-                  <Link key={action.id} href={action.link} className="group block w-full text-[13.5px] text-red-400 hover:text-red-300 font-medium tracking-tight">
-                    <span className="flex items-center gap-2">
-                      <ChevronRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform" />
-                      {action.message}
-                    </span>
+        <WeekStrip events={nextEventsList} />
+
+        {/* Zone 1: Aandacht Nu */}
+        {liveActions.length > 0 && (
+          <div className="mb-6 md:mb-8">
+            <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+              <Bell className="w-3.5 h-3.5 inline-block mr-2 text-red-400" />
+              Aandacht nodig
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {liveActions.map((action) => {
+                const isHigh = action.urgency === 'high';
+                return (
+                  <Link key={action.id} href={action.link}>
+                    <MetallicCard
+                      className="p-4 group"
+                      accent={isHigh ? '#ef4444' : '#f59e0b'}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isHigh ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
+                          {isHigh
+                            ? <AlertTriangle className="w-4 h-4 text-red-400" />
+                            : <Clock className="w-4 h-4 text-amber-400" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[13px] font-medium truncate ${isHigh ? 'text-red-400' : 'text-amber-300'}`}>
+                            {action.message}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-[var(--muted)] group-hover:translate-x-1 transition-transform shrink-0" />
+                      </div>
+                    </MetallicCard>
                   </Link>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
         )}
 
+        {/* Zone 3: Zaak-gezondheid */}
+        <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+          <BarChart3 className="w-3.5 h-3.5 inline-block mr-2 text-[#3b82f6]" />
+          Zaak-gezondheid
+        </h3>
         <div className="dash-kpi-grid">
           <KPICard
             icon={<Calendar className="w-4 h-4 text-[#3b82f6]" />}
@@ -343,7 +349,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right flex-shrink-0 hidden sm:block">
                           <p className="text-[15px] font-light text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</p>
-                          <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : 'Pending'}</p>
+                          <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : event.status === 'completed' ? 'Afgerond' : event.status === 'optie' ? 'Optie' : 'Nieuw'}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0" />
                       </Link>
@@ -520,6 +526,12 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      <EventWizard
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onComplete={() => ev.refetch?.()}
+      />
     </div>
   );
 }

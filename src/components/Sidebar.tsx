@@ -9,6 +9,7 @@ import {
     Menu, X, Settings
 } from "lucide-react";
 import { navSections, type NavSection } from "@/lib/navigation";
+import { useApp } from "@/lib/AppContext";
 
 interface SidebarFolderProps {
     section: NavSection;
@@ -17,11 +18,13 @@ interface SidebarFolderProps {
     expandedSections: string[];
     toggleSection: (title: string) => void;
     onNavigate?: () => void;
+    badges?: Record<string, number>;
 }
 
-function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleSection, onNavigate }: SidebarFolderProps) {
+function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleSection, onNavigate, badges = {} }: SidebarFolderProps) {
     const isExpanded = expandedSections.includes(section.title);
     const isActiveFolder = section.children.some(child => pathname === child.href || (child.href !== '/' && pathname.startsWith(child.href)));
+    const sectionBadgeCount = section.children.reduce((sum, child) => sum + (badges[child.href] || 0), 0);
 
     return (
         <div className="mb-2 w-full overflow-hidden">
@@ -35,16 +38,28 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 title={collapsed ? section.title : ""}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
-                    <span className={`shrink-0 transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[var(--muted)] group-hover:text-white'}`}>
+                    <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[var(--muted)] group-hover:text-white'}`}>
                         {section.icon}
+                        {sectionBadgeCount > 0 && collapsed && (
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
+                                {sectionBadgeCount}
+                            </span>
+                        )}
                     </span>
                     <span className={`whitespace-nowrap transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'}`}>
                         {section.title}
                     </span>
                 </div>
-                <ChevronDown
-                    className={`shrink-0 w-3.5 h-3.5 transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'} ${isExpanded ? "rotate-0" : "-rotate-90"}`}
-                />
+                <div className="flex items-center gap-2">
+                    {sectionBadgeCount > 0 && !collapsed && (
+                        <span className="min-w-[18px] h-[18px] rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold flex items-center justify-center px-1">
+                            {sectionBadgeCount}
+                        </span>
+                    )}
+                    <ChevronDown
+                        className={`shrink-0 w-3.5 h-3.5 transition-all duration-300 ${collapsed ? 'opacity-0 w-0' : 'opacity-100 w-auto'} ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                    />
+                </div>
             </button>
             <div
                 className={`overflow-hidden transition-all duration-300 ease-in-out ${(!collapsed && isExpanded) ? "max-h-[500px] opacity-100 mt-1 mb-3" : "max-h-0 opacity-0 mb-0"}`}
@@ -52,6 +67,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 <div className="space-y-1">
                     {section.children.map((item) => {
                         const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                        const badgeCount = badges[item.href] || 0;
                         return (
                             <Link
                                 key={item.href}
@@ -65,7 +81,12 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 <span className={`shrink-0 ${isActive ? "text-[#3b82f6]" : ""}`}>
                                     {item.icon}
                                 </span>
-                                <span className="text-[13px] font-medium truncate">{item.label}</span>
+                                <span className="text-[13px] font-medium truncate flex-1">{item.label}</span>
+                                {badgeCount > 0 && (
+                                    <span className="min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                        {badgeCount}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}
@@ -77,6 +98,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const { badges } = useApp();
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>([]);
@@ -94,6 +116,7 @@ export default function Sidebar() {
         );
     };
 
+    const [showSecondary, setShowSecondary] = useState(false);
     const [isDesktop, setIsDesktop] = useState(false);
 
     useEffect(() => {
@@ -102,6 +125,9 @@ export default function Sidebar() {
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
+
+    const primarySections = navSections.filter(s => !s.secondary);
+    const secondarySections = navSections.filter(s => s.secondary);
 
     const closeMobile = () => setMobileOpen(false);
 
@@ -157,7 +183,7 @@ export default function Sidebar() {
             </div>
 
             <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1 scrollbar-thin">
-                {navSections.map((section) => (
+                {primarySections.map((section) => (
                     <SidebarFolder
                         key={section.title}
                         section={section}
@@ -166,8 +192,39 @@ export default function Sidebar() {
                         expandedSections={expandedSections}
                         toggleSection={toggleSection}
                         onNavigate={closeMobile}
+                        badges={badges}
                     />
                 ))}
+
+                {/* Meer... toggle for secondary sections */}
+                {secondarySections.length > 0 && !collapsed && (
+                    <>
+                        <button
+                            onClick={() => setShowSecondary(!showSecondary)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--muted-light)] hover:text-[var(--muted)] transition-colors mt-2"
+                        >
+                            <span className="flex items-center gap-2">
+                                <span className="w-4 h-px bg-[var(--border)]" />
+                                Meer
+                                <span className="w-4 h-px bg-[var(--border)]" />
+                            </span>
+                            <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showSecondary ? 'rotate-0' : '-rotate-90'}`} />
+                        </button>
+                        <div className={`overflow-hidden transition-all duration-300 ${showSecondary ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                            {secondarySections.map((section) => (
+                                <SidebarFolder
+                                    key={section.title}
+                                    section={section}
+                                    collapsed={collapsed}
+                                    pathname={pathname}
+                                    expandedSections={expandedSections}
+                                    toggleSection={toggleSection}
+                                    onNavigate={closeMobile}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </nav>
 
             <div className="px-4 py-4 border-t border-[#141418] shrink-0 overflow-hidden">

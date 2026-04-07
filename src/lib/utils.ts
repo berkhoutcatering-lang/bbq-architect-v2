@@ -41,14 +41,16 @@ export function addDays(dateStr: string, days: number): string {
 
 // Calculate line totals
 export function calcLineTotals(items: (FactuurItem | OfferteItem)[] | null | undefined): LineTotals {
+    let rawItems = items;
+    if (typeof rawItems === 'string') { try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; } }
     let subtotaal = 0;
-    (items || []).forEach(function (item) {
-        subtotaal += (item.qty || 0) * (item.prijs || 0);
+    (rawItems || []).forEach(function (item: any) {
+        subtotaal += (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
     });
     let btwBedrag = 0;
-    (items || []).forEach(function (item) {
-        const lineTotal = (item.qty || 0) * (item.prijs || 0);
-        btwBedrag += lineTotal * ((item.btw || 0) / 100);
+    (rawItems || []).forEach(function (item: any) {
+        const lineTotal = (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);
+        btwBedrag += lineTotal * ((parseFloat(item.btw) || 0) / 100);
     });
     return { subtotaal, btw: btwBedrag, totaal: subtotaal + btwBedrag };
 }

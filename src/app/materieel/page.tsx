@@ -5,6 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
+import EmptyState from '@/components/EmptyState';
 import type { Materieel as MatType } from '@/types';
 
 interface NewLogEntry {
@@ -124,7 +125,7 @@ export default function Materieel() {
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Materieel ({materieel.length})</h3>
                 <button className="btn btn-brand" onClick={newItem}><i className="fa-solid fa-plus"></i> Nieuw</button>
             </div>
-            {materieel.length === 0 && <div className="empty-state"><i className="fa-solid fa-wrench"></i><p>Voeg je eerste materieel toe</p></div>}
+            {materieel.length === 0 && <EmptyState page="/materieel" onAction={newItem} />}
             <div className="grid-3">
                 {materieel.map(function (m: any) {
                     return (

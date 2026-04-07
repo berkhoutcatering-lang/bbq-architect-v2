@@ -170,7 +170,7 @@ export default function SectiePage() {
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">
                     <span className="text-[#3b82f6]">
-                        {React.cloneElement(section.icon as React.ReactElement, { size: 28 })}
+                        {React.cloneElement(section.icon as React.ReactElement<any>, { size: 28 })}
                     </span>
                     <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
                         {section.title}
@@ -196,7 +196,7 @@ export default function SectiePage() {
 
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6] group-hover:bg-[#3b82f6]/20 transition-colors duration-300">
-                                {React.cloneElement(child.icon as React.ReactElement, { size: 20 })}
+                                {React.cloneElement(child.icon as React.ReactElement<any>, { size: 20 })}
                             </div>
                             <h2 className="text-[15px] font-semibold text-white group-hover:text-[#3b82f6] transition-colors duration-300">
                                 {child.label}

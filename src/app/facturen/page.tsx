@@ -8,6 +8,10 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
+import { downloadUBL } from '@/lib/ublExport';
+import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
+import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
+import EmptyState from '@/components/EmptyState';
 import type { Factuur } from '@/types';
 
 export default function Facturen() {
@@ -148,9 +152,54 @@ export default function Facturen() {
                             <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--brand)' }}>Totaal: {fmt(totals.totaal)}</div>
                         </div>
                     </div>
+                    {/* Aanbetaling tracking */}
+                    {editing !== 'new' && (
+                        <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.1em' }}>Betalingen</span>
+                                <button className="btn btn-ghost btn-sm" onClick={function () {
+                                    const betalingen = form!.betalingen || [];
+                                    setField('betalingen', betalingen.concat([{ bedrag: 0, datum: today(), notitie: 'Aanbetaling' }]));
+                                }} style={{ fontSize: 10 }}><i className="fa-solid fa-plus"></i> Betaling</button>
+                            </div>
+                            {(form!.betalingen || []).map(function (b: any, i: number) {
+                                return (
+                                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                                        <input type="number" step="0.01" value={b.bedrag} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
+                                            const bets = [...(form!.betalingen || [])]; bets[i] = Object.assign({}, bets[i], { bedrag: parseFloat(e.target.value) || 0 }); setField('betalingen', bets);
+                                        }} style={{ width: 100, padding: '4px 8px', fontSize: 12, background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} placeholder="Bedrag" />
+                                        <input type="date" value={b.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
+                                            const bets = [...(form!.betalingen || [])]; bets[i] = Object.assign({}, bets[i], { datum: e.target.value }); setField('betalingen', bets);
+                                        }} style={{ padding: '4px 8px', fontSize: 12, background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                        <input value={b.notitie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
+                                            const bets = [...(form!.betalingen || [])]; bets[i] = Object.assign({}, bets[i], { notitie: e.target.value }); setField('betalingen', bets);
+                                        }} style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} placeholder="Notitie" />
+                                        <button onClick={function () { const bets = [...(form!.betalingen || [])]; bets.splice(i, 1); setField('betalingen', bets); }}
+                                            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                                    </div>
+                                );
+                            })}
+                            {(function () {
+                                const betaald = (form!.betalingen || []).reduce(function (s: number, b: any) { return s + (b.bedrag || 0); }, 0);
+                                const openstaand = totals.totaal - betaald;
+                                return (form!.betalingen || []).length > 0 ? (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, fontWeight: 600 }}>
+                                        <span style={{ color: '#10b981' }}>Betaald: {fmt(betaald)}</span>
+                                        <span style={{ color: openstaand > 0 ? '#ef4444' : '#10b981' }}>Openstaand: {fmt(openstaand)}</span>
+                                    </div>
+                                ) : <div style={{ fontSize: 11, color: 'var(--muted-light)' }}>Geen betalingen geregistreerd</div>;
+                            })()}
+                        </div>
+                    )}
+
                     <div className="editor-actions">
                         <button className="btn btn-brand" onClick={saveFactuur}><i className="fa-solid fa-save"></i> Opslaan</button>
                         <button className="btn btn-cyan" onClick={downloadFactuur}><i className="fa-solid fa-file-pdf"></i> PDF</button>
+                        <button className="btn btn-ghost" onClick={function () { mailFactuur(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Open email met factuur"><i className="fa-solid fa-envelope"></i> Mail</button>
+                        {form!.status === 'verzonden' && form!.vervaldatum && form!.vervaldatum < today() && (
+                            <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: '#ef4444' }}><i className="fa-solid fa-bell"></i> Herinnering</button>
+                        )}
+                        <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><i className="fa-solid fa-code"></i> UBL</button>
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
                 </div>
@@ -169,9 +218,12 @@ export default function Facturen() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Facturen ({filteredFacturen.length}{filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})</h3>
-                <button className="btn btn-brand" onClick={newFactuur}><i className="fa-solid fa-plus"></i> Nieuwe Factuur</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(facturenToCsv(facturen), 'facturen-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><i className="fa-solid fa-file-csv"></i> CSV</button>
+                    <button className="btn btn-brand" onClick={newFactuur}><i className="fa-solid fa-plus"></i> Nieuwe Factuur</button>
+                </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
@@ -187,7 +239,7 @@ export default function Facturen() {
                 })}
             </div>
             <div className="panel">
-                {facturen.length === 0 && <div className="empty-state"><i className="fa-solid fa-file-invoice"></i><p>Nog geen facturen aangemaakt</p></div>}
+                {facturen.length === 0 && <EmptyState page="/facturen" onAction={newFactuur} />}
                 {filteredFacturen.map(function (f) {
                     let total = 0;
                     (f.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
@@ -200,7 +252,7 @@ export default function Facturen() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                <span className={'pill ' + pill}>{f.status}</span>
+                                <span className={'pill ' + pill}>{f.status.charAt(0).toUpperCase() + f.status.slice(1)}</span>
                             </div>
                         </div>
                     );

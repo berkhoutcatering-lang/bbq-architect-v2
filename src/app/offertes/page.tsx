@@ -7,9 +7,12 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
+import { mailOfferte } from '@/lib/emailHelper';
+import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
 import MenuWizard from '@/components/MenuWizard';
 import MenuBuilder from '@/components/MenuBuilder';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
+import EmptyState from '@/components/EmptyState';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
@@ -74,7 +77,7 @@ export default function Offertes() {
         }
     }
     function margeColor(pct: number) { return pct > 70 ? 'green' : pct >= 60 ? 'orange' : 'red'; }
-    function margeLabel(pct: number) { return pct > 70 ? 'Strong' : pct >= 60 ? 'Watchful' : 'Low Margin'; }
+    function margeLabel(pct: number) { return pct > 70 ? 'Sterk' : pct >= 60 ? 'Aandacht' : 'Lage marge'; }
     function margeEmoji(pct: number) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
 
     function handleWizardComplete(result: any) {
@@ -400,7 +403,7 @@ export default function Offertes() {
                         <div className="field"><label>Offertenummer</label><input value={form.nummer} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('nummer', e.target.value); }} /></div>
                         <div className="field"><label>Status</label>
                             <select value={form.status} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('status', e.target.value); }}>
-                                {['concept', 'verzonden', 'geaccepteerd', 'akkoord', 'betaald', 'afgewezen', 'verlopen'].map(function (s) { return <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>; })}
+                                {[['concept', 'Concept'], ['verzonden', 'Verzonden'], ['geaccepteerd', 'Geaccepteerd'], ['afgewezen', 'Afgewezen'], ['verlopen', 'Verlopen'], ['geannuleerd', 'Geannuleerd']].map(function (s) { return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}
                             </select>
                         </div>
                         <KlantAutocomplete
@@ -453,6 +456,7 @@ export default function Offertes() {
                         <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><i className="fa-solid fa-save"></i> Opslaan</button>
                         <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><i className="fa-solid fa-utensils"></i> Menu Wizard</button>
                         <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><i className="fa-solid fa-grip"></i> Menu Builder</button>
+                        <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><i className="fa-solid fa-envelope"></i> Mail</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><i className="fa-solid fa-utensils"></i> Menukaart</button>
                         {editing !== 'new' && (
@@ -571,6 +575,7 @@ export default function Offertes() {
                     <h3 className="hb-title" style={{ fontSize: 20 }}>Offertes ({offertes.length})</h3>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><i className="fa-solid fa-file-csv"></i> CSV</button>
                     <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
                     <button className="btn-gold" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
                 </div>
@@ -602,7 +607,7 @@ export default function Offertes() {
                 </select>
             </div>
             <div className="panel">
-                {offertes.length === 0 && <div className="empty-state"><i className="fa-solid fa-file-signature"></i><p>Nog geen offertes aangemaakt</p></div>}
+                {offertes.length === 0 && <EmptyState page="/offertes" onAction={newOfferte} />}
                 {offertes.filter(function (o) {
                     if (filterStatus !== 'alle' && o.status !== filterStatus) return false;
                     if (searchQuery) {
@@ -615,7 +620,7 @@ export default function Offertes() {
                         return sortDir === 'asc' ? (a.datum || '').localeCompare(b.datum || '') : (b.datum || '').localeCompare(a.datum || '');
                     }
                     if (sortField === 'client_naam') {
-                        return (a.client_naam || '').localeCompare(b.client_naam || '');
+                        return sortDir === 'asc' ? (a.client_naam || '').localeCompare(b.client_naam || '') : (b.client_naam || '').localeCompare(a.client_naam || '');
                     }
                     if (sortField === 'totaal') {
                         const ta = (a.items || []).reduce(function (s: number, i: any) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
@@ -645,7 +650,7 @@ export default function Offertes() {
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                <span className={'pill ' + (pillMap[o.status] || 'pill-blue')}>{o.status}</span>
+                                <span className={'pill ' + (pillMap[o.status] || 'pill-blue')}>{o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span>
                             </div>
                         </div>
                     );

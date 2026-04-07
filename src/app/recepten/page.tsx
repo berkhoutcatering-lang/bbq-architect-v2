@@ -5,6 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { printHaccpLabel } from '@/lib/printLabel';
+import EmptyState from '@/components/EmptyState';
 import type { Recept, InventoryItem } from '@/types';
 
 export default function Recepten() {
@@ -248,11 +249,7 @@ export default function Recepten() {
             </div>
 
             {filtered.length === 0 && (
-                <div className="empty-state">
-                    <i className="fa-solid fa-utensils"></i>
-                    <p>Geen recepten gevonden</p>
-                    <button className="btn btn-brand btn-sm" onClick={newRecept}>Voeg je eerste recept toe</button>
-                </div>
+                <EmptyState page="/recepten" onAction={newRecept} />
             )}
 
             <div className="grid-3">

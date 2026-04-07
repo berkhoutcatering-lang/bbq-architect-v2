@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmtNl, today } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
+import EmptyState from '@/components/EmptyState';
 import type { HaccpRecord, DbEvent, Offerte } from '@/types';
 
 interface HaccpForm {
@@ -28,6 +29,11 @@ interface EventGroup {
     offerte?: any;
 }
 
+const QUICK_PRODUCTS = [
+    'Bavette', 'Spareribs', 'Pulled Pork', 'Kip', 'Worst', 'Zalm',
+    'Burger', 'Groenten', 'Saus', 'Salade', 'Brood', 'Anders'
+];
+
 export default function HACCP() {
     const { data: records, loading, insert, remove } = useSupabase<HaccpRecord>('haccp_records', []);
     const { data: events } = useSupabase<DbEvent>('events', []);
@@ -35,10 +41,18 @@ export default function HACCP() {
     const showToast = useToast();
     const [tab, setTab] = useState('overzicht');
     const [filterEvent, setFilterEvent] = useState('');
+    const [isMobile, setIsMobile] = useState(false);
     const [form, setForm] = useState<HaccpForm>({
         event_id: '', offerte_id: '', datum: today(), tijd: '', wat: '', temp: '',
         type: 'kern', check_type: 'bereiding', chef: 'Cor', notitie: ''
     });
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     function setField(key: string, val: string) { setForm(Object.assign({}, form, { [key]: val })); }
 
@@ -94,7 +108,7 @@ export default function HACCP() {
         });
         return Object.keys(groups).map(function (key) { return Object.assign({ id: key }, groups[key]); })
             .filter(function (g: any) { return g.records.length > 0; })
-            .sort(function (a: any, b: any) { return b.datum < a.datum ? -1 : 1; });
+            .sort(function (a: any, b: any) { return (b.datum || '').localeCompare(a.datum || ''); });
     }
 
     function downloadHACCPRapport(group: EventGroup) {
@@ -132,7 +146,110 @@ export default function HACCP() {
                 <button className={'tab-btn' + (tab === 'dossier' ? ' active' : '')} onClick={function () { setTab('dossier'); }}>DOSSIER</button>
             </div>
 
-            {tab === 'registratie' && (
+            {tab === 'registratie' && isMobile && (
+                <div style={{ padding: '0 4px' }}>
+                    {/* Step 1: Product selectie */}
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Product</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                            {QUICK_PRODUCTS.map(function (p) {
+                                return (
+                                    <button key={p} onClick={function () { setField('wat', p); }}
+                                        style={{
+                                            height: 56, borderRadius: 12, fontSize: 12, fontWeight: 600,
+                                            background: form.wat === p ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
+                                            border: form.wat === p ? '2px solid #3b82f6' : '1px solid var(--border)',
+                                            color: form.wat === p ? '#3b82f6' : 'var(--text)',
+                                            cursor: 'pointer', transition: 'all 0.15s'
+                                        }}>
+                                        {p}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Step 2: Temp type pills */}
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Type meting</label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            {[{ val: 'kern', label: 'Kern ≥75°C', icon: '🔥' }, { val: 'koeling', label: 'Koeling 0-7°C', icon: '❄️' }, { val: 'warmhoud', label: 'Warmhoud ≥60°C', icon: '♨️' }].map(function (t) {
+                                return (
+                                    <button key={t.val} onClick={function () { setField('type', t.val); }}
+                                        style={{
+                                            flex: 1, height: 48, borderRadius: 12, fontSize: 11, fontWeight: 600,
+                                            background: form.type === t.val ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
+                                            border: form.type === t.val ? '2px solid #3b82f6' : '1px solid var(--border)',
+                                            color: form.type === t.val ? '#3b82f6' : 'var(--text)',
+                                            cursor: 'pointer', transition: 'all 0.15s', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: 2
+                                        }}>
+                                        <span style={{ fontSize: 14 }}>{t.icon}</span>
+                                        <span>{t.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Step 3: Numpad temperature input */}
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Temperatuur</label>
+                        <div style={{
+                            textAlign: 'center', padding: '16px 0', marginBottom: 8,
+                            background: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? 'rgba(16,185,129,.08)' : s === 'warn' ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)'; })() : 'var(--card-solid)',
+                            border: form.temp ? (function () { const s = getStatus(form.type, form.temp); return '2px solid ' + (s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'); })() : '1px solid var(--border)',
+                            borderRadius: 16, transition: 'all 0.2s'
+                        }}>
+                            <span style={{
+                                fontSize: 48, fontWeight: 300, letterSpacing: '-2px',
+                                color: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'; })() : 'var(--muted-light)'
+                            }}>
+                                {form.temp || '—'}
+                            </span>
+                            <span style={{ fontSize: 24, color: 'var(--muted)', marginLeft: 4 }}>°C</span>
+                            {form.temp && (function () {
+                                const s = getStatus(form.type, form.temp);
+                                return <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444' }}>
+                                    {s === 'ok' ? '✓ OK' : s === 'warn' ? '⚠ Risicozone' : '✗ AFWIJKING'}
+                                </div>;
+                            })()}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, maxWidth: 280, margin: '0 auto' }}>
+                            {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map(function (key) {
+                                return (
+                                    <button key={key} onClick={function () {
+                                        if (key === '⌫') { setField('temp', form.temp.slice(0, -1)); }
+                                        else { setField('temp', form.temp + key); }
+                                    }}
+                                        style={{
+                                            height: 56, borderRadius: 12, fontSize: key === '⌫' ? 18 : 22, fontWeight: 500,
+                                            background: 'var(--card-solid)', border: '1px solid var(--border)',
+                                            color: 'var(--text)', cursor: 'pointer', transition: 'all 0.1s',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                        {key}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Save button */}
+                    <button onClick={saveRecord} disabled={!form.wat || !form.temp}
+                        style={{
+                            width: '100%', height: 56, borderRadius: 14, fontSize: 16, fontWeight: 700,
+                            background: (!form.wat || !form.temp) ? 'var(--card-solid)' : 'linear-gradient(135deg, #c4a35a, #a8893e)',
+                            border: 'none', color: (!form.wat || !form.temp) ? 'var(--muted)' : '#000',
+                            cursor: (!form.wat || !form.temp) ? 'not-allowed' : 'pointer',
+                            letterSpacing: '0.05em', textTransform: 'uppercase', transition: 'all 0.2s'
+                        }}>
+                        <i className="fa-solid fa-fire" style={{ marginRight: 8 }}></i>
+                        REGISTREER METING
+                    </button>
+                </div>
+            )}
+
+            {tab === 'registratie' && !isMobile && (
                 <div className="panel">
                     <div className="panel-head"><h3><i className="fa-solid fa-thermometer"></i> TEMPERATUUR REGISTREREN</h3></div>
                     <div className="panel-body">
@@ -207,7 +324,7 @@ export default function HACCP() {
                     </div>
                     <div className="panel">
                         <div className="panel-body">
-                            {filtered.length === 0 && <div className="empty-state"><i className="fa-solid fa-shield-halved"></i><p>Geen HACCP registraties</p></div>}
+                            {filtered.length === 0 && <EmptyState page="/haccp" onAction={function () { setTab('registratie'); }} />}
                             {filtered.slice().reverse().map(function (rec: any) {
                                 const pillClass = rec.status === 'ok' ? 'pill-green' : rec.status === 'warn' ? 'pill-amber' : 'pill-red';
                                 const ev = events.find(function (e: any) { return e.id === rec.event_id; });

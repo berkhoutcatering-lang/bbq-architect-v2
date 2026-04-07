@@ -40,6 +40,8 @@ export default function ServiceMode() {
 
     const [tempPopup, setTempPopup] = useState<TempPopup | null>(null);
     const [busLog, setBusLog] = useState<BusLog>({ koelTemp: 4, schoonmaak: false, saved: false });
+    const [vegaInputs, setVegaInputs] = useState<Record<string, string>>({});
+    const [completedDishes, setCompletedDishes] = useState<Record<string, boolean>>({});
 
     useEffect(function () {
         loadData();
@@ -58,9 +60,22 @@ export default function ServiceMode() {
         if (d.data) setGerechtenDb(d.data);
     }
 
+    // Get vega dishes per gang from DB (gerechten with "Vega" tag or "Dieet" in name)
+    function getVegaDishesForGang(gangSlug: string): string[] {
+        return gerechtenDb
+            .filter(function (g: any) {
+                if (g.gang_slug !== gangSlug) return false;
+                const naam = (g.naam || '').toLowerCase();
+                const tags = Array.isArray(g.tags) ? g.tags.map(function (t: string) { return t.toLowerCase(); }) : [];
+                return naam.includes('dieet') || tags.includes('vega') || tags.includes('vegetarisch') || tags.includes('dieet');
+            })
+            .map(function (g: any) { return g.naam; });
+    }
+
     function selectEvent(offerte: any) {
         setSelectedId(offerte.id);
         setExpandedBon(null);
+        setCompletedDishes({});
         const states: Record<string, string> = {};
         const tims: Record<string, { start: Date | null; elapsed: number }> = {};
         gangen.forEach(function (g: any) {
@@ -135,8 +150,10 @@ export default function ServiceMode() {
     }
 
     function requestFinishGang(slug: string) {
-        const dishNames = menuSelectie[slug] || [];
-        const dishName = dishNames.length > 0 ? dishNames.join(', ') : slug;
+        const normaalNames = menuSelectie[slug] || [];
+        const vegaNames = menuSelectie[slug + '_vega'] || [];
+        const allNames = normaalNames.concat(vegaNames);
+        const dishName = allNames.length > 0 ? allNames.join(', ') : slug;
         let defaultTemp = 75;
         const gangObj = gangen.find(function (g: any) { return g.slug === slug; });
         if (gangObj) {
@@ -150,6 +167,7 @@ export default function ServiceMode() {
     async function confirmTempAndFinish() {
         if (!tempPopup) return;
         const slug = tempPopup.slug;
+        const temp = typeof tempPopup.temp === 'number' ? tempPopup.temp : parseFloat(String(tempPopup.temp)) || 0;
         try {
             await supabase.from('haccp_records').insert([{
                 event_id: null,
@@ -158,11 +176,11 @@ export default function ServiceMode() {
                 type: 'kern',
                 check_type: 'uitgifte',
                 wat: tempPopup.dishName,
-                temp: tempPopup.temp,
+                temp: temp,
                 datum: new Date().toISOString().slice(0, 10),
                 tijd: new Date().toTimeString().slice(0, 5),
                 chef: 'Cor',
-                status: tempPopup.temp >= 75 ? 'ok' : tempPopup.temp >= 65 ? 'warn' : tempPopup.temp <= 7 ? 'ok' : 'danger',
+                status: temp >= 75 ? 'ok' : temp >= 65 ? 'warn' : temp <= 7 ? 'ok' : 'danger',
                 auto_logged: true,
                 notitie: 'Quick-log via Service Mode'
             }]);
@@ -204,6 +222,19 @@ export default function ServiceMode() {
         } catch (e) { showToast('Fout bij opslaan Bus-Log', 'error'); }
     }
 
+    async function saveVegaDish(gangSlug: string) {
+        const vegaDish = vegaInputs[gangSlug];
+        if (!vegaDish || !selectedId || !selected) return;
+        const updatedMenu = Object.assign({}, menuSelectie, { [gangSlug + '_vega']: [vegaDish] });
+        await supabase.from('offertes').update({ menu_selectie: updatedMenu }).eq('id', selectedId);
+        // Refresh local state
+        setOffertes(function (prev: any[]) {
+            return prev.map(function (o: any) { return o.id === selectedId ? Object.assign({}, o, { menu_selectie: updatedMenu }) : o; });
+        });
+        setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n[gangSlug]; return n; });
+        showToast('🌿 Vega gerecht opgeslagen voor ' + gangSlug);
+    }
+
     function formatTime(seconds: number): string {
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
@@ -224,9 +255,20 @@ export default function ServiceMode() {
     const allServed = gangen.length > 0 && gangen.every(function (g: any) { return bonStates[g.slug] === 'served'; });
 
     const modalGang = activeModal ? gangen.find(function (g: any) { return g.slug === activeModal; }) : null;
-    const modalDishNames = activeModal && menuSelectie[activeModal] ? menuSelectie[activeModal] : [];
-    const modalDishes = modalDishNames.map(function (name: string) { return gerechtenDb.find(function (g: any) { return g.naam === name && g.gang_slug === activeModal; }) || { naam: name }; });
-    const currentDish: any = modalDishes[modalDishIndex] || {};
+    const modalDishNamesNormaal = activeModal && menuSelectie[activeModal] ? menuSelectie[activeModal] : [];
+    // Vega: first check menu_selectie, then fallback to DB lookup
+    const modalDishNamesVega = activeModal ? (menuSelectie[activeModal + '_vega'] || (aantalVega > 0 ? getVegaDishesForGang(activeModal) : [])) : [];
+    const modalDishesAll: { naam: string; isVega: boolean; count: number; db: any; key: string }[] = [];
+    modalDishNamesNormaal.forEach(function (name: string, i: number) {
+        const db = gerechtenDb.find(function (g: any) { return g.naam === name && g.gang_slug === activeModal; }) || { naam: name };
+        modalDishesAll.push({ naam: name, isVega: false, count: aantalNormaal, db: db, key: activeModal + '_n_' + i });
+    });
+    modalDishNamesVega.forEach(function (name: string, i: number) {
+        const db = gerechtenDb.find(function (g: any) { return g.naam === name; }) || { naam: name };
+        modalDishesAll.push({ naam: name, isVega: true, count: aantalVega, db: db, key: activeModal + '_v_' + i });
+    });
+    const currentDishEntry = modalDishesAll[modalDishIndex] || { naam: '', isVega: false, count: 0, db: {}, key: '_empty' };
+    const currentDish: any = currentDishEntry.db || {};
     const currentSteps: string[] = currentDish.battle_plan_steps || [];
     const currentImage: string = currentDish.service_image || currentDish.foto_url || '';
     const targetTime: number = currentDish.target_prep_time || 0;
@@ -321,18 +363,94 @@ export default function ServiceMode() {
                                         </div>
                                     </div>
                                     <div style={{ padding: '0 20px 20px 20px' }}>
+                                        {/* Normaal gerechten */}
                                         {dishNames.map(function (dish: string, i: number) {
-                                            return <div key={i} style={{ fontSize: 13, marginBottom: 4 }}><span style={{ color: 'var(--brand)', fontWeight: 700 }}>[{aantalNormaal}]</span> {dish}</div>;
+                                            const gerechtData = gerechtenDb.find(function (g: any) { return g.naam === dish && g.gang_slug === gang.slug; });
+                                            return (
+                                                <div key={i} style={{ fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <span style={{ fontSize: 10 }}>🍖</span>
+                                                    <span style={{ color: 'var(--brand)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalNormaal}×</span>
+                                                    <span style={{ flex: 1 }}>{dish}</span>
+                                                    {gerechtData && gerechtData.foto_url && (
+                                                        <img src={gerechtData.foto_url} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                                                    )}
+                                                </div>
+                                            );
                                         })}
-                                        {aantalVega > 0 && (
-                                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', fontSize: 13, color: 'var(--green)' }}>
-                                                <span style={{ fontWeight: 700 }}>[{aantalVega}]</span> 🌿 VEGA OPTIE
-                                            </div>
-                                        )}
-                                        <div style={{ marginTop: 20 }}>
+
+                                        {/* Vega gerechten */}
+                                        {aantalVega > 0 && (function () {
+                                            const hasOverride = Array.isArray(menuSelectie[gang.slug + '_vega']) && menuSelectie[gang.slug + '_vega'].length > 0;
+                                            const dbVega = getVegaDishesForGang(gang.slug);
+                                            const vegaDishes: string[] = hasOverride ? menuSelectie[gang.slug + '_vega'] : dbVega;
+                                            const isEditing = vegaInputs['_editing_' + gang.slug] === '1';
+                                            const sourceLabel = hasOverride ? 'Offerte' : (dbVega.length > 0 ? 'Standaard dieet' : '');
+                                            return (
+                                                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border)' }}>
+                                                    {/* Source label */}
+                                                    {sourceLabel && !isEditing && (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6B7A2F', opacity: 0.6 }}>{sourceLabel}</span>
+                                                            <button onClick={function (e: React.MouseEvent) { e.stopPropagation(); setVegaInputs(function (prev) { return Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' }); }); }}
+                                                                style={{ fontSize: 9, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                                                wijzig
+                                                            </button>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show vega dishes or edit mode */}
+                                                    {!isEditing && vegaDishes.length > 0 ? vegaDishes.map(function (vDish: string, vi: number) {
+                                                        const vGerechtData = gerechtenDb.find(function (g: any) { return g.naam === vDish; });
+                                                        return (
+                                                            <div key={vi} style={{ fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                                <span style={{ fontSize: 10 }}>🌿</span>
+                                                                <span style={{ color: '#6B7A2F', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
+                                                                <span style={{ flex: 1, color: '#6B7A2F' }}>{vDish}</span>
+                                                                {vGerechtData && vGerechtData.foto_url && (
+                                                                    <img src={vGerechtData.foto_url} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }) : (
+                                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                            <span style={{ fontSize: 10 }}>🌿</span>
+                                                            <span style={{ color: '#6B7A2F', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
+                                                            <input
+                                                                value={vegaInputs[gang.slug] || ''}
+                                                                onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVegaInputs(function (prev) { return Object.assign({}, prev, { [gang.slug]: e.target.value }); }); }}
+                                                                placeholder="Vega gerecht naam..."
+                                                                onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}
+                                                                style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F' }}
+                                                            />
+                                                            {vegaInputs[gang.slug] && (
+                                                                <button onClick={function (e: React.MouseEvent) {
+                                                                    e.stopPropagation();
+                                                                    saveVegaDish(gang.slug);
+                                                                    setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
+                                                                }}
+                                                                    style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F', cursor: 'pointer' }}>
+                                                                    ✓
+                                                                </button>
+                                                            )}
+                                                            {isEditing && (
+                                                                <button onClick={function (e: React.MouseEvent) {
+                                                                    e.stopPropagation();
+                                                                    setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; delete n[gang.slug]; return n; });
+                                                                }}
+                                                                    style={{ padding: '4px 8px', fontSize: 11, background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', cursor: 'pointer' }}>
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <div style={{ marginTop: 16 }}>
                                             {state === 'idle' && <button className="btn-brand" style={{ width: '100%' }} onClick={function () { startGang(gang.slug); }}>START GANG</button>}
                                             {state === 'active' && <button className="btn-brand" style={{ width: '100%', background: '#fff', color: '#000' }} onClick={function () { setActiveModal(gang.slug); }}>OPEN ARCHITECT</button>}
-                                            {state === 'served' && <div style={{ color: 'var(--green)', fontWeight: 800, textAlign: 'center', fontSize: 12 }}>VOLTOOID</div>}
+                                            {state === 'served' && <div style={{ color: 'var(--green)', fontWeight: 800, textAlign: 'center', fontSize: 12 }}>✓ UITGESERVEERD</div>}
                                         </div>
                                     </div>
                                 </div>
@@ -344,10 +462,37 @@ export default function ServiceMode() {
 
             {activeModal && modalGang && (
                 <div className="architect-overlay" style={{ position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 999, display: 'flex', flexDirection: 'column' }}>
-                    <div className="architect-header" style={{ height: 80, padding: '0 40px', borderBottom: '1px solid var(--border-steel)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="architect-header" style={{ height: 'auto', padding: '16px 24px md:padding-0-40px', borderBottom: '1px solid var(--border-steel)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                         <div>
-                            <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 800 }}>GANG {gangen.indexOf(modalGang) + 1}</div>
-                            <div style={{ fontSize: 24, fontWeight: 800 }}>{modalGang.naam.toUpperCase()}</div>
+                            <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 800 }}>GANG {gangen.indexOf(modalGang) + 1} • {modalGang.naam.toUpperCase()}</div>
+                            <div style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span>{currentDishEntry.isVega ? '🌿' : '🍖'}</span>
+                                <span style={{ color: currentDishEntry.isVega ? '#6B7A2F' : 'var(--text)' }}>{currentDish.naam || 'Gerecht'}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: currentDishEntry.isVega ? '#6B7A2F' : 'var(--brand)', background: currentDishEntry.isVega ? 'rgba(107,122,47,.1)' : 'rgba(196,163,90,.1)', padding: '2px 8px', borderRadius: 6 }}>{currentDishEntry.count}×</span>
+                            </div>
+                            {/* Dish navigation tabs */}
+                            {modalDishesAll.length > 1 && (
+                                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                                    {modalDishesAll.map(function (d, i) {
+                                        const isDone = completedDishes[d.key];
+                                        const isCurrent = i === modalDishIndex;
+                                        return (
+                                            <button key={i} onClick={function () { setModalDishIndex(i); setCheckedSteps({}); }}
+                                                style={{
+                                                    padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
+                                                    border: isDone ? '2px solid #10b981' : (isCurrent ? '2px solid var(--brand)' : '1px solid var(--border)'),
+                                                    background: isDone ? 'rgba(16,185,129,.1)' : (isCurrent ? 'rgba(196,163,90,.15)' : 'transparent'),
+                                                    color: isDone ? '#10b981' : (d.isVega ? '#6B7A2F' : (isCurrent ? 'var(--brand)' : 'var(--muted)')),
+                                                    display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
+                                                }}>
+                                                {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
+                                                {d.naam}
+                                                <span style={{ fontSize: 10, opacity: 0.6 }}>{d.count}×</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                         <div style={{ textAlign: 'center' }}>
                             <div className={isOvertime ? 'text-red' : ''} style={{ fontSize: 32, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{formatTime(modalElapsed)}</div>
@@ -381,8 +526,64 @@ export default function ServiceMode() {
                         </div>
                     </div>
 
-                    <div className="architect-footer" style={{ height: 100, borderTop: '1px solid var(--border-steel)', padding: '0 40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <button className="btn-brand" style={{ padding: '20px 60px', fontSize: 18 }} onClick={function () { requestFinishGang(activeModal); }}>GANG UITGESERVEERD</button>
+                    <div className="architect-footer" style={{ borderTop: '1px solid var(--border-steel)', padding: '16px 24px' }}>
+                        {/* Per-dish status bar */}
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            {modalDishesAll.map(function (d, i) {
+                                const isDone = completedDishes[d.key];
+                                return (
+                                    <div key={d.key} style={{
+                                        display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                                        background: isDone ? 'rgba(16,185,129,.12)' : (i === modalDishIndex ? 'rgba(196,163,90,.12)' : 'rgba(255,255,255,.04)'),
+                                        border: isDone ? '1px solid rgba(16,185,129,.3)' : (i === modalDishIndex ? '1px solid rgba(196,163,90,.3)' : '1px solid var(--border)'),
+                                        color: isDone ? '#10b981' : (i === modalDishIndex ? 'var(--brand)' : 'var(--muted)')
+                                    }}>
+                                        {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
+                                        <span>{d.naam}</span>
+                                        <span style={{ fontSize: 10, opacity: 0.6 }}>{d.count}×</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                            {!completedDishes[currentDishEntry.key] ? (
+                                <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800 }}
+                                    onClick={function () {
+                                        setCompletedDishes(function (prev) { return Object.assign({}, prev, { [currentDishEntry.key]: true }); });
+                                        // Auto-advance to next unfinished dish
+                                        const nextIdx = modalDishesAll.findIndex(function (d, i) { return i > modalDishIndex && !completedDishes[d.key]; });
+                                        if (nextIdx >= 0) {
+                                            setModalDishIndex(nextIdx);
+                                            setCheckedSteps({});
+                                        }
+                                        showToast('✓ ' + currentDishEntry.naam + ' meegegeven (' + currentDishEntry.count + '×)');
+                                    }}>
+                                    {currentDishEntry.isVega ? '🌿' : '🍖'} GERECHT MEEGEVEN
+                                </button>
+                            ) : (
+                                /* All dishes done? Show finish gang button */
+                                modalDishesAll.every(function (d) { return completedDishes[d.key]; }) ? (
+                                    <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800, background: '#10b981' }}
+                                        onClick={function () { requestFinishGang(activeModal!); }}>
+                                        ✓ GANG UITGESERVEERD — ALLES MEE
+                                    </button>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ color: '#10b981', fontSize: 14, fontWeight: 700 }}>✓ {currentDishEntry.naam} is meegegeven</span>
+                                        <button className="tab-btn" style={{ padding: '12px 32px' }}
+                                            onClick={function () {
+                                                const nextIdx = modalDishesAll.findIndex(function (d) { return !completedDishes[d.key]; });
+                                                if (nextIdx >= 0) { setModalDishIndex(nextIdx); setCheckedSteps({}); }
+                                            }}>
+                                            VOLGENDE GERECHT →
+                                        </button>
+                                    </div>
+                                )
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

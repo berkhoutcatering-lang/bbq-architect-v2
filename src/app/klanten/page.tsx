@@ -5,8 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { fmtNl } from '@/lib/utils';
+import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import EmptyState from '@/components/EmptyState';
 import type { Klant } from '@/types';
 
 export default function KlantenPage() {
@@ -26,14 +27,15 @@ function Klanten() {
     const [filterType, setFilterType] = useState<string>('alle');
 
     // Fetch linked offertes & events counts per klant
-    const [klantStats, setKlantStats] = useState<Record<string, { offertes: number; events: number; omzet: number }>>({});
+    const [klantStats, setKlantStats] = useState<Record<string, { offertes: number; events: number; omzet: number; offerteList: any[]; eventList: any[]; factuurList: any[] }>>({});
 
     function loadStats(naam: string) {
         if (klantStats[naam]) return;
         Promise.all([
-            supabase.from('offertes').select('id,items', { count: 'exact' }).eq('client_naam', naam),
-            supabase.from('events').select('id,guests,ppp', { count: 'exact' }).eq('client_naam', naam),
-        ]).then(function ([offRes, evRes]) {
+            supabase.from('offertes').select('id,nummer,status,datum,items,aantal_gasten', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
+            supabase.from('events').select('id,name,date,guests,ppp,status', { count: 'exact' }).eq('client_naam', naam).order('date', { ascending: false }),
+            supabase.from('facturen').select('id,nummer,status,datum,items', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
+        ]).then(function ([offRes, evRes, facRes]) {
             let omzet = 0;
             (offRes.data || []).forEach(function (o: any) {
                 (o.items || []).forEach(function (i: any) { omzet += (i.qty || 0) * (i.prijs || 0); });
@@ -41,7 +43,7 @@ function Klanten() {
             (evRes.data || []).forEach(function (e: any) { omzet += (e.guests || 0) * (e.ppp || 0); });
             setKlantStats(function (prev) {
                 return Object.assign({}, prev, {
-                    [naam]: { offertes: offRes.count || 0, events: evRes.count || 0, omzet: omzet }
+                    [naam]: { offertes: offRes.count || 0, events: evRes.count || 0, omzet: omzet, offerteList: offRes.data || [], eventList: evRes.data || [], factuurList: facRes.data || [] }
                 });
             });
         });
@@ -113,6 +115,35 @@ function Klanten() {
                         <div className="field full"><label>Notities</label><textarea rows={3} value={form.notities || ''} onChange={function (e) { setField('notities', e.target.value); }} /></div>
                     </div>
 
+                    {/* Snelle communicatie */}
+                    {editing !== 'new' && (form.telefoon || form.email) && (
+                        <div style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {form.telefoon && (function () {
+                                const tel = (form.telefoon || '').replace(/[^0-9+]/g, '');
+                                const waTel = tel.startsWith('0') ? '31' + tel.slice(1) : tel.replace('+', '');
+                                return (
+                                    <a href={'https://wa.me/' + waTel} target="_blank" rel="noopener noreferrer"
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(37,211,102,.1)', border: '1px solid rgba(37,211,102,.25)', color: '#25d366', textDecoration: 'none', cursor: 'pointer' }}>
+                                        <i className="fa-brands fa-whatsapp" style={{ fontSize: 14 }}></i> WhatsApp
+                                    </a>
+                                );
+                            })()}
+                            {form.telefoon && (
+                                <a href={'tel:' + form.telefoon}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: '#3b82f6', textDecoration: 'none' }}>
+                                    <i className="fa-solid fa-phone" style={{ fontSize: 12 }}></i> Bellen
+                                </a>
+                            )}
+                            {form.email && (
+                                <a href={'mailto:' + form.email}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.25)', color: '#c4a35a', textDecoration: 'none' }}>
+                                    <i className="fa-solid fa-envelope" style={{ fontSize: 12 }}></i> Email
+                                </a>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Klant-historie */}
                     {stats && (
                         <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                             <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginBottom: 12 }}>
@@ -132,6 +163,61 @@ function Klanten() {
                                     <div className="stat-val" style={{ color: 'var(--brand)' }}>{fmt(stats.omzet)}</div>
                                 </div>
                             </div>
+
+                            {/* Gedetailleerde historie */}
+                            {stats.eventList && stats.eventList.length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Events</h5>
+                                    {stats.eventList.slice(0, 5).map(function (ev: any) {
+                                        const statusColor = ev.status === 'confirmed' ? '#10b981' : ev.status === 'completed' ? '#3b82f6' : '#f59e0b';
+                                        return (
+                                            <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                                <span>{ev.name} <span style={{ color: 'var(--muted)' }}>— {ev.date}</span></span>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <span>{ev.guests}p</span>
+                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }}></span>
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {stats.offerteList && stats.offerteList.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Offertes</h5>
+                                    {stats.offerteList.slice(0, 5).map(function (o: any) {
+                                        let totaal = 0;
+                                        (o.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
+                                        return (
+                                            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                                <span>{o.nummer} <span style={{ color: 'var(--muted)' }}>— {o.datum}</span></span>
+                                                <span style={{ fontWeight: 600 }}>{fmt(totaal)}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {stats.factuurList && stats.factuurList.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Facturen</h5>
+                                    {stats.factuurList.slice(0, 5).map(function (f: any) {
+                                        let totaal = 0;
+                                        (f.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
+                                        const statusColor = f.status === 'betaald' ? '#10b981' : f.status === 'vervallen' ? '#ef4444' : '#f59e0b';
+                                        return (
+                                            <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                                <span>{f.nummer} <span style={{ color: 'var(--muted)' }}>— {f.datum}</span></span>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <span style={{ fontWeight: 600 }}>{fmt(totaal)}</span>
+                                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }}></span>
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -176,7 +262,7 @@ function Klanten() {
                 })}
             </div>
             <div className="panel">
-                {klanten.length === 0 && <div className="empty-state"><i className="fa-solid fa-users"></i><p>Nog geen klanten aangemaakt</p><button className="btn btn-brand btn-sm" onClick={newKlant}>Eerste Klant Toevoegen</button></div>}
+                {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
                 {filtered.map(function (k) {
                     const pillColor = k.type === 'Zakelijk' ? 'pill-blue' : k.type === 'Festival' ? 'pill-purple' : k.type === 'Horeca' ? 'pill-cyan' : 'pill-amber';
                     return (
@@ -195,7 +281,19 @@ function Klanten() {
                                     {k.plaats && <span style={{ marginLeft: 12 }}><i className="fa-solid fa-location-dot" style={{ marginRight: 4, fontSize: 10 }}></i>{k.plaats}</span>}
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {k.telefoon && (function () {
+                                    const tel = (k.telefoon || '').replace(/[^0-9+]/g, '');
+                                    const waTel = tel.startsWith('0') ? '31' + tel.slice(1) : tel.replace('+', '');
+                                    return (
+                                        <a href={'https://wa.me/' + waTel} target="_blank" rel="noopener noreferrer"
+                                            onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}
+                                            style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(37,211,102,.1)', color: '#25d366', fontSize: 13, textDecoration: 'none', flexShrink: 0 }}
+                                            title="WhatsApp">
+                                            <i className="fa-brands fa-whatsapp"></i>
+                                        </a>
+                                    );
+                                })()}
                                 <span className={'pill ' + pillColor}>{k.type}</span>
                             </div>
                         </div>

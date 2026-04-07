@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import EmptyState from '@/components/EmptyState';
 import type { InventoryItem, Recept } from '@/types';
 
 const CATEGORIEEN = ['Alles', 'Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Overig'];
@@ -312,8 +313,7 @@ export default function Voorraad() {
             </div>
 
             {filtered.length === 0 && (
-                <div className="empty-state"><i className="fa-solid fa-warehouse"></i><p>Geen items gevonden</p>
-                    <button className="btn btn-brand btn-sm" onClick={newItem}>Eerste item toevoegen</button></div>
+                <EmptyState page="/voorraad" onAction={newItem} />
             )}
 
             {filtered.length > 0 && (

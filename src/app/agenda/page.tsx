@@ -168,7 +168,7 @@ export default function Agenda() {
                                             <div style={{ fontWeight: 800, fontSize: 13 }}>{ev.name.toUpperCase()}</div>
                                             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{ev.guests} GASTEN • {ev.location || '—'}</div>
                                         </div>
-                                        <span className={'pill pill-' + (ev.status === 'confirmed' ? 'green' : 'amber')} style={{ fontSize: 9 }}>{ev.status.toUpperCase()}</span>
+                                        <span className={'pill pill-' + (ev.status === 'confirmed' ? 'green' : ev.status === 'completed' ? 'green' : 'amber')} style={{ fontSize: 9 }}>{{ confirmed: 'Bevestigd', completed: 'Afgerond', pending: 'Nieuw', optie: 'Optie' }[ev.status] || ev.status}</span>
                                     </div>
                                 );
                             })}

@@ -30,6 +30,7 @@ export interface AppContextValue {
   openFacturen: Factuur[];
   notifications: Notification[];
   kpis: KPIs;
+  badges: Record<string, number>;
   loaded: boolean;
   refetch: () => void;
   pushNotification: (message: string, type?: string, duration?: number) => number;

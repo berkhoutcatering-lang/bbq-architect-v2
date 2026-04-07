@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction, loadPageContextData } from '@/lib/ai-actions';
 import type { ParsedAction } from '@/lib/ai-actions';
+import { PAGE_CHIPS } from '@/lib/constants';
 
 interface ChatMessage {
     role: 'user' | 'assistant';
@@ -31,28 +32,6 @@ interface Conversation {
 interface DishSelections {
     [msgIdx: number]: { [dishIdx: number]: boolean };
 }
-
-const PAGE_CHIPS: Record<string, string[]> = {
-    '/': ['Wat moet ik vandaag regelen?', 'Maak een prep-lijst', 'Lage voorraad check', 'Omzet overzicht'],
-    '/events': ['Voeg een nieuw event toe', 'Welke events komen eraan?', 'Maak een prep-lijst', 'Tip voor grote groepen'],
-    '/agenda': ['Maak een prep-lijst', 'Open taken afvinken', 'Taak toevoegen voor event', 'Planning komende week'],
-    '/recepten': ['Nieuw recept aanmaken', 'Bereken vlees voor 80 gasten', 'Dry rub recept voor brisket', 'Pulled pork bereidingstijd'],
-    '/gerechten': ['20 gerechten met buikspek', 'Gerecht verwijderen', 'Vegetarische hapjes bedenken', 'Menubalans analyseren'],
-    '/menu-engineering': ['Welke gerechten hebben beste marge?', 'Menu-analyse uitleggen', 'Stars vs Dogs in mijn menu', 'Gerecht verbeteren voor marge'],
-    '/offertes': ['Nieuwe offerte aanmaken', 'Welke offertes verlopen binnenkort?', 'Marge analyse', 'Omzet overzicht per status'],
-    '/facturen': ['Nieuwe factuur aanmaken', 'Welke facturen vervallen binnenkort?', 'Openstaand overzicht', 'Cashflow advies'],
-    '/voorraad': ['Wat staat op laag voorraad?', 'Bijbestellen wat ik nodig heb', 'Nieuw voorraad item toevoegen', 'Par levels uitleggen'],
-    '/inkoop': ['Inkooplijst aanmaken voor event', 'Leverancier toevoegen', 'Vleesinkoop calculeren voor 80p', 'Beste leverancier kiezen'],
-    '/service': ['Open prep-taken voor dit event', 'Temperatuur registreren', 'Hoe lang warm houden?', 'Snel probleem oplossen'],
-    '/haccp': ['Temperatuur registreren', 'Welke events missen HACCP?', 'Kerntemperaturen uitleggen', 'Gevaarlijke zone uitleg'],
-    '/uren': ['Uren registreren voor vandaag', 'Weekoverzicht medewerkers', 'Overuren berekenen', 'Wettelijke limieten NL'],
-    '/materieel': ['Welk materieel heeft onderhoud nodig?', 'Onderhoud registreren', 'Materieel toevoegen', 'Levensduur BBQ uitleggen'],
-    '/logistiek': ['Wat is nog niet afgevinkt?', 'Bus inlaadvolgorde tips', 'Koelboxen checklist', 'Vergeten items check'],
-    '/boekhouding': ['KPI overzicht', 'Verlopen facturen actie', 'BTW-aangifte tips', 'Food cost ratio berekenen'],
-    '/financien': ['Beste maand analyse', 'Marge per maand vergelijken', 'Stille maanden aanpak', 'YoY groei berekenen'],
-    '/price-intelligence': ['Leverancier vergelijken', 'Beste prijs-kwaliteit vlees', 'Inkoopprijs optimaliseren', 'Seizoensprijzen advies'],
-    '/ai-chat': ['20 gerechten met buikspek', 'Thema-BBQ concepten', 'Zomermenu brainstorm', 'Onderscheidend vermogen tips'],
-};
 
 // ─── AI System Operator — floating widget ─────────────────────────────────────
 export default function AiAssistant(): React.ReactElement {
@@ -160,6 +139,9 @@ export default function AiAssistant(): React.ReactElement {
         });
         setIsLoading(true);
 
+        const controller = new AbortController();
+        const timeout = setTimeout(function () { controller.abort(); }, 30000);
+
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -170,6 +152,7 @@ export default function AiAssistant(): React.ReactElement {
                     mode: 'context',
                     contextData: contextData,
                 }),
+                signal: controller.signal,
             });
 
             if (!res.ok) throw new Error(res.status === 429 ? 'AI is even overbelast — probeer het over 15 seconden opnieuw.' : 'Netwerkfout (' + res.status + ')');
@@ -214,13 +197,19 @@ export default function AiAssistant(): React.ReactElement {
                 }
             }
 
+            clearTimeout(timeout);
+
             if (activeConversation) {
                 setTimeout(updateConversation, 500);
             }
 
         } catch (error: any) {
+            clearTimeout(timeout);
+            const msg = error.name === 'AbortError'
+                ? 'AI-antwoord duurde te lang (timeout na 30s). Probeer het opnieuw.'
+                : error.message;
             setMessages(function (prev: ChatMessage[]): ChatMessage[] {
-                return [...prev.slice(0, -1), { role: 'assistant', content: '\u274C ' + error.message, actions: [] }];
+                return [...prev.slice(0, -1), { role: 'assistant', content: '\u274C ' + msg, actions: [] }];
             });
         } finally {
             setIsLoading(false);

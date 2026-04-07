@@ -23,7 +23,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const [evRes, offRes, invRes, facRes] = await Promise.all([
             supabase.from('events').select('id,name,date,guests,status,client_naam,location').gte('date', today).order('date').limit(10),
             supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp,items,korting,event_id').in('status', ['concept', 'geaccepteerd', 'verzonden']).order('datum', { ascending: false }).limit(20),
-            supabase.from('inventory').select('id,naam,current_stock,min_stock,unit').lte('current_stock', supabase.rpc ? undefined : 999999),
+            supabase.from('inventory').select('id,naam,current_stock,min_stock,unit'),
             supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').in('status', ['concept', 'verzonden', 'verlopen']).limit(10),
         ]);
 
@@ -115,6 +115,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     }, [loaded, upcomingEvents, activeOffertes, openFacturen, lowStockItems, pushNotification]);
 
+    // Badge counts for sidebar nav items
+    const today2 = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const badges: Record<string, number> = {};
+    if (lowStockItems.length > 0) badges['/voorraad'] = lowStockItems.length;
+    const verlopenOff = activeOffertes.filter(function (o) { return (o.status === 'concept' || o.status === 'verzonden') && o.geldig_tot && o.geldig_tot <= today2; });
+    if (verlopenOff.length > 0) badges['/offertes'] = verlopenOff.length;
+    const overdueF = openFacturen.filter(function (f) { return f.vervaldatum && f.vervaldatum < today2; });
+    if (overdueF.length > 0) badges['/facturen'] = overdueF.length;
+    const soonEv = upcomingEvents.filter(function (e) { return e.date >= today2 && e.date <= tomorrow && e.status === 'confirmed'; });
+    if (soonEv.length > 0) badges['/events'] = soonEv.length;
+
     const kpis: KPIs = {
         actieveOffertes: activeOffertes.length,
         aankomendEvents: upcomingEvents.length,
@@ -138,6 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             openFacturen,
             notifications,
             kpis,
+            badges,
             loaded,
             refetch: loadGlobalData,
             pushNotification,
@@ -158,6 +171,7 @@ export function useApp(): AppContextValue {
             openFacturen: [],
             notifications: [],
             kpis: { actieveOffertes: 0, aankomendEvents: 0, wachtOpAkkoord: 0, totaalOffertesExBtw: 0, lowStock: 0, openFacturen: 0 },
+            badges: {},
             loaded: false,
             refetch: function () { },
             pushNotification: function () { return 0; },

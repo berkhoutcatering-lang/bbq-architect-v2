@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import {
     Plus,
     Save,
@@ -19,6 +19,7 @@ import {
     UtensilsCrossed
 } from "lucide-react";
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, genNummer, today, addDays } from '@/lib/utils';
@@ -57,11 +58,20 @@ interface LineErrors {
     };
 }
 
-export default function OfferCreationDashboard() {
+export default function OfferCreationDashboardPage() {
+    return (
+        <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'var(--muted)' }}>Laden...</div>}>
+            <OfferCreationDashboard />
+        </Suspense>
+    );
+}
+
+function OfferCreationDashboard() {
     const { data: gerechten, loading: loadingMenu } = useSupabase('gerechten', []);
     const { data: offertes, insert: insertOfferte } = useSupabase('offertes', []);
     const { settings } = useSettings();
     const showToast: (msg: string, type?: string) => void = useToast();
+    const searchParams = useSearchParams();
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [lineItems, setLineItems] = useState<LineItem[]>([]);
@@ -75,6 +85,35 @@ export default function OfferCreationDashboard() {
         date: today(),
         note: ''
     });
+
+    // Pre-fill from searchParams (e.g. when coming from Events page)
+    useEffect(() => {
+        const client = searchParams.get('client');
+        const datum = searchParams.get('datum');
+        const gasten = searchParams.get('gasten');
+        const ppp = searchParams.get('ppp');
+        const event = searchParams.get('event');
+        if (client || datum || event) {
+            setClientInfo(prev => ({
+                ...prev,
+                name: client || prev.name,
+                date: datum || prev.date,
+                note: event ? `Event: ${event}` + (prev.note ? `\n${prev.note}` : '') : prev.note,
+            }));
+            if (gasten && ppp) {
+                const qty = parseInt(gasten) || 50;
+                const price = parseFloat(ppp) || 45;
+                setLineItems(prev => prev.length === 0 ? [{
+                    lineId: `line_${Date.now()}`,
+                    menuItemId: 0,
+                    name: `BBQ Catering${event ? ' - ' + event : ''}`,
+                    unitPriceExcl: price,
+                    quantity: qty,
+                    vatRate: 0.09,
+                }] : prev);
+            }
+        }
+    }, [searchParams]);
 
     const formatEUR = (value: number) => fmt(value);
 

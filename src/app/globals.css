@@ -474,6 +474,33 @@ body {
   }
 }
 
+/* SlideOver Panel Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .slide-over-panel {
+    max-width: 100% !important;
+  }
+}
+
 /* Event rows */
 .ev-row {
   display: flex;

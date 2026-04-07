@@ -22,6 +22,7 @@ export interface NavSection {
     slug: string;
     description: string;
     children: NavChild[];
+    secondary?: boolean;
 }
 
 export const navSections: NavSection[] = [
@@ -57,6 +58,7 @@ export const navSections: NavSection[] = [
         slug: "de-zaak",
         description: "Offertes, facturen, klanten en financieel overzicht.",
         children: [
+            { label: "Klantgesprek", icon: <HeartHandshake size={16} />, href: "/klantgesprek", description: "Intake bij potentiële klant" },
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes", description: "Bekijk en beheer je offertes" },
             { label: "Snel Aanmaken", icon: <FilePlus size={16} />, href: "/offerte-editor", description: "Maak snel een nieuwe offerte aan" },
             { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen", description: "Beheer je facturen en betalingen" },
@@ -96,6 +98,7 @@ export const navSections: NavSection[] = [
         icon: <Settings size={18} />,
         type: "folder",
         slug: "systeem",
+        secondary: true,
         description: "Systeeminstellingen, gebruikers en media.",
         children: [
             { label: "Foto-archief", icon: <Camera size={16} />, href: "/foto-archief", description: "Beheer je foto's en media" },
@@ -108,6 +111,7 @@ export const navSections: NavSection[] = [
         icon: <Mail size={18} />,
         type: "folder",
         slug: "communicatie",
+        secondary: true,
         description: "Berichten en e-mail vanuit één plek.",
         children: [
             { label: "Berichten", icon: <Mail size={16} />, href: "/berichten", description: "Bekijk en verstuur berichten" },
@@ -119,6 +123,7 @@ export const navSections: NavSection[] = [
         icon: <Globe size={18} />,
         type: "folder",
         slug: "website",
+        secondary: true,
         description: "Beheer je website en online aanwezigheid.",
         children: [
             { label: "Website Beheer", icon: <Globe size={16} />, href: "/website", description: "Beheer je website content" },
@@ -129,6 +134,7 @@ export const navSections: NavSection[] = [
         icon: <HelpCircle size={18} />,
         type: "folder",
         slug: "hulp-support",
+        secondary: true,
         description: "Veelgestelde vragen en contactinformatie.",
         children: [
             { label: "FAQ", icon: <BookOpen size={16} />, href: "/faq", description: "Veelgestelde vragen" },

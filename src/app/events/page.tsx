@@ -7,7 +7,9 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, today, addDays, genNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { mailEventBevestiging } from '@/lib/emailHelper';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
+import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
 import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion, EventReflectie } from '@/types';
 
@@ -124,7 +126,7 @@ export default function Events() {
                         const deductAmount = qty * unitFactor;
                         const newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
                         console.log('[DRAIN] Deducting:', deductAmount.toFixed(2), match.unit, 'New stock:', newStock.toFixed(2));
-                        supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id).then(function () { });
+                        Promise.resolve(supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id)).then(function () { }).catch(function (err: any) { console.error('[DRAIN] Update error:', err); });
                         match.current_stock = newStock;
                         deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
                         if (newStock < (match.min_stock || 0)) {
@@ -159,9 +161,9 @@ export default function Events() {
 
     function toggleMenu(receptId: number) {
         const current = form!.menu || [];
-        const idx = current.indexOf(receptId);
+        const idx = current.findIndex(function (id: any) { return String(id) === String(receptId); });
         if (idx >= 0) {
-            setField('menu', current.filter(function (id: number) { return id !== receptId; }));
+            setField('menu', current.filter(function (id: any) { return String(id) !== String(receptId); }));
         } else {
             setField('menu', current.concat([receptId]));
         }
@@ -236,10 +238,10 @@ export default function Events() {
                         </div>
                         <div className="field"><label>Status</label>
                             <select value={form.status} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('status', e.target.value); }}>
-                                <option value="optie">Optie (Offerte)</option>
-                                <option value="pending">In afwachting</option>
+                                <option value="optie">Optie</option>
+                                <option value="pending">Nieuw</option>
                                 <option value="confirmed">Bevestigd</option>
-                                <option value="completed">Voltooid ✓</option>
+                                <option value="completed">Afgerond</option>
                             </select>
                         </div>
                     </div>
@@ -289,14 +291,132 @@ export default function Events() {
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>Notitie</h4>
                     <div className="field full"><textarea rows={3} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
 
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
+                        <i className="fa-solid fa-users-gear" style={{ marginRight: 6 }}></i>Teamplanning
+                    </h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {['Cor', 'Mathijs', 'Kevin', 'Stagiair'].map(function (naam) {
+                            const team = form.team || [];
+                            const isSelected = team.indexOf(naam) >= 0;
+                            return (
+                                <button key={naam} className={'btn btn-sm ' + (isSelected ? 'btn-brand' : 'btn-ghost')}
+                                    onClick={function () {
+                                        setField('team', isSelected ? team.filter(function (n: string) { return n !== naam; }) : team.concat([naam]));
+                                    }} style={{ fontSize: 11, padding: '5px 12px' }}>
+                                    {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 9, marginRight: 4 }}></i>}
+                                    {naam}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {(form.team || []).length > 0 && (
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
+                            {(form.team || []).length} teamleden ingepland
+                        </div>
+                    )}
+
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#8b8bf0', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
+                        <i className="fa-solid fa-timeline" style={{ marginRight: 6 }}></i>Draaiboek
+                    </h4>
+                    <div style={{ marginBottom: 8 }}>
+                        {(form.draaiboek || []).map(function (item: any, i: number) {
+                            return (
+                                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                                    <input type="time" value={item.tijd || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
+                                        const d = [...(form.draaiboek || [])]; d[i] = Object.assign({}, d[i], { tijd: e.target.value }); setField('draaiboek', d);
+                                    }} style={{ width: 90, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                    <input value={item.activiteit || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
+                                        const d = [...(form.draaiboek || [])]; d[i] = Object.assign({}, d[i], { activiteit: e.target.value }); setField('draaiboek', d);
+                                    }} placeholder="bijv. Opbouw BBQ" style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                    <button onClick={function () { const d = [...(form.draaiboek || [])]; d.splice(i, 1); setField('draaiboek', d); }}
+                                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}>&#x2715;</button>
+                                </div>
+                            );
+                        })}
+                        <button className="btn btn-ghost btn-sm" onClick={function () {
+                            const d = form.draaiboek || [];
+                            setField('draaiboek', d.concat([{ tijd: '', activiteit: '' }]));
+                        }} style={{ fontSize: 11 }}><i className="fa-solid fa-plus"></i> Tijdslot toevoegen</button>
+                    </div>
+
                     <div style={{ marginTop: 20, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>Geschatte omzet: </span>
                         <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>{fmt(omzet)}</span>
                         <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>({form.guests} × {fmt(form.ppp)})</span>
                     </div>
 
+                    {editing !== 'new' && form.status === 'completed' && (
+                        <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                            <h4 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 12, letterSpacing: '0.1em' }}>
+                                <i className="fa-solid fa-chart-line" style={{ marginRight: 6 }}></i>P&L — Werkelijk vs Begroot
+                            </h4>
+                            <div className="form-grid">
+                                <div className="field"><label>Werkelijke kosten</label><input type="number" step="0.01" value={form.werkelijke_kosten || 0} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('werkelijke_kosten', parseFloat(e.target.value) || 0); }} /></div>
+                                <div className="field"><label>Extra kosten (personeel etc.)</label><input type="number" step="0.01" value={form.extra_kosten || 0} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('extra_kosten', parseFloat(e.target.value) || 0); }} /></div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 13 }}>
+                                <div><span style={{ color: 'var(--muted)' }}>Omzet: </span><span style={{ fontWeight: 700, color: 'var(--brand)' }}>{fmt(omzet)}</span></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Kosten: </span><span style={{ fontWeight: 700, color: '#ef4444' }}>{fmt((form.werkelijke_kosten || 0) + (form.extra_kosten || 0))}</span></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Winst: </span><span style={{ fontWeight: 700, color: (omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0)) > 0 ? '#10b981' : '#ef4444' }}>{fmt(omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0))}</span></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Automatische inkooplijst */}
+                    {(form.menu || []).length > 0 && (
+                        <div style={{ marginTop: 16, padding: 16, background: 'rgba(59,130,246,.04)', borderRadius: 12, border: '1px solid rgba(59,130,246,.12)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#3b82f6', letterSpacing: '0.1em' }}>
+                                    <i className="fa-solid fa-cart-shopping" style={{ marginRight: 6 }}></i>Inkooplijst
+                                </span>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: '#3b82f6' }} onClick={function () {
+                                    setField('_showInkoop', !form._showInkoop);
+                                }}>{form._showInkoop ? 'Verbergen' : 'Genereer'}</button>
+                            </div>
+                            {form._showInkoop && (function () {
+                                const guests = form.guests || 1;
+                                const inkoopItems: { naam: string; hoeveelheid: string; eenheid: string; recept: string }[] = [];
+                                (form.menu || []).forEach(function (receptId: any) {
+                                    const recept = recepten.find(function (r) { return String(r.id) === String(receptId); });
+                                    if (!recept) return;
+                                    let ingredienten: any[] = recept.ingredienten as any[] || [];
+                                    if (typeof ingredienten === 'string') { try { ingredienten = JSON.parse(ingredienten); } catch { ingredienten = []; } }
+                                    const porties = recept.porties || 1;
+                                    const multiplier = guests / porties;
+                                    ingredienten.forEach(function (ing: any) {
+                                        const qty = ((parseFloat(ing.hoeveelheid) || 0) * multiplier).toFixed(1);
+                                        inkoopItems.push({ naam: ing.naam || '?', hoeveelheid: qty, eenheid: ing.eenheid || '', recept: recept.naam });
+                                    });
+                                });
+                                // Groepeer dezelfde ingredienten
+                                const grouped: Record<string, { totaal: number; eenheid: string; recepten: string[] }> = {};
+                                inkoopItems.forEach(function (item) {
+                                    const key = item.naam.toLowerCase();
+                                    if (!grouped[key]) grouped[key] = { totaal: 0, eenheid: item.eenheid, recepten: [] };
+                                    grouped[key].totaal += parseFloat(item.hoeveelheid) || 0;
+                                    if (grouped[key].recepten.indexOf(item.recept) < 0) grouped[key].recepten.push(item.recept);
+                                });
+                                const sortedItems = Object.entries(grouped).sort(function (a, b) { return a[0].localeCompare(b[0]); });
+                                return sortedItems.length > 0 ? (
+                                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                        {sortedItems.map(function (entry) {
+                                            return (
+                                                <div key={entry[0]} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                                    <span style={{ fontWeight: 600 }}>{entry[0]}</span>
+                                                    <span style={{ color: 'var(--muted)' }}>{entry[1].totaal.toFixed(1)} {entry[1].eenheid} <span style={{ fontSize: 10, opacity: 0.6 }}>({entry[1].recepten.join(', ')})</span></span>
+                                                </div>
+                                            );
+                                        })}
+                                        <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)' }}>Berekend voor {guests} gasten op basis van {(form.menu || []).length} recept(en)</div>
+                                    </div>
+                                ) : <div style={{ fontSize: 11, color: 'var(--muted)' }}>Geen ingrediënten gevonden in gekoppelde recepten</div>;
+                            })()}
+                        </div>
+                    )}
+
                     <div className="editor-actions">
                         <button className="btn btn-brand" onClick={saveEvent}><i className="fa-solid fa-save"></i> Opslaan</button>
+                        <button className="btn btn-ghost" onClick={async function () { const res = await mailEventBevestiging(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.success ? 'Bevestiging verstuurd!' : 'Fout: ' + (res.error || ''), res.success ? 'success' : 'error'); }}><i className="fa-solid fa-envelope"></i> Bevestiging</button>
                         <button className="btn btn-cyan" onClick={createOfferte}><i className="fa-solid fa-file-signature"></i> Offerte Maken</button>
                         {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateEvent(form as unknown as DbEvent); }}><i className="fa-solid fa-copy"></i> Dupliceer</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteEvent}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
@@ -332,7 +452,7 @@ export default function Events() {
                 />
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
                     {['alle', 'pending', 'optie', 'confirmed', 'completed'].map(function (s) {
-                        const labels: Record<string, string> = { alle: 'Alle', pending: 'Pending', optie: 'Optie', confirmed: 'Bevestigd', completed: 'Voltooid' };
+                        const labels: Record<string, string> = { alle: 'Alle', pending: 'Nieuw', optie: 'Optie', confirmed: 'Bevestigd', completed: 'Afgerond' };
                         return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
                             onClick={function () { setFilterStatus(s); }}
                             style={{ fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{labels[s]}</button>;
@@ -340,15 +460,15 @@ export default function Events() {
                 </div>
             </div>
             <div className="panel">
-                {events.length === 0 && <div className="empty-state"><i className="fa-solid fa-fire"></i><p>Nog geen events aangemaakt</p><button className="btn btn-brand btn-sm" onClick={newEvent}>Eerste Event Toevoegen</button></div>}
+                {events.length === 0 && <EmptyState page="/events" onAction={newEvent} />}
                 {sorted.map(function (ev) {
                     const parts = (ev.date || '').split('-');
                     const month = parts[1] ? monthNames[parseInt(parts[1], 10) - 1] : '';
                     const day = parts[2] || '';
                     const omzet = (ev.guests || 0) * (ev.ppp || 0);
                     const rowGlow = ev.status === 'optie' ? ' ev-row-optie' : ev.status === 'confirmed' ? ' ev-row-confirmed' : '';
-                    const pillClass = ev.status === 'completed' ? 'pill-green' : ev.status === 'confirmed' ? 'pill-green' : ev.status === 'optie' ? 'pill-optie' : 'pill-amber';
-                    const pillLabel = ev.status === 'completed' ? '✓ Voltooid' : ev.status === 'confirmed' ? '✅ Bevestigd' : ev.status === 'optie' ? '🟠 Optie' : 'In afwachting';
+                    const pillClass = ev.status === 'completed' ? 'pill-purple' : ev.status === 'confirmed' ? 'pill-green' : ev.status === 'optie' ? 'pill-optie' : 'pill-amber';
+                    const pillLabel = ev.status === 'completed' ? 'Afgerond' : ev.status === 'confirmed' ? 'Bevestigd' : ev.status === 'optie' ? 'Optie' : 'Nieuw';
                     const ref = getReflectie(ev.id);
                     const needsReflectie = ev.status === 'completed' && !ref;
                     return (
@@ -370,6 +490,12 @@ export default function Events() {
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button className="btn btn-ghost btn-sm" title="Maak offerte voor dit event" onClick={function (e) { e.stopPropagation(); router.push('/offerte-editor?client=' + encodeURIComponent(ev.client_naam || ev.name || '') + '&datum=' + encodeURIComponent(ev.date || '') + '&gasten=' + (ev.guests || 50) + '&ppp=' + (ev.ppp || 45) + '&event=' + encodeURIComponent(ev.name || '')); }} style={{ padding: '4px 10px', fontSize: 11 }}>
+                                        <i className="fa-solid fa-file-signature"></i> Offerte
+                                    </button>
+                                    <button className="btn btn-ghost btn-sm" title="Dupliceer dit event" onClick={function (e) { e.stopPropagation(); duplicateEvent(ev); }} style={{ padding: '4px 10px', fontSize: 11 }}>
+                                        <i className="fa-solid fa-copy"></i>
+                                    </button>
                                     <button className="btn btn-ghost btn-sm" title="Bekijk de volledige event workflow" onClick={function (e) { e.stopPropagation(); router.push('/events/' + ev.id); }} style={{ padding: '4px 10px', fontSize: 11 }}>
                                         <i className="fa-solid fa-route"></i> Flow
                                     </button>

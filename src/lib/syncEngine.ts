@@ -37,14 +37,25 @@ export async function syncOffertaToEvent(offerte: Offerte): Promise<{ event: DbE
 
     if (eventId) {
         const upd = await supabase.from('events').update(eventPayload).eq('id', eventId).select().single();
+        if (upd.error) {
+            console.error('[SyncEngine] Event update error:', upd.error);
+            return null;
+        }
         event = upd.data as DbEvent | null;
     } else {
         const ins = await supabase.from('events').insert(eventPayload).select().single();
+        if (ins.error) {
+            console.error('[SyncEngine] Event insert error:', ins.error);
+            return null;
+        }
         event = ins.data as DbEvent | null;
         created = true;
 
         if (event) {
-            await supabase.from('offertes').update({ event_id: event.id }).eq('id', offerte.id);
+            const linkRes = await supabase.from('offertes').update({ event_id: event.id }).eq('id', offerte.id);
+            if (linkRes.error) {
+                console.error('[SyncEngine] Offerte link error:', linkRes.error);
+            }
         }
     }
 
@@ -61,6 +72,10 @@ export async function autoCreatePrepTasks(eventId: number, eventDate: string, cl
     if (!supabase || !eventId || !eventDate) return;
 
     const existing = await supabase.from('prep_tasks').select('id').eq('event_id', eventId);
+    if (existing.error) {
+        console.error('[SyncEngine] PrepTasks check error:', existing.error);
+        return;
+    }
     if (existing.data && existing.data.length > 0) return;
 
     const taken = [
@@ -83,7 +98,11 @@ export async function autoCreatePrepTasks(eventId: number, eventDate: string, cl
         };
     });
 
-    await supabase.from('prep_tasks').insert(rows);
+    const insertRes = await supabase.from('prep_tasks').insert(rows);
+    if (insertRes.error) {
+        console.error('[SyncEngine] PrepTasks insert error:', insertRes.error);
+        return;
+    }
     console.log('[SyncEngine] PrepTasks aangemaakt voor event', eventId);
 }
 

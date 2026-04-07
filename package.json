@@ -16,7 +16,8 @@
     "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "resend": "^6.10.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
