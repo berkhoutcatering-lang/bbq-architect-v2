@@ -94,7 +94,7 @@ export default function Gerechten() {
     async function editGerecht(g: any) {
         setEditing(g.id);
 
-        const rawIngs = g.ingredients_list || g.ingredienten || [];
+        const rawIngs = g.ingredienten || [];
         const mappedIngs = Array.isArray(rawIngs) ? rawIngs : (typeof rawIngs === 'string' ? rawIngs.split(',').map(function (s: string) { return s.trim(); }).filter(Boolean) : []);
 
         setForm({
@@ -107,7 +107,7 @@ export default function Gerechten() {
                 if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
                 return String(i);
             }),
-            bereidingswijze: g.preparation_steps || g.bereidingswijze || '',
+            bereidingswijze: g.bereidingswijze || '',
             allergenen: g.allergenen || [],
             tags: g.tags || [],
             kostprijs_pp: g.kostprijs_pp || '',
@@ -163,11 +163,6 @@ export default function Gerechten() {
         else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
 
         const dbData: Record<string, any> = Object.assign({}, saveData);
-        dbData.ingredients_list = (saveData.ingredienten || []).join(', ');
-        dbData.preparation_steps = saveData.bereidingswijze || '';
-
-        delete dbData.ingredienten;
-        delete dbData.bereidingswijze;
 
         if (editing === 'new') {
             const { error } = await supabase.from('gerechten').insert([dbData]);

@@ -3,9 +3,7 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "mcp__Claude_Preview__preview_start",
-      "Bash(npx next:*)",
-      "Bash(grep -v \"//\")"
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }
