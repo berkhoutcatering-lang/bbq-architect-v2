@@ -267,6 +267,7 @@ export default function CommandPalette() {
                         onChange={function (e) { setQuery(e.target.value); }}
                         onKeyDown={handleKeyDown}
                         placeholder="Zoek events, offertes, recepten, klanten..."
+                        aria-label="Zoeken"
                         style={{
                             flex: 1,
                             background: 'none',

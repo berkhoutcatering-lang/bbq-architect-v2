@@ -1,5 +1,6 @@
 'use client';
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useId, type ReactNode } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 type ShowConfirmFn = (msg: string, onConfirm: () => void) => void;
 
@@ -14,6 +15,37 @@ export function useConfirm(): ShowConfirmFn {
     const ctx = useContext(ConfirmContext);
     if (!ctx) return function () {};
     return ctx;
+}
+
+function ConfirmDialogInner({ dialog, onConfirm, onCancel }: { dialog: DialogState; onConfirm: () => void; onCancel: () => void }) {
+    const titleId = useId();
+    const descId = useId();
+    const trapRef = useFocusTrap(true);
+
+    return (
+        <div
+            className="modal-bg"
+            onClick={onCancel}
+            role="presentation"
+        >
+            <div
+                ref={trapRef}
+                className="modal-box"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={descId}
+                onClick={function (e) { e.stopPropagation(); }}
+            >
+                <h3 id={titleId}>Bevestigen</h3>
+                <p id={descId}>{dialog.msg}</p>
+                <div className="modal-actions">
+                    <button className="btn btn-ghost" onClick={onCancel}>Annuleren</button>
+                    <button className="btn btn-red" onClick={onConfirm}>Verwijderen</button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function ConfirmProvider({ children }: { children: ReactNode }) {
@@ -36,16 +68,7 @@ export default function ConfirmProvider({ children }: { children: ReactNode }) {
         <ConfirmContext.Provider value={showConfirm}>
             {children}
             {dialog && (
-                <div className="modal-bg" onClick={handleCancel}>
-                    <div className="modal-box" onClick={function (e) { e.stopPropagation(); }}>
-                        <h3>Bevestigen</h3>
-                        <p>{dialog.msg}</p>
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={handleCancel}>Annuleren</button>
-                            <button className="btn btn-red" onClick={handleConfirm}>Verwijderen</button>
-                        </div>
-                    </div>
-                </div>
+                <ConfirmDialogInner dialog={dialog} onConfirm={handleConfirm} onCancel={handleCancel} />
             )}
         </ConfirmContext.Provider>
     );

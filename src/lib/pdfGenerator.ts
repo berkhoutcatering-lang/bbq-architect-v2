@@ -37,16 +37,22 @@ let jsPDFLoaded: Promise<any> | null = null;
 
 function loadJsPDF(): Promise<any> {
     if (jsPDFLoaded) return jsPDFLoaded;
-    jsPDFLoaded = new Promise(function (resolve, reject) {
-        let attempts = 0;
-        function check(): void {
-            if ((window as any).jspdf) { resolve((window as any).jspdf); return; }
-            attempts++;
-            if (attempts > 50) { reject(new Error('jsPDF kon niet geladen worden.')); return; }
-            setTimeout(check, 100);
+    jsPDFLoaded = (async function () {
+        if (typeof window !== 'undefined' && !(window as any).jspdf) {
+            await new Promise<void>(function (resolve) {
+                const s1 = document.createElement('script');
+                s1.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
+                s1.onload = function () {
+                    const s2 = document.createElement('script');
+                    s2.src = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js';
+                    s2.onload = function () { resolve(); };
+                    document.head.appendChild(s2);
+                };
+                document.head.appendChild(s1);
+            });
         }
-        check();
-    });
+        return (window as any).jspdf;
+    })();
     return jsPDFLoaded;
 }
 

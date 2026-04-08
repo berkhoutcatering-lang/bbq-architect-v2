@@ -100,6 +100,7 @@ export default function Sidebar() {
     const pathname = usePathname();
     const { badges } = useApp();
     const [collapsed, setCollapsed] = useState(false);
+    const [userToggledCollapse, setUserToggledCollapse] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
@@ -107,6 +108,15 @@ export default function Sidebar() {
     useEffect(() => {
         setMobileOpen(false);
     }, [pathname]);
+
+    // Listen for bottom-nav "Meer" toggle event
+    useEffect(() => {
+        function handleToggle() {
+            setMobileOpen((prev) => !prev);
+        }
+        window.addEventListener("toggle-mobile-sidebar", handleToggle);
+        return () => window.removeEventListener("toggle-mobile-sidebar", handleToggle);
+    }, []);
 
     const toggleSection = (title: string) => {
         setExpandedSections((prev) =>
@@ -120,11 +130,18 @@ export default function Sidebar() {
     const [isDesktop, setIsDesktop] = useState(false);
 
     useEffect(() => {
-        const check = () => setIsDesktop(window.innerWidth >= 768);
+        const check = () => {
+            const w = window.innerWidth;
+            setIsDesktop(w >= 768);
+            // Auto-manage collapsed state based on viewport unless user manually toggled
+            if (!userToggledCollapse) {
+                setCollapsed(w >= 768 && w < 1280);
+            }
+        };
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
-    }, []);
+    }, [userToggledCollapse]);
 
     const primarySections = navSections.filter(s => !s.secondary);
     const secondarySections = navSections.filter(s => s.secondary);
@@ -153,6 +170,7 @@ export default function Sidebar() {
                         if (window.innerWidth < 768) {
                             setMobileOpen(false);
                         } else {
+                            setUserToggledCollapse(true);
                             setCollapsed(!collapsed);
                         }
                     }}
@@ -182,7 +200,7 @@ export default function Sidebar() {
                 </Link>
             </div>
 
-            <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1 scrollbar-thin">
+            <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1 scrollbar-thin" role="navigation" aria-label="Hoofdnavigatie">
                 {primarySections.map((section) => (
                     <SidebarFolder
                         key={section.title}
@@ -250,7 +268,7 @@ export default function Sidebar() {
             {!mobileOpen && !isDesktop && (
                 <button
                     onClick={() => setMobileOpen(true)}
-                    className="fixed top-3 left-3 z-[60] w-11 h-11 rounded-xl bg-[#18181c]/90 backdrop-blur-md border border-[#2a2a30] flex items-center justify-center text-[#999] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+                    className="fixed top-3 left-3 z-[60] w-[44px] h-[44px] rounded-xl bg-[#18181c]/90 backdrop-blur-md border border-[#2a2a30] flex items-center justify-center text-[#999] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
                     aria-label="Open menu"
                 >
                     <Menu size={20} />

@@ -11,7 +11,7 @@
   --border: rgba(130, 130, 130, .15);
   --border-strong: rgba(130, 130, 130, .3);
   --text: #f8f8f8;
-  --muted: #828282;
+  --muted: #949494;
   --muted-light: rgba(130, 130, 130, .4);
   --muted-extra-light: rgba(130, 130, 130, .1);
   --green: #22c55e;
@@ -166,7 +166,11 @@ body {
   color: var(--text);
   font-size: 20px;
   cursor: pointer;
-  padding: 4px;
+  padding: 10px;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
 }
 
 .main-content {
@@ -5774,5 +5778,183 @@ body {
 @media (min-width: 768px) {
   .breadcrumb-nav {
     padding-top: 10px;
+  }
+}
+
+/* ==========================================================================
+   UX AUDIT — Phase A: Critical Foundation Fixes
+   ========================================================================== */
+
+/* 1. Global 44px minimum touch targets — MOBILE/TABLET ONLY (WCAG 2.5.8) */
+@media (max-width: 1023px) {
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  .sidebar-nav a,
+  .ev-row,
+  .btn,
+  .btn-ghost,
+  .btn-brand,
+  .btn-red,
+  .pill,
+  .tab-btn {
+    min-height: 44px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+}
+
+/* 2. Minimum 12px font size on mobile */
+@media (max-width: 768px) {
+  * {
+    font-size: max(var(--_fs, inherit), 12px);
+  }
+
+  .sidebar-logo p,
+  .ev-date-block .ev-month,
+  .rec-cat,
+  .badge,
+  .pill-sm,
+  small,
+  .text-xs,
+  [class*="text-[9px]"],
+  [class*="text-[10px]"],
+  [class*="text-[11px]"] {
+    font-size: 12px !important;
+  }
+
+  h3, h4, h5, h6 {
+    font-size: max(14px, inherit);
+  }
+}
+
+/* 3. Focus-visible styles for accessibility */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 4. Screen-reader only utility (for skip link) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only:focus-visible {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  width: auto;
+  height: auto;
+  padding: 12px 24px;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  background: var(--brand);
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 8px;
+  z-index: 10000;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ─── Bottom Navigation (mobile only) ─────────────────────────────────────── */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #151518;
+    border-top: 1px solid rgba(130, 130, 130, .12);
+    z-index: 55;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .bottom-nav__tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 0;
+    color: #949494;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .15s ease;
+  }
+
+  .bottom-nav__tab:active {
+    opacity: .7;
+  }
+
+  .bottom-nav__tab--active {
+    color: #FFBF00;
+  }
+
+  .bottom-nav__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+  }
+
+  .bottom-nav__label {
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* Add bottom padding to main content so it is not hidden behind the nav bar */
+  /* Add side padding for breathing room on mobile */
+  #main-content {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }

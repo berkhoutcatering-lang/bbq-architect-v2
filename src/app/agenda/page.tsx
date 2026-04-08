@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
@@ -16,6 +16,15 @@ export default function Agenda() {
     const [selected, setSelected] = useState(today());
     const [showPrepForm, setShowPrepForm] = useState(false);
     const [showEventForm, setShowEventForm] = useState(false);
+    const [mobileView, setMobileView] = useState<'list' | 'calendar'>('list');
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
     const [newTask, setNewTask] = useState<Record<string, any>>({ event_id: '', text: '', dagen: -1 });
     const [newEvent, setNewEvent] = useState<Record<string, any>>({ name: '', date: '', guests: 50, location: '', ppp: 45, status: 'pending', client_naam: '', client_adres: '', client_tel: '', client_email: '', type: 'Particulier', notitie: '' });
 
@@ -107,15 +116,100 @@ export default function Agenda() {
                         {events.length} EVENTS • {prepTasks.filter(function (p) { return !p.done; }).length} OPEN PREP-TAKEN
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {isMobile && (
+                        <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                            <button onClick={function () { setMobileView('list'); }} aria-label="Lijstweergave" style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: mobileView === 'list' ? 'var(--brand)' : 'transparent', color: mobileView === 'list' ? '#000' : 'var(--muted)', border: 'none', cursor: 'pointer' }}>
+                                <i className="fa-solid fa-list"></i>
+                            </button>
+                            <button onClick={function () { setMobileView('calendar'); }} aria-label="Kalenderweergave" style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: mobileView === 'calendar' ? 'var(--brand)' : 'transparent', color: mobileView === 'calendar' ? '#000' : 'var(--muted)', border: 'none', cursor: 'pointer' }}>
+                                <i className="fa-solid fa-calendar"></i>
+                            </button>
+                        </div>
+                    )}
                     <button className="tab-btn" onClick={goToday}>VANDAAG</button>
                     <button className="btn-brand" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
-                        <i className="fa-solid fa-plus"></i> NIEUW EVENT
+                        <i className="fa-solid fa-plus"></i> {isMobile ? 'EVENT' : 'NIEUW EVENT'}
                     </button>
                 </div>
             </div>
 
-            <div className="agenda-layout grid gap-6 grid-cols-1 md:grid-cols-[minmax(0,1fr)_380px]">
+            {/* Mobile List View */}
+            {isMobile && mobileView === 'list' && (
+                <div style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <button onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Vorige maand"><i className="fa-solid fa-chevron-left"></i></button>
+                        <h3 style={{ margin: 0, fontWeight: 700, letterSpacing: 2, color: 'var(--brand)', fontSize: 14 }}>{MAANDEN[month].toUpperCase()} {year}</h3>
+                        <button onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Volgende maand"><i className="fa-solid fa-chevron-right"></i></button>
+                    </div>
+
+                    {(function () {
+                        const daysWithItems: { date: string; dayNum: number; dayName: string; evts: DbEvent[]; preps: { task: PrepTask; event: DbEvent | undefined }[] }[] = [];
+                        for (let d = 1; d <= daysInMonth; d++) {
+                            const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+                            const evts = eventsForDate(dateStr);
+                            const preps = prepsForDate(dateStr);
+                            if (evts.length > 0 || preps.length > 0 || dateStr === todayStr || dateStr === selected) {
+                                const dt = new Date(dateStr + 'T00:00:00');
+                                daysWithItems.push({ date: dateStr, dayNum: d, dayName: dagNamen[dt.getDay()], evts, preps });
+                            }
+                        }
+                        if (daysWithItems.length === 0) {
+                            return <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Geen events deze maand</div>;
+                        }
+                        return daysWithItems.map(function (day) {
+                            const isToday = day.date === todayStr;
+                            const isSel = day.date === selected;
+                            return (
+                                <div key={day.date} onClick={function () { setSelected(day.date); }}
+                                    style={{
+                                        padding: '14px 16px', marginBottom: 8, borderRadius: 14, cursor: 'pointer',
+                                        background: isSel ? 'rgba(213,178,98,0.06)' : 'var(--card)',
+                                        border: isSel ? '1px solid rgba(213,178,98,0.2)' : '1px solid var(--border)',
+                                        backdropFilter: 'blur(8px)',
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                        <div style={{
+                                            width: 52, height: 52, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                            background: isToday ? 'var(--brand)' : 'rgba(255,255,255,0.04)',
+                                            color: isToday ? '#000' : 'var(--text)',
+                                        }}>
+                                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1 }}>{day.dayName.substring(0, 2)}</span>
+                                            <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{day.dayNum}</span>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            {day.evts.map(function (ev) {
+                                                return (
+                                                    <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                        <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
+                                                        <span style={{
+                                                            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                                                            background: ev.status === 'confirmed' ? 'rgba(34,197,94,.12)' : 'rgba(255,191,0,.12)',
+                                                            color: ev.status === 'confirmed' ? 'var(--green)' : 'var(--brand)',
+                                                        }}>{{ confirmed: 'Bevestigd', completed: 'Klaar', pending: 'Nieuw', optie: 'Optie' }[ev.status] || ev.status}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {day.preps.map(function (pp, i) {
+                                                return (
+                                                    <div key={i} style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: pp.task.done ? 'var(--green)' : 'var(--muted)', flexShrink: 0 }} />
+                                                        <span style={{ textDecoration: pp.task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pp.task.text}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {day.evts.length === 0 && day.preps.length === 0 && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Vandaag</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()}
+                </div>
+            )}
+
+            {/* Calendar Grid — desktop always, mobile only when calendar mode selected */}
+            <div className="agenda-layout grid gap-6 grid-cols-1 md:grid-cols-[minmax(0,1fr)_380px]" style={isMobile && mobileView === 'list' ? { display: 'none' } : {}}>
                 <div className="panel" style={{ height: 'fit-content' }}>
                     <div className="calendar">
                         <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

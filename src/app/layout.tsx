@@ -10,6 +10,7 @@ import GlobalToast from "@/components/GlobalToast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import CommandPalette from "@/components/CommandPalette";
 import OnboardingWizard from "@/components/OnboardingWizard";
+import BottomNav from "@/components/BottomNav";
 
 export const metadata = {
   title: 'BBQ Architect — Hop & Bites',
@@ -21,8 +22,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="nl">
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-        <Script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" strategy="beforeInteractive" />
-        <Script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js" strategy="beforeInteractive" />
         <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
         <script dangerouslySetInnerHTML={{ __html: `tailwind.config = { corePlugins: { preflight: false } };` }} />
       </head>
@@ -30,16 +29,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AppProvider>
           <ToastProvider>
             <ConfirmProvider>
+              <a href="#main-content" className="sr-only">
+                Ga naar hoofdinhoud
+              </a>
               <div className="flex min-h-screen bg-[var(--bg)]">
                 <Sidebar />
-                <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
+                <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
                   <Breadcrumbs />
-                  <div className="flex-1 w-full">
+                  <div id="main-content" className="flex-1 w-full">
                     {children}
                   </div>
                 </main>
                 <AiAssistant />
               </div>
+              <BottomNav />
               <GlobalToast />
               <CommandPalette />
               <OnboardingWizard />

@@ -624,6 +624,7 @@ export default function AiStudioPage() {
                             value={newFolderName}
                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewFolderName(e.target.value); }}
                             placeholder="Mapnaam…"
+                            aria-label="Mapnaam"
                             style={{ width: '100%', background: 'var(--card-solid)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 6 }}
                             onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === 'Enter') createFolder(); }}
                             autoFocus
@@ -853,6 +854,7 @@ export default function AiStudioPage() {
                             onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setInput(e.target.value); }}
                             onKeyDown={handleKey}
                             placeholder={mode === 'brainstorm' ? 'Waar wil je over brainstormen? (Enter = versturen)' : 'Stel een vraag… (Enter = versturen)'}
+                            aria-label="Bericht invoeren"
                             disabled={isLoading}
                             rows={2}
                             autoComplete="off"
@@ -910,6 +912,7 @@ function SaveButton({ folders, onSave, onRefresh }: { folders: Folder[]; onSave:
                         value={titel}
                         onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setTitel(e.target.value); }}
                         placeholder="Geef een titel…"
+                        aria-label="Gesprekstitel"
                         style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8 }}
                         onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === 'Enter') doSave(); }}
                         autoFocus
@@ -917,6 +920,7 @@ function SaveButton({ folders, onSave, onRefresh }: { folders: Folder[]; onSave:
                     <select
                         value={folderId || ''}
                         onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setFolderId(e.target.value ? parseInt(e.target.value) : null); }}
+                        aria-label="Map selecteren"
                         style={{ width: '100%', background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 6, fontSize: 12, marginBottom: 8 }}
                     >
                         <option value="">Geen map (los)</option>

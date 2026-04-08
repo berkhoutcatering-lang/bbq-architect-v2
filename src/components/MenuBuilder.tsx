@@ -141,6 +141,7 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                             value={searchQuery}
                             onChange={function (e) { setSearchQuery(e.target.value); }}
                             placeholder="Zoek gerecht..."
+                            aria-label="Zoek gerecht"
                             style={{ width: '100%', padding: '7px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                         />
                     </div>

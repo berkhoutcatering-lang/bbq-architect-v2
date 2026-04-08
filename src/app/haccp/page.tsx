@@ -156,7 +156,7 @@ export default function HACCP() {
                                 return (
                                     <button key={p} onClick={function () { setField('wat', p); }}
                                         style={{
-                                            height: 56, borderRadius: 12, fontSize: 12, fontWeight: 600,
+                                            height: 64, borderRadius: 14, fontSize: 13, fontWeight: 600,
                                             background: form.wat === p ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
                                             border: form.wat === p ? '2px solid #3b82f6' : '1px solid var(--border)',
                                             color: form.wat === p ? '#3b82f6' : 'var(--text)',
@@ -177,7 +177,7 @@ export default function HACCP() {
                                 return (
                                     <button key={t.val} onClick={function () { setField('type', t.val); }}
                                         style={{
-                                            flex: 1, height: 48, borderRadius: 12, fontSize: 11, fontWeight: 600,
+                                            flex: 1, height: 56, borderRadius: 14, fontSize: 12, fontWeight: 600,
                                             background: form.type === t.val ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
                                             border: form.type === t.val ? '2px solid #3b82f6' : '1px solid var(--border)',
                                             color: form.type === t.val ? '#3b82f6' : 'var(--text)',
@@ -222,7 +222,7 @@ export default function HACCP() {
                                         else { setField('temp', form.temp + key); }
                                     }}
                                         style={{
-                                            height: 56, borderRadius: 12, fontSize: key === '⌫' ? 18 : 22, fontWeight: 500,
+                                            height: 64, borderRadius: 14, fontSize: key === '⌫' ? 20 : 24, fontWeight: 500,
                                             background: 'var(--card-solid)', border: '1px solid var(--border)',
                                             color: 'var(--text)', cursor: 'pointer', transition: 'all 0.1s',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -237,7 +237,7 @@ export default function HACCP() {
                     {/* Save button */}
                     <button onClick={saveRecord} disabled={!form.wat || !form.temp}
                         style={{
-                            width: '100%', height: 56, borderRadius: 14, fontSize: 16, fontWeight: 700,
+                            width: '100%', height: 64, borderRadius: 14, fontSize: 16, fontWeight: 700,
                             background: (!form.wat || !form.temp) ? 'var(--card-solid)' : 'linear-gradient(135deg, #c4a35a, #a8893e)',
                             border: 'none', color: (!form.wat || !form.temp) ? 'var(--muted)' : '#000',
                             cursor: (!form.wat || !form.temp) ? 'not-allowed' : 'pointer',

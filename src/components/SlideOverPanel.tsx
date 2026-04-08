@@ -1,5 +1,6 @@
 'use client';
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useId } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface SlideOverPanelProps {
   isOpen: boolean;
@@ -18,6 +19,10 @@ const WIDTH_MAP = {
 };
 
 export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width = 'md', children }: SlideOverPanelProps) {
+  const titleId = useId();
+  const subtitleId = useId();
+  const trapRef = useFocusTrap(isOpen);
+
   const handleEsc = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
@@ -41,6 +46,7 @@ export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width
       <div
         className="slide-over-backdrop"
         onClick={onClose}
+        aria-hidden="true"
         style={{
           position: 'fixed',
           inset: 0,
@@ -54,7 +60,12 @@ export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width
 
       {/* Panel */}
       <div
+        ref={trapRef}
         className="slide-over-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subtitle ? subtitleId : undefined}
         style={{
           position: 'fixed',
           top: 0,
@@ -83,17 +94,18 @@ export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width
           }}
         >
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>{title}</h3>
-            {subtitle && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</p>}
+            <h3 id={titleId} style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>{title}</h3>
+            {subtitle && <p id={subtitleId} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
+            aria-label="Sluiten"
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
               color: 'var(--muted)',
-              width: 32,
-              height: 32,
+              width: 44,
+              height: 44,
               borderRadius: 8,
               cursor: 'pointer',
               display: 'flex',

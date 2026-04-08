@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -16,6 +16,16 @@ export default function Recepten() {
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [filter, setFilter] = useState('Alles');
+    const [kitchenMode, setKitchenMode] = useState<Recept | null>(null);
+    const [kitchenStep, setKitchenStep] = useState(0);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     const categories = ['Alles', 'Vlees', 'Vis', 'Bijgerecht', 'Saus', 'Dessert', 'Drank'];
 
@@ -60,6 +70,103 @@ export default function Recepten() {
 
     function removeIngredient(idx: number) {
         setField('ingredienten', form!.ingredienten.filter(function (_: any, i: number) { return i !== idx; }));
+    }
+
+    // Kitchen Step-Through Mode
+    if (kitchenMode) {
+        const steps = (kitchenMode.instructies || '').split('\n').filter(function (s: string) { return s.trim().length > 0; });
+        const ingredients = (kitchenMode.ingredienten || []) as any[];
+        const totalSteps = steps.length + 1; // ingredients page + instruction steps
+        const isIngredientPage = kitchenStep === 0;
+
+        return (
+            <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '16px 12px', position: 'relative' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <button onClick={function () { setKitchenMode(null); setKitchenStep(0); }}
+                        style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                        <i className="fa-solid fa-arrow-left" style={{ marginRight: 6 }}></i> Terug
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
+                        {kitchenStep + 1} / {totalSteps}
+                    </span>
+                </div>
+
+                <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)', textAlign: 'center', marginBottom: 8, textTransform: 'uppercase' }}>
+                    {kitchenMode.naam}
+                </h2>
+
+                {/* Progress bar */}
+                <div style={{ width: '100%', height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 24 }}>
+                    <div style={{ width: ((kitchenStep + 1) / totalSteps * 100) + '%', height: '100%', background: 'var(--brand)', borderRadius: 2, transition: 'width 0.3s ease' }} />
+                </div>
+
+                {/* Content */}
+                {isIngredientPage ? (
+                    <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, textAlign: 'center', color: 'var(--text)' }}>
+                            <i className="fa-solid fa-list" style={{ marginRight: 8, color: 'var(--brand)' }}></i>
+                            Ingredienten ({kitchenMode.porties} porties)
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {ingredients.map(function (ing: any, idx: number) {
+                                return (
+                                    <div key={idx} style={{
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        padding: '14px 16px', background: 'var(--card)', border: '1px solid var(--border)',
+                                        borderRadius: 12, fontSize: 15,
+                                    }}>
+                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>{ing.naam}</span>
+                                        <span style={{ color: 'var(--brand)', fontWeight: 700 }}>{ing.hoeveelheid} {ing.eenheid}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <div style={{
+                            fontSize: 64, fontWeight: 800, color: 'var(--brand)', marginBottom: 16, opacity: 0.3,
+                        }}>
+                            {kitchenStep}
+                        </div>
+                        <p style={{
+                            fontSize: 20, lineHeight: 1.6, color: 'var(--text)', fontWeight: 500,
+                            padding: '0 8px', maxWidth: 500, margin: '0 auto',
+                        }}>
+                            {steps[kitchenStep - 1]}
+                        </p>
+                    </div>
+                )}
+
+                {/* Navigation buttons */}
+                <div style={{ display: 'flex', gap: 12, marginTop: 32, padding: '0 8px' }}>
+                    <button onClick={function () { setKitchenStep(Math.max(0, kitchenStep - 1)); }}
+                        disabled={kitchenStep === 0}
+                        style={{
+                            flex: 1, height: 56, borderRadius: 14, fontSize: 16, fontWeight: 700,
+                            background: kitchenStep === 0 ? 'var(--card-solid)' : 'rgba(255,255,255,0.05)',
+                            border: '1px solid var(--border)', color: kitchenStep === 0 ? 'var(--muted)' : 'var(--text)',
+                            cursor: kitchenStep === 0 ? 'not-allowed' : 'pointer',
+                        }}>
+                        <i className="fa-solid fa-chevron-left"></i> Vorige
+                    </button>
+                    <button onClick={function () {
+                        if (kitchenStep < totalSteps - 1) { setKitchenStep(kitchenStep + 1); }
+                        else { setKitchenMode(null); setKitchenStep(0); showToast('Recept voltooid!', 'success'); }
+                    }}
+                        style={{
+                            flex: 1, height: 56, borderRadius: 14, fontSize: 16, fontWeight: 700,
+                            background: kitchenStep === totalSteps - 1 ? 'var(--brand)' : 'rgba(255,191,0,0.1)',
+                            border: kitchenStep === totalSteps - 1 ? 'none' : '1px solid rgba(255,191,0,0.3)',
+                            color: kitchenStep === totalSteps - 1 ? '#000' : 'var(--brand)',
+                            cursor: 'pointer',
+                        }}>
+                        {kitchenStep === totalSteps - 1 ? 'Klaar!' : 'Volgende'} <i className="fa-solid fa-chevron-right" style={{ marginLeft: 4 }}></i>
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     if (editing !== null && form) {
@@ -263,6 +370,16 @@ export default function Recepten() {
                                 <span><i className="fa-solid fa-clock"></i> {r.preptime} min</span>
                                 <span><i className="fa-solid fa-list"></i> {(r.ingredienten || []).length} ingr.</span>
                             </div>
+                            {r.instructies && (
+                                <button onClick={function (e) { e.stopPropagation(); setKitchenMode(r); setKitchenStep(0); }}
+                                    style={{
+                                        marginTop: 10, width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                                        background: 'rgba(255,191,0,.08)', border: '1px solid rgba(255,191,0,.2)',
+                                        color: 'var(--brand)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
+                                    }}>
+                                    <i className="fa-solid fa-utensils" style={{ marginRight: 6 }}></i> Keuken Mode
+                                </button>
+                            )}
                             {calcRecipeCost(r) > 0 && (
                                 <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                                     <span style={{ fontSize: 11, color: 'var(--purple)', fontWeight: 700 }}><i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i> Kostprijs</span>

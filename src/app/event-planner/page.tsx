@@ -166,6 +166,7 @@ export default function EventPlannerDashboard() {
                                     className="rounded-xl border border-[var(--border)] bg-black/40 px-3 py-1.5 text-xs font-bold focus:border-[var(--brand)] outline-none"
                                     value={userRole}
                                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setUserRole(e.target.value)}
+                                    aria-label="Rol selecteren"
                                 >
                                     <option value="viewer">viewer</option>
                                     <option value="planner">planner</option>

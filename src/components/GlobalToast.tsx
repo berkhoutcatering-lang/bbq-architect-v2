@@ -23,24 +23,29 @@ export default function GlobalToast() {
     if (!notifications || notifications.length === 0) return null;
 
     return (
-        <div style={{
-            position: 'fixed',
-            bottom: '5rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column' as const,
-            gap: '0.5rem',
-            alignItems: 'center',
-            pointerEvents: 'none' as const,
-            width: '92%',
-            maxWidth: '480px',
-        }}>
+        <div
+            role="status"
+            aria-live="polite"
+            aria-label="Systeemmeldingen"
+            style={{
+                position: 'fixed',
+                bottom: '5rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 9999,
+                display: 'flex',
+                flexDirection: 'column' as const,
+                gap: '0.5rem',
+                alignItems: 'center',
+                pointerEvents: 'none' as const,
+                width: '92%',
+                maxWidth: '480px',
+            }}
+        >
             {notifications.map(function (n: Notification) {
                 const cfg = typeConfig[n.type] || typeConfig.info;
                 return (
-                    <div key={n.id} style={{
+                    <div key={n.id} role="alert" style={{
                         pointerEvents: 'all' as const,
                         display: 'flex',
                         alignItems: 'center',
@@ -57,12 +62,13 @@ export default function GlobalToast() {
                         animation: 'slideUp 0.25s ease',
                         backdropFilter: 'blur(8px)',
                     }}>
-                        <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{cfg.icon}</span>
+                        <span style={{ fontSize: '1.25rem', flexShrink: 0 }} aria-hidden="true">{cfg.icon}</span>
                         <span style={{ color: 'var(--text)', fontSize: '0.875rem', lineHeight: 1.4, flex: 1 }}>
                             {n.message}
                         </span>
                         <button
                             onClick={function () { dismissNotification(n.id); }}
+                            aria-label="Melding sluiten"
                             style={{
                                 background: 'none',
                                 border: 'none',

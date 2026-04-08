@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
@@ -29,6 +29,14 @@ export default function Events() {
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [searchQuery, setSearchQuery] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     function getReflectie(eventId: number): EventReflectie | undefined {
         return reflecties.find(function (r) { return r.event_id === eventId; });
@@ -448,6 +456,7 @@ export default function Events() {
                     value={searchQuery}
                     onChange={function (e) { setSearchQuery(e.target.value); }}
                     placeholder="Zoek op naam, locatie of klant..."
+                    aria-label="Zoek events"
                     style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginBottom: 8 }}
                 />
                 <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
@@ -532,6 +541,40 @@ export default function Events() {
                     );
                 })}
             </div>
+
+            {/* Mobile Quick-Action Bar */}
+            {isMobile && (
+                <div style={{
+                    position: 'fixed', bottom: 72, left: 0, right: 0, zIndex: 40,
+                    display: 'flex', gap: 8, padding: '0 12px',
+                    justifyContent: 'center',
+                }}>
+                    <button onClick={function () { router.push('/uren'); }} style={{
+                        flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
+                        background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.3)',
+                        color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
+                    }}>
+                        <i className="fa-solid fa-clock"></i> Uren
+                    </button>
+                    <button onClick={function () { router.push('/haccp'); }} style={{
+                        flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
+                        background: 'rgba(34,197,94,.15)', border: '1px solid rgba(34,197,94,.3)',
+                        color: '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
+                    }}>
+                        <i className="fa-solid fa-thermometer"></i> HACCP
+                    </button>
+                    <button onClick={newEvent} style={{
+                        flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
+                        background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)',
+                        color: 'var(--brand)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
+                    }}>
+                        <i className="fa-solid fa-plus"></i> Nieuw
+                    </button>
+                </div>
+            )}
         </>
     );
 }

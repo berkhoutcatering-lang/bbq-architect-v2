@@ -866,6 +866,7 @@ export default function AiAssistant(): React.ReactElement {
                                 onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>): void { setInput(e.target.value); }}
                                 onKeyDown={handleKey}
                                 placeholder="Opdracht of vraag… (Enter = versturen)"
+                                aria-label="AI opdracht invoeren"
                                 disabled={isLoading}
                                 autoComplete="off"
                                 rows={1}

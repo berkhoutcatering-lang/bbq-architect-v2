@@ -38,21 +38,26 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
     return (
         <ToastContext.Provider value={showToast}>
             {children}
-            <div style={{
-                position: 'fixed',
-                top: '1.5rem',
-                right: '1.5rem',
-                zIndex: 9999,
-                display: 'flex',
-                flexDirection: 'column' as const,
-                gap: '0.5rem',
-                alignItems: 'flex-end',
-                pointerEvents: 'none' as const,
-            }}>
+            <div
+                role="status"
+                aria-live="polite"
+                aria-label="Meldingen"
+                style={{
+                    position: 'fixed',
+                    top: '1.5rem',
+                    right: '1.5rem',
+                    zIndex: 9999,
+                    display: 'flex',
+                    flexDirection: 'column' as const,
+                    gap: '0.5rem',
+                    alignItems: 'flex-end',
+                    pointerEvents: 'none' as const,
+                }}
+            >
                 {toasts.map(function (t) {
                     const cfg = typeConfig[t.type] || typeConfig.info;
                     return (
-                        <div key={t.id} style={{
+                        <div key={t.id} role="alert" style={{
                             pointerEvents: 'all' as const,
                             display: 'flex',
                             alignItems: 'center',
@@ -68,7 +73,7 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
                             animation: 'toastIn 0.25s ease',
                             backdropFilter: 'blur(8px)',
                         }}>
-                            <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{cfg.icon}</span>
+                            <span style={{ fontSize: '1.1rem', flexShrink: 0 }} aria-hidden="true">{cfg.icon}</span>
                             <span style={{ color: 'var(--text)', fontSize: '0.85rem', lineHeight: 1.4, flex: 1 }}>
                                 {t.msg}
                             </span>
@@ -76,6 +81,7 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
                                 onClick={function () {
                                     setToasts(function (prev) { return prev.filter(function (x) { return x.id !== t.id; }); });
                                 }}
+                                aria-label="Melding sluiten"
                                 style={{
                                     background: 'none',
                                     border: 'none',
