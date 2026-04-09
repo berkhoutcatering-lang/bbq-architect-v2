@@ -105,17 +105,17 @@ export default function DashboardPage() {
 
   const liveActions: { id: string; urgency: string; message: string; link: string; icon: string }[] = [];
   if (lowStockItems.length > 0) {
-    liveActions.push({ id: 'a1', urgency: 'high', message: `${lowStockItems.length} items onder minimum voorraad`, link: '/voorraad', icon: 'fa-boxes-stacked' });
+    liveActions.push({ id: 'a1', urgency: 'high', message: `${lowStockItems.length} items onder minimum voorraad`, link: '/voorraad', icon: 'Package' });
   }
   if (pendingSuggestions.length > 0) {
-    liveActions.push({ id: 'a2', urgency: 'medium', message: `${pendingSuggestions.length} Pitmaster Ai suggesties`, link: '/agenda', icon: 'fa-wand-magic-sparkles' });
+    liveActions.push({ id: 'a2', urgency: 'medium', message: `${pendingSuggestions.length} Pitmaster Ai suggesties`, link: '/agenda', icon: 'Wand2' });
   }
   if (openFacturen.length > 0) {
-    liveActions.push({ id: 'a3', urgency: 'medium', message: `${openFacturen.length} openstaande facturen`, link: '/facturen', icon: 'fa-file-invoice' });
+    liveActions.push({ id: 'a3', urgency: 'medium', message: `${openFacturen.length} openstaande facturen`, link: '/facturen', icon: 'FileText' });
   }
   lowMargeOffertes.forEach((o: any) => {
     const m = _calcMarge(o);
-    liveActions.push({ id: `o_${o.id}`, urgency: 'high', message: `Offerte ${o.client_naam} marge: ${m.margePct.toFixed(1)}%`, link: '/offertes', icon: 'fa-triangle-exclamation' });
+    liveActions.push({ id: `o_${o.id}`, urgency: 'high', message: `Offerte ${o.client_naam} marge: ${m.margePct.toFixed(1)}%`, link: '/offertes', icon: 'AlertTriangle' });
   });
 
   // --- AI Inzichten nudges ---

@@ -9,7 +9,7 @@ import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame } from 'lucide-react';
+import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2 } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import type { Klant } from '@/types';
 
@@ -98,7 +98,7 @@ function Klanten() {
             <MetallicCard hover={false}>
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuwe Klant' : 'Klant Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Contactgegevens</h4>
@@ -127,20 +127,20 @@ function Klanten() {
                                 return (
                                     <a href={'https://wa.me/' + waTel} target="_blank" rel="noopener noreferrer"
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(37,211,102,.1)', border: '1px solid rgba(37,211,102,.25)', color: '#25d366', textDecoration: 'none', cursor: 'pointer' }}>
-                                        <i className="fa-brands fa-whatsapp" style={{ fontSize: 14 }}></i> WhatsApp
+                                        <MessageCircle size={14} /> WhatsApp
                                     </a>
                                 );
                             })()}
                             {form.telefoon && (
                                 <a href={'tel:' + form.telefoon}
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: '#3b82f6', textDecoration: 'none' }}>
-                                    <i className="fa-solid fa-phone" style={{ fontSize: 12 }}></i> Bellen
+                                    <Phone size={12} /> Bellen
                                 </a>
                             )}
                             {form.email && (
                                 <a href={'mailto:' + form.email}
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.25)', color: '#c4a35a', textDecoration: 'none' }}>
-                                    <i className="fa-solid fa-envelope" style={{ fontSize: 12 }}></i> Email
+                                    <Mail size={12} /> Email
                                 </a>
                             )}
                         </div>
@@ -150,7 +150,7 @@ function Klanten() {
                     {stats && (
                         <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                             <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginBottom: 12 }}>
-                                <i className="fa-solid fa-chart-bar" style={{ marginRight: 6 }}></i>Klant Overzicht
+                                <BarChart3 size={14} className="mr-1.5" />Klant Overzicht
                             </h4>
                             <div className="stat-grid grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="stat-card">
@@ -170,7 +170,7 @@ function Klanten() {
                             {/* Gedetailleerde historie */}
                             {stats.eventList && stats.eventList.length > 0 && (
                                 <div style={{ marginTop: 16 }}>
-                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Events</h5>
+                                    <h5 style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Events</h5>
                                     {stats.eventList.slice(0, 5).map(function (ev: any) {
                                         const statusColor = ev.status === 'confirmed' ? '#10b981' : ev.status === 'completed' ? '#3b82f6' : '#f59e0b';
                                         return (
@@ -188,7 +188,7 @@ function Klanten() {
 
                             {stats.offerteList && stats.offerteList.length > 0 && (
                                 <div style={{ marginTop: 12 }}>
-                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Offertes</h5>
+                                    <h5 style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Offertes</h5>
                                     {stats.offerteList.slice(0, 5).map(function (o: any) {
                                         let totaal = 0;
                                         (o.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
@@ -204,7 +204,7 @@ function Klanten() {
 
                             {stats.factuurList && stats.factuurList.length > 0 && (
                                 <div style={{ marginTop: 12 }}>
-                                    <h5 style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Facturen</h5>
+                                    <h5 style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Facturen</h5>
                                     {stats.factuurList.slice(0, 5).map(function (f: any) {
                                         let totaal = 0;
                                         (f.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
@@ -225,8 +225,8 @@ function Klanten() {
                     )}
 
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveKlant}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteKlant}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        <button className="btn btn-brand" onClick={saveKlant}><Save size={14} /> Opslaan</button>
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteKlant}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>
             </MetallicCard>
@@ -257,7 +257,7 @@ function Klanten() {
         <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Klanten ({filtered.length}{filtered.length !== klanten.length ? ' / ' + klanten.length : ''})</h3>
-                <button className="btn btn-brand" onClick={newKlant}><i className="fa-solid fa-plus"></i> Nieuwe Klant</button>
+                <button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>
             </div>
             <PageHint id="klanten" title="Klanten" description="Beheer je klantenbestand. Klik op een klant om details te bekijken of koppel direct aan events en offertes." />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -270,14 +270,14 @@ function Klanten() {
                 {['alle', 'Particulier', 'Zakelijk', 'Festival', 'Horeca'].map(function (s) {
                     return <button key={s} className={'btn btn-sm ' + (filterType === s ? 'btn-brand' : 'btn-ghost')}
                         onClick={function () { setFilterType(s); }}
-                        style={{ fontSize: 11 }}>{s === 'alle' ? 'Alle' : s}</button>;
+                        style={{ fontSize: 12 }}>{s === 'alle' ? 'Alle' : s}</button>;
                 })}
             </div>
             <MetallicCard hover={false}>
                 {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
                 {klanten.length > 0 && filtered.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
-                        <i className="fa-solid fa-search" style={{ fontSize: 24, marginBottom: 12, display: 'block', opacity: 0.4 }}></i>
+                        <Search size={24} style={{ display: 'block', opacity: 0.4 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Geen klanten gevonden</div>
                         <div style={{ fontSize: 12 }}>Pas je zoekopdracht of filters aan</div>
                     </div>
@@ -292,12 +292,12 @@ function Klanten() {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                                     {k.naam}
-                                    {k.bedrijf && <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>({k.bedrijf})</span>}
+                                    {k.bedrijf && <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>({k.bedrijf})</span>}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                    {k.email && <><i className="fa-solid fa-envelope" style={{ marginRight: 4, fontSize: 10 }}></i>{k.email}</>}
-                                    {k.telefoon && <span style={{ marginLeft: 12 }}><i className="fa-solid fa-phone" style={{ marginRight: 4, fontSize: 10 }}></i>{k.telefoon}</span>}
-                                    {k.plaats && <span style={{ marginLeft: 12 }}><i className="fa-solid fa-location-dot" style={{ marginRight: 4, fontSize: 10 }}></i>{k.plaats}</span>}
+                                    {k.email && <><Mail size={10} className="mr-1.5" />{k.email}</>}
+                                    {k.telefoon && <span style={{ marginLeft: 12 }}><Phone size={10} className="mr-1.5" />{k.telefoon}</span>}
+                                    {k.plaats && <span style={{ marginLeft: 12 }}><MapPin size={10} className="mr-1.5" />{k.plaats}</span>}
                                 </div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -309,7 +309,7 @@ function Klanten() {
                                             onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}
                                             style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(37,211,102,.1)', color: '#25d366', fontSize: 13, textDecoration: 'none', flexShrink: 0 }}
                                             title="WhatsApp">
-                                            <i className="fa-brands fa-whatsapp"></i>
+                                            <MessageCircle size={14} />
                                         </a>
                                     );
                                 })()}

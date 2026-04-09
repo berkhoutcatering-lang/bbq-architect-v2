@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import { AlertTriangle, RotateCw } from 'lucide-react';
 
 interface ErrorProps {
     error: Error & { digest?: string };
@@ -14,7 +15,7 @@ export default function Error({ error, reset }: ErrorProps) {
     return (
         <div style={{ padding: 40, background: 'var(--card)', borderRadius: 12, border: '1px solid rgba(239,68,68,.3)', margin: 20, animation: 'fadeIn 0.4s ease-out' }}>
             <h2 style={{ color: 'var(--red)', fontSize: 20, fontWeight: 800, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <i className="fa-solid fa-triangle-exclamation"></i> Er ging iets mis
+                <AlertTriangle size={14} /> Er ging iets mis
             </h2>
             <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}>
                 Er is een onverwachte fout opgetreden. Probeer de pagina opnieuw te laden.
@@ -23,7 +24,7 @@ export default function Error({ error, reset }: ErrorProps) {
                 {error.message}
             </div>
             <button onClick={function () { reset(); }} style={{ padding: '10px 24px', background: 'var(--brand)', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                <i className="fa-solid fa-rotate-right" style={{ marginRight: 6 }}></i> Probeer opnieuw
+                <RotateCw size={14} className="mr-1.5" /> Probeer opnieuw
             </button>
         </div>
     );

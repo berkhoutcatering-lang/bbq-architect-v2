@@ -89,7 +89,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'events',
         op: 'insert',
         pages: ['/', '/events', '/agenda', '/offertes', '/offerte-editor', '/event-planner'],
-        icon: 'fa-calendar-plus',
+        icon: 'CalendarPlus',
         color: '#3b82f6',
     },
     update_event: {
@@ -97,7 +97,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'events',
         op: 'update',
         pages: ['/events', '/agenda', '/service', '/event-planner'],
-        icon: 'fa-calendar-check',
+        icon: 'CalendarCheck',
         color: '#f59e0b',
     },
     delete_event: {
@@ -105,7 +105,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'events',
         op: 'delete',
         pages: ['/events'],
-        icon: 'fa-calendar-xmark',
+        icon: 'CalendarX',
         color: '#ef4444',
     },
 
@@ -115,7 +115,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'recepten',
         op: 'insert',
         pages: ['/recepten'],
-        icon: 'fa-book-open',
+        icon: 'BookOpen',
         color: '#22c55e',
     },
     update_recept: {
@@ -123,7 +123,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'recepten',
         op: 'update',
         pages: ['/recepten'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
     delete_recept: {
@@ -131,7 +131,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'recepten',
         op: 'delete',
         pages: ['/recepten'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
 
@@ -141,7 +141,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'gerechten',
         op: 'insert',
         pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
-        icon: 'fa-utensils',
+        icon: 'UtensilsCrossed',
         color: '#a78bfa',
     },
     update_gerecht: {
@@ -149,7 +149,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'gerechten',
         op: 'update',
         pages: ['/gerechten', '/menu-engineering'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
     delete_gerecht: {
@@ -157,7 +157,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'gerechten',
         op: 'delete',
         pages: ['/gerechten'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
 
@@ -167,7 +167,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'inventory',
         op: 'insert',
         pages: ['/voorraad', '/inkoop'],
-        icon: 'fa-box-open',
+        icon: 'PackageOpen',
         color: '#4ECDC4',
     },
     update_voorraad: {
@@ -175,7 +175,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'inventory',
         op: 'update',
         pages: ['/voorraad'],
-        icon: 'fa-boxes-stacked',
+        icon: 'Package',
         color: '#f59e0b',
     },
     delete_voorraad: {
@@ -183,7 +183,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'inventory',
         op: 'delete',
         pages: ['/voorraad'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
     process_receipt: {
@@ -191,7 +191,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'inventory',
         op: 'delete',
         pages: ['/voorraad'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
 
@@ -201,7 +201,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'leveranciers',
         op: 'insert',
         pages: ['/inkoop', '/price-intelligence'],
-        icon: 'fa-truck',
+        icon: 'Truck',
         color: '#3b82f6',
     },
     update_leverancier: {
@@ -209,7 +209,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'leveranciers',
         op: 'update',
         pages: ['/inkoop'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
 
@@ -219,7 +219,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'haccp_records',
         op: 'insert',
         pages: ['/haccp', '/service'],
-        icon: 'fa-temperature-half',
+        icon: 'Thermometer',
         color: '#ef4444',
     },
 
@@ -229,7 +229,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'time_logs',
         op: 'insert',
         pages: ['/uren'],
-        icon: 'fa-clock',
+        icon: 'Clock',
         color: '#a78bfa',
     },
     update_urenlog: {
@@ -237,7 +237,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'time_logs',
         op: 'update',
         pages: ['/uren'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
     delete_urenlog: {
@@ -245,7 +245,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'time_logs',
         op: 'delete',
         pages: ['/uren'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
 
@@ -255,7 +255,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'materieel',
         op: 'insert',
         pages: ['/materieel', '/logistiek'],
-        icon: 'fa-wrench',
+        icon: 'Wrench',
         color: '#4ECDC4',
     },
     update_materieel: {
@@ -263,7 +263,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'materieel',
         op: 'update',
         pages: ['/materieel'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
 
@@ -273,7 +273,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'prep_tasks',
         op: 'insert',
         pages: ['/agenda', '/events', '/service'],
-        icon: 'fa-list-check',
+        icon: 'ListChecks',
         color: '#22c55e',
     },
     update_prep_task: {
@@ -281,7 +281,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'prep_tasks',
         op: 'update',
         pages: ['/agenda', '/service'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#f59e0b',
     },
     delete_prep_task: {
@@ -289,7 +289,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'prep_tasks',
         op: 'delete',
         pages: ['/agenda'],
-        icon: 'fa-trash',
+        icon: 'Trash2',
         color: '#ef4444',
     },
 
@@ -299,7 +299,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'offertes',
         op: 'insert',
         pages: ['/offertes', '/offerte-editor', '/event-planner'],
-        icon: 'fa-file-invoice',
+        icon: 'FileText',
         color: '#22c55e',
     },
     update_offerte: {
@@ -307,7 +307,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'offertes',
         op: 'update',
         pages: ['/offertes', '/event-planner'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#3b82f6',
     },
     update_offerte_status: {
@@ -315,7 +315,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'offertes',
         op: 'update',
         pages: ['/offertes', '/event-planner'],
-        icon: 'fa-file-invoice',
+        icon: 'FileText',
         color: '#f59e0b',
     },
 
@@ -325,7 +325,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'facturen',
         op: 'insert',
         pages: ['/facturen'],
-        icon: 'fa-receipt',
+        icon: 'Receipt',
         color: '#22c55e',
     },
     update_factuur: {
@@ -333,7 +333,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'facturen',
         op: 'update',
         pages: ['/facturen'],
-        icon: 'fa-pen-to-square',
+        icon: 'Pencil',
         color: '#3b82f6',
     },
     update_factuur_status: {
@@ -341,7 +341,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'facturen',
         op: 'update',
         pages: ['/facturen'],
-        icon: 'fa-receipt',
+        icon: 'Receipt',
         color: '#f59e0b',
     },
 
@@ -351,7 +351,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'ai_conversations',
         op: 'insert',
         pages: ['/ai-chat'],
-        icon: 'fa-floppy-disk',
+        icon: 'Save',
         color: '#FFBF00',
     },
     create_folder: {
@@ -359,7 +359,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'ai_conversation_folders',
         op: 'insert',
         pages: ['/ai-chat'],
-        icon: 'fa-folder-plus',
+        icon: 'FolderPlus',
         color: '#FFBF00',
     },
 
@@ -369,7 +369,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: null,
         op: 'tool',
         pages: ['/', '/events', '/agenda', '/service'],
-        icon: 'fa-list-check',
+        icon: 'ListChecks',
         color: '#22c55e',
         tool: 'generatePrepList',
     },
@@ -378,7 +378,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: null,
         op: 'tool',
         pages: ['/', '/events', '/inkoop', '/voorraad'],
-        icon: 'fa-cart-shopping',
+        icon: 'ShoppingCart',
         color: '#3b82f6',
         tool: 'generateInkooplijst',
     },
@@ -387,7 +387,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: null,
         op: 'tool',
         pages: ['/', '/events', '/agenda', '/service'],
-        icon: 'fa-clipboard-list',
+        icon: 'ClipboardList',
         color: '#a78bfa',
         tool: 'generateEventBriefing',
     },
@@ -396,7 +396,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: null,
         op: 'tool',
         pages: ['/', '/events', '/facturen', '/boekhouding'],
-        icon: 'fa-chart-line',
+        icon: 'LineChart',
         color: '#22c55e',
         tool: 'getEventWinstgevendheid',
     },
@@ -405,7 +405,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'gerechten',
         op: 'bulk_insert',
         pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
-        icon: 'fa-utensils',
+        icon: 'UtensilsCrossed',
         color: '#a78bfa',
         tool: 'bulkCreateGerechten',
     },
@@ -414,7 +414,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: 'gerechten',
         op: 'bulk_delete',
         pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
-        icon: 'fa-filter',
+        icon: 'Filter',
         color: '#ef4444',
         tool: 'filterGerechten',
     },
@@ -423,7 +423,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         table: null,
         op: 'client_only',
         pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
-        icon: 'fa-star-half-stroke',
+        icon: 'StarHalf',
         color: '#f59e0b',
     },
 };

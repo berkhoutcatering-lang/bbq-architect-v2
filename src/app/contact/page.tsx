@@ -115,7 +115,7 @@ export default function Contact() {
                                 <Mail size={16} style={{ color: '#c4a35a' }} />
                             </div>
                             <div>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>E-mail</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>E-mail</div>
                                 <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>support@bbqarchitect.nl</div>
                             </div>
                         </div>
@@ -128,7 +128,7 @@ export default function Contact() {
                                 <Phone size={16} style={{ color: '#c4a35a' }} />
                             </div>
                             <div>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Telefoon</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Telefoon</div>
                                 <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>+31 6 12345678</div>
                             </div>
                         </div>

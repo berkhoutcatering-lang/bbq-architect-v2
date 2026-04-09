@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction, loadPageContextData } from '@/lib/ai-actions';
 import type { ParsedAction } from '@/lib/ai-actions';
 import { PAGE_CHIPS } from '@/lib/constants';
+import { ShoppingCart, FileText, ListChecks, PieChart, Plus, X, Check, Loader2, Send, ArrowRight, AlertTriangle, Trash2, Zap, RotateCcw, Database, Bot } from 'lucide-react';
 
 interface ChatMessage {
     role: 'user' | 'assistant';
@@ -509,7 +510,7 @@ export default function AiAssistant(): React.ReactElement {
         return (
             <div className="tool-card" style={{ background: 'rgba(255,191,0,0.05)', border: '1px solid rgba(255,191,0,0.2)' }}>
                 <div style={{ fontWeight: 800, marginBottom: 8, color: '#FFBF00' }}>
-                    <i className="fa-solid fa-cart-shopping" style={{ marginRight: 6 }}></i>
+                    <ShoppingCart size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Inkooplijst: {data.event?.naam}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
@@ -550,7 +551,7 @@ export default function AiAssistant(): React.ReactElement {
         return (
             <div className="tool-card" style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.2)' }}>
                 <div style={{ fontWeight: 800, marginBottom: 8, color: '#38bdf8' }}>
-                    <i className="fa-solid fa-file-lines" style={{ marginRight: 6 }}></i>
+                    <FileText size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Event Briefing: {data.event?.naam}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 11 }}>
@@ -568,7 +569,7 @@ export default function AiAssistant(): React.ReactElement {
                     </div>
                 </div>
                 <div style={{ marginTop: 10, fontSize: 11 }}>
-                    <i className="fa-solid fa-list-check" style={{ marginRight: 4 }}></i> {data.prep_taken_open} open prep taken
+                    <ListChecks size={12} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} /> {data.prep_taken_open} open prep taken
                 </div>
             </div>
         );
@@ -580,7 +581,7 @@ export default function AiAssistant(): React.ReactElement {
         return (
             <div className="tool-card" style={{ background: isGood ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)', border: isGood ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(239,68,68,0.2)' }}>
                 <div style={{ fontWeight: 800, marginBottom: 8, color: isGood ? '#22c55e' : '#ef4444' }}>
-                    <i className="fa-solid fa-chart-pie" style={{ marginRight: 6 }}></i>
+                    <PieChart size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Rendement: {data.event?.naam}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -661,15 +662,15 @@ export default function AiAssistant(): React.ReactElement {
                     {isPending && (
                         <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                             <button onClick={function (): void { approveAction(msgIdx, action.id); }} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', background: '#FFBF00', color: '#000', fontWeight: 800, fontSize: 11, cursor: 'pointer' }}>
-                                <i className="fa-solid fa-plus" style={{ marginRight: 5 }}></i>Toevoegen aan Menu
+                                <Plus size={11} style={{ marginRight: 5, display: 'inline-block', verticalAlign: 'middle' }} />Toevoegen aan Menu
                             </button>
                             <button onClick={function (): void { rejectAction(msgIdx, action.id); }} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
-                                <i className="fa-solid fa-xmark"></i>
+                                <X size={11} />
                             </button>
                         </div>
                     )}
-                    {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, textAlign: 'center', padding: '4px 0' }}><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 4 }}></i>Toevoegen&#8230;</div>}
-                    {isDone && <div style={{ color: '#22c55e', fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px 0' }}><i className="fa-solid fa-check" style={{ marginRight: 4 }}></i>Toegevoegd aan Menu!</div>}
+                    {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Toevoegen&#8230;</div>}
+                    {isDone && <div style={{ color: '#22c55e', fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={11} />Toegevoegd aan Menu!</div>}
                 </div>
             </div>
         );
@@ -710,7 +711,7 @@ export default function AiAssistant(): React.ReactElement {
                 background: isDone ? 'rgba(34,197,94,.08)' : isError ? 'rgba(239,68,68,.08)' : isRejected ? 'var(--muted-extra-light)' : 'rgba(255,191,0,.08)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <i className={'fa-solid ' + (action.meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? 'var(--muted)' : (action.meta.color || '#FFBF00'), fontSize: 13 }}></i>
+                    <Zap size={13} style={{ color: isDone ? '#22c55e' : isRejected ? 'var(--muted)' : (action.meta.color || '#FFBF00') }} />
                     <span style={{ fontWeight: 700, color: 'var(--text)' }}>{action.meta.label}</span>
                     {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 11 }}>✓ Klaar</span>}
                     {isRejected && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>Geannuleerd</span>}
@@ -725,8 +726,8 @@ export default function AiAssistant(): React.ReactElement {
                 {isPending && (
                     <div>
                         {action.meta && action.meta.op === 'delete' && (
-                            <div style={{ fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 6, padding: '5px 8px', marginBottom: 6 }}>
-                                <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: 4 }}></i>
+                            <div style={{ fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 6, padding: '5px 8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <AlertTriangle size={11} />
                                 <strong>Permanent verwijderen</strong> — dit kan niet ongedaan worden gemaakt!
                             </div>
                         )}
@@ -736,17 +737,17 @@ export default function AiAssistant(): React.ReactElement {
                                 style={{ flex: 1, padding: '5px 0', borderRadius: 7, border: 'none', background: action.meta && action.meta.op === 'delete' ? '#ef4444' : '#22c55e', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
                             >
                                 {action.meta && action.meta.op === 'delete'
-                                    ? <><i className="fa-solid fa-trash" style={{ marginRight: 4 }}></i>Permanent verwijderen</>
-                                    : <><i className="fa-solid fa-check" style={{ marginRight: 4 }}></i>Uitvoeren</>
+                                    ? <><Trash2 size={11} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />Permanent verwijderen</>
+                                    : <><Check size={11} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />Uitvoeren</>
                                 }
                             </button>
                             <button onClick={function (): void { rejectAction(msgIdx, action.id); }} style={{ flex: 1, padding: '5px 0', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
-                                <i className="fa-solid fa-xmark" style={{ marginRight: 4 }}></i>Annuleren
+                                <X size={11} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />Annuleren
                             </button>
                         </div>
                     </div>
                 )}
-                {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11 }}><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 4 }}></i>Bezig…</div>}
+                {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Bezig…</div>}
                 {isError && (action as any).error && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{(action as any).error}</div>}
             </div>
         );
@@ -760,7 +761,7 @@ export default function AiAssistant(): React.ReactElement {
                 title="BBQ System Operator"
                 id="ai-toggle-btn"
             >
-                <i className={'fa-solid ' + (isOpen ? 'fa-xmark' : 'fa-robot')}></i>
+                {isOpen ? <X size={18} /> : <Bot size={18} />}
                 {!isOpen && <span className="ai-pulse-ring"></span>}
             </button>
 
@@ -769,7 +770,7 @@ export default function AiAssistant(): React.ReactElement {
                     {/* Header */}
                     <div className="ai-chat-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div className="ai-avatar-header"><i className="fa-solid fa-robot"></i></div>
+                            <div className="ai-avatar-header"><Bot size={16} /></div>
                             <div>
                                 <div style={{ fontWeight: 800, fontSize: 14, color: '#000' }}>System Operator</div>
                                 <div style={{ fontSize: 10, color: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -781,10 +782,10 @@ export default function AiAssistant(): React.ReactElement {
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={function (): void { setContextLoaded(false); setContextData(null); loadContext(); }} className="ai-clear-btn" title="Data herladen">
-                                <i className="fa-solid fa-database" style={{ fontSize: 11 }}></i>
+                                <Database size={11} />
                             </button>
                             <button onClick={function (): void { setMessages([{ role: 'assistant', content: 'Gesprek gewist. Wat wil je doen?', actions: [] }]); setDishSelections({}); }} className="ai-clear-btn" title="Gesprek wissen">
-                                <i className="fa-solid fa-rotate-left"></i>
+                                <RotateCcw size={12} />
                             </button>
                         </div>
                     </div>
@@ -796,11 +797,11 @@ export default function AiAssistant(): React.ReactElement {
                             return (
                                 <div key={idx}>
                                     <div className={'ai-message-wrapper ' + (isUser ? 'user' : 'assistant')}>
-                                        {!isUser && <div className="ai-avatar"><i className="fa-solid fa-robot"></i></div>}
+                                        {!isUser && <div className="ai-avatar"><Bot size={14} /></div>}
                                         <div className={'ai-message bubble ' + (isUser ? 'user-bubble' : 'assistant-bubble')}>
                                             {msg.contextBadge && (
                                                 <div style={{ fontSize: 10, color: '#22c55e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                    <i className="fa-solid fa-database"></i> Live data geladen
+                                                    <Database size={10} /> Live data geladen
                                                 </div>
                                             )}
                                             {(msg.content || msg.streaming) && renderText(msg.content, msg.streaming)}
@@ -810,7 +811,7 @@ export default function AiAssistant(): React.ReactElement {
                                             {msg.winstgevendheid && renderWinstgevendheid(msg.winstgevendheid)}
                                             {msg.successBadge && msg.successLink && (
                                                 <a href={msg.successLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, background: 'rgba(167,139,250,.15)', border: '1px solid rgba(167,139,250,.3)', color: '#a78bfa', padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
-                                                    <i className="fa-solid fa-arrow-right"></i>{msg.successBadge}
+                                                    <ArrowRight size={11} />{msg.successBadge}
                                                 </a>
                                             )}
                                             {msg.undoInsert && (
@@ -819,7 +820,7 @@ export default function AiAssistant(): React.ReactElement {
                                                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: 'transparent', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444', padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
                                                     title="Maak dit ongedaan"
                                                 >
-                                                    <i className="fa-solid fa-rotate-left"></i>Ongedaan maken
+                                                    <RotateCcw size={10} />Ongedaan maken
                                                 </button>
                                             )}
                                         </div>
@@ -834,7 +835,7 @@ export default function AiAssistant(): React.ReactElement {
                         })}
                         {isLoading && (
                             <div className="ai-message-wrapper assistant">
-                                <div className="ai-avatar"><i className="fa-solid fa-robot"></i></div>
+                                <div className="ai-avatar"><Bot size={14} /></div>
                                 <div className="ai-message bubble assistant-bubble loading-dots">
                                     <span></span><span></span><span></span>
                                 </div>
@@ -872,7 +873,7 @@ export default function AiAssistant(): React.ReactElement {
                                 className="ai-textarea"
                             />
                             <button type="submit" disabled={!input.trim() || isLoading} className="send-btn" id="ai-send-btn">
-                                <i className="fa-solid fa-paper-plane"></i>
+                                <Send size={14} />
                             </button>
                         </form>
                     </div>

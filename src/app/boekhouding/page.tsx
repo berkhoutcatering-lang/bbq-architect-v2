@@ -7,7 +7,7 @@ import {
     ComposedChart, Line, PieChart, Pie, Legend,
 } from 'recharts';
 import EmptyState from '@/components/EmptyState';
-import { Flame } from 'lucide-react';
+import { BarChart3, Calculator, Clock, Euro, Flame, LineChart, Percent, PieChart as PieChartIcon, Star, Users } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import type { Factuur, Event as DbEvent } from '@/types';
 
@@ -110,25 +110,25 @@ export default function Boekhouding() {
                 <>
                     <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><i className="fa-solid fa-euro-sign"></i></div>
+                            <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Euro size={14} /></div>
                             <div className="stat-val">{fmt(omzet)}</div>
                             <div className="stat-label">Omzet (betaald)</div>
                             <div className="stat-sub">{betaald.length} facturen</div>
                         </div>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'rgba(245,158,11,.12)', color: 'var(--amber)' }}><i className="fa-solid fa-clock"></i></div>
+                            <div className="stat-icon" style={{ background: 'rgba(245,158,11,.12)', color: 'var(--amber)' }}><Clock size={14} /></div>
                             <div className="stat-val">{fmt(openstaand)}</div>
                             <div className="stat-label">Openstaand</div>
                             <div className="stat-sub">{open.length} facturen</div>
                         </div>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><i className="fa-solid fa-chart-line"></i></div>
+                            <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><LineChart size={14} /></div>
                             <div className="stat-val">{fmt(prognose)}</div>
                             <div className="stat-label">Prognose (events)</div>
                             <div className="stat-sub">{events.length} events</div>
                         </div>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><i className="fa-solid fa-percent"></i></div>
+                            <div className="stat-icon" style={{ background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><Percent size={14} /></div>
                             <div className="stat-val">{omzet + openstaand > 0 ? Math.round((omzet / (omzet + openstaand)) * 100) + '%' : '—'}</div>
                             <div className="stat-label">Betaald Ratio</div>
                             <div className="stat-sub">{facturen.length} facturen totaal</div>
@@ -139,9 +139,9 @@ export default function Boekhouding() {
                         <MetallicCard hover={false}>
                             <div className="panel-head">
                                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <i className="fa-solid fa-chart-column" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Maandomzet &amp; Cumulatief
+                                    <BarChart3 size={12} style={{ color: 'var(--brand)' }} /> Maandomzet &amp; Cumulatief
                                 </h3>
-                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
+                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>betaalde facturen</span>
                             </div>
                             <div className="panel-body" style={{ height: 200, marginTop: 12 }}>
                                 <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
@@ -163,9 +163,9 @@ export default function Boekhouding() {
                             <MetallicCard hover={false}>
                                 <div className="panel-head">
                                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <i className="fa-solid fa-chart-pie" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Facturen Status
+                                        <PieChartIcon size={12} style={{ color: 'var(--purple)' }} /> Facturen Status
                                     </h3>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{facturen.length} totaal</span>
+                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{facturen.length} totaal</span>
                                 </div>
                                 <div style={{ height: 200, marginTop: 12 }}>
                                     <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
@@ -188,7 +188,7 @@ export default function Boekhouding() {
                 <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head"><h3>BTW Overzicht</h3></div>
                     <div className="panel-body">
-                        {Object.keys(btwMap).length === 0 && <div className="empty-state"><i className="fa-solid fa-calculator"></i><p>Geen BTW data beschikbaar</p></div>}
+                        {Object.keys(btwMap).length === 0 && <div className="empty-state"><Calculator size={14} /><p>Geen BTW data beschikbaar</p></div>}
                         <div className="tbl-wrap">
                         <table className="tbl">
                             <thead><tr><th>BTW %</th><th style={{ textAlign: 'right' }}>Netto Omzet</th><th style={{ textAlign: 'right' }}>BTW Bedrag</th><th style={{ textAlign: 'right' }}>Bruto</th></tr></thead>
@@ -221,11 +221,11 @@ export default function Boekhouding() {
                 <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head">
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <i className="fa-solid fa-star" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Top Klanten
+                            <Star size={12} style={{ color: 'var(--brand)' }} /> Top Klanten
                         </h3>
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>betaalde facturen</span>
                     </div>
-                    {topClients.length === 0 && <div className="empty-state"><i className="fa-solid fa-users"></i><p>Geen data beschikbaar</p></div>}
+                    {topClients.length === 0 && <div className="empty-state"><Users size={14} /><p>Geen data beschikbaar</p></div>}
                     {topClients.length > 0 && (
                         <>
                             <div style={{ height: 250, padding: '16px 0' }}>

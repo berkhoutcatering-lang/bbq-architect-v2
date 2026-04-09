@@ -31,7 +31,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 10, color: 'var(--text)',
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, color: 'var(--muted)', marginBottom: 6, display: 'block',
+  fontSize: 12, color: 'var(--muted)', marginBottom: 6, display: 'block',
   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
 };
 
@@ -261,7 +261,7 @@ export default function KlantGesprek() {
         </div>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 300, color: 'white', letterSpacing: '-0.02em' }}>Klantgesprek</h1>
-          <p style={{ fontSize: 11, color: 'var(--muted)' }}>Intake bij potentiële klant</p>
+          <p style={{ fontSize: 12, color: 'var(--muted)' }}>Intake bij potentiële klant</p>
         </div>
       </div>
 
@@ -274,14 +274,14 @@ export default function KlantGesprek() {
             <React.Fragment key={s.label}>
               <button onClick={function () { if (i < step && canProceed()) setStep(i); }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8,
-                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', border: 'none', cursor: i <= step ? 'pointer' : 'default',
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+                  fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', border: 'none', cursor: i <= step ? 'pointer' : 'default',
                   background: i === step ? 'rgba(59,130,246,.1)' : 'transparent',
                   color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
                 }}>
                 <span style={{
                   width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, border: '1.5px solid',
+                  fontSize: 12, fontWeight: 700, border: '1.5px solid',
                   borderColor: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--border)',
                   background: i < step ? 'rgba(16,185,129,.1)' : i === step ? 'rgba(59,130,246,.1)' : 'transparent',
                   color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
@@ -301,7 +301,7 @@ export default function KlantGesprek() {
         <MetallicCard className="p-5 md:p-7" hover={false} accent="#c4a35a">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Users size={16} className="text-[#c4a35a]" />
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Klantgegevens</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Klantgegevens</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <KlantAutocomplete label="Klantnaam" value={klant.naam}
@@ -329,7 +329,7 @@ export default function KlantGesprek() {
         <MetallicCard className="p-5 md:p-7" hover={false} accent="#3b82f6">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Calendar size={16} className="text-[#3b82f6]" />
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Eventdetails</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Eventdetails</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div><label style={labelStyle}>Event naam</label><input value={event.naam} onChange={function (e) { setEvent(function (p) { return Object.assign({}, p, { naam: e.target.value }); }); }} style={inputStyle} placeholder={klant.naam || 'bijv. Bruiloft De Vries'} /></div>
@@ -358,7 +358,7 @@ export default function KlantGesprek() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <UtensilsCrossed size={16} className="text-emerald-400" />
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Menu wensen</span>
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Menu wensen</span>
             </div>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>{totalMenuDishes} gekozen</span>
           </div>
@@ -372,7 +372,7 @@ export default function KlantGesprek() {
                 <div key={gang.slug}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{gang.naam}</span>
-                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>{selected.length} gekozen</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{selected.length} gekozen</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {gangGerechten.map(function (g: any) {
@@ -393,7 +393,7 @@ export default function KlantGesprek() {
                         </button>
                       );
                     })}
-                    {gangGerechten.length === 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Geen gerechten</span>}
+                    {gangGerechten.length === 0 && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Geen gerechten</span>}
                   </div>
                 </div>
               );
@@ -404,7 +404,7 @@ export default function KlantGesprek() {
                 <label style={labelStyle}>Allergieen & dieetwensen per gast</label>
                 <button onClick={function () {
                   setGastenDieet(function (prev) { return prev.concat([{ id: Date.now(), label: 'Gast ' + (prev.length + 1), allergenen: [], dieet: 'geen' }]); });
-                }} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', color: '#10b981', cursor: 'pointer' }}>
+                }} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', color: '#10b981', cursor: 'pointer' }}>
                   + Gast met allergie/dieet
                 </button>
               </div>
@@ -428,7 +428,7 @@ export default function KlantGesprek() {
 
                     {/* Dieet type */}
                     <div style={{ marginBottom: 8 }}>
-                      <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dieet</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dieet</span>
                       <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                         {[{ code: 'geen', label: 'Geen', icon: '' }].concat(DIEETWENSEN).map(function (d) {
                           const active = gast.dieet === d.code;
@@ -436,7 +436,7 @@ export default function KlantGesprek() {
                             <button key={d.code} onClick={function () {
                               setGastenDieet(function (prev) { return prev.map(function (g) { return g.id === gast.id ? Object.assign({}, g, { dieet: d.code }) : g; }); });
                             }} style={{
-                              padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                               background: active ? 'rgba(16,185,129,.12)' : 'transparent',
                               border: active ? '1px solid #10b981' : '1px solid var(--border)',
                               color: active ? '#10b981' : 'var(--muted)',
@@ -450,7 +450,7 @@ export default function KlantGesprek() {
 
                     {/* Allergenen */}
                     <div>
-                      <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allergenen</span>
+                      <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allergenen</span>
                       <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                         {ALLERGENEN.map(function (a) {
                           const active = gast.allergenen.includes(a.code);
@@ -464,7 +464,7 @@ export default function KlantGesprek() {
                                 });
                               });
                             }} style={{
-                              padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                              padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                               background: active ? 'rgba(239,68,68,.1)' : 'transparent',
                               border: active ? '1px solid rgba(239,68,68,.4)' : '1px solid var(--border)',
                               color: active ? '#ef4444' : 'var(--muted-light)',
@@ -502,7 +502,7 @@ export default function KlantGesprek() {
         <MetallicCard className="p-5 md:p-7" hover={false} accent="#c4a35a">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Euro size={16} className="text-[#c4a35a]" />
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Budget & verwachtingen</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Budget & verwachtingen</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
@@ -510,9 +510,9 @@ export default function KlantGesprek() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <input type="number" step="0.50" value={budget.ppp} onChange={function (e) { setBudget(function (p) { return Object.assign({}, p, { ppp: parseFloat(e.target.value) || 0 }); }); }} style={Object.assign({}, inputStyle, { fontSize: 20, fontWeight: 300, textAlign: 'center' as const, maxWidth: 120 })} />
                 <div style={{ flex: 1, textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>Geschat totaal</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>Geschat totaal</div>
                   <div style={{ fontSize: 22, fontWeight: 300, color: '#c4a35a' }}>{fmt(totaalBedrag)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted-light)' }}>{event.gasten} gasten × {fmt(budget.ppp)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted-light)' }}>{event.gasten} gasten × {fmt(budget.ppp)}</div>
                 </div>
               </div>
             </div>
@@ -549,7 +549,7 @@ export default function KlantGesprek() {
         <MetallicCard className="p-5 md:p-7" hover={false} accent="#8b8bf0">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <StickyNote size={16} className="text-[#8b8bf0]" />
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Notities & opvolging</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Notities & opvolging</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div><label style={labelStyle}>Gespreknotities</label><textarea rows={5} value={notities.tekst} onChange={function (e) { setNotities(function (p) { return Object.assign({}, p, { tekst: e.target.value }); }); }} style={Object.assign({}, inputStyle, { resize: 'vertical' as const })} placeholder="Wat is er besproken? Eerste indruk, sfeer, bijzonderheden..." /></div>
@@ -570,7 +570,7 @@ export default function KlantGesprek() {
       {step === 5 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <MetallicCard className="p-5" hover={false} accent="#10b981">
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 12, display: 'block' }}>Samenvatting</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 12, display: 'block' }}>Samenvatting</span>
 
             {[
               { icon: <Users size={14} className="text-[#c4a35a]" />, label: klant.naam + (klant.bedrijf ? ' (' + klant.bedrijf + ')' : ''), sub: [klant.telefoon, klant.email, klant.type].filter(Boolean).join(' • ') },
@@ -584,7 +584,7 @@ export default function KlantGesprek() {
                   <div style={{ flexShrink: 0 }}>{row.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.sub}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.sub}</div>
                   </div>
                 </div>
               );
@@ -601,7 +601,7 @@ export default function KlantGesprek() {
                   const allergenLabels = g.allergenen.map(function (code) { const a = ALLERGENEN.find(function (x) { return x.code === code; }); return a ? a.icon + ' ' + a.label : code; });
                   const dieetLabel = g.dieet !== 'geen' ? (DIEETWENSEN.find(function (d) { return d.code === g.dieet; })?.label || g.dieet) : '';
                   return (
-                    <div key={g.id} style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    <div key={g.id} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                       <span style={{ fontWeight: 600, color: '#ef4444' }}>{g.label}:</span>{' '}
                       {dieetLabel && <span style={{ color: '#10b981' }}>{dieetLabel}</span>}
                       {dieetLabel && allergenLabels.length > 0 && ' + '}
@@ -621,13 +621,13 @@ export default function KlantGesprek() {
 
             {notities.tekst && (
               <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: '#0e0e10', fontSize: 12, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted-light)', marginBottom: 4, textTransform: 'uppercase' }}>Notities</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted-light)', marginBottom: 4, textTransform: 'uppercase' }}>Notities</div>
                 {notities.tekst.slice(0, 200)}{notities.tekst.length > 200 ? '...' : ''}
               </div>
             )}
 
             {notities.followUp && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#8b8bf0' }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#8b8bf0' }}>
                 <Clock size={10} style={{ display: 'inline', marginRight: 4 }} />
                 Follow-up: {notities.followUp}
               </div>

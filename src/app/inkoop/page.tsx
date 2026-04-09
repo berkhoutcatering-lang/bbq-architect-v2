@@ -10,7 +10,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame } from 'lucide-react';
+import { Camera, FileText, Flame, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 
 export default function Inkoop() {
@@ -226,7 +226,7 @@ export default function Inkoop() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
                     <h1 className="hero-title">INKOOP & LOGISTIEK</h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 1 }}>BEHEER LEVERANCIERS, BOODSCHAPPEN EN BONNEN</p>
+                    <p style={{ color: 'var(--muted)', fontSize: 12, letterSpacing: 1 }}>BEHEER LEVERANCIERS, BOODSCHAPPEN EN BONNEN</p>
                 </div>
             </div>
 
@@ -246,17 +246,17 @@ export default function Inkoop() {
                 <div className="grid-3">
                     <div className="artisan-panel" style={{ cursor: 'pointer', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 140 }} onClick={newLeverancier}>
                         <div style={{ textAlign: 'center' }}>
-                            <i className="fa-solid fa-plus-circle" style={{ fontSize: 24, color: 'var(--brand)', marginBottom: 12 }}></i>
+                            <PlusCircle size={24} style={{ color: 'var(--brand)' }} />
                             <div style={{ fontWeight: 800, fontSize: 12 }}>NIEUWE LEVERANCIER</div>
                         </div>
                     </div>
                     {leveranciers.map((l: any) => (
                         <div key={l.id} className="artisan-panel" onClick={() => editLeverancier(l)} style={{ cursor: 'pointer' }}>
-                            <div style={{ color: 'var(--brand)', fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>{l.type?.toUpperCase()}</div>
+                            <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>{l.type?.toUpperCase()}</div>
                             <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>{l.naam.toUpperCase()}</div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                {l.contact && <div><i className="fa-solid fa-user" style={{ width: 16 }}></i> {l.contact}</div>}
-                                {l.tel && <div><i className="fa-solid fa-phone" style={{ width: 16 }}></i> {l.tel}</div>}
+                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                {l.contact && <div><User size={14} /> {l.contact}</div>}
+                                {l.tel && <div><Phone size={14} /> {l.tel}</div>}
                             </div>
                         </div>
                     ))}
@@ -267,31 +267,31 @@ export default function Inkoop() {
             {tab === 'bonnen' && (
                 <div style={{ maxWidth: 800, margin: '0 auto' }}>
                     <div className="artisan-panel" style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
-                        <i className="fa-solid fa-receipt" style={{ fontSize: 48, color: 'var(--brand)', marginBottom: 20 }}></i>
+                        <Receipt size={48} style={{ color: 'var(--brand)' }} />
                         <h2 style={{ fontFamily: 'var(--font-artisan)', letterSpacing: 2, fontSize: 24, marginBottom: 16 }}>VISION INKOOP TRACKER</h2>
                         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 8, maxWidth: 500, margin: '0 auto 8px' }}>
                             Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen.
                         </p>
-                        <p style={{ color: 'var(--brand)', fontSize: 10, fontWeight: 900, letterSpacing: 1, marginBottom: 32 }}>
-                            <i className="fa-solid fa-circle-info"></i> MOMENTEEL ENKEL FOTO'S & SCREENSHOTS (PDF WORDT NOG NIET ONDERSTEUND)
+                        <p style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 900, letterSpacing: 1, marginBottom: 32 }}>
+                            <Info size={14} /> MOMENTEEL ENKEL FOTO'S & SCREENSHOTS (PDF WORDT NOG NIET ONDERSTEUND)
                         </p>
 
                         <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleReceiptUpload} style={{ display: 'none' }} />
 
                         <button className="btn-brand" style={{ padding: '16px 40px', fontSize: 16 }} onClick={() => fileInputRef.current!.click()} disabled={receiptScanning}>
                             {receiptScanning ? (
-                                <><i className="fa-solid fa-circle-notch fa-spin"></i> ANALYSEREN...</>
+                                <><Loader2 size={14} className="animate-spin" /> ANALYSEREN...</>
                             ) : (
-                                <><i className="fa-solid fa-camera"></i> SCAN KASSABON</>
+                                <><Camera size={14} /> SCAN KASSABON</>
                             )}
                         </button>
 
-                        {scanStatus && <div style={{ marginTop: 20, fontSize: 11, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
+                        {scanStatus && <div style={{ marginTop: 20, fontSize: 12, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
                     </div>
 
                     {scanInsight && (
                         <div className="artisan-panel" style={{ marginBottom: 24, borderLeft: '4px solid var(--brand)', background: 'rgba(213, 178, 98, 0.05)' }}>
-                            <div className="panel-head"><h3><i className="fa-solid fa-wand-magic-sparkles"></i> PITMASTER INSIGHT</h3></div>
+                            <div className="panel-head"><h3><Wand2 size={14} /> PITMASTER INSIGHT</h3></div>
                             <div className="panel-body" style={{ fontSize: 13, color: 'var(--white)', fontStyle: 'italic', lineHeight: 1.6 }}>
                                 {scanInsight}
                             </div>
@@ -303,8 +303,8 @@ export default function Inkoop() {
                             <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
                                 <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 10, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
-                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 10 }} onClick={async () => {
+                                    <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 12, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
+                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 12 }} onClick={async () => {
                                         for (const a of [...pendingActions]) {
                                             try { await supabase.from(a.meta.table).insert(a.data); } catch (e) { console.error("Error inserting action:", e); }
                                         }
@@ -318,7 +318,7 @@ export default function Inkoop() {
                                     <div key={action.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                                                 {(() => {
                                                     const item = action.data.items?.[0] || {};
                                                     const prijs = item.prijs || action.data.prijs || 0;
@@ -330,14 +330,14 @@ export default function Inkoop() {
                                                 })()}
                                             </div>
                                         </div>
-                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 11, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
+                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 12, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
                                             try { await supabase.from(action.meta.table).insert(action.data); } catch (e) { console.error("Error inserting action:", e); }
                                             setPendingActions(prev => prev.filter(a => a.id !== action.id));
                                             showToast('Item ingeboekt', 'success');
                                         }}>BEVESTIG</button>
                                     </div>
                                 ))}
-                                <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 10 }} onClick={() => setPendingActions([])}>WISSEN</button>
+                                <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 12 }} onClick={() => setPendingActions([])}>WISSEN</button>
                             </div>
                         </div>
                     )}
@@ -353,9 +353,9 @@ export default function Inkoop() {
                                     <img src={bon.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Bon" />
                                 </div>
                                 <div style={{ fontWeight: 900, fontSize: 14 }}>{bon.winkel.toUpperCase()}</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>{bon.datum} • {fmt(bon.totaal_bedrag)}</div>
-                                <button className="btn-brand w-full" style={{ padding: '8px', fontSize: 10 }} onClick={() => downloadReceiptPDF(bon)}>
-                                    <i className="fa-solid fa-file-pdf"></i> DOWNLOAD PDF RAPPORT
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{bon.datum} • {fmt(bon.totaal_bedrag)}</div>
+                                <button className="btn-brand w-full" style={{ padding: '8px', fontSize: 12 }} onClick={() => downloadReceiptPDF(bon)}>
+                                    <FileText size={14} /> DOWNLOAD PDF RAPPORT
                                 </button>
                             </div>
                         ))}
@@ -368,7 +368,7 @@ export default function Inkoop() {
                     <div className="architect-modal" style={{ maxWidth: 500 }}>
                         <div className="modal-head">
                             <h3>{editingLev === 'new' ? 'NIEUWE LEVERANCIER' : 'LEVERANCIER BEWERKEN'}</h3>
-                            <button className="close-btn" onClick={() => setEditingLev(null)} aria-label="Sluiten"><i className="fa-solid fa-xmark"></i></button>
+                            <button className="close-btn" onClick={() => setEditingLev(null)} aria-label="Sluiten"><X size={14} /></button>
                         </div>
                         <div className="modal-body">
                             <div className="field mb-16"><label>NAAM</label><input value={levForm!.naam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, naam: e.target.value })} /></div>

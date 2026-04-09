@@ -191,7 +191,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                             <div>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
                                 <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.2 }}>
                                     {offer.client_naam || 'Klant'}
                                 </h1>
@@ -199,7 +199,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: 28, fontWeight: 800, color: brandColor, lineHeight: 1 }}>{formatEuro(totaal)}</div>
-                                <div style={{ fontSize: 11, color: '#737373', marginTop: 4 }}>Inclusief {defaultBtw}% BTW</div>
+                                <div style={{ fontSize: 12, color: '#737373', marginTop: 4 }}>Inclusief {defaultBtw}% BTW</div>
                             </div>
                         </div>
                     </div>
@@ -214,7 +214,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         ].map(function (m) {
                             return (
                                 <div key={m.label} style={{ padding: '14px 28px', background: 'rgba(0,0,0,0.15)' }}>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
                                     <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{m.value}</div>
                                 </div>
                             );
@@ -296,7 +296,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Notes */}
                     {offer.notitie && (
                         <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
                             <p style={{ fontSize: 13, color: '#a3a3a3', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
                         </div>
                     )}
@@ -334,7 +334,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                             }}>
                                                 {step.icon}
                                             </div>
-                                            <div style={{ fontSize: 10, fontWeight: 600, color: done ? '#e5e7eb' : '#525252', lineHeight: 1.3 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: done ? '#e5e7eb' : '#525252', lineHeight: 1.3 }}>
                                                 {step.label}
                                             </div>
                                         </div>
@@ -432,7 +432,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 </button>
                             </div>
 
-                            <p style={{ fontSize: 11, color: '#525252', marginTop: 12, lineHeight: 1.5 }}>
+                            <p style={{ fontSize: 12, color: '#525252', marginTop: 12, lineHeight: 1.5 }}>
                                 Door te ondertekenen gaat u akkoord met de voorwaarden in deze offerte.
                                 {settings?.betaalvoorwaarden && ' ' + settings.betaalvoorwaarden}
                             </p>

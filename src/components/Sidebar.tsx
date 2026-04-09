@@ -38,6 +38,9 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 }}
                 className="w-full flex items-center justify-between px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)] hover:text-white transition-colors group"
                 title={collapsed ? section.title : ""}
+                aria-expanded={!collapsed ? isExpanded : undefined}
+                aria-controls={!collapsed ? `sidebar-section-${section.slug}` : undefined}
+                aria-label={`${section.title} ${!collapsed && isExpanded ? 'inklappen' : 'uitklappen'}`}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
                     <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[var(--muted)] group-hover:text-white'}`}>
@@ -64,6 +67,9 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 </div>
             </button>
             <div
+                id={`sidebar-section-${section.slug}`}
+                role="region"
+                aria-label={`${section.title} navigatie-items`}
                 className={`overflow-hidden transition-all duration-300 ease-in-out ${(!collapsed && isExpanded) ? "max-h-[500px] opacity-100 mt-1 mb-3" : "max-h-0 opacity-0 mb-0"}`}
             >
                 <div className="space-y-1">
@@ -224,6 +230,8 @@ export default function Sidebar() {
                         <button
                             onClick={() => setShowSecondary(!showSecondary)}
                             className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--muted-light)] hover:text-[var(--muted)] transition-colors mt-2"
+                            aria-expanded={showSecondary}
+                            aria-label={showSecondary ? 'Secundaire navigatie inklappen' : 'Secundaire navigatie uitklappen'}
                         >
                             <span className="flex items-center gap-2">
                                 <span className="w-4 h-px bg-[var(--border)]" />
@@ -296,6 +304,8 @@ export default function Sidebar() {
 
             {/* Sidebar - desktop: sticky, mobile: fixed overlay */}
             <aside
+                role="complementary"
+                aria-label="Zijbalk navigatie"
                 className="bg-[#151518] border-r border-[#141418] flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden"
                 style={{
                     position: isDesktop ? 'sticky' : 'fixed',

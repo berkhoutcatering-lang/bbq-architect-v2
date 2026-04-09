@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
+import { Flame } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,7 +38,7 @@ export default function LoginPage() {
         {/* Logo & Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand)] mb-4">
-            <i className="fa-solid fa-fire text-2xl text-[var(--bg)]" />
+            <Flame size={24} className="text-[var(--bg)]" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--text)]">BBQ Architect</h1>
           <p className="text-[var(--muted)] mt-1">Log in bij je account</p>
@@ -112,7 +113,7 @@ export default function LoginPage() {
         {/* Dev quick login buttons — only in development */}
         {process.env.NODE_ENV === 'development' && (
           <div style={{ marginTop: 24, padding: 16, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
               Dev Quick Login
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

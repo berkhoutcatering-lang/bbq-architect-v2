@@ -5,7 +5,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { fmt, addDays } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
-import { Flame } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, Coins, Crosshair, Flame, Lock, UserCog } from 'lucide-react';
 import type { Offerte, Gerecht, InventoryItem, TimeLog } from '@/types';
 
 function getInvPrice(inventoryData: InventoryItem[], naam: string) {
@@ -146,7 +146,7 @@ export default function Financien() {
             <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
                 <div style={{ marginBottom: 20 }}>
                     <h1 style={{ fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <i className="fa-solid fa-vault" style={{ color: 'var(--brand)' }}></i> The Vault Analytics
+                        <Lock size={14} style={{ color: 'var(--brand)' }} /> The Vault Analytics
                     </h1>
                 </div>
                 <EmptyState page="/financien" />
@@ -159,35 +159,35 @@ export default function Financien() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
                     <h1 style={{ fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <i className="fa-solid fa-vault" style={{ color: 'var(--brand)' }}></i> The Vault Analytics
+                        <Lock size={14} style={{ color: 'var(--brand)' }} /> The Vault Analytics
                     </h1>
                     <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Live Profit & Loss Dashboard over {selectedYear}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost" aria-label="Vorig jaar"><i className="fa-solid fa-chevron-left"></i></button>
+                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost" aria-label="Vorig jaar"><ChevronLeft size={14} /></button>
                     <div style={{ background: 'var(--card)', padding: '8px 16px', borderRadius: 8, fontWeight: 800 }}>{selectedYear}</div>
-                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost" aria-label="Volgend jaar"><i className="fa-solid fa-chevron-right"></i></button>
+                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
                 </div>
             </div>
 
             <div className="stat-grid" style={{ marginBottom: 30 }}>
                 <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                    <div className="stat-icon" style={{ background: 'rgba(255,140,0,.15)', color: 'var(--brand)' }}><i className="fa-solid fa-coins"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(255,140,0,.15)', color: 'var(--brand)' }}><Coins size={14} /></div>
                     <div className="stat-val">{fmt(financialData.totalOmzet)}</div>
                     <div className="stat-label">Totale Omzet (Geaccepteerd)</div>
                 </div>
                 <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                    <div className="stat-icon" style={{ background: 'rgba(239,68,68,.15)', color: 'var(--red)' }}><i className="fa-solid fa-fire"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(239,68,68,.15)', color: 'var(--red)' }}><Flame size={14} /></div>
                     <div className="stat-val">{fmt(financialData.totalFoodcost)}</div>
                     <div className="stat-label">Foodcost Theoretisch</div>
                 </div>
                 <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                    <div className="stat-icon" style={{ background: 'rgba(167,139,250,.15)', color: 'var(--purple)' }}><i className="fa-solid fa-users-gear"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(167,139,250,.15)', color: 'var(--purple)' }}><UserCog size={14} /></div>
                     <div className="stat-val">{fmt(financialData.totalLabor)}</div>
                     <div className="stat-label">Personeelskosten</div>
                 </div>
                 <div className="stat-card uren-glass" style={{ background: 'rgba(34,197,94,.15)', border: '1px solid rgba(34,197,94,.3)' }}>
-                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.2)', color: 'var(--green)' }}><i className="fa-solid fa-vault"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.2)', color: 'var(--green)' }}><Lock size={14} /></div>
                     <div className="stat-val" style={{ color: 'var(--green)' }}>{fmt(financialData.totalNetto)}</div>
                     <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span>Netto Winst</span>
@@ -200,7 +200,7 @@ export default function Financien() {
 
                 <div className="panel uren-glass" style={{ padding: 24, overflow: 'hidden' }}>
                     <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-chart-simple" style={{ color: 'var(--brand)' }}></i> Cashflow per Maand
+                        <BarChart3 size={14} style={{ color: 'var(--brand)' }} /> Cashflow per Maand
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 260, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
                         {financialData.months.map((m: any, idx: number) => {
@@ -223,12 +223,12 @@ export default function Financien() {
                                             boxShadow: '0 0 10px rgba(0,0,0,0.5)'
                                         }}></div>
                                     </div>
-                                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>{m.monthName}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}>{m.monthName}</span>
                                 </div>
                             );
                         })}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 16, fontSize: 11, fontWeight: 700, color: 'var(--muted)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 16, fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 12, height: 12, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}></div> Bruto Omzet</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 12, height: 12, background: 'var(--green)', borderRadius: 2 }}></div> Netto Winst</div>
                     </div>
@@ -236,7 +236,7 @@ export default function Financien() {
 
                 <div className="panel uren-glass" style={{ padding: 24 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-crosshairs" style={{ color: 'var(--brand)' }}></i> Focus Huidige Maand
+                        <Crosshair size={14} style={{ color: 'var(--brand)' }} /> Focus Huidige Maand
                     </h3>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

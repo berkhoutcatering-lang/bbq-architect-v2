@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
+import { Building2, CloudUpload, Database, FileText, Loader2, Palette, Save } from 'lucide-react';
 
 export default function Instellingen() {
     const { settings, loading, save } = useSettings();
@@ -50,12 +51,12 @@ export default function Instellingen() {
         save(data).then(function () { showToast('Instellingen opgeslagen', 'success'); });
     }
 
-    if (loading || !form) return <div className="empty-state"><i className="fa-solid fa-spinner fa-spin"></i><p>Laden...</p></div>;
+    if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
 
     return (
         <>
             <div className="panel" style={{ marginBottom: 20 }}>
-                <div className="panel-head"><h3><i className="fa-solid fa-building" style={{ marginRight: 8, color: 'var(--brand)' }}></i>Bedrijfsgegevens</h3></div>
+                <div className="panel-head"><h3><Building2 size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Bedrijfsgegevens</h3></div>
                 <div className="panel-body">
                     <div className="form-grid">
                         <div className="field"><label>Bedrijfsnaam</label><input value={form.bedrijfsnaam || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('bedrijfsnaam', e.target.value); }} /></div>
@@ -73,7 +74,7 @@ export default function Instellingen() {
 
             {/* Huisstijl / Branding */}
             <div className="panel" style={{ marginBottom: 20 }}>
-                <div className="panel-head"><h3><i className="fa-solid fa-palette" style={{ marginRight: 8, color: 'var(--brand)' }}></i>Huisstijl</h3></div>
+                <div className="panel-head"><h3><Palette size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Huisstijl</h3></div>
                 <div className="panel-body">
                     <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze instellingen bepalen hoe je facturen, offertes en klantpagina&apos;s eruitzien.</p>
 
@@ -85,11 +86,11 @@ export default function Instellingen() {
                                 {form.logo_url ? (
                                     <>
                                         <img src={form.logo_url} alt="Logo" style={{ maxWidth: 140, maxHeight: 60, objectFit: 'contain' }} />
-                                        <button type="button" onClick={function () { setField('logo_url', null); }} style={{ fontSize: 11, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer' }}>Verwijder</button>
+                                        <button type="button" onClick={function () { setField('logo_url', null); }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer' }}>Verwijder</button>
                                     </>
                                 ) : (
                                     <button type="button" onClick={function () { logoInputRef.current?.click(); }} disabled={uploading} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                        <i className="fa-solid fa-cloud-arrow-up" style={{ marginRight: 6 }}></i>{uploading ? 'Uploaden...' : 'Logo uploaden'}
+                                        <CloudUpload size={14} className="mr-1.5" />{uploading ? 'Uploaden...' : 'Logo uploaden'}
                                     </button>
                                 )}
                             </div>
@@ -102,11 +103,11 @@ export default function Instellingen() {
                                 {form.logo_dark_url ? (
                                     <>
                                         <img src={form.logo_dark_url} alt="Logo donker" style={{ maxWidth: 140, maxHeight: 60, objectFit: 'contain' }} />
-                                        <button type="button" onClick={function () { setField('logo_dark_url', null); }} style={{ fontSize: 11, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer' }}>Verwijder</button>
+                                        <button type="button" onClick={function () { setField('logo_dark_url', null); }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer' }}>Verwijder</button>
                                     </>
                                 ) : (
                                     <button type="button" onClick={function () { logoDarkInputRef.current?.click(); }} disabled={uploading} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                        <i className="fa-solid fa-cloud-arrow-up" style={{ marginRight: 6 }}></i>{uploading ? 'Uploaden...' : 'Donker logo uploaden'}
+                                        <CloudUpload size={14} className="mr-1.5" />{uploading ? 'Uploaden...' : 'Donker logo uploaden'}
                                     </button>
                                 )}
                             </div>
@@ -134,7 +135,7 @@ export default function Instellingen() {
 
                     {/* Preview */}
                     <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: '#fafaf7', border: '1px solid #eee' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Preview</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Preview</div>
                         <div style={{ height: 3, background: form.brand_primary || '#9e781c', borderRadius: 2, marginBottom: 12 }} />
                         <div style={{ textAlign: 'center', marginBottom: 12 }}>
                             {form.logo_url ? (
@@ -143,7 +144,7 @@ export default function Instellingen() {
                                 <span style={{ fontSize: 16, fontWeight: 800, color: form.brand_primary || '#9e781c' }}>{form.bedrijfsnaam || 'Bedrijfsnaam'}</span>
                             )}
                         </div>
-                        <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 6, background: form.brand_primary || '#9e781c', color: '#fff', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>
+                        <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 6, background: form.brand_primary || '#9e781c', color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em' }}>
                             FACTUUR
                         </div>
                         <div style={{ height: 3, background: form.brand_primary || '#9e781c', borderRadius: 2, marginTop: 12 }} />
@@ -152,7 +153,7 @@ export default function Instellingen() {
             </div>
 
             <div className="panel" style={{ marginBottom: 20 }}>
-                <div className="panel-head"><h3><i className="fa-solid fa-file-invoice" style={{ marginRight: 8, color: 'var(--brand)' }}></i>Facturatie</h3></div>
+                <div className="panel-head"><h3><FileText size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Facturatie</h3></div>
                 <div className="panel-body">
                     <div className="form-grid">
                         <div className="field"><label>Factuurprefix</label><input value={form.factuur_prefix || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('factuur_prefix', e.target.value); }} /></div>
@@ -165,7 +166,7 @@ export default function Instellingen() {
             </div>
 
             <div className="panel" style={{ marginBottom: 20 }}>
-                <div className="panel-head"><h3><i className="fa-solid fa-file-pdf" style={{ marginRight: 8, color: 'var(--brand)' }}></i>PDF Instellingen</h3></div>
+                <div className="panel-head"><h3><FileText size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />PDF Instellingen</h3></div>
                 <div className="panel-body">
                     <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze gegevens verschijnen automatisch op je facturen en offertes PDF&apos;s.</p>
                     <div className="form-grid">
@@ -178,7 +179,7 @@ export default function Instellingen() {
             </div>
 
             <div className="panel" style={{ marginBottom: 20 }}>
-                <div className="panel-head"><h3><i className="fa-solid fa-database" style={{ marginRight: 8, color: 'var(--brand)' }}></i>Gegevensoverzicht</h3></div>
+                <div className="panel-head"><h3><Database size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Gegevensoverzicht</h3></div>
                 <div className="panel-body">
                     <div className="stat-grid">
                         <div className="stat-card">
@@ -206,7 +207,7 @@ export default function Instellingen() {
             </div>
 
             <button className="btn btn-brand" onClick={saveSettings} style={{ width: '100%', justifyContent: 'center', padding: 14 }}>
-                <i className="fa-solid fa-save"></i> Instellingen Opslaan
+                <Save size={14} /> Instellingen Opslaan
             </button>
         </>
     );

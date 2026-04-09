@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(wc -l C:/bbq-architect-v2/docs/ux-strategy/*.md)",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node migrate-icons.mjs)",
+      "Bash(node -e ':*)"
     ]
   }
 }

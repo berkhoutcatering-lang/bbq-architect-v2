@@ -7,7 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import PageHint from '@/components/PageHint';
 import EmptyState from '@/components/EmptyState';
-import { Flame } from 'lucide-react';
+import { AlertTriangle, Camera, CloudUpload, Contact, Eye, EyeOff, Flame, Globe, HelpCircle, ImageIcon, Images, Info, Lock, Pencil, Plus, RotateCw, Save, Trash2, UtensilsCrossed } from 'lucide-react';
 import type { WebsiteFaq, WebsiteGallery, WebsiteGang, WebsiteGerecht, WebsiteHero } from '@/types';
 interface WSettings { id: number; email: string; telefoon: string; adres: string; kvk: string; btw_nummer: string; }
 
@@ -90,12 +90,12 @@ export default function WebsiteBeheer() {
         });
     }
 
-    const tabs: { key: Tab; label: string; icon: string }[] = [
-        { key: 'afbeeldingen', label: 'Afbeeldingen', icon: 'fa-image' },
-        { key: 'faq', label: 'FAQ', icon: 'fa-circle-question' },
-        { key: 'galerij', label: 'Galerij', icon: 'fa-images' },
-        { key: 'menu', label: 'Signature Menu', icon: 'fa-utensils' },
-        { key: 'footer', label: 'Footer / Contact', icon: 'fa-address-card' },
+    const tabs: { key: Tab; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+        { key: 'afbeeldingen', label: 'Afbeeldingen', icon: ImageIcon },
+        { key: 'faq', label: 'FAQ', icon: HelpCircle },
+        { key: 'galerij', label: 'Galerij', icon: Images },
+        { key: 'menu', label: 'Signature Menu', icon: UtensilsCrossed },
+        { key: 'footer', label: 'Footer / Contact', icon: Contact },
     ];
 
     if (isLoading) {
@@ -114,7 +114,7 @@ export default function WebsiteBeheer() {
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-1">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#3b82f6]/5 flex items-center justify-center">
-                        <i className="fa-solid fa-globe text-[#3b82f6]"></i>
+                        <Globe size={14} className="text-[#3b82f6]" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Website Beheer</h1>
@@ -123,7 +123,7 @@ export default function WebsiteBeheer() {
                 </div>
                 <div className="mt-3 p-3 rounded-lg bg-yellow-900/20 border border-yellow-700/30">
                     <p className="text-yellow-400 text-xs">
-                        <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                        <AlertTriangle size={14} />
                         De Next.js website draait voorlopig op <strong>localhost</strong>. Wijzigingen worden direct in Supabase opgeslagen en binnen 60 sec opgepikt.
                     </p>
                 </div>
@@ -135,7 +135,7 @@ export default function WebsiteBeheer() {
                     <button key={t.key}
                         className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-[#3b82f6]/15 text-white shadow-sm' : 'text-[var(--muted)] hover:text-white hover:bg-white/5'}`}
                         onClick={() => { setTab(t.key); cancelEdit(); }}>
-                        <i className={`fa-solid ${t.icon} mr-2`}></i>{t.label}
+                        <t.icon size={14} className="inline mr-2" />{t.label}
                     </button>
                 ))}
             </div>
@@ -259,7 +259,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                         <p className="text-[var(--muted)] text-sm">Homepage achtergrond afbeeldingen (4 slides)</p>
                     </div>
                     <button className={S.btn} onClick={() => heroInputRef.current?.click()}>
-                        <i className="fa-solid fa-cloud-arrow-up mr-2"></i>Upload
+                        <CloudUpload size={14} />Upload
                     </button>
                     <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={e => handleHeroUpload(e.target.files)} />
                 </div>
@@ -272,7 +272,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                     onDragOver={e => onDragOver(e, setDragOverHero)}
                     onDragLeave={() => onDragLeave(setDragOverHero)}
                 >
-                    <i className="fa-solid fa-cloud-arrow-up text-[var(--muted)] text-2xl mb-2"></i>
+                    <CloudUpload size={24} className="text-[var(--muted)] mb-2" />
                     <p className="text-[var(--muted)] text-sm">Sleep afbeeldingen hierheen of klik om te uploaden</p>
                     <p className="text-[var(--muted)] text-xs mt-1">JPG, PNG of WebP — max 10MB</p>
                 </div>
@@ -285,7 +285,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                 <img src={item.src} alt={item.alt} className="w-full h-full object-cover" onError={(e: any) => { e.target.src = ''; e.target.alt = 'Laden mislukt'; }} />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <label className={`${S.btnSm} cursor-pointer`}>
-                                        <i className="fa-solid fa-arrows-rotate mr-1"></i>Vervang
+                                        <RotateCw size={14} />Vervang
                                         <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { if (e.target.files?.[0]) replaceImage(hero, item, e.target.files[0], 'hero'); }} />
                                     </label>
                                 </div>
@@ -316,13 +316,13 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                         <p className="text-white text-xs truncate flex-1">{item.alt || '(geen alt tekst)'}</p>
                                         <div className="flex gap-1 shrink-0 ml-2">
                                             <button className={S.btnIcon} onClick={() => { hero.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
-                                                <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
+                                                {item.actief ? <Eye size={12} /> : <EyeOff size={12} />}
                                             </button>
                                             <button className={S.btnIcon} onClick={() => { setEditingHero(item.id); setHeroForm({ ...item }); }} aria-label="Bewerken">
-                                                <i className="fa-solid fa-pen text-xs"></i>
+                                                <Pencil size={14} />
                                             </button>
                                             <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(hero, item, 'Hero afbeelding')} aria-label="Verwijderen">
-                                                <i className="fa-solid fa-trash text-xs"></i>
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>
@@ -332,7 +332,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                     ))}
                     {sortedHero.length === 0 && (
                         <div className="col-span-4 text-center py-8">
-                            <i className="fa-solid fa-image text-[var(--muted)] text-3xl mb-2"></i>
+                            <ImageIcon size={30} className="text-[var(--muted)] mb-2" />
                             <p className="text-[var(--muted)] text-sm">Nog geen hero afbeeldingen. Upload er een paar!</p>
                         </div>
                     )}
@@ -347,7 +347,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                         <p className="text-[var(--muted)] text-sm">Foto&apos;s op de /galerij pagina — categorie, label en volgorde instelbaar</p>
                     </div>
                     <button className={S.btn} onClick={() => galleryInputRef.current?.click()}>
-                        <i className="fa-solid fa-cloud-arrow-up mr-2"></i>Upload
+                        <CloudUpload size={14} />Upload
                     </button>
                     <input ref={galleryInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={e => handleGalleryUpload(e.target.files)} />
                 </div>
@@ -360,7 +360,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                     onDragOver={e => onDragOver(e, setDragOverGallery)}
                     onDragLeave={() => onDragLeave(setDragOverGallery)}
                 >
-                    <i className="fa-solid fa-images text-[var(--muted)] text-2xl mb-2"></i>
+                    <Images size={24} className="text-[var(--muted)] mb-2" />
                     <p className="text-[var(--muted)] text-sm">Sleep galerij foto&apos;s hierheen of klik om te uploaden</p>
                     <p className="text-[var(--muted)] text-xs mt-1">Categorie wordt standaard op &quot;Gerechten&quot; gezet — pas aan na upload</p>
                 </div>
@@ -379,7 +379,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                             <img src={item.src} alt={item.label} className="w-full h-full object-cover" onError={(e: any) => { e.target.style.display = 'none'; }} />
                                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                                 <label className={`${S.btnSm} cursor-pointer`}>
-                                                    <i className="fa-solid fa-arrows-rotate mr-1"></i>Vervang
+                                                    <RotateCw size={14} />Vervang
                                                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { if (e.target.files?.[0]) replaceImage(gallery, item, e.target.files[0], 'gallery'); }} />
                                                 </label>
                                             </div>
@@ -415,13 +415,13 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                                         <span className="text-[var(--muted)] text-[10px]">{item.categorie}</span>
                                                         <div className="flex gap-1">
                                                             <button className={S.btnIcon} onClick={() => { gallery.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
-                                                                <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
+                                                                {item.actief ? <Eye size={12} /> : <EyeOff size={12} />}
                                                             </button>
                                                             <button className={S.btnIcon} onClick={() => { setEditingGallery(item.id); setGalleryForm({ ...item }); }} aria-label="Bewerken">
-                                                                <i className="fa-solid fa-pen text-xs"></i>
+                                                                <Pencil size={14} />
                                                             </button>
                                                             <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(gallery, item, 'Galerij foto')} aria-label="Verwijderen">
-                                                                <i className="fa-solid fa-trash text-xs"></i>
+                                                                <Trash2 size={14} />
                                                             </button>
                                                         </div>
                                                     </div>
@@ -436,7 +436,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                 })}
                 {sortedGallery.length === 0 && (
                     <div className="text-center py-8">
-                        <i className="fa-solid fa-images text-[var(--muted)] text-3xl mb-2"></i>
+                        <Images size={30} className="text-[var(--muted)] mb-2" />
                         <p className="text-[var(--muted)] text-sm">Nog geen galerij foto&apos;s. Upload er een paar!</p>
                     </div>
                 )}
@@ -455,7 +455,7 @@ function FaqTab({ faq, editId, form, f, startEdit, cancelEdit, saveItem, toggleA
             <div className="flex items-center justify-between mb-6">
                 <p className="text-[var(--muted)] text-sm">Beheer de FAQ vragen op de homepage</p>
                 <button className={S.btn} onClick={() => { startEdit({ id: -1, vraag: '', antwoord: '', volgorde: (sorted.length + 1) * 10, actief: true }); }}>
-                    <i className="fa-solid fa-plus mr-2"></i>Nieuwe vraag
+                    <Plus size={14} />Nieuwe vraag
                 </button>
             </div>
 
@@ -489,10 +489,10 @@ function FaqTab({ faq, editId, form, f, startEdit, cancelEdit, saveItem, toggleA
                         </div>
                         <div className="flex gap-1 shrink-0">
                             <button className={S.btnIcon} title={item.actief ? 'Verbergen' : 'Tonen'} onClick={() => toggleActief(faq, item)} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
-                                <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
+                                {item.actief ? <Eye size={12} /> : <EyeOff size={12} />}
                             </button>
-                            <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
-                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(faq, item.id, 'FAQ')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
+                            <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><Pencil size={14} /></button>
+                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(faq, item.id, 'FAQ')} aria-label="Verwijderen"><Trash2 size={14} /></button>
                         </div>
                     </div>
                 ))}
@@ -514,7 +514,7 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
             <div className="flex items-center justify-between mb-6">
                 <p className="text-[var(--muted)] text-sm">Metadata van galerij foto&apos;s bewerken (upload via Afbeeldingen tab)</p>
                 <button className={S.btn} onClick={() => { setEditId(-1); setForm({ src: '', label: '', categorie: 'Gerechten', volgorde: (sorted.length + 1) * 10, actief: true }); }}>
-                    <i className="fa-solid fa-plus mr-2"></i>Handmatig toevoegen
+                    <Plus size={14} />Handmatig toevoegen
                 </button>
             </div>
 
@@ -554,15 +554,15 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
                                         {item.src ? (
                                             <img src={item.src} alt={item.label} className="w-full h-full object-cover" onError={(e: any) => { e.target.style.display = 'none'; }} />
                                         ) : (
-                                            <i className="fa-solid fa-image text-[var(--muted)] text-2xl"></i>
+                                            <ImageIcon size={24} className="text-[var(--muted)]" />
                                         )}
                                     </div>
                                     <p className="text-white text-xs font-medium truncate">{item.label || '(geen bijschrift)'}</p>
                                     <p className="text-[var(--muted)] text-[10px] mt-0.5 truncate">{item.src}</p>
                                     <div className="flex gap-1 mt-2">
-                                        <button className={S.btnIcon} onClick={() => toggleActief(gallery, item)} aria-label={item.actief ? 'Verbergen' : 'Tonen'}><i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
-                                        <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
-                                        <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gallery, item.id, 'Foto')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
+                                        <button className={S.btnIcon} onClick={() => toggleActief(gallery, item)} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>{item.actief ? <Eye size={12} /> : <EyeOff size={12} />}</button>
+                                        <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><Pencil size={14} /></button>
+                                        <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gallery, item.id, 'Foto')} aria-label="Verwijderen"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
                             ))}
@@ -669,7 +669,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                     <p className="text-[var(--muted)] text-sm">Website Signature Menu — aparte gerechten tabel (<code className="text-[10px] bg-[#1a1a1e] px-1 py-0.5 rounded">website_gerechten</code>)</p>
                 </div>
                 <button className={S.btn} onClick={() => { setEditId(-1); setForm({ naam: '', beschrijving: '', gang_slug: gangSlugs[0] || 'bites', volgorde: 1, actief: true, allergenen: [], foto: null, extra_info: '', _type: 'gerecht' }); }}>
-                    <i className="fa-solid fa-plus mr-2"></i>Nieuw gerecht
+                    <Plus size={14} />Nieuw gerecht
                 </button>
             </div>
 
@@ -733,11 +733,11 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                     </div>
                                 ) : (
                                     <div className="w-20 h-14 rounded-lg bg-[#1a1a1e] flex items-center justify-center shrink-0">
-                                        <i className="fa-solid fa-image text-[var(--muted)] text-sm"></i>
+                                        <ImageIcon size={14} className="text-[var(--muted)]" />
                                     </div>
                                 )}
                                 <label className={`${S.btnSm} cursor-pointer`}>
-                                    <i className="fa-solid fa-cloud-arrow-up mr-1"></i>{form.foto ? 'Vervang' : 'Upload foto'}
+                                    <CloudUpload size={14} />{form.foto ? 'Vervang' : 'Upload foto'}
                                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => {
                                         if (e.target.files?.[0] && editId !== -1) uploadFoto(e.target.files[0], { ...form, id: editId });
                                     }} />
@@ -756,7 +756,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                             <div className="w-24"><label className={S.lbl}>Volgorde</label><input className={S.inp} type="number" value={form.volgorde ?? 1} onChange={(e: any) => f('volgorde', parseInt(e.target.value) || 0)} /></div>
                             <div className="flex items-end pb-1"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[#3b82f6]" /><span className="text-sm text-white">Zichtbaar op website</span></label></div>
                         </div>
-                        <p className="text-[var(--muted)] text-xs"><i className="fa-solid fa-info-circle mr-1"></i>Volgorde &lt; 10 = normaal menu | ≥ 10 = dieet/verborgen optie</p>
+                        <p className="text-[var(--muted)] text-xs"><Info size={14} />Volgorde &lt; 10 = normaal menu | ≥ 10 = dieet/verborgen optie</p>
                         <div className="flex gap-2 pt-2">
                             <button className={S.btn} onClick={async () => {
                                 try {
@@ -785,7 +785,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                             <span className="text-[var(--muted)] text-xs">min {gang.minimum} | +€{Number(gang.extra_prijs_pp || 0).toFixed(2)} p.p.</span>
                             <span className="text-[var(--muted)] text-xs ml-auto mr-2">{normalCount} normaal, {dieetCount} dieet</span>
                             <button className={S.btnIcon} title="Gang bewerken" onClick={() => { setEditId(gang.id); setForm({ ...gang, _type: 'gang' }); }}>
-                                <i className="fa-solid fa-pen text-xs"></i>
+                                <Pencil size={14} />
                             </button>
                         </div>
                         <div className="space-y-1.5">
@@ -800,7 +800,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                             </div>
                                         ) : (
                                             <div className="w-12 h-12 rounded-lg bg-[#1a1a1e] flex items-center justify-center shrink-0">
-                                                <i className="fa-solid fa-utensils text-[var(--muted)] text-[10px]"></i>
+                                                <UtensilsCrossed size={10} className="text-[var(--muted)]" />
                                             </div>
                                         )}
                                         <div className="text-xs text-[var(--muted)] font-mono w-5 text-center pt-1 shrink-0">{dish.volgorde}</div>
@@ -810,13 +810,13 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                                 {dish.volgorde >= 10 && <span className="text-yellow-500 text-[9px] font-medium px-1.5 py-0.5 rounded bg-yellow-900/20">DIEET</span>}
                                             </div>
                                             {dish.beschrijving && <p className="text-[var(--muted)] text-xs mt-0.5">{dish.beschrijving}</p>}
-                                            {dish.extra_info && <p className="text-blue-400/70 text-[10px] mt-0.5 truncate"><i className="fa-solid fa-circle-info mr-1"></i>{dish.extra_info}</p>}
+                                            {dish.extra_info && <p className="text-blue-400/70 text-[10px] mt-0.5 truncate"><Info size={14} />{dish.extra_info}</p>}
                                             <AllergenBadges allergenen={allergs} />
                                         </div>
                                         <div className="flex gap-1 shrink-0 pt-0.5">
-                                            <button className={S.btnIcon} onClick={() => toggleActief(gerechten, dish)} aria-label={dish.actief ? 'Verbergen' : 'Tonen'}><i className={`fa-solid ${dish.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
-                                            <button className={S.btnIcon} onClick={() => { setEditId(dish.id); setForm({ ...dish, _type: 'gerecht' }); }} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
-                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gerechten, dish.id, 'Gerecht')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
+                                            <button className={S.btnIcon} onClick={() => toggleActief(gerechten, dish)} aria-label={dish.actief ? 'Verbergen' : 'Tonen'}>{dish.actief ? <Eye size={12} /> : <EyeOff size={12} />}</button>
+                                            <button className={S.btnIcon} onClick={() => { setEditId(dish.id); setForm({ ...dish, _type: 'gerecht' }); }} aria-label="Bewerken"><Pencil size={14} /></button>
+                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gerechten, dish.id, 'Gerecht')} aria-label="Verwijderen"><Trash2 size={14} /></button>
                                         </div>
                                     </div>
                                 );
@@ -859,7 +859,7 @@ function FooterTab({ settings, footerForm, ff, footerDirty, setFooterDirty, foot
                                     setFooterDirty(false);
                                 } catch { showToast('Fout bij opslaan', 'error'); }
                             }}>
-                                <i className="fa-solid fa-floppy-disk mr-2"></i>Opslaan
+                                <Save size={14} />Opslaan
                             </button>
                         </div>
                     </div>
@@ -867,9 +867,9 @@ function FooterTab({ settings, footerForm, ff, footerDirty, setFooterDirty, foot
                     <div className="mt-6 pt-5 border-t border-[#222]">
                         <h4 className="text-[var(--muted)] text-xs font-semibold uppercase tracking-wider mb-3">Niet via dit paneel aanpasbaar</h4>
                         <ul className="text-[var(--muted)] text-xs space-y-1.5">
-                            <li><i className="fa-solid fa-lock mr-2 text-yellow-600"></i>Basisprijs Signature Menu (hardcoded in code)</li>
-                            <li><i className="fa-solid fa-lock mr-2 text-yellow-600"></i>Pagina&apos;s: Grote Groepen, Over Ons, Contact (statische teksten)</li>
-                            <li><i className="fa-solid fa-lock mr-2 text-yellow-600"></i>Dieet menu items in de popup</li>
+                            <li><Lock size={14} />Basisprijs Signature Menu (hardcoded in code)</li>
+                            <li><Lock size={14} />Pagina&apos;s: Grote Groepen, Over Ons, Contact (statische teksten)</li>
+                            <li><Lock size={14} />Dieet menu items in de popup</li>
                         </ul>
                     </div>
                 </div>

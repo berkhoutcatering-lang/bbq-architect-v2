@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import MetallicCard from '@/components/MetallicCard';
 import type { Recept, InventoryItem } from '@/types';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Coins, List, Plus, Printer, Save, Trash2, Users, UtensilsCrossed } from 'lucide-react';
 
 export default function Recepten() {
     const { data: recepten, insert, update, remove } = useSupabase<Recept>('recepten', []);
@@ -87,7 +88,7 @@ export default function Recepten() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <button onClick={function () { setKitchenMode(null); setKitchenStep(0); }}
                         style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                        <i className="fa-solid fa-arrow-left" style={{ marginRight: 6 }}></i> Terug
+                        <ArrowLeft size={14} className="mr-1.5" /> Terug
                     </button>
                     <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
                         {kitchenStep + 1} / {totalSteps}
@@ -107,7 +108,7 @@ export default function Recepten() {
                 {isIngredientPage ? (
                     <div>
                         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, textAlign: 'center', color: 'var(--text)' }}>
-                            <i className="fa-solid fa-list" style={{ marginRight: 8, color: 'var(--brand)' }}></i>
+                            <List size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />
                             Ingredienten ({kitchenMode.porties} porties)
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -151,7 +152,7 @@ export default function Recepten() {
                             border: '1px solid var(--border)', color: kitchenStep === 0 ? 'var(--muted)' : 'var(--text)',
                             cursor: kitchenStep === 0 ? 'not-allowed' : 'pointer',
                         }}>
-                        <i className="fa-solid fa-chevron-left"></i> Vorige
+                        <ChevronLeft size={14} /> Vorige
                     </button>
                     <button onClick={function () {
                         if (kitchenStep < totalSteps - 1) { setKitchenStep(kitchenStep + 1); }
@@ -164,7 +165,7 @@ export default function Recepten() {
                             color: kitchenStep === totalSteps - 1 ? '#000' : 'var(--brand)',
                             cursor: 'pointer',
                         }}>
-                        {kitchenStep === totalSteps - 1 ? 'Klaar!' : 'Volgende'} <i className="fa-solid fa-chevron-right" style={{ marginLeft: 4 }}></i>
+                        {kitchenStep === totalSteps - 1 ? 'Klaar!' : 'Volgende'} <ChevronRight size={14} className="ml-1.5" />
                     </button>
                 </div>
             </div>
@@ -178,7 +179,7 @@ export default function Recepten() {
                     <div className="panel-head">
                         <h3>{editing === 'new' ? 'Nieuw Recept' : 'Recept Bewerken'}</h3>
                         <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}>
-                            <i className="fa-solid fa-arrow-left"></i> Terug
+                            <ArrowLeft size={14} /> Terug
                         </button>
                     </div>
                     <div className="panel-body">
@@ -209,7 +210,7 @@ export default function Recepten() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <h4 style={{ fontSize: 14, fontWeight: 600 }}>Ingrediënten</h4>
                                 <button className="btn btn-brand btn-sm" onClick={addIngredient}>
-                                    <i className="fa-solid fa-plus"></i> Toevoegen
+                                    <Plus size={14} /> Toevoegen
                                 </button>
                             </div>
                             {(form.ingredienten || []).map(function (ing: any, idx: number) {
@@ -224,7 +225,7 @@ export default function Recepten() {
                                             {['gram', 'kg', 'ml', 'liter', 'stuks', 'el', 'tl'].map(function (u) { return <option key={u}>{u}</option>; })}
                                         </select>
                                         <button className="del-btn" onClick={function () { removeIngredient(idx); }}>
-                                            <i className="fa-solid fa-trash"></i>
+                                            <Trash2 size={14} />
                                         </button>
                                     </div>
                                 );
@@ -244,7 +245,7 @@ export default function Recepten() {
 
                         <div className="editor-actions">
                             <button className="btn btn-brand" onClick={saveRecept}>
-                                <i className="fa-solid fa-save"></i> Opslaan
+                                <Save size={14} /> Opslaan
                             </button>
                             {editing !== 'new' && (
                                 <>
@@ -256,10 +257,10 @@ export default function Recepten() {
                                         });
                                         showToast('Etiket verstuurd naar printer', 'success');
                                     }}>
-                                        <i className="fa-solid fa-print"></i> Print Etiket
+                                        <Printer size={14} /> Print Etiket
                                     </button>
                                     <button className="btn btn-red" onClick={deleteRecept}>
-                                        <i className="fa-solid fa-trash"></i> Verwijderen
+                                        <Trash2 size={14} /> Verwijderen
                                     </button>
                                 </>
                             )}
@@ -355,7 +356,7 @@ export default function Recepten() {
                     })}
                 </div>
                 <button className="btn btn-brand" onClick={newRecept} style={{ flexShrink: 0 }}>
-                    <i className="fa-solid fa-plus"></i> Nieuw Recept
+                    <Plus size={14} /> Nieuw Recept
                 </button>
             </div>
 
@@ -370,9 +371,9 @@ export default function Recepten() {
                             <div className="rec-cat">{r.categorie}</div>
                             <div className="rec-name">{r.naam}</div>
                             <div className="rec-meta">
-                                <span><i className="fa-solid fa-users"></i> {r.porties} porties</span>
-                                <span><i className="fa-solid fa-clock"></i> {r.preptime} min</span>
-                                <span><i className="fa-solid fa-list"></i> {(r.ingredienten || []).length} ingr.</span>
+                                <span><Users size={14} /> {r.porties} porties</span>
+                                <span><Clock size={14} /> {r.preptime} min</span>
+                                <span><List size={14} /> {(r.ingredienten || []).length} ingr.</span>
                             </div>
                             {(() => {
                                 const ings = (r.ingredienten || []) as any[];
@@ -386,7 +387,7 @@ export default function Recepten() {
                                 const color = ratio === 1 ? 'var(--green)' : ratio >= 0.5 ? 'var(--amber)' : 'var(--red)';
                                 const icon = ratio === 1 ? '\u{1F7E2}' : ratio >= 0.5 ? '\u{1F7E1}' : '\u{1F534}';
                                 return (
-                                    <div style={{ fontSize: 10, color: color, fontWeight: 600, marginTop: 6 }}>
+                                    <div style={{ fontSize: 12, color: color, fontWeight: 600, marginTop: 6 }}>
                                         {icon} {available}/{total} op voorraad
                                     </div>
                                 );
@@ -394,16 +395,16 @@ export default function Recepten() {
                             {r.instructies && (
                                 <button onClick={function (e) { e.stopPropagation(); setKitchenMode(r); setKitchenStep(0); }}
                                     style={{
-                                        marginTop: 10, width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                                        marginTop: 10, width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 700,
                                         background: 'rgba(255,191,0,.08)', border: '1px solid rgba(255,191,0,.2)',
                                         color: 'var(--brand)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
                                     }}>
-                                    <i className="fa-solid fa-utensils" style={{ marginRight: 6 }}></i> Keuken Mode
+                                    <UtensilsCrossed size={14} className="mr-1.5" /> Keuken Mode
                                 </button>
                             )}
                             {calcRecipeCost(r) > 0 && (
                                 <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                                    <span style={{ fontSize: 11, color: 'var(--purple)', fontWeight: 700 }}><i className="fa-solid fa-coins" style={{ marginRight: 4 }}></i> Kostprijs</span>
+                                    <span style={{ fontSize: 12, color: 'var(--purple)', fontWeight: 700 }}><Coins size={14} className="mr-1.5" /> Kostprijs</span>
                                     <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--brand)' }}>{(calcRecipeCost(r) / (r.porties || 1)).toFixed(2)} /portie</span>
                                 </div>
                             )}

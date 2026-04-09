@@ -2,6 +2,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Oswald:wght@300;400;500;600&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --brand: #FFBF00;
   --brand-light: rgba(255, 191, 0, .12);
@@ -269,9 +273,10 @@ body {
 }
 
 .btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
   border-radius: 8px;
+  min-height: 36px;
 }
 
 /* Forms */
@@ -420,13 +425,15 @@ body {
 
 /* Status Pills */
 .pill {
-  display: inline-block;
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .3px;
+  min-height: 32px;
 }
 
 .pill-green {
@@ -5807,7 +5814,8 @@ body {
    UX AUDIT — Phase A: Critical Foundation Fixes
    ========================================================================== */
 
-/* 1. Global 44px minimum touch targets — MOBILE/TABLET ONLY (WCAG 2.5.8) */
+/* 1. Global 44px minimum touch targets — MOBILE/TABLET ONLY (WCAG 2.5.8)
+   !important overrides inline style={{}} on pages that set tiny padding/height */
 @media (max-width: 1023px) {
   a,
   button,
@@ -5821,24 +5829,43 @@ body {
   .btn-ghost,
   .btn-brand,
   .btn-red,
+  .btn-green,
+  .btn-cyan,
+  .btn-sm,
   .pill,
   .tab-btn {
-    min-height: 44px;
+    min-height: 44px !important;
   }
 
+  /* Icon-only buttons need minimum width too */
+  button:not(.bottom-nav__tab),
+  [role="button"] {
+    min-width: 36px;
+  }
+
+  /* Checkbox/radio: 24px with proper accent color */
   input[type="checkbox"],
   input[type="radio"] {
-    min-width: 20px;
-    min-height: 20px;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  /* Ensure inline-styled tiny buttons still get padding */
+  button,
+  [role="button"],
+  .btn,
+  .btn-sm {
+    padding: 8px 12px;
   }
 }
 
-/* 2. Minimum 12px font size on mobile */
+/* 2. Minimum 12px font size on mobile
+   The previous max(var(--_fs, inherit), 12px) was invalid CSS — inherit cannot
+   be compared inside max(). This approach targets known small-text patterns. */
 @media (max-width: 768px) {
-  * {
-    font-size: max(var(--_fs, inherit), 12px);
-  }
-
+  /* Catch all elements that might have inline font-size below 12px */
   .sidebar-logo p,
   .ev-date-block .ev-month,
   .rec-cat,
@@ -5846,14 +5873,29 @@ body {
   .pill-sm,
   small,
   .text-xs,
+  .stat-sub,
+  .stat-label,
+  .bottom-nav__label,
   [class*="text-[9px]"],
   [class*="text-[10px]"],
-  [class*="text-[11px]"] {
+  [class*="text-[11px]"],
+  [style*="fontSize: 9"],
+  [style*="fontSize: 10"],
+  [style*="fontSize: 11"],
+  [style*="fontSize:9"],
+  [style*="fontSize:10"],
+  [style*="fontSize:11"] {
     font-size: 12px !important;
   }
 
+  /* Headings should never be below 14px */
   h3, h4, h5, h6 {
-    font-size: max(14px, inherit);
+    font-size: 14px;
+  }
+
+  /* Table cells, list items, spans — enforce readable minimum */
+  td, th, li, span, p, label, a {
+    font-size: clamp(12px, 1em, 100em);
   }
 }
 

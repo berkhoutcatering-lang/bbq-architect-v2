@@ -131,7 +131,7 @@ export default function HelpCenter() {
         </button>
         <MetallicCard hover={false} className="p-6">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6', textTransform: 'uppercase' }}>
               {CATEGORY_LABELS[openArticle.category] || openArticle.category}
             </span>
           </div>
@@ -176,7 +176,7 @@ export default function HelpCenter() {
         <button onClick={function () { setActiveView('support'); }}
           style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, background: activeView === 'support' ? 'var(--card)' : 'transparent', color: activeView === 'support' ? 'var(--text)' : 'var(--muted)', boxShadow: activeView === 'support' ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>
           <MessageCircle size={12} /> Support {tickets.filter(function (t) { return t.status === 'open'; }).length > 0 && (
-            <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 5px', borderRadius: '50%', background: '#3b82f6', color: '#fff' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, padding: '4px 8px', borderRadius: '50%', background: '#3b82f6', color: '#fff' }}>
               {tickets.filter(function (t) { return t.status === 'open'; }).length}
             </span>
           )}
@@ -189,14 +189,14 @@ export default function HelpCenter() {
           {/* Category filters */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             <button onClick={function () { setSelectedCategory(''); }}
-              style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: '1px solid ' + (!selectedCategory ? 'var(--brand)' : 'var(--border)'), background: !selectedCategory ? 'rgba(158,120,28,.1)' : 'transparent', color: !selectedCategory ? 'var(--brand)' : 'var(--muted)', cursor: 'pointer' }}>
+              style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: '1px solid ' + (!selectedCategory ? 'var(--brand)' : 'var(--border)'), background: !selectedCategory ? 'rgba(158,120,28,.1)' : 'transparent', color: !selectedCategory ? 'var(--brand)' : 'var(--muted)', cursor: 'pointer' }}>
               Alles
             </button>
             {categories.map(function (cat) {
               const active = selectedCategory === cat;
               return (
                 <button key={cat} onClick={function () { setSelectedCategory(active ? '' : cat); }}
-                  style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: '1px solid ' + (active ? 'var(--brand)' : 'var(--border)'), background: active ? 'rgba(158,120,28,.1)' : 'transparent', color: active ? 'var(--brand)' : 'var(--muted)', cursor: 'pointer' }}>
+                  style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: '1px solid ' + (active ? 'var(--brand)' : 'var(--border)'), background: active ? 'rgba(158,120,28,.1)' : 'transparent', color: active ? 'var(--brand)' : 'var(--muted)', cursor: 'pointer' }}>
                   {CATEGORY_LABELS[cat] || cat}
                 </button>
               );
@@ -221,7 +221,7 @@ export default function HelpCenter() {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{article.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{CATEGORY_LABELS[article.category] || article.category}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{CATEGORY_LABELS[article.category] || article.category}</div>
                 </div>
                 <ChevronRight size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />
               </button>
@@ -289,16 +289,16 @@ export default function HelpCenter() {
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{ticket.subject}</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: cfg.bg, color: cfg.color }}>{ticket.status.replace('_', ' ')}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: cfg.bg, color: cfg.color }}>{ticket.status.replace('_', ' ')}</span>
                         </div>
                         <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5 }}>{ticket.message}</p>
                         {ticket.admin_reply && (
                           <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(34,197,94,.04)', borderLeft: '3px solid #22c55e' }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', marginBottom: 2 }}>Antwoord van support</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', marginBottom: 2 }}>Antwoord van support</div>
                             <p style={{ fontSize: 12, color: 'var(--text)', margin: 0 }}>{ticket.admin_reply}</p>
                           </div>
                         )}
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>{formatDate(ticket.created_at)}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{formatDate(ticket.created_at)}</div>
                       </div>
                     </div>
                   </div>

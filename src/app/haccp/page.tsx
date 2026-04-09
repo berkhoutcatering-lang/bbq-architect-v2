@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import FieldTooltip from '@/components/FieldTooltip';
 import VoiceInput from '@/components/VoiceInput';
+import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull } from 'lucide-react';
 import type { HaccpRecord, DbEvent, Offerte } from '@/types';
 
 interface HaccpForm {
@@ -233,7 +234,7 @@ export default function HACCP() {
     if (loading) return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 32, marginBottom: 12, display: 'block' }}></i>
+                <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12, display: 'block', marginInline: 'auto' }} />
                 Laden...
             </div>
         </div>
@@ -261,7 +262,7 @@ export default function HACCP() {
                             background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.15)',
                             fontSize: 12, color: 'var(--brand)', display: 'flex', alignItems: 'center', gap: 8
                         }}>
-                            <i className="fa-solid fa-calendar-check"></i>
+                            <CalendarCheck size={16} />
                             <span style={{ opacity: 0.85 }}>
                                 {nearestOfferte ? nearestOfferte.client_naam : (nearestEvent ? (nearestEvent as any).name : '')}
                                 {' \u2022 Cor \u2022 '}{new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
@@ -271,7 +272,7 @@ export default function HACCP() {
 
                     {/* Step 1: Product selectie */}
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
                             {qlProduct ? '\u2705 Product' : '\u2776 Kies product'}
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -296,7 +297,7 @@ export default function HACCP() {
 
                     {/* Step 2: Temperature numpad */}
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
                             {qlTemp ? '\u2705 Temperatuur' : '\u2777 Voer temperatuur in'}
                         </label>
                         {/* Temperature display */}
@@ -347,7 +348,7 @@ export default function HACCP() {
 
                     {/* Step 3: Measurement type */}
                     <div style={{ marginBottom: 20 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
                             {'\u2778 Type meting'}
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
@@ -449,17 +450,18 @@ export default function HACCP() {
                             opacity: qlSaving ? 0.7 : 1
                         }}>
                         {qlSaving ? (
-                            <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }}></i>OPSLAAN...</>
+                            <><Loader2 size={18} className="animate-spin" style={{ marginRight: 8, display: 'inline-block', verticalAlign: 'middle' }} />OPSLAAN...</>
                         ) : qlSaved ? (
-                            <><i className="fa-solid fa-check-circle" style={{ marginRight: 8 }}></i>OPGESLAGEN!</>
+                            <><CheckCircle size={18} style={{ marginRight: 8, display: 'inline-block', verticalAlign: 'middle' }} />OPGESLAGEN!</>
                         ) : (
-                            <><i className="fa-solid fa-floppy-disk" style={{ marginRight: 8 }}></i>OPSLAAN</>
+                            <><Save size={18} style={{ marginRight: 8, display: 'inline-block', verticalAlign: 'middle' }} />OPSLAAN</>
+
                         )}
                     </button>
 
                     {/* Summary of what will be saved */}
                     {(qlProduct || qlTemp) && (
-                        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 11, color: 'var(--muted)', opacity: 0.7 }}>
+                        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--muted)', opacity: 0.7 }}>
                             {qlProduct && <span style={{ color: 'var(--brand)' }}>{qlProduct}</span>}
                             {qlProduct && qlTemp && ' \u2022 '}
                             {qlTemp && <span>{qlTemp}{'\u00B0C'}</span>}
@@ -470,7 +472,7 @@ export default function HACCP() {
                     {/* Quick access to recent logs */}
                     {records.length > 0 && (
                         <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                            <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
+                            <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>
                                 Laatste metingen
                             </label>
                             {records.slice().reverse().slice(0, 5).map(function (rec: any) {
@@ -486,9 +488,9 @@ export default function HACCP() {
                                         </span>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontSize: 13, fontWeight: 600 }}>{rec.wat}</div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{rec.tijd || ''} {'\u2022'} {rec.type}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rec.tijd || ''} {'\u2022'} {rec.type}</div>
                                         </div>
-                                        <span style={{ fontSize: 10, fontWeight: 700, color: rec.status === 'ok' ? '#10b981' : rec.status === 'warn' ? '#f59e0b' : '#ef4444' }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: rec.status === 'ok' ? '#10b981' : rec.status === 'warn' ? '#f59e0b' : '#ef4444' }}>
                                             {rec.status === 'ok' ? 'OK' : rec.status === 'warn' ? 'LET OP' : 'AFWIJKING'}
                                         </span>
                                     </div>
@@ -503,7 +505,7 @@ export default function HACCP() {
                 <div style={{ padding: '0 4px' }}>
                     {/* Step 1: Product selectie */}
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Product</label>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Product</label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                             {QUICK_PRODUCTS.map(function (p) {
                                 return (
@@ -524,7 +526,7 @@ export default function HACCP() {
 
                     {/* Step 2: Temp type pills */}
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Type meting</label>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Type meting</label>
                         <div style={{ display: 'flex', gap: 6 }}>
                             {[{ val: 'kern', label: 'Kern ≥75°C', icon: '🔥' }, { val: 'koeling', label: 'Koeling 0-7°C', icon: '❄️' }, { val: 'warmhoud', label: 'Warmhoud ≥60°C', icon: '♨️' }].map(function (t) {
                                 return (
@@ -546,7 +548,7 @@ export default function HACCP() {
 
                     {/* Step 3: Numpad temperature input */}
                     <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Temperatuur</label>
+                        <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Temperatuur</label>
                         <div style={{
                             textAlign: 'center', padding: '16px 0', marginBottom: 8,
                             background: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? 'rgba(16,185,129,.08)' : s === 'warn' ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)'; })() : 'var(--card-solid)',
@@ -596,7 +598,7 @@ export default function HACCP() {
                             cursor: (!form.wat || !form.temp) ? 'not-allowed' : 'pointer',
                             letterSpacing: '0.05em', textTransform: 'uppercase', transition: 'all 0.2s'
                         }}>
-                        <i className="fa-solid fa-fire" style={{ marginRight: 8 }}></i>
+                        <Flame size={18} style={{ marginRight: 8, display: 'inline-block', verticalAlign: 'middle' }} />
                         REGISTREER METING
                     </button>
                 </div>
@@ -604,7 +606,7 @@ export default function HACCP() {
 
             {tab === 'registratie' && !isMobile && (
                 <div className="panel">
-                    <div className="panel-head"><h3><i className="fa-solid fa-thermometer"></i> TEMPERATUUR REGISTREREN</h3></div>
+                    <div className="panel-head"><h3><Thermometer size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} /> TEMPERATUUR REGISTREREN</h3></div>
                     <div className="panel-body">
                         <div className="form-grid">
                             <div className="field">
@@ -651,14 +653,14 @@ export default function HACCP() {
                             if (s === 'ok') return null;
                             return (
                                 <div className={'haccp-boundary-warn haccp-boundary-' + s} style={{ marginTop: 20 }}>
-                                    <i className={'fa-solid ' + (s === 'warn' ? 'fa-triangle-exclamation' : 'fa-skull-crossbones')}></i>
+                                    {s === 'warn' ? <AlertTriangle size={16} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> : <Skull size={16} style={{ display: 'inline-block', verticalAlign: 'middle' }} />}
                                     <span>{s === 'warn' ? '⚠️ Temperatuur in risicozone!' : '🔴 AFWIJKING — Temperatuur buiten veilige norm!'}</span>
                                 </div>
                             );
                         })()}
 
                         <div style={{ marginTop: 24 }}>
-                            <button className="btn-brand" onClick={saveRecord}><i className="fa-solid fa-fire"></i> METING OPSLAAN</button>
+                            <button className="btn-brand" onClick={saveRecord}><Flame size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> METING OPSLAAN</button>
                         </div>
                     </div>
                 </div>
@@ -690,7 +692,7 @@ export default function HACCP() {
                                         </div>
                                         <div style={{ flex: 1, marginLeft: 16 }}>
                                             <div style={{ fontWeight: 600, fontSize: 14 }}>{rec.wat}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                                                 {checkTypeLabels[rec.check_type] || rec.check_type || rec.type} • {fmtNl(rec.datum)} {rec.tijd || ''}
                                                 {eventLabel && <span> • {eventLabel}</span>}
                                                 {rec.chef && <span> • 👨‍🍳 {rec.chef}</span>}
@@ -698,7 +700,7 @@ export default function HACCP() {
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <span className={'pill ' + pillClass}>{rec.status === 'ok' ? 'OK' : rec.status === 'warn' ? 'Let op' : 'Afwijking'}</span>
-                                            <button className="del-btn" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }} onClick={function () { remove(rec.id); }} aria-label="Meting verwijderen"><i className="fa-solid fa-trash"></i></button>
+                                            <button className="del-btn" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '8px', minWidth: 36, minHeight: 36 }} onClick={function () { remove(rec.id); }} aria-label="Meting verwijderen"><Trash2 size={16} /></button>
                                         </div>
                                     </div>
                                 );
@@ -710,10 +712,10 @@ export default function HACCP() {
 
             {tab === 'dossier' && (
                 <div className="panel">
-                    <div className="panel-head"><h3><i className="fa-solid fa-folder-open"></i> NVWA-READY DOSSIERS</h3></div>
+                    <div className="panel-head"><h3><FolderOpen size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} /> NVWA-READY DOSSIERS</h3></div>
                     <div className="panel-body">
                         {getEventGroups().length === 0 && (
-                            <div className="empty-state"><i className="fa-solid fa-folder-open"></i><p>Geen HACCP dossiers beschikbaar</p></div>
+                            <div className="empty-state"><FolderOpen size={24} /><p>Geen HACCP dossiers beschikbaar</p></div>
                         )}
                         {getEventGroups().map(function (group: EventGroup) {
                             const okCount = group.records.filter(function (r: any) { return r.status === 'ok'; }).length;
@@ -726,8 +728,8 @@ export default function HACCP() {
                                             <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--brand)' }}>{group.naam || 'Losse metingen'}</div>
                                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtNl(group.datum)} • {group.records.length} metingen</div>
                                         </div>
-                                        <button className="btn-brand btn-sm" style={{ padding: '6px 12px', fontSize: 12 }} onClick={function () { downloadHACCPRapport(group); }}>
-                                            <i className="fa-solid fa-file-pdf"></i> PDF RAPPORT
+                                        <button className="btn-brand btn-sm" style={{ padding: '8px 14px', fontSize: 13 }} onClick={function () { downloadHACCPRapport(group); }}>
+                                            <FileText size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> PDF RAPPORT
                                         </button>
                                     </div>
                                     <div className="haccp-dossier-stats" style={{ display: 'flex', gap: 12, marginBottom: 16, fontSize: 12, fontWeight: 600 }}>
@@ -743,7 +745,7 @@ export default function HACCP() {
                                                         <span>{rec.wat}</span>
                                                         <span style={{ color: rec.status === 'ok' ? 'var(--green)' : 'var(--red)' }}>{rec.temp}°C</span>
                                                     </div>
-                                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                                                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                                                         {rec.tijd || ''} • {checkTypeLabels[rec.check_type] || rec.type} • {rec.chef || 'Cor'}
                                                     </div>
                                                 </div>

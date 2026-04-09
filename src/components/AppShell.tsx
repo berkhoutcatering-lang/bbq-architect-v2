@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { Flame, Building2 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useOrg } from '@/lib/OrgContext';
 import { AppProvider } from '@/lib/AppContext';
@@ -44,7 +45,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--brand)] mb-3">
-            <i className="fa-solid fa-fire text-lg text-[var(--bg)]" />
+            <Flame className="text-lg text-[var(--bg)]" size={20} />
           </div>
           <div className="text-[var(--muted)] text-sm">Laden...</div>
         </div>
@@ -71,7 +72,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4">
         <div className="text-center max-w-md">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand)] mb-4">
-            <i className="fa-solid fa-building text-2xl text-[var(--bg)]" />
+            <Building2 className="text-2xl text-[var(--bg)]" size={24} />
           </div>
           <h2 className="text-xl font-bold text-[var(--text)] mb-2">Geen organisatie gevonden</h2>
           <p className="text-[var(--muted)] mb-6">
@@ -189,14 +190,14 @@ function AppShellInner({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen bg-[var(--bg)]">
         <Sidebar />
         <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
-          <div style={{
+          <header role="banner" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <Breadcrumbs />
             <div style={{ paddingRight: 16 }}>
               <Changelog />
             </div>
-          </div>
+          </header>
           <div id="main-content" className="flex-1 w-full">
             {children}
           </div>

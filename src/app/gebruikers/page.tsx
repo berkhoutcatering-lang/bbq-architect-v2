@@ -147,7 +147,7 @@ export default function Gebruikers() {
                 <EmptyState
                     page="/gebruikers"
                     onAction={function () { setShowInvite(true); }}
-                    icon="fa-solid fa-users"
+                    icon="Users"
                     title="Geen teamleden"
                     description="Nodig je team uit om samen te werken in BBQ Architect."
                     actionLabel="Teamlid uitnodigen"
@@ -164,7 +164,7 @@ export default function Gebruikers() {
                                         return (
                                             <th key={col} style={{
                                                 textAlign: 'left', padding: '8px 12px',
-                                                fontSize: 11, fontWeight: 700, color: 'var(--muted)',
+                                                fontSize: 12, fontWeight: 700, color: 'var(--muted)',
                                                 textTransform: 'uppercase', letterSpacing: '0.05em',
                                             }}>{col}</th>
                                         );
@@ -189,7 +189,7 @@ export default function Gebruikers() {
                                                     <span>
                                                         {m.naam || 'Onbekend'}
                                                         {isCurrentUser && (
-                                                            <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 6 }}>(jij)</span>
+                                                            <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 6 }}>(jij)</span>
                                                         )}
                                                     </span>
                                                 </div>
@@ -198,7 +198,7 @@ export default function Gebruikers() {
                                             <td style={{ padding: '10px 12px' }}>
                                                 <span style={{
                                                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                    fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8,
+                                                    fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8,
                                                     background: (rolKleur[m.role] || '#71717a') + '20',
                                                     color: rolKleur[m.role] || '#71717a',
                                                 }}>
@@ -207,14 +207,14 @@ export default function Gebruikers() {
                                             </td>
                                             <td style={{ padding: '10px 12px' }}>
                                                 <span style={{
-                                                    fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8,
+                                                    fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8,
                                                     background: (statusKleur[m.status] || '#71717a') + '20',
                                                     color: statusKleur[m.status] || '#71717a',
                                                 }}>{statusLabel[m.status] || m.status}</span>
                                             </td>
                                             <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                                                 {isCurrentUser && (
-                                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                                                         <LogOut size={12} style={{ display: 'inline', marginRight: 4 }} />
                                                     </span>
                                                 )}

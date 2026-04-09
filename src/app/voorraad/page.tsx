@@ -9,6 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import BarcodeScanner from '@/components/BarcodeScanner';
+import { ArrowLeft, Link as LinkIcon, Utensils, Save, Trash2, ShoppingCart, Barcode, Plus, Package, AlertTriangle, Coins, PieChart as PieChartIcon, Boxes, Warehouse, CheckCircle } from 'lucide-react';
 import type { InventoryItem, Recept } from '@/types';
 
 const CATEGORIEEN = ['Alles', 'Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Overig'];
@@ -111,7 +112,7 @@ export default function Voorraad() {
                 <div className="panel-head">
                     <h3>{editing === 'new' ? '\ud83d\udce6 Nieuw Voorraad Item' : '\u270f\ufe0f ' + form.naam}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}>
-                        <i className="fa-solid fa-arrow-left"></i> Terug
+                        <ArrowLeft size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Terug
                     </button>
                 </div>
                 <div className="panel-body">
@@ -132,7 +133,7 @@ export default function Voorraad() {
                             <input type="number" step="0.1" value={form.min_stock} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('min_stock', parseFloat(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Inkoopprijs per {form.unit}</label>
                             <input type="number" step="0.01" value={form.purchase_price} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('purchase_price', parseFloat(e.target.value) || 0); }} /></div>
-                        <div className="field"><label>Yield Factor <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 10 }}>(bereidingsverlies, bijv. 0.85 = 15% krimp)</span></label>
+                        <div className="field"><label>Yield Factor <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 12 }}>(bereidingsverlies, bijv. 0.85 = 15% krimp)</span></label>
                             <input type="number" step="0.05" min="0.1" max="1" value={form.yield_factor != null ? form.yield_factor : 1.0} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('yield_factor', parseFloat(e.target.value) || 1.0); }} /></div>
                         <div className="field"><label>Leverancier</label>
                             <input value={form.supplier} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('supplier', e.target.value); }} placeholder="bijv. Sligro, Hanos..." /></div>
@@ -140,16 +141,16 @@ export default function Voorraad() {
 
                     <div style={{ marginTop: 20, padding: 16, borderRadius: 14, border: '1px solid var(--border)', background: isLow ? 'rgba(239,68,68,.06)' : 'var(--bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Voorraadwaarde</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Voorraadwaarde</div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--brand)', marginTop: 4 }}>{fmt(stockValue)}</div>
                         </div>
-                        {isLow && <span className="pill pill-red" style={{ fontSize: 11 }}>⚠ Onder par-level!</span>}
+                        {isLow && <span className="pill pill-red" style={{ fontSize: 12 }}>⚠ Onder par-level!</span>}
                     </div>
 
                     {usedIn.length > 0 && (
                         <div style={{ marginTop: 20 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-                                <i className="fa-solid fa-link" style={{ marginRight: 6 }}></i> Profit-Guard — Gebruikt in {usedIn.length} recept(en)
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+                                <LinkIcon size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }} /> Profit-Guard — Gebruikt in {usedIn.length} recept(en)
                             </div>
                             {usedIn.map(function (r: any) {
                                 const ing = (r.ingredienten || []).find(function (i: any) { return i.naam && i.naam.toLowerCase().indexOf(form.naam.toLowerCase()) >= 0; });
@@ -160,14 +161,14 @@ export default function Voorraad() {
                                 const perPortie = r.porties ? costContrib / r.porties : 0;
                                 return (
                                     <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'rgba(167,139,250,.06)', border: '1px solid rgba(167,139,250,.15)', borderRadius: 10, marginBottom: 6 }}>
-                                        <i className="fa-solid fa-utensils" style={{ color: 'var(--purple)', fontSize: 12 }}></i>
+                                        <Utensils size={14} style={{ color: 'var(--purple)' }} />
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 700, fontSize: 12 }}>{r.naam}</div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{r.porties} porties · {ing ? ing.hoeveelheid + ' ' + (ing.eenheid || '') : ''}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r.porties} porties · {ing ? ing.hoeveelheid + ' ' + (ing.eenheid || '') : ''}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--brand)' }}>{fmt(costContrib)}</div>
-                                            <div style={{ fontSize: 9, color: 'var(--muted)' }}>{fmt(perPortie)}/portie</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmt(perPortie)}/portie</div>
                                         </div>
                                     </div>
                                 );
@@ -176,8 +177,8 @@ export default function Voorraad() {
                     )}
 
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveItem}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteItem}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        <button className="btn btn-brand" onClick={saveItem}><Save size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Opslaan</button>
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteItem}><Trash2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Verwijderen</button>}
                     </div>
                 </div>
             </div>
@@ -197,15 +198,15 @@ export default function Voorraad() {
             <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                     <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-cart-shopping" style={{ color: 'var(--brand)' }}></i> Inkooplijst
+                        <ShoppingCart size={20} style={{ color: 'var(--brand)' }} /> Inkooplijst
                     </h1>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setShowInkooplijst(false); }}>
-                        <i className="fa-solid fa-arrow-left"></i> Terug
+                        <ArrowLeft size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Terug
                     </button>
                 </div>
 
                 {tekorten.length === 0 && (
-                    <div className="empty-state"><i className="fa-solid fa-check-circle" style={{ color: 'var(--green)' }}></i><p>Alle voorraad is op niveau! 🎉</p></div>
+                    <div className="empty-state"><CheckCircle size={24} style={{ color: 'var(--green)' }} /><p>Alle voorraad is op niveau! 🎉</p></div>
                 )}
 
                 {tekorten.length > 0 && (
@@ -247,21 +248,21 @@ export default function Voorraad() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div>
                     <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-warehouse" style={{ color: 'var(--brand)' }}></i> Smart Inventory
+                        <Warehouse size={20} style={{ color: 'var(--brand)' }} /> Smart Inventory
                     </h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 3 }}>
+                    <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 3 }}>
                         {totalItems} items · {lowStock.length} bestellen · Waarde: {fmt(totalValue)}
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button className={'btn btn-sm ' + (lowStock.length > 0 ? 'btn-red' : 'btn-ghost')} onClick={function () { setShowInkooplijst(true); }}>
-                        <i className="fa-solid fa-cart-shopping"></i> Inkooplijst {lowStock.length > 0 && '(' + lowStock.length + ')'}
+                        <ShoppingCart size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Inkooplijst {lowStock.length > 0 && '(' + lowStock.length + ')'}
                     </button>
                     <button className="btn btn-sm btn-ghost" onClick={function () { setScannerOpen(true); }}>
-                        <i className="fa-solid fa-barcode"></i> Scan
+                        <Barcode size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Scan
                     </button>
                     <button className="btn btn-brand btn-sm" onClick={newItem}>
-                        <i className="fa-solid fa-plus"></i> Item Toevoegen
+                        <Plus size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Item Toevoegen
                     </button>
                 </div>
             </div>
@@ -270,17 +271,17 @@ export default function Voorraad() {
 
             <div className="stat-grid mb-24">
                 <div className="stat-card inv-glass">
-                    <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><i className="fa-solid fa-boxes-stacked"></i></div>
+                    <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><Boxes size={20} /></div>
                     <div className="stat-val">{totalItems}</div>
                     <div className="stat-label">Items in Voorraad</div>
                 </div>
                 <div className={'stat-card inv-glass' + (lowStock.length > 0 ? ' inv-low-pulse' : '')}>
-                    <div className="stat-icon" style={{ background: 'rgba(239,68,68,.12)', color: 'var(--red)' }}><i className="fa-solid fa-triangle-exclamation"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(239,68,68,.12)', color: 'var(--red)' }}><AlertTriangle size={20} /></div>
                     <div className="stat-val" style={{ color: lowStock.length > 0 ? 'var(--red)' : 'var(--text)' }}>{lowStock.length}</div>
                     <div className="stat-label">Onder Par-Level</div>
                 </div>
                 <div className="stat-card inv-glass">
-                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><i className="fa-solid fa-coins"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Coins size={20} /></div>
                     <div className="stat-val" style={{ fontSize: 20 }}>{fmt(totalValue)}</div>
                     <div className="stat-label">Voorraadwaarde</div>
                 </div>
@@ -291,7 +292,7 @@ export default function Voorraad() {
                     <div className="panel inv-glass">
                         <div className="panel-head">
                             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="fa-solid fa-chart-pie" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Waarde per Categorie
+                                <PieChartIcon size={14} style={{ color: 'var(--brand)' }} /> Waarde per Categorie
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
@@ -300,8 +301,8 @@ export default function Voorraad() {
                                     <Pie data={catData} dataKey="waarde" nameKey="naam" cx="45%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3}>
                                         {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
                                     </Pie>
-                                    <Tooltip formatter={function (v: any, n: any) { return ['\u20ac' + v.toLocaleString('nl-NL'), n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} />
-                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: '#71717a' }} />
+                                    <Tooltip formatter={function (v: any, n: any) { return ['\u20ac' + v.toLocaleString('nl-NL'), n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 12 }} />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: '#71717a' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
@@ -309,15 +310,15 @@ export default function Voorraad() {
                     <div className="panel inv-glass">
                         <div className="panel-head">
                             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <i className="fa-solid fa-boxes-stacked" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Items per Categorie
+                                <Boxes size={14} style={{ color: 'var(--purple)' }} /> Items per Categorie
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
                             <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <BarChart data={catData} layout="vertical" margin={{ top: 4, right: 8, left: 56, bottom: 4 }} barCategoryGap="25%">
-                                    <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                                    <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
-                                    <Tooltip formatter={function (v: any) { return [v + ' items', 'Aantal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
+                                    <XAxis type="number" tick={{ fill: '#71717a', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 12 }} axisLine={false} tickLine={false} width={52} />
+                                    <Tooltip formatter={function (v: any) { return [v + ' items', 'Aantal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 12 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
                                     <Bar dataKey="items" radius={[0, 4, 4, 0]}>
                                         {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
                                     </Bar>
@@ -335,7 +336,7 @@ export default function Voorraad() {
                     })}
                 </div>
                 <div className="field" style={{ marginBottom: 0, minWidth: 180 }}>
-                    <input value={search} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setSearch(e.target.value); }} placeholder="🔍 Zoek item..." style={{ padding: '7px 12px', fontSize: 12 }} />
+                    <input value={search} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setSearch(e.target.value); }} placeholder="🔍 Zoek item..." style={{ padding: '10px 14px', fontSize: 14 }} />
                 </div>
             </div>
 
@@ -359,7 +360,7 @@ export default function Voorraad() {
                                     <tr key={item.id} className={isLow ? 'inv-low-row' : ''} style={{ cursor: 'pointer', background: highlightId === item.id ? 'rgba(255,191,0,.12)' : undefined, transition: 'background 0.4s' }} onClick={function () { editItem(item); }}>
                                         <td>
                                             <div style={{ fontWeight: 700 }}>{item.naam}</div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{item.categorie}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.categorie}</div>
                                         </td>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -367,17 +368,17 @@ export default function Voorraad() {
                                                     <div style={{ width: pct + '%', height: '100%', borderRadius: 3, background: isLow ? 'var(--red)' : pct < 50 ? 'var(--amber)' : 'var(--green)', transition: 'width .3s' }}></div>
                                                 </div>
                                                 <span style={{ fontWeight: 700, color: isLow ? 'var(--red)' : 'var(--text)', fontSize: 13 }}>{parseFloat(Number(item.current_stock).toFixed(2))}</span>
-                                                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.unit}</span>
+                                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{item.unit}</span>
                                             </div>
                                         </td>
                                         <td style={{ fontSize: 12, color: 'var(--muted)' }}>{item.min_stock} {item.unit}</td>
                                         <td style={{ fontSize: 12 }}>{fmt(item.purchase_price)}/{item.unit}</td>
                                         <td style={{ fontWeight: 600, color: 'var(--brand)', fontSize: 12 }}>{fmt(value)}</td>
-                                        <td style={{ fontSize: 11, color: 'var(--muted)' }}>{item.supplier || '\u2014'}</td>
+                                        <td style={{ fontSize: 12, color: 'var(--muted)' }}>{item.supplier || '\u2014'}</td>
                                         <td onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}>
                                             <div style={{ display: 'flex', gap: 4 }}>
-                                                <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', fontSize: 11 }} onClick={function () { quickAdjust(item, -1); }}>−1</button>
-                                                <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', fontSize: 11 }} onClick={function () { quickAdjust(item, 1); }}>+1</button>
+                                                <button className="btn btn-ghost btn-sm" onClick={function () { quickAdjust(item, -1); }}>−1</button>
+                                                <button className="btn btn-ghost btn-sm" onClick={function () { quickAdjust(item, 1); }}>+1</button>
                                             </div>
                                         </td>
                                     </tr>

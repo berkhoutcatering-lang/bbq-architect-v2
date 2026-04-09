@@ -15,6 +15,7 @@ import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import EmptyState from '@/components/EmptyState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Factuur } from '@/types';
+import { ArrowLeft, Bell, Code, FileSpreadsheet, FileText, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
 
 export default function Facturen() {
     const { data: facturen, loading, insert, update, remove } = useSupabase<Factuur>('facturen', []);
@@ -107,7 +108,7 @@ export default function Facturen() {
     if (loading) return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 32, marginBottom: 12, display: 'block' }}></i>
+                <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12, display: 'block' }} />
                 Laden...
             </div>
         </div>
@@ -120,7 +121,7 @@ export default function Facturen() {
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuwe Factuur' : 'Factuur Bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}>
-                        <i className="fa-solid fa-arrow-left"></i> Terug
+                        <ArrowLeft size={14} /> Terug
                     </button>
                 </div>
                 <div className="panel-body">
@@ -139,7 +140,7 @@ export default function Facturen() {
                     <div style={{ marginTop: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                             <h4 style={{ fontSize: 14, fontWeight: 600 }}>Regels</h4>
-                            <button className="btn btn-brand btn-sm" onClick={addItem}><i className="fa-solid fa-plus"></i> Regel</button>
+                            <button className="btn btn-brand btn-sm" onClick={addItem}><Plus size={14} /> Regel</button>
                         </div>
                         <div className="tbl-wrap">
                         <table className="tbl">
@@ -153,7 +154,7 @@ export default function Facturen() {
                                             <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
                                             <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
-                                            <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><i className="fa-solid fa-trash"></i></button></td>
+                                            <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><Trash2 size={14} /></button></td>
                                         </tr>
                                     );
                                 })}
@@ -170,11 +171,11 @@ export default function Facturen() {
                     {editing !== 'new' && (
                         <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.1em' }}>Betalingen</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.1em' }}>Betalingen</span>
                                 <button className="btn btn-ghost btn-sm" onClick={function () {
                                     const betalingen = form!.betalingen || [];
                                     setField('betalingen', betalingen.concat([{ bedrag: 0, datum: today(), notitie: 'Aanbetaling' }]));
-                                }} style={{ fontSize: 10 }}><i className="fa-solid fa-plus"></i> Betaling</button>
+                                }} style={{ fontSize: 12 }}><Plus size={14} /> Betaling</button>
                             </div>
                             {(form!.betalingen || []).map(function (b: any, i: number) {
                                 return (
@@ -201,20 +202,20 @@ export default function Facturen() {
                                         <span style={{ color: 'var(--green)' }}>Betaald: {fmt(betaald)}</span>
                                         <span style={{ color: openstaand > 0 ? 'var(--red)' : 'var(--green)' }}>Openstaand: {fmt(openstaand)}</span>
                                     </div>
-                                ) : <div style={{ fontSize: 11, color: 'var(--muted-light)' }}>Geen betalingen geregistreerd</div>;
+                                ) : <div style={{ fontSize: 12, color: 'var(--muted-light)' }}>Geen betalingen geregistreerd</div>;
                             })()}
                         </div>
                     )}
 
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveFactuur}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn btn-cyan" onClick={downloadFactuur}><i className="fa-solid fa-file-pdf"></i> PDF</button>
-                        <button className="btn btn-ghost" onClick={function () { mailFactuur(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Open email met factuur"><i className="fa-solid fa-envelope"></i> Mail</button>
+                        <button className="btn btn-brand" onClick={saveFactuur}><Save size={14} /> Opslaan</button>
+                        <button className="btn btn-cyan" onClick={downloadFactuur}><FileText size={14} /> PDF</button>
+                        <button className="btn btn-ghost" onClick={function () { mailFactuur(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Open email met factuur"><Mail size={14} /> Mail</button>
                         {form!.status === 'verzonden' && form!.vervaldatum && form!.vervaldatum < today() && (
-                            <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: 'var(--red)' }}><i className="fa-solid fa-bell"></i> Herinnering</button>
+                            <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: 'var(--red)' }}><Bell size={14} /> Herinnering</button>
                         )}
-                        <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><i className="fa-solid fa-code"></i> UBL</button>
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><Code size={14} /> UBL</button>
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>
             </div>
@@ -235,8 +236,8 @@ export default function Facturen() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Facturen ({filteredFacturen.length}{filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})</h3>
                 <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(facturenToCsv(facturen), 'facturen-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><i className="fa-solid fa-file-csv"></i> CSV</button>
-                    <button className="btn btn-brand" onClick={newFactuur}><i className="fa-solid fa-plus"></i> Nieuwe Factuur</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(facturenToCsv(facturen), 'facturen-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileSpreadsheet size={14} /> CSV</button>
+                    <button className="btn btn-brand" onClick={newFactuur}><Plus size={14} /> Nieuwe Factuur</button>
                 </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -249,7 +250,7 @@ export default function Facturen() {
                 {['alle', 'concept', 'verzonden', 'betaald', 'vervallen'].map(function (s) {
                     return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
                         onClick={function () { setFilterStatus(s); }}
-                        style={{ fontSize: 11, textTransform: 'capitalize' }}>{s}</button>;
+                        style={{ fontSize: 12, textTransform: 'capitalize' }}>{s}</button>;
                 })}
             </div>
             <div className="panel">

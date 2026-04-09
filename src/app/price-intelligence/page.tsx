@@ -7,7 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import Papa from 'papaparse';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame } from 'lucide-react';
+import { AlertTriangle, CloudUpload, Flame, Info, X } from 'lucide-react';
 
 const DEFAULT_LEVERANCIERS = ['Sligro', 'Hanos', 'Bidfood'];
 
@@ -191,13 +191,13 @@ export default function PriceIntelligence() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
                     <h1 className="hero-title">PRICE INTELLIGENCE</h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 1 }}>MONITOR INKOOPPRIJZEN & MARGES</p>
+                    <p style={{ color: 'var(--muted)', fontSize: 12, letterSpacing: 1 }}>MONITOR INKOOPPRIJZEN & MARGES</p>
                 </div>
                 <button
                     onClick={() => setShowInfo(true)}
                     style={{ background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.2)', color: '#3b82f6', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                    <i className="fa-solid fa-circle-info"></i> HELP
+                    <Info size={14} /> HELP
                 </button>
             </div>
 
@@ -207,7 +207,7 @@ export default function PriceIntelligence() {
 
             {alerts.length > 0 && (
                 <div style={{ marginBottom: 16, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--red)', fontSize: 18 }}></i>
+                    <AlertTriangle size={18} style={{ color: 'var(--red)' }} />
                     <span style={{ color: 'var(--red)', fontWeight: 600, flex: 1 }}>{alerts.length} prijsstijgingen &gt;5% gedetecteerd</span>
                     <button onClick={() => setTab('alerts')} className="btn-red" style={{ padding: '5px 12px', fontSize: 12 }}>BEKIJK ALERTS</button>
                 </div>
@@ -243,14 +243,14 @@ export default function PriceIntelligence() {
                                         <tr key={p} style={inVoorraad ? { background: 'rgba(196,163,90,.04)' } : {}}>
                                             <td style={{ fontWeight: 800 }}>
                                                 {p.toUpperCase()}
-                                                {inVoorraad && <span style={{ marginLeft: 6, fontSize: 9, color: '#c4a35a', background: 'rgba(196,163,90,.12)', padding: '1px 5px', borderRadius: 4 }}>VOORRAAD</span>}
+                                                {inVoorraad && <span style={{ marginLeft: 6, fontSize: 12, color: '#c4a35a', background: 'rgba(196,163,90,.12)', padding: '4px 8px', borderRadius: 4 }}>VOORRAAD</span>}
                                             </td>
                                             {LEVERANCIERS.map(l => (
                                                 <td key={l} style={{ textAlign: 'right', background: (row[l] && l === cheapestLev && Object.keys(row).length > 1) ? 'rgba(16,185,129,.06)' : 'transparent' }}>
                                                     {row[l] ? (
                                                         <span style={{ color: l === cheapestLev ? '#10b981' : 'var(--white)', fontWeight: l === cheapestLev ? 700 : 400 }}>
                                                             {l === cheapestLev && Object.keys(row).length > 1 && <span style={{ fontSize: 9, marginRight: 4 }}>&#x2714;</span>}
-                                                            {fmt2(row[l].prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/{row[l].eenheid}</span>
+                                                            {fmt2(row[l].prijs)} <span style={{ fontSize: 12, color: 'var(--muted)' }}>/{row[l].eenheid}</span>
                                                         </span>
                                                     ) : <span style={{ color: 'var(--muted)' }}>—</span>}
                                                 </td>
@@ -268,7 +268,7 @@ export default function PriceIntelligence() {
                 <div style={{ maxWidth: 800, margin: '0 auto' }}>
                     {importStep === 1 && (
                         <div className="artisan-panel" style={{ textAlign: 'center', padding: 48 }}>
-                            <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 48, color: 'var(--brand)', marginBottom: 24 }}></i>
+                            <CloudUpload size={48} style={{ color: 'var(--brand)' }} />
                             <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 16 }}>UPLOAD PRIJSLIJST</h2>
                             <p style={{ color: 'var(--muted)', marginBottom: 32 }}>Sleep je Sligro, Hanos of Bidfood CSV hierheen om te beginnen.</p>
 
@@ -281,7 +281,7 @@ export default function PriceIntelligence() {
                                     <input value={newLeverancier} onChange={(e) => setNewLeverancier(e.target.value)} placeholder="Eigen leverancier toevoegen..." style={{ flex: 1, padding: '6px 10px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
                                     {newLeverancier.trim() && (
                                         <button onClick={() => { setCustomLevs(prev => [...prev, newLeverancier.trim()]); setImportLev(newLeverancier.trim()); setNewLeverancier(''); showToast('Leverancier toegevoegd'); }}
-                                            style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, background: 'rgba(196,163,90,.15)', border: '1px solid rgba(196,163,90,.3)', borderRadius: 6, color: '#c4a35a', cursor: 'pointer' }}>+ Toevoegen</button>
+                                            style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, background: 'rgba(196,163,90,.15)', border: '1px solid rgba(196,163,90,.3)', borderRadius: 6, color: '#c4a35a', cursor: 'pointer' }}>+ Toevoegen</button>
                                     )}
                                 </div>
                             </div>
@@ -294,7 +294,7 @@ export default function PriceIntelligence() {
                                 style={{ border: '2px dashed ' + (dragOver ? '#3b82f6' : 'var(--border)'), borderRadius: 20, padding: 40, cursor: 'pointer', background: dragOver ? 'rgba(59,130,246,.05)' : 'rgba(255,255,255,.02)', transition: 'all .2s' }}
                             >
                                 <div style={{ fontSize: 14, fontWeight: 800, color: dragOver ? '#3b82f6' : 'var(--white)' }}>KLIK OF SLEEP BESTAND</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>CSV BESTANDEN WORDEN ONDERSTEUND</div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>CSV BESTANDEN WORDEN ONDERSTEUND</div>
                             </div>
                             <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFile(e.target.files?.[0])} />
                         </div>
@@ -363,7 +363,7 @@ export default function PriceIntelligence() {
                                         ))}
                                     </tbody>
                                 </table>
-                                {csvData.rows.length > 25 && <div style={{ textAlign: 'center', padding: 12, fontSize: 11, color: 'var(--muted)' }}>... EN {csvData.rows.length - 25} ANDERE REGELS</div>}
+                                {csvData.rows.length > 25 && <div style={{ textAlign: 'center', padding: 12, fontSize: 12, color: 'var(--muted)' }}>... EN {csvData.rows.length - 25} ANDERE REGELS</div>}
                             </div>
                             <div className="panel-footer" style={{ borderTop: '1px solid var(--border)', padding: 16 }}>
                                 <button className="tab-btn w-full" onClick={() => setImportStep(2)}>TERUG NAAR MAPPING</button>
@@ -383,11 +383,11 @@ export default function PriceIntelligence() {
                             <div className="grid-2 gap-24 mb-32" style={{ maxWidth: 400, margin: '0 auto 32px' }}>
                                 <div className="artisan-panel" style={{ padding: 16 }}>
                                     <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--green)' }}>{importResults.success}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>SUCCESVOL</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>SUCCESVOL</div>
                                 </div>
                                 <div className="artisan-panel" style={{ padding: 16 }}>
                                     <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--red)' }}>{importResults.error}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>FOUTEN / OVERGESLAGEN</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>FOUTEN / OVERGESLAGEN</div>
                                 </div>
                             </div>
 
@@ -409,13 +409,13 @@ export default function PriceIntelligence() {
                             alerts.map((a, i) => (
                                 <div key={i} className="check-row" style={{ padding: '16px 20px', marginBottom: 12 }}>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 10, color: '#ef4444', fontWeight: 900 }}>{a.leverancier.toUpperCase()}</div>
+                                        <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 900 }}>{a.leverancier.toUpperCase()}</div>
                                         <div style={{ fontSize: 15, fontWeight: 900 }}>{a.product.toUpperCase()}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.datum}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{a.datum}</div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontSize: 18, fontWeight: 900, color: '#ef4444' }}>+{a.pct.toFixed(1)}%</div>
-                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{fmt2(a.prev_prijs)} → {fmt2(a.curr_prijs)}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmt2(a.prev_prijs)} → {fmt2(a.curr_prijs)}</div>
                                     </div>
                                 </div>
                             ))
@@ -436,7 +436,7 @@ export default function PriceIntelligence() {
                     >
                         <div className="panel-head">
                             <h3>IMPORT INSTRUCTIES</h3>
-                            <button className="close-btn" onClick={() => setShowInfo(false)} aria-label="Sluiten"><i className="fa-solid fa-xmark"></i></button>
+                            <button className="close-btn" onClick={() => setShowInfo(false)} aria-label="Sluiten"><X size={14} /></button>
                         </div>
                         <div className="panel-body">
                             <p style={{ marginBottom: 16 }}>Importeer CSV lijsten om marges te beschermen.</p>

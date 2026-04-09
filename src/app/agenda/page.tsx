@@ -5,7 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
-import { Flame } from 'lucide-react';
+import { Flame, Plus, List, Calendar, CalendarPlus, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import type { Event as DbEvent, PrepTask, PrepSuggestion } from '@/types';
 
@@ -124,7 +124,7 @@ export default function Agenda() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                     <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
                     <button className="btn-brand" onClick={function () { setShowEventForm(true); }}>
-                        <i className="fa-solid fa-plus"></i> NIEUW EVENT
+                        <Plus size={14} /> NIEUW EVENT
                     </button>
                 </div>
                 <EmptyState page="/agenda" onAction={function () { setShowEventForm(true); }} />
@@ -137,7 +137,7 @@ export default function Agenda() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
                     <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 4, letterSpacing: 1 }}>
+                    <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4, letterSpacing: 1 }}>
                         {events.length} EVENTS • {prepTasks.filter(function (p) { return !p.done; }).length} OPEN PREP-TAKEN
                     </p>
                 </div>
@@ -145,19 +145,19 @@ export default function Agenda() {
                     {isMobile && (
                         <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
                             <button onClick={function () { setMobileView('list'); }} aria-label="Lijstweergave" style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: mobileView === 'list' ? 'var(--brand)' : 'transparent', color: mobileView === 'list' ? '#000' : 'var(--muted)', border: 'none', cursor: 'pointer' }}>
-                                <i className="fa-solid fa-list"></i>
+                                <List size={14} />
                             </button>
                             <button onClick={function () { setMobileView('calendar'); }} aria-label="Kalenderweergave" style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: mobileView === 'calendar' ? 'var(--brand)' : 'transparent', color: mobileView === 'calendar' ? '#000' : 'var(--muted)', border: 'none', cursor: 'pointer' }}>
-                                <i className="fa-solid fa-calendar"></i>
+                                <Calendar size={14} />
                             </button>
                         </div>
                     )}
                     <a href="/api/calendar/ical" download className="tab-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Download iCal voor Google Calendar / Outlook">
-                        <i className="fa-solid fa-calendar-plus"></i> iCal
+                        <CalendarPlus size={14} /> iCal
                     </a>
                     <button className="tab-btn" onClick={goToday}>VANDAAG</button>
                     <button className="btn-brand" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
-                        <i className="fa-solid fa-plus"></i> {isMobile ? 'EVENT' : 'NIEUW EVENT'}
+                        <Plus size={14} /> {isMobile ? 'EVENT' : 'NIEUW EVENT'}
                     </button>
                 </div>
             </div>
@@ -166,9 +166,9 @@ export default function Agenda() {
             {isMobile && mobileView === 'list' && (
                 <div style={{ marginBottom: 24 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <button onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Vorige maand"><i className="fa-solid fa-chevron-left"></i></button>
+                        <button onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Vorige maand"><ChevronLeft size={16} /></button>
                         <h3 style={{ margin: 0, fontWeight: 700, letterSpacing: 2, color: 'var(--brand)', fontSize: 14 }}>{MAANDEN[month].toUpperCase()} {year}</h3>
-                        <button onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Volgende maand"><i className="fa-solid fa-chevron-right"></i></button>
+                        <button onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer', padding: 8, fontSize: 16 }} aria-label="Volgende maand"><ChevronRight size={16} /></button>
                     </div>
 
                     {(function () {
@@ -202,7 +202,7 @@ export default function Agenda() {
                                             background: isToday ? 'var(--brand)' : 'rgba(255,255,255,0.04)',
                                             color: isToday ? '#000' : 'var(--text)',
                                         }}>
-                                            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1 }}>{day.dayName.substring(0, 2)}</span>
+                                            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1 }}>{day.dayName.substring(0, 2)}</span>
                                             <span style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{day.dayNum}</span>
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -211,7 +211,7 @@ export default function Agenda() {
                                                     <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                                                         <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</div>
                                                         <span style={{
-                                                            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                                                            fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
                                                             background: ev.status === 'confirmed' ? 'rgba(34,197,94,.12)' : 'rgba(255,191,0,.12)',
                                                             color: ev.status === 'confirmed' ? 'var(--green)' : 'var(--brand)',
                                                         }}>{{ confirmed: 'Bevestigd', completed: 'Klaar', pending: 'Nieuw', optie: 'Optie' }[ev.status] || ev.status}</span>
@@ -221,7 +221,7 @@ export default function Agenda() {
                                             {day.preps.map(function (pp, i) {
                                                 return (
                                                     <div key={i} style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: pp.task.done ? 'var(--green)' : 'var(--muted)', flexShrink: 0 }} />
+                                                        <span style={{ width: 16, height: 16, borderRadius: '50%', background: pp.task.done ? 'var(--green)' : 'var(--muted)', flexShrink: 0, display: 'inline-block' }} />
                                                         <span style={{ textDecoration: pp.task.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pp.task.text}</span>
                                                     </div>
                                                 );
@@ -241,12 +241,12 @@ export default function Agenda() {
                 <MetallicCard hover={false} className="h-fit">
                     <div className="calendar">
                         <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Vorige maand"><i className="fa-solid fa-chevron-left"></i></button>
+                            <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Vorige maand"><ChevronLeft size={16} /></button>
                             <h3 style={{ margin: 0, fontFamily: 'var(--font-artisan)', letterSpacing: 2, color: 'var(--brand)' }}>{MAANDEN[month].toUpperCase()} {year}</h3>
-                            <button className="cal-nav" onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Volgende maand"><i className="fa-solid fa-chevron-right"></i></button>
+                            <button className="cal-nav" onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Volgende maand"><ChevronRight size={16} /></button>
                         </div>
                         <div className="cal-grid" style={{ padding: 10 }}>
-                            {['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'].map(function (dn) { return <div key={dn} className="cal-day-name" style={{ textAlign: 'center', fontSize: 10, fontWeight: 800, color: 'var(--muted)', padding: '10px 0' }}>{dn}</div>; })}
+                            {['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'].map(function (dn) { return <div key={dn} className="cal-day-name" style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: 'var(--muted)', padding: '10px 0' }}>{dn}</div>; })}
                             {cells.map(function (cell, idx) {
                                 const dayEvts = eventsForDate(cell.date);
                                 const dayPreps = prepsForDate(cell.date);
@@ -259,17 +259,17 @@ export default function Agenda() {
                                         <div className="cal-num" style={{ fontWeight: 800, fontSize: 12, color: isSelected ? 'var(--brand)' : isToday ? '#fff' : 'var(--muted)', marginBottom: 6 }}>{cell.day}</div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                             {dayEvts.map(function (ev) {
-                                                return <div key={ev.id} style={{ fontSize: 9, background: 'var(--brand)', color: '#1a1a1a', padding: '2px 4px', borderRadius: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                return <div key={ev.id} style={{ fontSize: 12, background: 'var(--brand)', color: '#1a1a1a', padding: '2px 4px', borderRadius: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {ev.name.toUpperCase()}
                                                 </div>;
                                             })}
                                             {dayPreps.map(function (pp, i) {
                                                 if (i > 1) return null;
-                                                return <div key={i} style={{ fontSize: 9, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 4px', borderRadius: 4, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                return <div key={i} style={{ fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 4px', borderRadius: 4, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {pp.task.text}
                                                 </div>;
                                             })}
-                                            {dayPreps.length > 2 && <div style={{ fontSize: 8, color: 'var(--muted)', textAlign: 'center' }}>+{dayPreps.length - 2}</div>}
+                                            {dayPreps.length > 2 && <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>+{dayPreps.length - 2}</div>}
                                         </div>
                                     </div>
                                 );
@@ -280,7 +280,7 @@ export default function Agenda() {
 
                 <div className="agenda-side">
                     <MetallicCard hover={false} className="mb-16">
-                        <div className="panel-head"><h3><i className="fa-solid fa-calendar-day"></i> {selLabel}</h3></div>
+                        <div className="panel-head"><h3><CalendarDays size={16} style={{ marginRight: 6 }} /> {selLabel}</h3></div>
                         <div className="panel-body">
                             {selEvents.length === 0 && selPreps.length === 0 && <div className="empty-state">Geen items op deze dag</div>}
                             {selEvents.map(function (ev) {
@@ -288,9 +288,9 @@ export default function Agenda() {
                                     <div key={ev.id} className="side-row" style={{ padding: 12, marginBottom: 8, borderLeft: '3px solid var(--brand)' }}>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 800, fontSize: 13 }}>{ev.name.toUpperCase()}</div>
-                                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{ev.guests} GASTEN • {ev.location || '—'}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{ev.guests} GASTEN • {ev.location || '—'}</div>
                                         </div>
-                                        <span className={'pill pill-' + (ev.status === 'confirmed' ? 'green' : ev.status === 'completed' ? 'green' : 'amber')} style={{ fontSize: 9 }}>{{ confirmed: 'Bevestigd', completed: 'Afgerond', pending: 'Nieuw', optie: 'Optie' }[ev.status] || ev.status}</span>
+                                        <span className={'pill pill-' + (ev.status === 'confirmed' ? 'green' : ev.status === 'completed' ? 'green' : 'amber')} style={{ fontSize: 12 }}>{{ confirmed: 'Bevestigd', completed: 'Afgerond', pending: 'Nieuw', optie: 'Optie' }[ev.status] || ev.status}</span>
                                     </div>
                                 );
                             })}
@@ -299,9 +299,9 @@ export default function Agenda() {
                                     <div key={pp.task.id} className="side-row" style={{ padding: 12, marginBottom: 8, opacity: pp.task.done ? 0.4 : 1 }}>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 600, fontSize: 12, textDecoration: pp.task.done ? 'line-through' : 'none' }}>{pp.task.text}</div>
-                                            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>📌 {pp.event ? pp.event.name : '—'}</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{pp.event ? pp.event.name : '—'}</div>
                                         </div>
-                                        <button className="tab-btn" style={{ padding: '4px 8px' }} onClick={function () { toggleTask(pp.task); }}>{pp.task.done ? 'UNDO' : 'DONE'}</button>
+                                        <button className="tab-btn" style={{ padding: '8px 14px' }} onClick={function () { toggleTask(pp.task); }}>{pp.task.done ? 'UNDO' : 'DONE'}</button>
                                     </div>
                                 );
                             })}
@@ -338,7 +338,7 @@ export default function Agenda() {
                                 return (
                                     <div key={pp.task.id} style={{ fontSize: 12, padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
                                         <span>{pp.task.text}</span>
-                                        <span style={{ fontSize: 10, color: 'var(--brand)' }}>{fmtNl(pp.prepDate as string)}</span>
+                                        <span style={{ fontSize: 12, color: 'var(--brand)' }}>{fmtNl(pp.prepDate as string)}</span>
                                     </div>
                                 );
                             })}

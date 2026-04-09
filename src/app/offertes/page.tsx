@@ -19,6 +19,7 @@ import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
+import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown } from 'lucide-react';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
 export default function Offertes() {
@@ -415,7 +416,7 @@ export default function Offertes() {
             <div className="hopbites-theme panel">
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuwe Offerte' : 'Offerte Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
                     <div className="form-grid">
@@ -433,20 +434,20 @@ export default function Offertes() {
                             error={errors.client_naam}
                         />
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); setErrors(Object.assign({}, errors, { datum: '' })); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />{errors.datum && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.datum}</span>}</div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); setErrors(Object.assign({}, errors, { datum: '' })); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />{errors.datum && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.datum}</span>}</div>
                         <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
                     </div>
 
                     <div style={{ margin: '16px 0 8px', padding: '10px 14px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-link" style={{ color: 'var(--brand)', fontSize: 11 }}></i>
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{syncMsg}</span>
+                        <LinkIcon size={12} style={{ color: 'var(--brand)' }} />
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{syncMsg}</span>
                     </div>
 
                     <div style={{ marginTop: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                             <h4 style={{ fontSize: 14, fontWeight: 600 }}>Regels</h4>
-                            <button className="btn btn-brand btn-sm" onClick={addItem}><i className="fa-solid fa-plus"></i> Regel</button>
+                            <button className="btn btn-brand btn-sm" onClick={addItem}><Plus size={14} /> Regel</button>
                         </div>
                         <div className="tbl-wrap">
                         <table className="tbl">
@@ -459,7 +460,7 @@ export default function Offertes() {
                                         <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                         <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
                                         <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
-                                        <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><i className="fa-solid fa-trash"></i></button></td>
+                                        <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen" style={{ minWidth: 36, minHeight: 36 }}><Trash2 size={14} /></button></td>
                                     </tr>;
                                 })}
                             </tbody>
@@ -472,29 +473,29 @@ export default function Offertes() {
                         </div>
                     </div>
                     <div className="editor-actions">
-                        <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><i className="fa-solid fa-utensils"></i> Menu Wizard</button>
-                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><i className="fa-solid fa-grip"></i> Menu Builder</button>
-                        <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><i className="fa-solid fa-envelope"></i> Mail</button>
-                        <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><i className="fa-solid fa-file-pdf"></i> PDF</button>
-                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><i className="fa-solid fa-utensils"></i> Menukaart</button>
-                        {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><i className="fa-solid fa-leaf"></i> Vega Menukaart</button>}
+                        <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><Save size={14} /> Opslaan</button>
+                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><UtensilsCrossed size={14} /> Menu Wizard</button>
+                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
+                        <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><Mail size={14} /> Mail</button>
+                        <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
+                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
+                        {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega Menukaart</button>}
                         {editing !== 'new' && (
                             <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
                                 navigator.clipboard.writeText(link);
                                 showToast('Magic Link gekopieerd!', 'success');
                             }} title="Kopieer een link die de klant kan openen om de offerte te bekijken">
-                                <i className="fa-solid fa-link"></i> Magic Link
+                                <LinkIcon size={14} /> Magic Link
                             </button>
                         )}
-                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><i className="fa-solid fa-file-invoice"></i> Naar Factuur</button>}
-                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><i className="fa-solid fa-copy"></i> Dupliceer</button>}
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Naar Factuur</button>}
+                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><Copy size={14} /> Dupliceer</button>}
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><Trash2 size={14} /> Verwijderen</button>}
                     </div>
 
                     <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
                             ⚙️ Vaste Kosten per Event
                         </div>
                         {(form.vaste_kosten || []).length > 0 && (
@@ -595,9 +596,9 @@ export default function Offertes() {
                     <h3 className="hb-title" style={{ fontSize: 20 }}>Offertes ({offertes.length})</h3>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><i className="fa-solid fa-file-csv"></i> CSV</button>
-                    <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><i className="fa-solid fa-utensils"></i> Stel Menu Samen</button>
-                    <button className="btn-gold" onClick={newOfferte}><i className="fa-solid fa-plus"></i> Nieuwe Offerte</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileDown size={14} /> CSV</button>
+                    <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><UtensilsCrossed size={14} /> Stel Menu Samen</button>
+                    <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe Offerte</button>
                 </div>
             </div>
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
@@ -613,13 +614,13 @@ export default function Offertes() {
                     {['alle', 'concept', 'verzonden', 'geaccepteerd', 'betaald', 'afgewezen'].map(function (s) {
                         return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
                             onClick={function () { setFilterStatus(s); }}
-                            style={{ fontSize: 11, textTransform: 'capitalize', whiteSpace: 'nowrap', flexShrink: 0 }}>{s}</button>;
+                            style={{ textTransform: 'capitalize', whiteSpace: 'nowrap', flexShrink: 0 }}>{s}</button>;
                     })}
                 </div>
                 <select value={sortField + '_' + sortDir} onChange={function (e) {
                     const [f, d] = e.target.value.split('_');
                     setSortField(f); setSortDir(d as 'asc' | 'desc');
-                }} style={{ padding: '6px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginTop: 6 }}>
+                }} style={{ padding: '8px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginTop: 6 }}>
                     <option value="datum_desc">Datum (nieuwste eerst)</option>
                     <option value="datum_asc">Datum (oudste eerst)</option>
                     <option value="totaal_desc">Bedrag (hoog-laag)</option>
@@ -666,7 +667,7 @@ export default function Offertes() {
                                     const txt = String(o.notitie);
                                     const gangIdx = txt.search(/GANG\s*\d|Normaal Menu:|Dieet Menu:|Totaalprijs/i);
                                     const opmerking = gangIdx > 0 ? txt.substring(0, gangIdx).trim() : (gangIdx === 0 ? '' : txt.trim());
-                                    return opmerking ? <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{opmerking.length > 80 ? opmerking.substring(0, 80) + '...' : opmerking}</div> : null;
+                                    return opmerking ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{opmerking.length > 80 ? opmerking.substring(0, 80) + '...' : opmerking}</div> : null;
                                 })()}
                             </div>
                             <div style={{ textAlign: 'right' }}>

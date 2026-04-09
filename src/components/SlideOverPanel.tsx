@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useCallback, useId } from 'react';
+import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface SlideOverPanelProps {
@@ -117,7 +118,7 @@ export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width
             onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--muted)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
           >
-            <i className="fa-solid fa-xmark" />
+            <X size={14} />
           </button>
         </div>
 

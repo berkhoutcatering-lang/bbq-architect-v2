@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { X, GripVertical, Plus, Minus, ChefHat, Euro, Users, Flame } from 'lucide-react';
+import { X, GripVertical, Plus, Minus, ChefHat, Euro, Users, Flame, Check } from 'lucide-react';
 
 interface GangRow {
     slug: string;
@@ -208,7 +208,7 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                             <button onClick={function () { onApply(menu); onClose(); }} className="btn btn-brand btn-sm">
-                                <i className="fa-solid fa-check" style={{ marginRight: 4 }}></i>Toepassen
+                                <Check size={14} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />Toepassen
                             </button>
                             <button onClick={onClose} className="btn btn-ghost btn-sm">
                                 <X size={14} />

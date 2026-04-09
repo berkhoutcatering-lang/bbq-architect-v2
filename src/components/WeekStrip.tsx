@@ -1,5 +1,6 @@
 'use client';
 import React, { useMemo } from 'react';
+import { Calendar } from 'lucide-react';
 import MetallicCard from './MetallicCard';
 import { StatusDot } from './StatusBadge';
 
@@ -52,7 +53,7 @@ export default function WeekStrip({ events, onDayClick, onEventClick }: WeekStri
     <MetallicCard hover={false} className="p-4 md:p-5 mb-6 md:mb-8">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
-          <i className="fa-solid fa-calendar-week mr-2" style={{ color: '#c4a35a' }} />
+          <Calendar size={12} className="mr-2 inline-block align-middle" style={{ color: '#c4a35a' }} />
           Deze week
         </h3>
         <span className="text-[10px] font-medium" style={{ color: 'var(--muted-light)' }}>

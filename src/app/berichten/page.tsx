@@ -98,7 +98,7 @@ export default function Berichten() {
                 <EmptyState
                     page="/berichten"
                     onAction={function () { setShowForm(true); }}
-                    icon="fa-solid fa-envelope"
+                    icon="Mail"
                     title="Geen berichten"
                     description="Je hebt nog geen berichten. Verstuur je eerste bericht."
                     actionLabel="Nieuw bericht"
@@ -114,7 +114,7 @@ export default function Berichten() {
                                     <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{b.onderwerp}</div>
                                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{b.afzender}</div>
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>
                                     {b.datum ? new Date(b.datum).toLocaleDateString('nl-NL') : ''}
                                 </div>
                             </div>
@@ -123,8 +123,8 @@ export default function Berichten() {
                             </p>
                             {!b.gelezen && (
                                 <span style={{
-                                    display: 'inline-block', marginTop: 8, fontSize: 10, fontWeight: 700,
-                                    padding: '2px 8px', borderRadius: 8,
+                                    display: 'inline-block', marginTop: 8, fontSize: 12, fontWeight: 700,
+                                    padding: '4px 8px', borderRadius: 8,
                                     background: 'rgba(196,163,90,.15)', color: '#c4a35a',
                                 }}>Ongelezen</span>
                             )}

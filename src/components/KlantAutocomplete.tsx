@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Klant {
@@ -128,7 +129,7 @@ export default function KlantAutocomplete({ value, onChange, onSelect, label, st
                         );
                     })}
                     <div style={{ padding: '6px 12px', fontSize: 10, color: 'var(--muted-light)', borderTop: '1px solid rgba(130,130,130,0.08)' }}>
-                        <i className="fa-solid fa-lightbulb" style={{ marginRight: 4 }}></i>
+                        <Lightbulb size={10} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />
                         Selecteer een klant of typ een nieuwe naam
                     </div>
                 </div>

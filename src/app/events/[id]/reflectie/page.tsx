@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { fmtNl } from '@/lib/utils';
 import type { DbEvent, EventReflectie } from '@/types';
+import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle, ClipboardCheck, Flame, Lightbulb, Loader2, PackageOpen, Pencil, StarHalf } from 'lucide-react';
 
 export default function ReflectiePage() {
     const params = useParams();
@@ -84,7 +85,7 @@ export default function ReflectiePage() {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
                 <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                    <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 24, marginBottom: 12 }}></i>
+                    <Loader2 size={24} className="animate-spin" style={{ marginBottom: 12 }} />
                     <div>Laden...</div>
                 </div>
             </div>
@@ -94,10 +95,10 @@ export default function ReflectiePage() {
     if (!event) {
         return (
             <div className="panel" style={{ textAlign: 'center', padding: 40 }}>
-                <i className="fa-solid fa-circle-exclamation" style={{ fontSize: 32, color: 'var(--red)', marginBottom: 12 }}></i>
+                <AlertCircle size={32} style={{ color: 'var(--red)' }} />
                 <h3>Event niet gevonden</h3>
                 <button className="btn btn-brand" style={{ marginTop: 16 }} onClick={function () { router.push('/events'); }}>
-                    <i className="fa-solid fa-arrow-left"></i> Terug naar Events
+                    <ArrowLeft size={14} /> Terug naar Events
                 </button>
             </div>
         );
@@ -109,10 +110,10 @@ export default function ReflectiePage() {
         <div style={{ animation: 'fadeIn 0.4s ease-out', maxWidth: 800, margin: '0 auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <button className="btn btn-ghost btn-sm" onClick={function () { router.push('/events'); }}>
-                    <i className="fa-solid fa-arrow-left"></i> Events
+                    <ArrowLeft size={14} /> Events
                 </button>
                 <h1 style={{ fontSize: 18, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <i className="fa-solid fa-clipboard-check" style={{ color: 'var(--brand)' }}></i> Event Reflectie
+                    <ClipboardCheck size={14} style={{ color: 'var(--brand)' }} /> Event Reflectie
                 </h1>
                 <div></div>
             </div>
@@ -122,7 +123,7 @@ export default function ReflectiePage() {
                 <div style={{ padding: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                         <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,191,0,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <i className="fa-solid fa-fire-flame-curved" style={{ color: 'var(--brand)', fontSize: 16 }}></i>
+                            <Flame size={16} style={{ color: 'var(--brand)' }} />
                         </div>
                         <div>
                             <div style={{ fontWeight: 800, fontSize: 16 }}>{event.name}</div>
@@ -132,8 +133,8 @@ export default function ReflectiePage() {
                         </div>
                     </div>
                     {existingId && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 8, background: 'rgba(34,197,94,.1)', color: 'var(--green)', fontSize: 11, fontWeight: 700 }}>
-                            <i className="fa-solid fa-check-circle"></i> Reflectie ingevuld
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 8, background: 'rgba(34,197,94,.1)', color: 'var(--green)', fontSize: 12, fontWeight: 700 }}>
+                            <CheckCircle size={14} /> Reflectie ingevuld
                         </div>
                     )}
                 </div>
@@ -142,7 +143,7 @@ export default function ReflectiePage() {
             {/* Score */}
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div style={{ padding: 24, textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--muted)', marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--muted)', marginBottom: 12 }}>
                         Totaalscore Event
                     </div>
                     <div style={{ fontSize: 56, fontWeight: 900, color: scoreColor, lineHeight: 1 }}>
@@ -162,7 +163,7 @@ export default function ReflectiePage() {
                             cursor: 'pointer'
                         }}
                     />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', maxWidth: 300, margin: '4px auto 0', fontSize: 10, color: 'var(--muted)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', maxWidth: 300, margin: '4px auto 0', fontSize: 12, color: 'var(--muted)' }}>
                         <span>Slecht</span><span>Goed</span><span>Uitstekend</span>
                     </div>
                 </div>
@@ -174,7 +175,7 @@ export default function ReflectiePage() {
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-box-open" style={{ color: 'var(--green)', fontSize: 11 }}></i> Wat was er over?
+                            <PackageOpen size={11} style={{ color: 'var(--green)' }} /> Wat was er over?
                         </label>
                         <textarea
                             rows={3}
@@ -185,7 +186,7 @@ export default function ReflectiePage() {
                     </div>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--red)', fontSize: 11 }}></i> Wat was er tekort?
+                            <AlertTriangle size={11} style={{ color: 'var(--red)' }} /> Wat was er tekort?
                         </label>
                         <textarea
                             rows={3}
@@ -196,7 +197,7 @@ export default function ReflectiePage() {
                     </div>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-star-half-stroke" style={{ color: 'var(--brand)', fontSize: 11 }}></i> Wat was niet goed genoeg?
+                            <StarHalf size={11} style={{ color: 'var(--brand)' }} /> Wat was niet goed genoeg?
                         </label>
                         <textarea
                             rows={3}
@@ -207,7 +208,7 @@ export default function ReflectiePage() {
                     </div>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-lightbulb" style={{ color: '#a78bfa', fontSize: 11 }}></i> Verbeterpunten
+                            <Lightbulb size={11} style={{ color: '#a78bfa' }} /> Verbeterpunten
                         </label>
                         <textarea
                             rows={3}
@@ -218,7 +219,7 @@ export default function ReflectiePage() {
                     </div>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-pen" style={{ color: 'var(--muted)', fontSize: 11 }}></i> Vrije Notities
+                            <Pencil size={11} style={{ color: 'var(--muted)' }} /> Vrije Notities
                         </label>
                         <textarea
                             rows={3}
@@ -242,9 +243,9 @@ export default function ReflectiePage() {
                     style={{ padding: '12px 32px' }}
                 >
                     {saving ? (
-                        <><i className="fa-solid fa-spinner fa-spin"></i> Opslaan...</>
+                        <><Loader2 size={14} className="animate-spin" /> Opslaan...</>
                     ) : (
-                        <><i className="fa-solid fa-check"></i> {existingId ? 'Reflectie Bijwerken' : 'Reflectie Opslaan'}</>
+                        <><Check size={14} /> {existingId ? 'Reflectie Bijwerken' : 'Reflectie Opslaan'}</>
                     )}
                 </button>
             </div>

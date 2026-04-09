@@ -7,7 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame } from 'lucide-react';
+import { Flame, Link, Unlink } from 'lucide-react';
 import type { InventoryItem, Gang } from '@/types';
 
 export default function Gerechten() {
@@ -339,7 +339,7 @@ export default function Gerechten() {
                             onClick={function () { setActiveGang(g.slug); setEditing(null); }}
                         >
                             {g.naam}
-                            <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 4 }}>
+                            <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>
                                 ({count})
                             </span>
                         </button>
@@ -374,7 +374,7 @@ export default function Gerechten() {
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                 <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
-                                {g.actief === false && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
+                                {g.actief === false && <span style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
                             </div>
                             <div className="dish-desc">{g.beschrijving || '—'}</div>
 
@@ -480,7 +480,7 @@ export default function Gerechten() {
                             </div>
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     🔥 The Architect — Service Mode
                                 </div>
 
@@ -538,7 +538,7 @@ export default function Gerechten() {
                             </div>
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     🍽️ Hardware per Gast
                                 </div>
 
@@ -591,7 +591,7 @@ export default function Gerechten() {
 
                             {(form.ingredienten || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                         🛒 Winkel per Ingrediënt
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -613,7 +613,7 @@ export default function Gerechten() {
                             )}
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     💰 Kostprijsberekening
                                 </div>
 
@@ -627,9 +627,9 @@ export default function Gerechten() {
                                                     <div className="ingredient-cost-info">
                                                         <span className="ingredient-cost-name">{item.naam}</span>
                                                         {inv ? (
-                                                            <span className="ingredient-cost-linked"><i className="fa-solid fa-link"></i> €{inv.price.toFixed(2)}/{inv.unit}</span>
+                                                            <span className="ingredient-cost-linked"><Link size={14} /> €{inv.price.toFixed(2)}/{inv.unit}</span>
                                                         ) : (
-                                                            <span className="ingredient-cost-unlinked"><i className="fa-solid fa-unlink"></i> niet in voorraad</span>
+                                                            <span className="ingredient-cost-unlinked"><Unlink size={14} /> niet in voorraad</span>
                                                         )}
                                                     </div>
                                                     <div className="ingredient-cost-details">
@@ -757,7 +757,7 @@ export default function Gerechten() {
                                     >
                                         {form.actief ? '✅ Actief' : '⏸ Inactief'}
                                     </button>
-                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                                         {form.actief ? 'Zichtbaar in offertes en menu' : 'Verborgen — niet beschikbaar voor offertes'}
                                     </span>
                                 </div>
@@ -782,7 +782,7 @@ export default function Gerechten() {
                                     </div>
                                     {stats.offList.length > 0 && (
                                         <div style={{ marginTop: 10 }}>
-                                            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Gebruikt in:</div>
+                                            <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Gebruikt in:</div>
                                             {stats.offList.map(function (o: any, i: number) {
                                                 return (
                                                     <div key={i} style={{ fontSize: 12, padding: '3px 0', display: 'flex', justifyContent: 'space-between' }}>

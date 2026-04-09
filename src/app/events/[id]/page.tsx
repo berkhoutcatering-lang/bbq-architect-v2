@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { fmtNl } from '@/lib/utils';
+import { ArrowLeft, Check, CheckCircle, ChevronDown, ChevronUp, FileText, Flag, Flame, ListChecks, Pencil, ShoppingCart, Star, Thermometer } from 'lucide-react';
 
 // ── Stage colors ──
 const COLORS: Record<string, { main: string; bg: string }> = {
@@ -183,7 +184,7 @@ export default function EventFlowPage() {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={function () { router.push('/events'); }}><i className="fa-solid fa-arrow-left"></i> Events</button>
+                        <button className="btn btn-ghost btn-sm" onClick={function () { router.push('/events'); }}><ArrowLeft size={14} /> Events</button>
                         <span className={'pill pill-' + (event.status === 'confirmed' ? 'green' : event.status === 'completed' ? 'purple' : 'amber')} style={{ alignSelf: 'center' }}>
                             {event.status.toUpperCase()}
                         </span>
@@ -191,15 +192,15 @@ export default function EventFlowPage() {
                 </div>
                 <div className="panel-body" style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                     <div style={{ background: 'var(--card)', padding: '12px 18px', borderRadius: 12, flex: 1, minWidth: 140 }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Klant</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Klant</div>
                         <div style={{ fontWeight: 700, marginTop: 4 }}>{event.client_naam || '—'}</div>
                     </div>
                     <div style={{ background: 'var(--card)', padding: '12px 18px', borderRadius: 12, flex: 1, minWidth: 140 }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Omzet</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Omzet</div>
                         <div style={{ fontWeight: 700, marginTop: 4, color: 'var(--brand)' }}>{totalBedrag > 0 ? '\u20ac ' + totalBedrag.toLocaleString('nl-NL', { minimumFractionDigits: 2 }) : '\u20ac ' + ((event.guests || 0) * (event.ppp || 0)).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</div>
                     </div>
                     <div style={{ background: 'var(--card)', padding: '12px 18px', borderRadius: 12, flex: 1, minWidth: 140 }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Type</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Type</div>
                         <div style={{ fontWeight: 700, marginTop: 4 }}>{event.type || 'Zakelijk'}</div>
                     </div>
                 </div>
@@ -225,7 +226,7 @@ export default function EventFlowPage() {
                                 border: '2px solid ' + color.main,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
                             }}>
-                                {isDone && <i className="fa-solid fa-check" style={{ fontSize: 10, color: '#fff' }}></i>}
+                                {isDone && <Check size={10} style={{ color: '#fff' }} />}
                                 {isActive && <div style={{ width: 6, height: 6, borderRadius: '50%', background: color.main }} />}
                             </div>
 
@@ -234,9 +235,9 @@ export default function EventFlowPage() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <span style={{ fontWeight: 800, fontSize: 14, color: color.main }}>{stage.label}</span>
-                                        <span className={pillClass(stage.status)} style={{ fontSize: 10 }}>{pillLabel(stage.status)}</span>
+                                        <span className={pillClass(stage.status)} style={{ fontSize: 12 }}>{pillLabel(stage.status)}</span>
                                     </div>
-                                    <i className={'fa-solid fa-chevron-' + (isOpen ? 'up' : 'down')} style={{ color: 'var(--muted)', fontSize: 12 }}></i>
+                                    {isOpen ? <ChevronUp size={12} style={{ color: 'var(--muted)' }} /> : <ChevronDown size={12} style={{ color: 'var(--muted)' }} />}
                                 </div>
 
                                 {isOpen && (
@@ -250,20 +251,20 @@ export default function EventFlowPage() {
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                                             <div>
                                                                 <span style={{ fontWeight: 700 }}>{offerte.nummer}</span>
-                                                                <span className={'pill pill-' + (offerte.status === 'geaccepteerd' ? 'green' : offerte.status === 'concept' ? 'blue' : 'amber')} style={{ marginLeft: 8, fontSize: 10 }}>{offerte.status}</span>
+                                                                <span className={'pill pill-' + (offerte.status === 'geaccepteerd' ? 'green' : offerte.status === 'concept' ? 'blue' : 'amber')} style={{ marginLeft: 8, fontSize: 12 }}>{offerte.status}</span>
                                                             </div>
                                                             <span style={{ color: 'var(--brand)', fontWeight: 700 }}>{'\u20ac ' + totalBedrag.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         {menuItems.length > 0 && (
                                                             <div style={{ marginBottom: 14 }}>
-                                                                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Menu</div>
+                                                                <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Menu</div>
                                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                                                     {menuItems.map(function (item, i) { return <span key={i} style={{ background: 'var(--card)', padding: '4px 10px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)' }}>{item}</span>; })}
                                                                 </div>
                                                             </div>
                                                         )}
                                                         <button className="btn btn-ghost btn-sm" onClick={function (e) { e.stopPropagation(); router.push('/offertes'); }}>
-                                                            <i className="fa-solid fa-file-lines"></i> Naar Offerte
+                                                            <FileText size={14} /> Naar Offerte
                                                         </button>
                                                     </>
                                                 ) : (
@@ -276,17 +277,17 @@ export default function EventFlowPage() {
                                         {stage.key === 'acceptatie' && (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" style={{ paddingTop: 14 }}>
                                                 {[
-                                                    { label: 'Factuur', icon: 'fa-file-invoice', count: factuur ? 1 : 0, detail: factuur ? factuur.nummer : 'Niet aangemaakt', ok: !!factuur },
-                                                    { label: 'Prep Tasks', icon: 'fa-list-check', count: prepTasks.length, detail: prepTasks.length + ' taken', ok: prepTasks.length > 0 },
-                                                    { label: 'Inkooplijst', icon: 'fa-cart-shopping', count: inkooplijst ? (inkooplijst.items || []).length : 0, detail: inkooplijst ? (inkooplijst.items || []).length + ' items' : 'Niet aangemaakt', ok: !!inkooplijst },
-                                                    { label: 'HACCP', icon: 'fa-thermometer-half', count: haccpRecords.length, detail: haccpRecords.length + ' registraties', ok: haccpRecords.length > 0 },
+                                                    { label: 'Factuur', Icon: FileText, count: factuur ? 1 : 0, detail: factuur ? factuur.nummer : 'Niet aangemaakt', ok: !!factuur },
+                                                    { label: 'Prep Tasks', Icon: ListChecks, count: prepTasks.length, detail: prepTasks.length + ' taken', ok: prepTasks.length > 0 },
+                                                    { label: 'Inkooplijst', Icon: ShoppingCart, count: inkooplijst ? (inkooplijst.items || []).length : 0, detail: inkooplijst ? (inkooplijst.items || []).length + ' items' : 'Niet aangemaakt', ok: !!inkooplijst },
+                                                    { label: 'HACCP', Icon: Thermometer, count: haccpRecords.length, detail: haccpRecords.length + ' registraties', ok: haccpRecords.length > 0 },
                                                 ].map(function (item) {
                                                     return (
                                                         <div key={item.label} style={{ background: item.ok ? 'rgba(34,197,94,.06)' : 'rgba(130,130,130,.06)', padding: '12px 14px', borderRadius: 10, border: '1px solid ' + (item.ok ? 'rgba(34,197,94,.2)' : 'var(--border)') }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                                <i className={'fa-solid ' + item.icon} style={{ color: item.ok ? '#22c55e' : 'var(--muted)', fontSize: 13 }}></i>
+                                                                <item.Icon size={13} style={{ color: item.ok ? '#22c55e' : 'var(--muted)' }} />
                                                                 <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
-                                                                {item.ok && <i className="fa-solid fa-circle-check" style={{ color: '#22c55e', fontSize: 11, marginLeft: 'auto' }}></i>}
+                                                                {item.ok && <CheckCircle size={11} style={{ color: '#22c55e' }} />}
                                                             </div>
                                                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.detail}</div>
                                                         </div>
@@ -309,7 +310,7 @@ export default function EventFlowPage() {
                                                             <div key={dayKey} style={{ marginBottom: 16 }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                                                     <span style={{ fontWeight: 700, fontSize: 12, color: '#3b82f6' }}>{dayLabels[dayKey] || 'Dag ' + dayKey}</span>
-                                                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{doneCount}/{tasks.length}</span>
+                                                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{doneCount}/{tasks.length}</span>
                                                                 </div>
                                                                 <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
                                                                     <div style={{ height: '100%', width: pct + '%', background: pct === 100 ? '#22c55e' : '#3b82f6', borderRadius: 2, transition: 'width .3s' }} />
@@ -322,7 +323,7 @@ export default function EventFlowPage() {
                                                                                 width: 18, height: 18, borderRadius: 4, border: '2px solid ' + (task.done ? '#22c55e' : 'var(--border)'),
                                                                                 background: task.done ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                                                             }}>
-                                                                                {task.done && <i className="fa-solid fa-check" style={{ fontSize: 10, color: '#fff' }}></i>}
+                                                                                {task.done && <Check size={10} style={{ color: '#fff' }} />}
                                                                             </div>
                                                                             <span style={{ textDecoration: task.done ? 'line-through' : 'none', color: task.done ? 'var(--muted)' : 'var(--text)' }}>{task.text}</span>
                                                                         </label>
@@ -340,7 +341,7 @@ export default function EventFlowPage() {
                                             <div style={{ paddingTop: 14 }}>
                                                 {serviceLogs.length > 0 ? (
                                                     <>
-                                                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Service Logs</div>
+                                                        <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Service Logs</div>
                                                         {serviceLogs.map(function (log: any, i: number) {
                                                             const gangName = gangNameMap[log.gang_slug] || log.gang_slug;
                                                             const mins = log.duration_seconds ? Math.round(log.duration_seconds / 60) : null;
@@ -358,7 +359,7 @@ export default function EventFlowPage() {
 
                                                 {haccpRecords.length > 0 && (
                                                     <>
-                                                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginTop: 14 }}>HACCP Registraties</div>
+                                                        <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginTop: 14 }}>HACCP Registraties</div>
                                                         {haccpRecords.slice(0, 8).map(function (rec: any, i: number) {
                                                             const statusColor = rec.status === 'ok' ? '#22c55e' : rec.status === 'warn' ? '#f59e0b' : '#ef4444';
                                                             return (
@@ -371,12 +372,12 @@ export default function EventFlowPage() {
                                                                 </div>
                                                             );
                                                         })}
-                                                        {haccpRecords.length > 8 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>+ {haccpRecords.length - 8} meer...</div>}
+                                                        {haccpRecords.length > 8 && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>+ {haccpRecords.length - 8} meer...</div>}
                                                     </>
                                                 )}
 
                                                 <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={function (e) { e.stopPropagation(); router.push('/service'); }}>
-                                                    <i className="fa-solid fa-fire"></i> Naar Service Mode
+                                                    <Flame size={14} /> Naar Service Mode
                                                 </button>
                                             </div>
                                         )}
@@ -388,13 +389,13 @@ export default function EventFlowPage() {
                                                     {/* Factuur */}
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', borderRadius: 10, border: '1px solid var(--border)' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            <i className="fa-solid fa-file-invoice" style={{ color: factuur ? '#a78bfa' : 'var(--muted)' }}></i>
+                                                            <FileText size={14} />
                                                             <span style={{ fontWeight: 600, fontSize: 13 }}>Factuur</span>
                                                         </div>
                                                         {factuur ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{factuur.nummer}</span>
-                                                                <span className={'pill pill-' + (factuur.status === 'betaald' ? 'green' : factuur.status === 'verzonden' ? 'amber' : 'blue')} style={{ fontSize: 10 }}>{factuur.status}</span>
+                                                                <span className={'pill pill-' + (factuur.status === 'betaald' ? 'green' : factuur.status === 'verzonden' ? 'amber' : 'blue')} style={{ fontSize: 12 }}>{factuur.status}</span>
                                                             </div>
                                                         ) : (
                                                             <span style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>Niet aangemaakt</span>
@@ -404,17 +405,17 @@ export default function EventFlowPage() {
                                                     {/* Reflectie */}
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', borderRadius: 10, border: '1px solid var(--border)' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            <i className="fa-solid fa-star" style={{ color: reflectie ? '#a78bfa' : 'var(--muted)' }}></i>
+                                                            <Star size={14} />
                                                             <span style={{ fontWeight: 600, fontSize: 13 }}>Reflectie</span>
                                                         </div>
                                                         {reflectie ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>Score: {reflectie.score}/10</span>
-                                                                <span className="pill pill-green" style={{ fontSize: 10 }}>Ingevuld</span>
+                                                                <span className="pill pill-green" style={{ fontSize: 12 }}>Ingevuld</span>
                                                             </div>
                                                         ) : (
                                                             <button className="btn btn-ghost btn-sm" onClick={function (e) { e.stopPropagation(); router.push('/events/' + eventId + '/reflectie'); }}>
-                                                                <i className="fa-solid fa-pen"></i> Invullen
+                                                                <Pencil size={14} /> Invullen
                                                             </button>
                                                         )}
                                                     </div>
@@ -422,10 +423,10 @@ export default function EventFlowPage() {
                                                     {/* Event Status */}
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', borderRadius: 10, border: '1px solid var(--border)' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                            <i className="fa-solid fa-flag-checkered" style={{ color: event.status === 'completed' ? '#a78bfa' : 'var(--muted)' }}></i>
+                                                            <Flag size={14} />
                                                             <span style={{ fontWeight: 600, fontSize: 13 }}>Event Status</span>
                                                         </div>
-                                                        <span className={'pill pill-' + (event.status === 'completed' ? 'green' : 'amber')} style={{ fontSize: 10 }}>{event.status}</span>
+                                                        <span className={'pill pill-' + (event.status === 'completed' ? 'green' : 'amber')} style={{ fontSize: 12 }}>{event.status}</span>
                                                     </div>
                                                 </div>
                                             </div>

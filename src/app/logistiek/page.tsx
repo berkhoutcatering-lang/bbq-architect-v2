@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import MetallicCard from '@/components/MetallicCard';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
+import { Check, ChevronDown, ChevronUp, ClipboardCheck, Loader2, Package, PackageOpen, Plus, RotateCcw, Trash2, Truck } from 'lucide-react';
 
 interface HardwareItem {
     id: number;
@@ -140,7 +141,7 @@ export default function Logistiek() {
     if (loading) return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 32, marginBottom: 12, display: 'block' }}></i>
+                <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12, display: 'block' }} />
                 Laden...
             </div>
         </div>
@@ -193,7 +194,7 @@ export default function Logistiek() {
                                             return (
                                                 <div key={item.naam} className={'bus-check-item' + (checked ? ' checked' : '')} onClick={function () { toggleBusItem(item.naam); }}>
                                                     <div className={'bus-checkbox' + (checked ? ' checked' : '')}>
-                                                        {checked && <i className="fa-solid fa-check"></i>}
+                                                        {checked && <Check size={14} />}
                                                     </div>
                                                     <div className="bus-item-info">
                                                         <span className="bus-item-name">{item.naam}</span>
@@ -209,7 +210,7 @@ export default function Logistiek() {
 
                             {busItems.length === 0 && (
                                 <div className="empty-state" style={{ marginTop: 24 }}>
-                                    <i className="fa-solid fa-box-open"></i>
+                                    <PackageOpen size={14} />
                                     <p>Geen hardware items gekoppeld aan de gerechten van dit menu</p>
                                     <p style={{ fontSize: 12 }}>Ga naar Gerechten → 🍽️ Hardware per Gast om items toe te voegen</p>
                                 </div>
@@ -219,7 +220,7 @@ export default function Logistiek() {
 
                     {!busOfferte && !selectedOfferte && (
                         <div className="empty-state">
-                            <i className="fa-solid fa-truck-loading"></i>
+                            <Truck size={14} />
                             <p>Selecteer een offerte om de bus-check te starten</p>
                         </div>
                     )}
@@ -232,19 +233,19 @@ export default function Logistiek() {
                         <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
                             placeholder="Nieuw checklist item..." value={newRtr} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewRtr(e.target.value); }}
                             onKeyDown={function (e: React.KeyboardEvent) { if (e.key === 'Enter') addRtrItem(); }} />
-                        <button className="btn btn-brand btn-sm" onClick={addRtrItem} aria-label="Toevoegen"><i className="fa-solid fa-plus"></i></button>
-                        <button className="btn btn-ghost btn-sm" onClick={resetRtr}><i className="fa-solid fa-rotate-left"></i> Reset</button>
+                        <button className="btn btn-brand btn-sm" onClick={addRtrItem} aria-label="Toevoegen"><Plus size={14} /></button>
+                        <button className="btn btn-ghost btn-sm" onClick={resetRtr}><RotateCcw size={14} /> Reset</button>
                     </div>
                     <MetallicCard hover={false}>
-                        {rtrItems.length === 0 && <div className="empty-state"><i className="fa-solid fa-clipboard-check"></i><p>Geen checklist items</p></div>}
+                        {rtrItems.length === 0 && <div className="empty-state"><ClipboardCheck size={14} /><p>Geen checklist items</p></div>}
                         {rtrItems.map(function (item: any) {
                             return (
                                 <div key={item.id} className="check-row">
                                     <button className={'check-box' + (item.done ? ' checked' : '')} onClick={function () { toggleRtr(item); }}>
-                                        {item.done && <i className="fa-solid fa-check"></i>}
+                                        {item.done && <Check size={14} />}
                                     </button>
                                     <span className={'check-text' + (item.done ? ' done' : '')}>{item.text}</span>
-                                    <button className="del-btn" onClick={function () { removeRtr(item.id); }} aria-label="Verwijderen"><i className="fa-solid fa-trash"></i></button>
+                                    <button className="del-btn" onClick={function () { removeRtr(item.id); }} aria-label="Verwijderen"><Trash2 size={14} /></button>
                                 </div>
                             );
                         })}
@@ -260,19 +261,19 @@ export default function Logistiek() {
                             <option value="">— Kies Event —</option>
                             {events.map(function (ev: any) { return <option key={ev.id} value={ev.id}>{ev.name}</option>; })}
                         </select>
-                        <button className="btn btn-brand btn-sm" onClick={createPackList}><i className="fa-solid fa-plus"></i> Paklijst</button>
+                        <button className="btn btn-brand btn-sm" onClick={createPackList}><Plus size={14} /> Paklijst</button>
                     </div>
-                    {packLists.length === 0 && <div className="empty-state"><i className="fa-solid fa-boxes-stacked"></i><p>Nog geen paklijsten</p></div>}
+                    {packLists.length === 0 && <div className="empty-state"><Package size={14} /><p>Nog geen paklijsten</p></div>}
                     {packLists.map(function (pack: any) {
                         const ev = events.find(function (e: any) { return e.id === pack.event_id; });
                         const expanded = editingPack === pack.id;
                         return (
                             <MetallicCard key={pack.id} hover={false} className="mb-3">
                                 <div className="panel-head" style={{ cursor: 'pointer' }} onClick={function () { setEditingPack(expanded ? null : pack.id); }}>
-                                    <h3><i className="fa-solid fa-box-open" style={{ marginRight: 8, color: 'var(--brand)' }}></i>{ev ? (ev as any).name : 'Onbekend'}</h3>
+                                    <h3><PackageOpen size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />{ev ? (ev as any).name : 'Onbekend'}</h3>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ fontSize: 12, color: 'var(--muted)' }}>{(pack.items || []).length} items</span>
-                                        <i className={'fa-solid ' + (expanded ? 'fa-chevron-up' : 'fa-chevron-down')} style={{ color: 'var(--muted)' }}></i>
+                                        {expanded ? <ChevronUp style={{ color: 'var(--muted)' }} size={14} /> : <ChevronDown style={{ color: 'var(--muted)' }} size={14} />}
                                     </div>
                                 </div>
                                 {expanded && (
@@ -281,11 +282,11 @@ export default function Logistiek() {
                                             return (
                                                 <div key={item.id} className="check-row">
                                                     <button className={'check-box' + (item.done ? ' checked' : '')} onClick={function () { togglePackItem(pack, item.id); }}>
-                                                        {item.done && <i className="fa-solid fa-check"></i>}
+                                                        {item.done && <Check size={14} />}
                                                     </button>
                                                     <span className={'check-text' + (item.done ? ' done' : '')}>{item.text}</span>
                                                     <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>×{item.qty}</span>
-                                                    <button className="del-btn" onClick={function () { removePackItem(pack, item.id); }} aria-label="Verwijderen"><i className="fa-solid fa-trash"></i></button>
+                                                    <button className="del-btn" onClick={function () { removePackItem(pack, item.id); }} aria-label="Verwijderen"><Trash2 size={14} /></button>
                                                 </div>
                                             );
                                         })}
@@ -294,10 +295,10 @@ export default function Logistiek() {
                                                 placeholder="Item..." value={newPackItem.text} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { text: e.target.value })); }} />
                                             <input type="number" style={{ width: 60, minWidth: 50, flex: '0 0 auto', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
                                                 value={newPackItem.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { qty: parseInt(e.target.value) || 1 })); }} />
-                                            <button className="btn btn-brand btn-sm" onClick={function () { addPackItem(pack); }} aria-label="Toevoegen"><i className="fa-solid fa-plus"></i></button>
+                                            <button className="btn btn-brand btn-sm" onClick={function () { addPackItem(pack); }} aria-label="Toevoegen"><Plus size={14} /></button>
                                         </div>
                                         <div style={{ marginTop: 12 }}>
-                                            <button className="btn btn-red btn-sm" onClick={function () { removePack(pack.id); }}><i className="fa-solid fa-trash"></i> Lijst Verwijderen</button>
+                                            <button className="btn btn-red btn-sm" onClick={function () { removePack(pack.id); }}><Trash2 size={14} /> Lijst Verwijderen</button>
                                         </div>
                                     </div>
                                 )}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { Flame } from 'lucide-react';
 
 export default function SignupPage() {
   const [step, setStep] = useState(1);
@@ -77,7 +78,7 @@ export default function SignupPage() {
         {/* Logo & Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand)] mb-4">
-            <i className="fa-solid fa-fire text-2xl text-[var(--bg)]" />
+            <Flame size={24} className="text-[var(--bg)]" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--text)]">BBQ Architect</h1>
           <p className="text-[var(--muted)] mt-1">

@@ -8,6 +8,7 @@ import PageHint from '@/components/PageHint';
 import MetallicCard from '@/components/MetallicCard';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, ZAxis } from 'recharts';
 import { safeJsonParse } from '@/lib/utils';
+import { Check, CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight } from 'lucide-react';
 
 const GANGEN = [
   { slug: 'bite', label: 'Bites', icon: '🍢', kleur: '#a78bfa' },
@@ -92,23 +93,23 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selec
           style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}
         >
           <div style={{
-            width: 20, height: 20, borderRadius: 6,
+            width: 24, height: 24, borderRadius: 6,
             border: selected ? 'none' : '1px solid rgba(255,255,255,.2)',
             background: selected ? '#3b82f6' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontSize: 12
           }}>
-            {selected && <i className="fa-solid fa-check"></i>}
+            {selected && <Check size={16} />}
           </div>
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: gang.kleur, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+        <span style={{ fontSize: 12, color: gang.kleur, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>
           {gang.icon} {gang.label}
         </span>
         {gerecht.actief && !selectionMode && (
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#4ade80', background: 'rgba(74,222,128,.1)', padding: '1px 6px', borderRadius: 4 }}>actief</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#4ade80', background: 'rgba(74,222,128,.1)', padding: '2px 8px', borderRadius: 4 }}>actief</span>
         )}
       </div>
 
@@ -121,7 +122,7 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selec
 
       {gerecht.kostprijs_pp && gerecht.kostprijs_pp > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(255,255,255,.4)', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,.4)', marginBottom: 4 }}>
             <span>kostprijs p.p.</span>
             <span style={{ color: marge ? scoreColor(marge) : 'rgba(255,255,255,.5)', fontWeight: 700 }}>
               {marge ? marge + '% marge' : '—'}
@@ -138,7 +139,7 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selec
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
           {gerecht.tags.slice(0, 3).map(function (tag: string) {
             return (
-              <span key={tag} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'rgba(255,255,255,.06)', color: 'rgba(255,255,255,.5)', border: '1px solid rgba(255,255,255,.08)' }}>
+              <span key={tag} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 10, background: 'rgba(255,255,255,.06)', color: 'rgba(255,255,255,.5)', border: '1px solid rgba(255,255,255,.08)' }}>
                 {tag}
               </span>
             );
@@ -151,7 +152,7 @@ function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selec
           onClick={function (e: React.MouseEvent) { e.stopPropagation(); onMoveToMap(gerecht); }}
           style={{
             width: '100%', background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.15)',
-            color: '#a78bfa', padding: '6px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+            color: '#a78bfa', padding: '8px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
             cursor: 'pointer', transition: 'all .15s', marginTop: 4
           }}
           onMouseEnter={function (e: React.MouseEvent<HTMLButtonElement>) { (e.target as HTMLButtonElement).style.background = 'rgba(167,139,250,.16)'; }}
@@ -232,34 +233,34 @@ function GerechtDetailsModal({ gerecht, onSave, onDelete, onClose, onError, supa
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Naam</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Naam</label>
             <input value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { naam: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13 }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Beschrijving (Smaakprofiel)</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Beschrijving (Smaakprofiel)</label>
             <textarea rows={2} value={form.beschrijving} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setForm(Object.assign({}, form, { beschrijving: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Ingrediënten (komma-gescheiden)</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Ingrediënten (komma-gescheiden)</label>
             <textarea rows={2} value={form.ingredienten} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setForm(Object.assign({}, form, { ingredienten: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#B48C14', textTransform: 'uppercase', marginBottom: 4 }}>Allergenen (volgens warenwet, komma-gescheiden)</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#B48C14', textTransform: 'uppercase', marginBottom: 4 }}>Allergenen (volgens warenwet, komma-gescheiden)</label>
             <input value={form.allergenen} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { allergenen: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'rgba(180,140,20,.1)', border: '1px solid rgba(180,140,20,.3)', borderRadius: 8, color: '#fff', fontSize: 13 }} placeholder="bijv. Gluten, Melk, Noten" />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Bereidingswijze (Stappenplan)</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Bereidingswijze (Stappenplan)</label>
             <textarea rows={5} value={form.bereidingswijze} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setForm(Object.assign({}, form, { bereidingswijze: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13, resize: 'vertical' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Foodcost p.p. (€)</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', marginBottom: 4 }}>Foodcost p.p. (€)</label>
             <input type="number" step="0.01" value={form.kostprijs_pp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} style={{ width: '100%', padding: '10px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: 13 }} />
           </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <button onClick={handleDelete} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.1)', color: '#ef4444', fontWeight: 600, cursor: 'pointer', transition: '0.2s' }} onMouseEnter={function (e: React.MouseEvent<HTMLButtonElement>) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,.2)'; }} onMouseLeave={function (e: React.MouseEvent<HTMLButtonElement>) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,.1)'; }}>
-            <i className="fa-solid fa-trash"></i> Verwijderen
+            <Trash2 size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Verwijderen
           </button>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: 'rgba(255,255,255,.5)', fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
@@ -307,14 +308,14 @@ function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
         <span style={{ fontSize: 18 }}>{gang.icon}</span>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{gang.label}</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)' }}>{gerechten.length} gerecht{gerechten.length !== 1 ? 'en' : ''}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>{gerechten.length} gerecht{gerechten.length !== 1 ? 'en' : ''}</div>
         </div>
         {gerechten.length > 0 && (
           <button
             onClick={function () { onPublish(gang, gerechten); }}
             style={{
               marginLeft: 'auto', background: kleur + '18', border: '1px solid ' + kleur + '40',
-              color: kleur, padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer'
+              color: kleur, padding: '8px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer'
             }}
           >
             Publiceer {gerechten.length} →
@@ -325,7 +326,7 @@ function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
       {isEmpty ? (
         <div style={{
           border: '1px dashed rgba(255,255,255,.1)', borderRadius: 8, padding: '16px 10px',
-          textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,.2)'
+          textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,.2)'
         }}>
           Sleep of klik "→ Zet in map"
         </div>
@@ -340,11 +341,11 @@ function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
               }}>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</span>
                 {g.kostprijs_pp && g.kostprijs_pp > 0 && (
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,.35)', flexShrink: 0 }}>€{Number(g.kostprijs_pp).toFixed(2)}</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', flexShrink: 0 }}>€{Number(g.kostprijs_pp).toFixed(2)}</span>
                 )}
                 <button
                   onClick={function () { onRemove(g.id); }}
-                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.25)', cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0 }}
+                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.25)', cursor: 'pointer', fontSize: 13, padding: '8px 14px', minWidth: 36, minHeight: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                   title="Uit map verwijderen"
                 >
                   ×
@@ -437,7 +438,7 @@ function CustomTooltip({ active, payload }: any) {
       padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,.5)', maxWidth: 240
     }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{d.naam}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Populariteit</span>
           <span style={{ color: '#fff', fontWeight: 600 }}>{d.popularity}x ingezet</span>
@@ -453,7 +454,7 @@ function CustomTooltip({ active, payload }: any) {
       </div>
       <div style={{
         marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.08)',
-        fontSize: 10, color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 700,
+        fontSize: 12, color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 700,
         display: 'flex', alignItems: 'center', gap: 4
       }}>
         {QUADRANT_CONFIG[d.quadrant].icon} {QUADRANT_CONFIG[d.quadrant].label}
@@ -536,10 +537,10 @@ function BCGMatrix({ dishes, medianPop, medianMargin }: { dishes: DishAnalysis[]
         </ResponsiveContainer>
 
         {/* Quadrant corner labels */}
-        <div style={{ position: 'absolute', top: 8, left: 50, fontSize: 10, color: 'rgba(96,165,250,.5)', fontWeight: 700 }}>🧩 Puzzles</div>
-        <div style={{ position: 'absolute', top: 8, right: 30, fontSize: 10, color: 'rgba(74,222,128,.5)', fontWeight: 700 }}>\u2B50 Stars</div>
-        <div style={{ position: 'absolute', bottom: 28, left: 50, fontSize: 10, color: 'rgba(248,113,113,.5)', fontWeight: 700 }}>🐕 Dogs</div>
-        <div style={{ position: 'absolute', bottom: 28, right: 30, fontSize: 10, color: 'rgba(251,191,36,.5)', fontWeight: 700 }}>🐎 Plowhorses</div>
+        <div style={{ position: 'absolute', top: 8, left: 50, fontSize: 12, color: 'rgba(96,165,250,.5)', fontWeight: 700 }}>🧩 Puzzles</div>
+        <div style={{ position: 'absolute', top: 8, right: 30, fontSize: 12, color: 'rgba(74,222,128,.5)', fontWeight: 700 }}>\u2B50 Stars</div>
+        <div style={{ position: 'absolute', bottom: 28, left: 50, fontSize: 12, color: 'rgba(248,113,113,.5)', fontWeight: 700 }}>🐕 Dogs</div>
+        <div style={{ position: 'absolute', bottom: 28, right: 30, fontSize: 12, color: 'rgba(251,191,36,.5)', fontWeight: 700 }}>🐎 Plowhorses</div>
       </div>
 
       {/* Legend */}
@@ -548,7 +549,7 @@ function BCGMatrix({ dishes, medianPop, medianMargin }: { dishes: DishAnalysis[]
           const cfg = QUADRANT_CONFIG[q];
           const count = dishes.filter(function (d) { return d.quadrant === q; }).length;
           return (
-            <div key={q} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <div key={q} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: cfg.color }} />
               <span style={{ color: 'rgba(255,255,255,.5)' }}>{cfg.icon} {cfg.label}</span>
               <span style={{ color: cfg.color, fontWeight: 700 }}>({count})</span>
@@ -584,11 +585,11 @@ function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
                 <span style={{ fontSize: 20 }}>{cfg.icon}</span>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: cfg.color }}>{cfg.label}</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)' }}>{items.length} gerechten</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>{items.length} gerechten</div>
                 </div>
               </div>
               <div style={{
-                fontSize: 11, color: cfg.color, background: cfg.bg,
+                fontSize: 12, color: cfg.color, background: cfg.bg,
                 border: '1px solid ' + cfg.border, borderRadius: 6,
                 padding: '6px 10px', marginBottom: 12, fontWeight: 600
               }}>
@@ -614,15 +615,15 @@ function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
                           <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {d.naam}
                           </div>
-                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.35)' }}>
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
                             {gang.label}
                           </div>
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: cfg.color }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>
                             {d.margePct.toFixed(0)}% marge
                           </div>
-                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,.35)' }}>
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
                             {d.popularity}x \u00b7 \u20ac{d.foodcostPP.toFixed(2)}/pp
                           </div>
                         </div>
@@ -1017,7 +1018,7 @@ export default function MenuEngineering() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'rgba(255,255,255,.4)', fontSize: 14 }}>
-        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} /> Menu laden...
+        <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Menu laden...
       </div>
     );
   }
@@ -1054,9 +1055,9 @@ export default function MenuEngineering() {
         ].map(function (s) {
           return (
             <div key={s.label} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{s.label}</div>
               <div style={{ fontSize: 22, fontWeight: 800 }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', marginTop: 2 }}>{s.sub}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.3)', marginTop: 2 }}>{s.sub}</div>
             </div>
           );
         })}
@@ -1064,7 +1065,7 @@ export default function MenuEngineering() {
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,.3)', fontSize: 12 }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,.3)' }} />
           <input
             type="text"
             value={search}
@@ -1081,7 +1082,7 @@ export default function MenuEngineering() {
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           <button
             onClick={function () { setGangFilter('alle'); }}
-            style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
+            style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
           >
             Alle
           </button>
@@ -1091,7 +1092,7 @@ export default function MenuEngineering() {
               <button
                 key={g.slug}
                 onClick={function () { setGangFilter(active ? 'alle' : g.slug); }}
-                style={{ padding: '7px 12px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? '#3b82f6' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
+                style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? '#3b82f6' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
               >
                 {g.icon} {g.label}
               </button>
@@ -1120,14 +1121,14 @@ export default function MenuEngineering() {
             if (selectionMode) setSelectedIds([]);
           }}
           style={{
-            padding: '7px 14px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
             border: '1px solid ' + (selectionMode ? '#3b82f6' : 'var(--border)'),
             background: selectionMode ? 'rgba(59,130,246,.15)' : 'transparent',
             color: selectionMode ? '#3b82f6' : 'rgba(255,255,255,.5)',
             display: 'flex', alignItems: 'center', gap: 6, transition: '0.2s'
           }}
         >
-          <i className={`fa-solid ${selectionMode ? 'fa-check-double' : 'fa-square-check'}`}></i>
+          {selectionMode ? <CheckCheck size={16} /> : <CheckSquare size={16} />}
           {selectionMode ? 'Selectie aan' : 'Selectiemodus'}
         </button>
 
@@ -1137,7 +1138,7 @@ export default function MenuEngineering() {
               display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.05)',
               border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 32
             }}>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', fontWeight: 700 }}>Max</span>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', fontWeight: 700 }}>Max</span>
               <input
                 type="number"
                 min={1}
@@ -1153,14 +1154,14 @@ export default function MenuEngineering() {
 
             <button
               onClick={selectVisible}
-              style={{ padding: '0 12px', height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '0 14px', height: 36, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >
               Selecteer {selectLimit}
             </button>
 
             <button
               onClick={clearSelection}
-              style={{ padding: '0 12px', height: 32, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '0 14px', height: 36, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >
               Deselecteer
             </button>
@@ -1168,9 +1169,9 @@ export default function MenuEngineering() {
             {selectedIds.length > 0 && (
               <button
                 onClick={deleteSelected}
-                style={{ padding: '0 12px', height: 32, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '0 14px', height: 36, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                <i className="fa-solid fa-trash" style={{ marginRight: 6 }}></i>
+                <Trash2 size={16} />
                 Verwijder ({selectedIds.length})
               </button>
             )}
@@ -1220,7 +1221,7 @@ export default function MenuEngineering() {
               ].map(function (s) {
                 return (
                   <div key={s.label} style={{ background: '#1a1a1e', border: '1px solid #2a2a30', borderRadius: 10, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
                   </div>
                 );
@@ -1263,7 +1264,7 @@ export default function MenuEngineering() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.35)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.35)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
                 Pool — {ongemapt.length} gerechten
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>
@@ -1280,9 +1281,9 @@ export default function MenuEngineering() {
                       <span style={{ fontSize: 14 }}>{gang.icon}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</div>
-                        <div style={{ fontSize: 10, color: gang.kleur, fontWeight: 600 }}>{gang.label}</div>
+                        <div style={{ fontSize: 12, color: gang.kleur, fontWeight: 600 }}>{gang.label}</div>
                       </div>
-                      <i className="fa-solid fa-arrow-right" style={{ fontSize: 10, color: 'rgba(255,255,255,.2)' }} />
+                      <ArrowRight size={14} style={{ color: 'rgba(255,255,255,.2)' }} />
                     </div>
                   );
                 })}

@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
 import PageHint from '@/components/PageHint';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import { ArrowLeft, Link as LinkIcon, UtensilsCrossed, Check, Users, Clock, Plus, BarChart3, ShoppingCart, Save, Mail, FileText, Copy, Trash2, CalendarPlus, Star, MapPin, Route, ClipboardCheck, ArrowRight, Thermometer } from 'lucide-react';
 import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion, EventReflectie } from '@/types';
 
 export default function Events() {
@@ -238,7 +239,7 @@ export default function Events() {
             <div className="panel">
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuw Event' : 'Event Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
                     {editing !== 'new' && (
@@ -252,10 +253,10 @@ export default function Events() {
                     )}
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Eventgegevens</h4>
                     <div className="form-grid">
-                        <div className="field full"><label>Event Naam</label><input value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); setErrors(Object.assign({}, errors, { name: '' })); }} style={errors.name ? { borderColor: 'var(--red)' } : {}} />{errors.name && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.name}</span>}</div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); setErrors(Object.assign({}, errors, { date: '' })); }} style={errors.date ? { borderColor: 'var(--red)' } : {}} />{errors.date && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.date}</span>}</div>
+                        <div className="field full"><label>Event Naam</label><input value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); setErrors(Object.assign({}, errors, { name: '' })); }} style={errors.name ? { borderColor: 'var(--red)' } : {}} />{errors.name && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.name}</span>}</div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); setErrors(Object.assign({}, errors, { date: '' })); }} style={errors.date ? { borderColor: 'var(--red)' } : {}} />{errors.date && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.date}</span>}</div>
                         <div className="field"><label>Locatie</label><input value={form.location} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('location', e.target.value); }} /></div>
-                        <div className="field"><label>Aantal Gasten</label><input type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); setErrors(Object.assign({}, errors, { guests: '' })); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} />{errors.guests && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.guests}</span>}</div>
+                        <div className="field"><label>Aantal Gasten</label><input type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); setErrors(Object.assign({}, errors, { guests: '' })); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} />{errors.guests && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.guests}</span>}</div>
                         <div className="field"><label>Prijs per Persoon</label><input type="number" step="0.50" value={form.ppp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('ppp', parseFloat(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('type', e.target.value); }}>
@@ -287,29 +288,29 @@ export default function Events() {
 
                     {form.offerte_id && (
                         <div style={{ margin: '16px 0 8px', padding: '10px 14px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <i className="fa-solid fa-link" style={{ color: 'var(--brand)', fontSize: 11 }}></i>
-                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>🔗 Gekoppeld aan Offerte — data wordt automatisch gesynchroniseerd</span>
+                            <LinkIcon size={12} style={{ color: 'var(--brand)' }} />
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Gekoppeld aan Offerte — data wordt automatisch gesynchroniseerd</span>
                         </div>
                     )}
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
-                        <i className="fa-solid fa-utensils" style={{ marginRight: 6 }}></i>Menu (Recepten Koppelen)
+                        <UtensilsCrossed size={14} style={{ marginRight: 6 }} />Menu (Recepten Koppelen)
                     </h4>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                        {recepten.length === 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>Geen recepten gevonden — maak eerst recepten aan</span>}
+                        {recepten.length === 0 && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Geen recepten gevonden — maak eerst recepten aan</span>}
                         {recepten.map(function (r) {
                             const isSelected = (form.menu || []).indexOf(r.id) >= 0;
                             return (
                                 <button key={r.id} className={'btn btn-sm ' + (isSelected ? 'btn-brand' : 'btn-ghost')}
-                                    onClick={function () { toggleMenu(r.id); }} style={{ fontSize: 11, padding: '5px 12px' }}>
-                                    {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 9, marginRight: 4 }}></i>}
+                                    onClick={function () { toggleMenu(r.id); }}>
+                                    {isSelected && <Check size={12} style={{ marginRight: 4 }} />}
                                     {r.naam}
                                 </button>
                             );
                         })}
                     </div>
                     {(form.menu || []).length > 0 && (
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
                             {(form.menu || []).length} recept(en) gekoppeld — ingrediënten worden bij "Voltooid" automatisch van voorraad afgetrokken
                         </div>
                     )}
@@ -318,7 +319,7 @@ export default function Events() {
                     <div className="field full"><textarea rows={3} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
-                        <i className="fa-solid fa-users-gear" style={{ marginRight: 6 }}></i>Teamplanning
+                        <Users size={14} style={{ marginRight: 6 }} />Teamplanning
                     </h4>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                         {['Cor', 'Mathijs', 'Kevin', 'Stagiair'].map(function (naam) {
@@ -328,21 +329,21 @@ export default function Events() {
                                 <button key={naam} className={'btn btn-sm ' + (isSelected ? 'btn-brand' : 'btn-ghost')}
                                     onClick={function () {
                                         setField('team', isSelected ? team.filter(function (n: string) { return n !== naam; }) : team.concat([naam]));
-                                    }} style={{ fontSize: 11, padding: '5px 12px' }}>
-                                    {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 9, marginRight: 4 }}></i>}
+                                    }}>
+                                    {isSelected && <Check size={12} style={{ marginRight: 4 }} />}
                                     {naam}
                                 </button>
                             );
                         })}
                     </div>
                     {(form.team || []).length > 0 && (
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
                             {(form.team || []).length} teamleden ingepland
                         </div>
                     )}
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: '#8b8bf0', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
-                        <i className="fa-solid fa-timeline" style={{ marginRight: 6 }}></i>Draaiboek
+                        <Clock size={14} style={{ marginRight: 6 }} />Draaiboek
                     </h4>
                     <div style={{ marginBottom: 8 }}>
                         {(form.draaiboek || []).map(function (item: any, i: number) {
@@ -350,19 +351,19 @@ export default function Events() {
                                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                                     <input type="time" value={item.tijd || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
                                         const d = [...(form.draaiboek || [])]; d[i] = Object.assign({}, d[i], { tijd: e.target.value }); setField('draaiboek', d);
-                                    }} style={{ width: 90, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                    }} style={{ width: 90, padding: '8px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
                                     <input value={item.activiteit || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) {
                                         const d = [...(form.draaiboek || [])]; d[i] = Object.assign({}, d[i], { activiteit: e.target.value }); setField('draaiboek', d);
-                                    }} placeholder="bijv. Opbouw BBQ" style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
+                                    }} placeholder="bijv. Opbouw BBQ" style={{ flex: 1, padding: '8px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }} />
                                     <button onClick={function () { const d = [...(form.draaiboek || [])]; d.splice(i, 1); setField('draaiboek', d); }}
-                                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}>&#x2715;</button>
+                                        style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14, minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label="Tijdslot verwijderen">&#x2715;</button>
                                 </div>
                             );
                         })}
                         <button className="btn btn-ghost btn-sm" onClick={function () {
                             const d = form.draaiboek || [];
                             setField('draaiboek', d.concat([{ tijd: '', activiteit: '' }]));
-                        }} style={{ fontSize: 11 }}><i className="fa-solid fa-plus"></i> Tijdslot toevoegen</button>
+                        }}><Plus size={12} /> Tijdslot toevoegen</button>
                     </div>
 
                     <div style={{ marginTop: 20, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -373,8 +374,8 @@ export default function Events() {
 
                     {editing !== 'new' && form.status === 'completed' && (
                         <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                            <h4 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 12, letterSpacing: '0.1em' }}>
-                                <i className="fa-solid fa-chart-line" style={{ marginRight: 6 }}></i>P&L — Werkelijk vs Begroot
+                            <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--brand)', marginBottom: 12, letterSpacing: '0.1em' }}>
+                                <BarChart3 size={14} style={{ marginRight: 6 }} />P&L — Werkelijk vs Begroot
                             </h4>
                             <div className="form-grid">
                                 <div className="field"><label>Werkelijke kosten</label><input type="number" step="0.01" value={form.werkelijke_kosten || 0} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('werkelijke_kosten', parseFloat(e.target.value) || 0); }} /></div>
@@ -392,10 +393,10 @@ export default function Events() {
                     {(form.menu || []).length > 0 && (
                         <div style={{ marginTop: 16, padding: 16, background: 'rgba(59,130,246,.04)', borderRadius: 12, border: '1px solid rgba(59,130,246,.12)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#3b82f6', letterSpacing: '0.1em' }}>
-                                    <i className="fa-solid fa-cart-shopping" style={{ marginRight: 6 }}></i>Inkooplijst
+                                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#3b82f6', letterSpacing: '0.1em' }}>
+                                    <ShoppingCart size={14} style={{ marginRight: 6 }} />Inkooplijst
                                 </span>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: '#3b82f6' }} onClick={function () {
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: '#3b82f6' }} onClick={function () {
                                     setField('_showInkoop', !form._showInkoop);
                                 }}>{form._showInkoop ? 'Verbergen' : 'Genereer'}</button>
                             </div>
@@ -429,23 +430,23 @@ export default function Events() {
                                             return (
                                                 <div key={entry[0]} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                                                     <span style={{ fontWeight: 600 }}>{entry[0]}</span>
-                                                    <span style={{ color: 'var(--muted)' }}>{entry[1].totaal.toFixed(1)} {entry[1].eenheid} <span style={{ fontSize: 10, opacity: 0.6 }}>({entry[1].recepten.join(', ')})</span></span>
+                                                    <span style={{ color: 'var(--muted)' }}>{entry[1].totaal.toFixed(1)} {entry[1].eenheid} <span style={{ fontSize: 12, opacity: 0.6 }}>({entry[1].recepten.join(', ')})</span></span>
                                                 </div>
                                             );
                                         })}
-                                        <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)' }}>Berekend voor {guests} gasten op basis van {(form.menu || []).length} recept(en)</div>
+                                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>Berekend voor {guests} gasten op basis van {(form.menu || []).length} recept(en)</div>
                                     </div>
-                                ) : <div style={{ fontSize: 11, color: 'var(--muted)' }}>Geen ingrediënten gevonden in gekoppelde recepten</div>;
+                                ) : <div style={{ fontSize: 12, color: 'var(--muted)' }}>Geen ingrediënten gevonden in gekoppelde recepten</div>;
                             })()}
                         </div>
                     )}
 
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveEvent}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        <button className="btn btn-ghost" onClick={async function () { const res = await mailEventBevestiging(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.success ? 'Bevestiging verstuurd!' : 'Fout: ' + (res.error || ''), res.success ? 'success' : 'error'); }}><i className="fa-solid fa-envelope"></i> Bevestiging</button>
-                        <button className="btn btn-cyan" onClick={createOfferte}><i className="fa-solid fa-file-signature"></i> Offerte Maken</button>
-                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateEvent(form as unknown as DbEvent); }}><i className="fa-solid fa-copy"></i> Dupliceer</button>}
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteEvent}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        <button className="btn btn-brand" onClick={saveEvent}><Save size={14} /> Opslaan</button>
+                        <button className="btn btn-ghost" onClick={async function () { const res = await mailEventBevestiging(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.success ? 'Bevestiging verstuurd!' : 'Fout: ' + (res.error || ''), res.success ? 'success' : 'error'); }}><Mail size={14} /> Bevestiging</button>
+                        <button className="btn btn-cyan" onClick={createOfferte}><FileText size={14} /> Offerte Maken</button>
+                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateEvent(form as unknown as DbEvent); }}><Copy size={14} /> Dupliceer</button>}
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteEvent}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>
             </div>
@@ -468,10 +469,10 @@ export default function Events() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Events ({filtered.length}{filtered.length !== events.length ? ' / ' + events.length : ''})</h3>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    <a href="/api/calendar/ical" download className="btn btn-ghost btn-sm" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }} title="Download iCal voor Google Calendar / Outlook">
-                        <i className="fa-solid fa-calendar-plus"></i> Kalender Export
+                    <a href="/api/calendar/ical" download className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }} title="Download iCal voor Google Calendar / Outlook">
+                        <CalendarPlus size={14} /> Kalender Export
                     </a>
-                    <button className="btn btn-brand" onClick={newEvent}><i className="fa-solid fa-plus"></i> Nieuw Event</button>
+                    <button className="btn btn-brand" onClick={newEvent}><Plus size={14} /> Nieuw Event</button>
                 </div>
             </div>
             <div style={{ marginBottom: 12 }}>
@@ -487,7 +488,7 @@ export default function Events() {
                         const labels: Record<string, string> = { alle: 'Alle', pending: 'Nieuw', optie: 'Optie', confirmed: 'Bevestigd', completed: 'Afgerond' };
                         return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
                             onClick={function () { setFilterStatus(s); }}
-                            style={{ fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>{labels[s]}</button>;
+                            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{labels[s]}</button>;
                     })}
                 </div>
             </div>
@@ -513,24 +514,24 @@ export default function Events() {
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        {ev.offerte_id && <i className="fa-solid fa-link" style={{ fontSize: 9, color: 'var(--brand)' }}></i>}
+                                        {ev.offerte_id && <LinkIcon size={12} style={{ color: 'var(--brand)' }} />}
                                         {ev.name}
-                                        {ref && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 6, fontSize: 10, fontWeight: 800, background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><i className="fa-solid fa-star" style={{ fontSize: 8 }}></i> {ref.score}/10</span>}
+                                        {ref && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 800, background: 'rgba(255,191,0,.12)', color: 'var(--brand)' }}><Star size={12} /> {ref.score}/10</span>}
                                     </div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', flexWrap: 'wrap' as const, gap: '2px 10px' }}>
-                                        <span><i className="fa-solid fa-location-dot" style={{ marginRight: 4 }}></i>{ev.location || '—'}</span>
-                                        <span><i className="fa-solid fa-users" style={{ marginRight: 4 }}></i>{ev.guests} gasten</span>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', flexWrap: 'wrap' as const, gap: '2px 10px' }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}><MapPin size={12} style={{ marginRight: 4 }} />{ev.location || '—'}</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center' }}><Users size={12} style={{ marginRight: 4 }} />{ev.guests} gasten</span>
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <button className="btn btn-ghost btn-sm" title="Maak offerte voor dit event" onClick={function (e) { e.stopPropagation(); router.push('/offerte-editor?client=' + encodeURIComponent(ev.client_naam || ev.name || '') + '&datum=' + encodeURIComponent(ev.date || '') + '&gasten=' + (ev.guests || 50) + '&ppp=' + (ev.ppp || 45) + '&event=' + encodeURIComponent(ev.name || '')); }} style={{ padding: '4px 10px', fontSize: 11 }}>
-                                        <i className="fa-solid fa-file-signature"></i> Offerte
+                                    <button className="btn btn-ghost btn-sm" title="Maak offerte voor dit event" onClick={function (e) { e.stopPropagation(); router.push('/offerte-editor?client=' + encodeURIComponent(ev.client_naam || ev.name || '') + '&datum=' + encodeURIComponent(ev.date || '') + '&gasten=' + (ev.guests || 50) + '&ppp=' + (ev.ppp || 45) + '&event=' + encodeURIComponent(ev.name || '')); }} style={{ padding: '8px 14px' }}>
+                                        <FileText size={14} /> Offerte
                                     </button>
-                                    <button className="btn btn-ghost btn-sm" title="Dupliceer dit event" onClick={function (e) { e.stopPropagation(); duplicateEvent(ev); }} style={{ padding: '4px 10px', fontSize: 11 }}>
-                                        <i className="fa-solid fa-copy"></i>
+                                    <button className="btn btn-ghost btn-sm" title="Dupliceer dit event" onClick={function (e) { e.stopPropagation(); duplicateEvent(ev); }} style={{ padding: '8px 14px' }}>
+                                        <Copy size={14} />
                                     </button>
-                                    <button className="btn btn-ghost btn-sm" title="Bekijk de volledige event workflow" onClick={function (e) { e.stopPropagation(); router.push('/events/' + ev.id); }} style={{ padding: '4px 10px', fontSize: 11 }}>
-                                        <i className="fa-solid fa-route"></i> Flow
+                                    <button className="btn btn-ghost btn-sm" title="Bekijk de volledige event workflow" onClick={function (e) { e.stopPropagation(); router.push('/events/' + ev.id); }} style={{ padding: '8px 14px' }}>
+                                        <Route size={14} /> Flow
                                     </button>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontWeight: 600 }}>{fmt(omzet)}</div>
@@ -556,9 +557,9 @@ export default function Events() {
                                     }}
                                 >
                                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <i className="fa-solid fa-clipboard-check"></i> Reflectie invullen voor dit event
+                                        <ClipboardCheck size={14} /> Reflectie invullen voor dit event
                                     </span>
-                                    <i className="fa-solid fa-arrow-right" style={{ fontSize: 11, color: 'var(--brand)' }}></i>
+                                    <ArrowRight size={14} style={{ color: 'var(--brand)' }} />
                                 </div>
                             )}
                         </div>
@@ -579,7 +580,7 @@ export default function Events() {
                         color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
                     }}>
-                        <i className="fa-solid fa-clock"></i> Uren
+                        <Clock size={14} /> Uren
                     </button>
                     <button onClick={function () { router.push('/haccp'); }} style={{
                         flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
@@ -587,7 +588,7 @@ export default function Events() {
                         color: '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
                     }}>
-                        <i className="fa-solid fa-thermometer"></i> HACCP
+                        <Thermometer size={14} /> HACCP
                     </button>
                     <button onClick={newEvent} style={{
                         flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
@@ -595,7 +596,7 @@ export default function Events() {
                         color: 'var(--brand)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
                     }}>
-                        <i className="fa-solid fa-plus"></i> Nieuw
+                        <Plus size={14} /> Nieuw
                     </button>
                 </div>
             )}

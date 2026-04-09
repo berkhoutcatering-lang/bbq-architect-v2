@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend
 import { MAANDEN_KORT } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import type { TimeLog } from '@/types';
+import { BarChart3, CalendarDays, Circle, Clock, History, LineChart, Play, Square, Target, Trash2 } from 'lucide-react';
 
 export default function Uren() {
     const { data: logs, insert, update, remove } = useSupabase<TimeLog>('time_logs', []);
@@ -97,7 +98,7 @@ export default function Uren() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div>
                     <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-clock" style={{ color: 'var(--brand)' }}></i> Workforce & Uren
+                        <Clock size={14} style={{ color: 'var(--brand)' }} /> Workforce & Uren
                     </h1>
                 </div>
             </div>
@@ -105,20 +106,20 @@ export default function Uren() {
             <div className="uren-punch-section mb-24" style={{ textAlign: 'center', padding: '32px 16px', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--border)' }}>
                 {activeLog ? (
                     <>
-                        <div style={{ fontSize: 11, color: 'var(--brand)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
-                            <i className="fa-solid fa-circle" style={{ fontSize: 8, marginRight: 6, animation: 'pulse 1.5s infinite' }}></i> AAN HET WERK
+                        <div style={{ fontSize: 12, color: 'var(--brand)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+                            <Circle size={8} className="mr-1.5" style={{ animation: 'pulse 1.5s infinite' }} /> AAN HET WERK
                         </div>
                         <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--text)', marginBottom: 8 }}>{fmtDuration(calcHours(activeLog))}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 24 }}>Ingeklokt om {fmtTime(activeLog.start_time)}</div>
                         <button className="btn btn-red btn-lg" onClick={punchOut} style={{ padding: '12px 32px' }}>
-                            <i className="fa-solid fa-stop"></i> Punch Out
+                            <Square size={14} /> Punch Out
                         </button>
                     </>
                 ) : (
                     <>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 20 }}>NIET INGEKLOKT</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 20 }}>NIET INGEKLOKT</div>
                         <button className="btn btn-brand btn-lg" onClick={punchIn} style={{ padding: '12px 40px' }}>
-                            <i className="fa-solid fa-play"></i> Punch In
+                            <Play size={14} /> Punch In
                         </button>
                     </>
                 )}
@@ -126,17 +127,17 @@ export default function Uren() {
 
             <div className="stat-grid mb-24">
                 <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><i className="fa-solid fa-calendar-week"></i></div>
+                    <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><CalendarDays size={14} /></div>
                     <div className="stat-val">{fmtDuration(weekData[11].hours)}</div>
                     <div className="stat-label">Deze Week</div>
                 </div>
                 <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><i className="fa-solid fa-chart-line"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><LineChart size={14} /></div>
                     <div className="stat-val">{fmtDuration(totalYearHours)}</div>
                     <div className="stat-label">Totaal {selectedYear}</div>
                 </div>
                 <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><i className="fa-solid fa-bullseye"></i></div>
+                    <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><Target size={14} /></div>
                     <div className="stat-val">{Math.max(0, IBA_JAARNORM - Math.round(totalYearHours))}u</div>
                     <div className="stat-label">IBA Resterend</div>
                 </div>
@@ -146,7 +147,7 @@ export default function Uren() {
                 <div className="panel inv-glass">
                     <div className="panel-head">
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <i className="fa-solid fa-chart-column" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Laatste 12 Weken
+                            <BarChart3 size={12} style={{ color: 'var(--brand)' }} /> Laatste 12 Weken
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
@@ -165,7 +166,7 @@ export default function Uren() {
                 <div className="panel inv-glass">
                     <div className="panel-head">
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <i className="fa-solid fa-chart-line" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Uren per Maand
+                            <LineChart size={12} style={{ color: 'var(--purple)' }} /> Uren per Maand
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
@@ -187,7 +188,7 @@ export default function Uren() {
                     <div style={{ height: 12, borderRadius: 6, background: 'var(--border)', overflow: 'hidden' }}>
                         <div style={{ width: Math.min(100, (totalYearHours / IBA_JAARNORM) * 100) + '%', height: '100%', background: 'linear-gradient(90deg, var(--brand), #fbbf24)', borderRadius: 6 }}></div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 11, fontWeight: 700 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12, fontWeight: 700 }}>
                         <span style={{ color: 'var(--muted)' }}>0u</span>
                         <span style={{ color: 'var(--brand)' }}>{Math.round(totalYearHours)}u gewerkt</span>
                         <span style={{ color: 'var(--muted)' }}>{IBA_JAARNORM}u norm</span>
@@ -198,7 +199,7 @@ export default function Uren() {
             <div className="panel inv-glass" style={{ marginTop: 24 }}>
                 <div className="panel-head">
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Recente Registraties
+                        <History size={12} style={{ color: 'var(--brand)' }} /> Recente Registraties
                     </h3>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -230,9 +231,9 @@ export default function Uren() {
                                             <td>
                                                 <span style={{
                                                     display: 'inline-block',
-                                                    padding: '2px 8px',
+                                                    padding: '4px 8px',
                                                     borderRadius: 6,
-                                                    fontSize: 10,
+                                                    fontSize: 12,
                                                     fontWeight: 700,
                                                     background: log.status === 'signed' ? 'rgba(59,130,246,.15)' : 'rgba(34,197,94,.15)',
                                                     color: log.status === 'signed' ? 'var(--blue)' : 'var(--green)'
@@ -252,7 +253,7 @@ export default function Uren() {
                                                         });
                                                     }}
                                                 >
-                                                    <i className="fa-solid fa-trash-can" style={{ fontSize: 11 }}></i>
+                                                    <Trash2 size={11} />
                                                 </button>
                                             </td>
                                         </tr>

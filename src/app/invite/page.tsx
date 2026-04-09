@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
+import { Flame } from 'lucide-react';
 
 export default function InvitePage() {
   const searchParams = useSearchParams();
@@ -78,7 +79,7 @@ export default function InvitePage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4">
       <div className="w-full max-w-md text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand)] mb-4">
-          <i className="fa-solid fa-fire text-2xl text-[var(--bg)]" />
+          <Flame size={24} className="text-[var(--bg)]" />
         </div>
 
         {status === 'loading' && (

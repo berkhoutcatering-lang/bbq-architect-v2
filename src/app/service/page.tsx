@@ -396,7 +396,7 @@ export default function ServiceMode() {
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                                                             <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6B7A2F', opacity: 0.6 }}>{sourceLabel}</span>
                                                             <button onClick={function (e: React.MouseEvent) { e.stopPropagation(); setVegaInputs(function (prev) { return Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' }); }); }}
-                                                                style={{ fontSize: 9, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                                                style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                                                                 wijzig
                                                             </button>
                                                         </div>
@@ -432,7 +432,7 @@ export default function ServiceMode() {
                                                                     saveVegaDish(gang.slug);
                                                                     setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
                                                                 }}
-                                                                    style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F', cursor: 'pointer' }}>
+                                                                    style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F', cursor: 'pointer' }}>
                                                                     ✓
                                                                 </button>
                                                             )}
@@ -441,7 +441,7 @@ export default function ServiceMode() {
                                                                     e.stopPropagation();
                                                                     setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; delete n[gang.slug]; return n; });
                                                                 }}
-                                                                    style={{ padding: '4px 8px', fontSize: 11, background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', cursor: 'pointer' }}>
+                                                                    style={{ padding: '4px 8px', fontSize: 12, background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', cursor: 'pointer' }}>
                                                                     ✕
                                                                 </button>
                                                             )}

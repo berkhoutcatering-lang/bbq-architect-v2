@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { Plus, Sparkles, Flame } from 'lucide-react';
 import MetallicCard from './MetallicCard';
 import { PAGE_CHIPS, EMPTY_STATE_CONFIG } from '@/lib/constants';
 
@@ -17,7 +18,6 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
   const config = EMPTY_STATE_CONFIG[page];
   const chips = PAGE_CHIPS[page] || [];
 
-  const displayIcon = icon || config?.icon || 'fa-solid fa-inbox';
   const displayTitle = title || config?.title || 'Nog geen gegevens';
   const displayDescription = description || config?.description || 'Begin met het toevoegen van je eerste item.';
   const displayActionLabel = actionLabel || config?.actionLabel || 'Toevoegen';
@@ -33,7 +33,7 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
             border: '1px solid rgba(196,163,90,.2)',
           }}
         >
-          <i className={`${displayIcon} text-2xl`} style={{ color: '#c4a35a' }} />
+          <Flame size={24} style={{ color: '#c4a35a' }} />
         </div>
 
         {/* Title & Description */}
@@ -47,7 +47,7 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
         {/* Primary Action */}
         {onAction && (
           <button className="btn btn-brand mb-6" onClick={onAction}>
-            <i className="fa-solid fa-plus" style={{ fontSize: 12 }} />
+            <Plus size={12} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} />
             {displayActionLabel}
           </button>
         )}
@@ -56,7 +56,7 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
         {chips.length > 0 && (
           <div className="w-full pt-4" style={{ borderTop: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>
-              <i className="fa-solid fa-wand-magic-sparkles mr-1" style={{ color: '#c4a35a' }} />
+              <Sparkles size={12} className="mr-1 inline-block align-middle" style={{ color: '#c4a35a' }} />
               Of vraag de AI
             </p>
             <div className="flex flex-wrap justify-center gap-2">

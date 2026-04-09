@@ -317,7 +317,7 @@ function OfferCreationDashboard() {
                             <ArrowLeft className="h-5 w-5 text-[#d4af37]" />
                         </Link>
                         <div>
-                            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 300, textTransform: 'uppercase', letterSpacing: 3, color: '#8a8272', marginBottom: 2 }}>BBQ Architect</div>
+                            <div style={{ fontFamily: "'Oswald', sans-serif", fontSize: 12, fontWeight: 300, textTransform: 'uppercase', letterSpacing: 3, color: '#8a8272', marginBottom: 2 }}>BBQ Architect</div>
                             <h1 className="text-lg font-semibold sm:text-xl tracking-tight" style={{ fontFamily: "'Playfair Display', serif" }}>Nieuwe Offerte</h1>
                             <p className="text-[11px] text-[var(--muted)] uppercase tracking-widest font-medium">Design & Logistics</p>
                         </div>

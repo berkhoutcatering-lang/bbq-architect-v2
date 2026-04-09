@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { X, ScanLine, AlertTriangle } from 'lucide-react';
 
 interface BarcodeScannerProps {
     onScan: (barcode: string) => void;
@@ -116,13 +117,13 @@ export default function BarcodeScanner({ onScan, isOpen, onClose }: BarcodeScann
                 }}
                 aria-label="Sluiten"
             >
-                <i className="fa-solid fa-xmark"></i>
+                <X size={24} />
             </button>
 
             {/* Title */}
             <div style={{ position: 'absolute', top: 24, left: 0, right: 0, textAlign: 'center', zIndex: 5 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '0.03em' }}>
-                    <i className="fa-solid fa-barcode" style={{ marginRight: 8, color: 'var(--brand)' }}></i>
+                    <ScanLine size={16} style={{ marginRight: 8, color: 'var(--brand)', display: 'inline-block', verticalAlign: 'middle' }} />
                     Barcode Scanner
                 </div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>
@@ -136,7 +137,7 @@ export default function BarcodeScanner({ onScan, isOpen, onClose }: BarcodeScann
                     background: 'rgba(30,30,34,.9)', borderRadius: 16,
                     border: '1px solid rgba(130,130,130,.15)',
                 }}>
-                    <i className="fa-solid fa-triangle-exclamation" style={{ fontSize: 32, color: 'var(--amber)', marginBottom: 12 }}></i>
+                    <AlertTriangle size={32} style={{ color: 'var(--amber)', marginBottom: 12 }} />
                     <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{error}</p>
                     <button onClick={handleClose} className="btn btn-brand" style={{ marginTop: 16 }}>Sluiten</button>
                 </div>

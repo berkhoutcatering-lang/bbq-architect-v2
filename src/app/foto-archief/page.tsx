@@ -7,7 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame } from 'lucide-react';
+import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, Flame, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
 const CAT_COLORS: Record<string, string> = { Food: '#ef4444', Gear: '#3b82f6', Sfeer: '#a78bfa', Admin: '#f59e0b' };
@@ -228,7 +228,7 @@ export default function FotoArchief() {
                     alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12,
                 }}
             >
-                <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 56, color: 'var(--brand)' }}></i>
+                <CloudUpload size={56} style={{ color: 'var(--brand)' }} />
                 <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>Sleep foto&apos;s hier naartoe</p>
             </div>
 
@@ -236,13 +236,13 @@ export default function FotoArchief() {
 
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'archief' ? ' active' : '')} onClick={function () { setTab('archief'); }}>
-                    <i className="fa-solid fa-images"></i> Archief
-                    <span style={{ background: 'var(--brand-light)', color: 'var(--brand)', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 5 }}>{fotos.length}</span>
+                    <Images size={14} /> Archief
+                    <span style={{ background: 'var(--brand-light)', color: 'var(--brand)', borderRadius: 10, padding: '4px 8px', fontSize: 12, marginLeft: 5 }}>{fotos.length}</span>
                 </button>
                 <button className={'tab-btn' + (tab === 'upload' ? ' active' : '')} onClick={function () { setTab('upload'); }}>
-                    <i className="fa-solid fa-upload"></i> Upload
+                    <Upload size={14} /> Upload
                     {uploadFiles.length > 0 && (
-                        <span style={{ background: 'var(--amber)', color: '#000', borderRadius: 10, padding: '1px 7px', fontSize: 11, marginLeft: 5, fontWeight: 700 }}>{uploadFiles.length}</span>
+                        <span style={{ background: 'var(--amber)', color: '#000', borderRadius: 10, padding: '4px 8px', fontSize: 12, marginLeft: 5, fontWeight: 700 }}>{uploadFiles.length}</span>
                     )}
                 </button>
             </div>
@@ -270,11 +270,11 @@ export default function FotoArchief() {
                             {!bulkMode ? (
                                 <>
                                     <button className="btn btn-ghost btn-sm" onClick={function () { fileRef.current && fileRef.current.click(); }}>
-                                        <i className="fa-solid fa-plus"></i> Upload
+                                        <Plus size={14} /> Upload
                                     </button>
                                     {fotos.length > 0 && (
                                         <button className="btn btn-ghost btn-sm" onClick={function () { setBulkMode(true); }}>
-                                            <i className="fa-solid fa-check-square"></i> Selecteren
+                                            <CheckSquare size={14} /> Selecteren
                                         </button>
                                     )}
                                 </>
@@ -292,10 +292,10 @@ export default function FotoArchief() {
                                                 {CATEGORIES.filter(function (c) { return c !== 'Alle'; }).map(function (c) { return <option key={c}>{c}</option>; })}
                                             </select>
                                             <button className="btn btn-brand btn-sm" onClick={bulkReCategorize}>
-                                                <i className="fa-solid fa-folder-open"></i> Verplaats ({selectedCount})
+                                                <FolderOpen size={14} /> Verplaats ({selectedCount})
                                             </button>
                                             <button className="btn btn-red btn-sm" onClick={bulkDelete}>
-                                                <i className="fa-solid fa-trash"></i> ({selectedCount})
+                                                <Trash2 size={14} /> ({selectedCount})
                                             </button>
                                         </>
                                     )}
@@ -309,7 +309,7 @@ export default function FotoArchief() {
 
                     {filtered.length === 0 ? (
                         <div className="empty-state">
-                            <i className="fa-solid fa-camera"></i>
+                            <Camera size={14} />
                             <p>{filterCat === 'Alle' ? "Nog geen foto's — upload via het Upload tabblad" : 'Geen foto\'s in categorie ' + filterCat}</p>
                         </div>
                     ) : (
@@ -334,19 +334,19 @@ export default function FotoArchief() {
                                             <img src={foto.url} alt={foto.beschrijving || foto.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                                         ) : (
                                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <i className="fa-solid fa-image" style={{ fontSize: 32, color: 'var(--muted)' }}></i>
+                                                <ImageIcon size={32} style={{ color: 'var(--muted)' }} />
                                             </div>
                                         )}
-                                        <div style={{ position: 'absolute', top: 8, left: 8, background: CAT_COLORS[foto.categorie] || 'var(--muted)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6, textTransform: 'uppercase' }}>
+                                        <div style={{ position: 'absolute', top: 8, left: 8, background: CAT_COLORS[foto.categorie] || 'var(--muted)', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 6, textTransform: 'uppercase' }}>
                                             {foto.categorie}
                                         </div>
                                         {bulkMode && (
                                             <div style={{ position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 6, background: isSelected ? 'var(--brand)' : 'rgba(0,0,0,.5)', border: '2px solid ' + (isSelected ? 'var(--brand)' : '#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 11, color: '#000' }}></i>}
+                                                {isSelected && <Check size={11} style={{ color: '#000' }} />}
                                             </div>
                                         )}
                                         {foto.beschrijving && !bulkMode && (
-                                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,.7))', padding: '16px 8px 8px', fontSize: 11, color: '#fff' }}>
+                                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,.7))', padding: '16px 8px 8px', fontSize: 12, color: '#fff' }}>
                                                 {foto.beschrijving}
                                             </div>
                                         )}
@@ -367,22 +367,22 @@ export default function FotoArchief() {
                         onClick={function () { fileRef.current && fileRef.current.click(); }}
                         style={{ border: '2px dashed ' + (dragOver ? 'var(--brand)' : 'var(--border)'), borderRadius: 14, padding: '36px 24px', textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--brand-light)' : 'transparent', marginBottom: 20, transition: 'all .2s' }}
                     >
-                        <i className="fa-solid fa-camera" style={{ fontSize: 36, color: 'var(--brand)', marginBottom: 12, display: 'block' }}></i>
+                        <Camera size={36} style={{ color: 'var(--brand)', display: 'block' }} />
                         <p style={{ color: 'var(--text)', fontWeight: 600, marginBottom: 4 }}>Sleep foto&apos;s hierheen of klik om te kiezen</p>
                         <p style={{ color: 'var(--muted)', fontSize: 12 }}>JPG, PNG, WEBP · Meerdere bestanden tegelijk</p>
                     </div>
                     <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleInputChange} />
 
                     {uploadFiles.length === 0 ? (
-                        <div className="empty-state"><i className="fa-solid fa-inbox"></i><p>Wachtrij is leeg</p></div>
+                        <div className="empty-state"><Inbox size={14} /><p>Wachtrij is leeg</p></div>
                     ) : (
                         <>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                 <span style={{ fontWeight: 600 }}>{uploadFiles.length} foto{uploadFiles.length > 1 ? "'s" : ''} gereed</span>
                                 <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="btn btn-ghost btn-sm" onClick={function () { setUploadFiles([]); }}><i className="fa-solid fa-xmark"></i> Wis wachtrij</button>
+                                    <button className="btn btn-ghost btn-sm" onClick={function () { setUploadFiles([]); }}><X size={14} /> Wis wachtrij</button>
                                     <button className="btn btn-brand" onClick={uploadAll} disabled={uploading}>
-                                        {uploading ? <><i className="fa-solid fa-spinner fa-spin"></i> Uploaden...</> : <><i className="fa-solid fa-cloud-arrow-up"></i> Upload alles</>}
+                                        {uploading ? <><Loader2 size={14} className="animate-spin" /> Uploaden...</> : <><CloudUpload size={14} /> Upload alles</>}
                                     </button>
                                 </div>
                             </div>
@@ -401,7 +401,7 @@ export default function FotoArchief() {
                                                 </div>
                                             </div>
                                             <button onClick={function () { removeFromQueue(idx); }} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4, fontSize: 16 }}>
-                                                <i className="fa-solid fa-xmark"></i>
+                                                <X size={14} />
                                             </button>
                                         </div>
                                     );
@@ -428,7 +428,7 @@ export default function FotoArchief() {
                             <input value={editForm.beschrijving} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setEditForm(Object.assign({}, editForm, { beschrijving: e.target.value })); }} placeholder="Optionele beschrijving" />
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn btn-brand" style={{ flex: 1 }} onClick={saveEdit}><i className="fa-solid fa-save"></i> Opslaan</button>
+                            <button className="btn btn-brand" style={{ flex: 1 }} onClick={saveEdit}><Save size={14} /> Opslaan</button>
                             <button className="btn btn-ghost" onClick={function () { setEditFoto(null); }}>Annuleren</button>
                         </div>
                     </div>
@@ -439,17 +439,17 @@ export default function FotoArchief() {
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 600, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
                     onClick={function (e: React.MouseEvent) { if (e.target === e.currentTarget) setLightbox(null); }}>
                     <button onClick={function () { setLightbox(null); }} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,.1)', border: 'none', color: '#fff', width: 40, height: 40, borderRadius: '50%', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <i className="fa-solid fa-xmark"></i>
+                        <X size={14} />
                     </button>
                     {filtered.length > 1 && (
                         <button onClick={lightboxPrev} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.1)', border: 'none', color: '#fff', width: 44, height: 44, borderRadius: '50%', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <i className="fa-solid fa-chevron-left"></i>
+                            <ChevronLeft size={14} />
                         </button>
                     )}
                     <img src={activeLightboxFoto.url} alt={activeLightboxFoto.beschrijving || ''} style={{ maxWidth: 'calc(100vw - 120px)', maxHeight: 'calc(100vh - 160px)', objectFit: 'contain', borderRadius: 12 }} />
                     {filtered.length > 1 && (
                         <button onClick={lightboxNext} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.1)', border: 'none', color: '#fff', width: 44, height: 44, borderRadius: '50%', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <i className="fa-solid fa-chevron-right"></i>
+                            <ChevronRight size={14} />
                         </button>
                     )}
                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,.7)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -457,10 +457,10 @@ export default function FotoArchief() {
                         <span style={{ color: '#fff', flex: 1, fontSize: 14 }}>{activeLightboxFoto.beschrijving || activeLightboxFoto.filename}</span>
                         <span style={{ color: 'rgba(255,255,255,.5)', fontSize: 12 }}>{lightbox! + 1} / {filtered.length}</span>
                         <button onClick={function () { openEdit(activeLightboxFoto); setLightbox(null); }} style={{ background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
-                            <i className="fa-solid fa-pen"></i> Bewerk
+                            <Pencil size={14} /> Bewerk
                         </button>
                         <button onClick={function () { deleteFoto(activeLightboxFoto); }} style={{ background: 'rgba(239,68,68,.3)', border: 'none', color: 'var(--red)', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
-                            <i className="fa-solid fa-trash"></i>
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 </div>

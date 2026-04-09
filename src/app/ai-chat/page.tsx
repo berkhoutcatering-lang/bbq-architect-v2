@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { parseActions, executeAction } from '@/lib/ai-actions';
+import { Bot, Check, Flame, Folder, FolderTree, HelpCircle, Loader2, Menu, MessageSquare, PanelLeft, Plus, Save, Send, Trash2, User, X, Zap } from 'lucide-react';
 
 const BRAINSTORM_SUGGESTIONS = [
     'Bedenk 5 thema-BBQ concepten voor de zomer',
@@ -555,7 +556,7 @@ export default function AiStudioPage() {
                 background: isDone ? 'rgba(34,197,94,.06)' : isError ? 'rgba(239,68,68,.06)' : isRejected ? 'rgba(113,113,122,.06)' : 'rgba(255,191,0,.06)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <i className={'fa-solid ' + (action.meta.icon || 'fa-bolt')} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00'), fontSize: 15 }}></i>
+                    <Zap size={15} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00') }} />
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{action.meta.label}</span>
                     {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12, fontWeight: 600 }}>✓ Uitgevoerd</span>}
                     {isRejected && <span style={{ marginLeft: 'auto', color: '#71717a', fontSize: 12 }}>Afgewezen</span>}
@@ -563,7 +564,7 @@ export default function AiStudioPage() {
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: isPending ? 10 : 0, lineHeight: 1.5 }}>{action.description}</div>
                 {action.data && Object.keys(action.data).length > 0 && (action.type !== 'save_conversation') && (
-                    <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--muted)', background: 'rgba(0,0,0,.3)', padding: '6px 8px', borderRadius: 7, marginBottom: isPending ? 10 : 0 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--muted)', background: 'rgba(0,0,0,.3)', padding: '6px 8px', borderRadius: 7, marginBottom: isPending ? 10 : 0 }}>
                         {JSON.stringify(action.data, null, 2).slice(0, 300)}
                     </div>
                 )}
@@ -573,19 +574,19 @@ export default function AiStudioPage() {
                             onClick={function () { approveAction(msgIdx, action.id); }}
                             style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: '#22c55e', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                         >
-                            <i className="fa-solid fa-check" style={{ marginRight: 6 }}></i>Goedkeuren & uitvoeren
+                            <Check size={14} className="mr-1.5" />Goedkeuren & uitvoeren
                         </button>
                         <button
                             onClick={function () { rejectAction(msgIdx, action.id); }}
                             style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}
                         >
-                            <i className="fa-solid fa-xmark"></i>
+                            <X size={14} />
                         </button>
                     </div>
                 )}
                 {isExecuting && (
                     <div style={{ color: '#FFBF00', fontSize: 13 }}>
-                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }}></i>Bezig met uitvoeren…
+                        <Loader2 size={14} className="animate-spin mr-1.5" />Bezig met uitvoeren…
                     </div>
                 )}
                 {isError && action.error && (
@@ -606,7 +607,7 @@ export default function AiStudioPage() {
             <div className={'ai-studio-sidebar' + (sidebarOpen ? ' open' : '')}>
                 <div className="ai-sidebar-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <i className="fa-solid fa-folder-tree" style={{ color: 'var(--brand)' }}></i>
+                        <FolderTree size={14} style={{ color: 'var(--brand)' }} />
                         <span style={{ fontWeight: 700, fontSize: 13 }}>Gespreksmappen</span>
                     </div>
                     <button
@@ -614,7 +615,7 @@ export default function AiStudioPage() {
                         style={{ background: 'rgba(255,191,0,.15)', border: 'none', color: 'var(--brand)', width: 26, height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
                         title="Nieuwe map"
                     >
-                        <i className="fa-solid fa-plus"></i>
+                        <Plus size={14} />
                     </button>
                 </div>
 
@@ -641,8 +642,8 @@ export default function AiStudioPage() {
                             })}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={createFolder} style={{ flex: 1, padding: '4px 0', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Aanmaken</button>
-                            <button onClick={function () { setShowNewFolder(false); setNewFolderName(''); }} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>Annuleer</button>
+                            <button onClick={createFolder} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Aanmaken</button>
+                            <button onClick={function () { setShowNewFolder(false); setNewFolderName(''); }} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Annuleer</button>
                         </div>
                     </div>
                 )}
@@ -651,20 +652,20 @@ export default function AiStudioPage() {
                     onClick={startNewConversation}
                     className="ai-new-conv-btn"
                 >
-                    <i className="fa-solid fa-plus"></i> Nieuw gesprek
+                    <Plus size={14} /> Nieuw gesprek
                 </button>
 
                 <div
                     className={'ai-folder-item' + (!activeFolder ? ' active' : '')}
                     onClick={function () { setActiveFolder(null); }}
                 >
-                    <i className="fa-solid fa-comments" style={{ color: 'var(--muted)', fontSize: 13 }}></i>
+                    <MessageSquare size={13} style={{ color: 'var(--muted)' }} />
                     <span>Alle gesprekken</span>
                     <span className="ai-folder-count">{conversations.length}</span>
                 </div>
 
                 {loadingFolders ? (
-                    <div style={{ padding: '8px 12px', color: 'var(--muted)', fontSize: 11 }}>Laden…</div>
+                    <div style={{ padding: '8px 12px', color: 'var(--muted)', fontSize: 12 }}>Laden…</div>
                 ) : (
                     folders.map(function (folder) {
                         const count = conversations.filter(function (c) { return c.folder_id === folder.id; }).length;
@@ -674,17 +675,17 @@ export default function AiStudioPage() {
                                     style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                                     onClick={function () { setActiveFolder(folder.id === activeFolder ? null : folder.id); }}
                                 >
-                                    <i className="fa-solid fa-folder" style={{ color: folder.kleur || 'var(--brand)', fontSize: 13 }}></i>
+                                    <Folder size={13} />
                                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{folder.naam}</span>
                                     <span className="ai-folder-count">{count}</span>
                                 </div>
                                 <button
                                     onClick={function (e: React.MouseEvent) { e.stopPropagation(); deleteFolder(folder.id); }}
-                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0, transition: 'opacity .15s' }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px 8px', fontSize: 12, opacity: 0, transition: 'opacity .15s' }}
                                     className="ai-folder-delete"
                                     title="Map verwijderen"
                                 >
-                                    <i className="fa-solid fa-trash"></i>
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         );
@@ -693,7 +694,7 @@ export default function AiStudioPage() {
 
                 <div className="ai-conv-list">
                     {visibleConversations.length === 0 && !loadingFolders && (
-                        <div style={{ padding: '12px', color: 'var(--muted)', fontSize: 11, textAlign: 'center' }}>
+                        <div style={{ padding: '12px', color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>
                             Nog geen gesprekken opgeslagen
                         </div>
                     )}
@@ -706,8 +707,8 @@ export default function AiStudioPage() {
                             >
                                 <div style={{ flex: 1, cursor: 'pointer', overflow: 'hidden' }} onClick={function () { loadConversation(conv); }}>
                                     <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.titel}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
-                                        <span style={{ background: conv.modus === 'brainstorm' ? 'rgba(255,191,0,.2)' : 'rgba(59,130,246,.2)', color: conv.modus === 'brainstorm' ? '#FFBF00' : '#3b82f6', padding: '1px 5px', borderRadius: 4, fontSize: 9, fontWeight: 700 }}>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                                        <span style={{ background: conv.modus === 'brainstorm' ? 'rgba(255,191,0,.2)' : 'rgba(59,130,246,.2)', color: conv.modus === 'brainstorm' ? '#FFBF00' : '#3b82f6', padding: '4px 8px', borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
                                             {conv.modus === 'brainstorm' ? 'Brainstorm' : 'Q&A'}
                                         </span>
                                         {new Date(conv.updated_at || conv.created_at).toLocaleDateString('nl-NL')}
@@ -715,10 +716,10 @@ export default function AiStudioPage() {
                                 </div>
                                 <button
                                     onClick={function (e: React.MouseEvent) { e.stopPropagation(); deleteConversation(conv.id); }}
-                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '2px 4px', fontSize: 11, opacity: 0, transition: 'opacity .15s' }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px 8px', fontSize: 12, opacity: 0, transition: 'opacity .15s' }}
                                     className="ai-conv-delete"
                                 >
-                                    <i className="fa-solid fa-trash"></i>
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         );
@@ -733,16 +734,16 @@ export default function AiStudioPage() {
                         style={{ background: 'rgba(255,255,255,.06)', border: 'none', color: 'var(--text)', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 14 }}
                         title="Sidebar toggling"
                     >
-                        <i className={'fa-solid ' + (sidebarOpen ? 'fa-sidebar' : 'fa-bars')}></i>
+                        {sidebarOpen ? <PanelLeft size={14} /> : <Menu size={14} />}
                     </button>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontSize: 16 }}>
-                            <i className="fa-solid fa-robot"></i>
+                            <Bot size={14} />
                         </div>
                         <div>
                             <div style={{ fontWeight: 800, fontSize: 15 }}>BBQ AI Studio</div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Hop & Bites — Powered by Groq</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Hop & Bites — Powered by Groq</div>
                         </div>
                     </div>
 
@@ -751,13 +752,13 @@ export default function AiStudioPage() {
                             onClick={function () { setMode('brainstorm'); }}
                             className={'ai-mode-tab' + (mode === 'brainstorm' ? ' active' : '')}
                         >
-                            <i className="fa-solid fa-fire" style={{ marginRight: 5 }}></i>Brainstorm
+                            <Flame size={14} className="mr-1.5" />Brainstorm
                         </button>
                         <button
                             onClick={function () { setMode('qa'); }}
                             className={'ai-mode-tab' + (mode === 'qa' ? ' active' : '')}
                         >
-                            <i className="fa-solid fa-circle-question" style={{ marginRight: 5 }}></i>Vragen
+                            <HelpCircle size={14} className="mr-1.5" />Vragen
                         </button>
                     </div>
 
@@ -772,8 +773,8 @@ export default function AiStudioPage() {
                             </div>
                         )}
                         {activeConversation && (
-                            <div style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <i className="fa-solid fa-floppy-disk"></i>
+                            <div style={{ fontSize: 12, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Save size={14} />
                                 {activeConversation.titel}
                             </div>
                         )}
@@ -788,7 +789,7 @@ export default function AiStudioPage() {
                                 <div className={'ai-studio-msg-row' + (isUser ? ' user' : '')}>
                                     {!isUser && (
                                         <div className="ai-studio-avatar">
-                                            <i className="fa-solid fa-robot"></i>
+                                            <Bot size={14} />
                                         </div>
                                     )}
                                     <div className={'ai-studio-bubble' + (isUser ? ' user' : '')}>
@@ -796,7 +797,7 @@ export default function AiStudioPage() {
                                     </div>
                                     {isUser && (
                                         <div className="ai-studio-user-avatar">
-                                            <i className="fa-solid fa-user"></i>
+                                            <User size={14} />
                                         </div>
                                     )}
                                 </div>
@@ -814,7 +815,7 @@ export default function AiStudioPage() {
                     {isLoading && (
                         <div className="ai-studio-msg-row">
                             <div className="ai-studio-avatar">
-                                <i className="fa-solid fa-robot"></i>
+                                <Bot size={14} />
                             </div>
                             <div className="ai-studio-bubble loading-dots">
                                 <span></span><span></span><span></span>
@@ -867,7 +868,7 @@ export default function AiStudioPage() {
                             className="send-btn"
                             style={{ padding: '12px 18px', fontSize: 16 }}
                         >
-                            <i className="fa-solid fa-paper-plane"></i>
+                            <Send size={14} />
                         </button>
                     </form>
                 </div>
@@ -903,7 +904,7 @@ function SaveButton({ folders, onSave, onRefresh }: { folders: Folder[]; onSave:
                 onClick={function () { setOpen(function (v) { return !v; }); }}
                 style={{ background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', color: 'var(--brand)', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
             >
-                <i className="fa-solid fa-floppy-disk" style={{ marginRight: 5 }}></i>Opslaan
+                <Save size={14} className="mr-1.5" />Opslaan
             </button>
             {open && (
                 <div style={{ position: 'absolute', right: 0, top: '110%', width: 240, background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>

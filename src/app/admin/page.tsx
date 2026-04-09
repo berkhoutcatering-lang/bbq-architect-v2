@@ -348,24 +348,24 @@ export default function AdminPortal() {
                 <div style={{
                   width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                   background: cfg.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 800, color: cfg.color,
+                  fontSize: 12, fontWeight: 800, color: cfg.color,
                 }}>{h.overall}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{h.orgName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     {h.daysInactive}d inactief &middot; {h.memberCount} leden &middot; {h.dataCount} records
                   </div>
                 </div>
                 {alertMsg[h.orgId] ? (
-                  <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</span>
+                  <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</span>
                 ) : (
                   <button
                     onClick={function () { sendAlert(h.orgId, h.orgName, h.daysInactive); }}
                     disabled={sendingAlert === h.orgId}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px',
+                      display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px',
                       borderRadius: 6, background: 'var(--card)', border: '1px solid var(--border)',
-                      cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text)',
+                      cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--text)',
                     }}
                   >
                     {sendingAlert === h.orgId
@@ -380,9 +380,9 @@ export default function AdminPortal() {
                     if (orgUser) handleImpersonate(orgUser.userId);
                   }}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 3, padding: '4px 10px',
+                    display: 'flex', alignItems: 'center', gap: 3, padding: '6px 12px',
                     borderRadius: 6, background: 'rgba(59,130,246,.1)', color: '#3b82f6',
-                    fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
                   }}
                 >
                   <LogIn size={11} /> Bekijk als klant
@@ -440,7 +440,7 @@ export default function AdminPortal() {
             <div className="field"><label>Admin naam</label><input value={newNaam} onChange={function (e) { setNewNaam(e.target.value); }} placeholder="Naam van de beheerder" /></div>
             <div className="field"><label>Admin email</label><input type="email" value={newEmail} onChange={function (e) { setNewEmail(e.target.value); }} placeholder="admin@bedrijf.nl" /></div>
             <div className="field"><label>Wachtwoord</label><input type="password" value={newPassword} onChange={function (e) { setNewPassword(e.target.value); }} placeholder="Min. 6 tekens" />
-              <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'block' }}>Account wordt direct aangemaakt en gekoppeld.</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'block' }}>Account wordt direct aangemaakt en gekoppeld.</span>
             </div>
             <div className="field"><label>Huisstijl kleur</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -504,9 +504,9 @@ export default function AdminPortal() {
               ].map(function (m) {
                 return (
                   <div key={m.label} style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{m.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{m.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: m.color, lineHeight: 1 }}>{m.val}</div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{m.sub}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{m.sub}</div>
                   </div>
                 );
               })}
@@ -549,14 +549,14 @@ export default function AdminPortal() {
                 const maxActions = (analytics?.orgTotals[0]?.totalActions || 1);
                 return (
                   <div key={org.orgId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', width: 16 }}>{i + 1}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', width: 16 }}>{i + 1}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{org.orgName}</div>
                       <div style={{ height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', borderRadius: 2, width: Math.round((org.totalActions / maxActions) * 100) + '%', background: '#22c55e' }} />
                       </div>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
                   </div>
                 );
               })}
@@ -620,9 +620,9 @@ export default function AdminPortal() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{h.orgName}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: statusCfg.bg, color: statusCfg.color }}>{statusCfg.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: statusCfg.bg, color: statusCfg.color }}>{statusCfg.label}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                       {h.memberCount} leden &middot; {h.dataCount} records &middot; {h.daysInactive === 0 ? 'Vandaag actief' : h.daysInactive + 'd inactief'}
                     </div>
                   </div>
@@ -633,7 +633,7 @@ export default function AdminPortal() {
                           <div style={{ height: 28, borderRadius: 4, background: 'var(--bg)', position: 'relative', overflow: 'hidden', marginBottom: 2 }}>
                             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: (m.val * 28 / 100) + 'px', background: m.val > 60 ? '#22c55e' : m.val > 30 ? '#f59e0b' : '#ef4444', borderRadius: 4, transition: 'height 0.3s' }} />
                           </div>
-                          <div style={{ fontSize: 8, color: 'var(--muted)', fontWeight: 600 }}>{m.label}</div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{m.label}</div>
                         </div>
                       );
                     })}
@@ -642,14 +642,14 @@ export default function AdminPortal() {
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     {h.daysInactive > 7 && (
                       <button onClick={function () { sendAlert(h.orgId, h.orgName, h.daysInactive); }} disabled={sendingAlert === h.orgId}
-                        style={{ padding: '4px 8px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
                         {sendingAlert === h.orgId ? <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> : <Mail size={10} />} Alert
                       </button>
                     )}
                   </div>
                 </div>
                 {alertMsg[h.orgId] && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</div>
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</div>
                 )}
               </div>
             );
@@ -695,7 +695,7 @@ export default function AdminPortal() {
                     <div style={{ width: 80, height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: Math.round((org.totalActions / maxA) * 100) + '%', background: '#c4a35a', borderRadius: 2 }} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
                   </div>
                 );
               })}
@@ -711,7 +711,7 @@ export default function AdminPortal() {
                     <div style={{ width: 80, height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: Math.round((p.count / maxP) * 100) + '%', background: '#3b82f6', borderRadius: 2 }} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{p.count}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{p.count}</span>
                   </div>
                 );
               })}
@@ -754,14 +754,14 @@ export default function AdminPortal() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{u.naam}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6' }}>{u.role}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6' }}>{u.role}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>
                     {u.email} &middot; {u.orgName}
                   </div>
                 </div>
                 {impersonateMsg[u.userId] ? (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: impersonateMsg[u.userId] === 'Link geopend' ? '#22c55e' : '#ef4444' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: impersonateMsg[u.userId] === 'Link geopend' ? '#22c55e' : '#ef4444' }}>
                     {impersonateMsg[u.userId]}
                   </span>
                 ) : (
@@ -820,15 +820,15 @@ export default function AdminPortal() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</span>
-                      {isInactive && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: '#ef4444' }}>INACTIEF</span>}
-                      {healthCfg && !isInactive && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: healthCfg.bg, color: healthCfg.color }}>{health!.overall}</span>}
+                      {isInactive && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: '#ef4444' }}>INACTIEF</span>}
+                      {healthCfg && !isInactive && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: healthCfg.bg, color: healthCfg.color }}>{health!.overall}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{org.slug} &middot; {formatDate(org.created_at)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{org.slug} &middot; {formatDate(org.created_at)}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.members.active}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>leden</div></div>
-                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.data.events || 0}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>events</div></div>
-                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.data.offertes || 0}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>offertes</div></div>
+                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.members.active}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>leden</div></div>
+                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.data.events || 0}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>events</div></div>
+                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{org.data.offertes || 0}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>offertes</div></div>
                     {isExpanded ? <ChevronDown size={16} style={{ color: 'var(--muted)' }} /> : <ChevronRight size={16} style={{ color: 'var(--muted)' }} />}
                   </div>
                 </button>
@@ -837,7 +837,7 @@ export default function AdminPortal() {
                   <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border)', marginTop: -1 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 16 }}>
                       <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Data</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Data</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                           {[{ icon: <Calendar size={13} />, l: 'Events', v: org.data.events || 0 }, { icon: <FileText size={13} />, l: 'Offertes', v: org.data.offertes || 0 }, { icon: <Receipt size={13} />, l: 'Facturen', v: org.data.facturen || 0 }, { icon: <ChefHat size={13} />, l: 'Recepten', v: org.data.recepten || 0 }].map(function (s) {
                             return <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><span style={{ color: 'var(--muted)' }}>{s.icon}</span><span style={{ color: 'var(--muted)' }}>{s.l}:</span><span style={{ fontWeight: 700, color: 'var(--text)' }}>{s.v}</span></div>;
@@ -845,16 +845,16 @@ export default function AdminPortal() {
                         </div>
                       </div>
                       <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Leden</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Leden</div>
                         <div style={{ display: 'flex', gap: 12 }}>
-                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{org.members.active}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>actief</div></div>
-                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b' }}>{org.members.invited}</div><div style={{ fontSize: 10, color: 'var(--muted)' }}>uitgenodigd</div></div>
+                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{org.members.active}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>actief</div></div>
+                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b' }}>{org.members.invited}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>uitgenodigd</div></div>
                         </div>
                       </div>
                       <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Info</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Info</div>
                         <div style={{ fontSize: 12 }}>
-                          <div style={{ color: 'var(--muted)', marginBottom: 4 }}>ID: <span style={{ color: 'var(--text)', fontFamily: 'monospace', fontSize: 11 }}>{org.id.slice(0, 8)}...</span></div>
+                          <div style={{ color: 'var(--muted)', marginBottom: 4 }}>ID: <span style={{ color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}>{org.id.slice(0, 8)}...</span></div>
                           <div style={{ color: 'var(--muted)' }}>Aangemaakt: <span style={{ color: 'var(--text)' }}>{formatDate(org.created_at)}</span></div>
                         </div>
                       </div>
@@ -862,7 +862,7 @@ export default function AdminPortal() {
 
                     {/* Feature Flags */}
                     <div style={{ marginTop: 16 }}>
-                      <button onClick={function () { loadFlags(org.id); }} style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <button onClick={function () { loadFlags(org.id); }} style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                         <ToggleLeft size={14} /> Feature Flags {flagsOrg === org.id ? '(verbergen)' : '(tonen)'}
                       </button>
                       {flagsOrg === org.id && (
@@ -875,7 +875,7 @@ export default function AdminPortal() {
                                 {enabled ? <ToggleRight size={16} style={{ color: '#22c55e', flexShrink: 0 }} /> : <ToggleLeft size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />}
                                 <div>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{flag.label}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>{flag.desc}</div>
+                                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>{flag.desc}</div>
                                 </div>
                               </button>
                             );
@@ -887,16 +887,16 @@ export default function AdminPortal() {
                     {/* Invitations */}
                     {org.invitations.length > 0 && (
                       <div style={{ marginTop: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Uitnodigingen ({org.invitations.length})</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Uitnodigingen ({org.invitations.length})</div>
                         {org.invitations.map(function (inv) {
                           const expired = new Date(inv.expires_at) < new Date();
                           return (
                             <div key={inv.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', marginBottom: 6, fontSize: 12 }}>
                               <span style={{ color: 'var(--text)', flex: 1 }}>{inv.email}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: expired ? 'rgba(239,68,68,.1)' : 'rgba(59,130,246,.1)', color: expired ? '#ef4444' : '#3b82f6' }}>{expired ? 'Verlopen' : inv.role}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: expired ? 'rgba(239,68,68,.1)' : 'rgba(59,130,246,.1)', color: expired ? '#ef4444' : '#3b82f6' }}>{expired ? 'Verlopen' : inv.role}</span>
                               {!expired && (
                                 <button onClick={function (e) { e.stopPropagation(); copyToken(inv.token); }}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,.1)', color: '#3b82f6', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 6, background: 'rgba(59,130,246,.1)', color: '#3b82f6', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                   {copiedToken === inv.token ? <><Check size={11} /> Gekopieerd</> : <><Copy size={11} /> Link</>}
                                 </button>
                               )}

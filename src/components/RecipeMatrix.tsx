@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Layers, CheckCircle, Check } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { normalizeIngredienten, normalizeBereidingswijze } from '@/lib/utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -137,8 +138,8 @@ export default function RecipeMatrix({ action, supabase }: RecipeMatrixProps) {
         <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg)', padding: 16 }}>
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--brand)' }}>
-                        <i className="fa-solid fa-layer-group" style={{ marginRight: 8 }}></i>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--brand)', display: 'flex', alignItems: 'center' }}>
+                        <Layers size={16} style={{ marginRight: 8 }} />
                         {action.description || 'Concept Funnel'}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
@@ -151,7 +152,7 @@ export default function RecipeMatrix({ action, supabase }: RecipeMatrixProps) {
                     </button>
                     {imported && (
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <i className="fa-solid fa-check-circle"></i> Ge\u00efmporteerd
+                            <CheckCircle size={13} /> Ge\u00efmporteerd
                         </div>
                     )}
                 </div>
@@ -183,7 +184,7 @@ export default function RecipeMatrix({ action, supabase }: RecipeMatrixProps) {
                             <div className="dish-select-name" style={{ fontSize: 14, marginBottom: 2, width: '100%' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <span style={{ whiteSpace: 'normal', lineHeight: 1.2, fontWeight: isSelected ? 800 : 500 }}>{r.naam}</span>
-                                    {isSelected && <i className="fa-solid fa-circle-check" style={{ color: 'var(--brand)', fontSize: 14, marginLeft: 8, marginTop: 2 }}></i>}
+                                    {isSelected && <CheckCircle size={14} style={{ color: 'var(--brand)', marginLeft: 8, marginTop: 2, flexShrink: 0 }} />}
                                 </div>
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>

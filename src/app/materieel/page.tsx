@@ -8,6 +8,7 @@ import { fmtNl, today } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import type { Materieel as MatType } from '@/types';
+import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
 interface NewLogEntry {
     actie: string;
@@ -57,7 +58,7 @@ export default function Materieel() {
     if (loading) return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 32, marginBottom: 12, display: 'block' }}></i>
+                <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12, display: 'block' }} />
                 Laden...
             </div>
         </div>
@@ -68,7 +69,7 @@ export default function Materieel() {
             <MetallicCard hover={false}>
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuw Materieel' : 'Materieel Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
+                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
                     <div className="form-grid">
@@ -104,12 +105,12 @@ export default function Materieel() {
                             placeholder="Actie (bijv. Reiniging)" value={newLog.actie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewLog(Object.assign({}, newLog, { actie: e.target.value })); }} />
                         <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
                             placeholder="Notitie" value={newLog.notitie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewLog(Object.assign({}, newLog, { notitie: e.target.value })); }} />
-                        <button className="btn btn-brand btn-sm" onClick={addLogEntry} aria-label="Logboek item toevoegen"><i className="fa-solid fa-plus"></i></button>
+                        <button className="btn btn-brand btn-sm" onClick={addLogEntry} aria-label="Logboek item toevoegen"><Plus size={14} /></button>
                     </div>
 
                     <div className="editor-actions">
-                        <button className="btn btn-brand" onClick={saveItem}><i className="fa-solid fa-save"></i> Opslaan</button>
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteItem}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
+                        <button className="btn btn-brand" onClick={saveItem}><Save size={14} /> Opslaan</button>
+                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteItem}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>
             </MetallicCard>
@@ -124,7 +125,7 @@ export default function Materieel() {
         <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Materieel ({materieel.length})</h3>
-                <button className="btn btn-brand" onClick={newItem}><i className="fa-solid fa-plus"></i> Nieuw</button>
+                <button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>
             </div>
             {materieel.length === 0 && <EmptyState page="/materieel" onAction={newItem} />}
             <div className="grid-3">
@@ -137,8 +138,8 @@ export default function Materieel() {
                             </div>
                             <div className="rec-name">{m.naam}</div>
                             <div className="rec-meta">
-                                {m.aanschaf_datum && <span><i className="fa-solid fa-calendar"></i> {fmtNl(m.aanschaf_datum)}</span>}
-                                <span><i className="fa-solid fa-clipboard-list"></i> {(m.logboek || []).length} logs</span>
+                                {m.aanschaf_datum && <span><Calendar size={14} /> {fmtNl(m.aanschaf_datum)}</span>}
+                                <span><ClipboardList size={14} /> {(m.logboek || []).length} logs</span>
                             </div>
                         </div>
                     );

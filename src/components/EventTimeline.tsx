@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Circle, Clock, FileText, ChefHat, Flame, Receipt, Star } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, FileText, ChefHat, Flame, Receipt, Star, Route } from 'lucide-react';
 
 interface TimelineStep {
     key: string;
@@ -56,7 +56,7 @@ export default function EventTimeline({ eventStatus, hasOfferte, hasFactuur, has
     return (
         <div style={{ padding: '16px 0' }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--brand)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>
-                <i className="fa-solid fa-route" style={{ marginRight: 6 }}></i>Event Lifecycle
+                <Route size={11} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />Event Lifecycle
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
                 {steps.map(function (step, i) {
