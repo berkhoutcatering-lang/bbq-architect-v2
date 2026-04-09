@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import PageHint from '@/components/PageHint';
+import EmptyState from '@/components/EmptyState';
 import { Flame } from 'lucide-react';
 import type { WebsiteFaq, WebsiteGallery, WebsiteGang, WebsiteGerecht, WebsiteHero } from '@/types';
 interface WSettings { id: number; email: string; telefoon: string; adres: string; kvk: string; btw_nummer: string; }

@@ -13,7 +13,7 @@ function isValidEmail(email: string): boolean {
 }
 
 // ── Core send function ──
-async function sendEmail(opts: {
+export async function sendEmail(opts: {
   to: string; subject: string; html?: string; text?: string;
   replyTo?: string; attachments?: any[];
 }): Promise<{ success: boolean; fallback?: boolean; error?: string }> {
@@ -46,7 +46,7 @@ function openMailtoFallback(to: string, subject: string, body: string) {
 }
 
 // ── HTML email template ──
-function wrapHtml(content: string, bedrijfsnaam: string): string {
+export function wrapHtml(content: string, bedrijfsnaam: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
 <div style="border-bottom:3px solid #c4a35a;padding-bottom:16px;margin-bottom:24px;">

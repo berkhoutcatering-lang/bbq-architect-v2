@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import MetallicCard from '@/components/MetallicCard';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
 
 interface HardwareItem {
@@ -234,7 +235,7 @@ export default function Logistiek() {
                         <button className="btn btn-brand btn-sm" onClick={addRtrItem} aria-label="Toevoegen"><i className="fa-solid fa-plus"></i></button>
                         <button className="btn btn-ghost btn-sm" onClick={resetRtr}><i className="fa-solid fa-rotate-left"></i> Reset</button>
                     </div>
-                    <div className="panel">
+                    <MetallicCard hover={false}>
                         {rtrItems.length === 0 && <div className="empty-state"><i className="fa-solid fa-clipboard-check"></i><p>Geen checklist items</p></div>}
                         {rtrItems.map(function (item: any) {
                             return (
@@ -247,7 +248,7 @@ export default function Logistiek() {
                                 </div>
                             );
                         })}
-                    </div>
+                    </MetallicCard>
                 </>
             )}
 
@@ -266,7 +267,7 @@ export default function Logistiek() {
                         const ev = events.find(function (e: any) { return e.id === pack.event_id; });
                         const expanded = editingPack === pack.id;
                         return (
-                            <div key={pack.id} className="panel" style={{ marginBottom: 12 }}>
+                            <MetallicCard key={pack.id} hover={false} className="mb-3">
                                 <div className="panel-head" style={{ cursor: 'pointer' }} onClick={function () { setEditingPack(expanded ? null : pack.id); }}>
                                     <h3><i className="fa-solid fa-box-open" style={{ marginRight: 8, color: 'var(--brand)' }}></i>{ev ? (ev as any).name : 'Onbekend'}</h3>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -300,7 +301,7 @@ export default function Logistiek() {
                                         </div>
                                     </div>
                                 )}
-                            </div>
+                            </MetallicCard>
                         );
                     })}
                 </>

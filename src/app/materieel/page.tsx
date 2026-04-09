@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
+import MetallicCard from '@/components/MetallicCard';
 import type { Materieel as MatType } from '@/types';
 
 interface NewLogEntry {
@@ -64,7 +65,7 @@ export default function Materieel() {
 
     if (editing !== null && form) {
         return (
-            <div className="panel">
+            <MetallicCard hover={false}>
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuw Materieel' : 'Materieel Bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
@@ -111,7 +112,7 @@ export default function Materieel() {
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteItem}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
                 </div>
-            </div>
+            </MetallicCard>
         );
     }
 

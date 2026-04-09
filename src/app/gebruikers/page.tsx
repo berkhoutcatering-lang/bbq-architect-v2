@@ -44,7 +44,7 @@ export default function Gebruikers() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-                <Flame size={24} style={{ color: 'var(--brand)', animation: 'pulse 1.5s infinite' }} />
+                <Flame size={24} className="text-[#c4a35a] animate-pulse" />
             </div>
         );
     }

@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import { Flame } from 'lucide-react';
+import MetallicCard from '@/components/MetallicCard';
 import type { Event as DbEvent, PrepTask, PrepSuggestion } from '@/types';
 
 export default function Agenda() {
@@ -237,7 +238,7 @@ export default function Agenda() {
 
             {/* Calendar Grid — desktop always, mobile only when calendar mode selected */}
             <div className="agenda-layout grid gap-6 grid-cols-1 md:grid-cols-[minmax(0,1fr)_380px]" style={isMobile && mobileView === 'list' ? { display: 'none' } : {}}>
-                <div className="panel" style={{ height: 'fit-content' }}>
+                <MetallicCard hover={false} className="h-fit">
                     <div className="calendar">
                         <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Vorige maand"><i className="fa-solid fa-chevron-left"></i></button>
@@ -275,10 +276,10 @@ export default function Agenda() {
                             })}
                         </div>
                     </div>
-                </div>
+                </MetallicCard>
 
                 <div className="agenda-side">
-                    <div className="panel mb-16">
+                    <MetallicCard hover={false} className="mb-16">
                         <div className="panel-head"><h3><i className="fa-solid fa-calendar-day"></i> {selLabel}</h3></div>
                         <div className="panel-body">
                             {selEvents.length === 0 && selPreps.length === 0 && <div className="empty-state">Geen items op deze dag</div>}
@@ -305,10 +306,10 @@ export default function Agenda() {
                                 );
                             })}
                         </div>
-                    </div>
+                    </MetallicCard>
 
                     {showEventForm && (
-                        <div className="panel mb-16">
+                        <MetallicCard hover={false} className="mb-16">
                             <div className="panel-head"><h3>NIEUW EVENT</h3></div>
                             <div className="panel-body">
                                 <div className="form-grid">
@@ -318,10 +319,10 @@ export default function Agenda() {
                                 </div>
                                 <button className="btn-brand mt-20" style={{ width: '100%' }} onClick={addEvent}>OPSLAAN</button>
                             </div>
-                        </div>
+                        </MetallicCard>
                     )}
 
-                    <div className="panel">
+                    <MetallicCard hover={false}>
                         <div className="panel-head">
                             <h3>PREP-TAKEN</h3>
                             <button className="tab-btn" onClick={function () { setShowPrepForm(!showPrepForm); }}>+ TAAK</button>
@@ -342,7 +343,7 @@ export default function Agenda() {
                                 );
                             })}
                         </div>
-                    </div>
+                    </MetallicCard>
                 </div>
             </div>
         </div>

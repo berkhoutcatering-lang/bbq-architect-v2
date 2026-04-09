@@ -250,7 +250,7 @@ export async function PUT(req: NextRequest) {
 
         if (factuurStatus) {
           await sb.from('facturen').update({ status: factuurStatus }).eq('id', factuurId);
-          console.log(`[MOLLIE-WEBHOOK] Factuur ${factuurId} status -> ${factuurStatus}`);
+          // Webhook factuur status updated
         }
       }
     }

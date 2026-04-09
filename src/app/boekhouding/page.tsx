@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import EmptyState from '@/components/EmptyState';
 import { Flame } from 'lucide-react';
+import MetallicCard from '@/components/MetallicCard';
 import type { Factuur, Event as DbEvent } from '@/types';
 
 export default function Boekhouding() {
@@ -135,7 +136,7 @@ export default function Boekhouding() {
                     </div>
 
                     <div className="analytics-grid">
-                        <div className="panel">
+                        <MetallicCard hover={false}>
                             <div className="panel-head">
                                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <i className="fa-solid fa-chart-column" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Maandomzet &amp; Cumulatief
@@ -156,10 +157,10 @@ export default function Boekhouding() {
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
-                        </div>
+                        </MetallicCard>
 
                         {statusPieData.length > 0 && (
-                            <div className="panel">
+                            <MetallicCard hover={false}>
                                 <div className="panel-head">
                                     <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <i className="fa-solid fa-chart-pie" style={{ color: 'var(--purple)', fontSize: 12 }}></i> Facturen Status
@@ -177,14 +178,14 @@ export default function Boekhouding() {
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
-                            </div>
+                            </MetallicCard>
                         )}
                     </div>
                 </>
             )}
 
             {tab === 'btw' && (
-                <div className="panel" style={{ marginTop: 16 }}>
+                <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head"><h3>BTW Overzicht</h3></div>
                     <div className="panel-body">
                         {Object.keys(btwMap).length === 0 && <div className="empty-state"><i className="fa-solid fa-calculator"></i><p>Geen BTW data beschikbaar</p></div>}
@@ -213,11 +214,11 @@ export default function Boekhouding() {
                             </span>
                         </div>
                     </div>
-                </div>
+                </MetallicCard>
             )}
 
             {tab === 'clients' && (
-                <div className="panel" style={{ marginTop: 16 }}>
+                <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head">
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <i className="fa-solid fa-star" style={{ color: 'var(--brand)', fontSize: 12 }}></i> Top Klanten
@@ -252,7 +253,7 @@ export default function Boekhouding() {
                             </div>
                         </>
                     )}
-                </div>
+                </MetallicCard>
             )}
         </div>
     );

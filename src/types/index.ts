@@ -70,5 +70,27 @@ export interface UseSettingsReturn {
   save: (data: Partial<import('./database.types').Settings>) => Promise<import('./database.types').Settings | null>;
 }
 
+// ── Email types ──
+export interface Email {
+  id: number;
+  klant_id: number | null;
+  aan_email: string;
+  aan_naam: string | null;
+  onderwerp: string;
+  inhoud: string;
+  type: string;
+  status: string;
+  created_at: string;
+}
+
+export interface EmailTemplate {
+  id: number;
+  naam: string;
+  onderwerp: string;
+  body: string;
+  categorie: string;
+  created_at: string;
+}
+
 // Re-export DbEvent as Event alias for backward compatibility
 export type { DbEvent as Event } from './database.types';

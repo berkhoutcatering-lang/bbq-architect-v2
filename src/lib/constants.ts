@@ -24,6 +24,7 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/klantgesprek': ['Wat moet ik vragen bij een intake?', 'Gemiddelde prijs per persoon', 'Hoeveel vlees per persoon?', 'Checklist klantbezoek'],
   '/foto-archief': ['Hoe organiseer ik foto\'s per event?', 'Categorisatie tips', 'Export naar klant', 'Watermark toevoegen'],
   '/berichten': ['Hoe bereik ik een klant?', 'Template voor offertebevestiging', 'Follow-up na event', 'Bedankbericht schrijven'],
+  '/mailbox': ['Mail naar klant sturen', 'E-mail template maken', 'Verzonden mails bekijken', 'Follow-up mail sturen'],
   '/gebruikers': ['Welke rollen zijn er?', 'Toegangsrechten instellen', 'Teamlid uitnodigen', 'Rolverdeling bij events'],
   '/website': ['Hoe update ik het menu?', 'SEO tips voor mijn website', 'Galerij beheren', 'FAQ toevoegen'],
   '/contact': ['Hoe bereik ik support?', 'Feedback geven', 'Feature aanvragen', 'Bug melden'],
@@ -160,9 +161,9 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
   },
   '/mailbox': {
     icon: 'fa-solid fa-inbox',
-    title: 'Mailbox is leeg',
-    description: 'De mailbox-functionaliteit wordt binnenkort beschikbaar. Gebruik Berichten voor communicatie.',
-    actionLabel: 'Naar berichten',
+    title: 'Nog geen e-mails verzonden',
+    description: 'Stuur je eerste e-mail naar een klant. Kies een template of schrijf een vrij bericht.',
+    actionLabel: 'Nieuwe e-mail',
   },
 };
 

@@ -112,7 +112,7 @@ export default function Contact() {
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.2)',
                             }}>
-                                <Mail size={16} style={{ color: 'var(--brand)' }} />
+                                <Mail size={16} style={{ color: '#c4a35a' }} />
                             </div>
                             <div>
                                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>E-mail</div>
@@ -125,7 +125,7 @@ export default function Contact() {
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.2)',
                             }}>
-                                <Phone size={16} style={{ color: 'var(--brand)' }} />
+                                <Phone size={16} style={{ color: '#c4a35a' }} />
                             </div>
                             <div>
                                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Telefoon</div>

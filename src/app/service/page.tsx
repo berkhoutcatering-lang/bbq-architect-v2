@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import PageHint from '@/components/PageHint';
+import EmptyState from '@/components/EmptyState';
 
 interface TempPopup {
     slug: string;
@@ -309,7 +310,7 @@ export default function ServiceMode() {
                                     </div>
                                 );
                             })}
-                            {offertes.length === 0 && <div className="empty-state">Geen offertes met menu gevonden.</div>}
+                            {offertes.length === 0 && <EmptyState page="/service" />}
                         </div>
 
                         {historie.length > 0 && (

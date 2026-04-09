@@ -90,7 +90,7 @@ export default function FollowUpPrompt({ title, actions, onDismiss, autoHideMs }
                         style={{
                             background: 'none', border: 'none', color: 'var(--muted)',
                             cursor: 'pointer', padding: 8, borderRadius: 6,
-                            minWidth: 32, minHeight: 32,
+                            minWidth: 44, minHeight: 44,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                     >

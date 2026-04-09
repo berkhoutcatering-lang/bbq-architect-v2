@@ -27,13 +27,13 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
         newWorker.addEventListener('statechange', function () {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             // New version available, could prompt user to refresh
-            console.log('[PWA] Nieuwe versie beschikbaar');
+            // New version available
           }
         });
       }
     });
 
-    console.log('[PWA] Service Worker geregistreerd');
+    // SW registered
     return registration;
   } catch (error) {
     console.error('[PWA] Service Worker registratie mislukt:', error);

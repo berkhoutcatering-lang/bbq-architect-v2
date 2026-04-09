@@ -6,6 +6,8 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { printHaccpLabel } from '@/lib/printLabel';
 import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import MetallicCard from '@/components/MetallicCard';
 import type { Recept, InventoryItem } from '@/types';
 
 export default function Recepten() {
@@ -172,7 +174,7 @@ export default function Recepten() {
     if (editing !== null && form) {
         return (
             <>
-                <div className="panel">
+                <MetallicCard hover={false}>
                     <div className="panel-head">
                         <h3>{editing === 'new' ? 'Nieuw Recept' : 'Recept Bewerken'}</h3>
                         <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}>
@@ -263,7 +265,7 @@ export default function Recepten() {
                             )}
                         </div>
                     </div>
-                </div>
+                </MetallicCard>
             </>
         );
     }
@@ -344,6 +346,8 @@ export default function Recepten() {
 
     return (
         <>
+            <PageHint id="recepten" title="Recepten" description="Beheer je recepten met ingrediënten en bereidingswijze. Koppel ze aan gerechten voor automatische kostprijsberekening." />
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {categories.map(function (c) {

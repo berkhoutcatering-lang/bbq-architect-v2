@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import { Flame } from 'lucide-react';
+import MetallicCard from '@/components/MetallicCard';
 import type { Klant } from '@/types';
 
 export default function KlantenPage() {
@@ -94,7 +95,7 @@ function Klanten() {
     if (editing !== null && form) {
         const stats = klantStats[form.naam];
         return (
-            <div className="panel">
+            <MetallicCard hover={false}>
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuwe Klant' : 'Klant Bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><i className="fa-solid fa-arrow-left"></i> Terug</button>
@@ -228,7 +229,7 @@ function Klanten() {
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteKlant}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
                     </div>
                 </div>
-            </div>
+            </MetallicCard>
         );
     }
 
@@ -272,7 +273,7 @@ function Klanten() {
                         style={{ fontSize: 11 }}>{s === 'alle' ? 'Alle' : s}</button>;
                 })}
             </div>
-            <div className="panel">
+            <MetallicCard hover={false}>
                 {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
                 {klanten.length > 0 && filtered.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
@@ -317,7 +318,7 @@ function Klanten() {
                         </div>
                     );
                 })}
-            </div>
+            </MetallicCard>
         </>
     );
 }
