@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 
 export function useSupabase<T extends { id: number }>(table: string, defaultVal?: T[]): {
     data: T[];
@@ -13,25 +14,36 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
 } {
     const [data, setData] = useState<T[]>(defaultVal || []);
     const [loading, setLoading] = useState(true);
+    const { orgId } = useOrg();
 
     const fetchData = useCallback(function () {
-        if (!supabase) { setLoading(false); return; }
+        if (!supabase || !orgId) { setLoading(false); return; }
         setLoading(true);
-        supabase.from(table).select('*').order('id', { ascending: true }).then(function (res) {
-            if (res.error) { console.warn('[DB] Fetch warning on ' + table + ':', res.error.message || res.error.code || 'unknown'); }
-            if (res.data) setData(res.data as T[]);
-            setLoading(false);
-        });
-    }, [table]);
+        supabase
+            .from(table)
+            .select('*')
+            .eq('organization_id', orgId)
+            .order('id', { ascending: true })
+            .then(function (res) {
+                if (res.error) { console.warn('[DB] Fetch warning on ' + table + ':', res.error.message || res.error.code || 'unknown'); }
+                if (res.data) setData(res.data as T[]);
+                setLoading(false);
+            });
+    }, [table, orgId]);
 
     useEffect(function () { fetchData(); }, [fetchData]);
 
-    // Supabase Realtime — auto-refresh on DB changes from other devices
+    // Supabase Realtime — auto-refresh on DB changes
     useEffect(function () {
-        if (!supabase) return;
+        if (!supabase || !orgId) return;
         const channel = supabase
             .channel('rt_' + table + '_' + Math.random().toString(36).slice(2, 6))
-            .on('postgres_changes', { event: '*', schema: 'public', table: table }, function () {
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: table,
+                filter: 'organization_id=eq.' + orgId,
+            }, function () {
                 fetchData();
             })
             .subscribe();
@@ -39,11 +51,13 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
         return function () {
             supabase.removeChannel(channel);
         };
-    }, [table, fetchData]);
+    }, [table, orgId, fetchData]);
 
     const insert = useCallback(function (row: Partial<T>): Promise<T | null> {
-        if (!supabase) return Promise.resolve(null);
-        return Promise.resolve(supabase.from(table).insert(row).select().single()).then(function (res) {
+        if (!supabase || !orgId) return Promise.resolve(null);
+        // Auto-inject organization_id
+        const rowWithOrg = { ...row, organization_id: orgId };
+        return Promise.resolve(supabase.from(table).insert(rowWithOrg as Record<string, unknown>).select().single()).then(function (res) {
             if (res.error) {
                 console.error('[DB] Insert error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
@@ -51,11 +65,11 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
             if (res.data) setData(function (prev) { return prev.concat([res.data as T]); });
             return res.data as T;
         });
-    }, [table]);
+    }, [table, orgId]);
 
     const update = useCallback(function (id: number, row: Partial<T>): Promise<T | null> {
-        if (!supabase) return Promise.resolve(null);
-        return Promise.resolve(supabase.from(table).update(row).eq('id', id).select().single()).then(function (res) {
+        if (!supabase || !orgId) return Promise.resolve(null);
+        return Promise.resolve(supabase.from(table).update(row as Record<string, unknown>).eq('id', id).eq('organization_id', orgId).select().single()).then(function (res) {
             if (res.error) {
                 console.error('[DB] Update error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
@@ -67,23 +81,23 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
             }
             return res.data as T;
         });
-    }, [table]);
+    }, [table, orgId]);
 
     const remove = useCallback(function (id: number): Promise<void> {
-        if (!supabase) return Promise.resolve();
-        return Promise.resolve(supabase.from(table).delete().eq('id', id)).then(function (res) {
+        if (!supabase || !orgId) return Promise.resolve();
+        return Promise.resolve(supabase.from(table).delete().eq('id', id).eq('organization_id', orgId)).then(function (res) {
             if (res.error) {
                 console.error('[DB] Delete error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
             setData(function (prev) { return prev.filter(function (item) { return item.id !== id; }); });
         });
-    }, [table]);
+    }, [table, orgId]);
 
     return { data, loading, refetch: fetchData, insert, update, remove, setData };
 }
 
-// Single-row table (settings)
+// Single-row table (settings) — scoped by organization
 export function useSettings(): {
     settings: import('@/types').Settings | null;
     loading: boolean;
@@ -91,22 +105,30 @@ export function useSettings(): {
 } {
     const [settings, setSettings] = useState<import('@/types').Settings | null>(null);
     const [loading, setLoading] = useState(true);
+    const { orgId } = useOrg();
 
     useEffect(function () {
-        if (!supabase) { setLoading(false); return; }
-        supabase.from('settings').select('*').single().then(function (res) {
-            if (res.data) setSettings(res.data as import('@/types').Settings);
-            setLoading(false);
-        });
-    }, []);
+        if (!supabase || !orgId) { setLoading(false); return; }
+        supabase
+            .from('settings')
+            .select('*')
+            .eq('organization_id', orgId)
+            .single()
+            .then(function (res) {
+                if (res.data) setSettings(res.data as import('@/types').Settings);
+                setLoading(false);
+            });
+    }, [orgId]);
 
     const save = useCallback(function (data: Partial<import('@/types').Settings>): Promise<import('@/types').Settings | null> {
-        if (!supabase) return Promise.resolve(null);
-        return Promise.resolve(supabase.from('settings').update(data).eq('id', 1).select().single()).then(function (res) {
+        if (!supabase || !orgId) return Promise.resolve(null);
+        return Promise.resolve(
+            supabase.from('settings').update(data).eq('organization_id', orgId).select().single()
+        ).then(function (res) {
             if (res.data) setSettings(res.data as import('@/types').Settings);
             return res.data as import('@/types').Settings;
         });
-    }, []);
+    }, [orgId]);
 
     return { settings, loading, save };
 }

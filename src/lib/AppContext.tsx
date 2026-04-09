@@ -1,13 +1,15 @@
 'use client';
-// ─── Global App Context ───────────────────────────────────────────────────────
+// ─── Global App Context (org-scoped) ────────────────────────────────────────
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import type { DbEvent, Offerte, InventoryItem, Factuur, Notification, KPIs, AppContextValue } from '@/types';
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+    const { orgId } = useOrg();
     const [upcomingEvents, setUpcomingEvents] = useState<DbEvent[]>([]);
     const [activeOffertes, setActiveOffertes] = useState<Offerte[]>([]);
     const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
@@ -17,14 +19,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const notifIdRef = useRef(0);
 
     const loadGlobalData = useCallback(async function () {
-        if (!supabase) return;
+        if (!supabase || !orgId) return;
         const today = new Date().toISOString().slice(0, 10);
 
         const [evRes, offRes, invRes, facRes] = await Promise.all([
-            supabase.from('events').select('id,name,date,guests,status,client_naam,location').gte('date', today).order('date').limit(10),
-            supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp,items,korting,event_id').in('status', ['concept', 'geaccepteerd', 'verzonden']).order('datum', { ascending: false }).limit(20),
-            supabase.from('inventory').select('id,naam,current_stock,min_stock,unit'),
-            supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').in('status', ['concept', 'verzonden', 'verlopen']).limit(10),
+            supabase.from('events').select('id,name,date,guests,status,client_naam,location').eq('organization_id', orgId).gte('date', today).order('date').limit(10),
+            supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp,items,korting,event_id,geldig_tot').eq('organization_id', orgId).in('status', ['concept', 'geaccepteerd', 'verzonden']).order('datum', { ascending: false }).limit(20),
+            supabase.from('inventory').select('id,naam,current_stock,min_stock,unit').eq('organization_id', orgId),
+            supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').eq('organization_id', orgId).in('status', ['concept', 'verzonden', 'verlopen']).limit(10),
         ]);
 
         setUpcomingEvents((evRes.data || []) as DbEvent[]);
@@ -34,20 +36,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLowStockItems(inv.filter(function (i) { return i.current_stock <= i.min_stock; }));
         setOpenFacturen((facRes.data || []) as Factuur[]);
         setLoaded(true);
-    }, []);
+    }, [orgId]);
 
     useEffect(function () {
         loadGlobalData();
     }, [loadGlobalData]);
 
     useEffect(function () {
-        if (!supabase) return;
+        if (!supabase || !orgId) return;
 
         const tables = ['events', 'offertes', 'facturen', 'inventory', 'prep_tasks'];
         const channels = tables.map(function (table) {
             return supabase
-                .channel('global_rt_' + table)
-                .on('postgres_changes', { event: '*', schema: 'public', table: table }, function () {
+                .channel('global_rt_' + table + '_' + orgId.slice(0, 8))
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: table,
+                    filter: 'organization_id=eq.' + orgId,
+                }, function () {
                     loadGlobalData();
                 })
                 .subscribe();
@@ -56,7 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return function () {
             channels.forEach(function (ch) { supabase!.removeChannel(ch); });
         };
-    }, [loadGlobalData]);
+    }, [orgId, loadGlobalData]);
 
     const pushNotification = useCallback(function (message: string, type?: string, duration?: number): number {
         const notifType = (type || 'info') as Notification['type'];
@@ -84,7 +91,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const today = new Date().toISOString().slice(0, 10);
         const in3Days = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 
-        // Check: events in de komende 3 dagen
         const soonEvents = upcomingEvents.filter(function (e) { return e.date >= today && e.date <= in3Days && e.status === 'confirmed'; });
         soonEvents.forEach(function (ev) {
             const daysUntil = Math.ceil((new Date(ev.date).getTime() - Date.now()) / 86400000);
@@ -92,7 +98,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             pushNotification(label + ': ' + ev.name + ' (' + ev.guests + ' gasten)', 'warning', 8000);
         });
 
-        // Check: verlopen offertes
         const verlopenOffertes = activeOffertes.filter(function (o) {
             return (o.status === 'concept' || o.status === 'verzonden') && o.geldig_tot && o.geldig_tot < today;
         });
@@ -100,7 +105,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             pushNotification(verlopenOffertes.length + ' offerte(s) verlopen — controleer of klant heeft gereageerd', 'warning', 8000);
         }
 
-        // Check: onbetaalde facturen voorbij vervaldatum
         const overdueFacturen = openFacturen.filter(function (f) {
             return f.vervaldatum && f.vervaldatum < today && f.status !== 'betaald';
         });
@@ -108,7 +112,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             pushNotification(overdueFacturen.length + ' factuur/facturen over vervaldatum — neem actie', 'error', 8000);
         }
 
-        // Check: lage voorraad
         if (lowStockItems.length > 0) {
             pushNotification(lowStockItems.length + ' item(s) onder minimum voorraad', 'warning', 6000);
         }

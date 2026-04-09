@@ -3,7 +3,7 @@ import {
     ChefHat, BookOpen, UtensilsCrossed, Calendar,
     PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
     ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette,
-    DollarSign, Camera, Settings,
+    DollarSign, Camera, Settings, Building2,
     Users, Mail, Inbox, Globe,
     FilePlus, HelpCircle, MessageCircle, PieChart
 } from "lucide-react";
@@ -103,6 +103,7 @@ export const navSections: NavSection[] = [
             { label: "Gebruikers", icon: <Users size={16} />, href: "/gebruikers", description: "Gebruikersbeheer en rollen" },
             { label: "Instellingen", icon: <Settings size={16} />, href: "/instellingen", description: "Systeemconfiguratie en voorkeuren" },
             { label: "Integraties", icon: <Settings size={16} />, href: "/instellingen/integraties", description: "Koppelingen met externe diensten" },
+            { label: "Platform Beheer", icon: <Building2 size={16} />, href: "/admin", description: "Organisaties en klanten beheren" },
         ],
     },
     {
@@ -136,6 +137,7 @@ export const navSections: NavSection[] = [
         secondary: true,
         description: "Veelgestelde vragen en contactinformatie.",
         children: [
+            { label: "Help Center", icon: <HelpCircle size={16} />, href: "/hulp", description: "Artikelen, FAQ en support tickets" },
             { label: "FAQ", icon: <BookOpen size={16} />, href: "/faq", description: "Veelgestelde vragen" },
             { label: "Contact", icon: <MessageCircle size={16} />, href: "/contact", description: "Neem contact met ons op" },
         ],

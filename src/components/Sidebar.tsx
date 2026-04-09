@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { navSections, type NavSection } from "@/lib/navigation";
 import { useApp } from "@/lib/AppContext";
+import { useAuth } from "@/lib/AuthContext";
+import { useOrg } from "@/lib/OrgContext";
 
 interface SidebarFolderProps {
     section: NavSection;
@@ -99,6 +101,8 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
 export default function Sidebar() {
     const pathname = usePathname();
     const { badges } = useApp();
+    const { user, signOut } = useAuth();
+    const { organization, userRole } = useOrg();
     const [collapsed, setCollapsed] = useState(false);
     const [userToggledCollapse, setUserToggledCollapse] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -160,7 +164,7 @@ export default function Sidebar() {
                             BBQ ARCHITECT
                         </p>
                         <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase mt-0.5">
-                            Hop & Bites
+                            {organization?.name || 'Catering'}
                         </p>
                     </div>
                 </div>
@@ -248,14 +252,21 @@ export default function Sidebar() {
             <div className="px-4 py-4 border-t border-[#141418] shrink-0 overflow-hidden">
                 <div className="flex items-center gap-3 transition-all duration-300" style={collapsed && isDesktop ? { justifyContent: 'center', margin: '0 4px' } : {}}>
                     <div className="w-8 h-8 shrink-0 rounded-full bg-[#3b82f6] flex items-center justify-center text-[11px] font-bold text-white shadow-lg">
-                        MB
+                        {(user?.user_metadata?.name || user?.email || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         <div className="min-w-0">
-                            <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">Mathijs Berkhout</p>
-                            <p className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider mt-0.5">Pitmaster</p>
+                            <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">{user?.user_metadata?.name || user?.email?.split('@')[0] || 'Gebruiker'}</p>
+                            <p className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider mt-0.5">{userRole || 'Lid'}{organization ? ' · ' + organization.name : ''}</p>
                         </div>
-                        <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-white cursor-pointer transition-colors" />
+                        <div className="flex items-center gap-1.5">
+                            <Link href="/instellingen">
+                                <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-white cursor-pointer transition-colors" />
+                            </Link>
+                            <button onClick={signOut} title="Uitloggen" className="p-1 rounded hover:bg-[#1a1a20] transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)] hover:text-red-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

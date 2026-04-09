@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServiceSupabase } from '@/lib/supabase-server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const sb = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+let sb: ReturnType<typeof createServiceSupabase> | null = null;
+try { sb = createServiceSupabase(); } catch { sb = null; }
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function addDaysStr(d: string, n: number) {
@@ -17,7 +16,8 @@ export async function POST(req: NextRequest) {
     try {
         if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
-        const { offerteId } = await req.json();
+        const body = await req.json();
+        const { offerteId, signedBy, signatureUrl } = body;
         if (!offerteId) return NextResponse.json({ error: 'Geen offerte ID' }, { status: 400 });
 
         // 1. Fetch offerte
@@ -29,8 +29,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, message: 'Offerte was al geaccepteerd', skipped: true });
         }
 
-        // 2. Update offerte status
-        const { error: updateErr } = await sb.from('offertes').update({ status: 'geaccepteerd' }).eq('id', offerteId);
+        // 2. Update offerte status + signature data
+        const updatePayload: Record<string, any> = { status: 'geaccepteerd' };
+        if (signedBy) updatePayload.signed_by = signedBy;
+        if (signatureUrl) updatePayload.signature_url = signatureUrl;
+        updatePayload.signed_at = new Date().toISOString();
+
+        const { error: updateErr } = await sb.from('offertes').update(updatePayload).eq('id', offerteId);
         if (updateErr) return NextResponse.json({ error: 'Status update mislukt: ' + updateErr.message }, { status: 500 });
 
         // 3. Parse items safely
@@ -59,6 +64,7 @@ export async function POST(req: NextRequest) {
                 }
             }
 
+            const orgId = offerte.organization_id;
             const payload: Record<string, any> = {
                 name: 'Offerte: ' + (offerte.client_naam || offerte.nummer || 'Onbekend'),
                 date: offerte.datum || todayStr(),
@@ -68,7 +74,8 @@ export async function POST(req: NextRequest) {
                 client_naam: offerte.client_naam || '',
                 client_adres: offerte.client_adres || '',
                 status: 'confirmed',
-                notitie: offerte.notitie || ''
+                notitie: offerte.notitie || '',
+                organization_id: orgId,
             };
 
             if (existing) {
@@ -115,7 +122,8 @@ export async function POST(req: NextRequest) {
                     client_adres: offerte.client_adres || '',
                     datum: todayStr(),
                     vervaldatum: addDaysStr(todayStr(), betaaltermijn),
-                    items: items
+                    items: items,
+                    organization_id: offerte.organization_id,
                 });
                 results.factuur = { success: true, message: 'Factuur ' + nummer + ' aangemaakt' };
             } else {
@@ -127,19 +135,20 @@ export async function POST(req: NextRequest) {
 
         // 4b. Auto-generate prep tasks
         try {
+            const orgId = offerte.organization_id;
             const tasks = [
-                { event_id: eventId, text: 'Voorraad check en ingredienten bestellen', dagen: -3, done: false },
-                { event_id: eventId, text: 'Materieel controleren en inladen', dagen: -3, done: false },
-                { event_id: eventId, text: 'Rubs en sauzen aanmaken', dagen: -2, done: false },
-                { event_id: eventId, text: 'Rookhout weken', dagen: -2, done: false },
-                { event_id: eventId, text: 'Smoker/BBQ testen', dagen: -1, done: false },
-                { event_id: eventId, text: 'Bus inladen', dagen: -1, done: false },
-                { event_id: eventId, text: 'Service materiaal checken', dagen: -1, done: false },
-                { event_id: eventId, text: 'Smoke/BBQ aansteken 4-6u voor service', dagen: 0, done: false },
-                { event_id: eventId, text: 'Sauzen opwarmen', dagen: 0, done: false },
-                { event_id: eventId, text: 'Garnituren snijden', dagen: 0, done: false },
-                { event_id: eventId, text: 'Service-station opzetten', dagen: 0, done: false },
-                { event_id: eventId, text: 'HACCP temperaturen registreren', dagen: 0, done: false }
+                { event_id: eventId, text: 'Voorraad check en ingredienten bestellen', dagen: -3, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Materieel controleren en inladen', dagen: -3, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Rubs en sauzen aanmaken', dagen: -2, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Rookhout weken', dagen: -2, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Smoker/BBQ testen', dagen: -1, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Bus inladen', dagen: -1, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Service materiaal checken', dagen: -1, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Smoke/BBQ aansteken 4-6u voor service', dagen: 0, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Sauzen opwarmen', dagen: 0, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Garnituren snijden', dagen: 0, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'Service-station opzetten', dagen: 0, done: false, organization_id: orgId },
+                { event_id: eventId, text: 'HACCP temperaturen registreren', dagen: 0, done: false, organization_id: orgId }
             ];
             await sb.from('prep_tasks').insert(tasks);
             results.prep = { success: true, message: tasks.length + ' prep-taken aangemaakt' };
@@ -174,10 +183,11 @@ export async function POST(req: NextRequest) {
                 const { data: event } = await sb.from('events').select('date').eq('id', eventId).single();
                 const eventDatum = event?.date || todayStr();
                 const records: any[] = [];
+                const hOrgId = offerte.organization_id;
                 menuItems.forEach(function (naam: string) {
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Ontvangst grondstoffen', temp: 0, type: 'ontvangst', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie' });
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Kerntemperatuur bereiding', temp: 0, type: 'bereiding', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie' });
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Uitgifte temperatuur', temp: 0, type: 'uitgifte', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie' });
+                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Ontvangst grondstoffen', temp: 0, type: 'ontvangst', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
+                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Kerntemperatuur bereiding', temp: 0, type: 'bereiding', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
+                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Uitgifte temperatuur', temp: 0, type: 'uitgifte', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
                 });
                 await sb.from('haccp_records').insert(records);
                 results.haccp = { success: true, message: records.length + ' HACCP-sjablonen voor ' + menuItems.length + ' gerechten' };

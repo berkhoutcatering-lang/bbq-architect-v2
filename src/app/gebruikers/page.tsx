@@ -1,33 +1,49 @@
 'use client';
 import { useState } from 'react';
-import { useSupabase } from '@/lib/useSupabase';
+import { useOrg } from '@/lib/OrgContext';
+import { useAuth } from '@/lib/AuthContext';
 import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
-import { Flame, UserPlus, ArrowLeft } from 'lucide-react';
+import { Flame, UserPlus, ArrowLeft, Mail, Shield, ShieldCheck, ChefHat, LogOut } from 'lucide-react';
 
-interface Profile {
-    id: number;
-    naam: string;
-    email: string;
-    rol: string;
-    status: string;
-}
-
-const ROLLEN = ['Admin', 'Pitmaster', 'Medewerker'];
-const STATUS_OPTIES = ['Actief', 'Inactief'];
+const ROLLEN = ['Admin', 'Pitmaster', 'Medewerker'] as const;
 
 export default function Gebruikers() {
-    const { data: gebruikers, loading, insert } = useSupabase<Profile>('profiles', []);
-    const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({ naam: '', email: '', rol: 'Medewerker', status: 'Actief' });
+    const { members, orgId, isAdmin, refetchMembers, organization } = useOrg();
+    const { user } = useAuth();
+    const [showInvite, setShowInvite] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteRole, setInviteRole] = useState<string>('Medewerker');
+    const [inviting, setInviting] = useState(false);
+    const [inviteMsg, setInviteMsg] = useState('');
 
-    function handleAdd() {
-        if (!form.naam || !form.email) return;
-        insert(form as Partial<Profile>).then(function () {
-            setForm({ naam: '', email: '', rol: 'Medewerker', status: 'Actief' });
-            setShowForm(false);
+    async function handleInvite() {
+        if (!inviteEmail || !orgId) return;
+        setInviting(true);
+        setInviteMsg('');
+
+        const res = await fetch('/api/org/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: inviteEmail,
+                role: inviteRole,
+                organizationId: orgId,
+            }),
         });
+
+        if (res.ok) {
+            const { invitation } = await res.json();
+            setInviteMsg('Uitnodiging verstuurd! Token: ' + invitation.token);
+            setInviteEmail('');
+            setInviteRole('Medewerker');
+            refetchMembers();
+        } else {
+            const err = await res.json();
+            setInviteMsg('Fout: ' + (err.error || 'Onbekende fout'));
+        }
+        setInviting(false);
     }
 
     const rolKleur: Record<string, string> = {
@@ -36,12 +52,25 @@ export default function Gebruikers() {
         Medewerker: '#3b82f6',
     };
 
-    const statusKleur: Record<string, string> = {
-        Actief: '#22c55e',
-        Inactief: '#71717a',
+    const rolIcon: Record<string, React.ReactNode> = {
+        Admin: <ShieldCheck size={14} />,
+        Pitmaster: <ChefHat size={14} />,
+        Medewerker: <Shield size={14} />,
     };
 
-    if (loading) {
+    const statusKleur: Record<string, string> = {
+        active: '#22c55e',
+        invited: '#f59e0b',
+        inactive: '#71717a',
+    };
+
+    const statusLabel: Record<string, string> = {
+        active: 'Actief',
+        invited: 'Uitgenodigd',
+        inactive: 'Inactief',
+    };
+
+    if (!members && !orgId) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
                 <Flame size={24} className="text-[#c4a35a] animate-pulse" />
@@ -53,71 +82,85 @@ export default function Gebruikers() {
         <>
             <PageHint
                 id="gebruikers"
-                title="Gebruikers"
-                description="Beheer wie toegang heeft tot BBQ Architect en welke rechten zij hebben"
+                title="Teamleden"
+                description={organization ? 'Beheer het team van ' + organization.name : 'Beheer wie toegang heeft tot BBQ Architect'}
             />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Gebruikers</h2>
-                <button
-                    className="btn btn-brand"
-                    onClick={function () { setShowForm(!showForm); }}
-                >
-                    {showForm ? <><ArrowLeft size={14} /> Terug</> : <><UserPlus size={14} /> Gebruiker toevoegen</>}
-                </button>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
+                    Teamleden
+                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)', marginLeft: 8 }}>
+                        {members.length} {members.length === 1 ? 'lid' : 'leden'}
+                    </span>
+                </h2>
+                {isAdmin && (
+                    <button
+                        className="btn btn-brand"
+                        onClick={function () { setShowInvite(!showInvite); setInviteMsg(''); }}
+                    >
+                        {showInvite ? <><ArrowLeft size={14} /> Terug</> : <><UserPlus size={14} /> Uitnodigen</>}
+                    </button>
+                )}
             </div>
 
-            {showForm && (
+            {showInvite && isAdmin && (
                 <MetallicCard hover={false} className="p-6 mb-4">
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>Nieuwe gebruiker</h3>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>
+                        Teamlid uitnodigen
+                    </h3>
                     <div className="form-grid">
                         <div className="field">
-                            <label>Naam</label>
-                            <input value={form.naam} onChange={function (e) { setForm({ ...form, naam: e.target.value }); }} placeholder="Volledige naam" />
-                        </div>
-                        <div className="field">
                             <label>Email</label>
-                            <input type="email" value={form.email} onChange={function (e) { setForm({ ...form, email: e.target.value }); }} placeholder="naam@bedrijf.nl" />
+                            <input
+                                type="email"
+                                value={inviteEmail}
+                                onChange={function (e) { setInviteEmail(e.target.value); }}
+                                placeholder="collega@bedrijf.nl"
+                            />
                         </div>
                         <div className="field">
                             <label>Rol</label>
-                            <select value={form.rol} onChange={function (e) { setForm({ ...form, rol: e.target.value }); }}>
+                            <select value={inviteRole} onChange={function (e) { setInviteRole(e.target.value); }}>
                                 {ROLLEN.map(function (r) { return <option key={r} value={r}>{r}</option>; })}
                             </select>
                         </div>
-                        <div className="field">
-                            <label>Status</label>
-                            <select value={form.status} onChange={function (e) { setForm({ ...form, status: e.target.value }); }}>
-                                {STATUS_OPTIES.map(function (s) { return <option key={s} value={s}>{s}</option>; })}
-                            </select>
-                        </div>
                     </div>
+                    {inviteMsg && (
+                        <div style={{
+                            marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13,
+                            background: inviteMsg.startsWith('Fout') ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)',
+                            color: inviteMsg.startsWith('Fout') ? '#ef4444' : '#22c55e',
+                            border: '1px solid ' + (inviteMsg.startsWith('Fout') ? 'rgba(239,68,68,.2)' : 'rgba(34,197,94,.2)'),
+                        }}>
+                            {inviteMsg}
+                        </div>
+                    )}
                     <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                        <button className="btn btn-brand" onClick={handleAdd}>
-                            <UserPlus size={14} /> Toevoegen
+                        <button className="btn btn-brand" onClick={handleInvite} disabled={inviting || !inviteEmail}>
+                            <Mail size={14} /> {inviting ? 'Versturen...' : 'Uitnodiging versturen'}
                         </button>
                     </div>
                 </MetallicCard>
             )}
 
-            {gebruikers.length === 0 && !showForm && (
+            {members.length === 0 && !showInvite && (
                 <EmptyState
                     page="/gebruikers"
-                    onAction={function () { setShowForm(true); }}
+                    onAction={function () { setShowInvite(true); }}
                     icon="fa-solid fa-users"
-                    title="Geen gebruikers"
-                    description="Voeg teamleden toe om toegang te geven tot BBQ Architect."
-                    actionLabel="Gebruiker toevoegen"
+                    title="Geen teamleden"
+                    description="Nodig je team uit om samen te werken in BBQ Architect."
+                    actionLabel="Teamlid uitnodigen"
                 />
             )}
 
-            {gebruikers.length > 0 && (
+            {members.length > 0 && (
                 <MetallicCard hover={false} className="p-4">
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <thead>
                                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                    {['Naam', 'Email', 'Rol', 'Status'].map(function (col) {
+                                    {['Naam', 'Email', 'Rol', 'Status', ''].map(function (col) {
                                         return (
                                             <th key={col} style={{
                                                 textAlign: 'left', padding: '8px 12px',
@@ -129,24 +172,52 @@ export default function Gebruikers() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {gebruikers.map(function (g) {
+                                {members.map(function (m) {
+                                    const isCurrentUser = m.user_id === user?.id;
                                     return (
-                                        <tr key={g.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                            <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text)' }}>{g.naam}</td>
-                                            <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{g.email}</td>
+                                        <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <div style={{
+                                                        width: 32, height: 32, borderRadius: '50%',
+                                                        background: (rolKleur[m.role] || '#71717a') + '20',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        color: rolKleur[m.role] || '#71717a', fontSize: 13, fontWeight: 700,
+                                                    }}>
+                                                        {(m.naam || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span>
+                                                        {m.naam || 'Onbekend'}
+                                                        {isCurrentUser && (
+                                                            <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 6 }}>(jij)</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{m.email}</td>
                                             <td style={{ padding: '10px 12px' }}>
                                                 <span style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 4,
                                                     fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8,
-                                                    background: (rolKleur[g.rol] || '#71717a') + '20',
-                                                    color: rolKleur[g.rol] || '#71717a',
-                                                }}>{g.rol}</span>
+                                                    background: (rolKleur[m.role] || '#71717a') + '20',
+                                                    color: rolKleur[m.role] || '#71717a',
+                                                }}>
+                                                    {rolIcon[m.role]} {m.role}
+                                                </span>
                                             </td>
                                             <td style={{ padding: '10px 12px' }}>
                                                 <span style={{
                                                     fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 8,
-                                                    background: (statusKleur[g.status] || '#71717a') + '20',
-                                                    color: statusKleur[g.status] || '#71717a',
-                                                }}>{g.status}</span>
+                                                    background: (statusKleur[m.status] || '#71717a') + '20',
+                                                    color: statusKleur[m.status] || '#71717a',
+                                                }}>{statusLabel[m.status] || m.status}</span>
+                                            </td>
+                                            <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                                                {isCurrentUser && (
+                                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                                        <LogOut size={12} style={{ display: 'inline', marginRight: 4 }} />
+                                                    </span>
+                                                )}
                                             </td>
                                         </tr>
                                     );

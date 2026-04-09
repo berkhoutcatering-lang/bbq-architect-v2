@@ -5,6 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmtNl, today } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
+import { buildBrandingConfig } from '@/lib/branding';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import FieldTooltip from '@/components/FieldTooltip';

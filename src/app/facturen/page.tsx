@@ -8,6 +8,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
+import { buildBrandingConfig } from '@/lib/branding';
 import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
@@ -99,7 +100,8 @@ export default function Facturen() {
 
     function downloadFactuur() {
         const totals = calcLineTotals(form!.items);
-        generatePDF({ type: 'factuur', form: form, settings: settings, totals: totals });
+        const branding = buildBrandingConfig(settings);
+        generatePDF({ type: 'factuur', form: form, settings: settings, totals: totals, branding: branding });
     }
 
     if (loading) return (

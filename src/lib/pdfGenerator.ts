@@ -4,6 +4,7 @@
  */
 
 import type { Settings, LineTotals } from '@/types';
+import type { BrandingConfig } from '@/lib/branding';
 
 interface LogoResult {
     data: string;
@@ -16,6 +17,7 @@ interface PDFOptions {
     form?: Record<string, any>;
     settings?: Partial<Settings>;
     totals?: LineTotals;
+    branding?: BrandingConfig;
     // HACCP specific
     eventName?: string;
     eventDatum?: string;
@@ -57,7 +59,7 @@ function loadJsPDF(): Promise<any> {
     return jsPDFLoaded;
 }
 
-function loadLogoAsBase64(): Promise<LogoResult | null> {
+function loadImageAsBase64(src: string): Promise<LogoResult | null> {
     return new Promise(function (resolve) {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -70,25 +72,16 @@ function loadLogoAsBase64(): Promise<LogoResult | null> {
             resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
         img.onerror = function () { resolve(null); };
-        img.src = '/logo.png';
+        img.src = src;
     });
 }
 
-function loadDarkLogoAsBase64(): Promise<LogoResult | null> {
-    return new Promise(function (resolve) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function () {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0);
-            resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
-        };
-        img.onerror = function () { resolve(null); };
-        img.src = '/logo-dark.jpeg';
-    });
+function loadLogoAsBase64(brandLogoUrl?: string | null): Promise<LogoResult | null> {
+    return loadImageAsBase64(brandLogoUrl || '/logo.png');
+}
+
+function loadDarkLogoAsBase64(brandDarkLogoUrl?: string | null, brandLogoUrl?: string | null): Promise<LogoResult | null> {
+    return loadImageAsBase64(brandDarkLogoUrl || brandLogoUrl || '/logo-dark.jpeg');
 }
 
 // ── Helpers ──
@@ -102,9 +95,14 @@ function nlDate(d: string | null | undefined): string {
     return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : d;
 }
 
-// ── Brand Colors ──
-const GOLD: [number, number, number] = [158, 120, 28];
-const DARK_GOLD: [number, number, number] = [130, 95, 15];
+// ── Brand Colors (resolved per-tenant) ──
+function resolveBrandColors(branding?: BrandingConfig) {
+    return {
+        GOLD: branding?.primaryRgb ?? [158, 120, 28] as [number, number, number],
+        DARK_GOLD: branding?.accentRgb ?? [130, 95, 15] as [number, number, number],
+    };
+}
+// ── Neutral colors (constant) ──
 const BLACK: [number, number, number] = [30, 30, 30];
 const NEAR_BLACK: [number, number, number] = [15, 15, 15];
 const DARK_PANEL: [number, number, number] = [245, 242, 235];
@@ -218,6 +216,11 @@ function parseMenuGangenVega(menuSel: any, knownDishes?: Set<string>): { gang: s
 export async function generatePDF(opts: PDFOptions): Promise<void> {
     try {
         const type = opts.type;
+        const { GOLD, DARK_GOLD } = resolveBrandColors(opts.branding);
+        const brandLogoUrl = opts.branding?.logoUrl || null;
+        const brandDarkLogoUrl = opts.branding?.logoDarkUrl || null;
+        const brandName = opts.settings?.bedrijfsnaam || 'BBQ Architect';
+        const brandSub = opts.settings?.ondertitel || '';
 
         // ═══ HACCP RAPPORT PDF ═══
         if (type === 'haccp') {
@@ -228,7 +231,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             doc2.setFillColor(...GOLD);
             doc2.rect(0, 0, pageW2, 3, 'F');
 
-            const logo2 = await loadLogoAsBase64();
+            const logo2 = await loadLogoAsBase64(brandLogoUrl);
             let y2 = 10;
             if (logo2 && logo2.data) {
                 let lw2 = 50; let lh2 = lw2 * (logo2.h / logo2.w);
@@ -237,7 +240,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 y2 += lh2 + 4;
             } else {
                 doc2.setFontSize(20); doc2.setTextColor(...GOLD); doc2.setFont('helvetica', 'bold');
-                doc2.text('HOP & BITES', pageW2 / 2, y2 + 8, { align: 'center' });
+                doc2.text(brandName.toUpperCase(), pageW2 / 2, y2 + 8, { align: 'center' });
                 y2 += 16;
             }
 
@@ -360,7 +363,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
 
             // Color palette for dark menu
             const MENU_BG: [number, number, number] = [18, 18, 18];
-            const MENU_GOLD: [number, number, number] = [178, 145, 62];
+            const MENU_GOLD: [number, number, number] = GOLD.map(function (c) { return Math.min(255, c + 20); }) as [number, number, number];
             const MENU_CREAM: [number, number, number] = [245, 240, 230];
             const MENU_GRAY: [number, number, number] = [160, 155, 145];
 
@@ -392,7 +395,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
 
             // -- Logo (try dark logo, fallback to text-only)
             let y = 28;
-            const logoDark = await loadDarkLogoAsBase64();
+            const logoDark = await loadDarkLogoAsBase64(brandDarkLogoUrl, brandLogoUrl);
             if (logoDark && logoDark.data) {
                 let lw = 50; let lh = lw * (logoDark.h / logoDark.w);
                 if (lh > 45) { lh = 45; lw = lh * (logoDark.w / logoDark.h); }
@@ -549,7 +552,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         doc.rect(0, 0, pageW, 2.5, 'F');
 
         // ── Logo ──
-        const logoResult = await loadLogoAsBase64();
+        const logoResult = await loadLogoAsBase64(brandLogoUrl);
         let logoBottomY = 22;
 
         if (logoResult && logoResult.data) {
@@ -565,11 +568,11 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             doc.setFontSize(26);
             doc.setTextColor(...DARK_GOLD);
             doc.setFont('helvetica', 'bold');
-            doc.text('HOP & BITES', pageW / 2, 24, { align: 'center' });
+            doc.text(brandName.toUpperCase(), pageW / 2, 24, { align: 'center' });
             doc.setFontSize(8);
             doc.setTextColor(...MID_GRAY);
             doc.setFont('helvetica', 'normal');
-            doc.text('B B Q   C A T E R I N G', pageW / 2, 30, { align: 'center' });
+            doc.text(brandSub ? brandSub.toUpperCase().split('').join(' ') : 'B B Q   C A T E R I N G', pageW / 2, 30, { align: 'center' });
             logoBottomY = 36;
         }
 
@@ -936,7 +939,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             if (s.iban) {
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(...BLACK);
-                doc.text(s.iban + ' t.n.v. ' + (s.bedrijfsnaam || 'Hop & Bites') + ' o.v.v. "' + (form.nummer || '') + '"', mL + 5, y + 13);
+                doc.text(s.iban + ' t.n.v. ' + (s.bedrijfsnaam || brandName) + ' o.v.v. "' + (form.nummer || '') + '"', mL + 5, y + 13);
             }
 
             y += payH + 6;

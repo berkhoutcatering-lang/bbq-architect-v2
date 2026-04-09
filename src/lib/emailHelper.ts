@@ -46,22 +46,24 @@ function openMailtoFallback(to: string, subject: string, body: string) {
 }
 
 // ── HTML email template ──
-export function wrapHtml(content: string, bedrijfsnaam: string): string {
+export function wrapHtml(content: string, bedrijfsnaam: string, brandColor?: string, ondertitel?: string): string {
+  const bc = brandColor || '#c4a35a';
+  const sub = ondertitel || '';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
-<div style="border-bottom:3px solid #c4a35a;padding-bottom:16px;margin-bottom:24px;">
+<div style="border-bottom:3px solid ${bc};padding-bottom:16px;margin-bottom:24px;">
   <h2 style="margin:0;color:#1a1a1a;font-weight:400;">${escH(bedrijfsnaam)}</h2>
-  <p style="margin:4px 0 0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">BBQ Catering</p>
+  ${sub ? `<p style="margin:4px 0 0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">${escH(sub)}</p>` : ''}
 </div>
 ${content}
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#999;">
-  <p>${escH(bedrijfsnaam)} — Ambachtelijke BBQ Catering</p>
+  <p>${escH(bedrijfsnaam)}</p>
 </div>
 </body></html>`;
 }
 
 // ── Offerte email ──
-export async function mailOfferte(offerte: any, bedrijfsnaam: string) {
+export async function mailOfferte(offerte: any, bedrijfsnaam: string, brandColor?: string, ondertitel?: string) {
   if (!isValidEmail(offerte.client_email)) return { success: false, error: 'Geen geldig emailadres bij deze klant' };
   const items: any[] = Array.isArray(offerte.items) ? offerte.items : [];
   let subtotaal = 0;
@@ -77,11 +79,11 @@ export async function mailOfferte(offerte: any, bedrijfsnaam: string) {
       <tr><td style="padding:8px 12px;font-size:13px;color:#888;">Datum</td><td style="padding:8px 12px;">${offerte.datum || ''}</td></tr>
       <tr style="background:#f8f8f8;"><td style="padding:8px 12px;font-size:13px;color:#888;">Aantal gasten</td><td style="padding:8px 12px;">${offerte.aantal_gasten || ''}</td></tr>
       <tr><td style="padding:8px 12px;font-size:13px;color:#888;">Geldig tot</td><td style="padding:8px 12px;">${offerte.geldig_tot || ''}</td></tr>
-      <tr style="background:#f8f8f8;"><td style="padding:8px 12px;font-size:13px;color:#888;">Totaal excl. BTW</td><td style="padding:8px 12px;font-weight:700;color:#c4a35a;font-size:18px;">${fmt(subtotaal)}</td></tr>
+      <tr style="background:#f8f8f8;"><td style="padding:8px 12px;font-size:13px;color:#888;">Totaal excl. BTW</td><td style="padding:8px 12px;font-weight:700;color:${brandColor || '#c4a35a'};font-size:18px;">${fmt(subtotaal)}</td></tr>
     </table>
-    ${acceptUrl ? `<p><a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;background:#c4a35a;color:#000;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Offerte Bekijken & Accepteren</a></p>` : ''}
+    ${acceptUrl ? `<p><a href="${acceptUrl}" style="display:inline-block;padding:12px 28px;background:${brandColor || '#c4a35a'};color:#000;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Offerte Bekijken & Accepteren</a></p>` : ''}
     <p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${bedrijfsnaam}</strong></p>
-  `, bedrijfsnaam);
+  `, bedrijfsnaam, brandColor, ondertitel);
 
   const text = `Beste ${offerte.client_naam},\n\nHierbij de offerte ${offerte.nummer} voor ${offerte.aantal_gasten || ''} gasten.\nTotaal: ${fmt(subtotaal)}\n\nBekijk en accepteer: ${acceptUrl}\n\nMvg, ${bedrijfsnaam}`;
 
@@ -93,7 +95,7 @@ export async function mailOfferte(offerte: any, bedrijfsnaam: string) {
 }
 
 // ── Factuur email ──
-export async function mailFactuur(factuur: any, bedrijfsnaam: string) {
+export async function mailFactuur(factuur: any, bedrijfsnaam: string, brandColor?: string, ondertitel?: string) {
   if (!isValidEmail(factuur.client_email)) return { success: false, error: 'Geen geldig emailadres bij deze klant' };
   const items: any[] = Array.isArray(factuur.items) ? factuur.items : [];
   let subtotaal = 0; let totalBtw = 0;
@@ -110,11 +112,11 @@ export async function mailFactuur(factuur: any, bedrijfsnaam: string) {
       <tr><td style="padding:8px 12px;font-size:13px;color:#888;">Datum</td><td style="padding:8px 12px;">${factuur.datum || ''}</td></tr>
       <tr style="background:#f8f8f8;"><td style="padding:8px 12px;font-size:13px;color:#888;">Vervaldatum</td><td style="padding:8px 12px;">${factuur.vervaldatum || ''}</td></tr>
       ${items.map(function (item: any) { return `<tr><td style="padding:8px 12px;font-size:13px;">${item.desc || item.omschrijving || 'Item'}</td><td style="padding:8px 12px;">${item.qty || 1}× ${fmt(item.prijs || 0)}</td></tr>`; }).join('')}
-      <tr style="border-top:2px solid #c4a35a;"><td style="padding:12px;font-weight:700;">Totaal incl. BTW</td><td style="padding:12px;font-weight:700;color:#c4a35a;font-size:18px;">${fmt(subtotaal + totalBtw)}</td></tr>
+      <tr style="border-top:2px solid ${brandColor || '#c4a35a'};"><td style="padding:12px;font-weight:700;">Totaal incl. BTW</td><td style="padding:12px;font-weight:700;color:${brandColor || '#c4a35a'};font-size:18px;">${fmt(subtotaal + totalBtw)}</td></tr>
     </table>
     <p style="color:#888;font-size:13px;">Wij verzoeken u het bedrag binnen de betalingstermijn over te maken.</p>
     <p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${bedrijfsnaam}</strong></p>
-  `, bedrijfsnaam);
+  `, bedrijfsnaam, brandColor, ondertitel);
 
   const text = `Factuur ${factuur.nummer}\nTotaal: ${fmt(subtotaal + totalBtw)}\nVervaldatum: ${factuur.vervaldatum}\n\nMvg, ${bedrijfsnaam}`;
 
@@ -126,7 +128,7 @@ export async function mailFactuur(factuur: any, bedrijfsnaam: string) {
 }
 
 // ── Betalingsherinnering ──
-export async function mailBetaalherinnering(factuur: any, bedrijfsnaam: string) {
+export async function mailBetaalherinnering(factuur: any, bedrijfsnaam: string, brandColor?: string, ondertitel?: string) {
   if (!isValidEmail(factuur.client_email)) return { success: false, error: 'Geen geldig emailadres bij deze klant' };
   const items: any[] = Array.isArray(factuur.items) ? factuur.items : [];
   let totaal = 0;
@@ -146,7 +148,7 @@ export async function mailBetaalherinnering(factuur: any, bedrijfsnaam: string) 
     <p>Wij verzoeken u vriendelijk het bedrag zo spoedig mogelijk over te maken.</p>
     <p style="color:#888;font-size:12px;">Mocht de betaling reeds onderweg zijn, dan kunt u dit bericht als niet verzonden beschouwen.</p>
     <p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${bedrijfsnaam}</strong></p>
-  `, bedrijfsnaam);
+  `, bedrijfsnaam, brandColor, ondertitel);
 
   return sendEmail({
     to: factuur.client_email || '',
@@ -156,7 +158,7 @@ export async function mailBetaalherinnering(factuur: any, bedrijfsnaam: string) 
 }
 
 // ── Eventbevestiging ──
-export async function mailEventBevestiging(event: any, bedrijfsnaam: string) {
+export async function mailEventBevestiging(event: any, bedrijfsnaam: string, brandColor?: string, ondertitel?: string) {
   if (!isValidEmail(event.client_email)) return { success: false, error: 'Geen geldig emailadres bij deze klant' };
   const html = wrapHtml(`
     <p>Beste ${escH(event.client_naam || 'klant')},</p>
@@ -169,7 +171,7 @@ export async function mailEventBevestiging(event: any, bedrijfsnaam: string) {
     </table>
     <p>Wij kijken ernaar uit om uw event te verzorgen!</p>
     <p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${bedrijfsnaam}</strong></p>
-  `, bedrijfsnaam);
+  `, bedrijfsnaam, brandColor, ondertitel);
 
   return sendEmail({
     to: event.client_email || '',

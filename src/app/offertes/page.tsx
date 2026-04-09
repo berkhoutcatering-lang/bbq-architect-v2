@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
+import { buildBrandingConfig } from '@/lib/branding';
 import { mailOfferte } from '@/lib/emailHelper';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
 import MenuWizard from '@/components/MenuWizard';
@@ -390,13 +391,16 @@ export default function Offertes() {
 
     function downloadOfferte() {
         const totals = calcLineTotals(form!.items);
-        generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals });
+        const branding = buildBrandingConfig(settings);
+        generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals, branding: branding });
     }
     function downloadMenukaart() {
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData });
+        const branding = buildBrandingConfig(settings);
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, branding: branding });
     }
     function downloadVegaMenukaart() {
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true });
+        const branding = buildBrandingConfig(settings);
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true, branding: branding });
     }
 
     if (editing !== null && form) {

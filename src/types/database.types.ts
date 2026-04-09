@@ -3,6 +3,58 @@
 // Gegenereerd uit supabase-schema.sql + schema-migration.sql
 // =============================================
 
+// ── Multi-Tenant Types ──
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  feature_flags: Record<string, boolean> | null;
+  website_url: string | null;
+  plan: 'starter' | 'professional' | 'enterprise';
+  plan_valid_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: 'Admin' | 'Pitmaster' | 'Medewerker';
+  status: 'invited' | 'active' | 'inactive';
+  invited_by: string | null;
+  joined_at: string;
+  created_at: string;
+  // joined from profiles
+  naam?: string;
+  email?: string;
+  avatar_url?: string;
+}
+
+export interface Invitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: string;
+  invited_by: string;
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface Profile {
+  id: number;
+  user_id: string | null;
+  naam: string;
+  email: string;
+  rol: string;
+  status: string;
+  avatar_url: string | null;
+  organization_id: string | null;
+}
+
 export interface Settings {
   id: number;
   bedrijfsnaam: string;
@@ -18,6 +70,10 @@ export interface Settings {
   default_btw: number;
   betaaltermijn: number;
   offerte_geldig: number;
+  logo_url: string | null;
+  logo_dark_url: string | null;
+  brand_primary: string | null;
+  brand_accent: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +138,8 @@ export interface Offerte {
   vaste_kosten?: VasteKost[];
   korting?: number;
   event_id?: number;
+  public_token?: string;
+  organization_id?: string;
   created_at: string;
 }
 
@@ -371,4 +429,82 @@ export interface EventReflectie {
   notities: string;
   fotos: string[];
   created_at: string;
+}
+
+// ── Health, Changelog & Onboarding Types ──
+
+export interface OnboardingEvent {
+  id: number;
+  organization_id: string;
+  user_id: string | null;
+  milestone: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ChangelogEntry {
+  id: number;
+  version: string;
+  title: string;
+  description: string;
+  category: 'feature' | 'improvement' | 'fix' | 'breaking';
+  published_at: string;
+  created_at: string;
+}
+
+export interface ChangelogRead {
+  id: number;
+  user_id: string;
+  last_read_at: string;
+  created_at: string;
+}
+
+export interface ActivityLog {
+  id: number;
+  organization_id: string;
+  user_id: string | null;
+  action: string;
+  page: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface HelpArticle {
+  id: number;
+  slug: string;
+  title: string;
+  content: string;
+  category: string;
+  search_tags: string[];
+  sort_order: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportTicket {
+  id: number;
+  organization_id: string;
+  user_id: string;
+  subject: string;
+  message: string;
+  category: 'vraag' | 'bug' | 'feature' | 'urgent';
+  status: 'open' | 'in_behandeling' | 'opgelost' | 'gesloten';
+  admin_reply: string | null;
+  replied_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HealthScore {
+  orgId: string;
+  orgName: string;
+  overall: number; // 0-100
+  activity: number; // 0-100
+  dataRichness: number; // 0-100
+  adoption: number; // 0-100
+  teamSize: number; // 0-100
+  lastActivity: string | null;
+  daysInactive: number;
+  status: 'healthy' | 'at-risk' | 'critical' | 'churned';
 }
