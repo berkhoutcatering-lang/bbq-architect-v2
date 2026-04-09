@@ -5,11 +5,14 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import Papa from 'papaparse';
+import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 
 const DEFAULT_LEVERANCIERS = ['Sligro', 'Hanos', 'Bidfood'];
 
 export default function PriceIntelligence() {
-    const { data: prijzen, insert: insertPrijs, remove: removePrijs } = useSupabase('supplier_prices', []);
+    const { data: prijzen, loading: prijzenLoading, insert: insertPrijs, remove: removePrijs } = useSupabase('supplier_prices', []);
     const { data: inventory } = useSupabase('inventory', []);
     const showToast: (msg: string, type?: string) => void = useToast();
     const showConfirm: (msg: string, onConfirm: () => void) => void = useConfirm();
@@ -175,6 +178,14 @@ export default function PriceIntelligence() {
     const products = Object.keys(comparison).sort();
     const alerts = buildAlerts();
 
+    if (prijzenLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     return (
         <div className="artisan-page">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -189,6 +200,10 @@ export default function PriceIntelligence() {
                     <i className="fa-solid fa-circle-info"></i> HELP
                 </button>
             </div>
+
+            <PageHint id="price-intelligence" title="Price Intelligence" description="Monitor inkoopprijzen van leveranciers. Importeer CSV-bestanden om prijzen te vergelijken en marges te beschermen." />
+
+            {products.length === 0 && tab === 'overzicht' && <EmptyState page="/price-intelligence" onAction={() => setTab('import')} />}
 
             {alerts.length > 0 && (
                 <div style={{ marginBottom: 16, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -421,7 +436,7 @@ export default function PriceIntelligence() {
                     >
                         <div className="panel-head">
                             <h3>IMPORT INSTRUCTIES</h3>
-                            <button className="close-btn" onClick={() => setShowInfo(false)}><i className="fa-solid fa-xmark"></i></button>
+                            <button className="close-btn" onClick={() => setShowInfo(false)} aria-label="Sluiten"><i className="fa-solid fa-xmark"></i></button>
                         </div>
                         <div className="panel-body">
                             <p style={{ marginBottom: 16 }}>Importeer CSV lijsten om marges te beschermen.</p>

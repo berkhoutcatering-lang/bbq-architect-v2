@@ -47,7 +47,7 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Agenda", icon: <Calendar size={16} />, href: "/agenda", description: "Bekijk je planning en agenda" },
             { label: "Events", icon: <PartyPopper size={16} />, href: "/events", description: "Beheer al je events en boekingen" },
-            { label: "Event Planner", icon: <PieChart size={16} />, href: "/event-planner", description: "Plan en configureer nieuwe events" },
+            { label: "Klantgesprek", icon: <HeartHandshake size={16} />, href: "/klantgesprek", description: "Intake bij potentiële klant" },
             { label: "Service", icon: <HeartHandshake size={16} />, href: "/service", description: "Beheer je serviceteam en taken" },
         ],
     },
@@ -58,9 +58,7 @@ export const navSections: NavSection[] = [
         slug: "de-zaak",
         description: "Offertes, facturen, klanten en financieel overzicht.",
         children: [
-            { label: "Klantgesprek", icon: <HeartHandshake size={16} />, href: "/klantgesprek", description: "Intake bij potentiële klant" },
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes", description: "Bekijk en beheer je offertes" },
-            { label: "Snel Aanmaken", icon: <FilePlus size={16} />, href: "/offerte-editor", description: "Maak snel een nieuwe offerte aan" },
             { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen", description: "Beheer je facturen en betalingen" },
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantbeheer en contactgegevens" },
             { label: "Analytics", icon: <BarChart3 size={16} />, href: "/financien", description: "Financiele analyses en rapportages" },
@@ -104,6 +102,7 @@ export const navSections: NavSection[] = [
             { label: "Foto-archief", icon: <Camera size={16} />, href: "/foto-archief", description: "Beheer je foto's en media" },
             { label: "Gebruikers", icon: <Users size={16} />, href: "/gebruikers", description: "Gebruikersbeheer en rollen" },
             { label: "Instellingen", icon: <Settings size={16} />, href: "/instellingen", description: "Systeemconfiguratie en voorkeuren" },
+            { label: "Integraties", icon: <Settings size={16} />, href: "/instellingen/integraties", description: "Koppelingen met externe diensten" },
         ],
     },
     {

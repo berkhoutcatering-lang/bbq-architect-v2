@@ -8,6 +8,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 import type { Klant } from '@/types';
 
 export default function KlantenPage() {
@@ -15,7 +17,7 @@ export default function KlantenPage() {
 }
 
 function Klanten() {
-    const { data: klanten, insert, update, remove } = useSupabase<Klant>('klanten', []);
+    const { data: klanten, loading: klantenLoading, insert, update, remove } = useSupabase<Klant>('klanten', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const searchParams = useSearchParams();
@@ -230,6 +232,14 @@ function Klanten() {
         );
     }
 
+    if (klantenLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     const filtered = klanten.filter(function (k) {
         if (filterType !== 'alle' && k.type !== filterType) return false;
         if (searchQuery) {
@@ -248,6 +258,7 @@ function Klanten() {
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Klanten ({filtered.length}{filtered.length !== klanten.length ? ' / ' + klanten.length : ''})</h3>
                 <button className="btn btn-brand" onClick={newKlant}><i className="fa-solid fa-plus"></i> Nieuwe Klant</button>
             </div>
+            <PageHint id="klanten" title="Klanten" description="Beheer je klantenbestand. Klik op een klant om details te bekijken of koppel direct aan events en offertes." />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                     value={searchQuery}
@@ -263,6 +274,13 @@ function Klanten() {
             </div>
             <div className="panel">
                 {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
+                {klanten.length > 0 && filtered.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
+                        <i className="fa-solid fa-search" style={{ fontSize: 24, marginBottom: 12, display: 'block', opacity: 0.4 }}></i>
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Geen klanten gevonden</div>
+                        <div style={{ fontSize: 12 }}>Pas je zoekopdracht of filters aan</div>
+                    </div>
+                )}
                 {filtered.map(function (k) {
                     const pillColor = k.type === 'Zakelijk' ? 'pill-blue' : k.type === 'Festival' ? 'pill-purple' : k.type === 'Horeca' ? 'pill-cyan' : 'pill-amber';
                     return (

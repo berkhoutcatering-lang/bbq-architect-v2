@@ -63,7 +63,6 @@ export async function syncOffertaToEvent(offerte: Offerte): Promise<{ event: DbE
         await autoCreatePrepTasks(event.id, eventDate, offerte.client_naam);
     }
 
-    console.log('[SyncEngine] Offerte', offerte.id, '→ Event', event?.id, created ? '(nieuw)' : '(bijgewerkt)');
     return { event, created };
 }
 
@@ -103,36 +102,45 @@ export async function autoCreatePrepTasks(eventId: number, eventDate: string, cl
         console.error('[SyncEngine] PrepTasks insert error:', insertRes.error);
         return;
     }
-    console.log('[SyncEngine] PrepTasks aangemaakt voor event', eventId);
 }
 
-// ── 3: Offerte → Factuur concept ──────────────────────────────────────────────
+// ── 3: Offerte → Factuur (auto-verzonden bij acceptatie) ─────────────────────
 export async function autoCreateFactuurDraft(offerte: Offerte & { event_id: number }): Promise<Factuur | null> {
     if (!supabase || !offerte.event_id) return null;
 
     const existing = await supabase.from('facturen').select('id').eq('event_id', offerte.event_id).limit(1);
     if (existing.data && existing.data.length > 0) return null;
 
-    const count = await supabase.from('facturen').select('id', { count: 'exact', head: true });
-    const nr = 'F' + new Date().getFullYear() + '-' + String((count.count || 0) + 1).padStart(3, '0');
+    // Gebruik MAX nummer i.p.v. count om duplicaten te voorkomen
+    const year = new Date().getFullYear();
+    const prefix = 'F' + year + '-';
+    const latest = await supabase.from('facturen')
+        .select('nummer')
+        .like('nummer', prefix + '%')
+        .order('nummer', { ascending: false })
+        .limit(1);
+    let nextNum = 1;
+    if (latest.data && latest.data.length > 0) {
+        const lastNr = (latest.data[0] as any).nummer || '';
+        const numPart = parseInt(lastNr.replace(prefix, ''), 10);
+        if (!isNaN(numPart)) nextNum = numPart + 1;
+    }
+    const nr = prefix + String(nextNum).padStart(3, '0');
 
     const factuurPayload = {
         nummer: nr,
         event_id: offerte.event_id,
         offerte_id: offerte.id,
         client_naam: offerte.client_naam || '',
-        status: 'concept',
+        status: 'verzonden',
         datum: today(),
         vervaldatum: addDays(today(), 14),
         items: offerte.items || [],
         korting: offerte.korting || 0,
-        notitie: 'Automatisch aangemaakt op basis van offerte ' + (offerte.nummer || offerte.id),
+        notitie: 'Automatisch aangemaakt en verzonden op basis van geaccepteerde offerte ' + (offerte.nummer || offerte.id),
     };
 
     const res = await supabase.from('facturen').insert(factuurPayload).select().single();
-    if (res.data) {
-        console.log('[SyncEngine] Factuur-concept aangemaakt:', (res.data as Factuur).nummer);
-    }
     return res.data as Factuur | null;
 }
 

@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
+import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
 
 interface HardwareItem {
@@ -151,6 +153,8 @@ export default function Logistiek() {
                 <button className={'tab-btn' + (tab === 'pack' ? ' active' : '')} onClick={function () { setTab('pack'); }}>📋 Paklijsten</button>
             </div>
 
+            <PageHint id="logistiek" title="Logistiek" description="Plan transport en check je materiaallijsten voor events. Gebruik de RTR-checklist voor vertrek." />
+
             {tab === 'buscheck' && (
                 <>
                     <div style={{ marginBottom: 16 }}>
@@ -227,7 +231,7 @@ export default function Logistiek() {
                         <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
                             placeholder="Nieuw checklist item..." value={newRtr} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewRtr(e.target.value); }}
                             onKeyDown={function (e: React.KeyboardEvent) { if (e.key === 'Enter') addRtrItem(); }} />
-                        <button className="btn btn-brand btn-sm" onClick={addRtrItem}><i className="fa-solid fa-plus"></i></button>
+                        <button className="btn btn-brand btn-sm" onClick={addRtrItem} aria-label="Toevoegen"><i className="fa-solid fa-plus"></i></button>
                         <button className="btn btn-ghost btn-sm" onClick={resetRtr}><i className="fa-solid fa-rotate-left"></i> Reset</button>
                     </div>
                     <div className="panel">
@@ -239,7 +243,7 @@ export default function Logistiek() {
                                         {item.done && <i className="fa-solid fa-check"></i>}
                                     </button>
                                     <span className={'check-text' + (item.done ? ' done' : '')}>{item.text}</span>
-                                    <button className="del-btn" onClick={function () { removeRtr(item.id); }}><i className="fa-solid fa-trash"></i></button>
+                                    <button className="del-btn" onClick={function () { removeRtr(item.id); }} aria-label="Verwijderen"><i className="fa-solid fa-trash"></i></button>
                                 </div>
                             );
                         })}
@@ -280,7 +284,7 @@ export default function Logistiek() {
                                                     </button>
                                                     <span className={'check-text' + (item.done ? ' done' : '')}>{item.text}</span>
                                                     <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>×{item.qty}</span>
-                                                    <button className="del-btn" onClick={function () { removePackItem(pack, item.id); }}><i className="fa-solid fa-trash"></i></button>
+                                                    <button className="del-btn" onClick={function () { removePackItem(pack, item.id); }} aria-label="Verwijderen"><i className="fa-solid fa-trash"></i></button>
                                                 </div>
                                             );
                                         })}
@@ -289,7 +293,7 @@ export default function Logistiek() {
                                                 placeholder="Item..." value={newPackItem.text} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { text: e.target.value })); }} />
                                             <input type="number" style={{ width: 60, minWidth: 50, flex: '0 0 auto', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
                                                 value={newPackItem.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewPackItem(Object.assign({}, newPackItem, { qty: parseInt(e.target.value) || 1 })); }} />
-                                            <button className="btn btn-brand btn-sm" onClick={function () { addPackItem(pack); }}><i className="fa-solid fa-plus"></i></button>
+                                            <button className="btn btn-brand btn-sm" onClick={function () { addPackItem(pack); }} aria-label="Toevoegen"><i className="fa-solid fa-plus"></i></button>
                                         </div>
                                         <div style={{ marginTop: 12 }}>
                                             <button className="btn btn-red btn-sm" onClick={function () { removePack(pack.id); }}><i className="fa-solid fa-trash"></i> Lijst Verwijderen</button>

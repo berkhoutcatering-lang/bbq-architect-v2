@@ -32,7 +32,6 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
         const channel = supabase
             .channel('rt_' + table + '_' + Math.random().toString(36).slice(2, 6))
             .on('postgres_changes', { event: '*', schema: 'public', table: table }, function () {
-                console.log('[REALTIME] ' + table + ': change detected');
                 fetchData();
             })
             .subscribe();
@@ -49,7 +48,6 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
                 console.error('[DB] Insert error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
-            console.log('[DB] Inserted into ' + table + ', id=' + (res.data && (res.data as T).id));
             if (res.data) setData(function (prev) { return prev.concat([res.data as T]); });
             return res.data as T;
         });

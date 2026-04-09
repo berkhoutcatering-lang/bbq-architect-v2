@@ -5,13 +5,14 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
+import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import EmptyState from '@/components/EmptyState';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Factuur } from '@/types';
 
 export default function Facturen() {
@@ -23,9 +24,11 @@ export default function Facturen() {
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [searchQuery, setSearchQuery] = useState('');
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
 
     function newFactuur() {
-        const nummer = genNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.length + 1);
+        const nummer = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.map((f: any) => f.nummer));
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), vervaldatum: addDays(today(), betaaltermijn), items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
@@ -40,7 +43,16 @@ export default function Facturen() {
         const oldFactuur = facturen.find(function (f) { return f.id === editing; });
         const statusChanged = oldFactuur && oldFactuur.status !== form!.status && (form!.status === 'verzonden' || form!.status === 'betaald');
         if (editing === 'new') {
-            insert(form!).then(function () { showToast('Factuur aangemaakt', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+            insert(form!).then(function () {
+                showToast('Factuur aangemaakt', 'success');
+                setFollowUpTitle('Factuur aangemaakt!');
+                setFollowUpActions([
+                    { icon: '📧', label: 'Factuur versturen per email', onClick: function () { /* trigger email */ } },
+                    { icon: '📄', label: 'PDF downloaden', onClick: function () { /* trigger PDF */ } },
+                    { icon: '📊', label: 'Analytics bekijken', href: '/financien' },
+                ]);
+                setEditing(null); setForm(null);
+            }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
         } else {
             const { id, created_at, ...rest } = form!;
             update(editing as number, rest).then(function () {
@@ -139,7 +151,7 @@ export default function Facturen() {
                                             <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
                                             <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
-                                            <td><button className="del-btn" onClick={function () { removeItem(idx); }}><i className="fa-solid fa-trash"></i></button></td>
+                                            <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><i className="fa-solid fa-trash"></i></button></td>
                                         </tr>
                                     );
                                 })}
@@ -184,8 +196,8 @@ export default function Facturen() {
                                 const openstaand = totals.totaal - betaald;
                                 return (form!.betalingen || []).length > 0 ? (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, fontWeight: 600 }}>
-                                        <span style={{ color: '#10b981' }}>Betaald: {fmt(betaald)}</span>
-                                        <span style={{ color: openstaand > 0 ? '#ef4444' : '#10b981' }}>Openstaand: {fmt(openstaand)}</span>
+                                        <span style={{ color: 'var(--green)' }}>Betaald: {fmt(betaald)}</span>
+                                        <span style={{ color: openstaand > 0 ? 'var(--red)' : 'var(--green)' }}>Openstaand: {fmt(openstaand)}</span>
                                     </div>
                                 ) : <div style={{ fontSize: 11, color: 'var(--muted-light)' }}>Geen betalingen geregistreerd</div>;
                             })()}
@@ -197,7 +209,7 @@ export default function Facturen() {
                         <button className="btn btn-cyan" onClick={downloadFactuur}><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         <button className="btn btn-ghost" onClick={function () { mailFactuur(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Open email met factuur"><i className="fa-solid fa-envelope"></i> Mail</button>
                         {form!.status === 'verzonden' && form!.vervaldatum && form!.vervaldatum < today() && (
-                            <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: '#ef4444' }}><i className="fa-solid fa-bell"></i> Herinnering</button>
+                            <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: 'var(--red)' }}><i className="fa-solid fa-bell"></i> Herinnering</button>
                         )}
                         <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><i className="fa-solid fa-code"></i> UBL</button>
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><i className="fa-solid fa-trash"></i> Verwijderen</button>}
@@ -258,6 +270,16 @@ export default function Facturen() {
                     );
                 })}
             </div>
+
+            {/* Follow-Up Prompt */}
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
+            )}
         </>
     );
 }

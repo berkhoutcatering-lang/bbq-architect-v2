@@ -29,6 +29,7 @@ interface PDFOptions {
     imageData?: string;
     // Menukaart specific
     gerechten?: Array<{ naam: string; beschrijving?: string }>;
+    isVega?: boolean;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -66,10 +67,9 @@ function loadLogoAsBase64(): Promise<LogoResult | null> {
             canvas.height = img.naturalHeight;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
-            console.log('[PDF] Logo geladen:', img.naturalWidth + 'x' + img.naturalHeight);
             resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
-        img.onerror = function () { console.warn('[PDF] Logo niet gevonden'); resolve(null); };
+        img.onerror = function () { resolve(null); };
         img.src = '/logo.png';
     });
 }
@@ -84,10 +84,9 @@ function loadDarkLogoAsBase64(): Promise<LogoResult | null> {
             canvas.height = img.naturalHeight;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
-            console.log('[PDF] Dark logo geladen:', img.naturalWidth + 'x' + img.naturalHeight);
             resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
         };
-        img.onerror = function () { console.warn('[PDF] Dark logo niet gevonden, fallback naar tekst'); resolve(null); };
+        img.onerror = function () { resolve(null); };
         img.src = '/logo-dark.jpeg';
     });
 }
@@ -139,9 +138,14 @@ const courseNames: Record<string, string> = {
     '5': 'Nagerecht', '6': 'Petit Four'
 };
 const slugNames: Record<string, string> = {
-    'bite': 'Bites', 'voorgerecht': 'Voorgerechten', 'hoofdgerecht': 'Hoofdgerechten',
-    'vegetarisch': 'Vegetarisch', 'dessert': 'Dessert', 'bijgerecht': 'Bijgerechten',
-    'borrelhap': 'Borrelhapjes', 'anders': 'Overig'
+    'bite': 'Bites', 'bites': 'Bites',
+    'voorgerecht': 'Voorgerechten', 'voorgerechten': 'Voorgerechten',
+    'hoofdgerecht': 'Hoofdgerechten', 'hoofdgerechten': 'Hoofdgerechten',
+    'vegetarisch': 'Vegetarisch',
+    'dessert': 'Dessert', 'desserts': 'Dessert',
+    'bijgerecht': 'Bijgerechten', 'bijgerechten': 'Bijgerechten',
+    'borrelhap': 'Borrelhapjes', 'borrelhapjes': 'Borrelhapjes',
+    'anders': 'Overig'
 };
 function gangToDisplayName(gangLabel: string): string {
     const lower = gangLabel.toLowerCase().trim();
@@ -151,30 +155,61 @@ function gangToDisplayName(gangLabel: string): string {
     return gangLabel;
 }
 
-// ── Parse menu_selectie into structured gang data ──
-function parseMenuGangen(menuSel: any): { gang: string; gerechten: string[] }[] {
+// ── Helper: extract string values from mixed array ──
+function extractStrings(items: any[]): string[] {
+    return items.map(function (i: any) { return typeof i === 'string' ? i : (i.gerecht_naam || i.naam || ''); }).filter(Boolean);
+}
+
+// ── Parse menu_selectie — merge duplicate gangs, filter to known dishes ──
+function parseMenuGangen(menuSel: any, knownDishes?: Set<string>): { gang: string; gerechten: string[] }[] {
     if (!menuSel) return [];
-    const result: { gang: string; gerechten: string[] }[] = [];
 
     if (typeof menuSel === 'object' && !Array.isArray(menuSel)) {
-        // Object format: { "Gang 1": [{naam: "..."}, ...], ... }
+        const merged: Record<string, string[]> = {};
+        const order: string[] = [];
         Object.keys(menuSel).forEach(function (gangName) {
+            if (gangName.endsWith('_vega')) return;
             const items = menuSel[gangName];
-            if (Array.isArray(items)) {
-                result.push({
-                    gang: gangName,
-                    gerechten: items.map(function (i: any) { return typeof i === 'string' ? i : (i.gerecht_naam || i.naam || ''); }).filter(Boolean)
-                });
-            }
+            if (!Array.isArray(items) || items.length === 0) return;
+            const display = gangToDisplayName(gangName);
+            if (!merged[display]) { merged[display] = []; order.push(display); }
+            extractStrings(items).forEach(function (d) {
+                if (knownDishes && !knownDishes.has(d.toLowerCase())) return;
+                if (merged[display].indexOf(d) === -1) merged[display].push(d);
+            });
         });
+        return order.map(function (g) { return { gang: g, gerechten: merged[g] }; }).filter(function (g) { return g.gerechten.length > 0; });
     } else if (Array.isArray(menuSel)) {
-        // Flat array — group into single gang
-        const names = menuSel.map(function (i: any) { return typeof i === 'string' ? i : (i.gerecht_naam || i.naam || ''); }).filter(Boolean);
-        if (names.length > 0) {
-            result.push({ gang: 'Menu', gerechten: names });
-        }
+        const names = extractStrings(menuSel).filter(function (d) { return !knownDishes || knownDishes.has(d.toLowerCase()); });
+        return names.length > 0 ? [{ gang: 'Menu', gerechten: names }] : [];
     }
-    return result;
+    return [];
+}
+
+// ── Parse menu_selectie into vega menu ──
+// Uses "vegetarisch" gang as hoofdgerecht, skips regular hoofdgerecht
+function parseMenuGangenVega(menuSel: any, knownDishes?: Set<string>): { gang: string; gerechten: string[] }[] {
+    if (!menuSel || typeof menuSel !== 'object' || Array.isArray(menuSel)) return [];
+    const merged: Record<string, string[]> = {};
+    const order: string[] = [];
+    const hoofdSlugs = ['hoofdgerecht', 'hoofdgerechten'];
+    const vegaSlugs = ['vegetarisch'];
+    const hasVegaGang = Object.keys(menuSel).some(function (k) { return vegaSlugs.indexOf(k.toLowerCase()) >= 0; });
+
+    Object.keys(menuSel).forEach(function (gangName) {
+        if (gangName.endsWith('_vega')) return;
+        const lower = gangName.toLowerCase();
+        if (hasVegaGang && hoofdSlugs.indexOf(lower) >= 0) return;
+        const items = menuSel[gangName];
+        if (!Array.isArray(items) || items.length === 0) return;
+        const display = vegaSlugs.indexOf(lower) >= 0 ? 'Hoofdgerechten' : gangToDisplayName(gangName);
+        if (!merged[display]) { merged[display] = []; order.push(display); }
+        extractStrings(items).forEach(function (d) {
+            if (knownDishes && !knownDishes.has(d.toLowerCase())) return;
+            if (merged[display].indexOf(d) === -1) merged[display].push(d);
+        });
+    });
+    return order.map(function (g) { return { gang: g, gerechten: merged[g] }; }).filter(function (g) { return g.gerechten.length > 0; });
 }
 
 /**
@@ -377,10 +412,26 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             docM.setDrawColor(...MENU_GOLD);
             docM.setLineWidth(0.3);
             docM.line(centerX - 30, y, centerX + 30, y);
-            y += 14;
+            y += opts.isVega ? 8 : 14;
+
+            // Vega subtitle
+            if (opts.isVega) {
+                docM.setFontSize(14);
+                docM.setFont('helvetica', 'bold');
+                docM.setTextColor(107, 122, 47);
+                docM.text('V E G A   M E N U', centerX, y, { align: 'center' });
+                y += 12;
+            }
+
+            // -- Build known dishes set for filtering
+            const knownDishes = new Set<string>();
+            if (opts.gerechten) {
+                opts.gerechten.forEach(function (gr) { if (gr.naam) knownDishes.add(gr.naam.toLowerCase()); });
+            }
+            const dishFilter = knownDishes.size > 0 ? knownDishes : undefined;
 
             // -- Parse menu data
-            let gangen = parseMenuGangen(form.menu_selectie);
+            let gangen = opts.isVega ? parseMenuGangenVega(form.menu_selectie, dishFilter) : parseMenuGangen(form.menu_selectie, dishFilter);
             if (gangen.length === 0 && form.notitie) {
                 const notitieText = String(form.notitie);
                 const gangRegex = /GANG\s*(\d+)\s*:\s*([\s\S]*?)(?=GANG\s*\d|$)/gi;
@@ -429,8 +480,8 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 docM.text('\u2014  ' + gang.gang.toUpperCase() + '  \u2014', centerX, y, { align: 'center' });
                 y += 9;
 
-                // Dishes: even index = name, odd = description
-                for (let i = 0; i < gang.gerechten.length; i += 2) {
+                // Dishes: each item is a verified dish name, description from beschrijvingMap
+                for (let i = 0; i < gang.gerechten.length; i++) {
                     if (y > pageH - 40) {
                         docM.addPage();
                         drawMenuBackground(docM);
@@ -439,11 +490,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                     }
 
                     const dishName = gang.gerechten[i];
-                    // Description: try beschrijvingMap first, then odd-index entry
-                    let desc = beschrijvingMap[dishName.toLowerCase()] || '';
-                    if (!desc && i + 1 < gang.gerechten.length) {
-                        desc = gang.gerechten[i + 1];
-                    }
+                    const desc = beschrijvingMap[dishName.toLowerCase()] || '';
 
                     // Dish name
                     docM.setFontSize(12);
@@ -472,7 +519,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
                 }
             });
 
-            docM.save('Menukaart_' + (form.nummer || 'menu').replace(/[^a-zA-Z0-9-]/g, '_') + '.pdf');
+            docM.save((opts.isVega ? 'Menukaart_Vega_' : 'Menukaart_') + (form.nummer || 'menu').replace(/[^a-zA-Z0-9-]/g, '_') + '.pdf');
             return;
         }
 

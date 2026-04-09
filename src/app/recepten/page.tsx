@@ -370,6 +370,23 @@ export default function Recepten() {
                                 <span><i className="fa-solid fa-clock"></i> {r.preptime} min</span>
                                 <span><i className="fa-solid fa-list"></i> {(r.ingredienten || []).length} ingr.</span>
                             </div>
+                            {(() => {
+                                const ings = (r.ingredienten || []) as any[];
+                                if (ings.length === 0) return null;
+                                const available = ings.filter(function (ing: any) {
+                                    const match = findBestInventoryMatch(ing.naam, inventory);
+                                    return match && match.current_stock > 0;
+                                }).length;
+                                const total = ings.length;
+                                const ratio = available / total;
+                                const color = ratio === 1 ? 'var(--green)' : ratio >= 0.5 ? 'var(--amber)' : 'var(--red)';
+                                const icon = ratio === 1 ? '\u{1F7E2}' : ratio >= 0.5 ? '\u{1F7E1}' : '\u{1F534}';
+                                return (
+                                    <div style={{ fontSize: 10, color: color, fontWeight: 600, marginTop: 6 }}>
+                                        {icon} {available}/{total} op voorraad
+                                    </div>
+                                );
+                            })()}
                             {r.instructies && (
                                 <button onClick={function (e) { e.stopPropagation(); setKitchenMode(r); setKitchenStep(0); }}
                                     style={{

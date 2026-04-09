@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { MAANDEN_KORT } from '@/lib/utils';
+import EmptyState from '@/components/EmptyState';
 import type { TimeLog } from '@/types';
 
 export default function Uren() {
@@ -149,7 +150,7 @@ export default function Uren() {
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                             <BarChart data={weekData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="25%">
                                 <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />
@@ -168,7 +169,7 @@ export default function Uren() {
                         </h3>
                     </div>
                     <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                             <BarChart data={monthlyChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="30%">
                                 <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />
@@ -234,7 +235,7 @@ export default function Uren() {
                                                     fontSize: 10,
                                                     fontWeight: 700,
                                                     background: log.status === 'signed' ? 'rgba(59,130,246,.15)' : 'rgba(34,197,94,.15)',
-                                                    color: log.status === 'signed' ? '#3b82f6' : '#22c55e'
+                                                    color: log.status === 'signed' ? 'var(--blue)' : 'var(--green)'
                                                 }}>
                                                     {log.status === 'signed' ? 'Getekend' : 'Voltooid'}
                                                 </span>
@@ -259,8 +260,8 @@ export default function Uren() {
                                 })}
                             {completedLogs.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>
-                                        Nog geen registraties
+                                    <td colSpan={6} style={{ padding: 0 }}>
+                                        <EmptyState page="/uren" onAction={punchIn} />
                                     </td>
                                 </tr>
                             )}

@@ -22,7 +22,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
-import { fmt, genNummer, today, addDays } from '@/lib/utils';
+import { fmt, genNummer, nextNummer, today, addDays } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 
 const MetallicCard = ({ children, className = "", hover = false, onClick }: { children: React.ReactNode; className?: string; hover?: boolean; onClick?: () => void }) => (
@@ -275,7 +275,7 @@ function OfferCreationDashboard() {
         setSaving(true);
         try {
             const geldigDagen = (settings && settings.offerte_geldig) || 30;
-            const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+            const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
 
             const payload = {
                 nummer: nummer,

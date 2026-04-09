@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Maskable icon: extra safe area padding (20% inset) -->
+  <rect width="192" height="192" fill="#121215"/>
+  <!-- Grill dome (centered in safe area) -->
+  <path d="M54 104 C54 72, 138 72, 138 104" fill="none" stroke="#c4a35a" stroke-width="5" stroke-linecap="round"/>
+  <!-- Grill grate -->
+  <line x1="60" y1="104" x2="132" y2="104" stroke="#c4a35a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="72" y1="92" x2="72" y2="114" stroke="#c4a35a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="88" y1="86" x2="88" y2="114" stroke="#c4a35a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="96" y1="85" x2="96" y2="114" stroke="#c4a35a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="104" y1="86" x2="104" y2="114" stroke="#c4a35a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="120" y1="92" x2="120" y2="114" stroke="#c4a35a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Legs -->
+  <line x1="72" y1="114" x2="66" y2="138" stroke="#c4a35a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="120" y1="114" x2="126" y2="138" stroke="#c4a35a" stroke-width="4" stroke-linecap="round"/>
+  <!-- Smoke -->
+  <path d="M84 62 C84 56, 88 56, 88 50" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M96 58 C96 52, 100 52, 100 46" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M108 62 C108 56, 112 56, 112 50" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

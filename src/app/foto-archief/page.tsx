@@ -5,6 +5,9 @@ import { useSupabase } from '@/lib/useSupabase';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
 const CAT_COLORS: Record<string, string> = { Food: '#ef4444', Gear: '#3b82f6', Sfeer: '#a78bfa', Admin: '#f59e0b' };
@@ -33,7 +36,7 @@ interface EditForm {
 }
 
 export default function FotoArchief() {
-    const { data: fotos, insert: insertFoto, update: updateFoto, remove: removeFoto } = useSupabase<Foto>('photo_logbook', []);
+    const { data: fotos, loading: fotosLoading, insert: insertFoto, update: updateFoto, remove: removeFoto } = useSupabase<Foto>('photo_logbook', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
 
@@ -202,8 +205,18 @@ export default function FotoArchief() {
     const catCounts: Record<string, number> = {};
     CATEGORIES.forEach(function (c) { catCounts[c] = c === 'Alle' ? fotos.length : fotos.filter(function (f) { return f.categorie === c; }).length; });
 
+    if (fotosLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     return (
         <>
+            <PageHint id="foto-archief" title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel. Sleep bestanden direct op de pagina." />
+
             <div
                 onDrop={handleDrop}
                 onDragOver={function (e: React.DragEvent) { e.preventDefault(); setDragOver(true); }}
@@ -218,6 +231,8 @@ export default function FotoArchief() {
                 <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: 56, color: 'var(--brand)' }}></i>
                 <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>Sleep foto&apos;s hier naartoe</p>
             </div>
+
+            {fotos.length === 0 && tab === 'archief' && <EmptyState page="/foto-archief" onAction={function () { setTab('upload'); }} />}
 
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'archief' ? ' active' : '')} onClick={function () { setTab('archief'); }}>

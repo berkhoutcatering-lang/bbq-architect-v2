@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer } from '@/lib/utils';
+import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { mailOfferte } from '@/lib/emailHelper';
@@ -13,6 +13,10 @@ import MenuWizard from '@/components/MenuWizard';
 import MenuBuilder from '@/components/MenuBuilder';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import FieldTooltip from '@/components/FieldTooltip';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
@@ -35,6 +39,9 @@ export default function Offertes() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [searchQuery, setSearchQuery] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
+    const [cascadeSteps, setCascadeSteps] = useState<CascadeStep[] | null>(null);
 
     function getInvPrice(naam: string) {
         const inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
@@ -82,7 +89,7 @@ export default function Offertes() {
 
     function handleWizardComplete(result: any) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
         setShowWizard(false);
         setEditing('new');
         setForm({
@@ -121,7 +128,7 @@ export default function Offertes() {
 
     function newOfferte() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
     }
@@ -130,15 +137,10 @@ export default function Offertes() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     async function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>): Promise<number | null> {
-        console.log('[SYNC] ═══════════════════════════════════════');
-        console.log('[SYNC] syncQuoteToEvent v3 (async) called');
-        console.log('[SYNC] Quote ID:', quoteId, '(type:', typeof quoteId + ')');
-        console.log('[SYNC] Quote status:', quoteData.status);
-
-        if (!quoteId) { console.error('[SYNC] ABORT: No quote ID'); return null; }
+        if (!quoteId) return null;
 
         const qid = parseInt(String(quoteId), 10);
-        if (isNaN(qid)) { console.error('[SYNC] ABORT: Invalid ID:', quoteId); return null; }
+        if (isNaN(qid)) return null;
 
         const newStatus = quoteData.status;
 
@@ -149,7 +151,6 @@ export default function Offertes() {
             if (!estimatedGuests && (item.qty || 0) > estimatedGuests) estimatedGuests = item.qty || 0;
         });
         const ppp = estimatedGuests > 0 ? totalBedrag / estimatedGuests : 45;
-        console.log('[SYNC] Calculated: guests=' + estimatedGuests + ', ppp=' + ppp.toFixed(2));
 
         let eventStatus: string;
         if (newStatus === 'geaccepteerd' || newStatus === 'akkoord' || newStatus === 'betaald') {
@@ -169,7 +170,6 @@ export default function Offertes() {
             }
 
             const rows = res.data || [];
-            console.log('[SYNC] Found ' + rows.length + ' event(s)');
 
             // Clean duplicates
             if (rows.length > 1) {
@@ -212,7 +212,6 @@ export default function Offertes() {
                     ? '✅ Agenda gesynchroniseerd — Event bevestigd!'
                     : '📅 Agenda gesynchroniseerd met Offerte';
                 showToast(msg, 'success');
-                console.log('[SYNC] Event UPDATED id=' + existing.id);
                 return existing.id;
             } else {
                 payload.offerte_id = qid;
@@ -226,7 +225,6 @@ export default function Offertes() {
                 }
                 const newEventId = ins.data && ins.data[0] ? ins.data[0].id : null;
                 showToast('📅 Agenda gesynchroniseerd — Optie toegevoegd!', 'success');
-                console.log('[SYNC] Event INSERTED id=' + newEventId);
                 return newEventId;
             }
         } catch (e: any) {
@@ -240,30 +238,52 @@ export default function Offertes() {
         const isAccepted = formData.status === 'geaccepteerd' || formData.status === 'akkoord' || formData.status === 'betaald';
         if (!isAccepted || !eventId) return;
 
-        console.log('[SAVE] Status is ' + formData.status + ' — triggering acceptance workflow for event ' + eventId);
+        // Show SyncCascade visual feedback
+        setCascadeSteps([
+            { id: 'accept', label: 'Offerte geaccepteerd', status: 'completed' },
+            { id: 'event', label: 'Event bijgewerkt → Bevestigd', status: 'in_progress' },
+            { id: 'factuur', label: 'Factuur aanmaken', status: 'pending' },
+            { id: 'prep', label: 'Prep-taken inplannen', status: 'pending' },
+            { id: 'inkoop', label: 'Inkooplijst genereren', status: 'pending' },
+        ]);
+
         try {
             const result = await runAcceptanceWorkflow({
                 eventId: eventId,
                 offerteData: formData,
                 settings: settings,
-                facturenCount: facturen.data.length
+                facturenCount: facturen.data.length,
+                facturenNummers: facturen.data.map((f: any) => f.nummer)
             });
 
-            // Show toast per sub-task
-            if (result.factuur.success) showToast('✅ ' + result.factuur.message, 'success');
-            else showToast('⚠️ ' + result.factuur.message, 'error');
+            // Update cascade steps progressively
+            setCascadeSteps(function (prev) {
+                if (!prev) return prev;
+                return prev.map(function (s) {
+                    if (s.id === 'event') return { ...s, status: 'completed' as const, href: '/events' };
+                    if (s.id === 'factuur') return { ...s, status: result.factuur.success ? 'completed' as const : 'error' as const, detail: result.factuur.message, href: '/facturen' };
+                    if (s.id === 'prep') return { ...s, status: result.prep.success ? 'completed' as const : 'error' as const, detail: result.prep.message, href: '/agenda' };
+                    if (s.id === 'inkoop') return { ...s, status: result.inkoop.success ? 'completed' as const : 'error' as const, detail: result.inkoop.message, href: '/inkoop' };
+                    return s;
+                });
+            });
 
-            if (result.prep.success && result.prep.count > 0) showToast('✅ ' + result.prep.message, 'success');
-            else if (!result.prep.success) showToast('⚠️ ' + result.prep.message, 'error');
-
-            if (result.inkoop.success) showToast('✅ ' + result.inkoop.message, 'success');
-            else showToast('⚠️ ' + result.inkoop.message, 'error');
-
-            if (result.haccp.success && result.haccp.count > 0) showToast('✅ ' + result.haccp.message, 'success');
-            else if (!result.haccp.success) showToast('⚠️ ' + result.haccp.message, 'error');
+            // Also show follow-up prompt after cascade
+            setTimeout(function () {
+                setFollowUpTitle('Offerte geaccepteerd!');
+                setFollowUpActions([
+                    { icon: '🧾', label: 'Factuur bekijken', href: '/facturen' },
+                    { icon: '📋', label: 'Prep-taken bekijken', href: '/agenda' },
+                    { icon: '📧', label: 'Bevestiging sturen naar klant', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
+                ]);
+            }, 3000);
         } catch (e: any) {
             console.error('[SAVE] Workflow error:', e);
             showToast('Workflow fout: ' + (e.message || ''), 'error');
+            setCascadeSteps(function (prev) {
+                if (!prev) return prev;
+                return prev.map(function (s) { return s.status === 'pending' || s.status === 'in_progress' ? { ...s, status: 'error' as const } : s; });
+            });
         }
     }
 
@@ -278,27 +298,22 @@ export default function Offertes() {
 
     async function saveOfferte() {
         if (!validateOfferte()) return;
-        console.log('[SAVE] ═══════════════════════════════════════');
-        console.log('[SAVE] editing=', editing, 'status=', form!.status);
 
         try {
             let quoteId: number | string | null = null;
 
             if (editing === 'new') {
-                console.log('[SAVE] Inserting new offerte...');
                 const insertedRow: any = await insert(form!);
                 showToast('Offerte aangemaakt', 'success');
 
                 quoteId = insertedRow && insertedRow.id ? insertedRow.id : null;
                 if (!quoteId) {
-                    console.log('[SAVE] No ID from insert — trying DB lookup');
                     const lookup: any = await supabase.from('offertes').select('id').eq('nummer', form!.nummer).order('id', { ascending: false }).limit(1);
                     if (lookup.data && lookup.data.length > 0) {
                         quoteId = lookup.data[0].id;
                     }
                 }
             } else {
-                console.log('[SAVE] Updating offerte id=', editing);
                 const { id, created_at, ...rest } = form!;
                 await update(editing as number, rest);
                 showToast('Offerte bijgewerkt', 'success');
@@ -316,12 +331,11 @@ export default function Offertes() {
             console.error('[SAVE] Error:', err);
             showToast('Fout bij opslaan: ' + (err.message || ''), 'error');
         }
-        console.log('[SAVE] ═══════════════════════════════════════');
     }
 
     function duplicateOfferte(o: Record<string, any>) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.length + 1);
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
         const copy = JSON.parse(JSON.stringify(o));
         delete copy.id;
         delete copy.created_at;
@@ -336,10 +350,8 @@ export default function Offertes() {
 
     function deleteOfferte() {
         showConfirm('Weet je zeker dat je deze offerte wilt verwijderen?', function () {
-            console.log('[DELETE] Deleting offerte id=', editing, '— also removing linked event');
             supabase.from('events').delete().eq('offerte_id', editing).then(function (res: any) {
                 if (res.error) console.error('[DELETE] Event delete error:', res.error);
-                else console.log('[DELETE] Linked event removed');
             });
             remove(editing as number).then(function () { showToast('Offerte verwijderd', 'success'); setEditing(null); setForm(null); });
         });
@@ -347,7 +359,7 @@ export default function Offertes() {
 
     async function convertToFactuur() {
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
-        const factuurNum = genNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.data.length + 1);
+        const factuurNum = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.data.map((f: any) => f.nummer));
         const factuurData = {
             nummer: factuurNum,
             status: 'concept' as const,
@@ -383,6 +395,9 @@ export default function Offertes() {
     function downloadMenukaart() {
         generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData });
     }
+    function downloadVegaMenukaart() {
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true });
+    }
 
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
@@ -415,7 +430,7 @@ export default function Offertes() {
                         />
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
                         <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); setErrors(Object.assign({}, errors, { datum: '' })); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />{errors.datum && <span style={{ fontSize: 11, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.datum}</span>}</div>
-                        <div className="field"><label>Geldig Tot</label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
+                        <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
                     </div>
 
@@ -431,7 +446,7 @@ export default function Offertes() {
                         </div>
                         <div className="tbl-wrap">
                         <table className="tbl">
-                            <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%</th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
+                            <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%<FieldTooltip text="Standaard 21% voor catering. 9% voor bepaalde voedingsmiddelen." position="left" /></th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
                             <tbody>
                                 {(form.items || []).map(function (item: any, idx: number) {
                                     return <tr key={idx}>
@@ -440,7 +455,7 @@ export default function Offertes() {
                                         <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                         <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
                                         <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
-                                        <td><button className="del-btn" onClick={function () { removeItem(idx); }}><i className="fa-solid fa-trash"></i></button></td>
+                                        <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><i className="fa-solid fa-trash"></i></button></td>
                                     </tr>;
                                 })}
                             </tbody>
@@ -459,6 +474,7 @@ export default function Offertes() {
                         <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><i className="fa-solid fa-envelope"></i> Mail</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><i className="fa-solid fa-file-pdf"></i> PDF</button>
                         <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><i className="fa-solid fa-utensils"></i> Menukaart</button>
+                        {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><i className="fa-solid fa-leaf"></i> Vega Menukaart</button>}
                         {editing !== 'new' && (
                             <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
@@ -581,6 +597,7 @@ export default function Offertes() {
                 </div>
             </div>
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
+            <PageHint id="offertes" title="Offertes" description="Maak offertes met menu-selectie en live marge-berekening. Geaccepteerde offertes genereren automatisch een event en factuur." />
             <div style={{ marginBottom: 12 }}>
                 <input
                     value={searchQuery}
@@ -656,6 +673,26 @@ export default function Offertes() {
                     );
                 })}
             </div>
+
+            {/* SyncCascade - visuele feedback bij offerte acceptatie */}
+            {cascadeSteps && (
+                <SyncCascade
+                    title="Acceptance Workflow"
+                    steps={cascadeSteps}
+                    onClose={function () { setCascadeSteps(null); }}
+                    autoClose={8000}
+                />
+            )}
+
+            {/* Follow-Up Prompt */}
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
+            )}
         </div>
     );
 }

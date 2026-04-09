@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
+import PageHint from '@/components/PageHint';
 
 interface TempPopup {
     slug: string;
@@ -286,6 +287,8 @@ export default function ServiceMode() {
     return (
         <div className="artisan-page service-page">
             <h1 className="hero-title mb-16" style={{ fontSize: 24 }}>SERVICE MODE — THE ARCHITECT</h1>
+
+            <PageHint id="service" title="Service Mode" description="Beheer je serviceteam en taken tijdens events. Gebruik de keukenmodus voor real-time overzicht." />
 
             {!selectedId ? (
                 <div className="panel">

@@ -7,11 +7,9 @@ import {
     LayoutDashboard,
     Calendar,
     PartyPopper,
-    ChefHat,
+    ShieldCheck,
     MoreHorizontal,
 } from "lucide-react";
-
-const KITCHEN_PATHS = ["/menu-engineering", "/recepten", "/gerechten"];
 
 interface Tab {
     label: string;
@@ -41,10 +39,10 @@ const tabs: Tab[] = [
         match: (p) => p === "/events" || p.startsWith("/events/"),
     },
     {
-        label: "Keuken",
-        icon: <ChefHat size={22} />,
-        href: "/menu-engineering",
-        match: (p) => KITCHEN_PATHS.some((kp) => p === kp || p.startsWith(kp + "/")),
+        label: "HACCP",
+        icon: <ShieldCheck size={22} />,
+        href: "/haccp",
+        match: (p) => p === "/haccp" || p.startsWith("/haccp/"),
     },
     {
         label: "Meer",

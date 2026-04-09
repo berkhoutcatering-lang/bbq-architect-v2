@@ -7,6 +7,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import BarcodeScanner from '@/components/BarcodeScanner';
 import type { InventoryItem, Recept } from '@/types';
 
 const CATEGORIEEN = ['Alles', 'Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Overig'];
@@ -22,6 +24,8 @@ export default function Voorraad() {
     const [filter, setFilter] = useState('Alles');
     const [showInkooplijst, setShowInkooplijst] = useState(false);
     const [search, setSearch] = useState('');
+    const [scannerOpen, setScannerOpen] = useState(false);
+    const [highlightId, setHighlightId] = useState<number | null>(null);
 
     const filtered = inventory.filter(function (item: any) {
         const matchCat = filter === 'Alles' || item.categorie === filter;
@@ -78,6 +82,24 @@ export default function Voorraad() {
         update(item.id, { current_stock: newStock } as any).then(function () {
             showToast(item.naam + ': ' + newStock + ' ' + item.unit, 'success');
         });
+    }
+
+    function handleBarcodeScan(barcode: string) {
+        setScannerOpen(false);
+        const match = inventory.find(function (item: any) {
+            const nameMatch = (item.naam || '').toLowerCase().indexOf(barcode.toLowerCase()) >= 0;
+            const eanMatch = (item.ean || '').toString() === barcode;
+            return nameMatch || eanMatch;
+        });
+        if (match) {
+            setFilter('Alles');
+            setSearch('');
+            setHighlightId((match as any).id);
+            showToast('Gevonden: ' + (match as any).naam, 'success');
+            setTimeout(function () { setHighlightId(null); }, 3000);
+        } else {
+            showToast('Product niet gevonden \u2014 voeg handmatig toe', 'error');
+        }
     }
 
     if (editing !== null && form) {
@@ -235,11 +257,16 @@ export default function Voorraad() {
                     <button className={'btn btn-sm ' + (lowStock.length > 0 ? 'btn-red' : 'btn-ghost')} onClick={function () { setShowInkooplijst(true); }}>
                         <i className="fa-solid fa-cart-shopping"></i> Inkooplijst {lowStock.length > 0 && '(' + lowStock.length + ')'}
                     </button>
+                    <button className="btn btn-sm btn-ghost" onClick={function () { setScannerOpen(true); }}>
+                        <i className="fa-solid fa-barcode"></i> Scan
+                    </button>
                     <button className="btn btn-brand btn-sm" onClick={newItem}>
                         <i className="fa-solid fa-plus"></i> Item Toevoegen
                     </button>
                 </div>
             </div>
+
+            <PageHint id="voorraad" title="Smart Inventory" description="Houd je voorraad bij met par-levels. Items onder minimum worden automatisch gemarkeerd. Gebruik +1/-1 voor snelle aanpassing." />
 
             <div className="stat-grid mb-24">
                 <div className="stat-card inv-glass">
@@ -268,7 +295,7 @@ export default function Voorraad() {
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <PieChart>
                                     <Pie data={catData} dataKey="waarde" nameKey="naam" cx="45%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={3}>
                                         {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
@@ -286,7 +313,7 @@ export default function Voorraad() {
                             </h3>
                         </div>
                         <div style={{ height: 160, marginTop: 12 }}>
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <BarChart data={catData} layout="vertical" margin={{ top: 4, right: 8, left: 56, bottom: 4 }} barCategoryGap="25%">
                                     <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
                                     <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
@@ -329,7 +356,7 @@ export default function Voorraad() {
                                 const value = (item.current_stock || 0) * (item.purchase_price || 0);
                                 const pct = item.min_stock > 0 ? Math.min(100, (item.current_stock / item.min_stock) * 100) : 100;
                                 return (
-                                    <tr key={item.id} className={isLow ? 'inv-low-row' : ''} style={{ cursor: 'pointer' }} onClick={function () { editItem(item); }}>
+                                    <tr key={item.id} className={isLow ? 'inv-low-row' : ''} style={{ cursor: 'pointer', background: highlightId === item.id ? 'rgba(255,191,0,.12)' : undefined, transition: 'background 0.4s' }} onClick={function () { editItem(item); }}>
                                         <td>
                                             <div style={{ fontWeight: 700 }}>{item.naam}</div>
                                             <div style={{ fontSize: 10, color: 'var(--muted)' }}>{item.categorie}</div>
@@ -361,6 +388,8 @@ export default function Voorraad() {
                     </div>
                 </div>
             )}
+
+            <BarcodeScanner isOpen={scannerOpen} onScan={handleBarcodeScan} onClose={function () { setScannerOpen(false); }} />
         </div>
     );
 }

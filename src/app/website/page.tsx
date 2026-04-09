@@ -5,6 +5,8 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { supabase } from '@/lib/supabase';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 import type { WebsiteFaq, WebsiteGallery, WebsiteGang, WebsiteGerecht, WebsiteHero } from '@/types';
 interface WSettings { id: number; email: string; telefoon: string; adres: string; kvk: string; btw_nummer: string; }
 
@@ -50,6 +52,7 @@ export default function WebsiteBeheer() {
     const wGangen = useSupabase<WebsiteGang>('website_gangen', []);
     const wGerechten = useSupabase<WebsiteGerecht>('website_gerechten', []);
     const footerHook = useSupabase<any>('settings', []);
+    const isLoading = faq.loading || gallery.loading || hero.loading;
 
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
@@ -94,8 +97,18 @@ export default function WebsiteBeheer() {
         { key: 'footer', label: 'Footer / Contact', icon: 'fa-address-card' },
     ];
 
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     return (
         <div className="p-6 max-w-6xl mx-auto">
+            <PageHint id="website" title="Website Beheer" description="Beheer de content van hopbites.nl. Wijzigingen worden direct in Supabase opgeslagen." />
+
             {/* Header */}
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-1">
@@ -301,13 +314,13 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                     <div className="flex items-center justify-between">
                                         <p className="text-white text-xs truncate flex-1">{item.alt || '(geen alt tekst)'}</p>
                                         <div className="flex gap-1 shrink-0 ml-2">
-                                            <button className={S.btnIcon} onClick={() => { hero.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }}>
+                                            <button className={S.btnIcon} onClick={() => { hero.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
                                                 <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
                                             </button>
-                                            <button className={S.btnIcon} onClick={() => { setEditingHero(item.id); setHeroForm({ ...item }); }}>
+                                            <button className={S.btnIcon} onClick={() => { setEditingHero(item.id); setHeroForm({ ...item }); }} aria-label="Bewerken">
                                                 <i className="fa-solid fa-pen text-xs"></i>
                                             </button>
-                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(hero, item, 'Hero afbeelding')}>
+                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(hero, item, 'Hero afbeelding')} aria-label="Verwijderen">
                                                 <i className="fa-solid fa-trash text-xs"></i>
                                             </button>
                                         </div>
@@ -400,13 +413,13 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                                     <div className="flex items-center justify-between mt-1.5">
                                                         <span className="text-[var(--muted)] text-[10px]">{item.categorie}</span>
                                                         <div className="flex gap-1">
-                                                            <button className={S.btnIcon} onClick={() => { gallery.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }}>
+                                                            <button className={S.btnIcon} onClick={() => { gallery.update(item.id, { actief: !item.actief }); showToast(item.actief ? 'Verborgen' : 'Zichtbaar', 'success'); }} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
                                                                 <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
                                                             </button>
-                                                            <button className={S.btnIcon} onClick={() => { setEditingGallery(item.id); setGalleryForm({ ...item }); }}>
+                                                            <button className={S.btnIcon} onClick={() => { setEditingGallery(item.id); setGalleryForm({ ...item }); }} aria-label="Bewerken">
                                                                 <i className="fa-solid fa-pen text-xs"></i>
                                                             </button>
-                                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(gallery, item, 'Galerij foto')}>
+                                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteWithStorage(gallery, item, 'Galerij foto')} aria-label="Verwijderen">
                                                                 <i className="fa-solid fa-trash text-xs"></i>
                                                             </button>
                                                         </div>
@@ -474,11 +487,11 @@ function FaqTab({ faq, editId, form, f, startEdit, cancelEdit, saveItem, toggleA
                             <p className="text-[var(--muted)] text-xs mt-1 line-clamp-2">{item.antwoord}</p>
                         </div>
                         <div className="flex gap-1 shrink-0">
-                            <button className={S.btnIcon} title={item.actief ? 'Verbergen' : 'Tonen'} onClick={() => toggleActief(faq, item)}>
+                            <button className={S.btnIcon} title={item.actief ? 'Verbergen' : 'Tonen'} onClick={() => toggleActief(faq, item)} aria-label={item.actief ? 'Verbergen' : 'Tonen'}>
                                 <i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i>
                             </button>
-                            <button className={S.btnIcon} onClick={() => startEdit(item)}><i className="fa-solid fa-pen text-xs"></i></button>
-                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(faq, item.id, 'FAQ')}><i className="fa-solid fa-trash text-xs"></i></button>
+                            <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
+                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(faq, item.id, 'FAQ')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
                         </div>
                     </div>
                 ))}
@@ -546,9 +559,9 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
                                     <p className="text-white text-xs font-medium truncate">{item.label || '(geen bijschrift)'}</p>
                                     <p className="text-[var(--muted)] text-[10px] mt-0.5 truncate">{item.src}</p>
                                     <div className="flex gap-1 mt-2">
-                                        <button className={S.btnIcon} onClick={() => toggleActief(gallery, item)}><i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
-                                        <button className={S.btnIcon} onClick={() => startEdit(item)}><i className="fa-solid fa-pen text-xs"></i></button>
-                                        <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gallery, item.id, 'Foto')}><i className="fa-solid fa-trash text-xs"></i></button>
+                                        <button className={S.btnIcon} onClick={() => toggleActief(gallery, item)} aria-label={item.actief ? 'Verbergen' : 'Tonen'}><i className={`fa-solid ${item.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
+                                        <button className={S.btnIcon} onClick={() => startEdit(item)} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
+                                        <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gallery, item.id, 'Foto')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
                                     </div>
                                 </div>
                             ))}
@@ -800,9 +813,9 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                             <AllergenBadges allergenen={allergs} />
                                         </div>
                                         <div className="flex gap-1 shrink-0 pt-0.5">
-                                            <button className={S.btnIcon} onClick={() => toggleActief(gerechten, dish)}><i className={`fa-solid ${dish.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
-                                            <button className={S.btnIcon} onClick={() => { setEditId(dish.id); setForm({ ...dish, _type: 'gerecht' }); }}><i className="fa-solid fa-pen text-xs"></i></button>
-                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gerechten, dish.id, 'Gerecht')}><i className="fa-solid fa-trash text-xs"></i></button>
+                                            <button className={S.btnIcon} onClick={() => toggleActief(gerechten, dish)} aria-label={dish.actief ? 'Verbergen' : 'Tonen'}><i className={`fa-solid ${dish.actief ? 'fa-eye' : 'fa-eye-slash'} text-xs`}></i></button>
+                                            <button className={S.btnIcon} onClick={() => { setEditId(dish.id); setForm({ ...dish, _type: 'gerecht' }); }} aria-label="Bewerken"><i className="fa-solid fa-pen text-xs"></i></button>
+                                            <button className={`${S.btnIcon} text-red-400`} onClick={() => deleteItem(gerechten, dish.id, 'Gerecht')} aria-label="Verwijderen"><i className="fa-solid fa-trash text-xs"></i></button>
                                         </div>
                                     </div>
                                 );

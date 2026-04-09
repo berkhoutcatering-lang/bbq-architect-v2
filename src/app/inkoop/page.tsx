@@ -8,10 +8,13 @@ import { parseActions } from '@/lib/ai-actions';
 import { fmt, resizeImage } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { supabase } from '@/lib/supabase';
+import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 
 export default function Inkoop() {
-    const { data: leveranciers, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
+    const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
     const { data: inkooplijsten, insert: insertInk, update: updateInk, remove: removeInk } = useSupabase<Inkooplijst>('inkooplijsten', []);
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const { data: events } = useSupabase<DbEvent>('events', []);
@@ -210,6 +213,14 @@ export default function Inkoop() {
         });
     }
 
+    if (levLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     return (
         <div className="artisan-page inkoop-page">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -218,6 +229,8 @@ export default function Inkoop() {
                     <p style={{ color: 'var(--muted)', fontSize: 11, letterSpacing: 1 }}>BEHEER LEVERANCIERS, BOODSCHAPPEN EN BONNEN</p>
                 </div>
             </div>
+
+            <PageHint id="inkoop" title="Inkoop" description="Beheer inkooporders en leveranciers. Scan bonnen voor automatische verwerking." />
 
             <div className="tab-bar mb-24">
                 <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={() => setTab('leveranciers')}>LEVERANCIERS</button>
@@ -228,6 +241,8 @@ export default function Inkoop() {
             </div>
 
             {tab === 'leveranciers' && (
+                <>
+                {leveranciers.length === 0 && <EmptyState page="/inkoop" onAction={newLeverancier} />}
                 <div className="grid-3">
                     <div className="artisan-panel" style={{ cursor: 'pointer', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 140 }} onClick={newLeverancier}>
                         <div style={{ textAlign: 'center' }}>
@@ -246,6 +261,7 @@ export default function Inkoop() {
                         </div>
                     ))}
                 </div>
+                </>
             )}
 
             {tab === 'bonnen' && (
@@ -352,7 +368,7 @@ export default function Inkoop() {
                     <div className="architect-modal" style={{ maxWidth: 500 }}>
                         <div className="modal-head">
                             <h3>{editingLev === 'new' ? 'NIEUWE LEVERANCIER' : 'LEVERANCIER BEWERKEN'}</h3>
-                            <button className="close-btn" onClick={() => setEditingLev(null)}><i className="fa-solid fa-xmark"></i></button>
+                            <button className="close-btn" onClick={() => setEditingLev(null)} aria-label="Sluiten"><i className="fa-solid fa-xmark"></i></button>
                         </div>
                         <div className="modal-body">
                             <div className="field mb-16"><label>NAAM</label><input value={levForm!.naam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, naam: e.target.value })} /></div>

@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { fmt, addDays } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import EmptyState from '@/components/EmptyState';
+import { Flame } from 'lucide-react';
 import type { Offerte, Gerecht, InventoryItem, TimeLog } from '@/types';
 
 function getInvPrice(inventoryData: InventoryItem[], naam: string) {
@@ -32,7 +34,7 @@ function calcDishCostPP(gerechtenData: any[], inventoryData: InventoryItem[], ge
 }
 
 export default function Financien() {
-    const { data: offertes } = useSupabase<Offerte>('offertes', []);
+    const { data: offertes, loading: offertesLoading } = useSupabase<Offerte>('offertes', []);
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const { data: urenLogs } = useSupabase<TimeLog>('time_logs', []);
@@ -131,6 +133,27 @@ export default function Financien() {
 
     const maxOmzet = Math.max(...financialData.months.map((m: any) => m.omzet), 1000);
 
+    if (offertesLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
+    if (financialData.totalOmzet === 0 && financialData.totalFoodcost === 0 && financialData.totalLabor === 0) {
+        return (
+            <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+                <div style={{ marginBottom: 20 }}>
+                    <h1 style={{ fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <i className="fa-solid fa-vault" style={{ color: 'var(--brand)' }}></i> The Vault Analytics
+                    </h1>
+                </div>
+                <EmptyState page="/financien" />
+            </div>
+        );
+    }
+
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -141,9 +164,9 @@ export default function Financien() {
                     <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Live Profit & Loss Dashboard over {selectedYear}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost"><i className="fa-solid fa-chevron-left"></i></button>
+                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost" aria-label="Vorig jaar"><i className="fa-solid fa-chevron-left"></i></button>
                     <div style={{ background: 'var(--card)', padding: '8px 16px', borderRadius: 8, fontWeight: 800 }}>{selectedYear}</div>
-                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost"><i className="fa-solid fa-chevron-right"></i></button>
+                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost" aria-label="Volgend jaar"><i className="fa-solid fa-chevron-right"></i></button>
                 </div>
             </div>
 

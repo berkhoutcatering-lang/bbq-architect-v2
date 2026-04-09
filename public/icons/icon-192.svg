@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="24" fill="#121215"/>
+  <!-- Grill dome -->
+  <path d="M44 100 C44 60, 148 60, 148 100" fill="none" stroke="#c4a35a" stroke-width="6" stroke-linecap="round"/>
+  <!-- Grill grate lines -->
+  <line x1="52" y1="100" x2="140" y2="100" stroke="#c4a35a" stroke-width="4" stroke-linecap="round"/>
+  <line x1="60" y1="88" x2="60" y2="112" stroke="#c4a35a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="82" x2="80" y2="112" stroke="#c4a35a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="96" y1="80" x2="96" y2="112" stroke="#c4a35a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="112" y1="82" x2="112" y2="112" stroke="#c4a35a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="132" y1="88" x2="132" y2="112" stroke="#c4a35a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Legs -->
+  <line x1="64" y1="112" x2="56" y2="144" stroke="#c4a35a" stroke-width="5" stroke-linecap="round"/>
+  <line x1="128" y1="112" x2="136" y2="144" stroke="#c4a35a" stroke-width="5" stroke-linecap="round"/>
+  <!-- Smoke wisps -->
+  <path d="M78 56 C78 48, 84 48, 84 40" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M96 52 C96 44, 102 44, 102 36" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M114 56 C114 48, 120 48, 120 40" fill="none" stroke="rgba(196,163,90,0.5)" stroke-width="3" stroke-linecap="round"/>
+</svg>

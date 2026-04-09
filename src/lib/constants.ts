@@ -22,6 +22,12 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/ai-chat': ['20 gerechten met buikspek', 'Thema-BBQ concepten', 'Zomermenu brainstorm', 'Onderscheidend vermogen tips'],
   '/klanten': ['Klant toevoegen', 'Welke klanten zijn terugkerend?', 'Top klanten overzicht', 'Klant contacteren'],
   '/klantgesprek': ['Wat moet ik vragen bij een intake?', 'Gemiddelde prijs per persoon', 'Hoeveel vlees per persoon?', 'Checklist klantbezoek'],
+  '/foto-archief': ['Hoe organiseer ik foto\'s per event?', 'Categorisatie tips', 'Export naar klant', 'Watermark toevoegen'],
+  '/berichten': ['Hoe bereik ik een klant?', 'Template voor offertebevestiging', 'Follow-up na event', 'Bedankbericht schrijven'],
+  '/gebruikers': ['Welke rollen zijn er?', 'Toegangsrechten instellen', 'Teamlid uitnodigen', 'Rolverdeling bij events'],
+  '/website': ['Hoe update ik het menu?', 'SEO tips voor mijn website', 'Galerij beheren', 'FAQ toevoegen'],
+  '/contact': ['Hoe bereik ik support?', 'Feedback geven', 'Feature aanvragen', 'Bug melden'],
+  '/faq': ['Hoe maak ik een offerte?', 'HACCP uitleggen', 'Boekhouding koppelen', 'Veelgestelde vragen bekijken'],
 };
 
 // EmptyState configuratie per pagina
@@ -121,6 +127,42 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
     title: 'Geen data beschikbaar',
     description: 'Boekhouding wordt automatisch gevuld met gegevens uit je facturen en offertes.',
     actionLabel: 'Naar facturen',
+  },
+  '/financien': {
+    icon: 'fa-solid fa-vault',
+    title: 'Geen financiele data',
+    description: 'Financiele analyse wordt opgebouwd uit geaccepteerde offertes, urenregistraties en foodcost-berekeningen.',
+    actionLabel: 'Naar offertes',
+  },
+  '/foto-archief': {
+    icon: 'fa-solid fa-images',
+    title: 'Geen foto\'s in archief',
+    description: 'Upload foto\'s van events, gerechten en materieel voor documentatie en terugblik.',
+    actionLabel: 'Upload foto',
+  },
+  '/price-intelligence': {
+    icon: 'fa-solid fa-chart-line',
+    title: 'Nog geen prijsdata',
+    description: 'Importeer CSV-prijslijsten van leveranciers om prijzen te vergelijken en marges te beschermen.',
+    actionLabel: 'Importeer prijzen',
+  },
+  '/berichten': {
+    icon: 'fa-solid fa-envelope',
+    title: 'Geen berichten',
+    description: 'Je hebt nog geen berichten. Verstuur je eerste bericht naar een klant of teamlid.',
+    actionLabel: 'Nieuw bericht',
+  },
+  '/gebruikers': {
+    icon: 'fa-solid fa-users-gear',
+    title: 'Geen gebruikers',
+    description: 'Voeg teamleden toe en wijs rollen toe voor je catering-operatie.',
+    actionLabel: 'Gebruiker toevoegen',
+  },
+  '/mailbox': {
+    icon: 'fa-solid fa-inbox',
+    title: 'Mailbox is leeg',
+    description: 'De mailbox-functionaliteit wordt binnenkort beschikbaar. Gebruik Berichten voor communicatie.',
+    actionLabel: 'Naar berichten',
   },
 };
 

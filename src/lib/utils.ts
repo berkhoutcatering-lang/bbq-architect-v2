@@ -60,9 +60,21 @@ export const MAANDEN = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 
 export const MAANDEN_KORT = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
 export const DAGEN = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
-// Generate invoice/quote number
+// Generate invoice/quote number (legacy — use nextNummer for dedup-safe numbering)
 export function genNummer(prefix: string, nr: number): string {
     return prefix + String(nr).padStart(3, '0');
+}
+
+// Dedup-safe nummer generator — finds max existing nummer and increments
+export function nextNummer(prefix: string, existingNummers: (string | undefined | null)[]): string {
+    let maxNum = 0;
+    existingNummers.forEach(nr => {
+        if (nr && nr.startsWith(prefix)) {
+            const num = parseInt(nr.replace(prefix, ''), 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    return prefix + String(maxNum + 1).padStart(3, '0');
 }
 
 // Resize image to max dimensions to avoid API limits and 'expected pattern' errors

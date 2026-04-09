@@ -11,9 +11,10 @@ import MetallicCard from '@/components/MetallicCard';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
-import { fmt, today, addDays, genNummer } from '@/lib/utils';
+import { fmt, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { ALLERGENEN, DIEETWENSEN } from '@/lib/constants';
+import PageHint from '@/components/PageHint';
 
 const STEPS = [
   { label: 'Klant', icon: <Users size={16} /> },
@@ -156,7 +157,7 @@ export default function KlantGesprek() {
       }
 
       // 2. Offerte aanmaken
-      const nummer = genNummer(settings?.offerte_prefix || 'OFF-2026-', (offertes?.length || 0) + 1);
+      const nummer = nextNummer(settings?.offerte_prefix || 'OFF-2026-', (offertes || []).map((o: any) => o.nummer));
       const geldigDagen = settings?.offerte_geldig || 30;
       const dieetTekst = gastenDieet.length > 0 ? 'Dieetwensen:\n' + gastenDieet.map(function (g) {
         const parts = [];
@@ -263,6 +264,8 @@ export default function KlantGesprek() {
           <p style={{ fontSize: 11, color: 'var(--muted)' }}>Intake bij potentiële klant</p>
         </div>
       </div>
+
+      <PageHint id="klantgesprek" title="Klantgesprek" description="Voer een gestructureerd intakegesprek met een potentiele klant. Gegevens worden automatisch opgeslagen." />
 
       {/* Progress bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 28, overflowX: 'auto', paddingBottom: 4 }}>

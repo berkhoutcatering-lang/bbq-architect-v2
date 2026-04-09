@@ -48,7 +48,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return supabase
                 .channel('global_rt_' + table)
                 .on('postgres_changes', { event: '*', schema: 'public', table: table }, function () {
-                    console.log('[AppContext RT]', table, 'change detected');
                     loadGlobalData();
                 })
                 .subscribe();

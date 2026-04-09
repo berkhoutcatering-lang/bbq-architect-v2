@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { fmt, fmtNl, today, addDays, genNummer } from '@/lib/utils';
+import { fmt, fmtNl, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { mailEventBevestiging } from '@/lib/emailHelper';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
+import PageHint from '@/components/PageHint';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Event as DbEvent, Recept, Offerte, InventoryItem, PrepSuggestion, EventReflectie } from '@/types';
 
 export default function Events() {
@@ -30,6 +32,8 @@ export default function Events() {
     const [searchQuery, setSearchQuery] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isMobile, setIsMobile] = useState(false);
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -64,6 +68,12 @@ export default function Events() {
         if (editing === 'new') {
             insert(form!).then(function () {
                 showToast('Event aangemaakt 🔥', 'success');
+                setFollowUpTitle('Event aangemaakt!');
+                setFollowUpActions([
+                    { icon: '📄', label: 'Offerte versturen naar klant', href: '/offertes' },
+                    { icon: '📝', label: 'Notitie toevoegen', onClick: function () { /* scroll to notes */ } },
+                    { icon: '📅', label: 'Bekijk in agenda', href: '/agenda' },
+                ]);
                 setEditing(null); setForm(null);
             }).catch(function (err: any) {
                 console.error('Event insert error:', err);
@@ -73,11 +83,25 @@ export default function Events() {
             supabase.from('events').select('status').eq('id', editing).single().then(function (freshRes: any) {
                 const freshStatus = (freshRes.data && freshRes.data.status) || 'pending';
                 const justCompleted = freshStatus !== 'completed' && form!.status === 'completed';
-                console.log('[SAVE] Fresh DB status:', freshStatus, 'Form status:', form!.status, 'justCompleted:', justCompleted, 'menu:', JSON.stringify(form!.menu));
                 const { id, created_at, ...rest } = form!;
                 update(editing as number, rest).then(function () {
                     showToast('Event bijgewerkt', 'success');
-                    if (justCompleted) { drainInventoryForEvent(form!); }
+                    if (justCompleted) {
+                        drainInventoryForEvent(form!);
+                        setFollowUpTitle('Event afgerond!');
+                        setFollowUpActions([
+                            { icon: '🧾', label: 'Factuur genereren', href: '/facturen' },
+                            { icon: '⭐', label: 'Reflectie invullen', onClick: function () { /* open reflectie */ } },
+                            { icon: '📊', label: 'P&L bekijken', href: '/financien' },
+                        ]);
+                    } else if (form!.status === 'confirmed') {
+                        setFollowUpTitle('Event bevestigd!');
+                        setFollowUpActions([
+                            { icon: '📋', label: 'Prep-taken bekijken', href: '/agenda' },
+                            { icon: '📧', label: 'Bevestiging sturen naar klant', onClick: function () { if (form!.client_email) { mailEventBevestiging(form!, settings?.bedrijfsnaam || 'Hop & Bites'); showToast('Bevestiging verstuurd!', 'success'); } else { showToast('Geen email adres', 'error'); } } },
+                            { icon: '🛒', label: 'Inkooplijst genereren', href: '/inkoop' },
+                        ]);
+                    }
                     setEditing(null); setForm(null);
                 }).catch(function (err: any) {
                     console.error('Event update error:', err);
@@ -99,20 +123,17 @@ export default function Events() {
 
     function drainInventoryForEvent(event: Record<string, any>) {
         const menuIds = event.menu || [];
-        console.log('[DRAIN] Starting drain for event:', event.name, 'menu:', JSON.stringify(menuIds), 'guests:', event.guests);
         if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
         if (!supabase) return;
         const guests = event.guests || 1;
         Promise.resolve(supabase.from('inventory').select('*')).then(function (invRes: any) {
             if (invRes.error) { console.error('[DRAIN] Inventory fetch error:', invRes.error); return; }
             const inventory = invRes.data || [];
-            console.log('[DRAIN] Inventory items:', inventory.length);
-            if (inventory.length === 0) { console.log('[DRAIN] No inventory items found'); return; }
+            if (inventory.length === 0) return;
             const deducted: string[] = [];
             const lowStockItems: string[] = [];
             menuIds.forEach(function (receptId: any) {
                 const recept = recepten.find(function (r) { return String(r.id) === String(receptId); });
-                console.log('[DRAIN] Looking for recipe ID:', receptId, 'Found:', recept ? recept.naam : 'NOT FOUND');
                 if (!recept) return;
                 let ingredienten: any[] = recept.ingredienten as any[] || [];
                 if (typeof ingredienten === 'string') {
@@ -120,12 +141,10 @@ export default function Events() {
                 }
                 const porties = recept.porties || 1;
                 const multiplier = guests / porties;
-                console.log('[DRAIN] Recipe:', recept.naam, 'porties:', porties, 'multiplier:', multiplier, 'ingredients:', ingredienten.length);
                 ingredienten.forEach(function (ing: any) {
                     const match = inventory.find(function (inv: any) {
                         return ing.naam && inv.naam && inv.naam.toLowerCase().indexOf(ing.naam.toLowerCase()) >= 0;
                     });
-                    console.log('[DRAIN] Ingredient:', ing.naam, ing.hoeveelheid, ing.eenheid, 'Match:', match ? match.naam + ' (' + match.current_stock + match.unit + ')' : 'NONE');
                     if (match) {
                         const qty = (parseFloat(ing.hoeveelheid) || 0) * multiplier;
                         let unitFactor = 1;
@@ -133,7 +152,6 @@ export default function Events() {
                         if (ing.eenheid === 'ml' && match.unit === 'L') unitFactor = 0.001;
                         const deductAmount = qty * unitFactor;
                         const newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
-                        console.log('[DRAIN] Deducting:', deductAmount.toFixed(2), match.unit, 'New stock:', newStock.toFixed(2));
                         Promise.resolve(supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id)).then(function () { }).catch(function (err: any) { console.error('[DRAIN] Update error:', err); });
                         match.current_stock = newStock;
                         deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
@@ -198,7 +216,7 @@ export default function Events() {
 
     function createOfferte() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = genNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.data.length + 1);
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.data.map((o: any) => o.nummer));
         const offData = {
             nummer: nummer,
             status: 'concept' as const,
@@ -449,7 +467,12 @@ export default function Events() {
         <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Events ({filtered.length}{filtered.length !== events.length ? ' / ' + events.length : ''})</h3>
-                <button className="btn btn-brand" onClick={newEvent}><i className="fa-solid fa-plus"></i> Nieuw Event</button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                    <a href="/api/calendar/ical" download className="btn btn-ghost btn-sm" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }} title="Download iCal voor Google Calendar / Outlook">
+                        <i className="fa-solid fa-calendar-plus"></i> Kalender Export
+                    </a>
+                    <button className="btn btn-brand" onClick={newEvent}><i className="fa-solid fa-plus"></i> Nieuw Event</button>
+                </div>
             </div>
             <div style={{ marginBottom: 12 }}>
                 <input
@@ -468,6 +491,7 @@ export default function Events() {
                     })}
                 </div>
             </div>
+            <PageHint id="events" title="Events Beheren" description="Maak events aan, koppel offertes en beheer je planning. Klik op een event om het te bewerken, of gebruik 'Offerte' voor directe offerte-creatie." />
             <div className="panel">
                 {events.length === 0 && <EmptyState page="/events" onAction={newEvent} />}
                 {sorted.map(function (ev) {
@@ -574,6 +598,15 @@ export default function Events() {
                         <i className="fa-solid fa-plus"></i> Nieuw
                     </button>
                 </div>
+            )}
+            {/* Follow-Up Prompt */}
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
             )}
         </>
     );

@@ -9,10 +9,12 @@ import {
 import SlideOverPanel from './SlideOverPanel';
 import KlantAutocomplete from './KlantAutocomplete';
 import MetallicCard from './MetallicCard';
+import FieldTooltip from './FieldTooltip';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from './Toast';
-import { fmt, today, addDays, genNummer, calcLineTotals } from '@/lib/utils';
+import { fmt, today, addDays, genNummer, nextNummer, calcLineTotals } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { autoCreatePrepTasks } from '@/lib/syncEngine';
 
 interface EventWizardProps {
   isOpen: boolean;
@@ -35,6 +37,22 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
   const { data: gerechten } = useSupabase('gerechten', []);
   const { data: gangen } = useSupabase('gangen', []);
   const { data: offertes } = useSupabase('offertes', []);
+  const { data: inventoryData } = useSupabase('inventory', []);
+
+  // Foodcost calculation per dish (for inline marge indicator)
+  function calcDishFoodcostPP(dishName: string): number {
+    const gerecht: any = gerechten.find(function (g: any) { return g.naam === dishName; });
+    if (!gerecht || !gerecht.ingredient_costs) return 0;
+    return (gerecht.ingredient_costs || []).reduce(function (sum: number, item: any) {
+      const inv = (inventoryData || []).find(function (i: any) { return i.naam && item.naam && i.naam.toLowerCase() === item.naam.toLowerCase(); });
+      const price = inv ? (inv.purchase_price || 0) : 0;
+      const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
+      let unitFactor = 1;
+      if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
+      if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
+      return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
+    }, 0);
+  }
 
   // Form state
   const [klant, setKlant] = useState({
@@ -63,6 +81,16 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
   const estimatedOmzet = details.gasten * details.ppp;
   const geldigDagen = settings?.offerte_geldig || 30;
 
+  // Total menu foodcost
+  const menuFoodcostPP = useMemo(function () {
+    return menuItems.reduce(function (sum, item) {
+      return sum + calcDishFoodcostPP(item.naam);
+    }, 0);
+  }, [menuItems, gerechten, inventoryData]);
+
+  const menuMargePct = details.ppp > 0 ? ((details.ppp - menuFoodcostPP) / details.ppp) * 100 : 0;
+  const margeColor = menuMargePct > 70 ? '#10b981' : menuMargePct >= 55 ? '#f59e0b' : '#ef4444';
+
   function canProceed(): boolean {
     if (step === 0) return klant.naam.length > 0;
     if (step === 1) return totalMenuDishes > 0;
@@ -74,7 +102,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
     setSaving(true);
     try {
       // 1. Create offerte
-      const nummer = genNummer(settings?.offerte_prefix || 'OFF-2026-', (offertes?.length || 0) + 1);
+      const nummer = nextNummer(settings?.offerte_prefix || 'OFF-2026-', (offertes || []).map((o: any) => o.nummer));
       const offerteData = {
         nummer,
         status: 'concept',
@@ -110,10 +138,35 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
         menu: [],
       };
 
-      const { error: evError } = await supabase!.from('events').insert(eventData);
+      const { data: event, error: evError } = await supabase!.from('events').insert(eventData).select().single();
       if (evError) throw evError;
 
-      showToast('Event + Offerte aangemaakt!', 'success');
+      // 3. Link offerte back to event (bidirectioneel)
+      if (offerte?.id && event?.id) {
+        await supabase!.from('offertes').update({ event_id: event.id }).eq('id', offerte.id);
+      }
+
+      // 4. Auto-create prep tasks voor het event
+      if (event?.id) {
+        await autoCreatePrepTasks(event.id, details.datum, klant.naam);
+      }
+
+      // 5. Upsert klant in klanten tabel
+      if (klant.naam) {
+        const { data: existingKlant } = await supabase!.from('klanten').select('id').eq('naam', klant.naam).limit(1);
+        if (!existingKlant || existingKlant.length === 0) {
+          await supabase!.from('klanten').insert({
+            naam: klant.naam,
+            adres: klant.adres || '',
+            telefoon: klant.tel || '',
+            email: klant.email || '',
+            bedrijf: klant.bedrijf || '',
+            type: details.type || 'Particulier',
+          });
+        }
+      }
+
+      showToast('Event + Offerte + Prep-taken aangemaakt!', 'success');
       onComplete?.();
       resetAndClose();
     } catch (err: any) {
@@ -265,6 +318,56 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                 </div>
               )}
             </MetallicCard>
+
+            {/* Inline Marge Indicator */}
+            {totalMenuDishes > 0 && (
+              <MetallicCard className="p-4" hover={false} accent={margeColor}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">Menu Marge</span>
+                  <span className="text-[11px] font-bold" style={{ color: margeColor }}>
+                    {menuMargePct > 0 ? menuMargePct.toFixed(1) + '%' : 'Geen data'}
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginBottom: 8 }}>
+                  <div style={{
+                    width: Math.min(100, Math.max(0, menuMargePct)) + '%',
+                    height: '100%', borderRadius: 3,
+                    background: `linear-gradient(90deg, ${margeColor}cc, ${margeColor})`,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[var(--muted)]">
+                    Foodcost: {fmt(menuFoodcostPP)}/pp
+                  </span>
+                  <span className="text-[10px] text-[var(--muted)]">
+                    Prijs: {fmt(details.ppp)}/pp
+                  </span>
+                </div>
+                {menuFoodcostPP > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[var(--border)]">
+                    {menuItems.map(function (item, idx) {
+                      const cost = calcDishFoodcostPP(item.naam);
+                      return (
+                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full" style={{
+                          background: cost > 0 ? 'rgba(196,163,90,0.08)' : 'rgba(255,255,255,0.03)',
+                          border: cost > 0 ? '1px solid rgba(196,163,90,0.15)' : '1px solid var(--border)',
+                          color: cost > 0 ? '#c4a35a' : 'var(--muted)',
+                        }}>
+                          {item.naam} {cost > 0 ? fmt(cost) : '—'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {menuMargePct > 0 && menuMargePct < 55 && (
+                  <div className="mt-2 p-2 rounded-lg text-[10px]" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)', color: '#ef4444' }}>
+                    ⚠️ Lage marge — overweeg goedkopere gerechten of hogere prijs p.p.
+                  </div>
+                )}
+              </MetallicCard>
+            )}
           </div>
         )}
 
@@ -281,8 +384,8 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="field"><label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>Gasten</label><input type="number" value={details.gasten} onChange={e => setDetails(prev => ({ ...prev, gasten: parseInt(e.target.value) || 0 }))} style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }} /></div>
-                  <div className="field"><label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>Prijs p.p.</label><input type="number" step="0.50" value={details.ppp} onChange={e => setDetails(prev => ({ ...prev, ppp: parseFloat(e.target.value) || 0 }))} style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }} /></div>
-                  <div className="field"><label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>Type</label>
+                  <div className="field"><label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>Prijs p.p.<FieldTooltip text="Prijs per persoon exclusief BTW" /></label><input type="number" step="0.50" value={details.ppp} onChange={e => setDetails(prev => ({ ...prev, ppp: parseFloat(e.target.value) || 0 }))} style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }} /></div>
+                  <div className="field"><label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, display: 'block' }}>Type<FieldTooltip text="Particulier: 21% BTW. Zakelijk: factuur op bedrijfsnaam." /></label>
                     <select value={details.type} onChange={e => setDetails(prev => ({ ...prev, type: e.target.value }))} aria-label="Event type" style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}>
                       <option>Particulier</option>
                       <option>Zakelijk</option>

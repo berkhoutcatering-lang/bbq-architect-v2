@@ -93,7 +93,6 @@ export default function AiAssistant(): React.ReactElement {
                 });
             }
         } catch (e: any) {
-            console.warn('[AI] Context laden mislukt:', e.message);
             setContextLoaded(true);
         } finally {
             setContextLoading(false);

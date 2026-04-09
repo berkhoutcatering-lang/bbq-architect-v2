@@ -9,13 +9,14 @@
 // =============================================
 
 import { supabase } from '@/lib/supabase';
-import { today, addDays, genNummer } from '@/lib/utils';
+import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
 
 export interface WorkflowParams {
     eventId: number;
     offerteData: Record<string, any>;
     settings: Record<string, any> | null;
     facturenCount: number;
+    facturenNummers: (string | undefined | null)[];
 }
 
 export interface WorkflowResult {
@@ -44,7 +45,7 @@ async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boo
 
         const betaaltermijn = (params.settings && params.settings.betaaltermijn) || 14;
         const prefix = (params.settings && params.settings.factuur_prefix) || 'F2026-';
-        const nummer = genNummer(prefix, params.facturenCount + 1);
+        const nummer = nextNummer(prefix, params.facturenNummers);
 
         const { error } = await supabase.from('facturen').insert({
             nummer: nummer,
@@ -278,9 +279,6 @@ async function autoCreateHaccpTemplates(params: WorkflowParams): Promise<{ succe
 
 // ── Main Workflow Runner ──
 export async function runAcceptanceWorkflow(params: WorkflowParams): Promise<WorkflowResult> {
-    console.log('[WORKFLOW] ═══════════════════════════════════════');
-    console.log('[WORKFLOW] Running acceptance workflow for event', params.eventId);
-
     const results = await Promise.allSettled([
         autoCreateFactuur(params),
         autoGeneratePrepTasks(params),
@@ -299,9 +297,6 @@ export async function runAcceptanceWorkflow(params: WorkflowParams): Promise<Wor
         inkoop: inkoopResult,
         haccp: haccpResult
     };
-
-    console.log('[WORKFLOW] Results:', JSON.stringify(result));
-    console.log('[WORKFLOW] ═══════════════════════════════════════');
 
     return result;
 }

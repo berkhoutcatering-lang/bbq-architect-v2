@@ -73,9 +73,7 @@ export function printHaccpLabel(data: LabelData): void {
                 title: 'Print HACCP Label',
                 text: 'HACCP Label voor Eleph-Label',
                 files: [blob]
-            }).catch(function (error) {
-                console.log('Error sharing:', error);
-            });
+            }).catch(function () { });
         } else {
             const link = document.createElement('a');
             link.download = 'HACCP-Label-BBQ-Architect.png';

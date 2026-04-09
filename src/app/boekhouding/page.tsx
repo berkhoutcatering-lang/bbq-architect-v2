@@ -6,6 +6,8 @@ import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     ComposedChart, Line, PieChart, Pie, Legend,
 } from 'recharts';
+import EmptyState from '@/components/EmptyState';
+import { Flame } from 'lucide-react';
 import type { Factuur, Event as DbEvent } from '@/types';
 
 export default function Boekhouding() {
@@ -52,10 +54,10 @@ export default function Boekhouding() {
         const s = f.status || 'onbekend';
         statusCounts[s] = (statusCounts[s] || 0) + 1;
     });
-    const statusKleuren: Record<string, string> = { betaald: '#22c55e', verzonden: '#FFBF00', concept: '#71717a', vervallen: '#ef4444' };
+    const statusKleuren: Record<string, string> = { betaald: 'var(--green)', verzonden: 'var(--brand)', concept: 'var(--muted)', vervallen: 'var(--red)' };
     const statusLabels: Record<string, string> = { betaald: 'Betaald', verzonden: 'Verzonden', concept: 'Concept', vervallen: 'Vervallen' };
     const statusPieData = Object.keys(statusCounts).map(function (s) {
-        return { name: statusLabels[s] || s, value: statusCounts[s], color: statusKleuren[s] || '#a78bfa' };
+        return { name: statusLabels[s] || s, value: statusCounts[s], color: statusKleuren[s] || 'var(--purple)' };
     }).filter(function (d) { return d.value > 0; });
 
     const clientTotals: Record<string, number> = {};
@@ -82,13 +84,18 @@ export default function Boekhouding() {
     });
 
     if (loading) return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-            <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 32, marginBottom: 12, display: 'block' }}></i>
-                Laden...
-            </div>
+        <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+            <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
         </div>
     );
+
+    if (facturen.length === 0) {
+        return (
+            <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+                <EmptyState page="/boekhouding" />
+            </div>
+        );
+    }
 
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
@@ -136,7 +143,7 @@ export default function Boekhouding() {
                                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>betaalde facturen</span>
                             </div>
                             <div className="panel-body" style={{ height: 200, marginTop: 12 }}>
-                                <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                     <ComposedChart data={omzetChartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barCategoryGap="30%">
                                         <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
                                         <YAxis yAxisId="left" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
@@ -160,7 +167,7 @@ export default function Boekhouding() {
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{facturen.length} totaal</span>
                                 </div>
                                 <div style={{ height: 200, marginTop: 12 }}>
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                         <PieChart>
                                             <Pie data={statusPieData} dataKey="value" cx="45%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3}>
                                                 {statusPieData.map(function (entry, i) { return <Cell key={i} fill={entry.color} />; })}
@@ -221,7 +228,7 @@ export default function Boekhouding() {
                     {topClients.length > 0 && (
                         <>
                             <div style={{ height: 250, padding: '16px 0' }}>
-                                <ResponsiveContainer width="100%" height="100%" minWidth={100}>
+                                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                     <BarChart data={topClients} layout="vertical" margin={{ top: 4, right: 32, left: 80, bottom: 4 }} barCategoryGap="25%">
                                         <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
                                         <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={76} />

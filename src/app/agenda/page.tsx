@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
+import EmptyState from '@/components/EmptyState';
+import { Flame } from 'lucide-react';
 import type { Event as DbEvent, PrepTask, PrepSuggestion } from '@/types';
 
 export default function Agenda() {
-    const { data: events, insert: insertEvent } = useSupabase<DbEvent>('events', []);
+    const { data: events, loading: eventsLoading, insert: insertEvent } = useSupabase<DbEvent>('events', []);
     const { data: prepTasks, insert: insertPrep, update: updatePrep, remove: removePrep } = useSupabase<PrepTask>('prep_tasks', []);
     const { data: suggestions, remove: removeSuggestion } = useSupabase<PrepSuggestion>('prep_suggestions', []);
     const showToast = useToast();
@@ -107,6 +109,28 @@ export default function Agenda() {
         }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
     }
 
+    if (eventsLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
+    if (events.length === 0 && prepTasks.length === 0) {
+        return (
+            <div className="artisan-page agenda-page">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+                    <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
+                    <button className="btn-brand" onClick={function () { setShowEventForm(true); }}>
+                        <i className="fa-solid fa-plus"></i> NIEUW EVENT
+                    </button>
+                </div>
+                <EmptyState page="/agenda" onAction={function () { setShowEventForm(true); }} />
+            </div>
+        );
+    }
+
     return (
         <div className="artisan-page agenda-page">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
@@ -127,6 +151,9 @@ export default function Agenda() {
                             </button>
                         </div>
                     )}
+                    <a href="/api/calendar/ical" download className="tab-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="Download iCal voor Google Calendar / Outlook">
+                        <i className="fa-solid fa-calendar-plus"></i> iCal
+                    </a>
                     <button className="tab-btn" onClick={goToday}>VANDAAG</button>
                     <button className="btn-brand" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
                         <i className="fa-solid fa-plus"></i> {isMobile ? 'EVENT' : 'NIEUW EVENT'}
@@ -213,9 +240,9 @@ export default function Agenda() {
                 <div className="panel" style={{ height: 'fit-content' }}>
                     <div className="calendar">
                         <div className="cal-header" style={{ padding: '20px', borderBottom: '1px solid var(--border-steel)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }}><i className="fa-solid fa-chevron-left"></i></button>
+                            <button className="cal-nav" onClick={prevMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Vorige maand"><i className="fa-solid fa-chevron-left"></i></button>
                             <h3 style={{ margin: 0, fontFamily: 'var(--font-artisan)', letterSpacing: 2, color: 'var(--brand)' }}>{MAANDEN[month].toUpperCase()} {year}</h3>
-                            <button className="cal-nav" onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }}><i className="fa-solid fa-chevron-right"></i></button>
+                            <button className="cal-nav" onClick={nextMonth} style={{ background: 'transparent', border: 'none', color: 'var(--brand)', cursor: 'pointer' }} aria-label="Volgende maand"><i className="fa-solid fa-chevron-right"></i></button>
                         </div>
                         <div className="cal-grid" style={{ padding: 10 }}>
                             {['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'].map(function (dn) { return <div key={dn} className="cal-day-name" style={{ textAlign: 'center', fontSize: 10, fontWeight: 800, color: 'var(--muted)', padding: '10px 0' }}>{dn}</div>; })}

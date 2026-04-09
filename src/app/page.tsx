@@ -6,43 +6,16 @@ import Link from "next/link";
 import {
   Calendar, ChefHat, Clock, FileText, TrendingUp, AlertTriangle, ArrowRight,
   Package, Users, Euro, Flame, CheckCircle2, Bell, Settings, Search, BarChart3,
-  MapPin, ChevronRight, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed
+  MapPin, ChevronRight, ChevronDown, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import MetallicCard from '@/components/MetallicCard';
 import { StatusDot } from '@/components/StatusBadge';
 import WeekStrip from '@/components/WeekStrip';
 import EventWizard from '@/components/EventWizard';
-
-const KPICard = ({ icon, label, value, subtitle, trend, accentColor = "var(--muted)", href }: { icon: React.ReactNode; label: string; value: string; subtitle?: string; trend?: string; accentColor?: string; href?: string }) => {
-  const card = (
-    <MetallicCard className="p-4 md:p-6 group">
-      <div className="flex items-start justify-between mb-3 md:mb-4">
-        <div
-          className="p-2 md:p-2.5 rounded-xl"
-          style={{
-            background: `linear-gradient(135deg, ${accentColor}15, ${accentColor}08)`,
-            border: `1px solid ${accentColor}20`,
-          }}
-        >
-          {icon}
-        </div>
-        {trend && (
-          <span className={`text-[10px] md:text-[11px] font-medium px-1.5 md:px-2 py-0.5 md:py-1 rounded-full ${trend.startsWith('+') ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
-            }`}>
-            {trend}
-          </span>
-        )}
-      </div>
-      <p className="text-[10px] md:text-[11px] font-medium uppercase tracking-[0.12em] md:tracking-[0.15em] text-[var(--muted)] mb-1">{label}</p>
-      <p className="text-xl md:text-2xl font-light text-white tracking-tight">{value}</p>
-      {subtitle && <p className="text-[11px] md:text-[12px] text-[var(--muted-light)] mt-1 line-clamp-2">{subtitle}</p>}
-    </MetallicCard>
-  );
-  return href ? <Link href={href}>{card}</Link> : card;
-};
+import OnboardingProgress from '@/components/OnboardingProgress';
+import DrillDownKPI from '@/components/DrillDownKPI';
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -52,6 +25,9 @@ export default function DashboardPage() {
   const sug = useSupabase('prep_suggestions', []);
   const gan = useSupabase('gangen', []);
   const ger = useSupabase('gerechten', []);
+  const pt = useSupabase('prep_tasks', []);
+  const kl = useSupabase('klanten', []);
+  const hc = useSupabase('haccp_records', []);
 
   const events: any[] = ev.data || [];
   const facturen: any[] = fac.data || [];
@@ -60,11 +36,15 @@ export default function DashboardPage() {
   const suggestions: any[] = sug.data || [];
   const gangenData: any[] = gan.data || [];
   const gerechtenData: any[] = ger.data || [];
+  const prepTasks: any[] = pt.data || [];
+  const klanten: any[] = kl.data || [];
+  const haccpRecords: any[] = hc.data || [];
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("Welkom");
   const [isMounted, setIsMounted] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [showAllNudges, setShowAllNudges] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -137,6 +117,104 @@ export default function DashboardPage() {
     const m = _calcMarge(o);
     liveActions.push({ id: `o_${o.id}`, urgency: 'high', message: `Offerte ${o.client_naam} marge: ${m.margePct.toFixed(1)}%`, link: '/offertes', icon: 'fa-triangle-exclamation' });
   });
+
+  // --- AI Inzichten nudges ---
+  const aiNudges: { id: string; type: 'warning' | 'info' | 'positive'; icon: string; message: string; link: string }[] = [];
+
+  // 1. Verlopen offertes
+  const verlopenOffertes = offertes.filter((o: any) => {
+    if (!o.geldig_tot) return false;
+    if (o.status === 'geaccepteerd' || o.status === 'goedgekeurd' || o.status === 'afgewezen' || o.status === 'geannuleerd') return false;
+    return o.geldig_tot < today;
+  });
+  if (verlopenOffertes.length > 0) {
+    aiNudges.push({ id: 'n_verlopen', type: 'warning', icon: '\u23F0', message: `${verlopenOffertes.length} offerte(s) verlopen \u2014 overweeg follow-up`, link: '/offertes' });
+  }
+
+  // 2. Onverzonden facturen voor afgeronde events
+  const conceptFacturenVoorAfgerondeEvents = facturen.filter((f: any) => {
+    if (f.status !== 'concept') return false;
+    const linkedEvent = events.find((e: any) => e.client_naam === f.client_naam || e.id === f.event_id);
+    return linkedEvent && linkedEvent.date < today;
+  });
+  if (conceptFacturenVoorAfgerondeEvents.length > 0) {
+    aiNudges.push({ id: 'n_concept_fac', type: 'warning', icon: '\uD83D\uDCC4', message: `${conceptFacturenVoorAfgerondeEvents.length} concept-facturen voor afgeronde events \u2014 verstuur ze`, link: '/facturen' });
+  }
+
+  // 3. Aankomend event zonder prep-taken (within 7 days)
+  const zevenDagenVooruitDate = new Date();
+  zevenDagenVooruitDate.setDate(zevenDagenVooruitDate.getDate() + 7);
+  const zevenDagenVooruit = zevenDagenVooruitDate.toISOString().slice(0, 10);
+  const eventIdsMetPrep = new Set(prepTasks.map((t: any) => t.event_id));
+  const upcomingZonderPrep = events.filter((e: any) => {
+    if (!e.date || e.date < today || e.date > zevenDagenVooruit) return false;
+    if (e.status === 'geannuleerd') return false;
+    return !eventIdsMetPrep.has(e.id);
+  });
+  upcomingZonderPrep.forEach((e: any) => {
+    const diffMs = new Date(e.date).getTime() - new Date(today).getTime();
+    const diffDagen = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    aiNudges.push({ id: `n_prep_${e.id}`, type: 'warning', icon: '\uD83D\uDD25', message: `Event ${e.name || e.title || 'Onbekend'} over ${diffDagen} dagen heeft geen prep-taken`, link: '/agenda' });
+  });
+
+  // 4. Lage marge waarschuwing (re-use lowMargeOffertes)
+  lowMargeOffertes.forEach((o: any) => {
+    const m = _calcMarge(o);
+    aiNudges.push({ id: `n_marge_${o.id}`, type: 'warning', icon: '\u26A0\uFE0F', message: `Offerte ${o.client_naam} \u2014 marge slechts ${m.margePct.toFixed(1)}%`, link: '/offertes' });
+  });
+
+  // 5. Week overzicht
+  const startOfWeek = new Date();
+  const dayOfWeek = startOfWeek.getDay();
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  startOfWeek.setDate(startOfWeek.getDate() + diffToMonday);
+  const startOfWeekStr = startOfWeek.toISOString().slice(0, 10);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  const endOfWeekStr = endOfWeek.toISOString().slice(0, 10);
+  const weekEvents = events.filter((e: any) => e.date >= startOfWeekStr && e.date <= endOfWeekStr && e.status !== 'geannuleerd');
+  if (weekEvents.length > 0) {
+    const totalGuests = weekEvents.reduce((sum: number, e: any) => sum + (e.guests || 0), 0);
+    aiNudges.push({ id: 'n_week', type: 'info', icon: '\uD83D\uDCC5', message: `Deze week: ${weekEvents.length} events, ${totalGuests} gasten totaal`, link: '/agenda' });
+  }
+
+  // 6. Voorraad-suggestie op basis van aankomende events
+  const upcomingGuests = nextEventsList.reduce(function (sum: number, e: any) { return sum + (e.guests || 0); }, 0);
+  if (upcomingGuests > 0 && lowStockItems.length > 0) {
+    aiNudges.push({
+      id: 'n_voorraad_predict',
+      type: 'warning',
+      icon: '📦',
+      message: `${upcomingGuests} gasten aankomend — ${lowStockItems.length} ingrediënten onder minimum`,
+      link: '/voorraad'
+    });
+  }
+
+  // 7. Seizoens-tip
+  const currentMonth = new Date().getMonth();
+  if (currentMonth >= 4 && currentMonth <= 8) {
+    const festivalEvents = events.filter(function (e: any) { return e.type === 'Festival' && e.date >= today; });
+    if (festivalEvents.length === 0) {
+      aiNudges.push({
+        id: 'n_seizoen',
+        type: 'positive' as any,
+        icon: '🌞',
+        message: 'BBQ-seizoen! Overweeg festival-aanbiedingen voor extra omzet',
+        link: '/events'
+      });
+    }
+  }
+
+  // 8. Positieve nudge bij goede marge
+  const avgMarge = offertes.filter(function (o: any) { return o.menu_selectie; }).reduce(function (sum: number, o: any) {
+    return sum + (_calcMarge(o).margePct || 0);
+  }, 0) / Math.max(1, offertes.filter(function (o: any) { return o.menu_selectie; }).length);
+  if (avgMarge > 65) {
+    aiNudges.push({ id: 'n_marge_goed', type: 'positive' as any, icon: '🎯', message: `Gemiddelde marge ${avgMarge.toFixed(0)}% — uitstekend!`, link: '/financien' });
+  }
+
+  const visibleNudges = showAllNudges ? aiNudges : aiNudges.slice(0, 4);
+  // --- End AI Inzichten ---
 
   const recentFeed: { text: string; time: string; dot: string; ts: number }[] = [];
   events.slice(0, 5).forEach((e: any) => recentFeed.push({ text: `Event toegevoegd: ${e.title || 'Nieuw'}`, time: e.created_at || 'recent', dot: '#10b981', ts: new Date(e.created_at || Date.now()).getTime() }));
@@ -223,6 +301,17 @@ export default function DashboardPage() {
 
         <WeekStrip events={nextEventsList} />
 
+        {/* Onboarding Progress */}
+        <OnboardingProgress
+          klanten={klanten}
+          offertes={offertes}
+          events={events}
+          facturen={facturen}
+          haccpRecords={haccpRecords}
+          inventory={inventory}
+          gerechten={gerechtenData}
+        />
+
         {/* Zone 1: Aandacht Nu */}
         {liveActions.length > 0 && (
           <div className="mb-6 md:mb-8">
@@ -261,13 +350,65 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Zone 2: AI Inzichten */}
+        {aiNudges.length > 0 && (
+          <div className="mb-6 md:mb-8">
+            <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
+              <Sparkles className="w-3.5 h-3.5 inline-block mr-2 text-[#c4a35a]" />
+              AI Inzichten
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {visibleNudges.map((nudge, idx) => {
+                const borderColor = nudge.type === 'warning' ? '#f59e0b' : nudge.type === 'positive' ? '#10b981' : '#3b82f6';
+                const bgTint = nudge.type === 'warning' ? 'bg-amber-500/10' : nudge.type === 'positive' ? 'bg-emerald-500/10' : 'bg-blue-500/10';
+                const textColor = nudge.type === 'warning' ? 'text-amber-300' : nudge.type === 'positive' ? 'text-emerald-300' : 'text-blue-300';
+                return (
+                  <Link key={nudge.id} href={nudge.link}>
+                    <div
+                      className="opacity-0 animate-[fadeInUp_0.4s_ease-out_forwards]"
+                      style={{ animationDelay: `${idx * 80}ms` }}
+                    >
+                      <MetallicCard className="p-4 group relative overflow-hidden" accent={borderColor}>
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full"
+                          style={{ background: `linear-gradient(to bottom, ${borderColor}, transparent)` }}
+                        />
+                        <div className="flex items-center gap-3 pl-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${bgTint}`}>
+                            <span className="text-[16px] leading-none">{nudge.icon}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[13px] font-medium truncate ${textColor}`}>
+                              {nudge.message}
+                            </p>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-[var(--muted)] group-hover:translate-x-1 transition-transform shrink-0" />
+                        </div>
+                      </MetallicCard>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+            {aiNudges.length > 4 && (
+              <button
+                onClick={() => setShowAllNudges(!showAllNudges)}
+                className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted)] hover:text-white transition-colors uppercase tracking-[0.1em] mx-auto"
+              >
+                {showAllNudges ? 'Minder tonen' : `Meer tonen (${aiNudges.length - 4})`}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showAllNudges ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Zone 3: Zaak-gezondheid */}
         <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
           <BarChart3 className="w-3.5 h-3.5 inline-block mr-2 text-[#3b82f6]" />
           Zaak-gezondheid
         </h3>
         <div className="dash-kpi-grid">
-          <KPICard
+          <DrillDownKPI
             icon={<Calendar className="w-4 h-4 text-[#3b82f6]" />}
             label="Bevestigde Events"
             value={confirmedEvents.length.toString()}
@@ -275,8 +416,14 @@ export default function DashboardPage() {
             accentColor="#3b82f6"
             trend="+12%"
             href="/events"
+            items={nextEventsList.slice(0, 4).map((e: any) => ({
+              label: `${e.name || 'Event'} — ${e.guests || 0}p`,
+              value: formatDate(e.date).day + ' ' + formatDate(e.date).month,
+              href: '/agenda',
+              color: e.status === 'confirmed' ? '#3b82f6' : 'var(--muted)',
+            }))}
           />
-          <KPICard
+          <DrillDownKPI
             icon={<Euro className="w-4 h-4 text-emerald-400" />}
             label="Gerealiseerde Omzet"
             value={formatCurrency(totalRevenue)}
@@ -284,17 +431,37 @@ export default function DashboardPage() {
             accentColor="#34d399"
             trend="+8.2%"
             href="/financien"
+            items={(() => {
+              const topFacturen = betaaldFacturen
+                .map((f: any) => {
+                  let bedrag = 0;
+                  (f.items || []).forEach((item: any) => { bedrag += (item.qty || 0) * (item.prijs || 0); });
+                  return { label: f.client_naam || f.factuur_nummer || 'Factuur', value: formatCurrency(bedrag) };
+                })
+                .sort((a: any, b: any) => parseFloat(b.value.replace(/[^\d,-]/g, '').replace(',', '.')) - parseFloat(a.value.replace(/[^\d,-]/g, '').replace(',', '.')))
+                .slice(0, 4);
+              return topFacturen;
+            })()}
           />
-          <KPICard
+          <DrillDownKPI
             icon={<FileText className="w-4 h-4 text-[#8b8bf0]" />}
             label="Open Facturen & Prognose"
             value={formatCurrency(prognose + openFacturenBedrag)}
-            subtitle={`€${openFacturenBedrag} facturen / €${prognose} open offertes`}
+            subtitle={`${formatCurrency(openFacturenBedrag)} facturen / ${formatCurrency(prognose)} open offertes`}
             accentColor="#8b8bf0"
             trend="-3%"
             href="/facturen"
+            items={[
+              { label: 'Open facturen', value: formatCurrency(openFacturenBedrag), color: '#f59e0b' },
+              { label: 'Open offertes', value: formatCurrency(prognose), color: '#8b8bf0' },
+              ...openFacturen.slice(0, 3).map((f: any) => {
+                let bedrag = 0;
+                (f.items || []).forEach((item: any) => { bedrag += (item.qty || 0) * (item.prijs || 0); });
+                return { label: f.client_naam || f.factuur_nummer || 'Factuur', value: formatCurrency(bedrag), href: '/facturen' };
+              }),
+            ]}
           />
-          <KPICard
+          <DrillDownKPI
             icon={<Users className="w-4 h-4 text-sky-400" />}
             label="Totaal Gasten"
             value={events.reduce((sum: number, e: any) => sum + (e.guests || 0), 0).toString()}
@@ -302,6 +469,17 @@ export default function DashboardPage() {
             accentColor="#38bdf8"
             trend="+24%"
             href="/events"
+            items={(() => {
+              const byType: Record<string, number> = {};
+              events.forEach((e: any) => {
+                const type = e.type || 'Overig';
+                byType[type] = (byType[type] || 0) + (e.guests || 0);
+              });
+              return Object.entries(byType)
+                .sort(([, a], [, b]) => (b as number) - (a as number))
+                .slice(0, 5)
+                .map(([type, guests]) => ({ label: type, value: `${guests} gasten` }));
+            })()}
           />
         </div>
 
@@ -427,6 +605,10 @@ export default function DashboardPage() {
                   { icon: <Calendar className="w-4 h-4" />, label: "Agenda", href: "/agenda" },
                   { icon: <ShoppingCart className="w-4 h-4" />, label: "Inkoop", href: "/inkoop" },
                   { icon: <UtensilsCrossed className="w-4 h-4" />, label: "Menu", href: "/menu-engineering" },
+                  { icon: <Shield className="w-4 h-4" />, label: "HACCP", href: "/haccp" },
+                  { icon: <Calendar className="w-4 h-4" />, label: "Kalender", href: "/api/calendar/ical" },
+                  { icon: <Settings className="w-4 h-4" />, label: "Integraties", href: "/instellingen/integraties" },
+                  { icon: <BarChart3 className="w-4 h-4" />, label: "Analytics", href: "/financien" },
                 ].map((action) => (
                   <Link key={action.label} href={action.href} className="flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[64px] rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#3b82f6]/30 hover:bg-[#121216] active:scale-95 transition-all duration-200 group">
                     <div className="text-[#555] group-hover:text-[#3b82f6] transition-colors">{action.icon}</div>

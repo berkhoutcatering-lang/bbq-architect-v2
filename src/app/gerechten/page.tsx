@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
+import PageHint from '@/components/PageHint';
+import { Flame } from 'lucide-react';
 import type { InventoryItem, Gang } from '@/types';
 
 export default function Gerechten() {
@@ -26,13 +29,14 @@ export default function Gerechten() {
     const [stats, setStats] = useState<Record<string, any> | null>(null);
     const [hwInput, setHwInput] = useState<Record<string, any>>({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
     const [costInput, setCostInput] = useState<Record<string, any>>({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
+    const [dataLoading, setDataLoading] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const serviceImageRef = useRef<HTMLInputElement>(null);
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
     const HW_CATS = ['servies', 'apparatuur', 'branding', 'meubilair'];
     const COST_UNITS = ['kg', 'g', 'L', 'ml', 'stuks'];
 
-    useEffect(function () { loadData(); }, []);
+    useEffect(function () { loadData().finally(function () { setDataLoading(false); }); }, []);
 
     async function loadData() {
         const g = await supabase.from('gangen').select('*').order('volgorde');
@@ -308,12 +312,22 @@ export default function Gerechten() {
     const ALLERGENEN_PRESETS = ['Glutenvrij', 'Lactosevrij', 'Notenvrij', 'Vegetarisch', 'Veganistisch', 'Vis', 'Schaaldieren'];
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
 
+    if (dataLoading) {
+        return (
+            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            </div>
+        );
+    }
+
     return (
         <div className="main-content">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h2 style={{ fontSize: 20, fontWeight: 700 }}>🍽️ Gerechten Beheer</h2>
                 <button className="btn btn-ghost btn-sm" onClick={newGang}>⚙️ Gang Toevoegen</button>
             </div>
+
+            <PageHint id="gerechten" title="Gerechten" description="Overzicht van al je gerechten met ingredienten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling." />
 
             <div className="tab-bar">
                 {gangen.map(function (g) {
@@ -348,6 +362,8 @@ export default function Gerechten() {
                     </div>
                 </div>
             )}
+
+            {gangGerechten.length === 0 && <EmptyState page="/gerechten" onAction={newGerecht} />}
 
             <div className="dish-grid">
                 {gangGerechten.map(function (g) {

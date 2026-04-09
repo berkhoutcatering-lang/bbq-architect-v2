@@ -94,7 +94,7 @@ export default function AiStudioPage() {
             setFolders(fRes.data || []);
             setConversations(cRes.data || []);
         } catch (e: any) {
-            console.warn('[AI Studio] Mappen laden mislukt:', e.message);
+            // load error handled silently
         } finally {
             setLoadingFolders(false);
         }
@@ -114,7 +114,7 @@ export default function AiStudioPage() {
                 setMode(res.data.modus || 'brainstorm');
             }
         } catch (e: any) {
-            console.warn('[AI Studio] Gesprek laden mislukt:', e.message);
+            // load error handled silently
         }
     }
 
@@ -136,7 +136,7 @@ export default function AiStudioPage() {
                 return res.data;
             }
         } catch (e: any) {
-            console.warn('[AI Studio] Opslaan mislukt:', e.message);
+            // save error handled silently
         }
         return null;
     }
@@ -152,7 +152,7 @@ export default function AiStudioPage() {
                 updated_at: new Date().toISOString(),
             }).eq('id', activeConversation.id);
         } catch (e: any) {
-            console.warn('[AI Studio] Bijwerken mislukt:', e.message);
+            // update error handled silently
         }
     }
 
@@ -169,7 +169,7 @@ export default function AiStudioPage() {
                 setShowNewFolder(false);
             }
         } catch (e: any) {
-            console.warn('[AI Studio] Map aanmaken mislukt:', e.message);
+            // folder create error handled silently
         }
     }
 
@@ -180,7 +180,7 @@ export default function AiStudioPage() {
             setFolders(function (prev) { return prev.filter(function (f) { return f.id !== folderId; }); });
             if (activeFolder === folderId) setActiveFolder(null);
         } catch (e: any) {
-            console.warn('[AI Studio] Map verwijderen mislukt:', e.message);
+            // folder delete error handled silently
         }
     }
 
@@ -194,7 +194,7 @@ export default function AiStudioPage() {
                 startNewConversation();
             }
         } catch (e: any) {
-            console.warn('[AI Studio] Gesprek verwijderen mislukt:', e.message);
+            // conversation delete error handled silently
         }
     }
 
@@ -891,7 +891,7 @@ function SaveButton({ folders, onSave, onRefresh }: { folders: Folder[]; onSave:
             setOpen(false);
             setTitel('');
         } catch (e: any) {
-            console.warn('Opslaan mislukt:', e.message);
+            // save error handled silently
         } finally {
             setSaving(false);
         }
