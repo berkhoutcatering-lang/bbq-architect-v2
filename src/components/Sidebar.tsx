@@ -29,21 +29,21 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
     const sectionBadgeCount = section.children.reduce((sum, child) => sum + (badges[child.href] || 0), 0);
 
     return (
-        <div className="mb-2 w-full overflow-hidden">
+        <div className="mt-3 mb-1 w-full overflow-hidden">
             <button
                 onClick={() => {
                     if (!collapsed) {
                         toggleSection(section.title);
                     }
                 }}
-                className="w-full flex items-center justify-between px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--muted)] hover:text-white transition-colors group"
+                className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] hover:text-[var(--brand)] transition-colors group bg-transparent border-none"
                 title={collapsed ? section.title : ""}
                 aria-expanded={!collapsed ? isExpanded : undefined}
                 aria-controls={!collapsed ? `sidebar-section-${section.slug}` : undefined}
                 aria-label={`${section.title} ${!collapsed && isExpanded ? 'inklappen' : 'uitklappen'}`}
             >
                 <div className={`flex items-center gap-3 transition-all duration-300 ${collapsed ? 'w-full justify-center' : ''}`}>
-                    <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[#3b82f6]' : 'text-[var(--muted)] group-hover:text-white'}`}>
+                    <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[var(--brand)]' : 'text-[var(--muted)] group-hover:text-[var(--brand)]'}`}>
                         {section.icon}
                         {sectionBadgeCount > 0 && collapsed && (
                             <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
@@ -81,12 +81,12 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 key={item.href}
                                 href={item.href}
                                 onClick={onNavigate}
-                                className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden ${isActive
-                                    ? "bg-[#3b82f6]/10 text-white border-l-2 border-[#3b82f6] pl-2.5"
-                                    : "text-[var(--muted)] hover:text-white hover:bg-white/[0.03] border-l-2 border-transparent pl-2.5"
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden no-underline ${isActive
+                                    ? "bg-[rgba(255,191,0,0.08)] text-white border-l-2 border-[var(--brand)] pl-2.5"
+                                    : "text-[var(--muted)] hover:text-white hover:bg-white/[0.04] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
-                                <span className={`shrink-0 ${isActive ? "text-[#3b82f6]" : ""}`}>
+                                <span className={`shrink-0 ${isActive ? "text-[var(--brand)]" : ""}`}>
                                     {item.icon}
                                 </span>
                                 <span className="text-[13px] font-medium truncate flex-1">{item.label}</span>
@@ -160,10 +160,10 @@ export default function Sidebar() {
 
     const sidebarContent = (
         <>
-            <div className="flex items-center justify-between px-5 py-5 border-b border-[#1e1e22] shrink-0">
+            <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--sidebar-border)] shrink-0">
                 <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#1a1a20] to-[#0e0e12] flex items-center justify-center border border-[#222228]">
-                        <Flame className="w-4 h-4 text-[#c4a35a]" />
+                    <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[#0e0e12] flex items-center justify-center border border-[var(--sidebar-border)] shadow-[0_0_12px_rgba(255,191,0,0.06)]">
+                        <Flame className="w-4 h-4 text-[var(--brand)]" />
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         <p className="text-[13px] font-semibold tracking-[0.08em] text-white font-['Outfit']">
@@ -184,7 +184,7 @@ export default function Sidebar() {
                             setCollapsed(!collapsed);
                         }
                     }}
-                    className="shrink-0 p-2 rounded-lg hover:bg-[#1a1a20] text-[var(--muted-light)] hover:text-white transition-colors"
+                    className="shrink-0 p-2 rounded-lg bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] text-[var(--muted-light)] hover:text-white transition-colors"
                     style={collapsed && isDesktop ? { position: 'absolute', right: 22 } : {}}
                 >
                     {!isDesktop && <X size={18} />}
@@ -196,21 +196,21 @@ export default function Sidebar() {
                 <Link
                     href="/"
                     onClick={closeMobile}
-                    className={`group flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap ${pathname === "/"
-                        ? "bg-[#3b82f6]/10 border border-[#3b82f6]/20 text-white shadow-[inset_0px_1px_1px_rgba(255,255,255,0.05)]"
-                        : "text-[var(--muted)] hover:text-white hover:bg-[#1a1a1f]"
+                    className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap no-underline ${pathname === "/"
+                        ? "bg-[rgba(255,191,0,0.08)] border border-[rgba(255,191,0,0.15)] text-white shadow-[inset_0px_1px_1px_rgba(255,191,0,0.06)]"
+                        : "text-[var(--muted)] hover:text-white hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
                         }`}
                     style={collapsed && isDesktop ? { justifyContent: 'center' } : {}}
                     title={collapsed ? "Dashboard" : ""}
                 >
-                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[#3b82f6]" : "group-hover:text-white"}`} />
+                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[var(--brand)]" : "group-hover:text-white"}`} />
                     <span className="text-[13.5px] font-semibold transition-all duration-300" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         Dashboard
                     </span>
                 </Link>
             </div>
 
-            <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1 scrollbar-thin" role="navigation" aria-label="Hoofdnavigatie">
+            <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1 sidebar-scroll" role="navigation" aria-label="Hoofdnavigatie">
                 {primarySections.map((section) => (
                     <SidebarFolder
                         key={section.title}
@@ -229,7 +229,7 @@ export default function Sidebar() {
                     <>
                         <button
                             onClick={() => setShowSecondary(!showSecondary)}
-                            className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--muted-light)] hover:text-[var(--muted)] transition-colors mt-2"
+                            className="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--muted-light)] hover:text-[var(--muted)] transition-colors mt-2 bg-transparent border-none"
                             aria-expanded={showSecondary}
                             aria-label={showSecondary ? 'Secundaire navigatie inklappen' : 'Secundaire navigatie uitklappen'}
                         >
@@ -257,9 +257,9 @@ export default function Sidebar() {
                 )}
             </nav>
 
-            <div className="px-4 py-4 border-t border-[#141418] shrink-0 overflow-hidden">
+            <div className="px-4 py-3.5 border-t border-[var(--sidebar-border)] shrink-0 overflow-hidden">
                 <div className="flex items-center gap-3 transition-all duration-300" style={collapsed && isDesktop ? { justifyContent: 'center', margin: '0 4px' } : {}}>
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-[#3b82f6] flex items-center justify-center text-[11px] font-bold text-white shadow-lg">
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-[var(--brand)] to-amber-700 flex items-center justify-center text-[11px] font-bold text-[var(--bg)] shadow-lg">
                         {(user?.user_metadata?.name || user?.email || '?').charAt(0).toUpperCase()}
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
@@ -271,7 +271,7 @@ export default function Sidebar() {
                             <Link href="/instellingen">
                                 <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-white cursor-pointer transition-colors" />
                             </Link>
-                            <button onClick={signOut} title="Uitloggen" className="p-1 rounded hover:bg-[#1a1a20] transition-colors">
+                            <button onClick={signOut} title="Uitloggen" className="p-1 rounded bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)] hover:text-red-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                             </button>
                         </div>
@@ -287,7 +287,7 @@ export default function Sidebar() {
             {!mobileOpen && !isDesktop && (
                 <button
                     onClick={() => setMobileOpen(true)}
-                    className="fixed top-3 left-3 z-[60] w-[44px] h-[44px] rounded-xl bg-[#18181c]/90 backdrop-blur-md border border-[#2a2a30] flex items-center justify-center text-[#999] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+                    className="fixed top-3 left-3 z-[60] w-[44px] h-[44px] rounded-xl bg-[var(--sidebar-bg)]/90 backdrop-blur-md border border-[var(--sidebar-border)] flex items-center justify-center text-[var(--muted)] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
                     aria-label="Open menu"
                 >
                     <Menu size={20} />
@@ -306,7 +306,7 @@ export default function Sidebar() {
             <aside
                 role="complementary"
                 aria-label="Zijbalk navigatie"
-                className="bg-[#151518] border-r border-[#141418] flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden"
+                className="bg-[var(--sidebar-bg)] border-r border-[var(--sidebar-border)] flex flex-col shrink-0 overflow-hidden"
                 style={{
                     position: isDesktop ? 'sticky' : 'fixed',
                     top: 0,
@@ -315,6 +315,7 @@ export default function Sidebar() {
                     zIndex: isDesktop ? 50 : 60,
                     width: isDesktop ? (collapsed ? 80 : 260) : 280,
                     transform: isDesktop ? 'translateX(0)' : (mobileOpen ? 'translateX(0)' : 'translateX(-100%)'),
+                    transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1), transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
                 }}
             >
                 {sidebarContent}
