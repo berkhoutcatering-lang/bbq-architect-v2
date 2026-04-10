@@ -9,6 +9,7 @@ import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } fro
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
+import { useOrg } from '@/lib/OrgContext';
 import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
@@ -20,6 +21,7 @@ import { ArrowLeft, Bell, Code, FileSpreadsheet, FileText, Loader2, Mail, Plus, 
 export default function Facturen() {
     const { data: facturen, loading, insert, update, remove } = useSupabase<Factuur>('facturen', []);
     const { settings } = useSettings();
+    const { orgId } = useOrg();
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
@@ -102,7 +104,7 @@ export default function Facturen() {
     function downloadFactuur() {
         const totals = calcLineTotals(form!.items);
         const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'factuur', form: form, settings: settings, totals: totals, branding: branding });
+        generatePDF({ type: 'factuur', form: form, settings: settings, totals: totals, branding: branding, orgId: orgId || undefined });
     }
 
     if (loading) return (

@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS settings (
   default_btw INT DEFAULT 21,
   betaaltermijn INT DEFAULT 14,
   offerte_geldig INT DEFAULT 30,
+  website TEXT DEFAULT '',
+  btw_nummer TEXT DEFAULT '',
+  betaalvoorwaarden TEXT DEFAULT '',
+  logo_url TEXT,
+  logo_dark_url TEXT,
+  brand_primary TEXT DEFAULT '#9e781c',
+  brand_accent TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

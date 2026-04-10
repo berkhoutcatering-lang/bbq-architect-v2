@@ -8,6 +8,7 @@ import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } fro
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
+import { useOrg } from '@/lib/OrgContext';
 import { mailOfferte } from '@/lib/emailHelper';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
 import MenuWizard from '@/components/MenuWizard';
@@ -28,6 +29,7 @@ export default function Offertes() {
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const { settings } = useSettings();
+    const { orgId } = useOrg();
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
@@ -393,15 +395,15 @@ export default function Offertes() {
     function downloadOfferte() {
         const totals = calcLineTotals(form!.items);
         const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals, branding: branding });
+        generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals, branding: branding, orgId: orgId || undefined });
     }
     function downloadMenukaart() {
         const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, branding: branding });
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, branding: branding, orgId: orgId || undefined });
     }
     function downloadVegaMenukaart() {
         const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true, branding: branding });
+        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true, branding: branding, orgId: orgId || undefined });
     }
 
     if (editing !== null && form) {

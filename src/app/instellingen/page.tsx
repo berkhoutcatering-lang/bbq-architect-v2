@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
-import { Building2, CloudUpload, Database, FileText, Loader2, Palette, Save } from 'lucide-react';
+import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save } from 'lucide-react';
 
 export default function Instellingen() {
     const { settings, loading, save } = useSettings();
@@ -174,6 +174,32 @@ export default function Instellingen() {
                             <label>Betaalvoorwaarden</label>
                             <textarea rows={3} value={form.betaalvoorwaarden || ''} placeholder="Bijv: Betaling binnen 14 dagen na factuurdatum. Graag onder vermelding van het factuurnummer." onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('betaalvoorwaarden', e.target.value); }} />
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="panel" style={{ marginBottom: 20 }}>
+                <div className="panel-head"><h3><Layout size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />PDF Templates</h3></div>
+                <div className="panel-body">
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Pas de opmaak van je documenten aan met de visuele template editor.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {[
+                            { type: 'factuur', label: 'Factuur' },
+                            { type: 'offerte', label: 'Offerte' },
+                            { type: 'menukaart', label: 'Menukaart' },
+                            { type: 'haccp', label: 'HACCP Rapport' },
+                            { type: 'bon', label: 'Bon / Kassaticket' },
+                        ].map(function (doc) {
+                            return (
+                                <a key={doc.type} href={'/template-editor?type=' + doc.type}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', textDecoration: 'none', color: 'var(--text)', fontSize: 13, transition: 'border-color 0.15s' }}>
+                                    <span style={{ fontWeight: 500 }}>{doc.label}</span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--brand)' }}>
+                                        <Pen size={12} /> Template bewerken
+                                    </span>
+                                </a>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

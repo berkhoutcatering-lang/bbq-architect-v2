@@ -9,7 +9,7 @@ import type {
   PdfTemplate, TemplateBlock, RenderContext, PageSettings,
   LogoBlock, TextBlock, ClientInfoBlock, DocumentBadgeBlock,
   ItemsTableBlock, MenuBlock, TotalsBlock, PaymentDetailsBlock,
-  DividerBlock, SpacerBlock, FooterBlock, HaccpTableBlock,
+  DividerBlock, SpacerBlock, ImageBlock, FooterBlock, HaccpTableBlock,
 } from '@/types/template.types';
 import { interpolateVariables, resolveColor } from '@/lib/templateVariables';
 
@@ -450,6 +450,27 @@ function renderHaccpTableBlock(doc: any, block: HaccpTableBlock, ctx: RenderCont
   return ((doc as any).lastAutoTable?.finalY || startY + 20) - startY + 4;
 }
 
+function renderImageBlock(doc: any, block: ImageBlock, ctx: RenderContext, cursor: Cursor): number {
+  const src = interpolateVariables(block.src, ctx.variables);
+  if (!src) return 0;
+
+  // Try to load from pre-loaded context data (e.g. receipt_image)
+  const imageData = (ctx as any)._images?.[src];
+  if (!imageData) return 0;
+
+  const ratio = imageData.w / imageData.h;
+  let w = Math.min(block.maxWidth, imageData.w * 0.264583);
+  let h = w / ratio;
+  if (h > block.maxHeight) { h = block.maxHeight; w = h * ratio; }
+
+  let x = cursor.margins.left;
+  if (block.alignment === 'center') x = (cursor.pageWidth - w) / 2;
+  else if (block.alignment === 'right') x = cursor.pageWidth - cursor.margins.right - w;
+
+  doc.addImage(imageData.data, 'PNG', x, cursor.y, w, h);
+  return h + 2;
+}
+
 // ── Block Condition Evaluator ──
 function evaluateConditions(conditions: TemplateBlock['conditions'], ctx: RenderContext): boolean {
   if (!conditions || conditions.length === 0) return true;
@@ -474,6 +495,7 @@ const RENDERERS: Record<string, (doc: any, block: any, ctx: RenderContext, curso
   payment_details: renderPaymentDetailsBlock,
   divider: renderDividerBlock,
   spacer: renderSpacerBlock,
+  image: renderImageBlock,
   footer: renderFooterBlock,
   haccp_table: renderHaccpTableBlock,
 };

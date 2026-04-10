@@ -8,7 +8,10 @@
       "Bash(npx next:*)",
       "Bash(npx tsc:*)",
       "Bash(node migrate-icons.mjs)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "WebSearch",
+      "WebFetch(domain:support.craftmypdf.com)",
+      "WebFetch(domain:craftmypdf.com)"
     ]
   }
 }

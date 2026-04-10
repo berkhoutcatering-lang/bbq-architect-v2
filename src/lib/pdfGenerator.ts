@@ -5,6 +5,9 @@
 
 import type { Settings, LineTotals } from '@/types';
 import type { BrandingConfig } from '@/lib/branding';
+import { renderFromTemplate } from '@/lib/templateRenderer';
+import { loadTemplate } from '@/lib/templateLoader';
+import { buildRenderContext } from '@/lib/templateContext';
 
 interface LogoResult {
     data: string;
@@ -18,6 +21,7 @@ interface PDFOptions {
     settings?: Partial<Settings>;
     totals?: LineTotals;
     branding?: BrandingConfig;
+    orgId?: string;
     // HACCP specific
     eventName?: string;
     eventDatum?: string;
@@ -215,6 +219,26 @@ function parseMenuGangenVega(menuSel: any, knownDishes?: Set<string>): { gang: s
  */
 export async function generatePDF(opts: PDFOptions): Promise<void> {
     try {
+        // ═══ Template-based rendering path ═══
+        if (opts.orgId) {
+            try {
+                const docType = opts.type === 'receipt' ? 'bon' : opts.type;
+                const template = await loadTemplate(docType, opts.orgId);
+                if (template) {
+                    const jsPDFLib = await loadJsPDF();
+                    const ctx = buildRenderContext(opts);
+                    const doc = await renderFromTemplate(template, ctx, jsPDFLib);
+                    const prefix = opts.type === 'factuur' ? 'Factuur' : opts.type === 'offerte' ? 'Offerte' : opts.type === 'haccp' ? 'HACCP' : opts.type === 'menukaart' ? 'Menukaart' : 'Document';
+                    const nummer = opts.form?.nummer || 'document';
+                    doc.save(prefix + '_' + nummer + '.pdf');
+                    return;
+                }
+            } catch (templateErr) {
+                console.warn('[PDF] Template rendering failed, falling back to hardcoded:', templateErr);
+            }
+        }
+
+        // ═══ Fallback: Hardcoded rendering ═══
         const type = opts.type;
         const { GOLD, DARK_GOLD } = resolveBrandColors(opts.branding);
         const brandLogoUrl = opts.branding?.logoUrl || null;
