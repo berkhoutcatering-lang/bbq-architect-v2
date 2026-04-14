@@ -8,6 +8,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import FieldTooltip from '@/components/FieldTooltip';
 import VoiceInput from '@/components/VoiceInput';
 import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull } from 'lucide-react';
@@ -242,7 +243,7 @@ export default function HACCP() {
 
     return (
         <div className="artisan-page haccp-page">
-            <h1 className="hero-title mb-16" style={{ fontSize: 24 }}>HACCP MONITORING</h1>
+            <PageHeader title="HACCP Monitoring" description="Log temperaturen en beheer compliance-dossiers" />
             <PageHint id="haccp" title="HACCP Monitoring" description="Log temperaturen via Quick Log (ideaal op mobiel). Alle metingen worden gekoppeld aan events voor compliance-dossiers." />
 
             <div className="tab-bar">

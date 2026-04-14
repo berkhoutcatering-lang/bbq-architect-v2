@@ -6,6 +6,8 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { Flame, Link, Unlink } from 'lucide-react';
 import type { InventoryItem, Gang } from '@/types';
@@ -322,10 +324,13 @@ export default function Gerechten() {
 
     return (
         <div className="main-content">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h2 style={{ fontSize: 20, fontWeight: 700 }}>🍽️ Gerechten Beheer</h2>
-                <button className="btn btn-ghost btn-sm" onClick={newGang}>⚙️ Gang Toevoegen</button>
-            </div>
+            <PageHeader
+                title="Gerechten Beheer"
+                description="Overzicht van al je gerechten met ingredienten en kostprijzen"
+                actions={<>
+                    <button className="btn btn-ghost btn-sm" onClick={newGang}>⚙️ Gang Toevoegen</button>
+                </>}
+            />
 
             <PageHint id="gerechten" title="Gerechten" description="Overzicht van al je gerechten met ingredienten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling." />
 
@@ -365,6 +370,7 @@ export default function Gerechten() {
 
             {gangGerechten.length === 0 && <EmptyState page="/gerechten" onAction={newGerecht} />}
 
+            <PageSection>
             <div className="dish-grid">
                 {gangGerechten.map(function (g) {
                     return (
@@ -409,6 +415,7 @@ export default function Gerechten() {
                     </div>
                 )}
             </div>
+            </PageSection>
 
             {editing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>

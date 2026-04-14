@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { CheckCircle2, Clock, XCircle, AlertTriangle, FileEdit, Eye, Send, CircleDot } from 'lucide-react';
 
 // Universeel statuskleur-schema (Principe #7: Cor's Taal)
 // groen  = bevestigd / betaald / ok / afgerond
@@ -8,6 +9,38 @@ import React from 'react';
 // blauw  = concept
 // paars  = optie
 // goud   = geaccepteerd / definitief / goedgekeurd
+
+// Status icons — so color isn't the only differentiator (WCAG 1.4.1)
+const STATUS_ICON_MAP: Record<string, React.ReactNode> = {
+  bevestigd: <CheckCircle2 size={12} />,
+  confirmed: <CheckCircle2 size={12} />,
+  geaccepteerd: <CheckCircle2 size={12} />,
+  akkoord: <CheckCircle2 size={12} />,
+  goedgekeurd: <CheckCircle2 size={12} />,
+  definitief: <CheckCircle2 size={12} />,
+  betaald: <CheckCircle2 size={12} />,
+  ok: <CheckCircle2 size={12} />,
+  afgerond: <CheckCircle2 size={12} />,
+  completed: <CheckCircle2 size={12} />,
+  active: <CheckCircle2 size={12} />,
+  nieuw: <Clock size={12} />,
+  pending: <Clock size={12} />,
+  verzonden: <Send size={12} />,
+  optie: <Eye size={12} />,
+  concept: <FileEdit size={12} />,
+  signed: <FileEdit size={12} />,
+  onderhoud: <Clock size={12} />,
+  stopped: <CircleDot size={12} />,
+  geannuleerd: <XCircle size={12} />,
+  cancelled: <XCircle size={12} />,
+  afgewezen: <XCircle size={12} />,
+  verlopen: <XCircle size={12} />,
+  vervallen: <XCircle size={12} />,
+  warn: <AlertTriangle size={12} />,
+  danger: <AlertTriangle size={12} />,
+  afwijking: <AlertTriangle size={12} />,
+  defect: <AlertTriangle size={12} />,
+};
 
 const STATUS_PILL_MAP: Record<string, string> = {
   // Events
@@ -75,8 +108,11 @@ export default function StatusBadge({ status, showLabel = true, size = 'md' }: S
   const pillClass = STATUS_PILL_MAP[status] || 'pill-blue';
   const label = STATUS_LABEL_MAP[status] || status;
 
+  const icon = STATUS_ICON_MAP[status] || null;
+
   return (
     <span className={`pill ${pillClass} ${size === 'sm' ? 'text-[10px] px-2 py-0.5' : ''}`}>
+      {icon && <span className="flex-shrink-0" aria-hidden="true">{icon}</span>}
       {showLabel ? label : status}
     </span>
   );

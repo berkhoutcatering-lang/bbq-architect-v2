@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Users, Calendar, MapPin, ChevronRight, ChevronLeft, Check, Euro,
   FileText, Sparkles, UtensilsCrossed, StickyNote, ClipboardList,
@@ -84,8 +84,9 @@ export default function KlantGesprek() {
     tekst: '', locatieNotes: '', concurrentie: 'Nee', concurrentieDetail: '', followUp: '',
   });
 
-  // ── LocalStorage auto-save ──
+  // ── LocalStorage auto-save (debounced to avoid write spam) ──
   const STORAGE_KEY = 'bbq_klantgesprek_draft';
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(function () {
     try {
@@ -104,11 +105,17 @@ export default function KlantGesprek() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(function () {
+  const saveDraft = useCallback(function () {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ klant, event, menuSelectie, menuExtra, gastenDieet, budget, notities, step }));
     } catch { /* ignore */ }
-  }, [klant, event, menuSelectie, menuExtra, budget, notities, step]);
+  }, [klant, event, menuSelectie, menuExtra, gastenDieet, budget, notities, step]);
+
+  useEffect(function () {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(saveDraft, 500);
+    return function () { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [saveDraft]);
 
   // ── Computed ──
   const sortedGangen = useMemo(function () {

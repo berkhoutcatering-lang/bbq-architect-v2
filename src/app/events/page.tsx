@@ -11,6 +11,8 @@ import { mailEventBevestiging } from '@/lib/emailHelper';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { ArrowLeft, Link as LinkIcon, UtensilsCrossed, Check, Users, Clock, Plus, BarChart3, ShoppingCart, Save, Mail, FileText, Copy, Trash2, CalendarPlus, Star, MapPin, Route, ClipboardCheck, ArrowRight, Thermometer } from 'lucide-react';
@@ -466,15 +468,15 @@ export default function Events() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Events ({filtered.length}{filtered.length !== events.length ? ' / ' + events.length : ''})</h3>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+            <PageHeader
+                title={'Events (' + filtered.length + (filtered.length !== events.length ? ' / ' + events.length : '') + ')'}
+                actions={<>
                     <a href="/api/calendar/ical" download className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }} title="Download iCal voor Google Calendar / Outlook">
                         <CalendarPlus size={14} /> Kalender Export
                     </a>
                     <button className="btn btn-brand" onClick={newEvent}><Plus size={14} /> Nieuw Event</button>
-                </div>
-            </div>
+                </>}
+            />
             <div style={{ marginBottom: 12 }}>
                 <input
                     value={searchQuery}
@@ -493,6 +495,7 @@ export default function Events() {
                 </div>
             </div>
             <PageHint id="events" title="Events Beheren" description="Maak events aan, koppel offertes en beheer je planning. Klik op een event om het te bewerken, of gebruik 'Offerte' voor directe offerte-creatie." />
+            <PageSection>
             <div className="panel">
                 {events.length === 0 && <EmptyState page="/events" onAction={newEvent} />}
                 {sorted.map(function (ev) {
@@ -566,6 +569,7 @@ export default function Events() {
                     );
                 })}
             </div>
+            </PageSection>
 
             {/* Mobile Quick-Action Bar */}
             {isMobile && (

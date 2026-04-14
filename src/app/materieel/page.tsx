@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
+import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
 import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
@@ -123,10 +124,10 @@ export default function Materieel() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Materieel ({materieel.length})</h3>
-                <button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>
-            </div>
+            <PageHeader
+                title={'Materieel (' + materieel.length + ')'}
+                actions={<button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>}
+            />
             {materieel.length === 0 && <EmptyState page="/materieel" onAction={newItem} />}
             <div className="grid-3">
                 {materieel.map(function (m: any) {

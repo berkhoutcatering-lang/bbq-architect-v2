@@ -114,6 +114,22 @@ export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
+    // Auto-expand the section that contains the active page (smart nav disclosure)
+    useEffect(() => {
+        const allSections = [...navSections];
+        const activeSection = allSections.find(s =>
+            s.children.some(child => pathname === child.href || (child.href !== '/' && pathname.startsWith(child.href)))
+        );
+        if (activeSection && !expandedSections.includes(activeSection.title)) {
+            setExpandedSections(prev => [...prev, activeSection.title]);
+        }
+        // Also auto-show secondary nav if active page is in a secondary section
+        if (activeSection?.secondary) {
+            setShowSecondary(true);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
+
     // Auto-close mobile sidebar on route change
     useEffect(() => {
         setMobileOpen(false);

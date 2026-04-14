@@ -14,6 +14,8 @@ import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Factuur } from '@/types';
 import { ArrowLeft, Bell, Code, FileSpreadsheet, FileText, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
@@ -235,13 +237,13 @@ export default function Facturen() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Facturen ({filteredFacturen.length}{filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})</h3>
-                <div style={{ display: 'flex', gap: 6 }}>
+            <PageHeader
+                title={`Facturen (${filteredFacturen.length}${filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})`}
+                actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(facturenToCsv(facturen), 'facturen-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileSpreadsheet size={14} /> CSV</button>
                     <button className="btn btn-brand" onClick={newFactuur}><Plus size={14} /> Nieuwe Factuur</button>
-                </div>
-            </div>
+                </>}
+            />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                     value={searchQuery}
@@ -255,26 +257,28 @@ export default function Facturen() {
                         style={{ fontSize: 12, textTransform: 'capitalize' }}>{s}</button>;
                 })}
             </div>
-            <div className="panel">
-                {facturen.length === 0 && <EmptyState page="/facturen" onAction={newFactuur} />}
-                {filteredFacturen.map(function (f) {
-                    let total = 0;
-                    (f.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
-                    const pill = f.status === 'betaald' ? 'pill-green' : f.status === 'verzonden' ? 'pill-amber' : f.status === 'vervallen' ? 'pill-red' : 'pill-blue';
-                    return (
-                        <div key={f.id} className="ev-row" onClick={function () { editFactuur(f); }}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 2 }}>{f.nummer}</div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{f.client_naam} — {fmtNl(f.datum)}</div>
+            <PageSection>
+                <div className="panel">
+                    {facturen.length === 0 && <EmptyState page="/facturen" onAction={newFactuur} />}
+                    {filteredFacturen.map(function (f) {
+                        let total = 0;
+                        (f.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
+                        const pill = f.status === 'betaald' ? 'pill-green' : f.status === 'verzonden' ? 'pill-amber' : f.status === 'vervallen' ? 'pill-red' : 'pill-blue';
+                        return (
+                            <div key={f.id} className="ev-row" onClick={function () { editFactuur(f); }}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 2 }}>{f.nummer}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{f.client_naam} — {fmtNl(f.datum)}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
+                                    <span className={'pill ' + pill}>{f.status.charAt(0).toUpperCase() + f.status.slice(1)}</span>
+                                </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                <span className={'pill ' + pill}>{f.status.charAt(0).toUpperCase() + f.status.slice(1)}</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            </PageSection>
 
             {/* Follow-Up Prompt */}
             {followUpActions && (

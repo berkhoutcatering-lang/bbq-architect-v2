@@ -8,6 +8,8 @@ import { fmt } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { ArrowLeft, Link as LinkIcon, Utensils, Save, Trash2, ShoppingCart, Barcode, Plus, Package, AlertTriangle, Coins, PieChart as PieChartIcon, Boxes, Warehouse, CheckCircle } from 'lucide-react';
 import type { InventoryItem, Recept } from '@/types';
@@ -245,16 +247,10 @@ export default function Voorraad() {
 
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Warehouse size={20} style={{ color: 'var(--brand)' }} /> Smart Inventory
-                    </h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 3 }}>
-                        {totalItems} items · {lowStock.length} bestellen · Waarde: {fmt(totalValue)}
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+            <PageHeader
+                title="Smart Inventory"
+                description={totalItems + ' items \u00b7 ' + lowStock.length + ' bestellen \u00b7 Waarde: ' + fmt(totalValue)}
+                actions={<>
                     <button className={'btn btn-sm ' + (lowStock.length > 0 ? 'btn-red' : 'btn-ghost')} onClick={function () { setShowInkooplijst(true); }}>
                         <ShoppingCart size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Inkooplijst {lowStock.length > 0 && '(' + lowStock.length + ')'}
                     </button>
@@ -264,8 +260,8 @@ export default function Voorraad() {
                     <button className="btn btn-brand btn-sm" onClick={newItem}>
                         <Plus size={16} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} /> Item Toevoegen
                     </button>
-                </div>
-            </div>
+                </>}
+            />
 
             <PageHint id="voorraad" title="Smart Inventory" description="Houd je voorraad bij met par-levels. Items onder minimum worden automatisch gemarkeerd. Gebruik +1/-1 voor snelle aanpassing." />
 

@@ -4,6 +4,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import { Flame, Send, ArrowLeft } from 'lucide-react';
 
 interface Bericht {
@@ -42,21 +43,24 @@ export default function Berichten() {
 
     return (
         <>
+            <PageHeader
+                title="Berichten"
+                description="Bekijk en verstuur berichten naar klanten en teamleden"
+                actions={
+                    <button
+                        className="btn btn-brand"
+                        onClick={function () { setShowForm(!showForm); }}
+                    >
+                        {showForm ? <><ArrowLeft size={14} /> Terug</> : <><Send size={14} /> Nieuw bericht</>}
+                    </button>
+                }
+            />
+
             <PageHint
                 id="berichten"
                 title="Berichten"
                 description="Bekijk en verstuur berichten naar klanten en teamleden"
             />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Berichten</h2>
-                <button
-                    className="btn btn-brand"
-                    onClick={function () { setShowForm(!showForm); }}
-                >
-                    {showForm ? <><ArrowLeft size={14} /> Terug</> : <><Send size={14} /> Nieuw bericht</>}
-                </button>
-            </div>
 
             {showForm && (
                 <MetallicCard hover={false} className="p-6 mb-4">

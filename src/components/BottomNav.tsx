@@ -7,7 +7,7 @@ import {
     LayoutDashboard,
     Calendar,
     PartyPopper,
-    ShieldCheck,
+    FileText,
     MoreHorizontal,
 } from "lucide-react";
 
@@ -39,10 +39,10 @@ const tabs: Tab[] = [
         match: (p) => p === "/events" || p.startsWith("/events/"),
     },
     {
-        label: "HACCP",
-        icon: <ShieldCheck size={22} />,
-        href: "/haccp",
-        match: (p) => p === "/haccp" || p.startsWith("/haccp/"),
+        label: "Offertes",
+        icon: <FileText size={22} />,
+        href: "/offertes",
+        match: (p) => p === "/offertes" || p.startsWith("/offertes/"),
     },
     {
         label: "Meer",

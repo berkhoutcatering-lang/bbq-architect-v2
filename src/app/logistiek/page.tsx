@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import MetallicCard from '@/components/MetallicCard';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
 import { Check, ChevronDown, ChevronUp, ClipboardCheck, Loader2, Package, PackageOpen, Plus, RotateCcw, Trash2, Truck } from 'lucide-react';
@@ -149,6 +150,8 @@ export default function Logistiek() {
 
     return (
         <>
+            <PageHeader title="Logistiek" description="Plan transport en check je materiaallijsten voor events" />
+
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'buscheck' ? ' active' : '')} onClick={function () { setTab('buscheck'); }}>🚛 Bus-Check</button>
                 <button className={'tab-btn' + (tab === 'rtr' ? ' active' : '')} onClick={function () { setTab('rtr'); }}>📦 RTR Checklist</button>

@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
+import PageHeader from '@/components/PageHeader';
 import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save } from 'lucide-react';
 
 export default function Instellingen() {
@@ -55,6 +56,8 @@ export default function Instellingen() {
 
     return (
         <>
+            <PageHeader title="Instellingen" description="Beheer bedrijfsgegevens, huisstijl en systeeminstellingen" />
+
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div className="panel-head"><h3><Building2 size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Bedrijfsgegevens</h3></div>
                 <div className="panel-body">

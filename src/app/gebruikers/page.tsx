@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import { Flame, UserPlus, ArrowLeft, Mail, Shield, ShieldCheck, ChefHat, LogOut } from 'lucide-react';
 
 const ROLLEN = ['Admin', 'Pitmaster', 'Medewerker'] as const;
@@ -80,28 +81,24 @@ export default function Gebruikers() {
 
     return (
         <>
-            <PageHint
-                id="gebruikers"
-                title="Teamleden"
+            <PageHeader
+                title={'Teamleden (' + members.length + ' ' + (members.length === 1 ? 'lid' : 'leden') + ')'}
                 description={organization ? 'Beheer het team van ' + organization.name : 'Beheer wie toegang heeft tot BBQ Architect'}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
-                    Teamleden
-                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)', marginLeft: 8 }}>
-                        {members.length} {members.length === 1 ? 'lid' : 'leden'}
-                    </span>
-                </h2>
-                {isAdmin && (
+                actions={isAdmin ? (
                     <button
                         className="btn btn-brand"
                         onClick={function () { setShowInvite(!showInvite); setInviteMsg(''); }}
                     >
                         {showInvite ? <><ArrowLeft size={14} /> Terug</> : <><UserPlus size={14} /> Uitnodigen</>}
                     </button>
-                )}
-            </div>
+                ) : undefined}
+            />
+
+            <PageHint
+                id="gebruikers"
+                title="Teamleden"
+                description={organization ? 'Beheer het team van ' + organization.name : 'Beheer wie toegang heeft tot BBQ Architect'}
+            />
 
             {showInvite && isAdmin && (
                 <MetallicCard hover={false} className="p-6 mb-4">

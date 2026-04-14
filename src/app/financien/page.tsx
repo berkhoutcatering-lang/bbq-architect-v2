@@ -5,6 +5,8 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { fmt, addDays } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import { BarChart3, ChevronLeft, ChevronRight, Coins, Crosshair, Flame, Lock, UserCog } from 'lucide-react';
 import type { Offerte, Gerecht, InventoryItem, TimeLog } from '@/types';
 
@@ -144,11 +146,7 @@ export default function Financien() {
     if (financialData.totalOmzet === 0 && financialData.totalFoodcost === 0 && financialData.totalLabor === 0) {
         return (
             <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
-                <div style={{ marginBottom: 20 }}>
-                    <h1 style={{ fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Lock size={14} style={{ color: 'var(--brand)' }} /> The Vault Analytics
-                    </h1>
-                </div>
+                <PageHeader title="The Vault Analytics" />
                 <EmptyState page="/financien" />
             </div>
         );
@@ -156,20 +154,17 @@ export default function Financien() {
 
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                    <h1 style={{ fontSize: 24, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Lock size={14} style={{ color: 'var(--brand)' }} /> The Vault Analytics
-                    </h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Live Profit & Loss Dashboard over {selectedYear}</p>
-                </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+            <PageHeader
+                title="The Vault Analytics"
+                description={`Live Profit & Loss Dashboard over ${selectedYear}`}
+                actions={<>
                     <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost" aria-label="Vorig jaar"><ChevronLeft size={14} /></button>
                     <div style={{ background: 'var(--card)', padding: '8px 16px', borderRadius: 8, fontWeight: 800 }}>{selectedYear}</div>
                     <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
-                </div>
-            </div>
+                </>}
+            />
 
+            <PageSection>
             <div className="stat-grid" style={{ marginBottom: 30 }}>
                 <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
                     <div className="stat-icon" style={{ background: 'rgba(255,140,0,.15)', color: 'var(--brand)' }}><Coins size={14} /></div>
@@ -195,7 +190,9 @@ export default function Financien() {
                     </div>
                 </div>
             </div>
+            </PageSection>
 
+            <PageSection>
             <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" style={{ alignItems: 'flex-start' }}>
 
                 <div className="panel uren-glass" style={{ padding: 24, overflow: 'hidden' }}>
@@ -285,6 +282,7 @@ export default function Financien() {
                 </div>
 
             </div>
+            </PageSection>
         </div>
     );
 }

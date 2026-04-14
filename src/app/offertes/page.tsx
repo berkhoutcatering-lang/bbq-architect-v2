@@ -15,6 +15,8 @@ import MenuWizard from '@/components/MenuWizard';
 import MenuBuilder from '@/components/MenuBuilder';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -592,17 +594,15 @@ export default function Offertes() {
 
     return (
         <div className="hopbites-theme">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 12 }}>
-                <div>
-                    <div className="hb-subtitle" style={{ marginBottom: 4 }}>BBQ Architect</div>
-                    <h3 className="hb-title" style={{ fontSize: 20 }}>Offertes ({offertes.length})</h3>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+            <PageHeader
+                title={`Offertes (${offertes.length})`}
+                description="BBQ Architect"
+                actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileDown size={14} /> CSV</button>
                     <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><UtensilsCrossed size={14} /> Stel Menu Samen</button>
                     <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe Offerte</button>
-                </div>
-            </div>
+                </>}
+            />
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
             <PageHint id="offertes" title="Offertes" description="Maak offertes met menu-selectie en live marge-berekening. Geaccepteerde offertes genereren automatisch een event en factuur." />
             <div style={{ marginBottom: 12 }}>

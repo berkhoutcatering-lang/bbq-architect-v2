@@ -17,11 +17,11 @@ export function useToast(): ShowToastFn {
     return ctx;
 }
 
-const typeConfig: Record<string, { icon: string; border: string }> = {
-    success: { icon: '\u2705', border: 'var(--green)' },
-    error: { icon: '\u274c', border: '#ef4444' },
-    warning: { icon: '\u26a0\ufe0f', border: '#f59e0b' },
-    info: { icon: '\ud83d\udca1', border: 'var(--muted)' },
+const typeConfig: Record<string, { icon: string; border: string; duration: number }> = {
+    success: { icon: '\u2705', border: 'var(--green)', duration: 3000 },
+    error: { icon: '\u274c', border: '#ef4444', duration: 8000 },
+    warning: { icon: '\u26a0\ufe0f', border: '#f59e0b', duration: 6000 },
+    info: { icon: '\ud83d\udca1', border: 'var(--muted)', duration: 4000 },
 };
 
 export default function ToastProvider({ children }: { children: ReactNode }) {
@@ -29,10 +29,12 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
 
     const showToast: ShowToastFn = useCallback(function (msg, type) {
         const id = Date.now() + Math.random();
-        setToasts(function (prev) { return prev.concat([{ id, msg, type: type || 'info' }]); });
+        const resolvedType = type || 'info';
+        const cfg = typeConfig[resolvedType] || typeConfig.info;
+        setToasts(function (prev) { return prev.concat([{ id, msg, type: resolvedType }]); });
         setTimeout(function () {
             setToasts(function (prev) { return prev.filter(function (t) { return t.id !== id; }); });
-        }, 4000);
+        }, cfg.duration);
     }, []);
 
     return (

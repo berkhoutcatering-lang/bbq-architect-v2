@@ -231,7 +231,7 @@ export default function EventFlowPage() {
                             </div>
 
                             {/* Stage card */}
-                            <div className="panel" style={{ borderLeft: '3px solid ' + color.main, cursor: 'pointer' }} onClick={function () { toggleStage(stage.key); }}>
+                            <div className="panel panel-interactive" style={{ borderLeft: '3px solid ' + color.main }} onClick={function () { toggleStage(stage.key); }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <span style={{ fontWeight: 800, fontSize: 14, color: color.main }}>{stage.label}</span>

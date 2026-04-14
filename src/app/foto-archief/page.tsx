@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, Flame, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
@@ -215,6 +216,8 @@ export default function FotoArchief() {
 
     return (
         <>
+            <PageHeader title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel" />
+
             <PageHint id="foto-archief" title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel. Sleep bestanden direct op de pagina." />
 
             <div

@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { MAANDEN_KORT } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
 import type { TimeLog } from '@/types';
 import { BarChart3, CalendarDays, Circle, Clock, History, LineChart, Play, Square, Target, Trash2 } from 'lucide-react';
 
@@ -95,13 +96,7 @@ export default function Uren() {
 
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                <div>
-                    <h1 style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Clock size={14} style={{ color: 'var(--brand)' }} /> Workforce & Uren
-                    </h1>
-                </div>
-            </div>
+            <PageHeader title="Workforce & Uren" />
 
             <div className="uren-punch-section mb-24" style={{ textAlign: 'center', padding: '32px 16px', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--border)' }}>
                 {activeLog ? (

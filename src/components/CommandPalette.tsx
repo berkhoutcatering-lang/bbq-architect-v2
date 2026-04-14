@@ -233,6 +233,9 @@ export default function CommandPalette() {
 
     return (
         <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Zoeken en navigeren"
             style={{
                 position: 'fixed',
                 inset: 0,
@@ -289,7 +292,7 @@ export default function CommandPalette() {
                     }}>ESC</kbd>
                 </div>
 
-                <div style={{ maxHeight: 400, overflowY: 'auto', padding: '6px 0' }}>
+                <div role="listbox" aria-label="Zoekresultaten" style={{ maxHeight: 400, overflowY: 'auto', padding: '6px 0' }}>
                     {loading && (
                         <div style={{ padding: '20px', textAlign: 'center', color: '#828282', fontSize: 13 }}>
                             Zoeken...
@@ -312,6 +315,8 @@ export default function CommandPalette() {
                         return (
                             <div
                                 key={result.id}
+                                role="option"
+                                aria-selected={isSelected}
                                 onClick={function () { handleSelect(result); }}
                                 onMouseEnter={function () { setSelectedIndex(i); }}
                                 style={{

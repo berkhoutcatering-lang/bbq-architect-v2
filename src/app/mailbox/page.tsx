@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
 import { sendEmail, wrapHtml } from '@/lib/emailHelper';
 import { Flame, Send, ArrowLeft, Plus, Pencil, Trash2, Search, Mail, FileText, X } from 'lucide-react';
 import type { Email, EmailTemplate, Klant } from '@/types';
@@ -218,17 +219,17 @@ export default function Mailbox() {
 
     return (
         <>
-            <PageHint id="mailbox" title="Mailbox" description="Verstuur e-mails naar klanten, bekijk je verzendhistorie en beheer e-mail templates." />
-
-            {/* Header + Tabs */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Mailbox</h2>
-                {tab !== 'nieuw' && (
+            <PageHeader
+                title="Mailbox"
+                description="Verstuur e-mails naar klanten, bekijk je verzendhistorie en beheer e-mail templates"
+                actions={tab !== 'nieuw' ? (
                     <button className="btn btn-brand" onClick={function () { resetCompose(); setTab('nieuw'); }}>
                         <Send size={14} /> Nieuwe e-mail
                     </button>
-                )}
-            </div>
+                ) : undefined}
+            />
+
+            <PageHint id="mailbox" title="Mailbox" description="Verstuur e-mails naar klanten, bekijk je verzendhistorie en beheer e-mail templates." />
 
             <div className="tab-bar" style={{ marginBottom: 16 }}>
                 <button className={'tab-btn' + (tab === 'verzonden' ? ' active' : '')} onClick={function () { setTab('verzonden'); setSelectedEmail(null); }}>

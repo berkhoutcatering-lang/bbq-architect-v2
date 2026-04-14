@@ -8,6 +8,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2 } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
@@ -255,10 +257,10 @@ function Klanten() {
 
     return (
         <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Klanten ({filtered.length}{filtered.length !== klanten.length ? ' / ' + klanten.length : ''})</h3>
-                <button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>
-            </div>
+            <PageHeader
+                title={`Klanten (${filtered.length}${filtered.length !== klanten.length ? ' / ' + klanten.length : ''})`}
+                actions={<button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>}
+            />
             <PageHint id="klanten" title="Klanten" description="Beheer je klantenbestand. Klik op een klant om details te bekijken of koppel direct aan events en offertes." />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
@@ -273,6 +275,7 @@ function Klanten() {
                         style={{ fontSize: 12 }}>{s === 'alle' ? 'Alle' : s}</button>;
                 })}
             </div>
+            <PageSection>
             <MetallicCard hover={false}>
                 {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
                 {klanten.length > 0 && filtered.length === 0 && (
@@ -319,6 +322,7 @@ function Klanten() {
                     );
                 })}
             </MetallicCard>
+            </PageSection>
         </>
     );
 }

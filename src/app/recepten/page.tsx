@@ -6,6 +6,8 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { printHaccpLabel } from '@/lib/printLabel';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import MetallicCard from '@/components/MetallicCard';
 import type { Recept, InventoryItem } from '@/types';
@@ -347,23 +349,29 @@ export default function Recepten() {
 
     return (
         <>
+            <PageHeader
+                title="Recepten"
+                description="Beheer je recepten met ingrediënten en bereidingswijze"
+                actions={<>
+                    <button className="btn btn-brand" onClick={newRecept}>
+                        <Plus size={14} /> Nieuw Recept
+                    </button>
+                </>}
+            />
+
             <PageHint id="recepten" title="Recepten" description="Beheer je recepten met ingrediënten en bereidingswijze. Koppel ze aan gerechten voor automatische kostprijsberekening." />
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, flexWrap: 'wrap' as const, gap: 10 }}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {categories.map(function (c) {
-                        return <button key={c} className={'btn btn-sm ' + (filter === c ? 'btn-brand' : 'btn-ghost')} onClick={function () { setFilter(c); }}>{c}</button>;
-                    })}
-                </div>
-                <button className="btn btn-brand" onClick={newRecept} style={{ flexShrink: 0 }}>
-                    <Plus size={14} /> Nieuw Recept
-                </button>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+                {categories.map(function (c) {
+                    return <button key={c} className={'btn btn-sm ' + (filter === c ? 'btn-brand' : 'btn-ghost')} onClick={function () { setFilter(c); }}>{c}</button>;
+                })}
             </div>
 
             {filtered.length === 0 && (
                 <EmptyState page="/recepten" onAction={newRecept} />
             )}
 
+            <PageSection>
             <div className="grid-3">
                 {filtered.map(function (r) {
                     return (
@@ -412,6 +420,7 @@ export default function Recepten() {
                     );
                 })}
             </div>
+            </PageSection>
         </>
     );
 }

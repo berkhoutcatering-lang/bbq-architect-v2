@@ -7,6 +7,8 @@ import {
     ComposedChart, Line, PieChart, Pie, Legend,
 } from 'recharts';
 import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import { BarChart3, Calculator, Clock, Euro, Flame, LineChart, Percent, PieChart as PieChartIcon, Star, Users } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import type { Factuur, Event as DbEvent } from '@/types';
@@ -100,6 +102,7 @@ export default function Boekhouding() {
 
     return (
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+            <PageHeader title="Boekhouding" />
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'wv' ? ' active' : '')} onClick={function () { setTab('wv'); }}>Winst &amp; Verlies</button>
                 <button className={'tab-btn' + (tab === 'btw' ? ' active' : '')} onClick={function () { setTab('btw'); }}>BTW Overzicht</button>
@@ -107,7 +110,7 @@ export default function Boekhouding() {
             </div>
 
             {tab === 'wv' && (
-                <>
+                <PageSection>
                     <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Euro size={14} /></div>
@@ -181,10 +184,11 @@ export default function Boekhouding() {
                             </MetallicCard>
                         )}
                     </div>
-                </>
+                </PageSection>
             )}
 
             {tab === 'btw' && (
+                <PageSection>
                 <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head"><h3>BTW Overzicht</h3></div>
                     <div className="panel-body">
@@ -215,9 +219,11 @@ export default function Boekhouding() {
                         </div>
                     </div>
                 </MetallicCard>
+                </PageSection>
             )}
 
             {tab === 'clients' && (
+                <PageSection>
                 <MetallicCard hover={false} className="mt-4">
                     <div className="panel-head">
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -254,6 +260,7 @@ export default function Boekhouding() {
                         </>
                     )}
                 </MetallicCard>
+                </PageSection>
             )}
         </div>
     );

@@ -10,6 +10,8 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import { Camera, FileText, Flame, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 
@@ -223,12 +225,7 @@ export default function Inkoop() {
 
     return (
         <div className="artisan-page inkoop-page">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <div>
-                    <h1 className="hero-title">INKOOP & LOGISTIEK</h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 12, letterSpacing: 1 }}>BEHEER LEVERANCIERS, BOODSCHAPPEN EN BONNEN</p>
-                </div>
-            </div>
+            <PageHeader title="Inkoop & Logistiek" description="Beheer leveranciers, boodschappen en bonnen" />
 
             <PageHint id="inkoop" title="Inkoop" description="Beheer inkooporders en leveranciers. Scan bonnen voor automatische verwerking." />
 

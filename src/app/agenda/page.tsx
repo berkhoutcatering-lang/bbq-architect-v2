@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, fmtNl, today, MAANDEN } from '@/lib/utils';
+import PageHeader from '@/components/PageHeader';
+import PageSection from '@/components/PageSection';
 import EmptyState from '@/components/EmptyState';
 import { Flame, Plus, List, Calendar, CalendarPlus, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
@@ -121,12 +123,14 @@ export default function Agenda() {
     if (events.length === 0 && prepTasks.length === 0) {
         return (
             <div className="artisan-page agenda-page">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-                    <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
-                    <button className="btn-brand" onClick={function () { setShowEventForm(true); }}>
-                        <Plus size={14} /> NIEUW EVENT
-                    </button>
-                </div>
+                <PageHeader
+                    title="Agenda & Planning"
+                    actions={<>
+                        <button className="btn-brand" onClick={function () { setShowEventForm(true); }}>
+                            <Plus size={14} /> NIEUW EVENT
+                        </button>
+                    </>}
+                />
                 <EmptyState page="/agenda" onAction={function () { setShowEventForm(true); }} />
             </div>
         );
@@ -134,14 +138,10 @@ export default function Agenda() {
 
     return (
         <div className="artisan-page agenda-page">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-                <div>
-                    <h1 className="hero-title" style={{ fontSize: 24, margin: 0 }}>AGENDA & PLANNING</h1>
-                    <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4, letterSpacing: 1 }}>
-                        {events.length} EVENTS • {prepTasks.filter(function (p) { return !p.done; }).length} OPEN PREP-TAKEN
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <PageHeader
+                title="Agenda & Planning"
+                description={events.length + ' events \u2022 ' + prepTasks.filter(function (p) { return !p.done; }).length + ' open prep-taken'}
+                actions={<>
                     {isMobile && (
                         <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
                             <button onClick={function () { setMobileView('list'); }} aria-label="Lijstweergave" style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: mobileView === 'list' ? 'var(--brand)' : 'transparent', color: mobileView === 'list' ? '#000' : 'var(--muted)', border: 'none', cursor: 'pointer' }}>
@@ -159,8 +159,8 @@ export default function Agenda() {
                     <button className="btn-brand" onClick={function () { setShowEventForm(!showEventForm); setShowPrepForm(false); }}>
                         <Plus size={14} /> {isMobile ? 'EVENT' : 'NIEUW EVENT'}
                     </button>
-                </div>
-            </div>
+                </>}
+            />
 
             {/* Mobile List View */}
             {isMobile && mobileView === 'list' && (
