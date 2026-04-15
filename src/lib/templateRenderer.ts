@@ -187,6 +187,8 @@ function renderItemsTableBlock(doc: any, block: ItemsTableBlock, ctx: RenderCont
     block.columns.forEach(function (col) {
       if (col.key === 'totaal') {
         row[col.key] = eur((item.qty || 1) * (item.prijs || 0));
+      } else if (col.key === 'prijs_incl_btw') {
+        row[col.key] = eur((item.prijs || 0) * (1 + (item.btw || 0) / 100));
       } else if (col.key === 'prijs') {
         row[col.key] = eur(item.prijs);
       } else if (col.key === 'btw') {

@@ -887,11 +887,11 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             },
             columnStyles: {
                 0: { cellWidth: 'auto' },
-                1: { cellWidth: 18, halign: 'center' },
-                2: { cellWidth: 24, halign: 'right' },
-                3: { cellWidth: 16, halign: 'center' },
-                4: { cellWidth: 30, halign: 'right' },
-                5: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
+                1: { cellWidth: 16, halign: 'center' },
+                2: { cellWidth: 22, halign: 'right' },
+                3: { cellWidth: 14, halign: 'center' },
+                4: { cellWidth: 28, halign: 'right' },
+                5: { cellWidth: 26, halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: { fillColor: [255, 255, 255] },
             bodyStyles: { fillColor: [252, 250, 247] },
