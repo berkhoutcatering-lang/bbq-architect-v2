@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Eye, EyeOff, Copy, Trash2, GripVertical, ChevronUp, ChevronDown,
+  Eye, EyeOff, Copy, Trash2, ChevronUp, ChevronDown,
   Image, Type, User, BadgeCheck, Table, ChefHat, Calculator,
   CreditCard, Minus, ArrowDownUp, ImagePlus, PanelBottom, Thermometer
 } from 'lucide-react';
@@ -29,13 +29,16 @@ interface Props {
   onToggleVisibility: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
-  onMoveBlock: (id: string, direction: 'up' | 'down') => void;
+  onZIndexChange: (id: string, direction: 'up' | 'down') => void;
 }
 
 export default function LayersPanel({
   blocks, selectedBlockId, hiddenBlockIds,
-  onSelectBlock, onToggleVisibility, onDuplicate, onDelete, onMoveBlock
+  onSelectBlock, onToggleVisibility, onDuplicate, onDelete, onZIndexChange
 }: Props) {
+  // Sort by zIndex descending (highest = top of layers list)
+  const sortedBlocks = [...blocks].sort(function (a, b) { return (b.zIndex || 0) - (a.zIndex || 0); });
+
   return (
     <div style={{
       borderBottom: '1px solid var(--border)', maxHeight: 240, overflowY: 'auto',
@@ -57,7 +60,7 @@ export default function LayersPanel({
         </div>
       )}
 
-      {blocks.map(function (block, index) {
+      {sortedBlocks.map(function (block) {
         const Icon = ICON_MAP[block.type] || Type;
         const isSelected = block.id === selectedBlockId;
         const isHidden = hiddenBlockIds.has(block.id);
@@ -80,18 +83,19 @@ export default function LayersPanel({
             <span style={{ flex: 1, color: isSelected ? 'var(--blue)' : 'var(--text)', fontWeight: isSelected ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {label}
             </span>
+            <span style={{ fontSize: 9, color: 'var(--muted)', marginRight: 2 }}>z{block.zIndex || 0}</span>
 
-            {/* Layer controls - show on hover/selection */}
+            {/* Layer controls */}
             <div className="layer-controls" style={{
-              display: 'flex', gap: 1, opacity: isSelected ? 1 : 0,
+              display: 'flex', gap: 1, opacity: isSelected ? 1 : 0.4,
               transition: 'opacity 0.1s',
             }}>
-              <button onClick={function (e) { e.stopPropagation(); onMoveBlock(block.id, 'up'); }} disabled={index === 0}
-                title="Omhoog" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', opacity: index === 0 ? 0.3 : 1 }}>
+              <button onClick={function (e) { e.stopPropagation(); onZIndexChange(block.id, 'up'); }}
+                title="Naar voren" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
                 <ChevronUp size={11} />
               </button>
-              <button onClick={function (e) { e.stopPropagation(); onMoveBlock(block.id, 'down'); }} disabled={index === blocks.length - 1}
-                title="Omlaag" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', opacity: index === blocks.length - 1 ? 0.3 : 1 }}>
+              <button onClick={function (e) { e.stopPropagation(); onZIndexChange(block.id, 'down'); }}
+                title="Naar achteren" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}>
                 <ChevronDown size={11} />
               </button>
               <button onClick={function (e) { e.stopPropagation(); onToggleVisibility(block.id); }}

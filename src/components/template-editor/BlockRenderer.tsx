@@ -4,11 +4,15 @@ import type { TemplateBlock, PdfTemplate } from '@/types/template.types';
 import { TEMPLATE_VARIABLES } from '@/lib/templateVariables';
 import { Image, ChefHat, Thermometer } from 'lucide-react';
 
+// ── Unit conversion: match jsPDF output on the 2.5px/mm canvas ──
+const MM = 2.5;          // 1mm = 2.5px on canvas
+const PT = 0.3528 * MM;  // 1pt = 0.3528mm = 0.882px on canvas
+
 // Build example data map from TEMPLATE_VARIABLES
 const EXAMPLE_DATA: Record<string, string> = {};
 TEMPLATE_VARIABLES.forEach(function (v) { EXAMPLE_DATA[v.key] = v.example; });
 
-// HTML preview of a block — approximation of PDF output using real example data
+// HTML preview of a block — calibrated to match jsPDF PDF output
 export default function BlockRenderer({ block, documentType }: { block: TemplateBlock; documentType: PdfTemplate['document_type'] }) {
   const brandColor = '#c4a35a';
   const isDark = documentType === 'menukaart';
@@ -19,7 +23,6 @@ export default function BlockRenderer({ block, documentType }: { block: Template
     return c;
   }
 
-  // Replace {{var}} with example data
   function resolveVars(text: string): string {
     return text.replace(/\{\{(\w+)\}\}/g, function (_m, key) {
       return EXAMPLE_DATA[key] || key;
@@ -29,15 +32,15 @@ export default function BlockRenderer({ block, documentType }: { block: Template
   switch (block.type) {
     case 'logo':
       return (
-        <div style={{ textAlign: block.alignment, padding: '4px 0' }}>
+        <div style={{ textAlign: block.alignment, padding: 1 * MM + 'px 0' }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            width: block.maxWidth * 2.5, height: block.maxHeight * 2.5,
-            background: isDark ? 'rgba(255,255,255,.04)' : 'rgba(158,120,28,.05)', borderRadius: 6,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            width: block.maxWidth * MM, height: block.maxHeight * MM,
+            background: isDark ? 'rgba(255,255,255,.04)' : 'rgba(158,120,28,.05)', borderRadius: 4,
             border: '1px dashed ' + (isDark ? 'rgba(196,163,90,.2)' : 'rgba(158,120,28,.2)'),
           }}>
-            <Image size={16} style={{ color: brandColor, opacity: 0.4 }} />
-            <span style={{ fontSize: 9, color: brandColor, opacity: 0.5, fontWeight: 500 }}>Logo</span>
+            <Image size={14} style={{ color: brandColor, opacity: 0.4 }} />
+            <span style={{ fontSize: 8, color: brandColor, opacity: 0.5, fontWeight: 500 }}>Logo</span>
           </div>
         </div>
       );
@@ -45,10 +48,10 @@ export default function BlockRenderer({ block, documentType }: { block: Template
     case 'text':
       return (
         <div style={{
-          fontSize: block.fontSize * 1.2, fontWeight: block.fontWeight,
+          fontSize: block.fontSize * PT, fontWeight: block.fontWeight,
           fontStyle: block.fontStyle, color: resolveC(block.color),
           textAlign: block.alignment, lineHeight: block.lineHeight,
-          padding: '2px 0', whiteSpace: 'pre-wrap',
+          padding: 1 * MM + 'px 0', whiteSpace: 'pre-wrap',
         }}>
           {resolveVars(block.content)}
         </div>
@@ -56,17 +59,17 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'client_info':
       return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: 1 * MM + 'px 0', gap: 8 * MM }}>
           <div>
             {block.fields.filter(function (f) { return f.visible && ['client_naam', 'client_adres'].includes(f.key); }).map(function (f) {
-              return <div key={f.key} style={{ fontSize: f.bold ? 12 : 10, fontWeight: f.bold ? 700 : 400, color: isDark ? '#e8e0d0' : '#333', marginBottom: 2 }}>
+              return <div key={f.key} style={{ fontSize: (f.bold ? 11 : 9) * PT, fontWeight: f.bold ? 700 : 400, color: isDark ? '#e8e0d0' : '#333', marginBottom: 1 * MM }}>
                 {f.label ? f.label + ': ' : ''}{EXAMPLE_DATA[f.key] || f.key}
               </div>;
             })}
           </div>
-          <div style={{ textAlign: 'right', fontSize: 10, color: isDark ? '#999' : '#666' }}>
+          <div style={{ textAlign: 'right', fontSize: 9 * PT, color: isDark ? '#999' : '#666' }}>
             {block.fields.filter(function (f) { return f.visible && !['client_naam', 'client_adres'].includes(f.key); }).map(function (f) {
-              return <div key={f.key} style={{ marginBottom: 2 }}>{f.label}: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA[f.key] || f.key}</strong></div>;
+              return <div key={f.key} style={{ marginBottom: 1 * MM }}>{f.label}: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA[f.key] || f.key}</strong></div>;
             })}
           </div>
         </div>
@@ -74,11 +77,11 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'document_badge':
       return (
-        <div style={{ textAlign: 'center', padding: '8px 0' }}>
+        <div style={{ textAlign: 'center', padding: 2 * MM + 'px 0' }}>
           <span style={{
-            display: 'inline-block', padding: '6px 28px', borderRadius: 6,
+            display: 'inline-block', padding: 2 * MM + 'px ' + 8 * MM + 'px', borderRadius: 4,
             background: resolveC(block.backgroundColor), color: resolveC(block.textColor),
-            fontSize: block.fontSize * 1.1, fontWeight: 700, letterSpacing: '0.15em',
+            fontSize: block.fontSize * PT, fontWeight: 700, letterSpacing: '0.15em',
           }}>
             {resolveVars(block.text)}
           </span>
@@ -87,24 +90,24 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'items_table':
       return (
-        <div style={{ padding: '4px 0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+        <div style={{ padding: 2 * MM + 'px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: resolveC(block.headerStyle.backgroundColor), color: resolveC(block.headerStyle.textColor) }}>
                 {block.columns.map(function (col) {
-                  return <th key={col.key} style={{ padding: '5px 8px', textAlign: col.alignment, fontWeight: 600, fontSize: block.headerStyle.fontSize * 1.1 }}>{col.label}</th>;
+                  return <th key={col.key} style={{ padding: 1.5 * MM + 'px ' + 2 * MM + 'px', textAlign: col.alignment, fontWeight: 600, fontSize: block.headerStyle.fontSize * PT, width: col.width + '%' }}>{col.label}</th>;
                 })}
               </tr>
             </thead>
             <tbody>
               {[
-                { omschrijving: 'BBQ Catering pakket Premium', qty: '1', prijs: '\u20ac 1.000,00', btw: '21%', totaal: '\u20ac 1.000,00' },
-                { omschrijving: 'Extra bediening (4 uur)', qty: '2', prijs: '\u20ac 125,00', btw: '21%', totaal: '\u20ac 250,00' },
+                { omschrijving: 'BBQ Catering pakket Premium', qty: '1', prijs: '\u20ac 1.000,00', btw: '21%', prijs_incl_btw: '\u20ac 1.210,00', totaal: '\u20ac 1.000,00' },
+                { omschrijving: 'Extra bediening (4 uur)', qty: '2', prijs: '\u20ac 125,00', btw: '21%', prijs_incl_btw: '\u20ac 151,25', totaal: '\u20ac 250,00' },
               ].map(function (row, ri) {
                 return (
                   <tr key={ri} style={{ borderBottom: '1px solid ' + (isDark ? 'rgba(255,255,255,.06)' : '#f0f0f0') }}>
                     {block.columns.map(function (col) {
-                      return <td key={col.key} style={{ padding: '4px 8px', textAlign: col.alignment, color: isDark ? '#ccc' : resolveC(block.bodyStyle.textColor), fontSize: block.bodyStyle.fontSize * 1.1 }}>
+                      return <td key={col.key} style={{ padding: 1 * MM + 'px ' + 2 * MM + 'px', textAlign: col.alignment, color: isDark ? '#ccc' : resolveC(block.bodyStyle.textColor), fontSize: block.bodyStyle.fontSize * PT }}>
                         {(row as Record<string, string>)[col.key] || ''}
                       </td>;
                     })}
@@ -118,20 +121,20 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'menu':
       return (
-        <div style={{ padding: '6px 0' }}>
+        <div style={{ padding: 2 * MM + 'px 0' }}>
           {block.layout === '2col' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 * MM }}>
               {[
                 { gang: 'Voorgerechten', dishes: ['Pulled Pork Slider', 'Coleslaw'] },
                 { gang: 'Hoofdgerechten', dishes: ['Smoked Brisket', 'BBQ Ribs'] },
               ].map(function (g) {
                 return (
                   <div key={g.gang}>
-                    <div style={{ fontSize: block.gangTitleStyle.fontSize * 1.1, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 4 }}>
+                    <div style={{ fontSize: block.gangTitleStyle.fontSize * PT, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 1.5 * MM }}>
                       {g.gang}
                     </div>
                     {g.dishes.map(function (d) {
-                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * 1.1, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 2 }}>{d}</div>;
+                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * PT, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 0.5 * MM }}>{d}</div>;
                     })}
                   </div>
                 );
@@ -144,12 +147,12 @@ export default function BlockRenderer({ block, documentType }: { block: Template
                 { gang: 'Hoofdgerechten', dishes: ['Smoked Brisket', 'BBQ Ribs', 'Grilled Corn'] },
               ].map(function (g) {
                 return (
-                  <div key={g.gang} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: block.gangTitleStyle.fontSize * 1.1, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 3 }}>
+                  <div key={g.gang} style={{ marginBottom: 3 * MM }}>
+                    <div style={{ fontSize: block.gangTitleStyle.fontSize * PT, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 1 * MM }}>
                       {g.gang}
                     </div>
                     {g.dishes.map(function (d) {
-                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * 1.1, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 1 }}>{d}</div>;
+                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * PT, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 0.5 * MM }}>{d}</div>;
                     })}
                   </div>
                 );
@@ -161,11 +164,11 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'totals':
       return (
-        <div style={{ textAlign: block.alignment, padding: '4px 0', fontSize: block.fontSize * 1.1 }}>
-          {block.showSubtotaal && <div style={{ color: isDark ? '#999' : '#666', marginBottom: 3 }}>Subtotaal: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA.subtotaal}</strong></div>}
-          {block.showBtw && <div style={{ color: isDark ? '#999' : '#666', marginBottom: 3 }}>BTW: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA.btw_bedrag}</strong></div>}
+        <div style={{ textAlign: block.alignment, padding: 1 * MM + 'px 0', fontSize: block.fontSize * PT }}>
+          {block.showSubtotaal && <div style={{ color: isDark ? '#999' : '#666', marginBottom: 1 * MM }}>Subtotaal: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA.subtotaal}</strong></div>}
+          {block.showBtw && <div style={{ color: isDark ? '#999' : '#666', marginBottom: 1 * MM }}>BTW: <strong style={{ color: isDark ? '#e8e0d0' : '#333' }}>{EXAMPLE_DATA.btw_bedrag}</strong></div>}
           {block.showTotaal && (
-            <span style={{ display: 'inline-block', padding: '4px 16px', borderRadius: 4, background: resolveC(block.totalBarColor), color: '#fff', fontWeight: 700 }}>
+            <span style={{ display: 'inline-block', padding: 1.5 * MM + 'px ' + 4 * MM + 'px', borderRadius: 3, background: resolveC(block.totalBarColor), color: '#fff', fontWeight: 700 }}>
               Totaal: {EXAMPLE_DATA.totaal}
             </span>
           )}
@@ -175,7 +178,7 @@ export default function BlockRenderer({ block, documentType }: { block: Template
     case 'payment_details':
       return (
         <div style={{
-          padding: '10px 14px', borderRadius: 6, fontSize: block.fontSize * 1.1,
+          padding: 3 * MM + 'px ' + 4 * MM + 'px', borderRadius: 4, fontSize: block.fontSize * PT,
           background: resolveC(block.backgroundColor), border: '1px solid ' + resolveC(block.borderColor),
           color: isDark ? '#ccc' : '#555', whiteSpace: 'pre-wrap', lineHeight: 1.6,
         }}>
@@ -185,39 +188,35 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'divider':
       return (
-        <div style={{ padding: '4px 0' }}>
-          <hr style={{ border: 'none', borderTop: block.thickness + 'px ' + block.style + ' ' + resolveC(block.color), margin: 0 }} />
+        <div style={{ padding: 1 * MM + 'px 0' }}>
+          <hr style={{ border: 'none', borderTop: (block.thickness * MM) + 'px ' + block.style + ' ' + resolveC(block.color), margin: 0 }} />
         </div>
       );
 
     case 'spacer':
       return (
-        <div style={{ height: block.height * 2.5, background: 'transparent', position: 'relative' }}>
-          <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', fontSize: 8, color: '#ccc', pointerEvents: 'none' }}>
-            {block.height}mm
-          </div>
-        </div>
+        <div style={{ height: block.height * MM, background: 'transparent' }} />
       );
 
     case 'image':
       return (
-        <div style={{ textAlign: block.alignment, padding: '4px 0' }}>
+        <div style={{ textAlign: block.alignment, padding: 1 * MM + 'px 0' }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            width: Math.min(block.maxWidth * 2.5, 400), height: block.maxHeight * 1.5,
-            background: 'rgba(0,0,0,.02)', borderRadius: 6, border: '1px dashed #ddd',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            width: block.maxWidth * MM, height: block.maxHeight * MM,
+            background: 'rgba(0,0,0,.02)', borderRadius: 4, border: '1px dashed #ddd',
           }}>
-            <Image size={16} style={{ color: '#bbb' }} />
-            <span style={{ fontSize: 9, color: '#bbb' }}>Afbeelding</span>
+            <Image size={14} style={{ color: '#bbb' }} />
+            <span style={{ fontSize: 8, color: '#bbb' }}>Afbeelding</span>
           </div>
         </div>
       );
 
     case 'footer':
       return (
-        <div style={{ padding: '6px 0' }}>
-          {block.showTopBorder && <hr style={{ border: 'none', borderTop: '1px solid ' + resolveC(block.borderColor), marginBottom: 4 }} />}
-          <div style={{ fontSize: block.fontSize * 1.2, color: resolveC(block.color), textAlign: block.alignment }}>
+        <div style={{ padding: 2 * MM + 'px 0' }}>
+          {block.showTopBorder && <hr style={{ border: 'none', borderTop: '1px solid ' + resolveC(block.borderColor), marginBottom: 2 * MM }} />}
+          <div style={{ fontSize: block.fontSize * PT, color: resolveC(block.color), textAlign: block.alignment }}>
             {resolveVars(block.content)}
           </div>
         </div>
@@ -225,12 +224,12 @@ export default function BlockRenderer({ block, documentType }: { block: Template
 
     case 'haccp_table':
       return (
-        <div style={{ padding: '4px 0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
+        <div style={{ padding: 2 * MM + 'px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 * PT }}>
             <thead>
               <tr style={{ background: block.headerColor, color: '#fff' }}>
                 {block.columns.map(function (col) {
-                  return <th key={col.key} style={{ padding: '4px 6px', textAlign: col.alignment, fontWeight: 600 }}>{col.label}</th>;
+                  return <th key={col.key} style={{ padding: 1.5 * MM + 'px ' + 2 * MM + 'px', textAlign: col.alignment, fontWeight: 600, width: col.width + '%' }}>{col.label}</th>;
                 })}
               </tr>
             </thead>
@@ -244,7 +243,7 @@ export default function BlockRenderer({ block, documentType }: { block: Template
                     {block.columns.map(function (col) {
                       const val = (row as Record<string, string>)[col.key] || '';
                       const statusColor = col.key === 'status' ? (val === 'ok' ? block.statusColors.ok : val === 'warn' ? block.statusColors.warn : val === 'danger' ? block.statusColors.danger : undefined) : undefined;
-                      return <td key={col.key} style={{ padding: '3px 6px', textAlign: col.alignment, color: statusColor || '#555', fontWeight: statusColor ? 600 : 400 }}>{val}</td>;
+                      return <td key={col.key} style={{ padding: 1 * MM + 'px ' + 2 * MM + 'px', textAlign: col.alignment, color: statusColor || '#555', fontWeight: statusColor ? 600 : 400 }}>{val}</td>;
                     })}
                   </tr>
                 );
@@ -255,6 +254,6 @@ export default function BlockRenderer({ block, documentType }: { block: Template
       );
 
     default:
-      return <div style={{ padding: 8, color: '#999', fontSize: 11 }}>Onbekend blok: {(block as TemplateBlock).type}</div>;
+      return <div style={{ padding: 2 * MM, color: '#999', fontSize: 10 * PT }}>Onbekend blok: {(block as TemplateBlock).type}</div>;
   }
 }

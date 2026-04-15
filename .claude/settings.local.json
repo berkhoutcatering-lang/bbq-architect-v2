@@ -27,7 +27,9 @@
       "WebFetch(domain:www.clearcogs.com)",
       "WebFetch(domain:nextsprints.com)",
       "WebFetch(domain:support.caterzen.com)",
-      "WebFetch(domain:www.flexcateringhq.com)"
+      "WebFetch(domain:www.flexcateringhq.com)",
+      "mcp__88f10787-7356-4f17-89d7-2012a75687ac__list_projects",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }

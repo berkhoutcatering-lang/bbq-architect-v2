@@ -21,6 +21,7 @@
     "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-rnd": "^10.5.3",
     "recharts": "^3.8.0",
     "resend": "^6.10.0"
   },

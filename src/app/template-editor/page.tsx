@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import TemplateEditor from '@/components/template-editor/TemplateEditor';
@@ -9,8 +9,20 @@ import { DEFAULT_TEMPLATES } from '@/lib/templateDefaults';
 import type { PdfTemplate, TemplateBlock, PageSettings } from '@/types/template.types';
 
 export default function TemplateEditorPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
+        <Loader2 size={24} style={{ color: 'var(--brand)', animation: 'spin 1s linear infinite' }} />
+      </div>
+    }>
+      <TemplateEditorInner />
+    </Suspense>
+  );
+}
+
+function TemplateEditorInner() {
   const searchParams = useSearchParams();
-  const { orgId } = useOrg();
+  const { orgId, loading: orgLoading } = useOrg();
   const documentType = (searchParams.get('type') || 'factuur') as PdfTemplate['document_type'];
   const templateId = searchParams.get('id');
   const scope = searchParams.get('scope'); // 'global' for platform admin
@@ -19,11 +31,16 @@ export default function TemplateEditorPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(function () {
+    // Wait for org context to finish loading before fetching
+    if (orgLoading) return;
+
     if (templateId) {
       // Load existing template
       fetch('/api/templates/' + templateId)
         .then(function (r) { return r.json(); })
-        .then(function (d) { setTemplate(d.template || null); setLoading(false); });
+        .then(function (d) { setTemplate(d.template || null); })
+        .catch(function () { /* fall through to built-in defaults */ })
+        .finally(function () { setLoading(false); });
     } else {
       // Load default for this type + org, or use built-in defaults
       const targetOrgId = scope === 'global' ? null : orgId;
@@ -38,10 +55,11 @@ export default function TemplateEditorPage() {
           const orgDefault = templates.find(function (t: PdfTemplate) { return t.organization_id === targetOrgId && t.is_default; });
           const globalDefault = templates.find(function (t: PdfTemplate) { return !t.organization_id && t.is_default; });
           setTemplate(orgDefault || globalDefault || null);
-          setLoading(false);
-        });
+        })
+        .catch(function () { /* fall through to built-in defaults */ })
+        .finally(function () { setLoading(false); });
     }
-  }, [templateId, documentType, orgId, scope]);
+  }, [templateId, documentType, orgId, orgLoading, scope]);
 
   async function handleSave(blocks: TemplateBlock[], pageSettings: PageSettings, name: string) {
     const targetOrgId = scope === 'global' ? null : orgId;

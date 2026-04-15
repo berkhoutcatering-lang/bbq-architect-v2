@@ -43,7 +43,7 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
     <div style={{ marginBottom: 6 }}>
       <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 2 }}>{label}</label>
       <div style={{ display: 'flex', gap: 4 }}>
-        <select value={isVar ? value : 'custom'} onChange={function (e) { onChange(e.target.value === 'custom' ? 'var(--color-text-ghost)' : e.target.value); }}
+        <select value={isVar ? value : 'custom'} onChange={function (e) { onChange(e.target.value === 'custom' ? '#333333' : e.target.value); }}
           style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 10 }}>
           <option value="brand_primary">Huisstijl primair</option>
           <option value="brand_accent">Huisstijl accent</option>
@@ -64,7 +64,7 @@ function NumberInput({ label, value, onChange, min, max, step, suffix }: { label
       <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 2 }}>{label}</label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <input type="number" value={value} min={min} max={max} step={step || 1}
-          onChange={function (e) { onChange(Number(e.target.value)); }}
+          onChange={function (e) { let v = Number(e.target.value); if (min !== undefined && v < min) v = min; if (max !== undefined && v > max) v = max; onChange(v); }}
           style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 11 }} />
         {suffix && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{suffix}</span>}
       </div>
@@ -156,6 +156,26 @@ export default function BlockPropertiesPanel({ block, documentType, onUpdate, on
           </button>
         </div>
       </div>
+
+      {/* Position & Size — all block types */}
+      <Section title="Positie & afmeting" defaultOpen={false}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <NumberInput label="X" value={Math.round((block.x || 0) * 10) / 10} onChange={function (v) { onUpdate({ x: v } as any); }} min={0} max={300} step={0.5} suffix="mm" />
+          <NumberInput label="Y" value={Math.round((block.y || 0) * 10) / 10} onChange={function (v) { onUpdate({ y: v } as any); }} min={0} max={400} step={0.5} suffix="mm" />
+          <NumberInput label="Breedte" value={Math.round((block.width || 180) * 10) / 10} onChange={function (v) { onUpdate({ width: v } as any); }} min={10} max={300} step={0.5} suffix="mm" />
+          <NumberInput label="Hoogte" value={Math.round((block.height || 20) * 10) / 10} onChange={function (v) { onUpdate({ height: v } as any); }} min={5} max={400} step={0.5} suffix="mm" />
+        </div>
+        <div style={{ marginTop: 6, display: 'flex', gap: 4 }}>
+          <button onClick={function () { onUpdate({ zIndex: (block.zIndex || 0) + 1 } as any); }}
+            style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', fontSize: 10, color: 'var(--text)' }}>
+            Naar voren
+          </button>
+          <button onClick={function () { onUpdate({ zIndex: Math.max(0, (block.zIndex || 0) - 1) } as any); }}
+            style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', fontSize: 10, color: 'var(--text)' }}>
+            Naar achteren
+          </button>
+        </div>
+      </Section>
 
       {/* Text block */}
       {block.type === 'text' && (

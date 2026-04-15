@@ -6,6 +6,11 @@
 export interface TemplateBlockBase {
   id: string;
   type: string;
+  x?: number;       // mm from left page edge
+  y?: number;       // mm from top page edge
+  width?: number;   // mm (undefined = full content width)
+  height?: number;  // mm (undefined = auto-fit)
+  zIndex?: number;  // stacking order (higher = on top)
   locked?: boolean;
   conditions?: BlockCondition[];
 }
@@ -201,6 +206,7 @@ export interface PdfTemplate {
   description: string;
   blocks: TemplateBlock[];
   page_settings: PageSettings;
+  layout_mode?: 'flow' | 'absolute'; // 'flow' = legacy vertical, 'absolute' = 2D WYSIWYG
   is_default: boolean;
   is_active: boolean;
   version: number;

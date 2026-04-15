@@ -538,7 +538,37 @@ export async function renderFromTemplate(
   }
   (ctx as any)._logos = logos;
 
-  // Render blocks
+  // ── Absolute layout mode (2D WYSIWYG) ──
+  if (template.layout_mode === 'absolute') {
+    // Sort by zIndex for correct paint order
+    const sorted = [...template.blocks].sort(function (a, b) { return (a.zIndex || 0) - (b.zIndex || 0); });
+
+    for (const block of sorted) {
+      if (!evaluateConditions(block.conditions, ctx)) continue;
+
+      // Create a cursor positioned at the block's absolute coordinates
+      const blockCursor: Cursor = {
+        y: block.y || ps.margins.top,
+        pageWidth,
+        pageHeight,
+        margins: {
+          ...ps.margins,
+          left: block.x || ps.margins.left,
+          right: pageWidth - (block.x || ps.margins.left) - (block.width || contentWidth),
+        },
+        contentWidth: block.width || contentWidth,
+      };
+
+      const renderer = RENDERERS[block.type];
+      if (renderer) {
+        renderer(doc, block, ctx, blockCursor);
+      }
+    }
+
+    return doc;
+  }
+
+  // ── Flow layout mode (legacy vertical) ──
   const cursor: Cursor = {
     y: ps.margins.top,
     pageWidth,
