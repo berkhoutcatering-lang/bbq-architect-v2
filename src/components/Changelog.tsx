@@ -5,10 +5,10 @@ import { X, Sparkles, Wrench, Bug, AlertTriangle, Bell } from 'lucide-react';
 import type { ChangelogEntry } from '@/types/database.types';
 
 const CATEGORY_CONFIG: Record<string, { icon: typeof Sparkles; color: string; label: string }> = {
-  feature: { icon: Sparkles, color: '#8b5cf6', label: 'Nieuw' },
-  improvement: { icon: Wrench, color: '#3b82f6', label: 'Verbeterd' },
-  fix: { icon: Bug, color: '#22c55e', label: 'Fix' },
-  breaking: { icon: AlertTriangle, color: '#ef4444', label: 'Breaking' },
+  feature: { icon: Sparkles, color: 'var(--purple)', label: 'Nieuw' },
+  improvement: { icon: Wrench, color: 'var(--blue)', label: 'Verbeterd' },
+  fix: { icon: Bug, color: 'var(--green)', label: 'Fix' },
+  breaking: { icon: AlertTriangle, color: 'var(--red)', label: 'Breaking' },
 };
 
 export default function Changelog() {
@@ -69,7 +69,7 @@ export default function Changelog() {
           <span style={{
             position: 'absolute', top: 2, right: 2,
             width: 16, height: 16, borderRadius: '50%',
-            background: '#ef4444', color: '#fff',
+            background: 'var(--red)', color: '#fff',
             fontSize: 9, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--card)',
@@ -92,7 +92,7 @@ export default function Changelog() {
             onClick={function () { setOpen(false); }}
             style={{
               position: 'absolute', inset: 0,
-              background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)',
+              background: 'var(--overlay)', backdropFilter: 'blur(4px)',
             }}
           />
 
@@ -102,7 +102,7 @@ export default function Changelog() {
             maxHeight: '80vh', margin: 16,
             background: 'var(--card)', borderRadius: 16,
             border: '1px solid var(--border)',
-            boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+            boxShadow: '0 20px 60px var(--shadow-lg)',
             display: 'flex', flexDirection: 'column',
             overflow: 'hidden',
           }}>
@@ -152,8 +152,8 @@ export default function Changelog() {
                     style={{
                       padding: '14px 16px',
                       borderRadius: 12,
-                      background: isNew ? 'rgba(139,92,246,.04)' : 'transparent',
-                      border: '1px solid ' + (isNew ? 'rgba(139,92,246,.12)' : 'var(--border)'),
+                      background: isNew ? 'color-mix(in srgb, var(--purple) 4%, transparent)' : 'transparent',
+                      border: '1px solid ' + (isNew ? 'color-mix(in srgb, var(--purple) 12%, transparent)' : 'var(--border)'),
                       marginBottom: 10,
                     }}
                   >

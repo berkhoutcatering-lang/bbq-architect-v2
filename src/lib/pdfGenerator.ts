@@ -850,14 +850,16 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         }
 
         // ── Items table ──
-        const tableHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW%', 'Totaal']];
+        const tableHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW%', 'Prijs incl. BTW', 'Totaal']];
         const tableBody = (form.items || []).map(function (item: any) {
             const lineTotal = (item.qty || 0) * (item.prijs || 0);
+            const prijsInclBtw = (item.prijs || 0) * (1 + (item.btw || 0) / 100);
             return [
                 item.desc || item.omschrijving || '',
                 String(item.qty || 0),
                 eur(item.prijs),
                 (item.btw || 0) + '%',
+                eur(prijsInclBtw),
                 eur(lineTotal)
             ];
         });
@@ -885,10 +887,11 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
             },
             columnStyles: {
                 0: { cellWidth: 'auto' },
-                1: { cellWidth: 20, halign: 'center' },
-                2: { cellWidth: 28, halign: 'right' },
-                3: { cellWidth: 18, halign: 'center' },
-                4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+                1: { cellWidth: 18, halign: 'center' },
+                2: { cellWidth: 24, halign: 'right' },
+                3: { cellWidth: 16, halign: 'center' },
+                4: { cellWidth: 30, halign: 'right' },
+                5: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
             },
             alternateRowStyles: { fillColor: [255, 255, 255] },
             bodyStyles: { fillColor: [252, 250, 247] },

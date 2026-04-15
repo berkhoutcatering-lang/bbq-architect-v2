@@ -31,7 +31,7 @@ function CustomTooltip({ active, payload }: any) {
   const d: DishAnalysis = payload[0].payload;
   return (
     <div style={{
-      background: '#1a1a1e', border: '1px solid #2a2a30', borderRadius: 10,
+      background: 'var(--sidebar-bg-hover)', border: '1px solid var(--color-border-hover)', borderRadius: 10,
       padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,.5)', maxWidth: 240
     }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{d.naam}</div>

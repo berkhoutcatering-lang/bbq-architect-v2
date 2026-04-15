@@ -73,7 +73,7 @@ export default function OfflineIndicator() {
         justifyContent: 'center',
         gap: '8px',
         background: showSyncComplete ? 'rgba(34, 197, 94, 0.95)' : 'rgba(245, 158, 11, 0.95)',
-        color: showSyncComplete ? '#fff' : '#1a1a1e',
+        color: showSyncComplete ? '#fff' : 'var(--sidebar-bg-hover)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
       }}

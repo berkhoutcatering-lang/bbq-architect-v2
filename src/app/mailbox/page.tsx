@@ -22,10 +22,10 @@ const TYPE_LABELS: Record<string, string> = {
     herinnering: 'Herinnering',
 };
 const TYPE_COLORS: Record<string, string> = {
-    vrij: '#3b82f6',
-    offerte: '#c4a35a',
-    factuur: '#22c55e',
-    herinnering: '#f59e0b',
+    vrij: 'var(--blue)',
+    offerte: 'var(--color-accent-gold)',
+    factuur: 'var(--green)',
+    herinnering: 'var(--amber)',
 };
 
 export default function Mailbox() {
@@ -212,7 +212,7 @@ export default function Mailbox() {
     if (isLoading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-                <Flame size={24} className="text-[#c4a35a] animate-pulse" />
+                <Flame size={24} className="text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }
@@ -296,14 +296,14 @@ export default function Mailbox() {
                             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                                 <span style={{
                                     fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
-                                    background: (TYPE_COLORS[selectedEmail.type] || '#3b82f6') + '22',
-                                    color: TYPE_COLORS[selectedEmail.type] || '#3b82f6',
+                                    background: (TYPE_COLORS[selectedEmail.type] || 'var(--blue)') + '22',
+                                    color: TYPE_COLORS[selectedEmail.type] || 'var(--blue)',
                                     textTransform: 'uppercase',
                                 }}>{TYPE_LABELS[selectedEmail.type] || selectedEmail.type}</span>
                                 <span style={{
                                     fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
-                                    background: selectedEmail.status === 'verzonden' ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)',
-                                    color: selectedEmail.status === 'verzonden' ? '#22c55e' : '#ef4444',
+                                    background: selectedEmail.status === 'verzonden' ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--red) 12%, transparent)',
+                                    color: selectedEmail.status === 'verzonden' ? 'var(--green)' : 'var(--red)',
                                     textTransform: 'uppercase',
                                 }}>{selectedEmail.status}</span>
                             </div>
@@ -315,14 +315,14 @@ export default function Mailbox() {
                         {filteredEmails.map(function (email) {
                             const isSelected = selectedEmail?.id === email.id;
                             return (
-                                <MetallicCard key={email.id} className={'p-4' + (isSelected ? ' border-[#c4a35a]' : '')}
+                                <MetallicCard key={email.id} className={'p-4' + (isSelected ? ' border-[var(--color-accent-gold)]' : '')}
                                     onClick={function () { setSelectedEmail(isSelected ? null : email); }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                 <span style={{
                                                     width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                                                    background: TYPE_COLORS[email.type] || '#3b82f6',
+                                                    background: TYPE_COLORS[email.type] || 'var(--blue)',
                                                 }} />
                                                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {email.onderwerp}
@@ -336,8 +336,8 @@ export default function Mailbox() {
                                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtDate(email.created_at)}</div>
                                             <span style={{
                                                 fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, marginTop: 4, display: 'inline-block',
-                                                background: email.status === 'verzonden' ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)',
-                                                color: email.status === 'verzonden' ? '#22c55e' : '#ef4444',
+                                                background: email.status === 'verzonden' ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--red) 12%, transparent)',
+                                                color: email.status === 'verzonden' ? 'var(--green)' : 'var(--red)',
                                                 textTransform: 'uppercase',
                                             }}>{email.status}</span>
                                         </div>
@@ -362,7 +362,7 @@ export default function Mailbox() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         {/* Klant selector */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Aan (klant)</label>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Aan (klant)</label>
                             <select
                                 value={composeKlantId}
                                 onChange={function (e) { selectKlant(e.target.value); }}
@@ -379,7 +379,7 @@ export default function Mailbox() {
                         {!composeKlantId && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 <div>
-                                    <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>E-mailadres</label>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>E-mailadres</label>
                                     <input
                                         value={composeEmail}
                                         onChange={function (e) { setComposeEmail(e.target.value); }}
@@ -388,7 +388,7 @@ export default function Mailbox() {
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Naam</label>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Naam</label>
                                     <input
                                         value={composeNaam}
                                         onChange={function (e) { setComposeNaam(e.target.value); }}
@@ -401,7 +401,7 @@ export default function Mailbox() {
 
                         {/* Template selector */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Template (optioneel)</label>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Template (optioneel)</label>
                             <select
                                 value={composeTemplateId}
                                 onChange={function (e) { selectTemplate(e.target.value); }}
@@ -416,7 +416,7 @@ export default function Mailbox() {
 
                         {/* Onderwerp */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Onderwerp</label>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Onderwerp</label>
                             <input
                                 value={composeOnderwerp}
                                 onChange={function (e) { setComposeOnderwerp(e.target.value); }}
@@ -427,7 +427,7 @@ export default function Mailbox() {
 
                         {/* Bericht */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Bericht</label>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Bericht</label>
                             <textarea
                                 rows={8}
                                 value={composeBericht}
@@ -475,12 +475,12 @@ export default function Mailbox() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
                                     <div>
-                                        <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Naam</label>
+                                        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Naam</label>
                                         <input value={tplForm.naam} onChange={function (e) { setTplForm({ ...tplForm, naam: e.target.value }); }} placeholder="Template naam"
                                             style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }} />
                                     </div>
                                     <div>
-                                        <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Categorie</label>
+                                        <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Categorie</label>
                                         <select value={tplForm.categorie} onChange={function (e) { setTplForm({ ...tplForm, categorie: e.target.value }); }}
                                             style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}>
                                             <option value="algemeen">Algemeen</option>
@@ -491,18 +491,18 @@ export default function Mailbox() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Onderwerp</label>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Onderwerp</label>
                                     <input value={tplForm.onderwerp} onChange={function (e) { setTplForm({ ...tplForm, onderwerp: e.target.value }); }}
                                         placeholder="Onderwerp (gebruik {{klant_naam}} en {{bedrijfsnaam}})"
                                         style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Inhoud</label>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Inhoud</label>
                                     <textarea rows={10} value={tplForm.body} onChange={function (e) { setTplForm({ ...tplForm, body: e.target.value }); }}
                                         placeholder="Typ de template inhoud... Gebruik {{klant_naam}} en {{bedrijfsnaam}} als variabelen."
                                         style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif', resize: 'vertical' }} />
                                 </div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)', background: 'rgba(196,163,90,.06)', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(196,163,90,.1)' }}>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', background: 'color-mix(in srgb, var(--color-accent-gold) 6%, transparent)', borderRadius: 8, padding: '8px 12px', border: '1px solid color-mix(in srgb, var(--color-accent-gold) 10%, transparent)' }}>
                                     <strong>Variabelen:</strong> {'{{klant_naam}}'} = naam ontvanger, {'{{bedrijfsnaam}}'} = jouw bedrijfsnaam
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -536,7 +536,7 @@ export default function Mailbox() {
                                                     <span style={{
                                                         display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700,
                                                         padding: '4px 8px', borderRadius: 6,
-                                                        background: 'rgba(196,163,90,.1)', color: '#c4a35a',
+                                                        background: 'color-mix(in srgb, var(--color-accent-gold) 10%, transparent)', color: 'var(--color-accent-gold)',
                                                         textTransform: 'uppercase',
                                                     }}>{tpl.categorie}</span>
                                                 </div>
@@ -545,7 +545,7 @@ export default function Mailbox() {
                                                         <Pencil size={13} />
                                                     </button>
                                                     <button className="btn btn-ghost btn-sm" onClick={function () { deleteTemplate(tpl.id); }} aria-label="Verwijderen"
-                                                        style={{ color: '#ef4444' }}>
+                                                        style={{ color: 'var(--red)' }}>
                                                         <Trash2 size={13} />
                                                     </button>
                                                 </div>

@@ -30,11 +30,22 @@
 
   /* Status */
   --green: #22c55e;
+  --emerald: #10b981;
   --red: #ef4444;
   --amber: #f59e0b;
   --cyan: #4ECDC4;
   --purple: #a78bfa;
   --blue: #3b82f6;
+  --sky: #38bdf8;
+  --pink: #ec4899;
+  --orange: #f97316;
+  --slate: #64748b;
+  --zinc: #71717a;
+  --indigo: #8b8bf0;
+
+  /* Dark backgrounds */
+  --color-bg-deep: #0e0e10;
+  --color-bg-darker: #0a0a0c;
 
   /* Layout */
   --sidebar-bg: #151518;
@@ -42,10 +53,20 @@
   --sidebar-border: #1e1e22;
   --header-h: 56px;
 
+  /* Typography scale */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+
   /* Effects */
   --glass-blur: blur(18px);
   --glass-border: 1px solid rgba(130, 130, 130, .12);
   --lift-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  --overlay: rgba(0, 0, 0, .5);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, .3);
 
   /* Mercedes-style semantic aliases */
   --color-bg-primary: #121215;
@@ -5729,6 +5750,12 @@ body {
 /* ==========================================================================
    UX REFACTOR — Accessibility
    ========================================================================== */
+
+/* Spin animation for loaders */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {

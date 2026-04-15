@@ -6,6 +6,8 @@ import { useToast } from '@/components/Toast';
 import { fmtNl, today } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
@@ -45,6 +47,10 @@ export default function HACCP() {
     const { data: events } = useSupabase<DbEvent>('events', []);
     const { data: offertes } = useSupabase<Offerte>('offertes', []);
     const showToast = useToast();
+    const { errors: haccpErrors, validateAll: validateHaccp, clearError: clearHaccpError, fieldProps: haccpFieldProps } = useFormValidation({
+        wat: [{ required: 'Selecteer een product' }],
+        temp: [{ required: 'Vul een temperatuur in' }],
+    });
     const [tab, setTab] = useState('overzicht');
     const [filterEvent, setFilterEvent] = useState('');
     const [isMobile, setIsMobile] = useState(false);
@@ -56,10 +62,10 @@ export default function HACCP() {
     // Quick-Log state
     const QUICKLOG_PRODUCTS = ['Bavette', 'Spareribs', 'Pulled Pork', 'Kippendij', 'Zalm', 'Moink Balls', 'Bavarois'];
     const QUICKLOG_TYPES = [
-        { val: 'kern', label: 'Kern', icon: '\uD83D\uDD25', color: '#ef4444' },
-        { val: 'koeling', label: 'Koeling', icon: '\u2744\uFE0F', color: '#3b82f6' },
-        { val: 'bewaring', label: 'Bewaring', icon: '\uD83D\uDCE6', color: '#8b5cf6' },
-        { val: 'uitgifte', label: 'Uitgifte', icon: '\uD83C\uDF7D\uFE0F', color: '#f59e0b' }
+        { val: 'kern', label: 'Kern', icon: '\uD83D\uDD25', color: 'var(--red)' },
+        { val: 'koeling', label: 'Koeling', icon: '\u2744\uFE0F', color: 'var(--blue)' },
+        { val: 'bewaring', label: 'Bewaring', icon: '\uD83D\uDCE6', color: 'var(--purple)' },
+        { val: 'uitgifte', label: 'Uitgifte', icon: '\uD83C\uDF7D\uFE0F', color: 'var(--amber)' }
     ];
     const [qlProduct, setQlProduct] = useState('');
     const [qlTemp, setQlTemp] = useState('');
@@ -171,7 +177,7 @@ export default function HACCP() {
     }
 
     function saveRecord() {
-        if (!form.wat || !form.temp) { showToast('Vul product en temperatuur in', 'error'); return; }
+        if (!validateHaccp({ wat: form.wat, temp: form.temp })) return;
         const status = getStatus(form.type, form.temp);
         const data = Object.assign({}, form, {
             temp: parseFloat(form.temp),
@@ -260,7 +266,7 @@ export default function HACCP() {
                     {(nearestEvent || nearestOfferte) && (
                         <div style={{
                             padding: '10px 14px', marginBottom: 12, borderRadius: 12,
-                            background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.15)',
+                            background: 'color-mix(in srgb, var(--brand) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--brand) 15%, transparent)',
                             fontSize: 12, color: 'var(--brand)', display: 'flex', alignItems: 'center', gap: 8
                         }}>
                             <CalendarCheck size={16} />
@@ -283,7 +289,7 @@ export default function HACCP() {
                                     <button key={p} onClick={function () { setQlProduct(p); }}
                                         style={{
                                             height: 64, borderRadius: 14, fontSize: 16, fontWeight: 700,
-                                            background: selected ? 'rgba(255,191,0,.12)' : 'var(--card-solid)',
+                                            background: selected ? 'color-mix(in srgb, var(--brand) 12%, transparent)' : 'var(--card-solid)',
                                             border: selected ? '2px solid var(--brand)' : '1px solid var(--border)',
                                             color: selected ? 'var(--brand)' : 'var(--text)',
                                             cursor: 'pointer', transition: 'all 0.15s',
@@ -304,20 +310,20 @@ export default function HACCP() {
                         {/* Temperature display */}
                         <div style={{
                             textAlign: 'center', padding: '20px 0', marginBottom: 10,
-                            background: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return s === 'ok' ? 'rgba(16,185,129,.08)' : s === 'warn' ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)'; })() : 'var(--card-solid)',
-                            border: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return '2px solid ' + (s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'); })() : '1px solid var(--border)',
+                            background: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return s === 'ok' ? 'color-mix(in srgb, var(--emerald) 8%, transparent)' : s === 'warn' ? 'color-mix(in srgb, var(--amber) 8%, transparent)' : 'color-mix(in srgb, var(--red) 8%, transparent)'; })() : 'var(--card-solid)',
+                            border: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return '2px solid ' + (s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)'); })() : '1px solid var(--border)',
                             borderRadius: 16, transition: 'all 0.2s'
                         }}>
                             <span style={{
                                 fontSize: 48, fontWeight: 300, letterSpacing: '-2px', fontVariantNumeric: 'tabular-nums',
-                                color: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'; })() : 'var(--muted-light)'
+                                color: qlTemp ? (function () { var s = getQuickLogStatus(qlType, qlTemp); return s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)'; })() : 'var(--muted-light)'
                             }}>
                                 {qlTemp || '\u2014'}
                             </span>
                             <span style={{ fontSize: 24, color: 'var(--muted)', marginLeft: 4 }}>{'\u00B0C'}</span>
                             {qlTemp && (function () {
                                 var s = getQuickLogStatus(qlType, qlTemp);
-                                return <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444' }}>
+                                return <div style={{ fontSize: 13, fontWeight: 700, marginTop: 6, color: s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
                                     {s === 'ok' ? '\u2713 OK' : s === 'warn' ? '\u26A0 Risicozone' : '\u2717 AFWIJKING'}
                                 </div>;
                             })()}
@@ -333,9 +339,9 @@ export default function HACCP() {
                                     }}
                                         style={{
                                             height: 56, borderRadius: 14, fontSize: key === '\u232B' ? 22 : 24, fontWeight: 600,
-                                            background: key === '\u232B' ? 'rgba(239,68,68,.08)' : 'var(--card-solid)',
-                                            border: key === '\u232B' ? '1px solid rgba(239,68,68,.2)' : '1px solid var(--border)',
-                                            color: key === '\u232B' ? '#ef4444' : 'var(--text)',
+                                            background: key === '\u232B' ? 'color-mix(in srgb, var(--red) 8%, transparent)' : 'var(--card-solid)',
+                                            border: key === '\u232B' ? '1px solid color-mix(in srgb, var(--red) 20%, transparent)' : '1px solid var(--border)',
+                                            color: key === '\u232B' ? 'var(--red)' : 'var(--text)',
                                             cursor: 'pointer', transition: 'all 0.1s',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             fontVariantNumeric: 'tabular-nums'
@@ -378,17 +384,17 @@ export default function HACCP() {
                         <button onClick={function () { setVoiceOpen(true); }}
                             style={{
                                 flex: 1, height: 52, borderRadius: 14, fontSize: 14, fontWeight: 700,
-                                background: 'rgba(196,163,90,0.08)', border: '1px solid rgba(196,163,90,0.2)',
-                                color: '#c4a35a', cursor: 'pointer', transition: 'all 0.15s',
+                                background: 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
+                                color: 'var(--color-accent-gold)', cursor: 'pointer', transition: 'all 0.15s',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                             }}>
                             🎤 Spraak
                         </button>
                         <label style={{
                             flex: 1, height: 52, borderRadius: 14, fontSize: 14, fontWeight: 700,
-                            background: qlFoto ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
-                            border: qlFoto ? '1px solid rgba(16,185,129,0.2)' : '1px solid rgba(59,130,246,0.2)',
-                            color: qlFoto ? '#10b981' : '#3b82f6', cursor: 'pointer', transition: 'all 0.15s',
+                            background: qlFoto ? 'color-mix(in srgb, var(--emerald) 8%, transparent)' : 'color-mix(in srgb, var(--blue) 8%, transparent)',
+                            border: qlFoto ? '1px solid color-mix(in srgb, var(--emerald) 20%, transparent)' : '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+                            color: qlFoto ? 'var(--emerald)' : 'var(--blue)', cursor: 'pointer', transition: 'all 0.15s',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                         }}>
                             {qlFoto ? '✅ Foto' : '📸 Foto'}
@@ -447,7 +453,7 @@ export default function HACCP() {
                             color: (!qlProduct || !qlTemp) ? 'var(--muted)' : '#fff',
                             cursor: (!qlProduct || !qlTemp || qlSaving) ? 'not-allowed' : 'pointer',
                             letterSpacing: '0.06em', textTransform: 'uppercase', transition: 'all 0.2s',
-                            boxShadow: (qlProduct && qlTemp && !qlSaving) ? '0 4px 20px rgba(16,185,129,.3)' : 'none',
+                            boxShadow: (qlProduct && qlTemp && !qlSaving) ? '0 4px 20px color-mix(in srgb, var(--emerald) 30%, transparent)' : 'none',
                             opacity: qlSaving ? 0.7 : 1
                         }}>
                         {qlSaving ? (
@@ -482,8 +488,8 @@ export default function HACCP() {
                                         <span style={{
                                             width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             fontSize: 13, fontWeight: 700, flexShrink: 0,
-                                            background: rec.status === 'ok' ? 'rgba(16,185,129,.1)' : rec.status === 'warn' ? 'rgba(245,158,11,.1)' : 'rgba(239,68,68,.1)',
-                                            color: rec.status === 'ok' ? '#10b981' : rec.status === 'warn' ? '#f59e0b' : '#ef4444'
+                                            background: rec.status === 'ok' ? 'color-mix(in srgb, var(--emerald) 10%, transparent)' : rec.status === 'warn' ? 'color-mix(in srgb, var(--amber) 10%, transparent)' : 'color-mix(in srgb, var(--red) 10%, transparent)',
+                                            color: rec.status === 'ok' ? 'var(--emerald)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)'
                                         }}>
                                             {rec.temp}{'\u00B0'}
                                         </span>
@@ -491,7 +497,7 @@ export default function HACCP() {
                                             <div style={{ fontSize: 13, fontWeight: 600 }}>{rec.wat}</div>
                                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{rec.tijd || ''} {'\u2022'} {rec.type}</div>
                                         </div>
-                                        <span style={{ fontSize: 12, fontWeight: 700, color: rec.status === 'ok' ? '#10b981' : rec.status === 'warn' ? '#f59e0b' : '#ef4444' }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: rec.status === 'ok' ? 'var(--emerald)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
                                             {rec.status === 'ok' ? 'OK' : rec.status === 'warn' ? 'LET OP' : 'AFWIJKING'}
                                         </span>
                                     </div>
@@ -513,9 +519,9 @@ export default function HACCP() {
                                     <button key={p} onClick={function () { setField('wat', p); }}
                                         style={{
                                             height: 64, borderRadius: 14, fontSize: 13, fontWeight: 600,
-                                            background: form.wat === p ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
-                                            border: form.wat === p ? '2px solid #3b82f6' : '1px solid var(--border)',
-                                            color: form.wat === p ? '#3b82f6' : 'var(--text)',
+                                            background: form.wat === p ? 'color-mix(in srgb, var(--blue) 15%, transparent)' : 'var(--card-solid)',
+                                            border: form.wat === p ? '2px solid var(--blue)' : '1px solid var(--border)',
+                                            color: form.wat === p ? 'var(--blue)' : 'var(--text)',
                                             cursor: 'pointer', transition: 'all 0.15s'
                                         }}>
                                         {p}
@@ -534,9 +540,9 @@ export default function HACCP() {
                                     <button key={t.val} onClick={function () { setField('type', t.val); }}
                                         style={{
                                             flex: 1, height: 56, borderRadius: 14, fontSize: 12, fontWeight: 600,
-                                            background: form.type === t.val ? 'rgba(59,130,246,.15)' : 'var(--card-solid)',
-                                            border: form.type === t.val ? '2px solid #3b82f6' : '1px solid var(--border)',
-                                            color: form.type === t.val ? '#3b82f6' : 'var(--text)',
+                                            background: form.type === t.val ? 'color-mix(in srgb, var(--blue) 15%, transparent)' : 'var(--card-solid)',
+                                            border: form.type === t.val ? '2px solid var(--blue)' : '1px solid var(--border)',
+                                            color: form.type === t.val ? 'var(--blue)' : 'var(--text)',
                                             cursor: 'pointer', transition: 'all 0.15s', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: 2
                                         }}>
                                         <span style={{ fontSize: 14 }}>{t.icon}</span>
@@ -552,20 +558,20 @@ export default function HACCP() {
                         <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8, display: 'block' }}>Temperatuur</label>
                         <div style={{
                             textAlign: 'center', padding: '16px 0', marginBottom: 8,
-                            background: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? 'rgba(16,185,129,.08)' : s === 'warn' ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)'; })() : 'var(--card-solid)',
-                            border: form.temp ? (function () { const s = getStatus(form.type, form.temp); return '2px solid ' + (s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'); })() : '1px solid var(--border)',
+                            background: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? 'color-mix(in srgb, var(--emerald) 8%, transparent)' : s === 'warn' ? 'color-mix(in srgb, var(--amber) 8%, transparent)' : 'color-mix(in srgb, var(--red) 8%, transparent)'; })() : 'var(--card-solid)',
+                            border: form.temp ? (function () { const s = getStatus(form.type, form.temp); return '2px solid ' + (s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)'); })() : '1px solid var(--border)',
                             borderRadius: 16, transition: 'all 0.2s'
                         }}>
                             <span style={{
                                 fontSize: 48, fontWeight: 300, letterSpacing: '-2px',
-                                color: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444'; })() : 'var(--muted-light)'
+                                color: form.temp ? (function () { const s = getStatus(form.type, form.temp); return s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)'; })() : 'var(--muted-light)'
                             }}>
                                 {form.temp || '—'}
                             </span>
                             <span style={{ fontSize: 24, color: 'var(--muted)', marginLeft: 4 }}>°C</span>
                             {form.temp && (function () {
                                 const s = getStatus(form.type, form.temp);
-                                return <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: s === 'ok' ? '#10b981' : s === 'warn' ? '#f59e0b' : '#ef4444' }}>
+                                return <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: s === 'ok' ? 'var(--emerald)' : s === 'warn' ? 'var(--amber)' : 'var(--red)' }}>
                                     {s === 'ok' ? '✓ OK' : s === 'warn' ? '⚠ Risicozone' : '✗ AFWIJKING'}
                                 </div>;
                             })()}
@@ -641,10 +647,10 @@ export default function HACCP() {
                             </div>
                             <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); }} /></div>
                             <div className="field"><label>Tijd</label><input type="time" value={form.tijd} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('tijd', e.target.value); }} /></div>
-                            <div className="field"><label>Product</label><input value={form.wat} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('wat', e.target.value); }} placeholder="bijv. Bavette kern" /></div>
+                            <div className="field"><label>Product</label><input name="wat" value={form.wat} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearHaccpError('wat'); setField('wat', e.target.value); }} placeholder="bijv. Bavette kern" {...haccpFieldProps('wat', form.wat)} style={haccpErrors.wat ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={haccpErrors.wat} fieldName="wat" /></div>
                             <div className="field">
                                 <label>Temperatuur (°C)<FieldTooltip text="Kerntemperatuur \u226575\u00B0C voor veilige bereiding. Koeling \u22647\u00B0C." /></label>
-                                <input type="number" step="0.1" value={form.temp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('temp', e.target.value); }} />
+                                <input name="temp" type="number" step="0.1" value={form.temp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearHaccpError('temp'); setField('temp', e.target.value); }} {...haccpFieldProps('temp', form.temp)} style={haccpErrors.temp ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={haccpErrors.temp} fieldName="temp" />
                             </div>
                             <div className="field full"><label>Notitie</label><input value={form.notitie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('notitie', e.target.value); }} /></div>
                         </div>

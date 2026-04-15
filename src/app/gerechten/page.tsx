@@ -5,16 +5,22 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { Flame, Link, Unlink } from 'lucide-react';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { InventoryItem, Gang } from '@/types';
 
 export default function Gerechten() {
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        naam: [{ required: 'Vul een naam in' }],
+    });
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const [gangen, setGangen] = useState<any[]>([]);
     const [gerechten, setGerechten] = useState<any[]>([]);
@@ -32,6 +38,8 @@ export default function Gerechten() {
     const [hwInput, setHwInput] = useState<Record<string, any>>({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
     const [costInput, setCostInput] = useState<Record<string, any>>({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
     const [dataLoading, setDataLoading] = useState(true);
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const serviceImageRef = useRef<HTMLInputElement>(null);
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
@@ -163,7 +171,7 @@ export default function Gerechten() {
     }
 
     async function saveGerecht() {
-        if (!form.naam) { showToast('Vul een naam in', 'error'); return; }
+        if (!validateAll({ naam: form.naam })) return;
         const saveData = Object.assign({}, form);
         if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
         else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
@@ -174,6 +182,12 @@ export default function Gerechten() {
             const { error } = await supabase.from('gerechten').insert([dbData]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht toegevoegd!');
+            setFollowUpActions([
+                { icon: '\ud83d\udccb', label: 'Recept koppelen', href: '/recepten' },
+                { icon: '\ud83c\udf7d\ufe0f', label: 'Aan menu toevoegen', href: '/menu-engineering' },
+                { icon: '\u2795', label: 'Nog een gerecht toevoegen', onClick: function() { newGerecht(); } },
+            ]);
+            setFollowUpTitle('Gerecht toegevoegd!');
         } else {
             const { error } = await supabase.from('gerechten').update(dbData).eq('id', editing);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
@@ -316,8 +330,8 @@ export default function Gerechten() {
 
     if (dataLoading) {
         return (
-            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }
@@ -380,7 +394,7 @@ export default function Gerechten() {
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                 <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
-                                {g.actief === false && <span style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
+                                {g.actief === false && <span style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: 'var(--red)', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
                             </div>
                             <div className="dish-desc">{g.beschrijving || '—'}</div>
 
@@ -435,7 +449,7 @@ export default function Gerechten() {
                                     </div>
                                 ) : (
                                     <div className="foto-upload-zone" onClick={function () { fileInputRef.current!.click(); }}>
-                                        {uploading ? <span style={{ color: '#B48C14' }}>⏳ Uploaden...</span> : <span>📷 Klik om foto te uploaden</span>}
+                                        {uploading ? <span style={{ color: 'var(--color-accent-gold)' }}>⏳ Uploaden...</span> : <span>📷 Klik om foto te uploaden</span>}
                                     </div>
                                 )}
                                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
@@ -444,7 +458,8 @@ export default function Gerechten() {
                             <div className="form-grid">
                                 <div className="field">
                                     <label>Naam</label>
-                                    <input value={form.naam || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { naam: e.target.value })); }} placeholder="bijv. Crispy Zalm" />
+                                    <input name="naam" value={form.naam || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { naam: e.target.value })); clearError('naam'); }} placeholder="bijv. Crispy Zalm" style={errors.naam ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} />
+                                    <FieldError message={errors.naam} fieldName="naam" />
                                 </div>
                                 <div className="field">
                                     <label>Gang</label>
@@ -487,7 +502,7 @@ export default function Gerechten() {
                             </div>
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     🔥 The Architect — Service Mode
                                 </div>
 
@@ -503,7 +518,7 @@ export default function Gerechten() {
                                         </div>
                                     ) : (
                                         <div className="foto-upload-zone" onClick={function () { serviceImageRef.current!.click(); }} style={{ borderColor: 'rgba(180,140,20,.2)' }}>
-                                            {uploading ? <span style={{ color: '#B48C14' }}>⏳ Uploaden...</span> : <span>🎯 Klik om service foto te uploaden</span>}
+                                            {uploading ? <span style={{ color: 'var(--color-accent-gold)' }}>⏳ Uploaden...</span> : <span>🎯 Klik om service foto te uploaden</span>}
                                         </div>
                                     )}
                                     <input ref={serviceImageRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleServiceImageUpload} />
@@ -516,7 +531,7 @@ export default function Gerechten() {
                                             {(form.battle_plan_steps || []).map(function (step: string, idx: number) {
                                                 return (
                                                     <span key={idx} className="battle-step-tag">
-                                                        <span style={{ color: '#B48C14', fontWeight: 700, marginRight: 4 }}>{idx + 1}.</span>
+                                                        <span style={{ color: 'var(--color-accent-gold)', fontWeight: 700, marginRight: 4 }}>{idx + 1}.</span>
                                                         {step}
                                                         <button type="button" className="tag-remove" onClick={function () { removeArrayItem('battle_plan_steps', idx); }}>×</button>
                                                     </span>
@@ -536,7 +551,7 @@ export default function Gerechten() {
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
                                             placeholder="bijv. 300 (= 5 min)" style={{ maxWidth: 160 }} />
                                         {form.target_prep_time > 0 && (
-                                            <span style={{ fontSize: 13, color: '#B48C14', fontWeight: 600 }}>
+                                            <span style={{ fontSize: 13, color: 'var(--color-accent-gold)', fontWeight: 600 }}>
                                                 = {formatTime(form.target_prep_time)}
                                             </span>
                                         )}
@@ -545,7 +560,7 @@ export default function Gerechten() {
                             </div>
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     🍽️ Hardware per Gast
                                 </div>
 
@@ -598,7 +613,7 @@ export default function Gerechten() {
 
                             {(form.ingredienten || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                         🛒 Winkel per Ingrediënt
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -620,7 +635,7 @@ export default function Gerechten() {
                             )}
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     💰 Kostprijsberekening
                                 </div>
 
@@ -759,7 +774,7 @@ export default function Gerechten() {
                                             padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
                                             fontWeight: 700, fontSize: 12, transition: 'all .15s',
                                             background: form.actief ? 'rgba(74,222,128,.15)' : 'rgba(239,68,68,.1)',
-                                            color: form.actief ? '#4ade80' : '#ef4444',
+                                            color: form.actief ? 'var(--green)' : 'var(--red)',
                                         }}
                                     >
                                         {form.actief ? '✅ Actief' : '⏸ Inactief'}
@@ -848,6 +863,14 @@ export default function Gerechten() {
                         </div>
                     </div>
                 </div>
+            )}
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
             )}
         </div>
     );

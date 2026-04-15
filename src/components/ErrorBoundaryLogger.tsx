@@ -48,7 +48,7 @@ export default class ErrorBoundaryLogger extends Component<Props, State> {
             width: 64, height: 64, borderRadius: 16,
             background: 'rgba(239,68,68,.1)', marginBottom: 16,
           }}>
-            <AlertTriangle size={28} style={{ color: '#ef4444' }} />
+            <AlertTriangle size={28} style={{ color: 'var(--red)' }} />
           </div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
             Er ging iets mis
@@ -61,7 +61,7 @@ export default class ErrorBoundaryLogger extends Component<Props, State> {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '10px 20px', borderRadius: 10,
-              background: 'linear-gradient(135deg, #c4a35a, #8b6914)',
+              background: 'linear-gradient(135deg, var(--color-accent-gold), #8b6914)',
               color: '#fff', border: 'none', cursor: 'pointer',
               fontSize: 14, fontWeight: 600,
             }}
@@ -71,7 +71,7 @@ export default class ErrorBoundaryLogger extends Component<Props, State> {
           {this.state.error && (
             <details style={{ marginTop: 20, textAlign: 'left', maxWidth: 500, margin: '20px auto 0' }}>
               <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--muted)' }}>Technische details</summary>
-              <pre style={{ fontSize: 11, color: '#ef4444', background: 'var(--bg)', padding: 12, borderRadius: 8, marginTop: 8, overflow: 'auto', maxHeight: 200 }}>
+              <pre style={{ fontSize: 11, color: 'var(--red)', background: 'var(--bg)', padding: 12, borderRadius: 8, marginTop: 8, overflow: 'auto', maxHeight: 200 }}>
                 {this.state.error.message}{'\n'}{this.state.error.stack}
               </pre>
             </details>

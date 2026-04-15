@@ -403,7 +403,7 @@ export default function MenuEngineering() {
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           <button
             onClick={function () { setGangFilter('alle'); }}
-            style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
+            style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? 'var(--blue)' : 'rgba(255,255,255,.5)' }}
           >
             Alle
           </button>
@@ -413,7 +413,7 @@ export default function MenuEngineering() {
               <button
                 key={g.slug}
                 onClick={function () { setGangFilter(active ? 'alle' : g.slug); }}
-                style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? '#3b82f6' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? '#3b82f6' : 'rgba(255,255,255,.5)' }}
+                style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? 'var(--blue)' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? 'var(--blue)' : 'rgba(255,255,255,.5)' }}
               >
                 {g.icon} {g.label}
               </button>
@@ -443,9 +443,9 @@ export default function MenuEngineering() {
           }}
           style={{
             padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            border: '1px solid ' + (selectionMode ? '#3b82f6' : 'var(--border)'),
+            border: '1px solid ' + (selectionMode ? 'var(--blue)' : 'var(--border)'),
             background: selectionMode ? 'rgba(59,130,246,.15)' : 'transparent',
-            color: selectionMode ? '#3b82f6' : 'rgba(255,255,255,.5)',
+            color: selectionMode ? 'var(--blue)' : 'rgba(255,255,255,.5)',
             display: 'flex', alignItems: 'center', gap: 6, transition: '0.2s'
           }}
         >
@@ -490,7 +490,7 @@ export default function MenuEngineering() {
             {selectedIds.length > 0 && (
               <button
                 onClick={deleteSelected}
-                style={{ padding: '0 14px', height: 36, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '0 14px', height: 36, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
                 <Trash2 size={16} />
                 Verwijder ({selectedIds.length})
@@ -504,7 +504,7 @@ export default function MenuEngineering() {
         <div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', marginBottom: 14 }}>
             {filtered.length} gerechten
-            {inMap.size > 0 && <span style={{ marginLeft: 8 }}>• <span style={{ color: '#a78bfa' }}>{inMap.size} in Map Station</span></span>}
+            {inMap.size > 0 && <span style={{ marginLeft: 8 }}>• <span style={{ color: 'var(--purple)' }}>{inMap.size} in Map Station</span></span>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
             {filtered.map(function (g) {
@@ -534,14 +534,14 @@ export default function MenuEngineering() {
           {bcgStats && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3" style={{ marginBottom: 20 }}>
               {[
-                { label: 'Geanalyseerd', value: bcgStats.totaal, color: '#c4a35a' },
+                { label: 'Geanalyseerd', value: bcgStats.totaal, color: 'var(--color-accent-gold)' },
                 { label: 'Stars', value: bcgStats.stars, color: '#4ade80' },
                 { label: 'Puzzles', value: bcgStats.puzzles, color: '#60a5fa' },
                 { label: 'Plowhorses', value: bcgStats.plowhorses, color: '#fbbf24' },
                 { label: 'Dogs', value: bcgStats.dogs, color: '#f87171' },
               ].map(function (s) {
                 return (
-                  <div key={s.label} style={{ background: '#1a1a1e', border: '1px solid #2a2a30', borderRadius: 10, padding: '12px 14px' }}>
+                  <div key={s.label} style={{ background: 'var(--sidebar-bg-hover)', border: '1px solid var(--color-border-hover)', borderRadius: 10, padding: '12px 14px' }}>
                     <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
                   </div>
@@ -570,7 +570,7 @@ export default function MenuEngineering() {
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button
                 onClick={aiAutoSort}
-                style={{ background: 'rgba(167,139,250,.1)', border: '1px solid rgba(167,139,250,.2)', color: '#a78bfa', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ background: 'rgba(167,139,250,.1)', border: '1px solid rgba(167,139,250,.2)', color: 'var(--purple)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >
                 ✨ AI auto-sort
               </button>

@@ -208,7 +208,7 @@ export default function ReflectiePage() {
                     </div>
                     <div className="field">
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Lightbulb size={11} style={{ color: '#a78bfa' }} /> Verbeterpunten
+                            <Lightbulb size={11} style={{ color: 'var(--purple)' }} /> Verbeterpunten
                         </label>
                         <textarea
                             rows={3}

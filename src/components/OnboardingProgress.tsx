@@ -106,22 +106,22 @@ export default function OnboardingProgress({
     if (!isExpanded) {
         return (
             <div style={{ marginBottom: 16 }}>
-                <MetallicCard className="p-4" accent={isComplete ? '#10b981' : '#c4a35a'}>
+                <MetallicCard className="p-4" accent={isComplete ? 'var(--green)' : 'var(--color-accent-gold)'}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div style={{
                             width: 36, height: 36, borderRadius: 10,
-                            background: isComplete ? 'rgba(16,185,129,0.12)' : 'rgba(196,163,90,0.12)',
-                            border: isComplete ? '1px solid rgba(16,185,129,0.2)' : '1px solid rgba(196,163,90,0.2)',
+                            background: isComplete ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--color-accent-gold) 12%, transparent)',
+                            border: isComplete ? '1px solid color-mix(in srgb, var(--green) 20%, transparent)' : '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                            {isComplete ? <Trophy size={18} style={{ color: '#10b981' }} /> : <Target size={18} style={{ color: '#c4a35a' }} />}
+                            {isComplete ? <Trophy size={18} style={{ color: 'var(--green)' }} /> : <Target size={18} style={{ color: 'var(--color-accent-gold)' }} />}
                         </div>
                         <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                                 <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>
                                     {isComplete ? 'Setup compleet!' : 'Aan de slag'}
                                 </span>
-                                <span style={{ fontSize: 11, fontWeight: 600, color: isComplete ? '#10b981' : '#c4a35a' }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: isComplete ? 'var(--green)' : 'var(--color-accent-gold)' }}>
                                     {completedCount}/{totalSteps}
                                 </span>
                             </div>
@@ -133,8 +133,8 @@ export default function OnboardingProgress({
                                 <div style={{
                                     width: progressPct + '%', height: '100%', borderRadius: 2,
                                     background: isComplete
-                                        ? 'linear-gradient(90deg, #10b981, #059669)'
-                                        : 'linear-gradient(90deg, #c4a35a, #a8893e)',
+                                        ? 'linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 75%, black))'
+                                        : 'linear-gradient(90deg, var(--color-accent-gold), color-mix(in srgb, var(--color-accent-gold) 75%, black))',
                                     transition: 'width 0.5s ease',
                                 }} />
                             </div>
@@ -166,17 +166,17 @@ export default function OnboardingProgress({
     // Expanded mode — full step list
     return (
         <div style={{ marginBottom: 16 }}>
-            <MetallicCard className="p-5" hover={false} accent={isComplete ? '#10b981' : '#c4a35a'}>
+            <MetallicCard className="p-5" hover={false} accent={isComplete ? 'var(--green)' : 'var(--color-accent-gold)'}>
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
                             width: 36, height: 36, borderRadius: 10,
-                            background: isComplete ? 'rgba(16,185,129,0.12)' : 'rgba(196,163,90,0.12)',
-                            border: isComplete ? '1px solid rgba(16,185,129,0.2)' : '1px solid rgba(196,163,90,0.2)',
+                            background: isComplete ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--color-accent-gold) 12%, transparent)',
+                            border: isComplete ? '1px solid color-mix(in srgb, var(--green) 20%, transparent)' : '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                            {isComplete ? <Trophy size={18} style={{ color: '#10b981' }} /> : <Target size={18} style={{ color: '#c4a35a' }} />}
+                            {isComplete ? <Trophy size={18} style={{ color: 'var(--green)' }} /> : <Target size={18} style={{ color: 'var(--color-accent-gold)' }} />}
                         </div>
                         <div>
                             <h3 style={{ fontSize: 15, fontWeight: 600, color: 'white' }}>
@@ -215,8 +215,8 @@ export default function OnboardingProgress({
                     <div style={{
                         width: progressPct + '%', height: '100%', borderRadius: 3,
                         background: isComplete
-                            ? 'linear-gradient(90deg, #10b981, #059669)'
-                            : 'linear-gradient(90deg, #c4a35a, #a8893e)',
+                            ? 'linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 75%, black))'
+                            : 'linear-gradient(90deg, var(--color-accent-gold), color-mix(in srgb, var(--color-accent-gold) 75%, black))',
                         transition: 'width 0.5s ease',
                     }} />
                 </div>
@@ -231,20 +231,20 @@ export default function OnboardingProgress({
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: 10,
                                         padding: '10px 12px', borderRadius: 10,
-                                        background: done ? 'rgba(16,185,129,0.04)' : 'rgba(255,255,255,0.02)',
-                                        border: done ? '1px solid rgba(16,185,129,0.1)' : '1px solid transparent',
+                                        background: done ? 'color-mix(in srgb, var(--green) 4%, transparent)' : 'rgba(255,255,255,0.02)',
+                                        border: done ? '1px solid color-mix(in srgb, var(--green) 10%, transparent)' : '1px solid transparent',
                                         cursor: done ? 'default' : 'pointer',
                                         transition: 'all 0.15s',
                                     }}
                                 >
                                     <div style={{
                                         width: 24, height: 24, borderRadius: 6,
-                                        background: done ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
-                                        border: done ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border)',
+                                        background: done ? 'color-mix(in srgb, var(--green) 15%, transparent)' : 'rgba(255,255,255,0.05)',
+                                        border: done ? '1px solid color-mix(in srgb, var(--green) 30%, transparent)' : '1px solid var(--border)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         {done ? (
-                                            <Check size={12} style={{ color: '#10b981' }} />
+                                            <Check size={12} style={{ color: 'var(--green)' }} />
                                         ) : (
                                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--border)' }} />
                                         )}
@@ -252,7 +252,7 @@ export default function OnboardingProgress({
                                     <div style={{ flex: 1 }}>
                                         <span style={{
                                             fontSize: 13, fontWeight: 500,
-                                            color: done ? '#10b981' : 'white',
+                                            color: done ? 'var(--green)' : 'white',
                                             textDecoration: done ? 'line-through' : 'none',
                                             opacity: done ? 0.7 : 1,
                                         }}>

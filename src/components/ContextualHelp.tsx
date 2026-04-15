@@ -48,7 +48,7 @@ export default function ContextualHelp() {
           style={{
             position: 'fixed', bottom: 80, right: 20, zIndex: 998,
             width: 40, height: 40, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #c4a35a, #8b6914)',
+            background: 'linear-gradient(135deg, var(--color-accent-gold), #8b6914)',
             border: 'none', cursor: 'pointer', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 4px 12px rgba(0,0,0,.2)',
@@ -59,7 +59,7 @@ export default function ContextualHelp() {
           <span style={{
             position: 'absolute', top: -2, right: -2,
             width: 16, height: 16, borderRadius: '50%',
-            background: '#3b82f6', fontSize: 9, fontWeight: 800,
+            background: 'var(--blue)', fontSize: 9, fontWeight: 800,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--card)', color: '#fff',
           }}>{articles.length}</span>
@@ -109,7 +109,7 @@ export default function ContextualHelp() {
                 {/* Feedback */}
                 <div style={{ marginTop: 16, padding: '12px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   {feedback[selectedArticle.id] !== undefined ? (
-                    <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, textAlign: 'center' }}>
+                    <div style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600, textAlign: 'center' }}>
                       Bedankt voor je feedback!
                     </div>
                   ) : (
@@ -117,11 +117,11 @@ export default function ContextualHelp() {
                       <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginBottom: 8 }}>Was dit artikel nuttig?</div>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
                         <button onClick={function () { handleFeedback(selectedArticle.id, true); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', borderRadius: 8, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#22c55e' }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', borderRadius: 8, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>
                           <ThumbsUp size={13} /> Ja
                         </button>
                         <button onClick={function () { handleFeedback(selectedArticle.id, false); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#ef4444' }}>
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
                           <ThumbsDown size={13} /> Nee
                         </button>
                       </div>
@@ -145,7 +145,7 @@ export default function ContextualHelp() {
                 })}
 
                 {/* Link to full help center */}
-                <a href="/hulp" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '10px', fontSize: 12, color: '#3b82f6', fontWeight: 600, textDecoration: 'none', marginTop: 8 }}>
+                <a href="/hulp" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '10px', fontSize: 12, color: 'var(--blue)', fontWeight: 600, textDecoration: 'none', marginTop: 8 }}>
                   <ExternalLink size={12} /> Naar volledig Help Center
                 </a>
               </>

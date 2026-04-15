@@ -82,7 +82,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 href={item.href}
                                 onClick={onNavigate}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden no-underline ${isActive
-                                    ? "bg-[rgba(255,191,0,0.08)] text-white border-l-2 border-[var(--brand)] pl-2.5"
+                                    ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] text-white border-l-2 border-[var(--brand)] pl-2.5"
                                     : "text-[var(--muted)] hover:text-white hover:bg-white/[0.04] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
@@ -178,7 +178,7 @@ export default function Sidebar() {
         <>
             <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--sidebar-border)] shrink-0">
                 <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[#0e0e12] flex items-center justify-center border border-[var(--sidebar-border)] shadow-[0_0_12px_rgba(255,191,0,0.06)]">
+                    <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[var(--sidebar-border)] shadow-[0_0_12px_color-mix(in_srgb,var(--brand)_6%,transparent)]">
                         <Flame className="w-4 h-4 text-[var(--brand)]" />
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
@@ -213,7 +213,7 @@ export default function Sidebar() {
                     href="/"
                     onClick={closeMobile}
                     className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap no-underline ${pathname === "/"
-                        ? "bg-[rgba(255,191,0,0.08)] border border-[rgba(255,191,0,0.15)] text-white shadow-[inset_0px_1px_1px_rgba(255,191,0,0.06)]"
+                        ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] border border-[color-mix(in_srgb,var(--brand)_15%,transparent)] text-white shadow-[inset_0px_1px_1px_color-mix(in_srgb,var(--brand)_6%,transparent)]"
                         : "text-[var(--muted)] hover:text-white hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
                         }`}
                     style={collapsed && isDesktop ? { justifyContent: 'center' } : {}}

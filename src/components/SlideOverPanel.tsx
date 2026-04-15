@@ -74,7 +74,7 @@ export default function SlideOverPanel({ isOpen, onClose, title, subtitle, width
           bottom: 0,
           width: '100%',
           maxWidth: WIDTH_MAP[width],
-          background: '#0e0e10',
+          background: 'var(--color-bg-deep)',
           borderLeft: '1px solid rgba(130,130,130,.12)',
           zIndex: 201,
           display: 'flex',

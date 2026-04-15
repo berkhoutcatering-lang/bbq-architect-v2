@@ -43,7 +43,7 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
     <div style={{ marginBottom: 6 }}>
       <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 2 }}>{label}</label>
       <div style={{ display: 'flex', gap: 4 }}>
-        <select value={isVar ? value : 'custom'} onChange={function (e) { onChange(e.target.value === 'custom' ? '#333333' : e.target.value); }}
+        <select value={isVar ? value : 'custom'} onChange={function (e) { onChange(e.target.value === 'custom' ? 'var(--color-text-ghost)' : e.target.value); }}
           style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 10 }}>
           <option value="brand_primary">Huisstijl primair</option>
           <option value="brand_accent">Huisstijl accent</option>
@@ -138,9 +138,9 @@ export default function BlockPropertiesPanel({ block, documentType, onUpdate, on
       {/* Block header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'rgba(59,130,246,.03)',
+        padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'color-mix(in srgb, var(--blue) 3%, transparent)',
       }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
           {block.type.replace('_', ' ')}
         </span>
         <div style={{ display: 'flex', gap: 2 }}>
@@ -148,10 +148,10 @@ export default function BlockPropertiesPanel({ block, documentType, onUpdate, on
             <Copy size={12} />
           </button>
           <button onClick={function () { onUpdate({ locked: !block.locked }); }} title={block.locked ? 'Ontgrendel' : 'Vergrendel'}
-            style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: block.locked ? '#f59e0b' : 'var(--muted)' }}>
+            style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: block.locked ? 'var(--amber)' : 'var(--muted)' }}>
             {block.locked ? <Lock size={12} /> : <Unlock size={12} />}
           </button>
-          <button onClick={onDelete} title="Verwijder" style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
+          <button onClick={onDelete} title="Verwijder" style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)' }}>
             <Trash2 size={12} />
           </button>
         </div>

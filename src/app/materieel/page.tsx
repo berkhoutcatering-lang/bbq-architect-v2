@@ -5,6 +5,8 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
@@ -23,6 +25,9 @@ export default function Materieel() {
     const [editing, setEditing] = useState<number | string | null>(null);
     const [form, setForm] = useState<any>(null);
     const [newLog, setNewLog] = useState<NewLogEntry>({ actie: '', notitie: '' });
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        naam: [{ required: 'Vul een naam in' }],
+    });
 
     function newItem() {
         setEditing('new');
@@ -33,7 +38,7 @@ export default function Materieel() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function saveItem() {
-        if (!form.naam) { showToast('Vul een naam in', 'error'); return; }
+        if (!validateAll({ naam: form.naam })) return;
         if (editing === 'new') {
             insert(form).then(function () { showToast('Materieel toegevoegd', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
         } else {
@@ -74,7 +79,7 @@ export default function Materieel() {
                 </div>
                 <div className="panel-body">
                     <div className="form-grid">
-                        <div className="field"><label>Naam</label><input value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('naam', e.target.value); }} /></div>
+                        <div className="field"><label>Naam</label><input name="naam" value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearError('naam'); setField('naam', e.target.value); }} {...fieldProps('naam', form.naam)} style={errors.naam ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.naam} fieldName="naam" /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('type', e.target.value); }}>
                                 {['Smoker', 'BBQ', 'Koeling', 'Transport', 'Overig'].map(function (t) { return <option key={t}>{t}</option>; })}

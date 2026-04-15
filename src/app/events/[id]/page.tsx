@@ -9,11 +9,11 @@ import { ArrowLeft, Check, CheckCircle, ChevronDown, ChevronUp, FileText, Flag, 
 
 // ── Stage colors ──
 const COLORS: Record<string, { main: string; bg: string }> = {
-    offerte:       { main: '#b2913e', bg: 'rgba(178,145,62,.12)' },
-    acceptatie:    { main: '#22c55e', bg: 'rgba(34,197,94,.12)' },
-    voorbereiding: { main: '#3b82f6', bg: 'rgba(59,130,246,.12)' },
-    eventdag:      { main: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
-    afronding:     { main: '#a78bfa', bg: 'rgba(167,139,250,.12)' },
+    offerte:       { main: 'var(--color-accent-gold)', bg: 'color-mix(in srgb, var(--color-accent-gold) 12%, transparent)' },
+    acceptatie:    { main: 'var(--green)', bg: 'color-mix(in srgb, var(--green) 12%, transparent)' },
+    voorbereiding: { main: 'var(--blue)', bg: 'color-mix(in srgb, var(--blue) 12%, transparent)' },
+    eventdag:      { main: 'var(--amber)', bg: 'color-mix(in srgb, var(--amber) 12%, transparent)' },
+    afronding:     { main: 'var(--purple)', bg: 'color-mix(in srgb, var(--purple) 12%, transparent)' },
 };
 
 function pillClass(status: string) {
@@ -285,9 +285,9 @@ export default function EventFlowPage() {
                                                     return (
                                                         <div key={item.label} style={{ background: item.ok ? 'rgba(34,197,94,.06)' : 'rgba(130,130,130,.06)', padding: '12px 14px', borderRadius: 10, border: '1px solid ' + (item.ok ? 'rgba(34,197,94,.2)' : 'var(--border)') }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                                <item.Icon size={13} style={{ color: item.ok ? '#22c55e' : 'var(--muted)' }} />
+                                                                <item.Icon size={13} style={{ color: item.ok ? 'var(--green)' : 'var(--muted)' }} />
                                                                 <span style={{ fontWeight: 700, fontSize: 13 }}>{item.label}</span>
-                                                                {item.ok && <CheckCircle size={11} style={{ color: '#22c55e' }} />}
+                                                                {item.ok && <CheckCircle size={11} style={{ color: 'var(--green)' }} />}
                                                             </div>
                                                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.detail}</div>
                                                         </div>
@@ -309,19 +309,19 @@ export default function EventFlowPage() {
                                                         return (
                                                             <div key={dayKey} style={{ marginBottom: 16 }}>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                                                    <span style={{ fontWeight: 700, fontSize: 12, color: '#3b82f6' }}>{dayLabels[dayKey] || 'Dag ' + dayKey}</span>
+                                                                    <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--blue)' }}>{dayLabels[dayKey] || 'Dag ' + dayKey}</span>
                                                                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>{doneCount}/{tasks.length}</span>
                                                                 </div>
                                                                 <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
-                                                                    <div style={{ height: '100%', width: pct + '%', background: pct === 100 ? '#22c55e' : '#3b82f6', borderRadius: 2, transition: 'width .3s' }} />
+                                                                    <div style={{ height: '100%', width: pct + '%', background: pct === 100 ? 'var(--green)' : 'var(--blue)', borderRadius: 2, transition: 'width .3s' }} />
                                                                 </div>
                                                                 {tasks.map(function (task: any) {
                                                                     return (
                                                                         <label key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', cursor: 'pointer', fontSize: 13 }}
                                                                             onClick={function (e) { e.stopPropagation(); togglePrep(task.id, task.done); }}>
                                                                             <div style={{
-                                                                                width: 18, height: 18, borderRadius: 4, border: '2px solid ' + (task.done ? '#22c55e' : 'var(--border)'),
-                                                                                background: task.done ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                                                width: 18, height: 18, borderRadius: 4, border: '2px solid ' + (task.done ? 'var(--green)' : 'var(--border)'),
+                                                                                background: task.done ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                                                             }}>
                                                                                 {task.done && <Check size={10} style={{ color: '#fff' }} />}
                                                                             </div>
@@ -361,7 +361,7 @@ export default function EventFlowPage() {
                                                     <>
                                                         <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginTop: 14 }}>HACCP Registraties</div>
                                                         {haccpRecords.slice(0, 8).map(function (rec: any, i: number) {
-                                                            const statusColor = rec.status === 'ok' ? '#22c55e' : rec.status === 'warn' ? '#f59e0b' : '#ef4444';
+                                                            const statusColor = rec.status === 'ok' ? 'var(--green)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)';
                                                             return (
                                                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: 'var(--card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border)', fontSize: 12 }}>
                                                                     <span>{rec.wat}</span>

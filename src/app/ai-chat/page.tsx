@@ -63,12 +63,12 @@ export default function AiStudioPage() {
 
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
-    const [newFolderColor, setNewFolderColor] = useState('#FFBF00');
+    const [newFolderColor, setNewFolderColor] = useState('var(--brand)');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
-    const FOLDER_COLORS = ['#FFBF00', '#22c55e', '#3b82f6', '#a78bfa', '#ef4444', '#f59e0b', '#4ECDC4', '#ec4899'];
+    const FOLDER_COLORS = ['var(--brand)', 'var(--green)', 'var(--blue)', 'var(--purple)', 'var(--red)', 'var(--amber)', 'var(--cyan)', 'var(--pink)'];
 
     useEffect(function () {
         setMessages([{
@@ -358,7 +358,7 @@ export default function AiStudioPage() {
             if (action.type === 'create_folder') {
                 const fRes = await supabase.from('ai_conversation_folders').insert({
                     naam: action.data.naam,
-                    kleur: action.data.kleur || '#FFBF00',
+                    kleur: action.data.kleur || 'var(--brand)',
                 }).select().single();
                 if (fRes.data) {
                     setFolders(function (prev) { return [...prev, fRes.data]; });
@@ -556,11 +556,11 @@ export default function AiStudioPage() {
                 background: isDone ? 'rgba(34,197,94,.06)' : isError ? 'rgba(239,68,68,.06)' : isRejected ? 'rgba(113,113,122,.06)' : 'rgba(255,191,0,.06)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Zap size={15} style={{ color: isDone ? '#22c55e' : isRejected ? '#71717a' : (action.meta.color || '#FFBF00') }} />
+                    <Zap size={15} style={{ color: isDone ? 'var(--green)' : isRejected ? 'var(--zinc)' : (action.meta.color || 'var(--brand)') }} />
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{action.meta.label}</span>
-                    {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12, fontWeight: 600 }}>✓ Uitgevoerd</span>}
-                    {isRejected && <span style={{ marginLeft: 'auto', color: '#71717a', fontSize: 12 }}>Afgewezen</span>}
-                    {isError && <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: 12 }}>Fout</span>}
+                    {isDone && <span style={{ marginLeft: 'auto', color: 'var(--green)', fontSize: 12, fontWeight: 600 }}>✓ Uitgevoerd</span>}
+                    {isRejected && <span style={{ marginLeft: 'auto', color: 'var(--zinc)', fontSize: 12 }}>Afgewezen</span>}
+                    {isError && <span style={{ marginLeft: 'auto', color: 'var(--red)', fontSize: 12 }}>Fout</span>}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: isPending ? 10 : 0, lineHeight: 1.5 }}>{action.description}</div>
                 {action.data && Object.keys(action.data).length > 0 && (action.type !== 'save_conversation') && (
@@ -572,7 +572,7 @@ export default function AiStudioPage() {
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={function () { approveAction(msgIdx, action.id); }}
-                            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: '#22c55e', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                         >
                             <Check size={14} className="mr-1.5" />Goedkeuren & uitvoeren
                         </button>
@@ -585,12 +585,12 @@ export default function AiStudioPage() {
                     </div>
                 )}
                 {isExecuting && (
-                    <div style={{ color: '#FFBF00', fontSize: 13 }}>
+                    <div style={{ color: 'var(--brand)', fontSize: 13 }}>
                         <Loader2 size={14} className="animate-spin mr-1.5" />Bezig met uitvoeren…
                     </div>
                 )}
                 {isError && action.error && (
-                    <div style={{ color: '#ef4444', fontSize: 12, marginTop: 6 }}>{action.error}</div>
+                    <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>{action.error}</div>
                 )}
             </div>
         );
@@ -708,7 +708,7 @@ export default function AiStudioPage() {
                                 <div style={{ flex: 1, cursor: 'pointer', overflow: 'hidden' }} onClick={function () { loadConversation(conv); }}>
                                     <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.titel}</div>
                                     <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
-                                        <span style={{ background: conv.modus === 'brainstorm' ? 'rgba(255,191,0,.2)' : 'rgba(59,130,246,.2)', color: conv.modus === 'brainstorm' ? '#FFBF00' : '#3b82f6', padding: '4px 8px', borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
+                                        <span style={{ background: conv.modus === 'brainstorm' ? 'rgba(255,191,0,.2)' : 'rgba(59,130,246,.2)', color: conv.modus === 'brainstorm' ? 'var(--brand)' : 'var(--blue)', padding: '4px 8px', borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
                                             {conv.modus === 'brainstorm' ? 'Brainstorm' : 'Q&A'}
                                         </span>
                                         {new Date(conv.updated_at || conv.created_at).toLocaleDateString('nl-NL')}
@@ -773,7 +773,7 @@ export default function AiStudioPage() {
                             </div>
                         )}
                         {activeConversation && (
-                            <div style={{ fontSize: 12, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ fontSize: 12, color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <Save size={14} />
                                 {activeConversation.titel}
                             </div>

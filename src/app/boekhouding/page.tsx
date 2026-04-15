@@ -87,8 +87,8 @@ export default function Boekhouding() {
     });
 
     if (loading) return (
-        <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-            <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+        <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+            <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
         </div>
     );
 
@@ -149,14 +149,14 @@ export default function Boekhouding() {
                             <div className="panel-body" style={{ height: 200, marginTop: 12 }}>
                                 <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                     <ComposedChart data={omzetChartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barCategoryGap="30%">
-                                        <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                        <YAxis yAxisId="left" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
-                                        <YAxis yAxisId="right" orientation="right" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <XAxis dataKey="naam" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <YAxis yAxisId="left" tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
                                         <Tooltip formatter={function (v: number, name: string) { return ['€' + v.toLocaleString('nl-NL'), name === 'omzet' ? 'Maandomzet' : 'Cumulatief']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
                                         <Bar yAxisId="left" dataKey="omzet" radius={[4, 4, 0, 0]}>
-                                            {omzetChartData.map(function (d, i) { return <Cell key={i} fill={d.omzet > 0 ? '#FFBF00' : '#27272a'} />; })}
+                                            {omzetChartData.map(function (d, i) { return <Cell key={i} fill={d.omzet > 0 ? 'var(--brand)' : '#27272a'} />; })}
                                         </Bar>
-                                        <Line yAxisId="right" type="monotone" dataKey="cumulatief" stroke="#a78bfa" strokeWidth={2} dot={false} />
+                                        <Line yAxisId="right" type="monotone" dataKey="cumulatief" stroke="var(--purple)" strokeWidth={2} dot={false} />
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
@@ -177,7 +177,7 @@ export default function Boekhouding() {
                                                 {statusPieData.map(function (entry, i) { return <Cell key={i} fill={entry.color} />; })}
                                             </Pie>
                                             <Tooltip formatter={function (v: number, n: string) { return [v + ' facturen', n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} />
-                                            <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: '#71717a' }} />
+                                            <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: 'var(--zinc)' }} />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -237,10 +237,10 @@ export default function Boekhouding() {
                             <div style={{ height: 250, padding: '16px 0' }}>
                                 <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                     <BarChart data={topClients} layout="vertical" margin={{ top: 4, right: 32, left: 80, bottom: 4 }} barCategoryGap="25%">
-                                        <XAxis type="number" tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
+                                        <XAxis type="number" tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={function (v: number) { return v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v; }} />
                                         <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={76} />
                                         <Tooltip formatter={function (v: number) { return ['€' + v.toLocaleString('nl-NL'), 'Omzet']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
-                                        <Bar dataKey="omzet" radius={[0, 4, 4, 0]} fill="#FFBF00" />
+                                        <Bar dataKey="omzet" radius={[0, 4, 4, 0]} fill="var(--brand)" />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

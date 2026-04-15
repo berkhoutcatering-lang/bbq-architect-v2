@@ -34,22 +34,22 @@ export default function FieldTooltip({ text, position = 'top' }: FieldTooltipPro
         top: {
             position: 'absolute', bottom: -arrowSize, left: '50%', transform: 'translateX(-50%)',
             width: 0, height: 0, borderLeft: `${arrowSize}px solid transparent`,
-            borderRight: `${arrowSize}px solid transparent`, borderTop: `${arrowSize}px solid #1e1e22`,
+            borderRight: `${arrowSize}px solid transparent`, borderTop: `${arrowSize}px solid var(--card-solid)`,
         },
         bottom: {
             position: 'absolute', top: -arrowSize, left: '50%', transform: 'translateX(-50%)',
             width: 0, height: 0, borderLeft: `${arrowSize}px solid transparent`,
-            borderRight: `${arrowSize}px solid transparent`, borderBottom: `${arrowSize}px solid #1e1e22`,
+            borderRight: `${arrowSize}px solid transparent`, borderBottom: `${arrowSize}px solid var(--card-solid)`,
         },
         left: {
             position: 'absolute', right: -arrowSize, top: '50%', transform: 'translateY(-50%)',
             width: 0, height: 0, borderTop: `${arrowSize}px solid transparent`,
-            borderBottom: `${arrowSize}px solid transparent`, borderLeft: `${arrowSize}px solid #1e1e22`,
+            borderBottom: `${arrowSize}px solid transparent`, borderLeft: `${arrowSize}px solid var(--card-solid)`,
         },
         right: {
             position: 'absolute', left: -arrowSize, top: '50%', transform: 'translateY(-50%)',
             width: 0, height: 0, borderTop: `${arrowSize}px solid transparent`,
-            borderBottom: `${arrowSize}px solid transparent`, borderRight: `${arrowSize}px solid #1e1e22`,
+            borderBottom: `${arrowSize}px solid transparent`, borderRight: `${arrowSize}px solid var(--card-solid)`,
         },
     };
 
@@ -72,7 +72,7 @@ export default function FieldTooltip({ text, position = 'top' }: FieldTooltipPro
                 style={{
                     position: 'absolute',
                     ...tooltipPositionStyles[position],
-                    background: '#1e1e22',
+                    background: 'var(--card-solid)',
                     color: '#fff',
                     fontSize: 12,
                     lineHeight: 1.4,

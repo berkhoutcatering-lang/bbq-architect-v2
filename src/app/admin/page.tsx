@@ -73,10 +73,10 @@ interface RetentionData {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  healthy: { color: '#22c55e', bg: 'rgba(34,197,94,.1)', label: 'Gezond' },
-  'at-risk': { color: '#f59e0b', bg: 'rgba(245,158,11,.1)', label: 'Risico' },
-  critical: { color: '#ef4444', bg: 'rgba(239,68,68,.1)', label: 'Kritiek' },
-  churned: { color: '#71717a', bg: 'rgba(113,113,122,.1)', label: 'Inactief' },
+  healthy: { color: 'var(--green)', bg: 'color-mix(in srgb, var(--green) 10%, transparent)', label: 'Gezond' },
+  'at-risk': { color: 'var(--amber)', bg: 'color-mix(in srgb, var(--amber) 10%, transparent)', label: 'Risico' },
+  critical: { color: 'var(--red)', bg: 'color-mix(in srgb, var(--red) 10%, transparent)', label: 'Kritiek' },
+  churned: { color: 'var(--zinc)', bg: 'color-mix(in srgb, var(--zinc) 10%, transparent)', label: 'Inactief' },
 };
 
 const FLAG_DEFS = [
@@ -265,8 +265,8 @@ export default function AdminPortal() {
   if (error && !loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 16, background: 'rgba(239,68,68,.1)', marginBottom: 16 }}>
-          <AlertTriangle size={28} style={{ color: '#ef4444' }} />
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: 16, background: 'color-mix(in srgb, var(--red) 10%, transparent)', marginBottom: 16 }}>
+          <AlertTriangle size={28} style={{ color: 'var(--red)' }} />
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>Toegang geweigerd</h2>
         <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 400, margin: '0 auto' }}>{error}</p>
@@ -316,7 +316,7 @@ export default function AdminPortal() {
           <div className="stat-label">Gebruikers</div>
         </div>
         <div className="stat-card">
-          <div className="stat-val" style={{ color: healthyCount === healthScores.length ? '#22c55e' : '#f59e0b' }}>
+          <div className="stat-val" style={{ color: healthyCount === healthScores.length ? 'var(--green)' : 'var(--amber)' }}>
             {healthyCount}/{healthScores.length}
           </div>
           <div className="stat-label">Gezond</div>
@@ -331,7 +331,7 @@ export default function AdminPortal() {
       {(criticalOrgs.length > 0 || atRiskOrgs.length > 0) && (
         <MetallicCard hover={false} className="p-4 mb-5">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <ShieldAlert size={16} style={{ color: '#ef4444' }} />
+            <ShieldAlert size={16} style={{ color: 'var(--red)' }} />
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
               Actie nodig ({criticalOrgs.length + atRiskOrgs.length})
             </span>
@@ -357,7 +357,7 @@ export default function AdminPortal() {
                   </div>
                 </div>
                 {alertMsg[h.orgId] ? (
-                  <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</span>
+                  <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>{alertMsg[h.orgId]}</span>
                 ) : (
                   <button
                     onClick={function () { sendAlert(h.orgId, h.orgName, h.daysInactive); }}
@@ -381,7 +381,7 @@ export default function AdminPortal() {
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 3, padding: '6px 12px',
-                    borderRadius: 6, background: 'rgba(59,130,246,.1)', color: '#3b82f6',
+                    borderRadius: 6, background: 'color-mix(in srgb, var(--blue) 10%, transparent)', color: 'var(--blue)',
                     fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
                   }}
                 >
@@ -450,7 +450,7 @@ export default function AdminPortal() {
             </div>
           </div>
           {createMsg && (
-            <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, background: createMsg.startsWith('Fout') ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)', color: createMsg.startsWith('Fout') ? '#ef4444' : '#22c55e', border: '1px solid ' + (createMsg.startsWith('Fout') ? 'rgba(239,68,68,.2)' : 'rgba(34,197,94,.2)') }}>
+            <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, background: createMsg.startsWith('Fout') ? 'color-mix(in srgb, var(--red) 10%, transparent)' : 'color-mix(in srgb, var(--green) 10%, transparent)', color: createMsg.startsWith('Fout') ? 'var(--red)' : 'var(--green)', border: '1px solid ' + (createMsg.startsWith('Fout') ? 'color-mix(in srgb, var(--red) 20%, transparent)' : 'color-mix(in srgb, var(--green) 20%, transparent)') }}>
               {createMsg}
             </div>
           )}
@@ -477,14 +477,14 @@ export default function AdminPortal() {
                   <AreaChart data={analytics.chartData}>
                     <defs>
                       <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#c4a35a" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#c4a35a" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--color-accent-gold)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="var(--color-accent-gold)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted)' }} interval={4} />
                     <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} width={30} />
                     <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
-                    <Area type="monotone" dataKey="total" stroke="#c4a35a" fillOpacity={1} fill="url(#colorActivity)" strokeWidth={2} name="Acties" />
+                    <Area type="monotone" dataKey="total" stroke="var(--color-accent-gold)" fillOpacity={1} fill="url(#colorActivity)" strokeWidth={2} name="Acties" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -495,12 +495,12 @@ export default function AdminPortal() {
           {retention && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
               {[
-                { label: 'DAU', val: retention.dau, sub: retention.dauPct + '% van totaal', color: '#22c55e' },
-                { label: 'WAU', val: retention.wau, sub: retention.wauPct + '% van totaal', color: '#3b82f6' },
-                { label: 'MAU', val: retention.mau, sub: retention.mauPct + '% van totaal', color: '#8b5cf6' },
-                { label: 'Stickiness', val: retention.stickiness + '%', sub: 'DAU/MAU ratio', color: '#f59e0b' },
-                { label: 'Errors', val: retention.errorCount, sub: 'Afgelopen 7d', color: retention.errorCount > 0 ? '#ef4444' : '#22c55e' },
-                { label: 'Tickets', val: retention.openTickets + '/' + retention.totalTickets, sub: 'Open/totaal', color: retention.openTickets > 0 ? '#f59e0b' : '#22c55e' },
+                { label: 'DAU', val: retention.dau, sub: retention.dauPct + '% van totaal', color: 'var(--green)' },
+                { label: 'WAU', val: retention.wau, sub: retention.wauPct + '% van totaal', color: 'var(--blue)' },
+                { label: 'MAU', val: retention.mau, sub: retention.mauPct + '% van totaal', color: 'var(--purple)' },
+                { label: 'Stickiness', val: retention.stickiness + '%', sub: 'DAU/MAU ratio', color: 'var(--amber)' },
+                { label: 'Errors', val: retention.errorCount, sub: 'Afgelopen 7d', color: retention.errorCount > 0 ? 'var(--red)' : 'var(--green)' },
+                { label: 'Tickets', val: retention.openTickets + '/' + retention.totalTickets, sub: 'Open/totaal', color: retention.openTickets > 0 ? 'var(--amber)' : 'var(--green)' },
               ].map(function (m) {
                 return (
                   <div key={m.label} style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
@@ -518,7 +518,7 @@ export default function AdminPortal() {
             {/* Health distribution */}
             <MetallicCard hover={false} className="p-5">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>
-                <Heart size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: '#ef4444' }} />
+                <Heart size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: 'var(--red)' }} />
                 Health verdeling
               </h3>
               {['healthy', 'at-risk', 'critical', 'churned'].map(function (status) {
@@ -542,7 +542,7 @@ export default function AdminPortal() {
             {/* Top active orgs */}
             <MetallicCard hover={false} className="p-5">
               <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>
-                <ArrowUpRight size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: '#22c55e' }} />
+                <ArrowUpRight size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: 'var(--green)' }} />
                 Meest actieve organisaties
               </h3>
               {(analytics?.orgTotals || []).slice(0, 5).map(function (org, i) {
@@ -553,7 +553,7 @@ export default function AdminPortal() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{org.orgName}</div>
                       <div style={{ height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 2, width: Math.round((org.totalActions / maxActions) * 100) + '%', background: '#22c55e' }} />
+                        <div style={{ height: '100%', borderRadius: 2, width: Math.round((org.totalActions / maxActions) * 100) + '%', background: 'var(--green)' }} />
                       </div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
@@ -579,7 +579,7 @@ export default function AdminPortal() {
                     <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--muted)' }} />
                     <YAxis dataKey="page" type="category" tick={{ fontSize: 10, fill: 'var(--muted)' }} width={100} />
                     <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
-                    <Bar dataKey="count" fill="#c4a35a" radius={[0, 4, 4, 0]} name="Bezoeken" />
+                    <Bar dataKey="count" fill="var(--color-accent-gold)" radius={[0, 4, 4, 0]} name="Bezoeken" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -593,7 +593,7 @@ export default function AdminPortal() {
         <MetallicCard hover={false} className="p-0 mb-6">
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-              <Heart size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: '#ef4444' }} />
+              <Heart size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6, color: 'var(--red)' }} />
               Customer Health Scores
             </h3>
           </div>
@@ -631,7 +631,7 @@ export default function AdminPortal() {
                       return (
                         <div key={m.label} style={{ textAlign: 'center', width: 36 }}>
                           <div style={{ height: 28, borderRadius: 4, background: 'var(--bg)', position: 'relative', overflow: 'hidden', marginBottom: 2 }}>
-                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: (m.val * 28 / 100) + 'px', background: m.val > 60 ? '#22c55e' : m.val > 30 ? '#f59e0b' : '#ef4444', borderRadius: 4, transition: 'height 0.3s' }} />
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: (m.val * 28 / 100) + 'px', background: m.val > 60 ? 'var(--green)' : m.val > 30 ? 'var(--amber)' : 'var(--red)', borderRadius: 4, transition: 'height 0.3s' }} />
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{m.label}</div>
                         </div>
@@ -642,14 +642,14 @@ export default function AdminPortal() {
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     {h.daysInactive > 7 && (
                       <button onClick={function () { sendAlert(h.orgId, h.orgName, h.daysInactive); }} disabled={sendingAlert === h.orgId}
-                        style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(239,68,68,.08)', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        style={{ padding: '6px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--red) 8%, transparent)', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
                         {sendingAlert === h.orgId ? <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> : <Mail size={10} />} Alert
                       </button>
                     )}
                   </div>
                 </div>
                 {alertMsg[h.orgId] && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{alertMsg[h.orgId]}</div>
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>{alertMsg[h.orgId]}</div>
                 )}
               </div>
             );
@@ -669,14 +669,14 @@ export default function AdminPortal() {
                 <AreaChart data={analytics.chartData}>
                   <defs>
                     <linearGradient id="colorAct2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#c4a35a" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#c4a35a" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--color-accent-gold)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--color-accent-gold)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--muted)' }} interval={2} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} width={30} />
                   <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="total" stroke="#c4a35a" fillOpacity={1} fill="url(#colorAct2)" strokeWidth={2} name="Acties" />
+                  <Area type="monotone" dataKey="total" stroke="var(--color-accent-gold)" fillOpacity={1} fill="url(#colorAct2)" strokeWidth={2} name="Acties" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -690,10 +690,10 @@ export default function AdminPortal() {
                 const trend = org.totalActions > 5 ? 'up' : org.totalActions > 0 ? 'flat' : 'down';
                 return (
                   <div key={org.orgId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    {trend === 'up' ? <ArrowUpRight size={12} style={{ color: '#22c55e' }} /> : trend === 'down' ? <ArrowDownRight size={12} style={{ color: '#ef4444' }} /> : <Minus size={12} style={{ color: 'var(--muted)' }} />}
+                    {trend === 'up' ? <ArrowUpRight size={12} style={{ color: 'var(--green)' }} /> : trend === 'down' ? <ArrowDownRight size={12} style={{ color: 'var(--red)' }} /> : <Minus size={12} style={{ color: 'var(--muted)' }} />}
                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', flex: 1 }}>{org.orgName}</span>
                     <div style={{ width: 80, height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: Math.round((org.totalActions / maxA) * 100) + '%', background: '#c4a35a', borderRadius: 2 }} />
+                      <div style={{ height: '100%', width: Math.round((org.totalActions / maxA) * 100) + '%', background: 'var(--color-accent-gold)', borderRadius: 2 }} />
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{org.totalActions}</span>
                   </div>
@@ -709,7 +709,7 @@ export default function AdminPortal() {
                   <div key={p.page} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, fontFamily: 'monospace' }}>{p.page}</span>
                     <div style={{ width: 80, height: 4, borderRadius: 2, background: 'var(--bg)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: Math.round((p.count / maxP) * 100) + '%', background: '#3b82f6', borderRadius: 2 }} />
+                      <div style={{ height: '100%', width: Math.round((p.count / maxP) * 100) + '%', background: 'var(--blue)', borderRadius: 2 }} />
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', minWidth: 28, textAlign: 'right' }}>{p.count}</span>
                   </div>
@@ -745,23 +745,23 @@ export default function AdminPortal() {
               <div key={u.userId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{
                   width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                  background: 'rgba(59,130,246,.1)',
+                  background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#3b82f6', fontSize: 14, fontWeight: 700,
+                  color: 'var(--blue)', fontSize: 14, fontWeight: 700,
                 }}>
                   {u.naam.charAt(0).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{u.naam}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6' }}>{u.role}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'color-mix(in srgb, var(--blue) 10%, transparent)', color: 'var(--blue)' }}>{u.role}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1 }}>
                     {u.email} &middot; {u.orgName}
                   </div>
                 </div>
                 {impersonateMsg[u.userId] ? (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: impersonateMsg[u.userId] === 'Link geopend' ? '#22c55e' : '#ef4444' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: impersonateMsg[u.userId] === 'Link geopend' ? 'var(--green)' : 'var(--red)' }}>
                     {impersonateMsg[u.userId]}
                   </span>
                 ) : (
@@ -770,7 +770,7 @@ export default function AdminPortal() {
                     disabled={impersonating === u.userId}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px',
-                      borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)',
+                      borderRadius: 8, background: 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
                       cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--brand)',
                     }}
                   >
@@ -814,13 +814,13 @@ export default function AdminPortal() {
                 <button onClick={function () { setExpandedOrg(isExpanded ? null : org.id); }}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', opacity: isInactive ? 0.5 : 1 }}
                   className="hover:bg-white/[0.02]">
-                  <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: isInactive ? 'rgba(113,113,122,.15)' : 'rgba(59,130,246,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isInactive ? '#71717a' : '#3b82f6', fontSize: 14, fontWeight: 700 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: isInactive ? 'color-mix(in srgb, var(--zinc) 15%, transparent)' : 'color-mix(in srgb, var(--blue) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isInactive ? 'var(--zinc)' : 'var(--blue)', fontSize: 14, fontWeight: 700 }}>
                     {displayName.charAt(0).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</span>
-                      {isInactive && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: '#ef4444' }}>INACTIEF</span>}
+                      {isInactive && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'color-mix(in srgb, var(--red) 10%, transparent)', color: 'var(--red)' }}>INACTIEF</span>}
                       {healthCfg && !isInactive && <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: healthCfg.bg, color: healthCfg.color }}>{health!.overall}</span>}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{org.slug} &middot; {formatDate(org.created_at)}</div>
@@ -847,8 +847,8 @@ export default function AdminPortal() {
                       <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Leden</div>
                         <div style={{ display: 'flex', gap: 12 }}>
-                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{org.members.active}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>actief</div></div>
-                          <div><div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b' }}>{org.members.invited}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>uitgenodigd</div></div>
+                          <div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--green)' }}>{org.members.active}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>actief</div></div>
+                          <div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--amber)' }}>{org.members.invited}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>uitgenodigd</div></div>
                         </div>
                       </div>
                       <div style={{ padding: 14, borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
@@ -871,8 +871,8 @@ export default function AdminPortal() {
                             const enabled = !!orgFlags[flag.key];
                             return (
                               <button key={flag.key} onClick={function () { toggleFlag(org.id, flag.key); }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: enabled ? 'rgba(34,197,94,.06)' : 'var(--bg)', border: '1px solid ' + (enabled ? 'rgba(34,197,94,.2)' : 'var(--border)'), cursor: 'pointer', textAlign: 'left' }}>
-                                {enabled ? <ToggleRight size={16} style={{ color: '#22c55e', flexShrink: 0 }} /> : <ToggleLeft size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: enabled ? 'color-mix(in srgb, var(--green) 6%, transparent)' : 'var(--bg)', border: '1px solid ' + (enabled ? 'color-mix(in srgb, var(--green) 20%, transparent)' : 'var(--border)'), cursor: 'pointer', textAlign: 'left' }}>
+                                {enabled ? <ToggleRight size={16} style={{ color: 'var(--green)', flexShrink: 0 }} /> : <ToggleLeft size={16} style={{ color: 'var(--muted)', flexShrink: 0 }} />}
                                 <div>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{flag.label}</div>
                                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>{flag.desc}</div>
@@ -893,10 +893,10 @@ export default function AdminPortal() {
                           return (
                             <div key={inv.token} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)', marginBottom: 6, fontSize: 12 }}>
                               <span style={{ color: 'var(--text)', flex: 1 }}>{inv.email}</span>
-                              <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: expired ? 'rgba(239,68,68,.1)' : 'rgba(59,130,246,.1)', color: expired ? '#ef4444' : '#3b82f6' }}>{expired ? 'Verlopen' : inv.role}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: expired ? 'color-mix(in srgb, var(--red) 10%, transparent)' : 'color-mix(in srgb, var(--blue) 10%, transparent)', color: expired ? 'var(--red)' : 'var(--blue)' }}>{expired ? 'Verlopen' : inv.role}</span>
                               {!expired && (
                                 <button onClick={function (e) { e.stopPropagation(); copyToken(inv.token); }}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 6, background: 'rgba(59,130,246,.1)', color: '#3b82f6', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 6, background: 'color-mix(in srgb, var(--blue) 10%, transparent)', color: 'var(--blue)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                   {copiedToken === inv.token ? <><Check size={11} /> Gekopieerd</> : <><Copy size={11} /> Link</>}
                                 </button>
                               )}
@@ -912,20 +912,20 @@ export default function AdminPortal() {
                           const orgUser = impersonateUsers.find(function (u) { return u.orgId === org.id; });
                           if (orgUser) handleImpersonate(orgUser.userId);
                         }}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'rgba(59,130,246,.1)', color: '#3b82f6', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--blue) 10%, transparent)', color: 'var(--blue)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                         <LogIn size={12} /> Inloggen als klant
                       </button>
                       <button onClick={function () { handleExport(org.id, org.slug, 'json'); }}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'rgba(34,197,94,.08)', color: '#22c55e', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--green) 8%, transparent)', color: 'var(--green)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                         <Download size={12} /> Export JSON
                       </button>
                       <button onClick={function () { handleExport(org.id, org.slug, 'csv'); }}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'rgba(34,197,94,.08)', color: '#22c55e', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--green) 8%, transparent)', color: 'var(--green)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                         <Download size={12} /> Export CSV
                       </button>
                       {!isInactive && (
                         <button onClick={function () { handleDeactivate(org.id, displayName); }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'rgba(239,68,68,.08)', color: '#ef4444', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--red) 8%, transparent)', color: 'var(--red)', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                           <Trash2 size={12} /> Deactiveren
                         </button>
                       )}

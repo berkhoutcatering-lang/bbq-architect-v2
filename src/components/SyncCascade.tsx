@@ -58,7 +58,7 @@ export default function SyncCascade({ title, steps, onClose, autoClose }: SyncCa
             }}
         >
             <div style={{
-                background: 'linear-gradient(135deg, #1e1e22, #1a1a1e)',
+                background: 'linear-gradient(135deg, var(--card-solid), var(--sidebar-bg-hover))',
                 border: allDone ? '1px solid rgba(16,185,129,0.2)' : '1px solid rgba(196,163,90,0.2)',
                 borderRadius: 16,
                 padding: '16px 20px',
@@ -67,8 +67,8 @@ export default function SyncCascade({ title, steps, onClose, autoClose }: SyncCa
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sparkles size={14} style={{ color: allDone ? '#10b981' : '#c4a35a' }} />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: allDone ? '#10b981' : '#c4a35a' }}>
+                        <Sparkles size={14} style={{ color: allDone ? 'var(--emerald)' : 'var(--color-accent-gold)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: allDone ? 'var(--emerald)' : 'var(--color-accent-gold)' }}>
                             {title}
                         </span>
                     </div>
@@ -84,18 +84,18 @@ export default function SyncCascade({ title, steps, onClose, autoClose }: SyncCa
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 2 }}>
                     {steps.map(function (step, idx) {
                         const icon = step.status === 'completed' ? (
-                            <Check size={12} style={{ color: '#10b981' }} />
+                            <Check size={12} style={{ color: 'var(--emerald)' }} />
                         ) : step.status === 'in_progress' ? (
-                            <Loader2 size={12} style={{ color: '#c4a35a', animation: 'spin 1s linear infinite' }} />
+                            <Loader2 size={12} style={{ color: 'var(--color-accent-gold)', animation: 'spin 1s linear infinite' }} />
                         ) : step.status === 'error' ? (
-                            <X size={12} style={{ color: '#ef4444' }} />
+                            <X size={12} style={{ color: 'var(--red)' }} />
                         ) : (
                             <Clock size={12} style={{ color: 'var(--muted)' }} />
                         );
 
-                        const textColor = step.status === 'completed' ? '#10b981'
+                        const textColor = step.status === 'completed' ? 'var(--emerald)'
                             : step.status === 'in_progress' ? 'white'
-                            : step.status === 'error' ? '#ef4444'
+                            : step.status === 'error' ? 'var(--red)'
                             : 'var(--muted)';
 
                         const content = (

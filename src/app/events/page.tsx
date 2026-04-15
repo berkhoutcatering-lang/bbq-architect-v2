@@ -8,6 +8,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt, fmtNl, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { mailEventBevestiging } from '@/lib/emailHelper';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
@@ -33,7 +35,11 @@ export default function Events() {
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [searchQuery, setSearchQuery] = useState('');
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { errors, validateField, validateAll, clearError, fieldProps } = useFormValidation({
+        name: [{ required: 'Vul een naam in' }],
+        date: [{ required: 'Vul een datum in' }],
+        guests: [{ required: 'Vul het aantal gasten in' }, { min: [1, 'Minimaal 1 gast'] }],
+    });
     const [isMobile, setIsMobile] = useState(false);
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
@@ -58,12 +64,7 @@ export default function Events() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function validateEvent(): boolean {
-        const e: Record<string, string> = {};
-        if (!form!.name) e.name = 'Vul een naam in';
-        if (!form!.date) e.date = 'Vul een datum in';
-        if (!form!.guests || form!.guests <= 0) e.guests = 'Vul het aantal gasten in';
-        setErrors(e);
-        return Object.keys(e).length === 0;
+        return validateAll({ name: form!.name, date: form!.date, guests: form!.guests });
     }
 
     function saveEvent() {
@@ -255,10 +256,10 @@ export default function Events() {
                     )}
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Eventgegevens</h4>
                     <div className="form-grid">
-                        <div className="field full"><label>Event Naam</label><input value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); setErrors(Object.assign({}, errors, { name: '' })); }} style={errors.name ? { borderColor: 'var(--red)' } : {}} />{errors.name && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.name}</span>}</div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); setErrors(Object.assign({}, errors, { date: '' })); }} style={errors.date ? { borderColor: 'var(--red)' } : {}} />{errors.date && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.date}</span>}</div>
+                        <div className="field full"><label>Event Naam</label><input name="name" value={form.name} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('name', e.target.value); clearError('name'); }} style={errors.name ? { borderColor: 'var(--red)' } : {}} {...fieldProps('name', form.name)} /><FieldError message={errors.name} fieldName="name" /></div>
+                        <div className="field"><label>Datum</label><input name="date" type="date" value={form.date} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('date', e.target.value); clearError('date'); }} style={errors.date ? { borderColor: 'var(--red)' } : {}} {...fieldProps('date', form.date)} /><FieldError message={errors.date} fieldName="date" /></div>
                         <div className="field"><label>Locatie</label><input value={form.location} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('location', e.target.value); }} /></div>
-                        <div className="field"><label>Aantal Gasten</label><input type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); setErrors(Object.assign({}, errors, { guests: '' })); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} />{errors.guests && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.guests}</span>}</div>
+                        <div className="field"><label>Aantal Gasten</label><input name="guests" type="number" value={form.guests} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('guests', parseInt(e.target.value) || 0); clearError('guests'); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} {...fieldProps('guests', form.guests)} /><FieldError message={errors.guests} fieldName="guests" /></div>
                         <div className="field"><label>Prijs per Persoon</label><input type="number" step="0.50" value={form.ppp} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('ppp', parseFloat(e.target.value) || 0); }} /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('type', e.target.value); }}>
@@ -344,7 +345,7 @@ export default function Events() {
                         </div>
                     )}
 
-                    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#8b8bf0', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--indigo)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>
                         <Clock size={14} style={{ marginRight: 6 }} />Draaiboek
                     </h4>
                     <div style={{ marginBottom: 8 }}>
@@ -385,8 +386,8 @@ export default function Events() {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 13 }}>
                                 <div><span style={{ color: 'var(--muted)' }}>Omzet: </span><span style={{ fontWeight: 700, color: 'var(--brand)' }}>{fmt(omzet)}</span></div>
-                                <div><span style={{ color: 'var(--muted)' }}>Kosten: </span><span style={{ fontWeight: 700, color: '#ef4444' }}>{fmt((form.werkelijke_kosten || 0) + (form.extra_kosten || 0))}</span></div>
-                                <div><span style={{ color: 'var(--muted)' }}>Winst: </span><span style={{ fontWeight: 700, color: (omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0)) > 0 ? '#10b981' : '#ef4444' }}>{fmt(omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0))}</span></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Kosten: </span><span style={{ fontWeight: 700, color: 'var(--red)' }}>{fmt((form.werkelijke_kosten || 0) + (form.extra_kosten || 0))}</span></div>
+                                <div><span style={{ color: 'var(--muted)' }}>Winst: </span><span style={{ fontWeight: 700, color: (omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0)) > 0 ? 'var(--emerald)' : 'var(--red)' }}>{fmt(omzet - (form.werkelijke_kosten || 0) - (form.extra_kosten || 0))}</span></div>
                             </div>
                         </div>
                     )}
@@ -395,10 +396,10 @@ export default function Events() {
                     {(form.menu || []).length > 0 && (
                         <div style={{ marginTop: 16, padding: 16, background: 'rgba(59,130,246,.04)', borderRadius: 12, border: '1px solid rgba(59,130,246,.12)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#3b82f6', letterSpacing: '0.1em' }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--blue)', letterSpacing: '0.1em' }}>
                                     <ShoppingCart size={14} style={{ marginRight: 6 }} />Inkooplijst
                                 </span>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: '#3b82f6' }} onClick={function () {
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, color: 'var(--blue)' }} onClick={function () {
                                     setField('_showInkoop', !form._showInkoop);
                                 }}>{form._showInkoop ? 'Verbergen' : 'Genereer'}</button>
                             </div>
@@ -581,7 +582,7 @@ export default function Events() {
                     <button onClick={function () { router.push('/uren'); }} style={{
                         flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
                         background: 'rgba(59,130,246,.15)', border: '1px solid rgba(59,130,246,.3)',
-                        color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        color: 'var(--blue)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
                     }}>
                         <Clock size={14} /> Uren
@@ -589,7 +590,7 @@ export default function Events() {
                     <button onClick={function () { router.push('/haccp'); }} style={{
                         flex: 1, maxWidth: 140, height: 48, borderRadius: 14, fontSize: 12, fontWeight: 700,
                         background: 'rgba(34,197,94,.15)', border: '1px solid rgba(34,197,94,.3)',
-                        color: '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        color: 'var(--green)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         backdropFilter: 'blur(12px)', boxShadow: '0 4px 16px rgba(0,0,0,.3)',
                     }}>
                         <Thermometer size={14} /> HACCP

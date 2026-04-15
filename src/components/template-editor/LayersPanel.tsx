@@ -70,14 +70,14 @@ export default function LayersPanel({
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '5px 8px 5px 12px', cursor: 'pointer', fontSize: 11,
-              background: isSelected ? 'rgba(59,130,246,.1)' : 'transparent',
-              borderLeft: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+              background: isSelected ? 'color-mix(in srgb, var(--blue) 10%, transparent)' : 'transparent',
+              borderLeft: isSelected ? '2px solid var(--blue)' : '2px solid transparent',
               opacity: isHidden ? 0.4 : 1,
               transition: 'background 0.1s',
             }}
           >
-            <Icon size={12} style={{ color: isSelected ? '#3b82f6' : 'var(--muted)', flexShrink: 0 }} />
-            <span style={{ flex: 1, color: isSelected ? '#3b82f6' : 'var(--text)', fontWeight: isSelected ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Icon size={12} style={{ color: isSelected ? 'var(--blue)' : 'var(--muted)', flexShrink: 0 }} />
+            <span style={{ flex: 1, color: isSelected ? 'var(--blue)' : 'var(--text)', fontWeight: isSelected ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {label}
             </span>
 
@@ -95,7 +95,7 @@ export default function LayersPanel({
                 <ChevronDown size={11} />
               </button>
               <button onClick={function (e) { e.stopPropagation(); onToggleVisibility(block.id); }}
-                title={isHidden ? 'Tonen' : 'Verbergen'} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: isHidden ? '#f59e0b' : 'var(--muted)' }}>
+                title={isHidden ? 'Tonen' : 'Verbergen'} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: isHidden ? 'var(--amber)' : 'var(--muted)' }}>
                 {isHidden ? <EyeOff size={11} /> : <Eye size={11} />}
               </button>
               <button onClick={function (e) { e.stopPropagation(); onDuplicate(block.id); }}
@@ -103,7 +103,7 @@ export default function LayersPanel({
                 <Copy size={11} />
               </button>
               <button onClick={function (e) { e.stopPropagation(); onDelete(block.id); }}
-                title="Verwijder" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
+                title="Verwijder" style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)' }}>
                 <Trash2 size={11} />
               </button>
             </div>

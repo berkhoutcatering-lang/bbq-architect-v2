@@ -7,12 +7,15 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2 } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Klant } from '@/types';
 
 export default function KlantenPage() {
@@ -23,6 +26,9 @@ function Klanten() {
     const { data: klanten, loading: klantenLoading, insert, update, remove } = useSupabase<Klant>('klanten', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        naam: [{ required: 'Vul een naam in' }],
+    });
     const searchParams = useSearchParams();
     const initialZoek = searchParams.get('zoek') || '';
 
@@ -30,6 +36,8 @@ function Klanten() {
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [searchQuery, setSearchQuery] = useState(initialZoek);
     const [filterType, setFilterType] = useState<string>('alle');
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
 
     // Fetch linked offertes & events counts per klant
     const [klantStats, setKlantStats] = useState<Record<string, { offertes: number; events: number; omzet: number; offerteList: any[]; eventList: any[]; factuurList: any[] }>>({});
@@ -68,10 +76,16 @@ function Klanten() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function saveKlant() {
-        if (!form!.naam) { showToast('Vul een naam in', 'error'); return; }
+        if (!validateAll({ naam: form!.naam })) return;
         if (editing === 'new') {
             insert(form!).then(function () {
                 showToast('Klant aangemaakt', 'success');
+                setFollowUpActions([
+                    { icon: '\ud83d\udcc4', label: 'Offerte opstellen', href: '/offertes' },
+                    { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },
+                    { icon: '\ud83d\udce7', label: 'Welkomstmail versturen', onClick: function() { showToast('Mail functie komt binnenkort', 'info'); } },
+                ]);
+                setFollowUpTitle('Klant aangemaakt!');
                 setEditing(null); setForm(null);
             });
         } else {
@@ -105,7 +119,7 @@ function Klanten() {
                 <div className="panel-body">
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Contactgegevens</h4>
                     <div className="form-grid">
-                        <div className="field full"><label>Naam / Contactpersoon</label><input value={form.naam} onChange={function (e) { setField('naam', e.target.value); }} /></div>
+                        <div className="field full"><label>Naam / Contactpersoon</label><input name="naam" value={form.naam} onChange={function (e) { setField('naam', e.target.value); clearError('naam'); }} style={errors.naam ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} /><FieldError message={errors.naam} fieldName="naam" /></div>
                         <div className="field"><label>Bedrijfsnaam</label><input value={form.bedrijf || ''} onChange={function (e) { setField('bedrijf', e.target.value); }} /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e) { setField('type', e.target.value); }}>
@@ -135,13 +149,13 @@ function Klanten() {
                             })()}
                             {form.telefoon && (
                                 <a href={'tel:' + form.telefoon}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: '#3b82f6', textDecoration: 'none' }}>
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.25)', color: 'var(--blue)', textDecoration: 'none' }}>
                                     <Phone size={12} /> Bellen
                                 </a>
                             )}
                             {form.email && (
                                 <a href={'mailto:' + form.email}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.25)', color: '#c4a35a', textDecoration: 'none' }}>
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.25)', color: 'var(--color-accent-gold)', textDecoration: 'none' }}>
                                     <Mail size={12} /> Email
                                 </a>
                             )}
@@ -174,7 +188,7 @@ function Klanten() {
                                 <div style={{ marginTop: 16 }}>
                                     <h5 style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>Events</h5>
                                     {stats.eventList.slice(0, 5).map(function (ev: any) {
-                                        const statusColor = ev.status === 'confirmed' ? '#10b981' : ev.status === 'completed' ? '#3b82f6' : '#f59e0b';
+                                        const statusColor = ev.status === 'confirmed' ? 'var(--emerald)' : ev.status === 'completed' ? 'var(--blue)' : 'var(--amber)';
                                         return (
                                             <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                                                 <span>{ev.name} <span style={{ color: 'var(--muted)' }}>— {ev.date}</span></span>
@@ -210,7 +224,7 @@ function Klanten() {
                                     {stats.factuurList.slice(0, 5).map(function (f: any) {
                                         let totaal = 0;
                                         (f.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
-                                        const statusColor = f.status === 'betaald' ? '#10b981' : f.status === 'vervallen' ? '#ef4444' : '#f59e0b';
+                                        const statusColor = f.status === 'betaald' ? 'var(--emerald)' : f.status === 'vervallen' ? 'var(--red)' : 'var(--amber)';
                                         return (
                                             <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                                                 <span>{f.nummer} <span style={{ color: 'var(--muted)' }}>— {f.datum}</span></span>
@@ -237,8 +251,8 @@ function Klanten() {
 
     if (klantenLoading) {
         return (
-            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }
@@ -323,6 +337,14 @@ function Klanten() {
                 })}
             </MetallicCard>
             </PageSection>
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
+            )}
         </>
     );
 }

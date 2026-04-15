@@ -148,11 +148,11 @@ export default function Uren() {
                     <div style={{ height: 180, marginTop: 16 }}>
                         <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                             <BarChart data={weekData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="25%">
-                                <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />
+                                <XAxis dataKey="label" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} />
                                 <Tooltip formatter={function (v: any) { return [v + ' uur', 'Gewerkt']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
                                 <Bar dataKey="hours" radius={[3, 3, 0, 0]}>
-                                    {weekData.map(function (d, i) { return <Cell key={i} fill={d.week === selectedWeek ? '#FFBF00' : 'rgba(255,191,0,.25)'} />; })}
+                                    {weekData.map(function (d, i) { return <Cell key={i} fill={d.week === selectedWeek ? 'var(--brand)' : 'rgba(255,191,0,.25)'} />; })}
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
@@ -167,10 +167,10 @@ export default function Uren() {
                     <div style={{ height: 180, marginTop: 16 }}>
                         <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                             <BarChart data={monthlyChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="30%">
-                                <XAxis dataKey="naam" tick={{ fill: '#71717a', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fill: '#71717a', fontSize: 9 }} axisLine={false} tickLine={false} />
+                                <XAxis dataKey="naam" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} />
                                 <Tooltip formatter={function (v: any) { return [v + ' uur', 'Totaal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(167,139,250,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(167,139,250,.06)' }} />
-                                <Bar dataKey="uren" fill="#a78bfa" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="uren" fill="var(--purple)" radius={[3, 3, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

@@ -244,7 +244,7 @@ export default function CommandPalette() {
                 alignItems: 'flex-start',
                 justifyContent: 'center',
                 paddingTop: '15vh',
-                background: 'rgba(0,0,0,0.6)',
+                background: 'var(--overlay)',
                 backdropFilter: 'blur(4px)',
             }}
             onClick={function () { setOpen(false); }}
@@ -254,16 +254,16 @@ export default function CommandPalette() {
                 style={{
                     width: '100%',
                     maxWidth: 580,
-                    background: '#1a1a1e',
-                    border: '1px solid rgba(130,130,130,0.2)',
+                    background: 'var(--card-solid)',
+                    border: '1px solid var(--border-strong)',
                     borderRadius: 16,
                     overflow: 'hidden',
                     boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
                     animation: 'cmdFadeIn 0.15s ease',
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid rgba(130,130,130,0.12)' }}>
-                    <Search size={18} style={{ color: '#828282', flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+                    <Search size={18} style={{ color: 'var(--muted)', flexShrink: 0 }} />
                     <input
                         ref={inputRef}
                         value={query}
@@ -276,7 +276,7 @@ export default function CommandPalette() {
                             background: 'none',
                             border: 'none',
                             outline: 'none',
-                            color: '#f8f8f8',
+                            color: 'var(--text)',
                             fontSize: 15,
                             fontFamily: 'inherit',
                         }}
@@ -285,26 +285,26 @@ export default function CommandPalette() {
                         fontSize: 10,
                         padding: '2px 6px',
                         borderRadius: 4,
-                        background: 'rgba(130,130,130,0.1)',
-                        border: '1px solid rgba(130,130,130,0.2)',
-                        color: '#828282',
+                        background: 'var(--muted-extra-light)',
+                        border: '1px solid var(--border-strong)',
+                        color: 'var(--muted)',
                         fontFamily: 'monospace',
                     }}>ESC</kbd>
                 </div>
 
                 <div role="listbox" aria-label="Zoekresultaten" style={{ maxHeight: 400, overflowY: 'auto', padding: '6px 0' }}>
                     {loading && (
-                        <div style={{ padding: '20px', textAlign: 'center', color: '#828282', fontSize: 13 }}>
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                             Zoeken...
                         </div>
                     )}
                     {!loading && results.length === 0 && query.length >= 2 && (
-                        <div style={{ padding: '24px', textAlign: 'center', color: '#555558', fontSize: 13 }}>
+                        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
                             Geen resultaten voor &ldquo;{query}&rdquo;
                         </div>
                     )}
                     {!loading && results.length === 0 && query.length < 2 && (
-                        <div style={{ padding: '16px 18px', color: '#555558', fontSize: 12 }}>
+                        <div style={{ padding: '16px 18px', color: 'var(--color-text-muted)', fontSize: 12 }}>
                             Typ minimaal 2 tekens om te zoeken, of navigeer naar een pagina...
                         </div>
                     )}
@@ -325,7 +325,7 @@ export default function CommandPalette() {
                                     gap: 12,
                                     padding: '10px 18px',
                                     cursor: 'pointer',
-                                    background: isSelected ? 'rgba(130,130,130,0.08)' : 'transparent',
+                                    background: isSelected ? 'var(--muted-extra-light)' : 'transparent',
                                     transition: 'background 0.1s',
                                 }}
                             >
@@ -343,10 +343,10 @@ export default function CommandPalette() {
                                     <Icon size={15} style={{ color: result.accent }} />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f8f8f8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {result.title}
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#828282', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {result.subtitle}
                                     </div>
                                 </div>
@@ -370,15 +370,15 @@ export default function CommandPalette() {
 
                 <div style={{
                     padding: '8px 18px',
-                    borderTop: '1px solid rgba(130,130,130,0.12)',
+                    borderTop: '1px solid var(--border)',
                     display: 'flex',
                     gap: 16,
                     fontSize: 10,
-                    color: '#555558',
+                    color: 'var(--color-text-muted)',
                 }}>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'rgba(130,130,130,0.1)', border: '1px solid rgba(130,130,130,0.15)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'rgba(130,130,130,0.1)', border: '1px solid rgba(130,130,130,0.15)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'rgba(130,130,130,0.1)', border: '1px solid rgba(130,130,130,0.15)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
+                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
+                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
                 </div>
             </div>
 

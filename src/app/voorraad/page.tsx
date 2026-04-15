@@ -6,11 +6,14 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmt } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import BarcodeScanner from '@/components/BarcodeScanner';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { ArrowLeft, Link as LinkIcon, Utensils, Save, Trash2, ShoppingCart, Barcode, Plus, Package, AlertTriangle, Coins, PieChart as PieChartIcon, Boxes, Warehouse, CheckCircle } from 'lucide-react';
 import type { InventoryItem, Recept } from '@/types';
 
@@ -22,6 +25,9 @@ export default function Voorraad() {
     const { data: recepten } = useSupabase<Recept>('recepten', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        naam: [{ required: 'Vul een naam in' }],
+    });
     const [editing, setEditing] = useState<number | string | null>(null);
     const [form, setForm] = useState<any>(null);
     const [filter, setFilter] = useState('Alles');
@@ -29,6 +35,8 @@ export default function Voorraad() {
     const [search, setSearch] = useState('');
     const [scannerOpen, setScannerOpen] = useState(false);
     const [highlightId, setHighlightId] = useState<number | null>(null);
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
 
     const filtered = inventory.filter(function (item: any) {
         const matchCat = filter === 'Alles' || item.categorie === filter;
@@ -41,11 +49,11 @@ export default function Voorraad() {
     let totalValue = 0;
     inventory.forEach(function (i: any) { totalValue += (i.current_stock || 0) * (i.purchase_price || 0); });
 
-    const catKleuren: Record<string, string> = { Vlees: '#ef4444', Vis: '#3b82f6', Groenten: '#22c55e', Zuivel: '#f59e0b', Kruiden: '#a78bfa', Sauzen: '#f97316', Dranken: '#06b6d4', Overig: '#71717a' };
+    const catKleuren: Record<string, string> = { Vlees: 'var(--red)', Vis: 'var(--blue)', Groenten: 'var(--green)', Zuivel: 'var(--amber)', Kruiden: 'var(--purple)', Sauzen: 'var(--orange)', Dranken: 'var(--cyan)', Overig: 'var(--zinc)' };
     const catData = CATEGORIEEN.filter(function (c) { return c !== 'Alles'; }).map(function (cat) {
         const items = inventory.filter(function (i: any) { return i.categorie === cat; });
         const waarde = items.reduce(function (s: number, i: any) { return s + (i.current_stock || 0) * (i.purchase_price || 0); }, 0);
-        return { naam: cat, items: items.length, waarde: Math.round(waarde), color: catKleuren[cat] || '#71717a' };
+        return { naam: cat, items: items.length, waarde: Math.round(waarde), color: catKleuren[cat] || 'var(--zinc)' };
     }).filter(function (d) { return d.items > 0; });
 
     function newItem() {
@@ -57,9 +65,18 @@ export default function Voorraad() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function saveItem() {
-        if (!form.naam) { showToast('Vul een naam in', 'error'); return; }
+        if (!validateAll({ naam: form.naam })) return;
         if (editing === 'new') {
-            insert(form).then(function () { showToast('Item toegevoegd aan voorraad \ud83d\udce6', 'success'); setEditing(null); setForm(null); });
+            insert(form).then(function () {
+                showToast('Item toegevoegd aan voorraad \ud83d\udce6', 'success');
+                setFollowUpActions([
+                    { icon: '\ud83d\udce6', label: 'Meer items toevoegen', onClick: function() { newItem(); } },
+                    { icon: '\ud83d\udccb', label: 'Boodschappenlijst', href: '/inkoop' },
+                    { icon: '\ud83d\udcca', label: 'Voorraadoverzicht bekijken', onClick: function() { setFollowUpActions(null); } },
+                ]);
+                setFollowUpTitle('Item toegevoegd!');
+                setEditing(null); setForm(null);
+            });
         } else {
             const { id, created_at, ...rest } = form;
             update(editing as number, rest).then(function () { showToast('Voorraad bijgewerkt', 'success'); setEditing(null); setForm(null); });
@@ -120,7 +137,8 @@ export default function Voorraad() {
                 <div className="panel-body">
                     <div className="form-grid">
                         <div className="field full"><label>Naam</label>
-                            <input value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('naam', e.target.value); }} placeholder="bijv. Pulled Pork, BBQ Saus..." /></div>
+                            <input name="naam" value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('naam', e.target.value); clearError('naam'); }} placeholder="bijv. Pulled Pork, BBQ Saus..." style={errors.naam ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} />
+                            <FieldError message={errors.naam} fieldName="naam" /></div>
                         <div className="field"><label>Categorie</label>
                             <select value={form.categorie} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('categorie', e.target.value); }}>
                                 {CATEGORIEEN.filter(function (c) { return c !== 'Alles'; }).map(function (c) { return <option key={c}>{c}</option>; })}
@@ -298,7 +316,7 @@ export default function Voorraad() {
                                         {catData.map(function (d, i) { return <Cell key={i} fill={d.color} />; })}
                                     </Pie>
                                     <Tooltip formatter={function (v: any, n: any) { return ['\u20ac' + v.toLocaleString('nl-NL'), n]; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 12 }} />
-                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: '#71717a' }} />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 12, color: 'var(--zinc)' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
@@ -312,7 +330,7 @@ export default function Voorraad() {
                         <div style={{ height: 160, marginTop: 12 }}>
                             <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <BarChart data={catData} layout="vertical" margin={{ top: 4, right: 8, left: 56, bottom: 4 }} barCategoryGap="25%">
-                                    <XAxis type="number" tick={{ fill: '#71717a', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                    <XAxis type="number" tick={{ fill: 'var(--zinc)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
                                     <YAxis type="category" dataKey="naam" tick={{ fill: '#f4f4f5', fontSize: 12 }} axisLine={false} tickLine={false} width={52} />
                                     <Tooltip formatter={function (v: any) { return [v + ' items', 'Aantal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 12 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
                                     <Bar dataKey="items" radius={[0, 4, 4, 0]}>
@@ -387,6 +405,14 @@ export default function Voorraad() {
             )}
 
             <BarcodeScanner isOpen={scannerOpen} onScan={handleBarcodeScan} onClose={function () { setScannerOpen(false); }} />
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
+            )}
         </div>
     );
 }

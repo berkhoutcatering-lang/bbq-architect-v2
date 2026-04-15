@@ -206,8 +206,8 @@ export default function EventPlannerDashboard() {
 
                     <section className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
                         <KPICard icon={FileText} label="Actieve Offertes" value={offertes.length} />
-                        <KPICard icon={Calendar} label="Aankomende Events" value={kpis.upcoming} accent="#10b981" />
-                        <KPICard icon={AlertTriangle} label="Wacht op Akkoord" value={kpis.awaiting} accent="#f59e0b" />
+                        <KPICard icon={Calendar} label="Aankomende Events" value={kpis.upcoming} accent="var(--emerald)" />
+                        <KPICard icon={AlertTriangle} label="Wacht op Akkoord" value={kpis.awaiting} accent="var(--amber)" />
                         <KPICard icon={Euro} label="Totaal Excl. BTW" value={fmt(kpis.total)} accent="var(--brand)" />
                     </section>
 
@@ -418,7 +418,7 @@ export default function EventPlannerDashboard() {
 
             {quickActionOpen && (
                 <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-                    <div className="h-full w-full max-w-md border-l border-[var(--border)] bg-[#111113] flex flex-col">
+                    <div className="h-full w-full max-w-md border-l border-[var(--border)] bg-[var(--color-bg-card)] flex flex-col">
                         <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
                             <h3 className="text-base font-black uppercase tracking-widest">Snelle Actie</h3>
                             <button className="p-2 hover:bg-white/5 rounded-lg transition-colors" onClick={() => setQuickActionOpen(false)}>

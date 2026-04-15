@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
@@ -20,9 +22,14 @@ export default function Berichten() {
     const { data: berichten, loading, insert } = useSupabase<Bericht>('berichten', []);
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({ afzender: '', onderwerp: '', bericht: '' });
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        afzender: [{ required: 'Vul een afzender in' }],
+        onderwerp: [{ required: 'Vul een onderwerp in' }],
+        bericht: [{ required: 'Vul een bericht in' }],
+    });
 
     function handleSend() {
-        if (!form.afzender || !form.onderwerp || !form.bericht) return;
+        if (!validateAll({ afzender: form.afzender, onderwerp: form.onderwerp, bericht: form.bericht })) return;
         insert({
             ...form,
             datum: new Date().toISOString(),
@@ -36,7 +43,7 @@ export default function Berichten() {
     if (loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-                <Flame size={24} style={{ color: '#c4a35a', animation: 'pulse 1.5s infinite' }} />
+                <Flame size={24} style={{ color: 'var(--color-accent-gold)', animation: 'pulse 1.5s infinite' }} />
             </div>
         );
     }
@@ -69,27 +76,39 @@ export default function Berichten() {
                         <div className="field">
                             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Aan</label>
                             <input
+                                name="afzender"
                                 value={form.afzender}
-                                onChange={function (e) { setForm({ ...form, afzender: e.target.value }); }}
+                                onChange={function (e) { clearError('afzender'); setForm({ ...form, afzender: e.target.value }); }}
                                 placeholder="Naam of e-mail"
+                                {...fieldProps('afzender', form.afzender)}
+                                style={errors.afzender ? { borderColor: 'var(--red)' } : undefined}
                             />
+                            <FieldError message={errors.afzender} fieldName="afzender" />
                         </div>
                         <div className="field">
                             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Onderwerp</label>
                             <input
+                                name="onderwerp"
                                 value={form.onderwerp}
-                                onChange={function (e) { setForm({ ...form, onderwerp: e.target.value }); }}
+                                onChange={function (e) { clearError('onderwerp'); setForm({ ...form, onderwerp: e.target.value }); }}
                                 placeholder="Onderwerp van het bericht"
+                                {...fieldProps('onderwerp', form.onderwerp)}
+                                style={errors.onderwerp ? { borderColor: 'var(--red)' } : undefined}
                             />
+                            <FieldError message={errors.onderwerp} fieldName="onderwerp" />
                         </div>
                         <div className="field">
                             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>Bericht</label>
                             <textarea
+                                name="bericht"
                                 rows={4}
                                 value={form.bericht}
-                                onChange={function (e) { setForm({ ...form, bericht: e.target.value }); }}
+                                onChange={function (e) { clearError('bericht'); setForm({ ...form, bericht: e.target.value }); }}
                                 placeholder="Typ je bericht..."
+                                {...fieldProps('bericht', form.bericht)}
+                                style={errors.bericht ? { borderColor: 'var(--red)' } : undefined}
                             />
+                            <FieldError message={errors.bericht} fieldName="bericht" />
                         </div>
                         <button className="btn btn-brand" onClick={handleSend} style={{ alignSelf: 'flex-end' }}>
                             <Send size={14} /> Versturen
@@ -129,7 +148,7 @@ export default function Berichten() {
                                 <span style={{
                                     display: 'inline-block', marginTop: 8, fontSize: 12, fontWeight: 700,
                                     padding: '4px 8px', borderRadius: 8,
-                                    background: 'rgba(196,163,90,.15)', color: '#c4a35a',
+                                    background: 'rgba(196,163,90,.15)', color: 'var(--color-accent-gold)',
                                 }}>Ongelezen</span>
                             )}
                         </MetallicCard>

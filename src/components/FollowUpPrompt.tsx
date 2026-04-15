@@ -63,11 +63,11 @@ export default function FollowUpPrompt({ title, actions, onDismiss, autoHideMs }
         >
             <div
                 style={{
-                    background: 'linear-gradient(135deg, #1e1e22, #1a1a1e)',
-                    border: '1px solid rgba(196, 163, 90, 0.2)',
+                    background: 'linear-gradient(135deg, var(--card-solid), var(--card))',
+                    border: '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
                     borderRadius: 16,
                     padding: '16px 20px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(196,163,90,0.05)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px color-mix(in srgb, var(--color-accent-gold) 5%, transparent)',
                     backdropFilter: 'blur(20px)',
                 }}
             >
@@ -76,13 +76,13 @@ export default function FollowUpPrompt({ title, actions, onDismiss, autoHideMs }
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{
                             width: 28, height: 28, borderRadius: 8,
-                            background: 'rgba(16, 185, 129, 0.12)',
-                            border: '1px solid rgba(16, 185, 129, 0.2)',
+                            background: 'color-mix(in srgb, var(--green) 12%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--green) 20%, transparent)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
-                            <CheckCircle2 size={14} style={{ color: '#10b981' }} />
+                            <CheckCircle2 size={14} style={{ color: 'var(--green)' }} />
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#10b981' }}>{title}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{title}</span>
                     </div>
                     <button
                         onClick={handleDismiss}
@@ -104,7 +104,7 @@ export default function FollowUpPrompt({ title, actions, onDismiss, autoHideMs }
                     letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 8,
                     display: 'flex', alignItems: 'center', gap: 6,
                 }}>
-                    <Sparkles size={10} style={{ color: '#c4a35a' }} />
+                    <Sparkles size={10} style={{ color: 'var(--color-accent-gold)' }} />
                     Wat nu?
                 </div>
 
@@ -123,8 +123,8 @@ export default function FollowUpPrompt({ title, actions, onDismiss, autoHideMs }
                                     fontSize: 13, color: 'var(--text)', fontWeight: 500,
                                 }}
                                 onMouseEnter={function (e) {
-                                    (e.currentTarget as HTMLElement).style.background = 'rgba(196,163,90,0.08)';
-                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(196,163,90,0.2)';
+                                    (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--color-accent-gold) 20%, transparent)';
                                 }}
                                 onMouseLeave={function (e) {
                                     (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)';

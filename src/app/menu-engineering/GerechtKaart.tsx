@@ -70,15 +70,15 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
       }}
       style={{
         background: selected ? 'rgba(59,130,246,.1)' : (geselecteerd ? 'rgba(167,139,250,.05)' : 'var(--card)'),
-        border: selected ? '1px solid #3b82f6' : (geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)'),
+        border: selected ? '1px solid var(--blue)' : (geselecteerd ? '1px solid rgba(167,139,250,.25)' : '1px solid var(--border)'),
         borderRadius: 12,
         padding: '16px',
         transition: 'all .15s',
         position: 'relative',
         cursor: 'pointer'
       }}
-      onMouseEnter={function (e: React.MouseEvent<HTMLDivElement>) { (e.currentTarget as HTMLDivElement).style.borderColor = selected ? '#3b82f6' : 'rgba(255,255,255,.2)'; }}
-      onMouseLeave={function (e: React.MouseEvent<HTMLDivElement>) { (e.currentTarget as HTMLDivElement).style.borderColor = selected ? '#3b82f6' : (geselecteerd ? 'rgba(167,139,250,.25)' : 'var(--border)'); }}
+      onMouseEnter={function (e: React.MouseEvent<HTMLDivElement>) { (e.currentTarget as HTMLDivElement).style.borderColor = selected ? 'var(--blue)' : 'rgba(255,255,255,.2)'; }}
+      onMouseLeave={function (e: React.MouseEvent<HTMLDivElement>) { (e.currentTarget as HTMLDivElement).style.borderColor = selected ? 'var(--blue)' : (geselecteerd ? 'rgba(167,139,250,.25)' : 'var(--border)'); }}
     >
       {selectionMode && (
         <div
@@ -88,7 +88,7 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
           <div style={{
             width: 24, height: 24, borderRadius: 6,
             border: selected ? 'none' : '1px solid rgba(255,255,255,.2)',
-            background: selected ? '#3b82f6' : 'transparent',
+            background: selected ? 'var(--blue)' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontSize: 12
           }}>
@@ -145,7 +145,7 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
           onClick={function (e: React.MouseEvent) { e.stopPropagation(); onMoveToMap(gerecht); }}
           style={{
             width: '100%', background: 'rgba(167,139,250,.08)', border: '1px solid rgba(167,139,250,.15)',
-            color: '#a78bfa', padding: '8px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+            color: 'var(--purple)', padding: '8px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
             cursor: 'pointer', transition: 'all .15s', marginTop: 4
           }}
           onMouseEnter={function (e: React.MouseEvent<HTMLButtonElement>) { (e.target as HTMLButtonElement).style.background = 'rgba(167,139,250,.16)'; }}

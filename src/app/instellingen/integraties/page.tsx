@@ -113,7 +113,7 @@ const INTEGRATIES: Integration[] = [
     beschrijving: 'Stuur automatische notificaties naar externe systemen bij events zoals nieuwe offertes, facturen of HACCP registraties.',
     categorie: 'webhooks',
     icon: <Webhook size={20} />,
-    accentColor: '#a78bfa',
+    accentColor: 'var(--purple)',
     envVars: [], // Webhooks gebruiken de database, geen env vars
     docsUrl: '',
     apiEndpoint: '/api/webhooks',
@@ -342,7 +342,7 @@ export default function IntegratiesPage() {
                                   return (
                                     <code
                                       key={v}
-                                      className="block text-[12px] px-3 py-1.5 bg-[#0a0a0c] rounded-lg text-amber-400/80 font-mono border border-[var(--border)]"
+                                      className="block text-[12px] px-3 py-1.5 bg-[var(--color-bg-darker)] rounded-lg text-amber-400/80 font-mono border border-[var(--border)]"
                                     >
                                       {v}
                                     </code>
@@ -378,7 +378,7 @@ export default function IntegratiesPage() {
                             <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--muted)] mb-2">
                               API Endpoint
                             </p>
-                            <code className="block text-[12px] px-3 py-1.5 bg-[#0a0a0c] rounded-lg text-blue-400/80 font-mono border border-[var(--border)]">
+                            <code className="block text-[12px] px-3 py-1.5 bg-[var(--color-bg-darker)] rounded-lg text-blue-400/80 font-mono border border-[var(--border)]">
                               {integration.apiEndpoint}
                             </code>
                           </div>
@@ -390,7 +390,7 @@ export default function IntegratiesPage() {
                                 href={integration.docsUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[#0a0a0c] border border-[var(--border)] rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
                               >
                                 <ExternalLink size={12} />
                                 Documentatie
@@ -398,7 +398,7 @@ export default function IntegratiesPage() {
                             )}
                             <Link
                               href="/instellingen"
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[#0a0a0c] border border-[var(--border)] rounded-lg transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
                             >
                               <Settings size={12} />
                               Instellingen
@@ -422,7 +422,7 @@ export default function IntegratiesPage() {
           <div>
             <p className="text-[12px] text-[var(--muted)] leading-relaxed">
               Alle API-sleutels en tokens worden veilig opgeslagen als omgevingsvariabelen in{' '}
-              <code className="text-[11px] px-1 py-0.5 bg-[#0a0a0c] rounded text-amber-400/80 font-mono">.env.local</code>{' '}
+              <code className="text-[11px] px-1 py-0.5 bg-[var(--color-bg-darker)] rounded text-amber-400/80 font-mono">.env.local</code>{' '}
               en worden nooit naar de client verstuurd. Configureer je integraties door de benodigde
               variabelen toe te voegen en de applicatie opnieuw te starten.
             </p>

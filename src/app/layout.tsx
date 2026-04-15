@@ -22,7 +22,7 @@ export const metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#c4a35a',
+  themeColor: '#c4a35a', // Keep as hex — viewport meta requires static value
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

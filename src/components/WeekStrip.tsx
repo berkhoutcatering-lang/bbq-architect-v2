@@ -53,7 +53,7 @@ export default function WeekStrip({ events, onDayClick, onEventClick }: WeekStri
     <MetallicCard hover={false} className="p-4 md:p-5 mb-6 md:mb-8">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
-          <Calendar size={12} className="mr-2 inline-block align-middle" style={{ color: '#c4a35a' }} />
+          <Calendar size={12} className="mr-2 inline-block align-middle" style={{ color: 'var(--color-accent-gold)' }} />
           Deze week
         </h3>
         <span className="text-[10px] font-medium" style={{ color: 'var(--muted-light)' }}>
@@ -69,14 +69,14 @@ export default function WeekStrip({ events, onDayClick, onEventClick }: WeekStri
             className="flex flex-col items-center rounded-xl py-2 md:py-3 px-1 transition-all duration-200"
             style={{
               background: day.isToday
-                ? 'linear-gradient(135deg, rgba(196,163,90,.12), rgba(196,163,90,.04))'
+                ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-accent-gold) 12%, transparent), color-mix(in srgb, var(--color-accent-gold) 4%, transparent))'
                 : day.events.length > 0
-                  ? 'rgba(59,130,246,.04)'
+                  ? 'color-mix(in srgb, var(--blue) 4%, transparent)'
                   : 'transparent',
               border: day.isToday
-                ? '1px solid rgba(196,163,90,.25)'
+                ? '1px solid color-mix(in srgb, var(--color-accent-gold) 25%, transparent)'
                 : day.events.length > 0
-                  ? '1px solid rgba(59,130,246,.1)'
+                  ? '1px solid color-mix(in srgb, var(--blue) 10%, transparent)'
                   : '1px solid transparent',
               cursor: day.events.length > 0 || onDayClick ? 'pointer' : 'default',
             }}
@@ -84,13 +84,13 @@ export default function WeekStrip({ events, onDayClick, onEventClick }: WeekStri
               if (!day.isToday) e.currentTarget.style.background = 'rgba(255,255,255,.03)';
             }}
             onMouseLeave={(e) => {
-              if (!day.isToday) e.currentTarget.style.background = day.events.length > 0 ? 'rgba(59,130,246,.04)' : 'transparent';
+              if (!day.isToday) e.currentTarget.style.background = day.events.length > 0 ? 'color-mix(in srgb, var(--blue) 4%, transparent)' : 'transparent';
             }}
           >
             {/* Day name */}
             <span
               className="text-[10px] font-semibold uppercase tracking-wider mb-1"
-              style={{ color: day.isToday ? '#c4a35a' : 'var(--muted)' }}
+              style={{ color: day.isToday ? 'var(--color-accent-gold)' : 'var(--muted)' }}
             >
               {day.dayName}
             </span>
@@ -99,7 +99,7 @@ export default function WeekStrip({ events, onDayClick, onEventClick }: WeekStri
             <span
               className="text-lg md:text-xl font-light mb-1.5"
               style={{
-                color: day.isToday ? '#c4a35a' : day.events.length > 0 ? 'var(--text)' : 'var(--muted-light)',
+                color: day.isToday ? 'var(--color-accent-gold)' : day.events.length > 0 ? 'var(--text)' : 'var(--muted-light)',
               }}
             >
               {day.dayNum}

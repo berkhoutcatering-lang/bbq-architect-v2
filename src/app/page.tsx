@@ -217,9 +217,9 @@ export default function DashboardPage() {
   // --- End AI Inzichten ---
 
   const recentFeed: { text: string; time: string; dot: string; ts: number }[] = [];
-  events.slice(0, 5).forEach((e: any) => recentFeed.push({ text: `Event toegevoegd: ${e.title || 'Nieuw'}`, time: e.created_at || 'recent', dot: '#10b981', ts: new Date(e.created_at || Date.now()).getTime() }));
-  offertes.slice(0, 5).forEach((o: any) => recentFeed.push({ text: `Offerte: ${o.client_naam || 'Nieuw'}`, time: o.created_at || 'recent', dot: '#3b82f6', ts: new Date(o.created_at || Date.now()).getTime() }));
-  facturen.slice(0, 5).forEach((f: any) => recentFeed.push({ text: `Factuur gegenereerd: ${f.factuur_nummer || 'Concept'}`, time: f.created_at || 'recent', dot: '#f59e0b', ts: new Date(f.created_at || Date.now()).getTime() }));
+  events.slice(0, 5).forEach((e: any) => recentFeed.push({ text: `Event toegevoegd: ${e.title || 'Nieuw'}`, time: e.created_at || 'recent', dot: 'var(--emerald)', ts: new Date(e.created_at || Date.now()).getTime() }));
+  offertes.slice(0, 5).forEach((o: any) => recentFeed.push({ text: `Offerte: ${o.client_naam || 'Nieuw'}`, time: o.created_at || 'recent', dot: 'var(--blue)', ts: new Date(o.created_at || Date.now()).getTime() }));
+  facturen.slice(0, 5).forEach((f: any) => recentFeed.push({ text: `Factuur gegenereerd: ${f.factuur_nummer || 'Concept'}`, time: f.created_at || 'recent', dot: 'var(--amber)', ts: new Date(f.created_at || Date.now()).getTime() }));
   recentFeed.sort((a, b) => b.ts - a.ts);
   const recentActivity = recentFeed.slice(0, 4);
 
@@ -238,24 +238,24 @@ export default function DashboardPage() {
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-[#121215] flex items-center justify-center text-white/50">
-        <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+      <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center text-white/50">
+        <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#121215] text-white selection:bg-[#c4a35a]/30">
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#121215]/80 border-b border-[#151518]">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] text-white selection:bg-[var(--color-accent-gold)]/30">
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--color-bg-elevated)]">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Spacer for hamburger on mobile */}
             <div className="w-8 shrink-0 sidebar-hidden-spacer" />
             <div className="relative sidebar-hidden-logo">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[#2a2a30]">
-                <Flame className="w-5 h-5 text-[#c4a35a]" />
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)]">
+                <Flame className="w-5 h-5 text-[var(--color-accent-gold)]" />
               </div>
-              <div className="absolute inset-0 rounded-full bg-[#c4a35a]/5 blur-md" />
+              <div className="absolute inset-0 rounded-full bg-[var(--color-accent-gold)]/5 blur-md" />
             </div>
             <div className="sidebar-hidden-logo">
               <h1 className="text-[14px] font-semibold tracking-[0.08em] text-white font-['Outfit']">BBQ ARCHITECT</h1>
@@ -263,10 +263,10 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            <button className="relative p-2 md:p-2.5 rounded-xl bg-[#111115] border border-[#1e1e22] hover:border-[#2a2a30] transition-colors">
-              <Bell className="w-4 h-4 text-[#555558]" />
+            <button className="relative p-2 md:p-2.5 rounded-xl bg-[#111115] border border-[var(--card-solid)] hover:border-[var(--color-border-hover)] transition-colors">
+              <Bell className="w-4 h-4 text-[var(--color-text-muted)]" />
               {liveActions.some((a) => a.urgency === "high") && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#121215]" />
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[var(--color-bg-primary)]" />
               )}
             </button>
             <div className="ml-1 md:ml-2 text-right">
@@ -326,7 +326,7 @@ export default function DashboardPage() {
                   <Link key={action.id} href={action.link}>
                     <MetallicCard
                       className="p-4 group"
-                      accent={isHigh ? '#ef4444' : '#f59e0b'}
+                      accent={isHigh ? 'var(--red)' : 'var(--amber)'}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isHigh ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
@@ -354,12 +354,12 @@ export default function DashboardPage() {
         {aiNudges.length > 0 && (
           <div className="mb-6 md:mb-8">
             <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-              <Sparkles className="w-3.5 h-3.5 inline-block mr-2 text-[#c4a35a]" />
+              <Sparkles className="w-3.5 h-3.5 inline-block mr-2 text-[var(--color-accent-gold)]" />
               AI Inzichten
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {visibleNudges.map((nudge, idx) => {
-                const borderColor = nudge.type === 'warning' ? '#f59e0b' : nudge.type === 'positive' ? '#10b981' : '#3b82f6';
+                const borderColor = nudge.type === 'warning' ? 'var(--amber)' : nudge.type === 'positive' ? 'var(--emerald)' : 'var(--blue)';
                 const bgTint = nudge.type === 'warning' ? 'bg-amber-500/10' : nudge.type === 'positive' ? 'bg-emerald-500/10' : 'bg-blue-500/10';
                 const textColor = nudge.type === 'warning' ? 'text-amber-300' : nudge.type === 'positive' ? 'text-emerald-300' : 'text-blue-300';
                 return (
@@ -404,23 +404,23 @@ export default function DashboardPage() {
 
         {/* Zone 3: Zaak-gezondheid */}
         <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-          <BarChart3 className="w-3.5 h-3.5 inline-block mr-2 text-[#3b82f6]" />
+          <BarChart3 className="w-3.5 h-3.5 inline-block mr-2 text-[var(--blue)]" />
           Zaak-gezondheid
         </h3>
         <div className="dash-kpi-grid">
           <DrillDownKPI
-            icon={<Calendar className="w-4 h-4 text-[#3b82f6]" />}
+            icon={<Calendar className="w-4 h-4 text-[var(--blue)]" />}
             label="Bevestigde Events"
             value={confirmedEvents.length.toString()}
             subtitle={`totaal geregistreerd dit jaar`}
-            accentColor="#3b82f6"
+            accentColor="var(--blue)"
             trend="+12%"
             href="/events"
             items={nextEventsList.slice(0, 4).map((e: any) => ({
               label: `${e.name || 'Event'} — ${e.guests || 0}p`,
               value: formatDate(e.date).day + ' ' + formatDate(e.date).month,
               href: '/agenda',
-              color: e.status === 'confirmed' ? '#3b82f6' : 'var(--muted)',
+              color: e.status === 'confirmed' ? 'var(--blue)' : 'var(--muted)',
             }))}
           />
           <DrillDownKPI
@@ -428,7 +428,7 @@ export default function DashboardPage() {
             label="Gerealiseerde Omzet"
             value={formatCurrency(totalRevenue)}
             subtitle={`${betaaldFacturen.length} betaalde facturen`}
-            accentColor="#34d399"
+            accentColor="var(--emerald)"
             trend="+8.2%"
             href="/financien"
             items={(() => {
@@ -444,16 +444,16 @@ export default function DashboardPage() {
             })()}
           />
           <DrillDownKPI
-            icon={<FileText className="w-4 h-4 text-[#8b8bf0]" />}
+            icon={<FileText className="w-4 h-4 text-[var(--indigo)]" />}
             label="Open Facturen & Prognose"
             value={formatCurrency(prognose + openFacturenBedrag)}
             subtitle={`${formatCurrency(openFacturenBedrag)} facturen / ${formatCurrency(prognose)} open offertes`}
-            accentColor="#8b8bf0"
+            accentColor="var(--indigo)"
             trend="-3%"
             href="/facturen"
             items={[
-              { label: 'Open facturen', value: formatCurrency(openFacturenBedrag), color: '#f59e0b' },
-              { label: 'Open offertes', value: formatCurrency(prognose), color: '#8b8bf0' },
+              { label: 'Open facturen', value: formatCurrency(openFacturenBedrag), color: 'var(--amber)' },
+              { label: 'Open offertes', value: formatCurrency(prognose), color: 'var(--indigo)' },
               ...openFacturen.slice(0, 3).map((f: any) => {
                 let bedrag = 0;
                 (f.items || []).forEach((item: any) => { bedrag += (item.qty || 0) * (item.prijs || 0); });
@@ -466,7 +466,7 @@ export default function DashboardPage() {
             label="Totaal Gasten"
             value={events.reduce((sum: number, e: any) => sum + (e.guests || 0), 0).toString()}
             subtitle="over alle geregistreerde events"
-            accentColor="#38bdf8"
+            accentColor="var(--sky)"
             trend="+24%"
             href="/events"
             items={(() => {
@@ -489,8 +489,8 @@ export default function DashboardPage() {
             <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-[#c4a35a]/10 border border-[#c4a35a]/20">
-                    <Calendar className="w-4 h-4 text-[#c4a35a]" />
+                  <div className="p-2 rounded-xl bg-[var(--color-accent-gold)]/10 border border-[var(--color-accent-gold)]/20">
+                    <Calendar className="w-4 h-4 text-[var(--color-accent-gold)]" />
                   </div>
                   <div>
                     <h3 className="text-[15px] font-medium text-white tracking-tight">Aankomende Events</h3>
@@ -503,13 +503,13 @@ export default function DashboardPage() {
               </div>
 
               {nextEventsList.length === 0 ? (
-                <p className="text-center text-[13px] text-[#444447] py-6">Geen aankomende events.</p>
+                <p className="text-center text-[13px] text-[var(--color-text-ghost)] py-6">Geen aankomende events.</p>
               ) : (
                 <div className="space-y-2">
                   {nextEventsList.map((event: any) => {
                     const date = formatDate(event.date);
                     return (
-                      <Link key={event.id} href={`/agenda`} className="group flex items-center gap-3 md:gap-5 p-3 md:p-4 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300">
+                      <Link key={event.id} href={`/agenda`} className="group flex items-center gap-3 md:gap-5 p-3 md:p-4 rounded-xl bg-[var(--color-bg-deep)] hover:bg-[#121216] border border-transparent hover:border-[var(--card-solid)] transition-all duration-300">
                         <div className="flex-shrink-0 w-11 md:w-14 text-center">
                           <p className="text-[18px] md:text-[22px] font-light text-white leading-none">{date.day}</p>
                           <p className="text-[9px] md:text-[10px] uppercase tracking-[0.15em] md:tracking-[0.2em] text-[var(--muted)] mt-0.5">{date.month}</p>
@@ -529,7 +529,7 @@ export default function DashboardPage() {
                           <p className="text-[15px] font-light text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</p>
                           <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : event.status === 'completed' ? 'Afgerond' : event.status === 'optie' ? 'Optie' : 'Nieuw'}</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-[#333] group-hover:text-[#666] transition-colors flex-shrink-0" />
+                        <ChevronRight className="w-4 h-4 text-[var(--color-text-ghost)] group-hover:text-[#666] transition-colors flex-shrink-0" />
                       </Link>
                     );
                   })}
@@ -545,7 +545,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h3 className="text-[15px] font-medium text-white tracking-tight">Actuele Productielijst (Prep)</h3>
-                    <p className="text-[11px] text-[#444447]">{prepEvents.length > 0 ? `${prepEvents[0].client_naam} • ${prepEvents[0].datum}` : "Geen geaccepteerde/goedgekeurde offertes nabij."}</p>
+                    <p className="text-[11px] text-[var(--color-text-ghost)]">{prepEvents.length > 0 ? `${prepEvents[0].client_naam} • ${prepEvents[0].datum}` : "Geen geaccepteerde/goedgekeurde offertes nabij."}</p>
                   </div>
                 </div>
                 {prepEvents.length > 0 && <span className="text-[11px] font-medium text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">{prepEvents[0].aantal_gasten}p</span>}
@@ -566,18 +566,18 @@ export default function DashboardPage() {
 
                     return prepItems.length > 0 ? (
                       <div key={offerte.id} className="space-y-2">
-                        {oIndex > 0 && <div className="h-px w-full bg-[#151518] my-4" />}
-                        <div className="mb-2 text-[12px] font-semibold text-[#8b8b8f] tracking-wide">{offerte.client_naam}</div>
+                        {oIndex > 0 && <div className="h-px w-full bg-[var(--color-bg-elevated)] my-4" />}
+                        <div className="mb-2 text-[12px] font-semibold text-[var(--color-accent-silver)] tracking-wide">{offerte.client_naam}</div>
                         {prepItems.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-4 p-3.5 rounded-xl bg-[#0e0e10] border border-[#151518]">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#1a1a1e]">
-                              <Clock className="w-4 h-4 text-[#444447]" />
+                          <div key={idx} className="flex items-center gap-4 p-3.5 rounded-xl bg-[var(--color-bg-deep)] border border-[var(--color-bg-elevated)]">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--sidebar-bg-hover)]">
+                              <Clock className="w-4 h-4 text-[var(--color-text-ghost)]" />
                             </div>
                             <div className="flex-1">
                               <p className="text-[13px] text-white font-medium">{item.dish}</p>
                               <p className="text-[11px] text-[var(--muted-light)]">{item.gang}</p>
                             </div>
-                            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full text-[var(--muted)] bg-[#1a1a1e] border border-[var(--border)]">
+                            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full text-[var(--muted)] bg-[var(--sidebar-bg-hover)] border border-[var(--border)]">
                               Prep To Do
                             </span>
                           </div>
@@ -588,7 +588,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-[13px] text-[#444447]">Geen actuele prep voor vandaag</p>
+                  <p className="text-[13px] text-[var(--color-text-ghost)]">Geen actuele prep voor vandaag</p>
                 </div>
               )}
             </MetallicCard>
@@ -610,9 +610,9 @@ export default function DashboardPage() {
                   { icon: <Settings className="w-4 h-4" />, label: "Integraties", href: "/instellingen/integraties" },
                   { icon: <BarChart3 className="w-4 h-4" />, label: "Analytics", href: "/financien" },
                 ].map((action) => (
-                  <Link key={action.label} href={action.href} className="flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[64px] rounded-xl bg-[#0e0e10] border border-[#151518] hover:border-[#3b82f6]/30 hover:bg-[#121216] active:scale-95 transition-all duration-200 group">
-                    <div className="text-[#555] group-hover:text-[#3b82f6] transition-colors">{action.icon}</div>
-                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.08em] text-[#555] group-hover:text-[#888] transition-colors text-center leading-tight">{action.label}</span>
+                  <Link key={action.label} href={action.href} className="flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[64px] rounded-xl bg-[var(--color-bg-deep)] border border-[var(--color-bg-elevated)] hover:border-[var(--blue)]/30 hover:bg-[#121216] active:scale-95 transition-all duration-200 group">
+                    <div className="text-[var(--color-text-muted)] group-hover:text-[var(--blue)] transition-colors">{action.icon}</div>
+                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors text-center leading-tight">{action.label}</span>
                   </Link>
                 ))}
               </div>
@@ -628,7 +628,7 @@ export default function DashboardPage() {
               {liveActions.length > 0 ? (
                 <div className="space-y-2">
                   {liveActions.map((action, i) => (
-                    <Link key={i} href={action.link} className="flex items-center gap-3 p-3 rounded-xl bg-[#0e0e10] hover:bg-[#121216] border border-transparent hover:border-[#1e1e22] transition-all duration-300 group">
+                    <Link key={i} href={action.link} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-bg-deep)] hover:bg-[#121216] border border-transparent hover:border-[var(--card-solid)] transition-all duration-300 group">
                       <StatusDot status={action.urgency} />
                       <span className="text-[12.5px] font-medium text-[var(--muted)] group-hover:text-white transition-colors flex-1 line-clamp-1">{action.message}</span>
                       <ChevronRight className="w-3.5 h-3.5 text-[var(--muted-light)] group-hover:text-white transition-colors" />
@@ -636,35 +636,35 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-[13px] text-[#444447]">Geen lopende acties of alerts ontdekt.</div>
+                <div className="text-[13px] text-[var(--color-text-ghost)]">Geen lopende acties of alerts ontdekt.</div>
               )}
             </MetallicCard>
 
             <MetallicCard className="p-4 md:p-6" hover={false}>
               <div className="flex flex-col mb-5">
                 <h3 className="text-[15px] font-medium text-white tracking-tight leading-none">Recente activiteit</h3>
-                <p className="text-[10px] text-[#444447] mt-1.5 uppercase tracking-wider">Laatste updates van vandaag</p>
+                <p className="text-[10px] text-[var(--color-text-ghost)] mt-1.5 uppercase tracking-wider">Laatste updates van vandaag</p>
               </div>
               <div className="space-y-4">
                 {recentActivity.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between pb-3 last:pb-0 last:border-0 border-b border-[#151518]/50">
+                  <div key={i} className="flex items-center justify-between pb-3 last:pb-0 last:border-0 border-b border-[var(--color-bg-elevated)]/50">
                     <div className="flex items-center gap-3">
                       <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.dot }} />
-                      <span className="text-[12.5px] font-medium text-[#888]">{item.text}</span>
+                      <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">{item.text}</span>
                     </div>
-                    <span className="text-[10px] font-medium text-[#444447] whitespace-nowrap ml-4">
+                    <span className="text-[10px] font-medium text-[var(--color-text-ghost)] whitespace-nowrap ml-4">
                       {item.time === 'recent' ? 'nu' : new Date(item.ts).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 ))}
                 {recentActivity.length === 0 && (
-                  <p className="text-[13px] text-[#444447]">Nog geen activiteit geregistreerd.</p>
+                  <p className="text-[13px] text-[var(--color-text-ghost)]">Nog geen activiteit geregistreerd.</p>
                 )}
               </div>
             </MetallicCard>
 
             <MetallicCard className="p-4 md:p-6" hover={false}>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#555558] mb-4">Pipeline Top Offertes</h3>
+              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-4">Pipeline Top Offertes</h3>
               {openOffertes.length > 0 ? (
                 <>
                   <div className="space-y-3">
@@ -678,25 +678,25 @@ export default function DashboardPage() {
                             <span className="text-[11px] text-[var(--muted)] truncate max-w-[140px] font-medium">{off.client_naam || off.nummer}</span>
                             <span className="text-[11px] text-[var(--muted)] tabular-nums">{formatCurrency(eventTotal)}</span>
                           </div>
-                          <div className="h-1 bg-[#151518] rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-gradient-to-r from-[#c4a35a] to-[#d4b36a] transition-all duration-700" style={{ width: `${percentage}%` }} />
+                          <div className="h-1 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent-gold)] to-[#d4b36a] transition-all duration-700" style={{ width: `${percentage}%` }} />
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  <div className="mt-4 pt-4 border-t border-[#151518] flex justify-between items-center">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#555558]">Totaal Prognose</span>
+                  <div className="mt-4 pt-4 border-t border-[var(--color-bg-elevated)] flex justify-between items-center">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-text-muted)]">Totaal Prognose</span>
                     <span className="text-[15px] font-medium text-white tabular-nums">{formatCurrency(prognose)}</span>
                   </div>
                 </>
               ) : (
-                <div className="text-[13px] text-[#444447]">Geen actuele pijplijn of concept offertes.</div>
+                <div className="text-[13px] text-[var(--color-text-ghost)]">Geen actuele pijplijn of concept offertes.</div>
               )}
             </MetallicCard>
 
             <div className="relative px-6 py-5">
-              <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[#c4a35a]/30 to-transparent" />
+              <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[var(--color-accent-gold)]/30 to-transparent" />
               <blockquote className="pl-5">
                 <p className="text-[12px] text-[var(--muted)] italic leading-relaxed font-light">
                   &ldquo;A perfect dish is no accident. It&apos;s the seamless execution of logistics, craft, and fire.&rdquo;

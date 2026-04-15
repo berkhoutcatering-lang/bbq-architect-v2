@@ -51,10 +51,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: typeof Clock }> = {
-  open: { color: '#3b82f6', bg: 'rgba(59,130,246,.1)', icon: Clock },
-  in_behandeling: { color: '#f59e0b', bg: 'rgba(245,158,11,.1)', icon: AlertCircle },
-  opgelost: { color: '#22c55e', bg: 'rgba(34,197,94,.1)', icon: CheckCircle },
-  gesloten: { color: '#71717a', bg: 'rgba(113,113,122,.1)', icon: CheckCircle },
+  open: { color: 'var(--blue)', bg: 'color-mix(in srgb, var(--blue) 10%, transparent)', icon: Clock },
+  in_behandeling: { color: 'var(--amber)', bg: 'color-mix(in srgb, var(--amber) 10%, transparent)', icon: AlertCircle },
+  opgelost: { color: 'var(--green)', bg: 'color-mix(in srgb, var(--green) 10%, transparent)', icon: CheckCircle },
+  gesloten: { color: 'var(--zinc)', bg: 'color-mix(in srgb, var(--zinc) 10%, transparent)', icon: CheckCircle },
 };
 
 export default function HelpCenter() {
@@ -131,7 +131,7 @@ export default function HelpCenter() {
         </button>
         <MetallicCard hover={false} className="p-6">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'rgba(59,130,246,.1)', color: '#3b82f6', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: '4px 8px', borderRadius: 4, background: 'color-mix(in srgb, var(--blue) 10%, transparent)', color: 'var(--blue)', textTransform: 'uppercase' }}>
               {CATEGORY_LABELS[openArticle.category] || openArticle.category}
             </span>
           </div>
@@ -149,7 +149,7 @@ export default function HelpCenter() {
     <div style={{ padding: '24px 16px', maxWidth: 800, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #c4a35a 0%, #8b6914 100%)', marginBottom: 12 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, var(--color-accent-gold) 0%, #8b6914 100%)', marginBottom: 12 }}>
           <HelpCircle size={28} style={{ color: '#fff' }} />
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Help Center</h1>
@@ -176,7 +176,7 @@ export default function HelpCenter() {
         <button onClick={function () { setActiveView('support'); }}
           style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, background: activeView === 'support' ? 'var(--card)' : 'transparent', color: activeView === 'support' ? 'var(--text)' : 'var(--muted)', boxShadow: activeView === 'support' ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>
           <MessageCircle size={12} /> Support {tickets.filter(function (t) { return t.status === 'open'; }).length > 0 && (
-            <span style={{ fontSize: 12, fontWeight: 800, padding: '4px 8px', borderRadius: '50%', background: '#3b82f6', color: '#fff' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, padding: '4px 8px', borderRadius: '50%', background: 'var(--blue)', color: '#fff' }}>
               {tickets.filter(function (t) { return t.status === 'open'; }).length}
             </span>
           )}
@@ -216,8 +216,8 @@ export default function HelpCenter() {
             return (
               <button key={article.id} onClick={function () { setOpenArticle(article); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)', marginBottom: 8, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(59,130,246,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon size={16} style={{ color: '#3b82f6' }} />
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'color-mix(in srgb, var(--blue) 8%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={16} style={{ color: 'var(--blue)' }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{article.title}</div>
@@ -262,7 +262,7 @@ export default function HelpCenter() {
               </div>
             </div>
             {submitMsg && (
-              <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, background: submitMsg.startsWith('Fout') ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)', color: submitMsg.startsWith('Fout') ? '#ef4444' : '#22c55e' }}>
+              <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, background: submitMsg.startsWith('Fout') ? 'color-mix(in srgb, var(--red) 10%, transparent)' : 'color-mix(in srgb, var(--green) 10%, transparent)', color: submitMsg.startsWith('Fout') ? 'var(--red)' : 'var(--green)' }}>
                 {submitMsg}
               </div>
             )}
@@ -293,8 +293,8 @@ export default function HelpCenter() {
                         </div>
                         <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5 }}>{ticket.message}</p>
                         {ticket.admin_reply && (
-                          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(34,197,94,.04)', borderLeft: '3px solid #22c55e' }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', marginBottom: 2 }}>Antwoord van support</div>
+                          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--green) 4%, transparent)', borderLeft: '3px solid var(--green)' }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', marginBottom: 2 }}>Antwoord van support</div>
                             <p style={{ fontSize: 12, color: 'var(--text)', margin: 0 }}>{ticket.admin_reply}</p>
                           </div>
                         )}

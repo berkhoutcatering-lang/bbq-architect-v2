@@ -14,7 +14,7 @@ import { fmt } from '@/lib/utils';
 
 /* ── KPI Card ─────────────────────────────────────────────── */
 
-function KPICard({ icon, label, value, subtitle, accent = '#3b82f6' }: {
+function KPICard({ icon, label, value, subtitle, accent = 'var(--blue)' }: {
     icon: React.ReactNode;
     label: string;
     value: string | number;
@@ -22,8 +22,8 @@ function KPICard({ icon, label, value, subtitle, accent = '#3b82f6' }: {
     accent?: string;
 }) {
     return (
-        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#111113] to-[#0c0c0e] border border-[#1e1e22] p-4">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[var(--color-bg-primary)] to-[var(--color-bg-deep)] border border-[var(--card-solid)] p-4">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-text-ghost)] to-transparent" />
             <div className="flex items-center gap-2 mb-2">
                 <span style={{ color: accent }} className="opacity-80">{icon}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">{label}</span>
@@ -50,9 +50,9 @@ function DeKeukenStats() {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <KPICard icon={<UtensilsCrossed size={16} />} label="Totaal gerechten" value={total} subtitle={`${actief} actief`} />
-            <KPICard icon={<CheckCircle2 size={16} />} label="Met kostprijs" value={metKostprijs} subtitle={`${total - metKostprijs} nog berekenen`} accent="#10b981" />
-            <KPICard icon={<Euro size={16} />} label="Gem. kostprijs p.p." value={fmt(gemKostprijs)} subtitle="over alle gerechten" accent="#f59e0b" />
-            <KPICard icon={<TrendingUp size={16} />} label="Gem. marge" value={gemKostprijs > 0 ? `${Math.round((1 - gemKostprijs / 45) * 100)}%` : '–'} subtitle="op €45 menu" accent="#8b5cf6" />
+            <KPICard icon={<CheckCircle2 size={16} />} label="Met kostprijs" value={metKostprijs} subtitle={`${total - metKostprijs} nog berekenen`} accent="var(--emerald)" />
+            <KPICard icon={<Euro size={16} />} label="Gem. kostprijs p.p." value={fmt(gemKostprijs)} subtitle="over alle gerechten" accent="var(--amber)" />
+            <KPICard icon={<TrendingUp size={16} />} label="Gem. marge" value={gemKostprijs > 0 ? `${Math.round((1 - gemKostprijs / 45) * 100)}%` : '–'} subtitle="op €45 menu" accent="var(--purple)" />
         </div>
     );
 }
@@ -70,9 +70,9 @@ function OperatieStats() {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <KPICard icon={<Calendar size={16} />} label="Aankomende events" value={upcoming.length} subtitle="gepland" />
-            <KPICard icon={<CheckCircle2 size={16} />} label="Bevestigd" value={confirmed.length} subtitle="events bevestigd" accent="#10b981" />
-            <KPICard icon={<Users size={16} />} label="Totaal gasten" value={totalGuests} subtitle="komende events" accent="#f59e0b" />
-            <KPICard icon={<TrendingUp size={16} />} label="Voltooid" value={completed.length} subtitle="afgeronde events" accent="#8b5cf6" />
+            <KPICard icon={<CheckCircle2 size={16} />} label="Bevestigd" value={confirmed.length} subtitle="events bevestigd" accent="var(--emerald)" />
+            <KPICard icon={<Users size={16} />} label="Totaal gasten" value={totalGuests} subtitle="komende events" accent="var(--amber)" />
+            <KPICard icon={<TrendingUp size={16} />} label="Voltooid" value={completed.length} subtitle="afgeronde events" accent="var(--purple)" />
         </div>
     );
 }
@@ -97,9 +97,9 @@ function DeZaakStats() {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <KPICard icon={<FileText size={16} />} label="Open offertes" value={openOffertes.length} subtitle={`${offertes.length} totaal`} />
-            <KPICard icon={<Euro size={16} />} label="Omzet (betaald)" value={fmt(revenue)} subtitle={`${betaald.length} facturen`} accent="#10b981" />
-            <KPICard icon={<AlertTriangle size={16} />} label="Open facturen" value={fmt(openBedrag)} subtitle={`${openFact.length} facturen`} accent="#f59e0b" />
-            <KPICard icon={<TrendingUp size={16} />} label="Conversieratio" value={`${convRatio}%`} subtitle="offertes geaccepteerd" accent="#8b5cf6" />
+            <KPICard icon={<Euro size={16} />} label="Omzet (betaald)" value={fmt(revenue)} subtitle={`${betaald.length} facturen`} accent="var(--emerald)" />
+            <KPICard icon={<AlertTriangle size={16} />} label="Open facturen" value={fmt(openBedrag)} subtitle={`${openFact.length} facturen`} accent="var(--amber)" />
+            <KPICard icon={<TrendingUp size={16} />} label="Conversieratio" value={`${convRatio}%`} subtitle="offertes geaccepteerd" accent="var(--purple)" />
         </div>
     );
 }
@@ -115,9 +115,9 @@ function BeheerStats() {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <KPICard icon={<Package size={16} />} label="Producten" value={inventory.length} subtitle="in voorraad" />
-            <KPICard icon={<AlertTriangle size={16} />} label="Onder minimum" value={lowStock.length} subtitle={lowStock.length > 0 ? 'actie vereist' : 'alles op peil'} accent={lowStock.length > 0 ? '#ef4444' : '#10b981'} />
-            <KPICard icon={<Euro size={16} />} label="Voorraadwaarde" value={fmt(totalValue)} subtitle="totale waarde" accent="#f59e0b" />
-            <KPICard icon={<Truck size={16} />} label="Leveranciers" value={leveranciers.length} subtitle="geregistreerd" accent="#8b5cf6" />
+            <KPICard icon={<AlertTriangle size={16} />} label="Onder minimum" value={lowStock.length} subtitle={lowStock.length > 0 ? 'actie vereist' : 'alles op peil'} accent={lowStock.length > 0 ? 'var(--red)' : 'var(--emerald)'} />
+            <KPICard icon={<Euro size={16} />} label="Voorraadwaarde" value={fmt(totalValue)} subtitle="totale waarde" accent="var(--amber)" />
+            <KPICard icon={<Truck size={16} />} label="Leveranciers" value={leveranciers.length} subtitle="geregistreerd" accent="var(--purple)" />
         </div>
     );
 }
@@ -126,10 +126,10 @@ function StatsLoading() {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#111113] to-[#0c0c0e] border border-[#1e1e22] p-4 animate-pulse">
-                    <div className="h-3 w-20 bg-[#1e1e22] rounded mb-3" />
-                    <div className="h-6 w-16 bg-[#1e1e22] rounded mb-2" />
-                    <div className="h-2 w-24 bg-[#1e1e22] rounded" />
+                <div key={i} className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[var(--color-bg-primary)] to-[var(--color-bg-deep)] border border-[var(--card-solid)] p-4 animate-pulse">
+                    <div className="h-3 w-20 bg-[var(--card-solid)] rounded mb-3" />
+                    <div className="h-6 w-16 bg-[var(--card-solid)] rounded mb-2" />
+                    <div className="h-2 w-24 bg-[var(--card-solid)] rounded" />
                 </div>
             ))}
         </div>
@@ -154,7 +154,7 @@ export default function SectiePage() {
             <div className="flex-1 flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                     <p className="text-[var(--muted)] text-lg">Sectie niet gevonden</p>
-                    <Link href="/" className="text-[#3b82f6] text-sm mt-2 inline-block hover:underline">
+                    <Link href="/" className="text-[var(--blue)] text-sm mt-2 inline-block hover:underline">
                         Terug naar dashboard
                     </Link>
                 </div>
@@ -169,7 +169,7 @@ export default function SectiePage() {
             {/* Header */}
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">
-                    <span className="text-[#3b82f6]">
+                    <span className="text-[var(--blue)]">
                         {React.cloneElement(section.icon as React.ReactElement<any>, { size: 28 })}
                     </span>
                     <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
@@ -190,15 +190,15 @@ export default function SectiePage() {
                     <Link
                         key={child.href}
                         href={child.href}
-                        className="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#111113] to-[#0c0c0e] border border-[#1e1e22] hover:border-[#2a2a30] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 p-5 flex flex-col gap-3"
+                        className="group relative rounded-2xl overflow-hidden bg-gradient-to-br from-[var(--color-bg-primary)] to-[var(--color-bg-deep)] border border-[var(--card-solid)] hover:border-[var(--color-border-hover)] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 p-5 flex flex-col gap-3"
                     >
-                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />
+                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-text-ghost)] to-transparent" />
 
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6] group-hover:bg-[#3b82f6]/20 transition-colors duration-300">
+                            <div className="w-10 h-10 rounded-xl bg-[var(--blue)]/10 flex items-center justify-center text-[var(--blue)] group-hover:bg-[var(--blue)]/20 transition-colors duration-300">
                                 {React.cloneElement(child.icon as React.ReactElement<any>, { size: 20 })}
                             </div>
-                            <h2 className="text-[15px] font-semibold text-white group-hover:text-[#3b82f6] transition-colors duration-300">
+                            <h2 className="text-[15px] font-semibold text-white group-hover:text-[var(--blue)] transition-colors duration-300">
                                 {child.label}
                             </h2>
                         </div>
@@ -209,7 +209,7 @@ export default function SectiePage() {
                             </p>
                         )}
 
-                        <div className="flex items-center gap-1 text-[11px] text-[var(--muted)] group-hover:text-[#3b82f6] transition-colors duration-300 mt-auto">
+                        <div className="flex items-center gap-1 text-[11px] text-[var(--muted)] group-hover:text-[var(--blue)] transition-colors duration-300 mt-auto">
                             <span>Openen</span>
                             <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform duration-300" />
                         </div>

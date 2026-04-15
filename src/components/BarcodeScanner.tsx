@@ -135,7 +135,7 @@ export default function BarcodeScanner({ onScan, isOpen, onClose }: BarcodeScann
                 <div style={{
                     maxWidth: 340, padding: 24, textAlign: 'center',
                     background: 'rgba(30,30,34,.9)', borderRadius: 16,
-                    border: '1px solid rgba(130,130,130,.15)',
+                    border: '1px solid var(--border)',
                 }}>
                     <AlertTriangle size={32} style={{ color: 'var(--amber)', marginBottom: 12 }} />
                     <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>{error}</p>
@@ -149,7 +149,7 @@ export default function BarcodeScanner({ onScan, isOpen, onClose }: BarcodeScann
                         muted
                         style={{
                             width: '100%', height: '100%', objectFit: 'cover',
-                            borderRadius: 16, border: '2px solid rgba(255,191,0,.3)',
+                            borderRadius: 16, border: '2px solid color-mix(in srgb, var(--brand) 30%, transparent)',
                         }}
                     />
                     {/* Scanning overlay */}
@@ -168,7 +168,7 @@ export default function BarcodeScanner({ onScan, isOpen, onClose }: BarcodeScann
                                 position: 'absolute', left: 24, right: 24, height: 2,
                                 background: 'linear-gradient(90deg, transparent, var(--brand), transparent)',
                                 animation: 'barcodeScanLine 2s ease-in-out infinite',
-                                boxShadow: '0 0 12px rgba(255,191,0,.5)',
+                                boxShadow: '0 0 12px color-mix(in srgb, var(--brand) 50%, transparent)',
                             }} />
                         </div>
                     )}

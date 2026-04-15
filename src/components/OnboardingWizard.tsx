@@ -97,13 +97,13 @@ export default function OnboardingWizard() {
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg mx-4 rounded-2xl overflow-hidden bg-gradient-to-br from-[#111113] to-[#0c0c0e] border border-[#1e1e22] shadow-2xl">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c4a35a] to-transparent" />
+      <div className="w-full max-w-lg mx-4 rounded-2xl overflow-hidden bg-gradient-to-br from-[var(--color-bg-card)] to-[var(--color-bg-darker)] border border-[var(--card-solid)] shadow-2xl">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-accent-gold)] to-transparent" />
 
         {/* Header */}
         <div className="px-8 pt-8 pb-4 text-center">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#1a1a20] to-[#0e0e12] flex items-center justify-center border border-[#222228] mx-auto mb-4">
-            <Flame className="w-7 h-7 text-[#c4a35a]" />
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[var(--color-border)] mx-auto mb-4">
+            <Flame className="w-7 h-7 text-[var(--color-accent-gold)]" />
           </div>
           <h2 className="text-xl font-light text-white tracking-tight mb-1">
             {step === 0 && 'Welkom bij BBQ Architect'}
@@ -123,7 +123,7 @@ export default function OnboardingWizard() {
         <div className="flex justify-center gap-2 py-3">
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="w-2 h-2 rounded-full transition-all" style={{
-              background: i === step ? '#c4a35a' : i < step ? '#10b981' : 'var(--border)',
+              background: i === step ? 'var(--color-accent-gold)' : i < step ? 'var(--green)' : 'var(--border)',
               width: i === step ? 24 : 8,
             }} />
           ))}
@@ -199,22 +199,22 @@ export default function OnboardingWizard() {
           </button>
 
           {step === 0 && (
-            <button onClick={saveBedrijf} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)' }}>
+            <button onClick={saveBedrijf} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)' }}>
               Volgende <ChevronRight size={14} />
             </button>
           )}
           {step === 1 && (
-            <button onClick={saveGerecht} disabled={saving} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)' }}>
+            <button onClick={saveGerecht} disabled={saving} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)' }}>
               {saving ? 'Opslaan...' : 'Gerecht Toevoegen'} <ChefHat size={14} />
             </button>
           )}
           {step === 2 && (
-            <button onClick={saveEvent} disabled={saving} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)' }}>
+            <button onClick={saveEvent} disabled={saving} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)' }}>
               {saving ? 'Opslaan...' : 'Event Plannen'} <Calendar size={14} />
             </button>
           )}
           {step === 3 && (
-            <button onClick={dismiss} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)' }}>
+            <button onClick={dismiss} className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold text-black" style={{ background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)' }}>
               Aan de slag <ArrowRight size={14} />
             </button>
           )}

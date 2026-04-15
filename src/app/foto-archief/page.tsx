@@ -11,7 +11,7 @@ import PageHeader from '@/components/PageHeader';
 import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, Flame, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
-const CAT_COLORS: Record<string, string> = { Food: '#ef4444', Gear: '#3b82f6', Sfeer: '#a78bfa', Admin: '#f59e0b' };
+const CAT_COLORS: Record<string, string> = { Food: 'var(--red)', Gear: 'var(--blue)', Sfeer: 'var(--purple)', Admin: 'var(--amber)' };
 const BUCKET = 'photos';
 
 interface Foto {
@@ -208,8 +208,8 @@ export default function FotoArchief() {
 
     if (fotosLoading) {
         return (
-            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }

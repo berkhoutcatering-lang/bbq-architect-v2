@@ -124,7 +124,7 @@ function PlatformAdminShell({ children }: { children: ReactNode }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 8px', marginBottom: 24 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 10,
-            background: 'linear-gradient(135deg, #c4a35a, #8b6914)',
+            background: 'linear-gradient(135deg, var(--color-accent-gold), #8b6914)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, color: '#fff',
           }}>🔥</div>
@@ -144,10 +144,10 @@ function PlatformAdminShell({ children }: { children: ReactNode }) {
             <a key={link.href} href={link.href} style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
               borderRadius: 10, marginBottom: 2, textDecoration: 'none',
-              background: isActive ? 'rgba(196,163,90,.1)' : 'transparent',
+              background: isActive ? 'color-mix(in srgb, var(--color-accent-gold) 10%, transparent)' : 'transparent',
               color: isActive ? 'var(--brand)' : 'var(--text)',
               fontWeight: isActive ? 700 : 500, fontSize: 13,
-              border: isActive ? '1px solid rgba(196,163,90,.2)' : '1px solid transparent',
+              border: isActive ? '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)' : '1px solid transparent',
             }}>
               <span style={{ fontSize: 16 }}>{link.icon}</span>
               {link.label}

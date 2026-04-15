@@ -13,6 +13,8 @@ import { useOrg } from '@/lib/OrgContext';
 import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
@@ -32,6 +34,9 @@ export default function Facturen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        client_naam: [{ required: 'Vul een klantnaam in' }],
+    });
 
     function newFactuur() {
         const nummer = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.map((f: any) => f.nummer));
@@ -45,7 +50,7 @@ export default function Facturen() {
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function saveFactuur() {
-        if (!form!.client_naam) { showToast('Vul een klantnaam in', 'error'); return; }
+        if (!validateAll({ client_naam: form!.client_naam })) return;
         const oldFactuur = facturen.find(function (f) { return f.id === editing; });
         const statusChanged = oldFactuur && oldFactuur.status !== form!.status && (form!.status === 'verzonden' || form!.status === 'betaald');
         if (editing === 'new') {
@@ -136,7 +141,7 @@ export default function Facturen() {
                                 {['concept', 'verzonden', 'betaald', 'vervallen'].map(function (s) { return <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>; })}
                             </select>
                         </div>
-                        <div className="field"><label>Klantnaam</label><input value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_naam', e.target.value); }} /></div>
+                        <div className="field"><label>Klantnaam</label><input name="client_naam" value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearError('client_naam'); setField('client_naam', e.target.value); }} {...fieldProps('client_naam', form.client_naam)} style={errors.client_naam ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.client_naam} fieldName="client_naam" /></div>
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
                         <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); }} /></div>
                         <div className="field"><label>Vervaldatum</label><input type="date" value={form.vervaldatum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('vervaldatum', e.target.value); }} /></div>
@@ -148,7 +153,7 @@ export default function Facturen() {
                         </div>
                         <div className="tbl-wrap">
                         <table className="tbl">
-                            <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%</th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
+                            <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%</th><th style={{ width: 110 }}>Prijs incl. BTW</th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
                             <tbody>
                                 {(form.items || []).map(function (item: any, idx: number) {
                                     return (
@@ -157,6 +162,7 @@ export default function Facturen() {
                                             <td><input type="number" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
+                                            <td style={{ color: 'var(--muted)' }}>{fmt((item.prijs || 0) * (1 + (item.btw || 0) / 100))}</td>
                                             <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
                                             <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><Trash2 size={14} /></button></td>
                                         </tr>

@@ -122,16 +122,16 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                 display: 'flex',
                 maxWidth: 1100,
                 margin: '24px auto',
-                background: '#151518',
+                background: 'var(--color-bg-elevated)',
                 borderRadius: 16,
-                border: '1px solid rgba(130,130,130,0.15)',
+                border: '1px solid var(--border)',
                 overflow: 'hidden',
                 boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
                 animation: 'cmdFadeIn 0.2s ease',
             }}>
                 {/* Left: Available Dishes */}
-                <div style={{ width: 380, borderRight: '1px solid rgba(130,130,130,0.1)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '16px 18px', borderBottom: '1px solid rgba(130,130,130,0.1)' }}>
+                <div style={{ width: 380, borderRight: '1px solid var(--muted-extra-light)', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--muted-extra-light)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                             <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <ChefHat size={16} style={{ color: 'var(--brand)' }} /> Beschikbare Gerechten
@@ -199,7 +199,7 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
 
                 {/* Right: Your Menu (Drop Zones) */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '16px 18px', borderBottom: '1px solid rgba(130,130,130,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--muted-extra-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div>
                             <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Flame size={16} style={{ color: 'var(--brand)' }} /> Jouw Menu
@@ -230,8 +230,8 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                                         marginBottom: 12,
                                         padding: 12,
                                         borderRadius: 12,
-                                        border: isDragOver ? '2px dashed var(--brand)' : '1px solid rgba(130,130,130,0.1)',
-                                        background: isDragOver ? 'rgba(196,163,90,0.05)' : 'rgba(130,130,130,0.03)',
+                                        border: isDragOver ? '2px dashed var(--brand)' : '1px solid var(--muted-extra-light)',
+                                        background: isDragOver ? 'color-mix(in srgb, var(--color-accent-gold) 5%, transparent)' : 'rgba(130,130,130,0.03)',
                                         transition: 'all 0.2s',
                                         minHeight: 60,
                                     }}
@@ -242,7 +242,7 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                                         </span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             {gang.extra_prijs_pp > 0 && (
-                                                <span style={{ fontSize: 10, color: 'var(--brand)', background: 'rgba(196,163,90,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                                <span style={{ fontSize: 10, color: 'var(--brand)', background: 'color-mix(in srgb, var(--color-accent-gold) 10%, transparent)', padding: '2px 6px', borderRadius: 4 }}>
                                                     +€{gang.extra_prijs_pp.toFixed(2)}/p.p.
                                                 </span>
                                             )}
@@ -252,7 +252,7 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                                                 color: meetsMin ? 'var(--green)' : gangDishes.length > 0 ? 'var(--amber)' : 'var(--muted)',
                                                 padding: '2px 6px',
                                                 borderRadius: 4,
-                                                background: meetsMin ? 'rgba(34,197,94,0.1)' : 'rgba(130,130,130,0.06)',
+                                                background: meetsMin ? 'color-mix(in srgb, var(--green) 10%, transparent)' : 'rgba(130,130,130,0.06)',
                                             }}>
                                                 {gangDishes.length}/{gang.minimum}
                                             </span>
@@ -272,8 +272,8 @@ export default function MenuBuilder({ open, onClose, onApply, initialMenu }: Pro
                                                         gap: 6,
                                                         padding: '5px 10px',
                                                         borderRadius: 8,
-                                                        background: 'rgba(196,163,90,0.08)',
-                                                        border: '1px solid rgba(196,163,90,0.15)',
+                                                        background: 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)',
+                                                        border: '1px solid color-mix(in srgb, var(--color-accent-gold) 15%, transparent)',
                                                         fontSize: 12,
                                                         color: 'var(--text)',
                                                         fontWeight: 500,

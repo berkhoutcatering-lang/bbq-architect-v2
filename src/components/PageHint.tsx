@@ -40,19 +40,19 @@ export default function PageHint({ id, title, description, icon, actions }: Page
                 padding: '10px 14px',
                 marginBottom: 14,
                 borderRadius: 12,
-                background: 'rgba(59,130,246,0.06)',
-                border: '1px solid rgba(59,130,246,0.15)',
-                borderLeft: '2px solid rgba(59,130,246,0.5)',
+                background: 'color-mix(in srgb, var(--blue) 6%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--blue) 15%, transparent)',
+                borderLeft: '2px solid color-mix(in srgb, var(--blue) 50%, transparent)',
                 maxHeight: 80,
                 overflow: 'hidden',
                 animation: 'fadeInDown 0.35s ease-out',
             }}
         >
-            <div style={{ flexShrink: 0, color: 'rgba(59,130,246,0.7)', display: 'flex', alignItems: 'center' }}>
+            <div style={{ flexShrink: 0, color: 'color-mix(in srgb, var(--blue) 70%, transparent)', display: 'flex', alignItems: 'center' }}>
                 {icon || <Info size={16} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', lineHeight: 1.3 }}>{title}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>{title}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4, marginTop: 1 }}>{description}</div>
                 {actions && actions.length > 0 && (
                     <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
@@ -61,7 +61,7 @@ export default function PageHint({ id, title, description, icon, actions }: Page
                                 <a
                                     key={a.href}
                                     href={a.href}
-                                    style={{ fontSize: 11, color: 'rgba(59,130,246,0.8)', textDecoration: 'none', fontWeight: 600 }}
+                                    style={{ fontSize: 11, color: 'color-mix(in srgb, var(--blue) 80%, transparent)', textDecoration: 'none', fontWeight: 600 }}
                                 >
                                     {a.label}
                                 </a>

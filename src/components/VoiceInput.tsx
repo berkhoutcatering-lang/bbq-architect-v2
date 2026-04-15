@@ -134,10 +134,10 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                 padding: 24,
             }}>
                 <div style={{
-                    background: '#1a1a1e', border: '1px solid var(--border)',
+                    background: 'var(--sidebar-bg-hover)', border: '1px solid var(--border)',
                     borderRadius: 20, padding: 32, maxWidth: 380, textAlign: 'center' as const,
                 }}>
-                    <AlertCircle size={48} style={{ color: '#f59e0b', margin: '0 auto 16px' }} />
+                    <AlertCircle size={48} style={{ color: 'var(--amber)', margin: '0 auto 16px' }} />
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'white', marginBottom: 8 }}>
                         Spraakherkenning niet beschikbaar
                     </h3>
@@ -198,8 +198,8 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                 style={{
                     width: 120, height: 120, borderRadius: '50%',
                     background: listening
-                        ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-                        : 'linear-gradient(135deg, #c4a35a, #a8893e)',
+                        ? 'linear-gradient(135deg, var(--red), #dc2626)'
+                        : 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)',
                     border: 'none', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: listening
@@ -213,7 +213,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
             </button>
 
             <p style={{
-                fontSize: 12, fontWeight: 600, color: listening ? '#ef4444' : '#c4a35a',
+                fontSize: 12, fontWeight: 600, color: listening ? 'var(--red)' : 'var(--color-accent-gold)',
                 marginTop: 16, textTransform: 'uppercase' as const,
                 letterSpacing: '0.15em',
             }}>
@@ -224,7 +224,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
             {transcript && (
                 <div style={{
                     marginTop: 32, padding: '16px 24px', borderRadius: 16,
-                    background: '#1a1a1e', border: '1px solid var(--border)',
+                    background: 'var(--sidebar-bg-hover)', border: '1px solid var(--border)',
                     maxWidth: 400, width: '100%',
                 }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>
@@ -240,7 +240,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                             {parsed.product && (
                                 <span style={{
                                     padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                    background: 'rgba(196,163,90,0.12)', color: '#c4a35a',
+                                    background: 'rgba(196,163,90,0.12)', color: 'var(--color-accent-gold)',
                                     border: '1px solid rgba(196,163,90,0.2)',
                                 }}>
                                     {parsed.product}
@@ -249,7 +249,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                             {parsed.temp && (
                                 <span style={{
                                     padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                    background: 'rgba(16,185,129,0.12)', color: '#10b981',
+                                    background: 'rgba(16,185,129,0.12)', color: 'var(--emerald)',
                                     border: '1px solid rgba(16,185,129,0.2)',
                                 }}>
                                     {parsed.temp}°C
@@ -258,7 +258,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                             {parsed.type && (
                                 <span style={{
                                     padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                    background: 'rgba(59,130,246,0.12)', color: '#3b82f6',
+                                    background: 'rgba(59,130,246,0.12)', color: 'var(--blue)',
                                     border: '1px solid rgba(59,130,246,0.2)',
                                 }}>
                                     {parsed.type}
@@ -285,7 +285,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                             style={{
                                 flex: 1, height: 48, borderRadius: 12, fontSize: 14, fontWeight: 600,
                                 background: (parsed.product || parsed.temp)
-                                    ? 'linear-gradient(135deg, #10b981, #059669)'
+                                    ? 'linear-gradient(135deg, var(--emerald), #059669)'
                                     : 'var(--card-solid)',
                                 border: 'none',
                                 color: (parsed.product || parsed.temp) ? 'white' : 'var(--muted)',
@@ -303,7 +303,7 @@ export default function VoiceInput({ onResult, onParsed, products, isOpen, onClo
                 <div style={{
                     marginTop: 20, padding: '10px 20px', borderRadius: 12,
                     background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-                    fontSize: 13, color: '#ef4444', maxWidth: 400,
+                    fontSize: 13, color: 'var(--red)', maxWidth: 400,
                 }}>
                     {error}
                 </div>

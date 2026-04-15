@@ -98,7 +98,7 @@ export default function KlantAutocomplete({ value, onChange, onSelect, label, st
                     left: 0,
                     right: 0,
                     zIndex: 100,
-                    background: '#1e1e22',
+                    background: 'var(--card-solid)',
                     border: '1px solid rgba(130,130,130,0.2)',
                     borderRadius: 8,
                     marginTop: 4,
@@ -114,7 +114,7 @@ export default function KlantAutocomplete({ value, onChange, onSelect, label, st
                                 style={{
                                     padding: '8px 12px',
                                     cursor: 'pointer',
-                                    background: i === selectedIdx ? 'rgba(130,130,130,0.1)' : 'transparent',
+                                    background: i === selectedIdx ? 'var(--muted-extra-light)' : 'transparent',
                                     borderBottom: i < suggestions.length - 1 ? '1px solid rgba(130,130,130,0.08)' : 'none',
                                 }}
                             >

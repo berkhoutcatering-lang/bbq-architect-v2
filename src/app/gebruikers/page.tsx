@@ -48,9 +48,9 @@ export default function Gebruikers() {
     }
 
     const rolKleur: Record<string, string> = {
-        Admin: '#c4a35a',
-        Pitmaster: '#f97316',
-        Medewerker: '#3b82f6',
+        Admin: 'var(--color-accent-gold)',
+        Pitmaster: 'var(--orange)',
+        Medewerker: 'var(--blue)',
     };
 
     const rolIcon: Record<string, React.ReactNode> = {
@@ -60,9 +60,9 @@ export default function Gebruikers() {
     };
 
     const statusKleur: Record<string, string> = {
-        active: '#22c55e',
-        invited: '#f59e0b',
-        inactive: '#71717a',
+        active: 'var(--green)',
+        invited: 'var(--amber)',
+        inactive: 'var(--zinc)',
     };
 
     const statusLabel: Record<string, string> = {
@@ -74,7 +74,7 @@ export default function Gebruikers() {
     if (!members && !orgId) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-                <Flame size={24} className="text-[#c4a35a] animate-pulse" />
+                <Flame size={24} className="text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }
@@ -125,9 +125,9 @@ export default function Gebruikers() {
                     {inviteMsg && (
                         <div style={{
                             marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13,
-                            background: inviteMsg.startsWith('Fout') ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)',
-                            color: inviteMsg.startsWith('Fout') ? '#ef4444' : '#22c55e',
-                            border: '1px solid ' + (inviteMsg.startsWith('Fout') ? 'rgba(239,68,68,.2)' : 'rgba(34,197,94,.2)'),
+                            background: inviteMsg.startsWith('Fout') ? 'color-mix(in srgb, var(--red) 10%, transparent)' : 'color-mix(in srgb, var(--green) 10%, transparent)',
+                            color: inviteMsg.startsWith('Fout') ? 'var(--red)' : 'var(--green)',
+                            border: '1px solid ' + (inviteMsg.startsWith('Fout') ? 'color-mix(in srgb, var(--red) 20%, transparent)' : 'color-mix(in srgb, var(--green) 20%, transparent)'),
                         }}>
                             {inviteMsg}
                         </div>
@@ -179,7 +179,7 @@ export default function Gebruikers() {
                                                         width: 32, height: 32, borderRadius: '50%',
                                                         background: (rolKleur[m.role] || '#71717a') + '20',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        color: rolKleur[m.role] || '#71717a', fontSize: 13, fontWeight: 700,
+                                                        color: rolKleur[m.role] || 'var(--zinc)', fontSize: 13, fontWeight: 700,
                                                     }}>
                                                         {(m.naam || '?').charAt(0).toUpperCase()}
                                                     </div>
@@ -196,8 +196,8 @@ export default function Gebruikers() {
                                                 <span style={{
                                                     display: 'inline-flex', alignItems: 'center', gap: 4,
                                                     fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8,
-                                                    background: (rolKleur[m.role] || '#71717a') + '20',
-                                                    color: rolKleur[m.role] || '#71717a',
+                                                    background: (rolKleur[m.role] || 'var(--zinc)') + '20',
+                                                    color: rolKleur[m.role] || 'var(--zinc)',
                                                 }}>
                                                     {rolIcon[m.role]} {m.role}
                                                 </span>
@@ -205,8 +205,8 @@ export default function Gebruikers() {
                                             <td style={{ padding: '10px 12px' }}>
                                                 <span style={{
                                                     fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 8,
-                                                    background: (statusKleur[m.status] || '#71717a') + '20',
-                                                    color: statusKleur[m.status] || '#71717a',
+                                                    background: (statusKleur[m.status] || 'var(--zinc)') + '20',
+                                                    color: statusKleur[m.status] || 'var(--zinc)',
                                                 }}>{statusLabel[m.status] || m.status}</span>
                                             </td>
                                             <td style={{ padding: '10px 12px', textAlign: 'right' }}>

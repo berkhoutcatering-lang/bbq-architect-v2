@@ -508,8 +508,8 @@ export default function AiAssistant(): React.ReactElement {
     function renderInkooplijst(data: any): React.ReactElement | null {
         if (!data) return null;
         return (
-            <div className="tool-card" style={{ background: 'rgba(255,191,0,0.05)', border: '1px solid rgba(255,191,0,0.2)' }}>
-                <div style={{ fontWeight: 800, marginBottom: 8, color: '#FFBF00' }}>
+            <div className="tool-card" style={{ background: 'color-mix(in srgb, var(--brand) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--brand) 20%, transparent)' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: 'var(--brand)' }}>
                     <ShoppingCart size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Inkooplijst: {data.event?.naam}
                 </div>
@@ -530,7 +530,7 @@ export default function AiAssistant(): React.ReactElement {
                                 <tr key={k} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                                     <td style={{ padding: '4px 0' }}>{item.naam}</td>
                                     <td style={{ padding: '4px 0' }}>{item.benodigdheid} {item.eenheid}</td>
-                                    <td style={{ padding: '4px 0', fontWeight: item.te_bestellen > 0 ? 700 : 400, color: item.te_bestellen > 0 ? '#FFBF00' : '#22c55e' }}>
+                                    <td style={{ padding: '4px 0', fontWeight: item.te_bestellen > 0 ? 700 : 400, color: item.te_bestellen > 0 ? 'var(--brand)' : 'var(--green)' }}>
                                         {item.te_bestellen > 0 ? item.te_bestellen + ' ' + item.eenheid : '\u2713'}
                                     </td>
                                 </tr>
@@ -550,7 +550,7 @@ export default function AiAssistant(): React.ReactElement {
         if (!data) return null;
         return (
             <div className="tool-card" style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.2)' }}>
-                <div style={{ fontWeight: 800, marginBottom: 8, color: '#38bdf8' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: 'var(--sky)' }}>
                     <FileText size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Event Briefing: {data.event?.naam}
                 </div>
@@ -579,8 +579,8 @@ export default function AiAssistant(): React.ReactElement {
         if (!data) return null;
         const isGood = data.nettoMargePerc > 40;
         return (
-            <div className="tool-card" style={{ background: isGood ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)', border: isGood ? '1px solid rgba(34,197,94,0.2)' : '1px solid rgba(239,68,68,0.2)' }}>
-                <div style={{ fontWeight: 800, marginBottom: 8, color: isGood ? '#22c55e' : '#ef4444' }}>
+            <div className="tool-card" style={{ background: isGood ? 'rgba(34,197,94,0.05)' : 'color-mix(in srgb, var(--red) 5%, transparent)', border: isGood ? '1px solid rgba(34,197,94,0.2)' : '1px solid color-mix(in srgb, var(--red) 20%, transparent)' }}>
+                <div style={{ fontWeight: 800, marginBottom: 8, color: isGood ? 'var(--green)' : 'var(--red)' }}>
                     <PieChart size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
                     Rendement: {data.event?.naam}
                 </div>
@@ -599,11 +599,11 @@ export default function AiAssistant(): React.ReactElement {
                     </div>
                     <div className="stat-mini">
                         <div className="label">Netto Winst</div>
-                        <div className="val" style={{ color: isGood ? '#22c55e' : '#ef4444' }}>&euro;{data.nettoMarge}</div>
+                        <div className="val" style={{ color: isGood ? 'var(--green)' : 'var(--red)' }}>&euro;{data.nettoMarge}</div>
                     </div>
                 </div>
                 <div style={{ height: 6, background: 'rgba(0,0,0,0.2)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: data.nettoMargePerc + '%', height: '100%', background: isGood ? '#22c55e' : '#ef4444' }}></div>
+                    <div style={{ width: data.nettoMargePerc + '%', height: '100%', background: isGood ? 'var(--green)' : 'var(--red)' }}></div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 10, marginTop: 4, fontWeight: 700 }}>{data.nettoMargePerc}% Netto Marge</div>
             </div>
@@ -616,15 +616,15 @@ export default function AiAssistant(): React.ReactElement {
         const isPending = action.status === 'pending';
         const isDone = action.status === 'done';
         const isExecuting = action.status === 'executing';
-        const CAT_COLORS: Record<string, string> = { bite: '#f59e0b', voorgerecht: '#3b82f6', hoofdgerecht: '#ef4444', vegetarisch: '#22c55e', dessert: '#ec4899', bijgerecht: '#8b5cf6', borrelhap: '#f97316', anders: '#64748b' };
-        const catColor = CAT_COLORS[d.gang_slug] || '#FFBF00';
+        const CAT_COLORS: Record<string, string> = { bite: 'var(--amber)', voorgerecht: 'var(--blue)', hoofdgerecht: 'var(--red)', vegetarisch: 'var(--green)', dessert: 'var(--pink)', bijgerecht: 'var(--purple)', borrelhap: 'var(--orange)', anders: 'var(--slate)' };
+        const catColor = CAT_COLORS[d.gang_slug] || 'var(--brand)';
         const ingredienten: string[] = Array.isArray(d.ingredienten) ? d.ingredienten : [];
         const allergenen: string[] = Array.isArray(d.allergenen) ? d.allergenen : [];
         const rawStappen: string = typeof d.bereidingswijze === 'string' ? d.bereidingswijze : '';
         const stappen = rawStappen.split(/\n|(?=Stap \d)/g).map(function (s: string): string { return s.replace(/^Stap \d+[:.\s]+/, '').trim(); }).filter(Boolean);
         return (
-            <div key={action.id} style={{ margin: '10px 0 0 0', borderRadius: 12, overflow: 'hidden', border: isDone ? '1px solid rgba(34,197,94,.4)' : '1px solid rgba(255,191,0,.3)', background: 'rgba(0,0,0,.25)', fontSize: 12 }}>
-                <div style={{ background: isDone ? 'rgba(34,197,94,.1)' : 'rgba(255,191,0,.07)', padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+            <div key={action.id} style={{ margin: '10px 0 0 0', borderRadius: 12, overflow: 'hidden', border: isDone ? '1px solid rgba(34,197,94,.4)' : '1px solid color-mix(in srgb, var(--brand) 30%, transparent)', background: 'rgba(0,0,0,.25)', fontSize: 12 }}>
+                <div style={{ background: isDone ? 'rgba(34,197,94,.1)' : 'color-mix(in srgb, var(--brand) 7%, transparent)', padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <span style={{ fontSize: 18 }}>&#127830;</span>
                         <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)', flex: 1 }}>{d.naam || 'Nieuw Gerecht'}</span>
@@ -635,7 +635,7 @@ export default function AiAssistant(): React.ReactElement {
                 <div style={{ padding: '10px 12px' }}>
                     {ingredienten.length > 0 && (
                         <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#FFBF00', marginBottom: 5 }}>Ingredi&#235;nten</div>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--brand)', marginBottom: 5 }}>Ingredi&#235;nten</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                                 {ingredienten.slice(0, 8).map(function (ing: string, i: number): React.ReactElement { return <span key={i} style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 5, padding: '2px 6px', fontSize: 10 }}>{ing}</span>; })}
                                 {ingredienten.length > 8 && <span style={{ fontSize: 10, color: 'var(--muted)' }}>+{ingredienten.length - 8} meer</span>}
@@ -644,24 +644,24 @@ export default function AiAssistant(): React.ReactElement {
                     )}
                     {stappen.length > 0 && (
                         <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#FFBF00', marginBottom: 5 }}>Bereiding</div>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--brand)', marginBottom: 5 }}>Bereiding</div>
                             {stappen.slice(0, 4).map(function (stap: string, i: number): React.ReactElement {
-                                return <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 4 }}><span style={{ minWidth: 18, height: 18, background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.3)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#FFBF00', flexShrink: 0 }}>{i + 1}</span><span style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{stap}</span></div>;
+                                return <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 4 }}><span style={{ minWidth: 18, height: 18, background: 'color-mix(in srgb, var(--brand) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--brand) 30%, transparent)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'var(--brand)', flexShrink: 0 }}>{i + 1}</span><span style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{stap}</span></div>;
                             })}
                             {stappen.length > 4 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>+ {stappen.length - 4} stappen meer&#8230;</div>}
                         </div>
                     )}
                     {allergenen.length > 0 && (
                         <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#ef4444', marginBottom: 4 }}>Allergenen</div>
+                            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--red)', marginBottom: 4 }}>Allergenen</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                                {allergenen.map(function (a: string, i: number): React.ReactElement { return <span key={i} style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#ef4444', borderRadius: 4, padding: '1px 5px', fontSize: 9 }}>{a}</span>; })}
+                                {allergenen.map(function (a: string, i: number): React.ReactElement { return <span key={i} style={{ background: 'color-mix(in srgb, var(--red) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--red) 20%, transparent)', color: 'var(--red)', borderRadius: 4, padding: '1px 5px', fontSize: 9 }}>{a}</span>; })}
                             </div>
                         </div>
                     )}
                     {isPending && (
                         <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                            <button onClick={function (): void { approveAction(msgIdx, action.id); }} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', background: '#FFBF00', color: '#000', fontWeight: 800, fontSize: 11, cursor: 'pointer' }}>
+                            <button onClick={function (): void { approveAction(msgIdx, action.id); }} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 800, fontSize: 11, cursor: 'pointer' }}>
                                 <Plus size={11} style={{ marginRight: 5, display: 'inline-block', verticalAlign: 'middle' }} />Toevoegen aan Menu
                             </button>
                             <button onClick={function (): void { rejectAction(msgIdx, action.id); }} style={{ padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
@@ -669,8 +669,8 @@ export default function AiAssistant(): React.ReactElement {
                             </button>
                         </div>
                     )}
-                    {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Toevoegen&#8230;</div>}
-                    {isDone && <div style={{ color: '#22c55e', fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={11} />Toegevoegd aan Menu!</div>}
+                    {isExecuting && <div style={{ color: 'var(--brand)', fontSize: 11, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Toevoegen&#8230;</div>}
+                    {isDone && <div style={{ color: 'var(--green)', fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}><Check size={11} />Toegevoegd aan Menu!</div>}
                 </div>
             </div>
         );
@@ -707,15 +707,15 @@ export default function AiAssistant(): React.ReactElement {
         return (
             <div key={action.id} style={{
                 margin: '8px 0 0 0', padding: '10px 12px', borderRadius: 10, border: '1px solid', fontSize: 12,
-                borderColor: isDone ? 'rgba(34,197,94,.4)' : isError ? 'rgba(239,68,68,.4)' : isRejected ? 'var(--border)' : 'rgba(255,191,0,.35)',
-                background: isDone ? 'rgba(34,197,94,.08)' : isError ? 'rgba(239,68,68,.08)' : isRejected ? 'var(--muted-extra-light)' : 'rgba(255,191,0,.08)',
+                borderColor: isDone ? 'rgba(34,197,94,.4)' : isError ? 'color-mix(in srgb, var(--red) 40%, transparent)' : isRejected ? 'var(--border)' : 'color-mix(in srgb, var(--brand) 35%, transparent)',
+                background: isDone ? 'rgba(34,197,94,.08)' : isError ? 'color-mix(in srgb, var(--red) 8%, transparent)' : isRejected ? 'var(--muted-extra-light)' : 'color-mix(in srgb, var(--brand) 8%, transparent)',
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <Zap size={13} style={{ color: isDone ? '#22c55e' : isRejected ? 'var(--muted)' : (action.meta.color || '#FFBF00') }} />
+                    <Zap size={13} style={{ color: isDone ? 'var(--green)' : isRejected ? 'var(--muted)' : (action.meta.color || 'var(--brand)') }} />
                     <span style={{ fontWeight: 700, color: 'var(--text)' }}>{action.meta.label}</span>
-                    {isDone && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 11 }}>✓ Klaar</span>}
+                    {isDone && <span style={{ marginLeft: 'auto', color: 'var(--green)', fontSize: 11 }}>✓ Klaar</span>}
                     {isRejected && <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 11 }}>Geannuleerd</span>}
-                    {isError && <span style={{ marginLeft: 'auto', color: '#ef4444', fontSize: 11 }}>Fout</span>}
+                    {isError && <span style={{ marginLeft: 'auto', color: 'var(--red)', fontSize: 11 }}>Fout</span>}
                 </div>
                 <div style={{ color: 'var(--muted)', marginBottom: isPending ? 8 : 0, lineHeight: 1.4 }}>{action.description}</div>
                 {action.data && Object.keys(action.data).length > 0 && action.type !== 'mark_weak_dishes' && (
@@ -726,7 +726,7 @@ export default function AiAssistant(): React.ReactElement {
                 {isPending && (
                     <div>
                         {action.meta && action.meta.op === 'delete' && (
-                            <div style={{ fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 6, padding: '5px 8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ fontSize: 11, color: 'var(--red)', background: 'color-mix(in srgb, var(--red) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--red) 20%, transparent)', borderRadius: 6, padding: '5px 8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <AlertTriangle size={11} />
                                 <strong>Permanent verwijderen</strong> — dit kan niet ongedaan worden gemaakt!
                             </div>
@@ -734,7 +734,7 @@ export default function AiAssistant(): React.ReactElement {
                         <div style={{ display: 'flex', gap: 6 }}>
                             <button
                                 onClick={function (): void { approveAction(msgIdx, action.id); }}
-                                style={{ flex: 1, padding: '5px 0', borderRadius: 7, border: 'none', background: action.meta && action.meta.op === 'delete' ? '#ef4444' : '#22c55e', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+                                style={{ flex: 1, padding: '5px 0', borderRadius: 7, border: 'none', background: action.meta && action.meta.op === 'delete' ? 'var(--red)' : 'var(--green)', color: '#fff', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
                             >
                                 {action.meta && action.meta.op === 'delete'
                                     ? <><Trash2 size={11} style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} />Permanent verwijderen</>
@@ -747,8 +747,8 @@ export default function AiAssistant(): React.ReactElement {
                         </div>
                     </div>
                 )}
-                {isExecuting && <div style={{ color: '#FFBF00', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Bezig…</div>}
-                {isError && (action as any).error && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{(action as any).error}</div>}
+                {isExecuting && <div style={{ color: 'var(--brand)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" />Bezig…</div>}
+                {isError && (action as any).error && <div style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{(action as any).error}</div>}
             </div>
         );
     }
@@ -800,7 +800,7 @@ export default function AiAssistant(): React.ReactElement {
                                         {!isUser && <div className="ai-avatar"><Bot size={14} /></div>}
                                         <div className={'ai-message bubble ' + (isUser ? 'user-bubble' : 'assistant-bubble')}>
                                             {msg.contextBadge && (
-                                                <div style={{ fontSize: 10, color: '#22c55e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <div style={{ fontSize: 10, color: 'var(--green)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                                                     <Database size={10} /> Live data geladen
                                                 </div>
                                             )}
@@ -810,14 +810,14 @@ export default function AiAssistant(): React.ReactElement {
                                             {msg.eventBriefing && renderEventBriefing(msg.eventBriefing)}
                                             {msg.winstgevendheid && renderWinstgevendheid(msg.winstgevendheid)}
                                             {msg.successBadge && msg.successLink && (
-                                                <a href={msg.successLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, background: 'rgba(167,139,250,.15)', border: '1px solid rgba(167,139,250,.3)', color: '#a78bfa', padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+                                                <a href={msg.successLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, background: 'color-mix(in srgb, var(--purple) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--purple) 30%, transparent)', color: 'var(--purple)', padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
                                                     <ArrowRight size={11} />{msg.successBadge}
                                                 </a>
                                             )}
                                             {msg.undoInsert && (
                                                 <button
                                                     onClick={function (): void { undoInsertAction(msg.undoInsert!.table, msg.undoInsert!.id); }}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: 'transparent', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444', padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, background: 'transparent', border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)', color: 'var(--red)', padding: '3px 9px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
                                                     title="Maak dit ongedaan"
                                                 >
                                                     <RotateCcw size={10} />Ongedaan maken
@@ -849,7 +849,7 @@ export default function AiAssistant(): React.ReactElement {
                         <div style={{ padding: '6px 12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                             {quickChips.map(function (s: string): React.ReactElement {
                                 return (
-                                    <button key={s} onClick={function (): void { sendMessage(null, s); }} style={{ background: 'rgba(255,191,0,.08)', border: '1px solid rgba(255,191,0,.2)', color: 'var(--brand)', padding: '3px 8px', borderRadius: 20, fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>
+                                    <button key={s} onClick={function (): void { sendMessage(null, s); }} style={{ background: 'color-mix(in srgb, var(--brand) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--brand) 20%, transparent)', color: 'var(--brand)', padding: '3px 8px', borderRadius: 20, fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>
                                         {s}
                                     </button>
                                 );

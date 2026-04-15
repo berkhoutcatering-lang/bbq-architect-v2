@@ -346,7 +346,7 @@ export default function ServiceMode() {
                             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
                                 {selected.datum} • {selected.aantal_gasten} gasten •
                                 <span style={{ color: 'var(--brand)', marginLeft: 8 }}>🍖 {aantalNormaal}</span>
-                                {aantalVega > 0 && <span style={{ color: '#6B7A2F', marginLeft: 8 }}>🌿 {aantalVega}</span>}
+                                {aantalVega > 0 && <span style={{ color: 'var(--service-vega, #6B7A2F)', marginLeft: 8 }}>🌿 {aantalVega}</span>}
                             </div>
                         </div>
                         <button className="tab-btn" onClick={function () { setSelectedId(null); }}>← EVENT SELECTIE</button>
@@ -394,7 +394,7 @@ export default function ServiceMode() {
                                                     {/* Source label */}
                                                     {sourceLabel && !isEditing && (
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#6B7A2F', opacity: 0.6 }}>{sourceLabel}</span>
+                                                            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--service-vega, #6B7A2F)', opacity: 0.6 }}>{sourceLabel}</span>
                                                             <button onClick={function (e: React.MouseEvent) { e.stopPropagation(); setVegaInputs(function (prev) { return Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' }); }); }}
                                                                 style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                                                                 wijzig
@@ -408,8 +408,8 @@ export default function ServiceMode() {
                                                         return (
                                                             <div key={vi} style={{ fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                                                                 <span style={{ fontSize: 10 }}>🌿</span>
-                                                                <span style={{ color: '#6B7A2F', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
-                                                                <span style={{ flex: 1, color: '#6B7A2F' }}>{vDish}</span>
+                                                                <span style={{ color: 'var(--service-vega, #6B7A2F)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
+                                                                <span style={{ flex: 1, color: 'var(--service-vega, #6B7A2F)' }}>{vDish}</span>
                                                                 {vGerechtData && vGerechtData.foto_url && (
                                                                     <img src={vGerechtData.foto_url} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
                                                                 )}
@@ -418,13 +418,13 @@ export default function ServiceMode() {
                                                     }) : (
                                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                                             <span style={{ fontSize: 10 }}>🌿</span>
-                                                            <span style={{ color: '#6B7A2F', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
+                                                            <span style={{ color: 'var(--service-vega, #6B7A2F)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
                                                             <input
                                                                 value={vegaInputs[gang.slug] || ''}
                                                                 onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVegaInputs(function (prev) { return Object.assign({}, prev, { [gang.slug]: e.target.value }); }); }}
                                                                 placeholder="Vega gerecht naam..."
                                                                 onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}
-                                                                style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F' }}
+                                                                style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: 'var(--service-vega, #6B7A2F)' }}
                                                             />
                                                             {vegaInputs[gang.slug] && (
                                                                 <button onClick={function (e: React.MouseEvent) {
@@ -432,7 +432,7 @@ export default function ServiceMode() {
                                                                     saveVegaDish(gang.slug);
                                                                     setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
                                                                 }}
-                                                                    style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: '#6B7A2F', cursor: 'pointer' }}>
+                                                                    style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: 'var(--service-vega, #6B7A2F)', cursor: 'pointer' }}>
                                                                     ✓
                                                                 </button>
                                                             )}
@@ -471,8 +471,8 @@ export default function ServiceMode() {
                             <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 800 }}>GANG {gangen.indexOf(modalGang) + 1} • {modalGang.naam.toUpperCase()}</div>
                             <div style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span>{currentDishEntry.isVega ? '🌿' : '🍖'}</span>
-                                <span style={{ color: currentDishEntry.isVega ? '#6B7A2F' : 'var(--text)' }}>{currentDish.naam || 'Gerecht'}</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: currentDishEntry.isVega ? '#6B7A2F' : 'var(--brand)', background: currentDishEntry.isVega ? 'rgba(107,122,47,.1)' : 'rgba(196,163,90,.1)', padding: '2px 8px', borderRadius: 6 }}>{currentDishEntry.count}×</span>
+                                <span style={{ color: currentDishEntry.isVega ? 'var(--service-vega, #6B7A2F)' : 'var(--text)' }}>{currentDish.naam || 'Gerecht'}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: currentDishEntry.isVega ? 'var(--service-vega, #6B7A2F)' : 'var(--brand)', background: currentDishEntry.isVega ? 'rgba(107,122,47,.1)' : 'rgba(196,163,90,.1)', padding: '2px 8px', borderRadius: 6 }}>{currentDishEntry.count}×</span>
                             </div>
                             {/* Dish navigation tabs */}
                             {modalDishesAll.length > 1 && (
@@ -484,9 +484,9 @@ export default function ServiceMode() {
                                             <button key={i} onClick={function () { setModalDishIndex(i); setCheckedSteps({}); }}
                                                 style={{
                                                     padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
-                                                    border: isDone ? '2px solid #10b981' : (isCurrent ? '2px solid var(--brand)' : '1px solid var(--border)'),
+                                                    border: isDone ? '2px solid var(--emerald)' : (isCurrent ? '2px solid var(--brand)' : '1px solid var(--border)'),
                                                     background: isDone ? 'rgba(16,185,129,.1)' : (isCurrent ? 'rgba(196,163,90,.15)' : 'transparent'),
-                                                    color: isDone ? '#10b981' : (d.isVega ? '#6B7A2F' : (isCurrent ? 'var(--brand)' : 'var(--muted)')),
+                                                    color: isDone ? 'var(--emerald)' : (d.isVega ? 'var(--service-vega, #6B7A2F)' : (isCurrent ? 'var(--brand)' : 'var(--muted)')),
                                                     display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
                                                 }}>
                                                 {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
@@ -540,8 +540,8 @@ export default function ServiceMode() {
                                         display: 'flex', alignItems: 'center', gap: 6,
                                         padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                                         background: isDone ? 'rgba(16,185,129,.12)' : (i === modalDishIndex ? 'rgba(196,163,90,.12)' : 'rgba(255,255,255,.04)'),
-                                        border: isDone ? '1px solid rgba(16,185,129,.3)' : (i === modalDishIndex ? '1px solid rgba(196,163,90,.3)' : '1px solid var(--border)'),
-                                        color: isDone ? '#10b981' : (i === modalDishIndex ? 'var(--brand)' : 'var(--muted)')
+                                        border: isDone ? '1px solid color-mix(in srgb, var(--emerald) 30%, transparent)' : (i === modalDishIndex ? '1px solid color-mix(in srgb, var(--color-accent-gold) 30%, transparent)' : '1px solid var(--border)'),
+                                        color: isDone ? 'var(--emerald)' : (i === modalDishIndex ? 'var(--brand)' : 'var(--muted)')
                                     }}>
                                         {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
                                         <span>{d.naam}</span>
@@ -570,13 +570,13 @@ export default function ServiceMode() {
                             ) : (
                                 /* All dishes done? Show finish gang button */
                                 modalDishesAll.every(function (d) { return completedDishes[d.key]; }) ? (
-                                    <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800, background: '#10b981' }}
+                                    <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800, background: 'var(--emerald)' }}
                                         onClick={function () { requestFinishGang(activeModal!); }}>
                                         ✓ GANG UITGESERVEERD — ALLES MEE
                                     </button>
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ color: '#10b981', fontSize: 14, fontWeight: 700 }}>✓ {currentDishEntry.naam} is meegegeven</span>
+                                        <span style={{ color: 'var(--emerald)', fontSize: 14, fontWeight: 700 }}>✓ {currentDishEntry.naam} is meegegeven</span>
                                         <button className="tab-btn" style={{ padding: '12px 32px' }}
                                             onClick={function () {
                                                 const nextIdx = modalDishesAll.findIndex(function (d) { return !completedDishes[d.key]; });

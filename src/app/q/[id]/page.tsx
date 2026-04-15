@@ -95,12 +95,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     // --- Loading ---
     if (loading) {
         return (
-            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-darker)' }}>
                 <div style={{ textAlign: 'center' }}>
                     <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(158,120,28,.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                         <span style={{ fontSize: 24 }}>🔥</span>
                     </div>
-                    <p style={{ color: '#737373', fontSize: 14 }}>Offerte laden...</p>
+                    <p style={{ color: 'var(--zinc)', fontSize: 14 }}>Offerte laden...</p>
                 </div>
             </div>
         );
@@ -109,11 +109,11 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     // --- Error ---
     if (error || !offer) {
         return (
-            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', padding: 20 }}>
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-darker)', padding: 20 }}>
                 <div style={{ textAlign: 'center', maxWidth: 400 }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
                     <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Offerte niet gevonden</h2>
-                    <p style={{ color: '#737373', fontSize: 14 }}>{error || 'Deze offerte bestaat niet of is verlopen.'}</p>
+                    <p style={{ color: 'var(--zinc)', fontSize: 14 }}>{error || 'Deze offerte bestaat niet of is verlopen.'}</p>
                 </div>
             </div>
         );
@@ -163,12 +163,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     const totaal = nettoSubtotal + btwBedrag;
 
     const companyName = settings?.bedrijfsnaam || 'BBQ Architect';
-    const brandColor = (settings as any)?.brand_primary || '#c4a35a';
+    const brandColor = (settings as any)?.brand_primary || 'var(--color-accent-gold)';
     const brandLogoUrl = (settings as any)?.logo_url || null;
     const currentStep = getStepIndex(offer.status);
 
     return (
-        <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0a0a0a 0%, #111 100%)', color: '#e5e7eb', fontFamily: "'DM Sans', system-ui, sans-serif", padding: '24px 16px 60px' }}>
+        <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, var(--color-bg-darker) 0%, #111 100%)', color: '#e5e7eb', fontFamily: "'DM Sans', system-ui, sans-serif", padding: '24px 16px 60px' }}>
             <div style={{ maxWidth: 720, margin: '0 auto' }}>
 
                 {/* Company header */}
@@ -181,7 +181,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         )}
                     </div>
                     <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: '0 0 4px' }}>{companyName}</h2>
-                    {settings?.ondertitel && <p style={{ fontSize: 12, color: '#737373', margin: 0 }}>{settings.ondertitel}</p>}
+                    {settings?.ondertitel && <p style={{ fontSize: 12, color: 'var(--zinc)', margin: 0 }}>{settings.ondertitel}</p>}
                 </div>
 
                 {/* Main card */}
@@ -191,15 +191,15 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                             <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
                                 <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.2 }}>
                                     {offer.client_naam || 'Klant'}
                                 </h1>
-                                {offer.client_adres && <p style={{ color: '#737373', fontSize: 13, margin: 0 }}>{offer.client_adres}</p>}
+                                {offer.client_adres && <p style={{ color: 'var(--zinc)', fontSize: 13, margin: 0 }}>{offer.client_adres}</p>}
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: 28, fontWeight: 800, color: brandColor, lineHeight: 1 }}>{formatEuro(totaal)}</div>
-                                <div style={{ fontSize: 12, color: '#737373', marginTop: 4 }}>Inclusief {defaultBtw}% BTW</div>
+                                <div style={{ fontSize: 12, color: 'var(--zinc)', marginTop: 4 }}>Inclusief {defaultBtw}% BTW</div>
                             </div>
                         </div>
                     </div>
@@ -214,7 +214,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         ].map(function (m) {
                             return (
                                 <div key={m.label} style={{ padding: '14px 28px', background: 'rgba(0,0,0,0.15)' }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
                                     <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{m.value}</div>
                                 </div>
                             );
@@ -224,7 +224,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Items */}
                     {items.length > 0 && (
                         <div style={{ padding: '24px 28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Overzicht</h3>
+                            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Overzicht</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                                 {items.map(function (item: any, i: number) {
                                     const lineTotal = (item.qty || 0) * (item.prijs || 0);
@@ -235,7 +235,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                         }}>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{item.omschrijving || 'Item'}</div>
-                                                <div style={{ fontSize: 12, color: '#525252', marginTop: 2 }}>{item.qty || 0} x {formatEuro(item.prijs || 0)}</div>
+                                                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{item.qty || 0} x {formatEuro(item.prijs || 0)}</div>
                                             </div>
                                             <div style={{ fontSize: 14, fontWeight: 700, color: '#e5e7eb' }}>{formatEuro(lineTotal)}</div>
                                         </div>
@@ -248,7 +248,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Menu items */}
                     {menuItems.length > 0 && (
                         <div style={{ padding: '0 28px 24px' }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Menu</h3>
+                            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Menu</h3>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                 {menuItems.map(function (naam, i) {
                                     return (
@@ -266,23 +266,23 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Totals */}
                     <div style={{ padding: '20px 28px', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 300, marginLeft: 'auto' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#a3a3a3' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                                 <span>Subtotaal</span>
                                 <span>{formatEuro(subtotal)}</span>
                             </div>
                             {vasteKostenTotal > 0 && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#a3a3a3' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                                     <span>Vaste kosten</span>
                                     <span>{formatEuro(vasteKostenTotal)}</span>
                                 </div>
                             )}
                             {korting > 0 && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#22c55e' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--green)' }}>
                                     <span>Korting</span>
                                     <span>-{formatEuro(korting)}</span>
                                 </div>
                             )}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#a3a3a3' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                                 <span>BTW {defaultBtw}%</span>
                                 <span>{formatEuro(btwBedrag)}</span>
                             </div>
@@ -296,15 +296,15 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Notes */}
                     {offer.notitie && (
                         <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
-                            <p style={{ fontSize: 13, color: '#a3a3a3', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
+                            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
                         </div>
                     )}
 
                     {/* Status tracker (shown after acceptance) */}
                     {accepted && (
                         <div style={{ padding: '24px 28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#737373', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Voortgang</h3>
+                            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Voortgang</h3>
                             <div style={{ display: 'flex', gap: 0 }}>
                                 {STATUS_STEPS.map(function (step, i) {
                                     const done = i <= currentStep;
@@ -315,13 +315,13 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                             {i > 0 && (
                                                 <div style={{
                                                     position: 'absolute', top: 16, left: 0, right: '50%',
-                                                    height: 2, background: done ? '#f59e0b' : 'rgba(255,255,255,0.08)',
+                                                    height: 2, background: done ? 'var(--amber)' : 'rgba(255,255,255,0.08)',
                                                 }} />
                                             )}
                                             {i < STATUS_STEPS.length - 1 && (
                                                 <div style={{
                                                     position: 'absolute', top: 16, left: '50%', right: 0,
-                                                    height: 2, background: i < currentStep ? '#f59e0b' : 'rgba(255,255,255,0.08)',
+                                                    height: 2, background: i < currentStep ? 'var(--amber)' : 'rgba(255,255,255,0.08)',
                                                 }} />
                                             )}
                                             {/* Circle */}
@@ -329,12 +329,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                                 width: 34, height: 34, borderRadius: '50%', margin: '0 auto 8px',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 background: done ? 'rgba(158,120,28,.15)' : 'rgba(255,255,255,0.04)',
-                                                border: isCurrent ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.08)',
+                                                border: isCurrent ? '2px solid var(--amber)' : '1px solid rgba(255,255,255,0.08)',
                                                 fontSize: 16, position: 'relative', zIndex: 1,
                                             }}>
                                                 {step.icon}
                                             </div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: done ? '#e5e7eb' : '#525252', lineHeight: 1.3 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: done ? '#e5e7eb' : 'var(--color-text-muted)', lineHeight: 1.3 }}>
                                                 {step.label}
                                             </div>
                                         </div>
@@ -344,8 +344,8 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                             {/* Signed info */}
                             {offer.signed_by && (
-                                <div style={{ marginTop: 20, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.12)', fontSize: 12, color: '#a3a3a3' }}>
-                                    Ondertekend door <strong style={{ color: '#10b981' }}>{offer.signed_by}</strong>
+                                <div style={{ marginTop: 20, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.12)', fontSize: 12, color: 'var(--muted)' }}>
+                                    Ondertekend door <strong style={{ color: 'var(--emerald)' }}>{offer.signed_by}</strong>
                                     {offer.signed_at && <span> op {formatDate(offer.signed_at)}</span>}
                                 </div>
                             )}
@@ -357,7 +357,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         <div style={{ padding: '32px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(158,120,28,.06)', borderRadius: 16, border: '1px solid rgba(158,120,28,.12)' }}>
                                 <h3 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Akkoord met deze offerte?</h3>
-                                <p style={{ color: '#a3a3a3', fontSize: 14, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
+                                <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
                                     Bevestig met een digitale handtekening om de datum vast te leggen.
                                 </p>
                                 <button
@@ -381,12 +381,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {!accepted && signStep && (
                         <div style={{ padding: '28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Digitale handtekening</h3>
-                            <p style={{ color: '#737373', fontSize: 13, marginBottom: 20 }}>
+                            <p style={{ color: 'var(--zinc)', fontSize: 13, marginBottom: 20 }}>
                                 Vul uw naam in en plaats een handtekening om de offerte te bevestigen.
                             </p>
 
                             <div style={{ marginBottom: 16 }}>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#a3a3a3', marginBottom: 6 }}>Naam ondertekenaar</label>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Naam ondertekenaar</label>
                                 <input
                                     type="text"
                                     value={signerName}
@@ -402,7 +402,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             </div>
 
                             <div style={{ marginBottom: 20 }}>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#a3a3a3', marginBottom: 6 }}>Handtekening</label>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Handtekening</label>
                                 <SignaturePad onSignature={setSignatureData} />
                             </div>
 
@@ -412,7 +412,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     style={{
                                         padding: '12px 24px', borderRadius: 10,
                                         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#a3a3a3', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                        color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                                     }}
                                 >
                                     Annuleren
@@ -422,7 +422,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     disabled={submitting || !signatureData || !signerName.trim()}
                                     style={{
                                         flex: 1, padding: '12px 24px', borderRadius: 10,
-                                        background: signatureData && signerName.trim() ? '#f59e0b' : 'rgba(158,120,28,.3)',
+                                        background: signatureData && signerName.trim() ? 'var(--amber)' : 'rgba(158,120,28,.3)',
                                         color: signatureData && signerName.trim() ? '#000' : 'rgba(0,0,0,.5)',
                                         border: 'none', fontSize: 14, fontWeight: 800, cursor: signatureData && signerName.trim() ? 'pointer' : 'not-allowed',
                                         opacity: submitting ? 0.6 : 1,
@@ -432,7 +432,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 </button>
                             </div>
 
-                            <p style={{ fontSize: 12, color: '#525252', marginTop: 12, lineHeight: 1.5 }}>
+                            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 12, lineHeight: 1.5 }}>
                                 Door te ondertekenen gaat u akkoord met de voorwaarden in deze offerte.
                                 {settings?.betaalvoorwaarden && ' ' + settings.betaalvoorwaarden}
                             </p>
@@ -444,8 +444,8 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         <div style={{ padding: '28px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(16,185,129,.06)', borderRadius: 16, border: '1px solid rgba(16,185,129,.12)' }}>
                                 <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
-                                <h3 style={{ color: '#10b981', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Offerte geaccepteerd!</h3>
-                                <p style={{ color: '#a3a3a3', fontSize: 14, margin: 0, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto' }}>
+                                <h3 style={{ color: 'var(--emerald)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Offerte geaccepteerd!</h3>
+                                <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto' }}>
                                     Wij gaan direct aan de slag. U ontvangt een bevestiging per e-mail.
                                 </p>
                             </div>

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Users, Calendar, MapPin, ChevronRight, ChevronLeft,
   Check, Euro, FileText, Sparkles
@@ -15,6 +15,7 @@ import { useToast } from './Toast';
 import { fmt, today, addDays, genNummer, nextNummer, calcLineTotals } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { autoCreatePrepTasks } from '@/lib/syncEngine';
+import { useAutoSave } from '@/hooks/useAutoSave';
 
 interface EventWizardProps {
   isOpen: boolean;
@@ -63,6 +64,27 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
     naam: '', datum: today(), locatie: '', gasten: 50,
     ppp: 45, type: 'Particulier', notitie: ''
   });
+
+  // Auto-save draft
+  const wizardForm = isOpen ? { klant, menuSelectie, details, step } : null;
+  const { hasDraft, restoreDraft, discardDraft, lastSaved } = useAutoSave({
+    key: 'bbq_draft_event_wizard',
+    data: wizardForm,
+    enabled: isOpen,
+  });
+
+  // Restore draft when wizard opens and a draft exists
+  useEffect(function () {
+    if (isOpen && hasDraft) {
+      const draft = restoreDraft();
+      if (draft) {
+        if (draft.klant) setKlant(draft.klant as typeof klant);
+        if (draft.menuSelectie) setMenuSelectie(draft.menuSelectie as typeof menuSelectie);
+        if (draft.details) setDetails(draft.details as typeof details);
+        if (typeof draft.step === 'number') setStep(draft.step as number);
+      }
+    }
+  }, [isOpen]);
 
   // Menu items for preview
   const menuItems = useMemo(() => {
@@ -167,6 +189,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
       }
 
       showToast('Event + Offerte + Prep-taken aangemaakt!', 'success');
+      discardDraft();
       onComplete?.();
       resetAndClose();
     } catch (err: any) {
@@ -197,16 +220,16 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
               onClick={() => i < step && setStep(i)}
               className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors"
               style={{
-                color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
+                color: i === step ? 'var(--blue)' : i < step ? 'var(--green)' : 'var(--muted-light)',
                 cursor: i < step ? 'pointer' : 'default'
               }}
             >
               <div
                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all"
                 style={{
-                  borderColor: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--border)',
-                  background: i < step ? 'rgba(16,185,129,.1)' : i === step ? 'rgba(59,130,246,.1)' : 'transparent',
-                  color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
+                  borderColor: i === step ? 'var(--blue)' : i < step ? 'var(--green)' : 'var(--border)',
+                  background: i < step ? 'color-mix(in srgb, var(--green) 10%, transparent)' : i === step ? 'color-mix(in srgb, var(--blue) 10%, transparent)' : 'transparent',
+                  color: i === step ? 'var(--blue)' : i < step ? 'var(--green)' : 'var(--muted-light)',
                 }}
               >
                 {i < step ? <Check size={12} /> : i + 1}
@@ -214,7 +237,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
               <span className="hidden md:inline">{s.label}</span>
             </button>
             {i < STEPS.length - 1 && (
-              <div className="flex-1 h-px" style={{ background: i < step ? '#10b981' : 'var(--border)' }} />
+              <div className="flex-1 h-px" style={{ background: i < step ? 'var(--green)' : 'var(--border)' }} />
             )}
           </React.Fragment>
         ))}
@@ -228,7 +251,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
           <div className="space-y-4">
             <MetallicCard className="p-5" hover={false}>
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-4 h-4 text-[#c4a35a]" />
+                <Sparkles className="w-4 h-4 text-[var(--color-accent-gold)]" />
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">Klantgegevens</span>
               </div>
               <div className="space-y-3">
@@ -263,7 +286,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
             <MetallicCard className="p-5" hover={false}>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">Menu samenstellen</span>
-                <span className="text-[11px] font-medium text-[#3b82f6]">{totalMenuDishes} gerechten</span>
+                <span className="text-[11px] font-medium text-[var(--blue)]">{totalMenuDishes} gerechten</span>
               </div>
               {sortedGangen.length === 0 ? (
                 <p style={{ fontSize: 13, color: 'var(--muted)' }}>Geen gangen gevonden. Maak eerst gangen aan.</p>
@@ -297,9 +320,9 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                                 }}
                                 style={{
                                   padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                                  background: isSelected ? 'rgba(59,130,246,.12)' : 'var(--bg)',
-                                  border: isSelected ? '1px solid #3b82f6' : '1px solid var(--border)',
-                                  color: isSelected ? '#3b82f6' : 'var(--text)',
+                                  background: isSelected ? 'color-mix(in srgb, var(--blue) 12%, transparent)' : 'var(--bg)',
+                                  border: isSelected ? '1px solid var(--blue)' : '1px solid var(--border)',
+                                  color: isSelected ? 'var(--blue)' : 'var(--text)',
                                   cursor: 'pointer', transition: 'all 0.15s'
                                 }}
                               >
@@ -351,9 +374,9 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                       const cost = calcDishFoodcostPP(item.naam);
                       return (
                         <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full" style={{
-                          background: cost > 0 ? 'rgba(196,163,90,0.08)' : 'rgba(255,255,255,0.03)',
-                          border: cost > 0 ? '1px solid rgba(196,163,90,0.15)' : '1px solid var(--border)',
-                          color: cost > 0 ? '#c4a35a' : 'var(--muted)',
+                          background: cost > 0 ? 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)' : 'rgba(255,255,255,0.03)',
+                          border: cost > 0 ? '1px solid color-mix(in srgb, var(--color-accent-gold) 15%, transparent)' : '1px solid var(--border)',
+                          color: cost > 0 ? 'var(--color-accent-gold)' : 'var(--muted)',
                         }}>
                           {item.naam} {cost > 0 ? fmt(cost) : '—'}
                         </span>
@@ -362,7 +385,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                   </div>
                 )}
                 {menuMargePct > 0 && menuMargePct < 55 && (
-                  <div className="mt-2 p-2 rounded-lg text-[10px]" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)', color: '#ef4444' }}>
+                  <div className="mt-2 p-2 rounded-lg text-[10px]" style={{ background: 'color-mix(in srgb, var(--red) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--red) 12%, transparent)', color: 'var(--red)' }}>
                     ⚠️ Lage marge — overweeg goedkopere gerechten of hogere prijs p.p.
                   </div>
                 )}
@@ -398,10 +421,10 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
             </MetallicCard>
 
             {/* Quick summary */}
-            <MetallicCard className="p-4" hover={false} accent="#c4a35a">
+            <MetallicCard className="p-4" hover={false} accent="var(--color-accent-gold)">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-[var(--muted)]">Geschatte omzet</span>
-                <span className="text-lg font-light text-[#c4a35a]">{fmt(estimatedOmzet)}</span>
+                <span className="text-lg font-light text-[var(--color-accent-gold)]">{fmt(estimatedOmzet)}</span>
               </div>
               <div className="text-[10px] text-[var(--muted-light)] mt-1">{details.gasten} gasten x {fmt(details.ppp)} p.p.</div>
             </MetallicCard>
@@ -411,27 +434,27 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
         {/* Step 3: Preview & Confirm */}
         {step === 3 && (
           <div className="space-y-4">
-            <MetallicCard className="p-5" hover={false} accent="#10b981">
+            <MetallicCard className="p-5" hover={false} accent="var(--green)">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-4 block">Samenvatting</span>
 
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0e0e10]">
-                  <Users className="w-4 h-4 text-[#3b82f6] shrink-0" />
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
+                  <Users className="w-4 h-4 text-[var(--blue)] shrink-0" />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium text-white">{klant.naam}</div>
                     <div className="text-[11px] text-[var(--muted)]">{klant.email || klant.tel || klant.adres || '—'}</div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0e0e10]">
-                  <Calendar className="w-4 h-4 text-[#c4a35a] shrink-0" />
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
+                  <Calendar className="w-4 h-4 text-[var(--color-accent-gold)] shrink-0" />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium text-white">{details.naam || klant.naam}</div>
                     <div className="text-[11px] text-[var(--muted)]">{details.datum} • {details.gasten} gasten • {details.locatie || 'Locatie TBD'}</div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0e0e10]">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
                   <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div className="flex-1">
                     <div className="text-[13px] font-medium text-white">{totalMenuDishes} gerechten</div>
@@ -444,10 +467,10 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
               </div>
             </MetallicCard>
 
-            <MetallicCard className="p-5" hover={false} accent="#c4a35a">
+            <MetallicCard className="p-5" hover={false} accent="var(--color-accent-gold)">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] text-[var(--muted)]">Offerte bedrag</span>
-                <span className="text-xl font-light text-[#c4a35a]">{fmt(estimatedOmzet)}</span>
+                <span className="text-xl font-light text-[var(--color-accent-gold)]">{fmt(estimatedOmzet)}</span>
               </div>
               <div className="text-[10px] text-[var(--muted-light)]">
                 {details.gasten} gasten x {fmt(details.ppp)} p.p. • Geldig tot {addDays(details.datum, geldigDagen)}
@@ -468,7 +491,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
       <div className="flex items-center justify-between pt-4 mt-4 border-t border-[var(--border)]">
         <button
           onClick={() => step > 0 ? setStep(step - 1) : resetAndClose()}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-[var(--muted)] hover:text-white hover:bg-[#1a1a1e] transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-[var(--muted)] hover:text-white hover:bg-[var(--card-solid)] transition-colors"
         >
           <ChevronLeft size={14} />
           {step > 0 ? 'Vorige' : 'Annuleren'}
@@ -480,7 +503,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
             disabled={!canProceed()}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold transition-all"
             style={{
-              background: canProceed() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'var(--card-solid)',
+              background: canProceed() ? 'linear-gradient(135deg, var(--blue), #2563eb)' : 'var(--card-solid)',
               color: canProceed() ? 'white' : 'var(--muted)',
               cursor: canProceed() ? 'pointer' : 'not-allowed',
               border: canProceed() ? 'none' : '1px solid var(--border)',
@@ -494,7 +517,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
             disabled={saving}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg text-[12px] font-semibold"
             style={{
-              background: 'linear-gradient(135deg, #c4a35a, #a8893e)',
+              background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)',
               color: '#000',
               cursor: saving ? 'wait' : 'pointer',
               opacity: saving ? 0.7 : 1,

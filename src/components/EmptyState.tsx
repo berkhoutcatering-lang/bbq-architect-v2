@@ -23,17 +23,17 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
   const displayActionLabel = actionLabel || config?.actionLabel || 'Toevoegen';
 
   return (
-    <MetallicCard hover={false} className="p-8 md:p-12" accent="#c4a35a">
+    <MetallicCard hover={false} className="p-8 md:p-12" accent="var(--color-accent-gold)">
       <div className="flex flex-col items-center text-center max-w-md mx-auto">
         {/* Icon */}
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
           style={{
-            background: 'linear-gradient(135deg, rgba(196,163,90,.15), rgba(196,163,90,.05))',
-            border: '1px solid rgba(196,163,90,.2)',
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-accent-gold) 15%, transparent), color-mix(in srgb, var(--color-accent-gold) 5%, transparent))',
+            border: '1px solid color-mix(in srgb, var(--color-accent-gold) 20%, transparent)',
           }}
         >
-          <Flame size={24} style={{ color: '#c4a35a' }} />
+          <Flame size={24} style={{ color: 'var(--color-accent-gold)' }} />
         </div>
 
         {/* Title & Description */}
@@ -56,7 +56,7 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
         {chips.length > 0 && (
           <div className="w-full pt-4" style={{ borderTop: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>
-              <Sparkles size={12} className="mr-1 inline-block align-middle" style={{ color: '#c4a35a' }} />
+              <Sparkles size={12} className="mr-1 inline-block align-middle" style={{ color: 'var(--color-accent-gold)' }} />
               Of vraag de AI
             </p>
             <div className="flex flex-wrap justify-center gap-2">
@@ -66,17 +66,17 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
                   onClick={() => onAiChip?.(chip)}
                   className="px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
                   style={{
-                    background: 'rgba(196,163,90,.08)',
-                    border: '1px solid rgba(196,163,90,.15)',
-                    color: '#c4a35a',
+                    background: 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--color-accent-gold) 15%, transparent)',
+                    color: 'var(--color-accent-gold)',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(196,163,90,.15)';
-                    e.currentTarget.style.borderColor = 'rgba(196,163,90,.3)';
+                    e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent-gold) 15%, transparent)';
+                    e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent-gold) 30%, transparent)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(196,163,90,.08)';
-                    e.currentTarget.style.borderColor = 'rgba(196,163,90,.15)';
+                    e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent-gold) 8%, transparent)';
+                    e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-accent-gold) 15%, transparent)';
                   }}
                 >
                   {chip}

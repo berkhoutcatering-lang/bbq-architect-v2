@@ -83,7 +83,7 @@ export default function FAQ() {
                                 display: 'flex', alignItems: 'center', gap: 12,
                                 padding: '14px 16px', cursor: 'pointer',
                             }}>
-                                <div style={{ color: '#c4a35a', flexShrink: 0, transition: 'transform 0.2s' }}>
+                                <div style={{ color: 'var(--color-accent-gold)', flexShrink: 0, transition: 'transform 0.2s' }}>
                                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                                 </div>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>

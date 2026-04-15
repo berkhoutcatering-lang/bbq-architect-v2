@@ -15,17 +15,17 @@ export default function MetallicCard({ children, className = '', hover = true, o
       onClick={onClick}
       className={`
         relative rounded-2xl overflow-hidden
-        bg-gradient-to-br from-[#111113] to-[#0c0c0e]
-        border border-[#1e1e22]
-        ${hover ? 'hover:border-[#2a2a30] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 cursor-pointer' : ''}
+        bg-gradient-to-br from-[var(--color-bg-card)] to-[var(--color-bg-darker)]
+        border border-[var(--card-solid)]
+        ${hover ? 'hover:border-[var(--color-border-hover)] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 cursor-pointer' : ''}
         ${className}
       `}
     >
       <div
         className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent"
-        style={{ '--tw-gradient-via': accent || '#333338' } as React.CSSProperties}
+        style={{ '--tw-gradient-via': accent || 'var(--color-text-ghost)' } as React.CSSProperties}
       />
-      {!accent && <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#333338] to-transparent" />}
+      {!accent && <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-text-ghost)] to-transparent" />}
       {accent && (
         <div
           className="absolute inset-x-0 top-0 h-px"

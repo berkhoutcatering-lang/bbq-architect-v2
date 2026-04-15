@@ -22,7 +22,7 @@ export default function VariablePicker({ documentType, onInsert }: Props) {
         style={{
           display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
           borderRadius: 6, background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.2)',
-          cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#3b82f6',
+          cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--blue)',
         }}
       >
         <Variable size={12} /> Variabele

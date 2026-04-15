@@ -5,11 +5,14 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { printHaccpLabel } from '@/lib/printLabel';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import MetallicCard from '@/components/MetallicCard';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Recept, InventoryItem } from '@/types';
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Coins, List, Plus, Printer, Save, Trash2, Users, UtensilsCrossed } from 'lucide-react';
 
@@ -18,12 +21,18 @@ export default function Recepten() {
     const { data: inventory } = useSupabase<InventoryItem>('inventory', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const { errors, validateAll, clearError, fieldProps } = useFormValidation({
+        naam: [{ required: 'Vul een naam in' }],
+        categorie: [{ required: 'Kies een categorie' }],
+    });
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [filter, setFilter] = useState('Alles');
     const [kitchenMode, setKitchenMode] = useState<Recept | null>(null);
     const [kitchenStep, setKitchenStep] = useState(0);
     const [isMobile, setIsMobile] = useState(false);
+    const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
+    const [followUpTitle, setFollowUpTitle] = useState('');
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -45,10 +54,18 @@ export default function Recepten() {
     }
 
     function saveRecept() {
-        if (!form!.naam) { showToast('Vul een naam in', 'error'); return; }
-        if (!form!.categorie) { showToast('Kies een categorie', 'error'); return; }
+        if (!validateAll({ naam: form!.naam, categorie: form!.categorie })) return;
         if (editing === 'new') {
-            insert(form!).then(function () { showToast('Recept aangemaakt', 'success'); setEditing(null); setForm(null); });
+            insert(form!).then(function () {
+                showToast('Recept aangemaakt', 'success');
+                setFollowUpActions([
+                    { icon: '\ud83c\udf7d\ufe0f', label: 'Aan menu toevoegen', href: '/menu-engineering' },
+                    { icon: '\ud83d\udcdd', label: 'Nog een recept toevoegen', onClick: function() { newRecept(); } },
+                    { icon: '\ud83d\udcca', label: 'Kostprijs bekijken', href: '/gerechten' },
+                ]);
+                setFollowUpTitle('Recept aangemaakt!');
+                setEditing(null); setForm(null);
+            });
         } else {
             const { id, created_at, ...rest } = form!;
             update(editing as number, rest).then(function () { showToast('Recept bijgewerkt', 'success'); setEditing(null); setForm(null); });
@@ -188,15 +205,17 @@ export default function Recepten() {
                         <div className="form-grid">
                             <div className="field full">
                                 <label>Naam</label>
-                                <input value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('naam', e.target.value); }} />
+                                <input name="naam" value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('naam', e.target.value); clearError('naam'); }} style={errors.naam ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} />
+                                <FieldError message={errors.naam} fieldName="naam" />
                             </div>
                             <div className="field">
                                 <label>Categorie</label>
-                                <select value={form.categorie} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('categorie', e.target.value); }}>
+                                <select name="categorie" value={form.categorie} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('categorie', e.target.value); clearError('categorie'); }} style={errors.categorie ? { borderColor: 'var(--red)' } : {}} {...fieldProps('categorie', form.categorie)}>
                                     {['Vlees', 'Vis', 'Bijgerecht', 'Saus', 'Dessert', 'Drank'].map(function (c) {
                                         return <option key={c} value={c}>{c}</option>;
                                     })}
                                 </select>
+                                <FieldError message={errors.categorie} fieldName="categorie" />
                             </div>
                             <div className="field">
                                 <label>Porties</label>
@@ -251,7 +270,7 @@ export default function Recepten() {
                             </button>
                             {editing !== 'new' && (
                                 <>
-                                    <button className="btn" style={{ background: '#10b981', color: '#fff', border: 'none' }} onClick={function () {
+                                    <button className="btn" style={{ background: 'var(--emerald)', color: '#fff', border: 'none' }} onClick={function () {
                                         printHaccpLabel({
                                             titel: form.naam,
                                             allergenen: detectAllergenen(form.ingredienten),
@@ -421,6 +440,14 @@ export default function Recepten() {
                 })}
             </div>
             </PageSection>
+            {followUpActions && (
+                <FollowUpPrompt
+                    title={followUpTitle}
+                    actions={followUpActions}
+                    onDismiss={function () { setFollowUpActions(null); }}
+                    autoHideMs={15000}
+                />
+            )}
         </>
     );
 }

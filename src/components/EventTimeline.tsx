@@ -48,9 +48,9 @@ export default function EventTimeline({ eventStatus, hasOfferte, hasFactuur, has
     steps.push({ key: 'reflectie', label: 'Reflectie', icon: Star, status: reflectieStatus, detail: hasReflectie ? 'Ingevuld' : '' });
 
     const statusColors = {
-        done: { bg: 'rgba(34,197,94,0.15)', border: '#22c55e', text: '#22c55e', line: '#22c55e' },
-        active: { bg: 'rgba(196,163,90,0.15)', border: '#c4a35a', text: '#c4a35a', line: 'rgba(130,130,130,0.2)' },
-        upcoming: { bg: 'rgba(130,130,130,0.06)', border: 'rgba(130,130,130,0.15)', text: '#555558', line: 'rgba(130,130,130,0.1)' },
+        done: { bg: 'rgba(34,197,94,0.15)', border: 'var(--green)', text: 'var(--green)', line: 'var(--green)' },
+        active: { bg: 'color-mix(in srgb, var(--color-accent-gold) 15%, transparent)', border: 'var(--color-accent-gold)', text: 'var(--color-accent-gold)', line: 'rgba(130,130,130,0.2)' },
+        upcoming: { bg: 'rgba(130,130,130,0.06)', border: 'var(--border)', text: 'var(--color-text-muted)', line: 'var(--muted-extra-light)' },
     };
 
     return (
@@ -94,7 +94,7 @@ export default function EventTimeline({ eventStatus, hasOfferte, hasFactuur, has
                                     flex: 1,
                                     height: 2,
                                     marginTop: 14,
-                                    background: step.status === 'done' ? colors.line : 'rgba(130,130,130,0.1)',
+                                    background: step.status === 'done' ? colors.line : 'var(--muted-extra-light)',
                                     borderRadius: 1,
                                     transition: 'background 0.3s',
                                 }} />

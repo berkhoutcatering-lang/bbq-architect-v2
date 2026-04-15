@@ -35,7 +35,7 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
 };
 
-function PillSelect({ options, value, onChange, color = '#3b82f6' }: { options: string[]; value: string; onChange: (v: string) => void; color?: string }) {
+function PillSelect({ options, value, onChange, color = 'var(--blue)' }: { options: string[]; value: string; onChange: (v: string) => void; color?: string }) {
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {options.map(function (opt) {
@@ -264,7 +264,7 @@ export default function KlantGesprek() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(196,163,90,.1)', border: '1px solid rgba(196,163,90,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <HeartHandshake className="w-5 h-5 text-[#c4a35a]" />
+          <HeartHandshake className="w-5 h-5 text-[var(--color-accent-gold)]" />
         </div>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 300, color: 'white', letterSpacing: '-0.02em' }}>Klantgesprek</h1>
@@ -284,20 +284,20 @@ export default function KlantGesprek() {
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
                   fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', border: 'none', cursor: i <= step ? 'pointer' : 'default',
                   background: i === step ? 'rgba(59,130,246,.1)' : 'transparent',
-                  color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
+                  color: i === step ? 'var(--blue)' : i < step ? 'var(--emerald)' : 'var(--muted-light)',
                 }}>
                 <span style={{
                   width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 12, fontWeight: 700, border: '1.5px solid',
-                  borderColor: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--border)',
+                  borderColor: i === step ? 'var(--blue)' : i < step ? 'var(--emerald)' : 'var(--border)',
                   background: i < step ? 'rgba(16,185,129,.1)' : i === step ? 'rgba(59,130,246,.1)' : 'transparent',
-                  color: i === step ? '#3b82f6' : i < step ? '#10b981' : 'var(--muted-light)',
+                  color: i === step ? 'var(--blue)' : i < step ? 'var(--emerald)' : 'var(--muted-light)',
                 }}>
                   {i < step ? <Check size={10} /> : i + 1}
                 </span>
                 <span className="hidden sm:inline">{s.label}</span>
               </button>
-              {i < STEPS.length - 1 && <div style={{ width: 16, height: 1, background: i < step ? '#10b981' : 'var(--border)', flexShrink: 0 }} />}
+              {i < STEPS.length - 1 && <div style={{ width: 16, height: 1, background: i < step ? 'var(--emerald)' : 'var(--border)', flexShrink: 0 }} />}
             </React.Fragment>
           );
         })}
@@ -305,9 +305,9 @@ export default function KlantGesprek() {
 
       {/* ═══════════════ STAP 1: KLANT ═══════════════ */}
       {step === 0 && (
-        <MetallicCard className="p-5 md:p-7" hover={false} accent="#c4a35a">
+        <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--color-accent-gold)">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <Users size={16} className="text-[#c4a35a]" />
+            <Users size={16} className="text-[var(--color-accent-gold)]" />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Klantgegevens</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -325,7 +325,7 @@ export default function KlantGesprek() {
             </div>
             <div><label style={labelStyle}>Adres</label><input value={klant.adres} onChange={function (e) { setKlant(function (p) { return Object.assign({}, p, { adres: e.target.value }); }); }} style={inputStyle} /></div>
             <div><label style={labelStyle}>Type klant</label>
-              <PillSelect options={['Particulier', 'Zakelijk', 'Festival']} value={klant.type} onChange={function (v) { setKlant(function (p) { return Object.assign({}, p, { type: v }); }); }} color="#c4a35a" />
+              <PillSelect options={['Particulier', 'Zakelijk', 'Festival']} value={klant.type} onChange={function (v) { setKlant(function (p) { return Object.assign({}, p, { type: v }); }); }} color="var(--color-accent-gold)" />
             </div>
           </div>
         </MetallicCard>
@@ -333,9 +333,9 @@ export default function KlantGesprek() {
 
       {/* ═══════════════ STAP 2: EVENT ═══════════════ */}
       {step === 1 && (
-        <MetallicCard className="p-5 md:p-7" hover={false} accent="#3b82f6">
+        <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--blue)">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <Calendar size={16} className="text-[#3b82f6]" />
+            <Calendar size={16} className="text-[var(--blue)]" />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Eventdetails</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -353,7 +353,7 @@ export default function KlantGesprek() {
               <div><label style={labelStyle}>Eindtijd</label><input type="time" value={event.eindTijd} onChange={function (e) { setEvent(function (p) { return Object.assign({}, p, { eindTijd: e.target.value }); }); }} style={inputStyle} /></div>
             </div>
             <div><label style={labelStyle}>Binnen of buiten?</label>
-              <PillSelect options={['Buiten', 'Binnen', 'Combinatie']} value={event.binnenBuiten} onChange={function (v) { setEvent(function (p) { return Object.assign({}, p, { binnenBuiten: v }); }); }} color="#3b82f6" />
+              <PillSelect options={['Buiten', 'Binnen', 'Combinatie']} value={event.binnenBuiten} onChange={function (v) { setEvent(function (p) { return Object.assign({}, p, { binnenBuiten: v }); }); }} color="var(--blue)" />
             </div>
           </div>
         </MetallicCard>
@@ -361,13 +361,13 @@ export default function KlantGesprek() {
 
       {/* ═══════════════ STAP 3: MENU ═══════════════ */}
       {step === 2 && (
-        <MetallicCard className="p-5 md:p-7" hover={false} accent="#10b981">
+        <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--emerald)">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <UtensilsCrossed size={16} className="text-emerald-400" />
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Menu wensen</span>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>{totalMenuDishes} gekozen</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--emerald)' }}>{totalMenuDishes} gekozen</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {sortedGangen.length === 0 ? (
@@ -393,8 +393,8 @@ export default function KlantGesprek() {
                         }} style={{
                           padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
                           background: isSelected ? 'rgba(16,185,129,.12)' : 'var(--bg)',
-                          border: isSelected ? '1px solid #10b981' : '1px solid var(--border)',
-                          color: isSelected ? '#10b981' : 'var(--text)',
+                          border: isSelected ? '1px solid var(--emerald)' : '1px solid var(--border)',
+                          color: isSelected ? 'var(--emerald)' : 'var(--text)',
                         }}>
                           {isSelected && <Check size={10} style={{ display: 'inline', marginRight: 4 }} />}{g.naam}
                         </button>
@@ -411,7 +411,7 @@ export default function KlantGesprek() {
                 <label style={labelStyle}>Allergieen & dieetwensen per gast</label>
                 <button onClick={function () {
                   setGastenDieet(function (prev) { return prev.concat([{ id: Date.now(), label: 'Gast ' + (prev.length + 1), allergenen: [], dieet: 'geen' }]); });
-                }} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', color: '#10b981', cursor: 'pointer' }}>
+                }} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', color: 'var(--emerald)', cursor: 'pointer' }}>
                   + Gast met allergie/dieet
                 </button>
               </div>
@@ -445,8 +445,8 @@ export default function KlantGesprek() {
                             }} style={{
                               padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                               background: active ? 'rgba(16,185,129,.12)' : 'transparent',
-                              border: active ? '1px solid #10b981' : '1px solid var(--border)',
-                              color: active ? '#10b981' : 'var(--muted)',
+                              border: active ? '1px solid var(--emerald)' : '1px solid var(--border)',
+                              color: active ? 'var(--emerald)' : 'var(--muted)',
                             }}>
                               {d.icon ? d.icon + ' ' : ''}{d.label}
                             </button>
@@ -474,7 +474,7 @@ export default function KlantGesprek() {
                               padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                               background: active ? 'rgba(239,68,68,.1)' : 'transparent',
                               border: active ? '1px solid rgba(239,68,68,.4)' : '1px solid var(--border)',
-                              color: active ? '#ef4444' : 'var(--muted-light)',
+                              color: active ? 'var(--red)' : 'var(--muted-light)',
                             }}>
                               {a.icon} {a.label}
                             </button>
@@ -489,7 +489,7 @@ export default function KlantGesprek() {
               {/* Dieet samenvatting */}
               {totalVegaMenu > 0 && (
                 <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.15)', marginTop: 8, fontSize: 12 }}>
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>🌿 {totalVegaMenu} gasten vega menu</span>
+                  <span style={{ color: 'var(--emerald)', fontWeight: 700 }}>🌿 {totalVegaMenu} gasten vega menu</span>
                   <span style={{ color: 'var(--muted)', marginLeft: 8 }}>({event.vegaGasten} vega + {allergieGastenNeedVega} allergie-fallback + {vegaGastenFromDieet} dieet)</span>
                   <span style={{ color: 'var(--muted)', marginLeft: 8 }}>• 🍖 {totalNormaalMenu} normaal</span>
                 </div>
@@ -506,9 +506,9 @@ export default function KlantGesprek() {
 
       {/* ═══════════════ STAP 4: BUDGET ═══════════════ */}
       {step === 3 && (
-        <MetallicCard className="p-5 md:p-7" hover={false} accent="#c4a35a">
+        <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--color-accent-gold)">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <Euro size={16} className="text-[#c4a35a]" />
+            <Euro size={16} className="text-[var(--color-accent-gold)]" />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Budget & verwachtingen</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -518,16 +518,16 @@ export default function KlantGesprek() {
                 <input type="number" step="0.50" value={budget.ppp} onChange={function (e) { setBudget(function (p) { return Object.assign({}, p, { ppp: parseFloat(e.target.value) || 0 }); }); }} style={Object.assign({}, inputStyle, { fontSize: 20, fontWeight: 300, textAlign: 'center' as const, maxWidth: 120 })} />
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   <div style={{ fontSize: 12, color: 'var(--muted)' }}>Geschat totaal</div>
-                  <div style={{ fontSize: 22, fontWeight: 300, color: '#c4a35a' }}>{fmt(totaalBedrag)}</div>
+                  <div style={{ fontSize: 22, fontWeight: 300, color: 'var(--color-accent-gold)' }}>{fmt(totaalBedrag)}</div>
                   <div style={{ fontSize: 12, color: 'var(--muted-light)' }}>{event.gasten} gasten × {fmt(budget.ppp)}</div>
                 </div>
               </div>
             </div>
             <div><label style={labelStyle}>Dranken</label>
-              <PillSelect options={['Inclusief', 'Eigen regeling', 'Apart bespreken']} value={budget.dranken} onChange={function (v) { setBudget(function (p) { return Object.assign({}, p, { dranken: v }); }); }} color="#c4a35a" />
+              <PillSelect options={['Inclusief', 'Eigen regeling', 'Apart bespreken']} value={budget.dranken} onChange={function (v) { setBudget(function (p) { return Object.assign({}, p, { dranken: v }); }); }} color="var(--color-accent-gold)" />
             </div>
             <div><label style={labelStyle}>Serveerwijze</label>
-              <PillSelect options={['Buffet', 'Bediend', 'Walking Dinner', 'BBQ Live Cooking']} value={budget.serveerwijze} onChange={function (v) { setBudget(function (p) { return Object.assign({}, p, { serveerwijze: v }); }); }} color="#c4a35a" />
+              <PillSelect options={['Buffet', 'Bediend', 'Walking Dinner', 'BBQ Live Cooking']} value={budget.serveerwijze} onChange={function (v) { setBudget(function (p) { return Object.assign({}, p, { serveerwijze: v }); }); }} color="var(--color-accent-gold)" />
             </div>
             <div><label style={labelStyle}>Extra benodigdheden</label>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -538,8 +538,8 @@ export default function KlantGesprek() {
                       style={{
                         padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                         background: checked ? 'rgba(196,163,90,.1)' : 'transparent',
-                        border: checked ? '2px solid #c4a35a' : '1px solid var(--border)',
-                        color: checked ? '#c4a35a' : 'var(--muted)',
+                        border: checked ? '2px solid var(--color-accent-gold)' : '1px solid var(--border)',
+                        color: checked ? 'var(--color-accent-gold)' : 'var(--muted)',
                       }}>
                       {checked ? '✓ ' : ''}{item.label}
                     </button>
@@ -553,9 +553,9 @@ export default function KlantGesprek() {
 
       {/* ═══════════════ STAP 5: NOTITIES ═══════════════ */}
       {step === 4 && (
-        <MetallicCard className="p-5 md:p-7" hover={false} accent="#8b8bf0">
+        <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--indigo)">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <StickyNote size={16} className="text-[#8b8bf0]" />
+            <StickyNote size={16} className="text-[var(--indigo)]" />
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Notities & opvolging</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -563,7 +563,7 @@ export default function KlantGesprek() {
             <div><label style={labelStyle}>Locatie-aantekeningen</label><textarea rows={2} value={notities.locatieNotes} onChange={function (e) { setNotities(function (p) { return Object.assign({}, p, { locatieNotes: e.target.value }); }); }} style={Object.assign({}, inputStyle, { resize: 'vertical' as const })} placeholder="Stroom aanwezig? Ondergrond? Overkapping?" /></div>
             <div>
               <label style={labelStyle}>Heeft de klant al andere offertes?</label>
-              <PillSelect options={['Nee', 'Ja', 'Weet niet']} value={notities.concurrentie} onChange={function (v) { setNotities(function (p) { return Object.assign({}, p, { concurrentie: v }); }); }} color="#8b8bf0" />
+              <PillSelect options={['Nee', 'Ja', 'Weet niet']} value={notities.concurrentie} onChange={function (v) { setNotities(function (p) { return Object.assign({}, p, { concurrentie: v }); }); }} color="var(--indigo)" />
               {notities.concurrentie === 'Ja' && (
                 <input value={notities.concurrentieDetail} onChange={function (e) { setNotities(function (p) { return Object.assign({}, p, { concurrentieDetail: e.target.value }); }); }} style={Object.assign({}, inputStyle, { marginTop: 8 })} placeholder="Van wie? Welk bedrag?" />
               )}
@@ -576,18 +576,18 @@ export default function KlantGesprek() {
       {/* ═══════════════ STAP 6: OVERZICHT ═══════════════ */}
       {step === 5 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <MetallicCard className="p-5" hover={false} accent="#10b981">
+          <MetallicCard className="p-5" hover={false} accent="var(--emerald)">
             <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: 12, display: 'block' }}>Samenvatting</span>
 
             {[
-              { icon: <Users size={14} className="text-[#c4a35a]" />, label: klant.naam + (klant.bedrijf ? ' (' + klant.bedrijf + ')' : ''), sub: [klant.telefoon, klant.email, klant.type].filter(Boolean).join(' • ') },
-              { icon: <Calendar size={14} className="text-[#3b82f6]" />, label: event.naam || klant.naam, sub: event.datum + ' • ' + event.gasten + ' gasten • ' + event.locatie },
+              { icon: <Users size={14} className="text-[var(--color-accent-gold)]" />, label: klant.naam + (klant.bedrijf ? ' (' + klant.bedrijf + ')' : ''), sub: [klant.telefoon, klant.email, klant.type].filter(Boolean).join(' • ') },
+              { icon: <Calendar size={14} className="text-[var(--blue)]" />, label: event.naam || klant.naam, sub: event.datum + ' • ' + event.gasten + ' gasten • ' + event.locatie },
               { icon: <Clock size={14} className="text-[var(--muted)]" />, label: event.startTijd + ' – ' + event.eindTijd, sub: event.binnenBuiten },
               { icon: <UtensilsCrossed size={14} className="text-emerald-400" />, label: totalMenuDishes + ' gerechten', sub: Object.entries(menuSelectie).map(function (e) { return e[1].length + '× ' + e[0]; }).join(', ') || 'Geen menu gekozen' },
-              { icon: <Euro size={14} className="text-[#c4a35a]" />, label: fmt(totaalBedrag), sub: event.gasten + ' × ' + fmt(budget.ppp) + ' • ' + budget.dranken + ' • ' + budget.serveerwijze },
+              { icon: <Euro size={14} className="text-[var(--color-accent-gold)]" />, label: fmt(totaalBedrag), sub: event.gasten + ' × ' + fmt(budget.ppp) + ' • ' + budget.dranken + ' • ' + budget.serveerwijze },
             ].map(function (row, i) {
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: '#0e0e10', marginBottom: 6 }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--color-bg-deep)', marginBottom: 6 }}>
                   <div style={{ flexShrink: 0 }}>{row.icon}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.label}</div>
@@ -602,15 +602,15 @@ export default function KlantGesprek() {
               <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(16,185,129,.05)', border: '1px solid rgba(16,185,129,.12)', marginTop: 8, fontSize: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ color: 'white', fontWeight: 600 }}>🍖 Normaal menu: {totalNormaalMenu} personen</span>
-                  <span style={{ color: '#10b981', fontWeight: 600 }}>🌿 Vega menu: {totalVegaMenu} personen</span>
+                  <span style={{ color: 'var(--emerald)', fontWeight: 600 }}>🌿 Vega menu: {totalVegaMenu} personen</span>
                 </div>
                 {gastenDieet.map(function (g) {
                   const allergenLabels = g.allergenen.map(function (code) { const a = ALLERGENEN.find(function (x) { return x.code === code; }); return a ? a.icon + ' ' + a.label : code; });
                   const dieetLabel = g.dieet !== 'geen' ? (DIEETWENSEN.find(function (d) { return d.code === g.dieet; })?.label || g.dieet) : '';
                   return (
                     <div key={g.id} style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      <span style={{ fontWeight: 600, color: '#ef4444' }}>{g.label}:</span>{' '}
-                      {dieetLabel && <span style={{ color: '#10b981' }}>{dieetLabel}</span>}
+                      <span style={{ fontWeight: 600, color: 'var(--red)' }}>{g.label}:</span>{' '}
+                      {dieetLabel && <span style={{ color: 'var(--emerald)' }}>{dieetLabel}</span>}
                       {dieetLabel && allergenLabels.length > 0 && ' + '}
                       {allergenLabels.join(', ')}
                       <span style={{ color: 'var(--muted-light)' }}> → vega menu</span>
@@ -621,20 +621,20 @@ export default function KlantGesprek() {
             )}
 
             {menuExtra.speciale_wensen && (
-              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,.05)', border: '1px solid rgba(239,68,68,.1)', marginTop: 8, fontSize: 12, color: '#ef4444' }}>
+              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,.05)', border: '1px solid rgba(239,68,68,.1)', marginTop: 8, fontSize: 12, color: 'var(--red)' }}>
                 Wensen: {menuExtra.speciale_wensen}
               </div>
             )}
 
             {notities.tekst && (
-              <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: '#0e0e10', fontSize: 12, color: 'var(--muted)' }}>
+              <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'var(--color-bg-deep)', fontSize: 12, color: 'var(--muted)' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted-light)', marginBottom: 4, textTransform: 'uppercase' }}>Notities</div>
                 {notities.tekst.slice(0, 200)}{notities.tekst.length > 200 ? '...' : ''}
               </div>
             )}
 
             {notities.followUp && (
-              <div style={{ marginTop: 8, fontSize: 12, color: '#8b8bf0' }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--indigo)' }}>
                 <Clock size={10} style={{ display: 'inline', marginRight: 4 }} />
                 Follow-up: {notities.followUp}
               </div>
@@ -646,7 +646,7 @@ export default function KlantGesprek() {
             <button onClick={saveAsConceptOfferte} disabled={saving}
               style={{
                 width: '100%', padding: '16px 24px', borderRadius: 14, fontSize: 15, fontWeight: 700,
-                background: 'linear-gradient(135deg, #c4a35a, #a8893e)', color: '#000',
+                background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)', color: '#000',
                 border: 'none', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1,
               }}>
               {saving ? 'Bezig...' : 'Opslaan als Concept Offerte + Event'}
@@ -690,7 +690,7 @@ export default function KlantGesprek() {
           }} disabled={!canProceed()}
             style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-              background: canProceed() ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'var(--card-solid)',
+              background: canProceed() ? 'linear-gradient(135deg, var(--blue), #2563eb)' : 'var(--card-solid)',
               border: canProceed() ? 'none' : '1px solid var(--border)',
               color: canProceed() ? 'white' : 'var(--muted)', cursor: canProceed() ? 'pointer' : 'not-allowed',
             }}>

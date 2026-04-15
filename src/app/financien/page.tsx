@@ -137,8 +137,8 @@ export default function Financien() {
 
     if (offertesLoading) {
         return (
-            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }

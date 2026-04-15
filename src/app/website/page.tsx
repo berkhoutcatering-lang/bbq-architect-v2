@@ -18,13 +18,13 @@ const STORAGE_URL = 'https://oheilybckvtsczmbczot.supabase.co/storage/v1/object/
 
 /* ── Shared styles ── */
 const S = {
-    btn: 'px-4 py-2 rounded-lg text-sm font-medium bg-[#3b82f6] text-white hover:bg-[#2563eb] transition-colors',
-    btnSm: 'px-3 py-1.5 rounded-lg text-xs font-medium bg-[#3b82f6] text-white hover:bg-[#2563eb] transition-colors',
-    btnOutline: 'px-4 py-2 rounded-lg text-sm font-medium border border-[#333] text-[var(--muted)] hover:text-white hover:border-[#555] transition-colors',
+    btn: 'px-4 py-2 rounded-lg text-sm font-medium bg-[var(--blue)] text-white hover:bg-[#2563eb] transition-colors',
+    btnSm: 'px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--blue)] text-white hover:bg-[#2563eb] transition-colors',
+    btnOutline: 'px-4 py-2 rounded-lg text-sm font-medium border border-[var(--color-text-ghost)] text-[var(--muted)] hover:text-white hover:border-[var(--color-text-muted)] transition-colors',
     btnIcon: 'w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors',
-    inp: 'w-full bg-[#111114] border border-[#222] rounded-lg px-3 py-2.5 text-white text-sm placeholder:text-[#555] focus:outline-none focus:border-[#3b82f6]/50 transition-colors',
+    inp: 'w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg px-3 py-2.5 text-white text-sm placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--blue)]/50 transition-colors',
     lbl: 'block text-xs font-semibold uppercase tracking-wider text-[var(--muted)] mb-1.5',
-    card: 'bg-[#111114] border border-[#1a1a1e] rounded-xl',
+    card: 'bg-[var(--color-bg-primary)] border border-[var(--sidebar-bg-hover)] rounded-xl',
 };
 
 /* ── Upload helper ── */
@@ -100,8 +100,8 @@ export default function WebsiteBeheer() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-[#121215] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[#c4a35a] animate-pulse" />
+            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
+                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
             </div>
         );
     }
@@ -113,8 +113,8 @@ export default function WebsiteBeheer() {
             {/* Header */}
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-1">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#3b82f6]/20 to-[#3b82f6]/5 flex items-center justify-center">
-                        <Globe size={14} className="text-[#3b82f6]" />
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--blue)]/20 to-[var(--blue)]/5 flex items-center justify-center">
+                        <Globe size={14} className="text-[var(--blue)]" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Website Beheer</h1>
@@ -130,10 +130,10 @@ export default function WebsiteBeheer() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 mb-6 bg-[#111114] p-1 rounded-xl w-fit">
+            <div className="flex gap-1 mb-6 bg-[var(--color-bg-primary)] p-1 rounded-xl w-fit">
                 {tabs.map(t => (
                     <button key={t.key}
-                        className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-[#3b82f6]/15 text-white shadow-sm' : 'text-[var(--muted)] hover:text-white hover:bg-white/5'}`}
+                        className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-[var(--blue)]/15 text-white shadow-sm' : 'text-[var(--muted)] hover:text-white hover:bg-white/5'}`}
                         onClick={() => { setTab(t.key); cancelEdit(); }}>
                         <t.icon size={14} className="inline mr-2" />{t.label}
                     </button>
@@ -245,7 +245,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
             {uploading && (
                 <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
                     <div className={`${S.card} p-6 flex items-center gap-3`}>
-                        <div className="w-5 h-5 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-[var(--blue)] border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-white text-sm">Uploading...</span>
                     </div>
                 </div>
@@ -266,7 +266,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
 
                 {/* Drop zone */}
                 <div
-                    className={`border-2 border-dashed rounded-xl p-6 mb-4 transition-colors text-center cursor-pointer ${dragOverHero ? 'border-[#3b82f6] bg-[#3b82f6]/5' : 'border-[#333] hover:border-[#555]'}`}
+                    className={`border-2 border-dashed rounded-xl p-6 mb-4 transition-colors text-center cursor-pointer ${dragOverHero ? 'border-[var(--blue)] bg-[var(--blue)]/5' : 'border-[var(--color-text-ghost)] hover:border-[var(--color-text-muted)]'}`}
                     onClick={() => heroInputRef.current?.click()}
                     onDrop={e => onDrop(e, handleHeroUpload, setDragOverHero)}
                     onDragOver={e => onDragOver(e, setDragOverHero)}
@@ -281,7 +281,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {sortedHero.map((item: any) => (
                         <div key={item.id} className={`${S.card} overflow-hidden transition-opacity ${!item.actief ? 'opacity-40' : ''}`}>
-                            <div className="aspect-video bg-[#0a0a0c] relative group">
+                            <div className="aspect-video bg-[var(--color-bg-darker)] relative group">
                                 <img src={item.src} alt={item.alt} className="w-full h-full object-cover" onError={(e: any) => { e.target.src = ''; e.target.alt = 'Laden mislukt'; }} />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <label className={`${S.btnSm} cursor-pointer`}>
@@ -298,7 +298,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                         <div className="flex gap-2">
                                             <input className={`${S.inp} w-20`} type="number" value={heroForm.volgorde ?? 0} onChange={e => setHeroForm(p => ({ ...p, volgorde: parseInt(e.target.value) || 0 }))} />
                                             <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white">
-                                                <input type="checkbox" checked={heroForm.actief ?? true} onChange={e => setHeroForm(p => ({ ...p, actief: e.target.checked }))} className="accent-[#3b82f6]" />Actief
+                                                <input type="checkbox" checked={heroForm.actief ?? true} onChange={e => setHeroForm(p => ({ ...p, actief: e.target.checked }))} className="accent-[var(--blue)]" />Actief
                                             </label>
                                         </div>
                                         <div className="flex gap-1">
@@ -354,7 +354,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
 
                 {/* Drop zone */}
                 <div
-                    className={`border-2 border-dashed rounded-xl p-6 mb-4 transition-colors text-center cursor-pointer ${dragOverGallery ? 'border-[#3b82f6] bg-[#3b82f6]/5' : 'border-[#333] hover:border-[#555]'}`}
+                    className={`border-2 border-dashed rounded-xl p-6 mb-4 transition-colors text-center cursor-pointer ${dragOverGallery ? 'border-[var(--blue)] bg-[var(--blue)]/5' : 'border-[var(--color-text-ghost)] hover:border-[var(--color-text-muted)]'}`}
                     onClick={() => galleryInputRef.current?.click()}
                     onDrop={e => onDrop(e, handleGalleryUpload, setDragOverGallery)}
                     onDragOver={e => onDragOver(e, setDragOverGallery)}
@@ -375,7 +375,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {items.map((item: any) => (
                                     <div key={item.id} className={`${S.card} overflow-hidden transition-opacity ${!item.actief ? 'opacity-40' : ''}`}>
-                                        <div className="aspect-video bg-[#0a0a0c] relative group">
+                                        <div className="aspect-video bg-[var(--color-bg-darker)] relative group">
                                             <img src={item.src} alt={item.label} className="w-full h-full object-cover" onError={(e: any) => { e.target.style.display = 'none'; }} />
                                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                                 <label className={`${S.btnSm} cursor-pointer`}>
@@ -395,7 +395,7 @@ function AfbeeldingenTab({ hero, gallery, showToast, showConfirm, S }: any) {
                                                     <div className="flex gap-2">
                                                         <input className={`${S.inp} w-20`} type="number" value={galleryForm.volgorde ?? 0} onChange={e => setGalleryForm(p => ({ ...p, volgorde: parseInt(e.target.value) || 0 }))} placeholder="Volgorde" />
                                                         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white">
-                                                            <input type="checkbox" checked={galleryForm.actief ?? true} onChange={e => setGalleryForm(p => ({ ...p, actief: e.target.checked }))} className="accent-[#3b82f6]" />Actief
+                                                            <input type="checkbox" checked={galleryForm.actief ?? true} onChange={e => setGalleryForm(p => ({ ...p, actief: e.target.checked }))} className="accent-[var(--blue)]" />Actief
                                                         </label>
                                                     </div>
                                                     <div className="flex gap-1">
@@ -460,7 +460,7 @@ function FaqTab({ faq, editId, form, f, startEdit, cancelEdit, saveItem, toggleA
             </div>
 
             {editId !== null && (
-                <div className={`${S.card} p-5 mb-6 border-[#3b82f6]/30`}>
+                <div className={`${S.card} p-5 mb-6 border-[var(--blue)]/30`}>
                     <h4 className="text-white font-semibold mb-4">{editId === -1 ? 'Nieuwe FAQ' : 'FAQ Bewerken'}</h4>
                     <div className="space-y-3">
                         <div><label className={S.lbl}>Vraag</label><input className={S.inp} value={form.vraag || ''} onChange={(e: any) => f('vraag', e.target.value)} /></div>
@@ -468,7 +468,7 @@ function FaqTab({ faq, editId, form, f, startEdit, cancelEdit, saveItem, toggleA
                         <div className="flex gap-4">
                             <div className="flex-1"><label className={S.lbl}>Volgorde</label><input className={S.inp} type="number" value={form.volgorde ?? 0} onChange={(e: any) => f('volgorde', parseInt(e.target.value) || 0)} /></div>
                             <div className="flex items-end pb-1">
-                                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[#3b82f6]" /><span className="text-sm text-white">Zichtbaar</span></label>
+                                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[var(--blue)]" /><span className="text-sm text-white">Zichtbaar</span></label>
                             </div>
                         </div>
                         <div className="flex gap-2 pt-2">
@@ -519,7 +519,7 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
             </div>
 
             {editId !== null && (
-                <div className={`${S.card} p-5 mb-6 border-[#3b82f6]/30`}>
+                <div className={`${S.card} p-5 mb-6 border-[var(--blue)]/30`}>
                     <h4 className="text-white font-semibold mb-4">{editId === -1 ? 'Nieuwe foto' : 'Foto Bewerken'}</h4>
                     <div className="space-y-3">
                         <div><label className={S.lbl}>Afbeelding URL</label><input className={S.inp} value={form.src || ''} onChange={(e: any) => f('src', e.target.value)} placeholder="https://..." /></div>
@@ -531,7 +531,7 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
                                 </select>
                             </div>
                             <div className="w-24"><label className={S.lbl}>Volgorde</label><input className={S.inp} type="number" value={form.volgorde ?? 0} onChange={(e: any) => f('volgorde', parseInt(e.target.value) || 0)} /></div>
-                            <div className="flex items-end pb-1"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[#3b82f6]" /><span className="text-sm text-white">Zichtbaar</span></label></div>
+                            <div className="flex items-end pb-1"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[var(--blue)]" /><span className="text-sm text-white">Zichtbaar</span></label></div>
                         </div>
                         <div className="flex gap-2 pt-2">
                             <button className={S.btn} onClick={() => saveItem(gallery, 'Foto')}>Opslaan</button>
@@ -550,7 +550,7 @@ function GalerijTab({ gallery, editId, form, f, startEdit, cancelEdit, saveItem,
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {items.map((item: any) => (
                                 <div key={item.id} className={`${S.card} p-3 transition-opacity ${!item.actief ? 'opacity-40' : ''}`}>
-                                    <div className="aspect-video bg-[#1a1a20] rounded-lg mb-2 overflow-hidden flex items-center justify-center">
+                                    <div className="aspect-video bg-[var(--sidebar-bg-hover)] rounded-lg mb-2 overflow-hidden flex items-center justify-center">
                                         {item.src ? (
                                             <img src={item.src} alt={item.label} className="w-full h-full object-cover" onError={(e: any) => { e.target.style.display = 'none'; }} />
                                         ) : (
@@ -616,7 +616,7 @@ function AllergenCheckboxes({ selected, onChange }: { selected: string[]; onChan
     return (
         <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5">
             {ALLERGENEN.map(a => (
-                <label key={a.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${current.includes(a.code) ? 'bg-orange-900/30 text-orange-300 border border-orange-600/40' : 'bg-[#1a1a1e] text-[var(--muted)] border border-transparent hover:border-[#333]'}`}>
+                <label key={a.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${current.includes(a.code) ? 'bg-orange-900/30 text-orange-300 border border-orange-600/40' : 'bg-[var(--sidebar-bg-hover)] text-[var(--muted)] border border-transparent hover:border-[var(--color-text-ghost)]'}`}>
                     <input type="checkbox" className="hidden" checked={current.includes(a.code)} onChange={() => {
                         onChange(current.includes(a.code) ? current.filter(x => x !== a.code) : [...current, a.code]);
                     }} />
@@ -660,13 +660,13 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
         <div>
             {uploading && (
                 <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-                    <div className={`${S.card} p-6 flex items-center gap-3`}><div className="w-5 h-5 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin"></div><span className="text-white text-sm">Foto uploaden...</span></div>
+                    <div className={`${S.card} p-6 flex items-center gap-3`}><div className="w-5 h-5 border-2 border-[var(--blue)] border-t-transparent rounded-full animate-spin"></div><span className="text-white text-sm">Foto uploaden...</span></div>
                 </div>
             )}
 
             <div className="flex items-center justify-between mb-4">
                 <div>
-                    <p className="text-[var(--muted)] text-sm">Website Signature Menu — aparte gerechten tabel (<code className="text-[10px] bg-[#1a1a1e] px-1 py-0.5 rounded">website_gerechten</code>)</p>
+                    <p className="text-[var(--muted)] text-sm">Website Signature Menu — aparte gerechten tabel (<code className="text-[10px] bg-[var(--sidebar-bg-hover)] px-1 py-0.5 rounded">website_gerechten</code>)</p>
                 </div>
                 <button className={S.btn} onClick={() => { setEditId(-1); setForm({ naam: '', beschrijving: '', gang_slug: gangSlugs[0] || 'bites', volgorde: 1, actief: true, allergenen: [], foto: null, extra_info: '', _type: 'gerecht' }); }}>
                     <Plus size={14} />Nieuw gerecht
@@ -682,7 +682,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
 
             {/* Gang edit form */}
             {editId !== null && form._type === 'gang' && (
-                <div className={`${S.card} p-5 mb-6 border-[#3b82f6]/30`}>
+                <div className={`${S.card} p-5 mb-6 border-[var(--blue)]/30`}>
                     <h4 className="text-white font-semibold mb-4">Gang bewerken</h4>
                     <div className="space-y-3">
                         <div className="flex gap-4">
@@ -693,7 +693,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                             <div className="w-32"><label className={S.lbl}>Extra € p.p.</label><input className={S.inp} type="number" step="0.25" value={form.extra_prijs_pp ?? 0} onChange={(e: any) => f('extra_prijs_pp', parseFloat(e.target.value) || 0)} /></div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[#3b82f6]" /><span className="text-sm text-white">Actief op website</span></label>
+                            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[var(--blue)]" /><span className="text-sm text-white">Actief op website</span></label>
                         </div>
                         <div className="flex gap-2 pt-2">
                             <button className={S.btn} onClick={async () => {
@@ -707,7 +707,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
 
             {/* Gerecht edit form — met foto, extra_info, allergenen */}
             {editId !== null && form._type === 'gerecht' && (
-                <div className={`${S.card} p-5 mb-6 border-[#3b82f6]/30`}>
+                <div className={`${S.card} p-5 mb-6 border-[var(--blue)]/30`}>
                     <h4 className="text-white font-semibold mb-4">{editId === -1 ? 'Nieuw gerecht' : 'Gerecht bewerken'}</h4>
                     <div className="space-y-4">
                         <div className="flex gap-4">
@@ -728,11 +728,11 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                             <label className={S.lbl}>Foto <span className="normal-case text-[var(--muted)]">(info-popup)</span></label>
                             <div className="flex items-center gap-3">
                                 {form.foto ? (
-                                    <div className="w-20 h-14 rounded-lg overflow-hidden bg-[#1a1a1e] shrink-0">
+                                    <div className="w-20 h-14 rounded-lg overflow-hidden bg-[var(--sidebar-bg-hover)] shrink-0">
                                         <img src={form.foto} alt="" className="w-full h-full object-cover" />
                                     </div>
                                 ) : (
-                                    <div className="w-20 h-14 rounded-lg bg-[#1a1a1e] flex items-center justify-center shrink-0">
+                                    <div className="w-20 h-14 rounded-lg bg-[var(--sidebar-bg-hover)] flex items-center justify-center shrink-0">
                                         <ImageIcon size={14} className="text-[var(--muted)]" />
                                     </div>
                                 )}
@@ -754,7 +754,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
 
                         <div className="flex gap-4">
                             <div className="w-24"><label className={S.lbl}>Volgorde</label><input className={S.inp} type="number" value={form.volgorde ?? 1} onChange={(e: any) => f('volgorde', parseInt(e.target.value) || 0)} /></div>
-                            <div className="flex items-end pb-1"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[#3b82f6]" /><span className="text-sm text-white">Zichtbaar op website</span></label></div>
+                            <div className="flex items-end pb-1"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.actief ?? true} onChange={(e: any) => f('actief', e.target.checked)} className="accent-[var(--blue)]" /><span className="text-sm text-white">Zichtbaar op website</span></label></div>
                         </div>
                         <p className="text-[var(--muted)] text-xs"><Info size={14} />Volgorde &lt; 10 = normaal menu | ≥ 10 = dieet/verborgen optie</p>
                         <div className="flex gap-2 pt-2">
@@ -795,11 +795,11 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                     <div key={dish.id} className={`${S.card} p-3 flex items-start gap-3 transition-opacity ${!dish.actief ? 'opacity-40' : ''} ${dish.volgorde >= 10 ? 'border-l-2 border-yellow-600/40' : 'border-l-2 border-green-600/40'}`}>
                                         {/* Foto thumbnail */}
                                         {dish.foto ? (
-                                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#1a1a1e] shrink-0">
+                                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-[var(--sidebar-bg-hover)] shrink-0">
                                                 <img src={dish.foto} alt="" className="w-full h-full object-cover" />
                                             </div>
                                         ) : (
-                                            <div className="w-12 h-12 rounded-lg bg-[#1a1a1e] flex items-center justify-center shrink-0">
+                                            <div className="w-12 h-12 rounded-lg bg-[var(--sidebar-bg-hover)] flex items-center justify-center shrink-0">
                                                 <UtensilsCrossed size={10} className="text-[var(--muted)]" />
                                             </div>
                                         )}
@@ -864,7 +864,7 @@ function FooterTab({ settings, footerForm, ff, footerDirty, setFooterDirty, foot
                         </div>
                     </div>
 
-                    <div className="mt-6 pt-5 border-t border-[#222]">
+                    <div className="mt-6 pt-5 border-t border-[var(--color-border)]">
                         <h4 className="text-[var(--muted)] text-xs font-semibold uppercase tracking-wider mb-3">Niet via dit paneel aanpasbaar</h4>
                         <ul className="text-[var(--muted)] text-xs space-y-1.5">
                             <li><Lock size={14} />Basisprijs Signature Menu (hardcoded in code)</li>

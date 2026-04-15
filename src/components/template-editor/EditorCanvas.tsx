@@ -32,7 +32,7 @@ function SortableBlock({ block, isSelected, isHidden, onSelect, documentType }: 
     opacity: isDragging ? 0.3 : isHidden ? 0.2 : 1,
     position: 'relative' as const,
     borderRadius: 4,
-    border: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+    border: isSelected ? '2px solid var(--blue)' : '2px solid transparent',
     cursor: 'pointer',
     marginBottom: 1,
   };
@@ -45,7 +45,7 @@ function SortableBlock({ block, isSelected, isHidden, onSelect, documentType }: 
         className="block-drag-handle"
         style={{
           position: 'absolute', left: -22, top: '50%', transform: 'translateY(-50%)',
-          cursor: 'grab', color: isSelected ? '#3b82f6' : 'var(--muted)',
+          cursor: 'grab', color: isSelected ? 'var(--blue)' : 'var(--muted)',
           opacity: 0, transition: 'opacity 0.15s',
         }}
       >

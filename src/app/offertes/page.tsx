@@ -11,6 +11,8 @@ import { buildBrandingConfig } from '@/lib/branding';
 import { useOrg } from '@/lib/OrgContext';
 import { mailOfferte } from '@/lib/emailHelper';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import FieldError from '@/components/FieldError';
 import MenuWizard from '@/components/MenuWizard';
 import MenuBuilder from '@/components/MenuBuilder';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
@@ -44,7 +46,11 @@ export default function Offertes() {
     const [sortField, setSortField] = useState<string>('datum');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [searchQuery, setSearchQuery] = useState('');
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { errors, validateField, validateAll, clearError, fieldProps } = useFormValidation({
+        client_naam: [{ required: 'Vul een klantnaam in' }],
+        datum: [{ required: 'Vul een datum in' }],
+        items: [{ custom: function (v: unknown) { return (!v || (Array.isArray(v) && v.length === 0)) ? 'Voeg minstens één regel toe' : null; } }],
+    });
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
     const [cascadeSteps, setCascadeSteps] = useState<CascadeStep[] | null>(null);
@@ -294,12 +300,7 @@ export default function Offertes() {
     }
 
     function validateOfferte(): boolean {
-        const e: Record<string, string> = {};
-        if (!form!.client_naam) e.client_naam = 'Vul een klantnaam in';
-        if (!form!.datum) e.datum = 'Vul een datum in';
-        if (!form!.items || form!.items.length === 0) e.items = 'Voeg minstens één regel toe';
-        setErrors(e);
-        return Object.keys(e).length === 0;
+        return validateAll({ client_naam: form!.client_naam, datum: form!.datum, items: form!.items });
     }
 
     async function saveOfferte() {
@@ -433,12 +434,12 @@ export default function Offertes() {
                         <KlantAutocomplete
                             label="Klantnaam"
                             value={form.client_naam}
-                            onChange={function (v) { setField('client_naam', v); setErrors(Object.assign({}, errors, { client_naam: '' })); }}
+                            onChange={function (v) { setField('client_naam', v); clearError('client_naam'); }}
                             onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); }}
                             error={errors.client_naam}
                         />
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); setErrors(Object.assign({}, errors, { datum: '' })); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />{errors.datum && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.datum}</span>}</div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); clearError('datum'); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} /><FieldError message={errors.datum} fieldName="datum" /></div>
                         <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
                     </div>
@@ -482,10 +483,10 @@ export default function Offertes() {
                         <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
                         <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><Mail size={14} /> Mail</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
-                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#b2913e', border: '1px solid #b2913e' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
+                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: 'var(--color-accent-gold)', border: '1px solid var(--color-accent-gold)' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
                         {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega Menukaart</button>}
                         {editing !== 'new' && (
-                            <button className="btn" style={{ background: '#8b5cf6', color: '#fff' }} onClick={function () {
+                            <button className="btn" style={{ background: 'var(--purple)', color: '#fff' }} onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
                                 navigator.clipboard.writeText(link);
                                 showToast('Magic Link gekopieerd!', 'success');
@@ -499,7 +500,7 @@ export default function Offertes() {
                     </div>
 
                     <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#B48C14', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
                             ⚙️ Vaste Kosten per Event
                         </div>
                         {(form.vaste_kosten || []).length > 0 && (
