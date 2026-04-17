@@ -11,6 +11,7 @@ export interface TemplateBlockBase {
   width?: number;   // mm (undefined = full content width)
   height?: number;  // mm (undefined = auto-fit)
   zIndex?: number;  // stacking order (higher = on top)
+  rotation?: number; // degrees, clockwise; 0 = unrotated
   locked?: boolean;
   conditions?: BlockCondition[];
 }
@@ -195,6 +196,13 @@ export interface PageSettings {
     left: number;
   };
   backgroundColor: string; // hex, e.g. '#ffffff' or '#121212' for menukaart
+  /** Per-template overrides for huisstijl colours. When set, these win from the
+   *  organisation defaults during PDF render. Used to preview alternative palettes
+   *  without touching the org-wide branding. */
+  brandColors?: {
+    primary?: string;
+    accent?: string;
+  };
 }
 
 // ── Template ──
