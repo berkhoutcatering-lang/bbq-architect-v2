@@ -80,6 +80,20 @@
   --color-text-ghost: #333338;
   --color-accent-gold: #c4a35a;
   --color-accent-silver: #8b8b8f;
+
+  /* Template editor tokens (semantic aliases for editor chrome) */
+  --surface: #1e1e22;            /* panels, toolbars, top bar, dialogs */
+  --bg-subtle: #0e0e10;          /* canvas gutter — slightly deeper than --bg */
+  --brand-tint: rgba(255, 191, 0, .14);  /* active tab/button background */
+  --brand-hover: #ffd24d;        /* brand on hover (lighter amber) */
+  --success: #22c55e;
+  --success-tint: rgba(34, 197, 94, .15);
+  --danger: #ef4444;
+  --danger-hover: #f87171;
+  --warning: #f59e0b;
+  --muted-weak: #5a5a5e;         /* disabled icon text */
+  --hover: rgba(255, 255, 255, .05);
+  --hover-strong: rgba(255, 255, 255, .09);
 }
 
 * {

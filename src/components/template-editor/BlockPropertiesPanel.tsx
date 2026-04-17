@@ -37,23 +37,87 @@ function Section({ title, defaultOpen, children }: { title: string; defaultOpen?
   );
 }
 
+// Brand-colour swatch values used in the picker preview.
+// These mirror the preview-context branding (#9e781c primary, #8b6914 accent) so the
+// user sees a representative chip; the renderer resolves brand_* tokens to the
+// organisation's actual brand colours at PDF time.
+const BRAND_PRIMARY_PREVIEW = '#9e781c';
+const BRAND_ACCENT_PREVIEW = '#8b6914';
+
 function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const isVar = value === 'brand_primary' || value === 'brand_accent';
+  const isPrimary = value === 'brand_primary';
+  const isAccent = value === 'brand_accent';
+  const isCustom = !isPrimary && !isAccent;
+
+  function chipStyle(active: boolean, color: string): React.CSSProperties {
+    return {
+      flex: 1,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+      padding: '4px 6px',
+      borderRadius: 4,
+      border: active ? '2px solid var(--brand)' : '1px solid var(--border)',
+      background: 'var(--bg)',
+      color: 'var(--text)',
+      fontSize: 10, fontWeight: 600,
+      cursor: 'pointer',
+      transition: 'border-color 0.1s',
+    };
+  }
+
   return (
     <div style={{ marginBottom: 6 }}>
-      <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 2 }}>{label}</label>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <select value={isVar ? value : 'custom'} onChange={function (e) { onChange(e.target.value === 'custom' ? '#333333' : e.target.value); }}
-          style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 10 }}>
-          <option value="brand_primary">Huisstijl primair</option>
-          <option value="brand_accent">Huisstijl accent</option>
-          <option value="custom">Aangepast...</option>
-        </select>
-        {!isVar && (
-          <input type="color" value={value} onChange={function (e) { onChange(e.target.value); }}
-            style={{ width: 26, height: 26, border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: 1, background: 'transparent' }} />
-        )}
+      <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>{label}</label>
+      {/* Quick-bind swatches — always visible so primary/accent are one click away */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+        <button
+          type="button"
+          title="Bind aan huisstijl primair — past automatisch aan op de organisatiekleur"
+          aria-pressed={isPrimary}
+          onClick={function () { onChange('brand_primary'); }}
+          style={chipStyle(isPrimary, BRAND_PRIMARY_PREVIEW)}
+        >
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 3, background: BRAND_PRIMARY_PREVIEW, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)' }} />
+          Primair
+        </button>
+        <button
+          type="button"
+          title="Bind aan huisstijl accent — past automatisch aan op de organisatiekleur"
+          aria-pressed={isAccent}
+          onClick={function () { onChange('brand_accent'); }}
+          style={chipStyle(isAccent, BRAND_ACCENT_PREVIEW)}
+        >
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 3, background: BRAND_ACCENT_PREVIEW, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.15)' }} />
+          Accent
+        </button>
+        <button
+          type="button"
+          title="Eigen kleur kiezen"
+          aria-pressed={isCustom}
+          onClick={function () { if (!isCustom) onChange('#333333'); }}
+          style={chipStyle(isCustom, '#333333')}
+        >
+          Eigen
+        </button>
       </div>
+      {isCustom && (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <input
+            type="color"
+            value={value}
+            onChange={function (e) { onChange(e.target.value); }}
+            aria-label={label + ' (eigen kleur kiezen)'}
+            style={{ width: 28, height: 26, border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: 1, background: 'transparent' }}
+          />
+          <input
+            type="text"
+            value={value}
+            onChange={function (e) { onChange(e.target.value); }}
+            aria-label={label + ' hex'}
+            spellCheck={false}
+            style={{ flex: 1, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: 10, fontFamily: 'monospace' }}
+          />
+        </div>
+      )}
     </div>
   );
 }

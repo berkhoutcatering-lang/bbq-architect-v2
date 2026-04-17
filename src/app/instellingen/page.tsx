@@ -47,9 +47,21 @@ export default function Instellingen() {
         showToast('Logo geupload', 'success');
     }
 
+    // Track the brand colours we last loaded so we can detect changes and offer a cascade
+    const [pendingCascade, setPendingCascade] = useState<null | { primary?: string; accent?: string }>(null);
+
     function saveSettings() {
         const { id, created_at, updated_at, ...data } = form;
-        save(data).then(function () { showToast('Instellingen opgeslagen', 'success'); });
+        const beforePrimary = settings?.brand_primary as string | undefined;
+        const beforeAccent = settings?.brand_accent as string | undefined;
+        save(data).then(function () {
+            showToast('Instellingen opgeslagen', 'success');
+            // Detect huisstijl change → ask the user whether to also update existing templates
+            const changed: { primary?: string; accent?: string } = {};
+            if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;
+            if (data.brand_accent && data.brand_accent !== beforeAccent) changed.accent = data.brand_accent;
+            if (changed.primary || changed.accent) setPendingCascade(changed);
+        });
     }
 
     if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
@@ -238,6 +250,179 @@ export default function Instellingen() {
             <button className="btn btn-brand" onClick={saveSettings} style={{ width: '100%', justifyContent: 'center', padding: 14 }}>
                 <Save size={14} /> Instellingen Opslaan
             </button>
+
+            {pendingCascade && orgId && (
+                <BrandCascadeDialog
+                    organizationId={orgId}
+                    brandColors={pendingCascade}
+                    onClose={function () { setPendingCascade(null); }}
+                    onDone={function (count) {
+                        setPendingCascade(null);
+                        if (count > 0) showToast('Huisstijl bijgewerkt in ' + count + ' sjablonen', 'success');
+                    }}
+                />
+            )}
         </>
+    );
+}
+
+// ── Brand-color cascade dialog: lets the user push the just-saved huisstijl into existing templates ──
+type TemplateRow = { id: string; name: string; document_type: string; page_settings?: { brandColors?: { primary?: string; accent?: string } } };
+function BrandCascadeDialog({ organizationId, brandColors, onClose, onDone }: {
+    organizationId: string;
+    brandColors: { primary?: string; accent?: string };
+    onClose: () => void;
+    onDone: (updatedCount: number) => void;
+}) {
+    const [templates, setTemplates] = useState<TemplateRow[] | null>(null);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [mode, setMode] = useState<'all' | 'some'>('all');
+    const [busy, setBusy] = useState(false);
+
+    useEffect(function () {
+        const params = new URLSearchParams({ orgId: organizationId });
+        fetch('/api/templates?' + params.toString())
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                const list = (d.templates || []).filter(function (t: TemplateRow) { return t.id; });
+                setTemplates(list);
+                setSelected(new Set(list.map(function (t: TemplateRow) { return t.id; })));
+            })
+            .catch(function () { setTemplates([]); });
+    }, [organizationId]);
+
+    function toggle(id: string) {
+        setSelected(function (prev) {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+
+    async function apply(scope: 'all' | 'selected' | 'none') {
+        if (scope === 'none') { onClose(); return; }
+        setBusy(true);
+        const ids = scope === 'all'
+            ? (templates || []).map(function (t) { return t.id; })
+            : Array.from(selected);
+        try {
+            const res = await fetch('/api/templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_brand_colors',
+                    organizationId,
+                    templateIds: ids,
+                    brandColors,
+                }),
+            });
+            const data = await res.json();
+            onDone(data.count || 0);
+        } catch {
+            onDone(0);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const colorChips = (
+        <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)' }}>
+            {brandColors.primary && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 3, background: brandColors.primary, border: '1px solid var(--border-strong)' }} aria-hidden="true" />
+                    Primair: <code style={{ fontFamily: 'monospace' }}>{brandColors.primary}</code>
+                </span>
+            )}
+            {brandColors.accent && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 3, background: brandColors.accent, border: '1px solid var(--border-strong)' }} aria-hidden="true" />
+                    Accent: <code style={{ fontFamily: 'monospace' }}>{brandColors.accent}</code>
+                </span>
+            )}
+        </div>
+    );
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cascade-title"
+            onClick={onClose}
+            style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}
+        >
+            <div
+                onClick={function (e) { e.stopPropagation(); }}
+                style={{
+                    width: 'min(560px, 92vw)', maxHeight: '80vh', overflow: 'hidden',
+                    background: 'var(--surface, var(--card-solid))', border: '1px solid var(--border-strong)',
+                    borderRadius: 10, boxShadow: '0 18px 48px rgba(0,0,0,.5)',
+                    display: 'flex', flexDirection: 'column',
+                }}
+            >
+                <div style={{ padding: '18px 22px 12px' }}>
+                    <h2 id="cascade-title" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+                        Huisstijl ook in sjablonen toepassen?
+                    </h2>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', margin: '6px 0 12px' }}>
+                        Je hebt de huisstijlkleuren gewijzigd. Sjablonen die deze kleuren overschrijven blijven ongewijzigd, tenzij je ze hier kiest.
+                    </p>
+                    {colorChips}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border)', padding: '12px 22px 4px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer', padding: '4px 0' }}>
+                        <input type="radio" name="cascade-mode" checked={mode === 'all'} onChange={function () { setMode('all'); }} />
+                        <strong>Alle sjablonen bijwerken</strong>
+                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>({templates ? templates.length : '…'})</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer', padding: '4px 0' }}>
+                        <input type="radio" name="cascade-mode" checked={mode === 'some'} onChange={function () { setMode('some'); }} />
+                        <strong>Alleen geselecteerde sjablonen</strong>
+                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>({selected.size} gekozen)</span>
+                    </label>
+                </div>
+
+                {mode === 'some' && (
+                    <div style={{ padding: '6px 22px 12px', overflowY: 'auto', flex: 1 }}>
+                        {!templates && <p style={{ fontSize: 12, color: 'var(--muted)' }}>Sjablonen laden…</p>}
+                        {templates && templates.length === 0 && <p style={{ fontSize: 12, color: 'var(--muted)' }}>Geen sjablonen gevonden.</p>}
+                        {templates && templates.map(function (t) {
+                            const overridesPrimary = !!t.page_settings?.brandColors?.primary;
+                            const overridesAccent = !!t.page_settings?.brandColors?.accent;
+                            return (
+                                <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', padding: '5px 0', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={selected.has(t.id)} onChange={function () { toggle(t.id); }} />
+                                    <span style={{ flex: 1 }}>{t.name}</span>
+                                    <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.document_type}</span>
+                                    {(overridesPrimary || overridesAccent) && (
+                                        <span title="Sjabloon heeft eigen huisstijlkleur(en) — wordt overschreven" style={{ fontSize: 10, color: 'var(--amber)' }}>eigen</span>
+                                    )}
+                                </label>
+                            );
+                        })}
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 22px 16px', borderTop: '1px solid var(--border)' }}>
+                    <button
+                        type="button"
+                        onClick={function () { apply('none'); }}
+                        disabled={busy}
+                        style={{ padding: '8px 14px', borderRadius: 6, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12 }}
+                    >
+                        Niet bijwerken
+                    </button>
+                    <button
+                        type="button"
+                        onClick={function () { apply(mode === 'all' ? 'all' : 'selected'); }}
+                        disabled={busy || (mode === 'some' && selected.size === 0)}
+                        className="btn btn-brand"
+                        style={{ padding: '8px 14px', fontSize: 12 }}
+                    >
+                        {busy ? 'Bezig…' : (mode === 'all' ? 'Alle bijwerken' : 'Geselecteerde bijwerken')}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }

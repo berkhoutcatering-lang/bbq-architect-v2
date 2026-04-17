@@ -54,22 +54,37 @@ interface Cursor {
 
 function renderLogoBlock(doc: any, block: LogoBlock, ctx: RenderContext, cursor: Cursor): number {
   const logoUrl = block.variant === 'dark' ? ctx.branding.logoDarkUrl : ctx.branding.logoUrl;
-  if (!logoUrl) return 0;
+  const logoData = logoUrl ? (ctx as any)._logos?.[block.variant] : null;
 
-  // Logo is loaded async before render starts — stored in ctx
-  const logoData = (ctx as any)._logos?.[block.variant];
-  if (!logoData) return 0;
-
-  const ratio = logoData.w / logoData.h;
-  let w = Math.min(block.maxWidth, logoData.w * 0.264583); // px to mm
-  let h = w / ratio;
-  if (h > block.maxHeight) { h = block.maxHeight; w = h * ratio; }
+  // Compute placement using either real image ratio or block's max box
+  let w = block.maxWidth;
+  let h = block.maxHeight;
+  if (logoData) {
+    const ratio = logoData.w / logoData.h;
+    w = Math.min(block.maxWidth, logoData.w * 0.264583); // px to mm
+    h = w / ratio;
+    if (h > block.maxHeight) { h = block.maxHeight; w = h * ratio; }
+  }
 
   let x = cursor.margins.left;
   if (block.alignment === 'center') x = (cursor.pageWidth - w) / 2;
   else if (block.alignment === 'right') x = cursor.pageWidth - cursor.margins.right - w;
 
-  doc.addImage(logoData.data, 'PNG', x, cursor.y, w, h);
+  if (logoData) {
+    doc.addImage(logoData.data, 'PNG', x, cursor.y, w, h);
+  } else {
+    // Placeholder: dashed-border box with "Logo" label, so the user sees where the
+    // logo will land in the PDF even when no image has been uploaded yet.
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    doc.setLineDashPattern([1.2, 1.2], 0);
+    doc.rect(x, cursor.y, w, h);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150, 150, 150);
+    doc.text('Logo', x + w / 2, cursor.y + h / 2 + 1, { align: 'center', baseline: 'middle' });
+  }
   return h + 2;
 }
 
@@ -477,9 +492,19 @@ function renderImageBlock(doc: any, block: ImageBlock, ctx: RenderContext, curso
 function evaluateConditions(conditions: TemplateBlock['conditions'], ctx: RenderContext): boolean {
   if (!conditions || conditions.length === 0) return true;
   return conditions.every(function (c) {
-    const val = ctx.variables[c.field] || '';
-    if (c.operator === 'eq') return val === c.value;
-    if (c.operator === 'neq') return val !== c.value;
+    // Special-case `document_type`: the variable resolves to the uppercase display
+    // form ('FACTUUR') but defaults / template conditions use the canonical lowercase
+    // form ('factuur'). Compare against ctx.documentType to avoid that mismatch.
+    let val: string;
+    if (c.field === 'document_type') {
+      val = ctx.documentType || '';
+    } else {
+      val = ctx.variables[c.field] || '';
+    }
+    const a = String(val).toLowerCase();
+    const b = String(c.value).toLowerCase();
+    if (c.operator === 'eq') return a === b;
+    if (c.operator === 'neq') return a !== b;
     if (c.operator === 'exists') return val !== '';
     return true;
   });
@@ -526,6 +551,16 @@ export async function renderFromTemplate(
     const bgRgb = hexToRgb(ps.backgroundColor);
     doc.setFillColor(...bgRgb);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  }
+
+  // Apply per-template brand colour overrides if present (Settings tab → Huisstijlkleuren)
+  if (ps.brandColors) {
+    if (ps.brandColors.primary) {
+      ctx.branding = { ...ctx.branding, primaryColor: ps.brandColors.primary, primaryRgb: hexToRgb(ps.brandColors.primary) };
+    }
+    if (ps.brandColors.accent) {
+      ctx.branding = { ...ctx.branding, accentColor: ps.brandColors.accent, accentRgb: hexToRgb(ps.brandColors.accent) };
+    }
   }
 
   // Pre-load logos

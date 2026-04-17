@@ -40,6 +40,41 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
 
+  // Bulk update brand colours on selected templates' page_settings.brandColors override.
+  // Body: { action: 'update_brand_colors', organizationId, templateIds?: string[], brandColors: { primary?, accent? } | null }
+  // - templateIds omitted → all org templates
+  // - brandColors null → clear the override on the selected templates (revert to org default)
+  if (body.action === 'update_brand_colors') {
+    const sb = createServiceSupabase();
+    const orgId = body.organizationId || null;
+    const ids: string[] | undefined = Array.isArray(body.templateIds) ? body.templateIds : undefined;
+    const brandColors: { primary?: string; accent?: string } | null = body.brandColors ?? null;
+
+    let q = sb.from('pdf_templates').select('id, page_settings').eq('is_active', true);
+    if (orgId) q = q.eq('organization_id', orgId); else q = q.is('organization_id', null);
+    if (ids && ids.length > 0) q = q.in('id', ids);
+    const { data: rows, error: fetchErr } = await q;
+    if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+
+    const updated: string[] = [];
+    for (const row of rows || []) {
+      const ps = (row.page_settings as any) || {};
+      const nextPs = { ...ps };
+      if (brandColors === null) {
+        // Clear the override entirely
+        delete nextPs.brandColors;
+      } else {
+        const bc = { ...(ps.brandColors || {}) };
+        if (brandColors.primary !== undefined) bc.primary = brandColors.primary;
+        if (brandColors.accent !== undefined) bc.accent = brandColors.accent;
+        nextPs.brandColors = bc;
+      }
+      const { error: upErr } = await sb.from('pdf_templates').update({ page_settings: nextPs }).eq('id', row.id);
+      if (!upErr) updated.push(row.id);
+    }
+    return NextResponse.json({ success: true, updated, count: updated.length });
+  }
+
   // Seed defaults action
   if (body.action === 'seed_defaults') {
     const sb = createServiceSupabase();
