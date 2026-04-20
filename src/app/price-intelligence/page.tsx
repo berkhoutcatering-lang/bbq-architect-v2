@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -195,6 +195,73 @@ function detectDuplicates(candidate: { leverancier?: string | null; factuurnumme
     const prio: Record<string, number> = { exact: 3, likely: 2, possible: 1 };
     matches.sort((a, b) => prio[b.type] - prio[a.type]);
     return matches;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SMART MATCHING — voorraad-link + prijshistorie per product
+   ═══════════════════════════════════════════════════════════════════ */
+
+/** Simpele fuzzy match score tussen 0 en 1 */
+function fuzzyScore(a: string, b: string): number {
+    const na = a.toLowerCase().trim();
+    const nb = b.toLowerCase().trim();
+    if (!na || !nb) return 0;
+    if (na === nb) return 1;
+    if (na.includes(nb) || nb.includes(na)) return 0.85;
+    // Word-overlap
+    const wordsA = na.split(/\s+/).filter(w => w.length > 2);
+    const wordsB = nb.split(/\s+/).filter(w => w.length > 2);
+    if (wordsA.length === 0 || wordsB.length === 0) return 0;
+    const common = wordsA.filter(w => wordsB.some(x => x.includes(w) || w.includes(x)));
+    return common.length / Math.max(wordsA.length, wordsB.length);
+}
+
+type InventoryMatch = { item: any; confidence: number };
+
+/** Match een factuur-regel tegen bestaande voorraad */
+function matchInventoryItem(productNaam: string, inventory: any[]): InventoryMatch | null {
+    if (!productNaam || !inventory || inventory.length === 0) return null;
+    let best: InventoryMatch | null = null;
+    for (const item of inventory) {
+        if (!item.naam) continue;
+        const score = fuzzyScore(productNaam, item.naam);
+        if (score > 0.5 && (!best || score > best.confidence)) {
+            best = { item, confidence: score };
+        }
+    }
+    return best;
+}
+
+/** Haal prijshistorie op voor een product uit supplier_prices + eerdere factuurregels */
+function getProductPriceHistory(productNaam: string, supplierPrices: any[], invoices: any[]): { prijs: number; datum?: string; bron: 'csv' | 'factuur' }[] {
+    const history: { prijs: number; datum?: string; bron: 'csv' | 'factuur' }[] = [];
+    const low = (productNaam || '').toLowerCase().trim();
+    if (!low) return [];
+
+    // Uit supplier_prices tabel
+    for (const sp of supplierPrices || []) {
+        if (!sp.product_naam) continue;
+        if (fuzzyScore(low, sp.product_naam) > 0.5) {
+            history.push({ prijs: parseFloat(sp.prijs) || 0, datum: sp.datum, bron: 'csv' });
+        }
+    }
+    // Uit eerder gescande factuur-regels (via raw_ai_response)
+    for (const inv of invoices || []) {
+        const regels = inv.raw_ai_response?.regels || [];
+        for (const r of regels) {
+            if (!r.product_naam) continue;
+            if (fuzzyScore(low, r.product_naam) > 0.6) {
+                history.push({ prijs: parseFloat(r.prijs_per_eenheid) || 0, datum: inv.datum, bron: 'factuur' });
+            }
+        }
+    }
+    // Sort nieuwste eerst
+    history.sort((a, b) => {
+        if (!a.datum) return 1;
+        if (!b.datum) return -1;
+        return b.datum.localeCompare(a.datum);
+    });
+    return history.slice(0, 8);
 }
 
 /** Vind paren van duplicates in een bestaande lijst (voor opruim-functie) */
@@ -417,6 +484,8 @@ type ParsedInvoiceLine = {
 
 function FolderInvoices() {
     const { data: invoices, insert, update, remove, refetch } = useSupabase<any>('supplier_invoices', []);
+    const { data: inventoryData } = useSupabase<any>('inventory', []);
+    const { data: supplierPricesData } = useSupabase<any>('supplier_prices', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
@@ -425,6 +494,8 @@ function FolderInvoices() {
     const [error, setError] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [lastFile, setLastFile] = useState<File | null>(null);
+    const [uploadQueue, setUploadQueue] = useState<File[]>([]);
+    const [queueTotal, setQueueTotal] = useState(0);
     const abortRef = useRef<AbortController | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const scanning = scanStep !== 'idle' && scanStep !== 'done' && scanStep !== 'error';
@@ -473,10 +544,33 @@ function FolderInvoices() {
         setScanStep('idle');
         setScanPreview(null);
         setError(null);
+        setParsedInvoice(null);
+        // Als er nog in queue staat: start volgende
+        if (uploadQueue.length > 0) {
+            const [next, ...rest] = uploadQueue;
+            setUploadQueue(rest);
+            setTimeout(() => handleFile(next), 300);
+        } else {
+            setQueueTotal(0);
+        }
     }
 
     function retryScan() {
         if (lastFile) handleFile(lastFile);
+    }
+
+    function handleFiles(files: FileList | File[]) {
+        const arr = Array.from(files);
+        if (arr.length === 0) return;
+        if (arr.length === 1) {
+            setQueueTotal(1);
+            handleFile(arr[0]);
+            return;
+        }
+        setQueueTotal(arr.length);
+        setUploadQueue(arr.slice(1));
+        handleFile(arr[0]);
+        showToast(`${arr.length} facturen in queue — wordt sequentieel verwerkt`, 'info');
     }
 
     async function saveInvoice() {
@@ -521,6 +615,14 @@ function FolderInvoices() {
             setParsedInvoice(null);
             setScanPreview(null);
             refetch();
+            // Volgende in queue automatisch starten
+            if (uploadQueue.length > 0) {
+                const [next, ...rest] = uploadQueue;
+                setUploadQueue(rest);
+                setTimeout(() => handleFile(next), 400);
+            } else {
+                setQueueTotal(0);
+            }
         } catch (e: any) {
             showToast('Opslaan mislukt: ' + (e?.message || 'onbekend'), 'error');
         }
@@ -547,6 +649,8 @@ function FolderInvoices() {
             setInvoice={setParsedInvoice}
             preview={scanPreview}
             existingInvoices={invoices}
+            inventory={inventoryData}
+            supplierPrices={supplierPricesData}
             onSave={saveInvoice}
             onCancel={cancelScan}
         />;
@@ -594,11 +698,23 @@ function FolderInvoices() {
             {/* Upload zone */}
             <MetalCard>
                 {scanning ? (
-                    <ScanProgress step={scanStep as any} onCancel={cancelScan} />
+                    <div>
+                        {queueTotal > 1 && (
+                            <div style={{ padding: '10px 16px', background: `${GOLD}10`, borderBottom: `1px solid ${GOLD}30`, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: `${GOLD}26`, color: GOLD, border: `1px solid ${GOLD}4D` }}>QUEUE</span>
+                                <span>Factuur {queueTotal - uploadQueue.length} van {queueTotal}</span>
+                                <span style={{ flex: 1, height: 4, background: 'rgba(130,130,130,.1)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <span style={{ display: 'block', height: '100%', width: `${((queueTotal - uploadQueue.length - 1) / queueTotal) * 100}%`, background: GOLD, transition: 'width .3s' }} />
+                                </span>
+                                {uploadQueue.length > 0 && <span style={{ color: 'var(--muted)', fontSize: 11 }}>· nog {uploadQueue.length} in wachtrij</span>}
+                            </div>
+                        )}
+                        <ScanProgress step={scanStep as any} onCancel={cancelScan} />
+                    </div>
                 ) : (
                     <div
                         onDragOver={e => e.preventDefault()}
-                        onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
+                        onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files); }}
                         style={{
                             padding: '40px 30px', textAlign: 'center',
                             border: `2px dashed var(--border-strong)`,
@@ -607,17 +723,17 @@ function FolderInvoices() {
                         <div style={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: 16, background: `${GOLD}18`, border: `1px solid ${GOLD}4D`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <CloudUpload size={28} style={{ color: GOLD }} />
                         </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginBottom: 8 }}>Upload een factuur</div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginBottom: 8 }}>Upload één of meerdere facturen</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
-                            Sleep hierheen of klik op een knop hieronder.<br />
-                            PDF, JPG of PNG · AI leest binnen 15 seconden.
+                            Sleep meerdere tegelijk erin — worden sequentieel verwerkt.<br />
+                            PDF, JPG of PNG · AI leest binnen 15 seconden per factuur.
                         </div>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <BtnPrimary icon={FolderOpen} onClick={() => fileRef.current?.click()}>Kies bestand</BtnPrimary>
+                            <BtnPrimary icon={FolderOpen} onClick={() => fileRef.current?.click()}>Kies bestand(en)</BtnPrimary>
                             <BtnGhost icon={Camera} onClick={() => { fileRef.current?.setAttribute('capture', 'environment'); fileRef.current?.click(); setTimeout(() => fileRef.current?.removeAttribute('capture'), 500); }}>Foto maken</BtnGhost>
                         </div>
-                        <input ref={fileRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
-                            onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                        <input ref={fileRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }}
+                            onChange={e => e.target.files && e.target.files.length > 0 && handleFiles(e.target.files)} />
                     </div>
                 )}
 
@@ -800,12 +916,38 @@ function InvoiceListTable({ invoices, onDelete }: { invoices: any[]; onDelete: (
     );
 }
 
-function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, onSave, onCancel }: {
+function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, inventory, supplierPrices, onSave, onCancel }: {
     invoice: ParsedInvoice; setInvoice: (i: ParsedInvoice) => void; preview: string | null;
     existingInvoices?: any[];
+    inventory?: any[];
+    supplierPrices?: any[];
     onSave: () => void | Promise<void>; onCancel: () => void;
 }) {
     const [saving, setSaving] = useState(false);
+
+    // Keyboard shortcuts: Cmd+S = save, Esc = annuleer, Cmd+D = duplicate regel
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            const meta = e.metaKey || e.ctrlKey;
+            if (meta && e.key === 's') {
+                e.preventDefault();
+                if (!saving) void doSave();
+            } else if (e.key === 'Escape') {
+                onCancel();
+            } else if (meta && e.key === 'd') {
+                e.preventDefault();
+                const lines = [...(invoice.regels || [])];
+                if (lines.length > 0) {
+                    const last = lines[lines.length - 1];
+                    lines.push({ ...last });
+                    setInvoice({ ...invoice, regels: lines });
+                }
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [invoice, saving]);
 
     // Validatie: bereken live welke checks wel/niet kloppen
     const validation = useMemo(() => {
@@ -1006,19 +1148,28 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, onSave,
                                     </thead>
                                     <tbody>
                                         {(invoice.regels || []).map((r, i) => (
-                                            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                <td style={{ padding: 4 }}><InlineInput value={r.product_naam} onChange={v => updateLine(i, 'product_naam', v)} /></td>
-                                                <td style={{ padding: 4, width: 70 }}><InlineInput value={String(r.hoeveelheid)} onChange={v => updateLine(i, 'hoeveelheid', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 80 }}><InlineInput value={r.eenheid} onChange={v => updateLine(i, 'eenheid', v)} /></td>
-                                                <td style={{ padding: 4, width: 92 }}><InlineInput prefix="€" value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 72 }}><InlineInput suffix="%" value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 102 }}><InlineInput prefix="€" value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 28 }}>
-                                                    <button onClick={() => removeLine(i)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
-                                                        <X size={12} />
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                            <React.Fragment key={i}>
+                                                <tr style={{ borderBottom: (inventory || supplierPrices) ? 'none' : '1px solid var(--border)' }}>
+                                                    <td style={{ padding: 4 }}><InlineInput value={r.product_naam} onChange={v => updateLine(i, 'product_naam', v)} /></td>
+                                                    <td style={{ padding: 4, width: 70 }}><InlineInput value={String(r.hoeveelheid)} onChange={v => updateLine(i, 'hoeveelheid', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 80 }}><InlineInput value={r.eenheid} onChange={v => updateLine(i, 'eenheid', v)} /></td>
+                                                    <td style={{ padding: 4, width: 92 }}><InlineInput prefix="€" value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 72 }}><InlineInput suffix="%" value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 102 }}><InlineInput prefix="€" value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 28 }}>
+                                                        <button onClick={() => removeLine(i)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
+                                                            <X size={12} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {(inventory || supplierPrices) && (
+                                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                                        <td colSpan={7} style={{ padding: '0 4px 6px 10px' }}>
+                                                            <LineInsights line={r} inventory={inventory || []} supplierPrices={supplierPrices || []} invoices={existingInvoices || []} />
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
                                         ))}
                                     </tbody>
                                 </table>
@@ -1051,6 +1202,87 @@ function CurrencyField(props: Omit<Parameters<typeof Field>[0], 'prefix' | 'type
 
 function PercentField(props: Omit<Parameters<typeof Field>[0], 'suffix' | 'type'>) {
     return <Field {...props} type="number" suffix="%" />;
+}
+
+/** Mini-sparkline: 6 recente prijzen voor een product */
+function PriceSparkline({ prices, currentPrice }: { prices: number[]; currentPrice?: number }) {
+    if (!prices || prices.length < 2) return null;
+    const all = currentPrice ? [...prices, currentPrice] : prices;
+    const min = Math.min(...all);
+    const max = Math.max(...all);
+    const range = max - min || 1;
+    const w = 60, h = 18;
+    const pts = prices.map((p, i) => {
+        const x = (i / (prices.length - 1)) * w;
+        const y = h - ((p - min) / range) * h;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    // Trendkleur op basis van laatste vs vorige
+    const last = prices[prices.length - 1];
+    const prev = prices[prices.length - 2];
+    const up = last > prev;
+    const color = up ? 'var(--red)' : 'var(--green)';
+    return (
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+            <polyline points={pts} fill="none" stroke={color} strokeWidth="1.3" vectorEffect="non-scaling-stroke" opacity="0.8" />
+            {currentPrice && (
+                <circle
+                    cx={w}
+                    cy={h - ((currentPrice - min) / range) * h}
+                    r={2.5}
+                    fill={currentPrice > prices[prices.length - 1] ? 'var(--red)' : 'var(--green)'}
+                />
+            )}
+        </svg>
+    );
+}
+
+/** Insights per regel: voorraad-match + prijsverloop + % change */
+function LineInsights({ line, inventory, supplierPrices, invoices }: {
+    line: ParsedInvoiceLine;
+    inventory: any[];
+    supplierPrices: any[];
+    invoices: any[];
+}) {
+    const match = useMemo(() => matchInventoryItem(line.product_naam, inventory), [line.product_naam, inventory]);
+    const history = useMemo(() => getProductPriceHistory(line.product_naam, supplierPrices, invoices), [line.product_naam, supplierPrices, invoices]);
+
+    const currentPrice = parseFloat(String(line.prijs_per_eenheid || 0));
+    const historyPrices = history.map(h => h.prijs);
+    const avgHistory = historyPrices.length > 0 ? historyPrices.reduce((s, p) => s + p, 0) / historyPrices.length : 0;
+    const pctChange = avgHistory > 0 && currentPrice > 0 ? ((currentPrice - avgHistory) / avgHistory) * 100 : null;
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--muted)' }}>
+            {/* Voorraad-match badge */}
+            {match && match.confidence > 0.8 ? (
+                <span title={`Match met voorraad: ${match.item.naam} (${Math.round(match.confidence * 100)}%)`}
+                    style={{ padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 700, letterSpacing: '.05em', background: 'rgba(34,197,94,.15)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)', whiteSpace: 'nowrap' }}>
+                    ✓ VOORRAAD
+                </span>
+            ) : match && match.confidence > 0.5 ? (
+                <span title={`Mogelijk match: ${match.item.naam} (${Math.round(match.confidence * 100)}%)`}
+                    style={{ padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 700, letterSpacing: '.05em', background: 'rgba(245,158,11,.15)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,.3)', whiteSpace: 'nowrap' }}>
+                    ? MATCH
+                </span>
+            ) : null}
+
+            {/* Sparkline */}
+            {historyPrices.length >= 2 && (
+                <div title={`${historyPrices.length} eerdere prijzen · gemiddeld ${fmt2(avgHistory)}`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    <PriceSparkline prices={historyPrices} currentPrice={currentPrice > 0 ? currentPrice : undefined} />
+                </div>
+            )}
+
+            {/* % change vs gemiddelde */}
+            {pctChange !== null && Math.abs(pctChange) > 3 && (
+                <span title={`Gemiddeld was ${fmt2(avgHistory)} over ${historyPrices.length} eerdere facturen`}
+                    style={{ fontSize: 10, fontWeight: 700, color: pctChange > 0 ? 'var(--red)' : 'var(--green)', whiteSpace: 'nowrap' }}>
+                    {pctChange > 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(0)}%
+                </span>
+            )}
+        </div>
+    );
 }
 
 function InlineInput({ value, onChange, type, prefix, suffix }: { value: string; onChange: (v: string) => void; type?: string; prefix?: string; suffix?: string }) {
