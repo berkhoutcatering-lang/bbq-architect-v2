@@ -127,6 +127,94 @@ function fmt2(n: number | string | null | undefined) {
     return isNaN(v) ? '€\u00a00,00' : '€\u00a0' + v.toFixed(2).replace('.', ',');
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   DUPLICATE DETECTION — fuzzy matching met name normalization
+   ═══════════════════════════════════════════════════════════════════ */
+
+function normalizeLeverancier(s?: string | null): string {
+    if (!s) return '';
+    let n = String(s).toLowerCase().trim();
+    // Verwijder dingen tussen haakjes: "Makro (Metro Cash & Carry)" → "makro"
+    n = n.replace(/\s*\([^)]*\)\s*/g, '').trim();
+    // Verwijder bedrijfs-suffixes
+    n = n.replace(/\s+(b\.?\s*v\.?|n\.?\s*v\.?|vof|v\.?o\.?f\.?|holding|groep|group)\.?$/i, '').trim();
+    // Collapse meerdere spaties
+    n = n.replace(/\s+/g, ' ');
+    return n;
+}
+
+function normalizeFactuurnummer(s?: string | null): string {
+    if (!s) return '';
+    return String(s).toLowerCase().replace(/[\s\-_/\\.]/g, '').trim();
+}
+
+type DupeMatch = {
+    type: 'exact' | 'likely' | 'possible';
+    existing: any;
+    reasons: string[];
+};
+
+function detectDuplicates(candidate: { leverancier?: string | null; factuurnummer?: string | null; datum?: string | null; totaal_incl?: number | string | null }, existing: any[] = [], excludeId?: number): DupeMatch[] {
+    const matches: DupeMatch[] = [];
+    const candLev = normalizeLeverancier(candidate.leverancier);
+    const candNum = normalizeFactuurnummer(candidate.factuurnummer);
+    const candIncl = parseFloat(String(candidate.totaal_incl ?? 0));
+    const candDatum = candidate.datum;
+
+    for (const ex of existing) {
+        if (excludeId && ex.id === excludeId) continue;
+        const exLev = normalizeLeverancier(ex.leverancier);
+        const exNum = normalizeFactuurnummer(ex.factuurnummer);
+        const exIncl = parseFloat(String(ex.totaal_incl ?? 0));
+        const exDatum = ex.datum;
+
+        const reasons: string[] = [];
+        let score = 0;
+        let sameFactNr = false;
+        let sameLev = false;
+
+        if (candNum && exNum && candNum === exNum) { reasons.push('Zelfde factuurnummer'); score += 3; sameFactNr = true; }
+        if (candLev && exLev && candLev === exLev) { reasons.push('Zelfde leverancier'); score += 1; sameLev = true; }
+        if (candIncl > 0 && exIncl > 0 && Math.abs(candIncl - exIncl) < 0.02) { reasons.push('Zelfde bedrag'); score += 2; }
+        if (candDatum && exDatum && candDatum === exDatum) { reasons.push('Zelfde datum'); score += 1; }
+
+        // Classificatie:
+        // EXACT: factuurnr + leverancier matchen → 100% dubbel
+        // LIKELY: alles behalve factuurnr (bedrag + datum + leverancier) → zeer waarschijnlijk
+        // POSSIBLE: bedrag + datum zonder leverancier match → check handmatig
+        if (sameFactNr && sameLev) {
+            matches.push({ type: 'exact', existing: ex, reasons });
+        } else if (score >= 4) {
+            matches.push({ type: 'likely', existing: ex, reasons });
+        } else if (score >= 3 && reasons.includes('Zelfde bedrag') && reasons.includes('Zelfde datum')) {
+            matches.push({ type: 'possible', existing: ex, reasons });
+        }
+    }
+
+    // Sorteer: exact > likely > possible
+    const prio: Record<string, number> = { exact: 3, likely: 2, possible: 1 };
+    matches.sort((a, b) => prio[b.type] - prio[a.type]);
+    return matches;
+}
+
+/** Vind paren van duplicates in een bestaande lijst (voor opruim-functie) */
+function findDuplicateGroups(list: any[]): any[][] {
+    const groups: any[][] = [];
+    const seen = new Set<number>();
+    for (let i = 0; i < list.length; i++) {
+        if (seen.has(list[i].id)) continue;
+        const dupes = detectDuplicates(list[i], list, list[i].id)
+            .filter(m => m.type === 'exact' || m.type === 'likely')
+            .map(m => m.existing);
+        if (dupes.length > 0) {
+            const group = [list[i], ...dupes];
+            group.forEach(x => seen.add(x.id));
+            groups.push(group);
+        }
+    }
+    return groups;
+}
+
 function ScanProgress({ step, onCancel }: { step: 'prep' | 'upload' | 'ai' | 'done' | 'error'; onCancel?: () => void }) {
     const steps: { id: 'prep' | 'upload' | 'ai' | 'done'; label: string }[] = [
         { id: 'prep', label: 'Bestand voorbereiden' },
@@ -393,28 +481,49 @@ function FolderInvoices() {
 
     async function saveInvoice() {
         if (!parsedInvoice) return;
-        const { regels = [], ...header } = parsedInvoice;
-        const inserted = await insert({
-            leverancier: header.leverancier || 'Onbekend',
-            factuurnummer: header.factuurnummer || null,
-            datum: header.datum || null,
-            totaal_excl: header.totaal_excl || 0,
-            totaal_btw: header.totaal_btw || 0,
-            totaal_incl: header.totaal_incl || 0,
-            valuta: header.valuta || 'EUR',
-            status: 'review',
-            raw_ai_response: parsedInvoice,
-        } as any);
-        const invoiceId = (inserted as any)?.[0]?.id || (inserted as any)?.id;
-        if (invoiceId && regels.length > 0) {
-            for (const r of regels) {
-                await fetch('/api/supabase-proxy', { method: 'POST' }).catch(() => { /* noop fallback */ });
-            }
+
+        // Pre-save dupe check met echte, up-to-date lijst
+        const dupes = detectDuplicates(parsedInvoice, invoices || []);
+        const exactDupe = dupes.find(d => d.type === 'exact');
+        if (exactDupe) {
+            showToast('Factuur niet opgeslagen: exact dezelfde staat al in je systeem', 'error');
+            return;
         }
-        showToast(`Factuur opgeslagen · ${regels.length} regels`, 'success');
-        setParsedInvoice(null);
-        setScanPreview(null);
-        refetch();
+        const likelyDupe = dupes.find(d => d.type === 'likely');
+        if (likelyDupe) {
+            const reasonsText = likelyDupe.reasons.join(', ');
+            const existingLabel = `${likelyDupe.existing.leverancier || 'Onbekend'} · ${likelyDupe.existing.factuurnummer || 'geen nr'} · ${likelyDupe.existing.datum || ''} · ${fmt2(likelyDupe.existing.totaal_incl)}`;
+            const confirmed = await new Promise<boolean>((resolve) => {
+                showConfirm(
+                    `Mogelijk dubbele factuur!\n\nBestaande: ${existingLabel}\nOvereenkomst: ${reasonsText}\n\nToch opslaan?`,
+                    () => resolve(true),
+                );
+                // Als showConfirm annuleren niet ondersteunt, resolve false na kort delay
+                setTimeout(() => resolve(false), 60000);
+            });
+            if (!confirmed) return;
+        }
+
+        const { regels = [], ...header } = parsedInvoice;
+        try {
+            await insert({
+                leverancier: header.leverancier || 'Onbekend',
+                factuurnummer: header.factuurnummer || null,
+                datum: header.datum || null,
+                totaal_excl: header.totaal_excl || 0,
+                totaal_btw: header.totaal_btw || 0,
+                totaal_incl: header.totaal_incl || 0,
+                valuta: header.valuta || 'EUR',
+                status: 'review',
+                raw_ai_response: parsedInvoice,
+            } as any);
+            showToast(`Factuur opgeslagen · ${regels.length} regels`, 'success');
+            setParsedInvoice(null);
+            setScanPreview(null);
+            refetch();
+        } catch (e: any) {
+            showToast('Opslaan mislukt: ' + (e?.message || 'onbekend'), 'error');
+        }
     }
 
     function deleteInvoice(id: number) {
@@ -519,6 +628,9 @@ function FolderInvoices() {
                 )}
             </MetalCard>
 
+            {/* Duplicate cleanup section (alleen tonen als er dubbelen zijn) */}
+            <DuplicateCleanup invoices={invoices} onRemove={async (id) => { await remove(id); refetch(); }} />
+
             {/* Invoice list */}
             <MetalCard>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -533,40 +645,158 @@ function FolderInvoices() {
                         Nog geen gescande facturen. Upload je eerste factuur hierboven.
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                        <thead>
-                            <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
-                                {['Leverancier', 'Factuurnr.', 'Datum', 'Excl. BTW', 'BTW', 'Totaal', 'Status', ''].map(h => (
-                                    <th key={h} style={{ padding: '10px 12px', textAlign: ['Excl. BTW', 'BTW', 'Totaal'].includes(h) ? 'right' : 'left', fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {invoices.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((inv: any) => (
-                                <tr key={inv.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>{inv.leverancier || 'Onbekend'}</td>
-                                    <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{inv.factuurnummer || '—'}</td>
-                                    <td style={{ padding: '10px 12px', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{inv.datum || '—'}</td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_excl)}</td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_btw)}</td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_incl)}</td>
-                                    <td style={{ padding: '10px 12px' }}>
-                                        <Pill variant={inv.status === 'booked' ? 'ok' : inv.status === 'archived' ? 'draft' : 'warn'}>
-                                            {inv.status === 'booked' ? 'Geboekt' : inv.status === 'archived' ? 'Archief' : 'Review'}
-                                        </Pill>
-                                    </td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                                        <button onClick={() => deleteInvoice(inv.id)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }} title="Verwijderen">
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <InvoiceListTable
+                        invoices={invoices}
+                        onDelete={(id) => showConfirm('Deze factuur verwijderen? Dit kan niet ongedaan gemaakt worden.', () => remove(id).then(() => { showToast('Factuur verwijderd', 'success'); refetch(); }))}
+                    />
                 )}
             </MetalCard>
         </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DUPLICATE CLEANUP — waarschuwing + 1-klik opruimen
+   ═══════════════════════════════════════════════════════════════════ */
+
+function DuplicateCleanup({ invoices, onRemove }: { invoices: any[]; onRemove: (id: number) => Promise<void> }) {
+    const showConfirm = useConfirm();
+    const showToast = useToast();
+    const groups = useMemo(() => findDuplicateGroups(invoices || []), [invoices]);
+    const [working, setWorking] = useState(false);
+
+    if (groups.length === 0) return null;
+
+    const totalDupes = groups.reduce((s, g) => s + (g.length - 1), 0);
+
+    async function removeAllDupes() {
+        setWorking(true);
+        try {
+            for (const group of groups) {
+                // Behoud de oudste (eerste aangemaakt), verwijder de rest
+                const sorted = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                const keep = sorted[0];
+                const toDelete = sorted.slice(1);
+                for (const dupe of toDelete) {
+                    if (dupe.id !== keep.id) await onRemove(dupe.id);
+                }
+            }
+            showToast(`${totalDupes} dubbele factuur${totalDupes === 1 ? '' : 'en'} opgeruimd`, 'success');
+        } catch (e: any) {
+            showToast('Opruimen mislukt: ' + (e?.message || 'onbekend'), 'error');
+        }
+        setWorking(false);
+    }
+
+    return (
+        <MetalCard style={{ borderColor: 'rgba(239,68,68,.4)' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(239,68,68,.05)' }}>
+                <AlertTriangle size={16} style={{ color: 'var(--red)' }} />
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)' }}>
+                        {groups.length} groep{groups.length === 1 ? '' : 'en'} dubbele facturen gevonden · {totalDupes} extra exemplaren
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                        Ruim op om één schone kopie per factuur te behouden (de oudst aangemaakte blijft staan)
+                    </div>
+                </div>
+                <button
+                    onClick={() => showConfirm(`${totalDupes} dubbele factuur${totalDupes === 1 ? '' : 'en'} verwijderen?\n\nPer groep wordt de oudste behouden.`, removeAllDupes)}
+                    disabled={working}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 12, border: 'none', cursor: working ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                    <Trash2 size={13} /> {working ? 'Bezig…' : 'Ruim op'}
+                </button>
+            </div>
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {groups.map((group, i) => (
+                    <div key={i} style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.04)', border: '1px solid rgba(239,68,68,.15)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, fontWeight: 600 }}>
+                            Groep {i + 1} · {group.length} exemplaren van dezelfde factuur
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {group.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((inv, idx) => (
+                                <div key={inv.id} style={{ display: 'grid', gridTemplateColumns: '20px 1fr auto auto auto', gap: 10, alignItems: 'center', fontSize: 12, padding: '4px 6px' }}>
+                                    <span style={{ fontSize: 10, color: idx === 0 ? 'var(--green)' : 'var(--muted-light)', fontWeight: 700 }}>
+                                        {idx === 0 ? 'KEEP' : 'DUP'}
+                                    </span>
+                                    <span>{inv.leverancier || 'Onbekend'} · {inv.factuurnummer || 'geen nr'}</span>
+                                    <span style={{ color: 'var(--muted)', fontSize: 11 }}>{inv.datum || '—'}</span>
+                                    <span style={{ color: GOLD, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_incl)}</span>
+                                    {idx > 0 && (
+                                        <button onClick={() => showConfirm('Deze kopie verwijderen?', () => onRemove(inv.id))} style={{ background: 'transparent', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: 2 }}>
+                                            <X size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </MetalCard>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INVOICE LIST TABLE — met dupe-badges per rij
+   ═══════════════════════════════════════════════════════════════════ */
+
+function InvoiceListTable({ invoices, onDelete }: { invoices: any[]; onDelete: (id: number) => void }) {
+    // Vind welke invoices een dupe-partner hebben
+    const dupeMap = useMemo(() => {
+        const map: Record<number, 'exact' | 'likely' | 'possible'> = {};
+        for (const inv of invoices) {
+            const matches = detectDuplicates(inv, invoices, inv.id);
+            if (matches.length > 0) map[inv.id] = matches[0].type;
+        }
+        return map;
+    }, [invoices]);
+
+    const sorted = invoices.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+                <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
+                    {['Leverancier', 'Factuurnr.', 'Datum', 'Excl. BTW', 'BTW', 'Totaal', 'Status', ''].map(h => (
+                        <th key={h} style={{ padding: '10px 12px', textAlign: ['Excl. BTW', 'BTW', 'Totaal'].includes(h) ? 'right' : 'left', fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody>
+                {sorted.map((inv: any) => {
+                    const dupe = dupeMap[inv.id];
+                    const bgColor = dupe === 'exact' ? 'rgba(239,68,68,.04)' : dupe === 'likely' ? 'rgba(245,158,11,.04)' : 'transparent';
+                    return (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid var(--border)', background: bgColor }}>
+                            <td style={{ padding: '10px 12px', fontWeight: 500 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    {inv.leverancier || 'Onbekend'}
+                                    {dupe === 'exact' && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: 'var(--red)', border: '1px solid rgba(239,68,68,.3)' }}>DUBBEL</span>}
+                                    {dupe === 'likely' && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', padding: '2px 6px', borderRadius: 4, background: 'rgba(245,158,11,.15)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,.3)' }}>MOGELIJK DUBBEL</span>}
+                                </div>
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{inv.factuurnummer || '—'}</td>
+                            <td style={{ padding: '10px 12px', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{inv.datum || '—'}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_excl)}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_btw)}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_incl)}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                                <Pill variant={inv.status === 'booked' ? 'ok' : inv.status === 'archived' ? 'draft' : 'warn'}>
+                                    {inv.status === 'booked' ? 'Geboekt' : inv.status === 'archived' ? 'Archief' : 'Review'}
+                                </Pill>
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                                <button onClick={() => onDelete(inv.id)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }} title="Verwijderen">
+                                    <Trash2 size={14} />
+                                </button>
+                            </td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
     );
 }
 
@@ -622,16 +852,20 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, onSave,
             }
         }
 
-        // Check 4: dubbele factuur
-        if (invoice.factuurnummer && existingInvoices) {
-            const dupe = existingInvoices.find(i =>
-                i.factuurnummer === invoice.factuurnummer &&
-                i.leverancier === invoice.leverancier
-            );
-            if (dupe) {
-                checks.push({ id: 'dupe', status: 'error', label: 'Dubbele factuur!', detail: `Factuurnr ${invoice.factuurnummer} van ${invoice.leverancier} al ingeboekt` });
+        // Check 4: dubbele factuur (fuzzy matching)
+        if (existingInvoices && existingInvoices.length > 0) {
+            const dupes = detectDuplicates(invoice, existingInvoices);
+            const exact = dupes.find(d => d.type === 'exact');
+            const likely = dupes.find(d => d.type === 'likely');
+            const possible = dupes.find(d => d.type === 'possible');
+            if (exact) {
+                checks.push({ id: 'dupe', status: 'error', label: 'Dubbele factuur!', detail: `${exact.reasons.join(' + ')} als ${exact.existing.leverancier}` });
+            } else if (likely) {
+                checks.push({ id: 'dupe', status: 'warn', label: 'Mogelijk dubbel', detail: `${likely.reasons.join(' + ')} · Check voor opslaan` });
+            } else if (possible) {
+                checks.push({ id: 'dupe', status: 'warn', label: 'Lijkt op bestaande factuur', detail: `${possible.reasons.join(' + ')}` });
             } else {
-                checks.push({ id: 'dupe', status: 'ok', label: 'Niet eerder ingeboekt', detail: 'Uniek factuurnummer' });
+                checks.push({ id: 'dupe', status: 'ok', label: 'Niet eerder ingeboekt', detail: 'Uniek in je systeem' });
             }
         }
 
