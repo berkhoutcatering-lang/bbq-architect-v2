@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
     '/': [
@@ -473,22 +477,33 @@ interface ChatRequestBody {
     pageContext?: string;
     mode?: string;
     contextData?: Record<string, any>;
+    model?: 'sonnet' | 'opus' | 'haiku';
 }
+
+const MODEL_MAP: Record<string, string> = {
+    sonnet: 'claude-sonnet-4-6',
+    opus: 'claude-opus-4-7',
+    haiku: 'claude-haiku-4-5',
+};
 
 export async function POST(req: NextRequest): Promise<NextResponse | Response> {
     try {
         const body: ChatRequestBody = await req.json();
-        const { messages, pageContext, mode, contextData } = body;
+        const { messages, pageContext, mode, contextData, model: modelChoice } = body;
 
         if (!messages || !Array.isArray(messages)) {
             return NextResponse.json({ error: 'Berichten zijn onjuist geformatteerd' }, { status: 400 });
         }
 
-        const apiKey = process.env.GROQ_API_KEY;
+        const apiKey = process.env.ANTHROPIC_API_KEY;
         if (!apiKey) {
-            return NextResponse.json({ error: 'Groq API Key ontbreekt' }, { status: 500 });
+            return NextResponse.json({
+                error: 'ANTHROPIC_API_KEY ontbreekt — voeg toe aan .env.local',
+                hint: 'Ga naar console.anthropic.com → API Keys → Create key',
+            }, { status: 500 });
         }
 
+        // Build system prompt (same logic as before)
         const systemParts: string[] = [];
 
         if (mode === 'brainstorm') {
@@ -527,64 +542,59 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         systemParts.push(BASE_INSTRUCTIONS);
 
         const systemContent = systemParts.join('\n');
-        const systemMessage: ChatMessage = { role: 'system', content: systemContent };
-        const groqMessages: ChatMessage[] = [systemMessage, ...messages];
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + apiKey,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
-                messages: groqMessages,
-                temperature: mode === 'brainstorm' ? 0.85 : 0.7,
-                max_tokens: mode === 'brainstorm' ? 6000 : 4000,
-                stream: true,
-            }),
-        });
+        // Map messages to Anthropic format — system is separate, only user/assistant in messages
+        const anthropicMessages: Anthropic.Messages.MessageParam[] = messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error('Groq API Error:', response.status, errorData);
-            if (response.status === 429) {
-                return NextResponse.json({ error: 'AI rate limit bereikt — wacht even en probeer opnieuw.' }, { status: 429 });
-            }
-            return NextResponse.json({ error: 'Fout bij communicatie met Groq API' }, { status: response.status });
+        if (anthropicMessages.length === 0 || anthropicMessages[0].role !== 'user') {
+            return NextResponse.json({ error: 'Eerste bericht moet van gebruiker komen' }, { status: 400 });
         }
+
+        // Model selection: default sonnet, user can request opus or haiku
+        const selectedModel = MODEL_MAP[modelChoice || 'sonnet'] || MODEL_MAP.sonnet;
+        const maxTokens = mode === 'brainstorm' ? 8000 : 6000;
+
+        const client = new Anthropic({ apiKey });
+
+        const stream = client.messages.stream({
+            model: selectedModel,
+            max_tokens: maxTokens,
+            system: systemContent,
+            messages: anthropicMessages,
+        });
 
         const encoder = new TextEncoder();
         const readable = new ReadableStream({
             async start(controller) {
-                const reader = response.body!.getReader();
-                const decoder = new TextDecoder();
                 let fullText = '';
-                let lineBuffer = '';
                 try {
-                    while (true) {
-                        const chunk = await reader.read();
-                        if (chunk.done) break;
-                        lineBuffer += decoder.decode(chunk.value, { stream: true });
-                        const lines = lineBuffer.split('\n');
-                        lineBuffer = lines.pop()!;
-                        for (const line of lines) {
-                            const trimmed = line.trim();
-                            if (!trimmed.startsWith('data: ')) continue;
-                            const raw = trimmed.slice(6);
-                            if (raw === '[DONE]') continue;
-                            try {
-                                const parsed = JSON.parse(raw);
-                                const delta = (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) || '';
-                                if (delta) {
-                                    fullText += delta;
-                                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta }) + '\n\n'));
-                                }
-                            } catch (_e) { /* ongeldige chunk */ }
+                    for await (const event of stream) {
+                        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                            const delta = event.delta.text;
+                            if (delta) {
+                                fullText += delta;
+                                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta }) + '\n\n'));
+                            }
                         }
                     }
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({
+                        done: true,
+                        full: fullText,
+                        model: selectedModel,
+                    }) + '\n\n'));
+                } catch (err: any) {
+                    console.error('Anthropic stream error:', err);
+                    const msg = err instanceof Anthropic.AuthenticationError
+                        ? 'Ongeldige ANTHROPIC_API_KEY'
+                        : err instanceof Anthropic.RateLimitError
+                        ? 'AI rate limit bereikt — wacht even en probeer opnieuw.'
+                        : err instanceof Anthropic.APIError
+                        ? 'Claude API fout: ' + err.message
+                        : err?.message || 'Onbekende AI-fout';
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ error: msg, done: true, full: fullText }) + '\n\n'));
                 } finally {
-                    controller.enqueue(encoder.encode('data: ' + JSON.stringify({ done: true, full: fullText }) + '\n\n'));
                     controller.close();
                 }
             },
@@ -598,8 +608,14 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             },
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Chat API Route Error:', error);
-        return NextResponse.json({ error: 'Interne serverfout' }, { status: 500 });
+        if (error instanceof Anthropic.AuthenticationError) {
+            return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
+        }
+        if (error instanceof Anthropic.RateLimitError) {
+            return NextResponse.json({ error: 'Rate limit — wacht even' }, { status: 429 });
+        }
+        return NextResponse.json({ error: 'Interne serverfout: ' + (error?.message || 'onbekend') }, { status: 500 });
     }
 }

@@ -127,10 +127,13 @@ export async function POST(req: NextRequest) {
 
         contentBlocks.push({ type: 'text', text: userText });
 
-        console.log(`[parse-document] calling Claude Opus 4.7 type=${type} elapsed=${Date.now() - t0}ms`);
+        // Haiku 4.5 is uitstekend voor gestructureerde extractie en ~80% goedkoper dan Opus.
+        // Voor complexe facturen waar Haiku faalt kan later een fallback naar Sonnet/Opus worden toegevoegd.
+        const model = 'claude-haiku-4-5';
+        console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
         const response = await client.messages.create({
-            model: 'claude-opus-4-7',
+            model,
             max_tokens: 4000,
             system: systemPrompt,
             messages: [{ role: 'user', content: contentBlocks }],

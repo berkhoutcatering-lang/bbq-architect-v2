@@ -51,6 +51,17 @@ export default function AiAssistant(): React.ReactElement {
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [folders, setFolders] = useState<any[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [aiModel, setAiModel] = useState<'sonnet' | 'opus'>(function () {
+        if (typeof window === 'undefined') return 'sonnet';
+        const stored = localStorage.getItem('bbq_ai_model');
+        return stored === 'opus' ? 'opus' : 'sonnet';
+    });
+
+    function toggleModel() {
+        const next: 'sonnet' | 'opus' = aiModel === 'sonnet' ? 'opus' : 'sonnet';
+        setAiModel(next);
+        if (typeof window !== 'undefined') localStorage.setItem('bbq_ai_model', next);
+    }
 
     let pageName = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
     pageName = pageName.charAt(0).toUpperCase() + pageName.slice(1);
@@ -151,6 +162,7 @@ export default function AiAssistant(): React.ReactElement {
                     pageContext: pathname,
                     mode: 'context',
                     contextData: contextData,
+                    model: aiModel,
                 }),
                 signal: controller.signal,
             });
@@ -780,7 +792,28 @@ export default function AiAssistant(): React.ReactElement {
                                 </div>
                             </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                onClick={toggleModel}
+                                title={aiModel === 'sonnet' ? 'Sonnet 4.6 actief — klik voor Opus 4.7 (slimmer, duurder)' : 'Opus 4.7 actief — klik voor Sonnet 4.6 (sneller, goedkoper)'}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    background: aiModel === 'opus' ? '#c4a35a' : 'rgba(0,0,0,.15)',
+                                    color: aiModel === 'opus' ? '#000' : 'rgba(0,0,0,.85)',
+                                    border: 'none',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: '.08em',
+                                    textTransform: 'uppercase',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                }}
+                            >
+                                {aiModel === 'opus' ? '⚡ OPUS' : 'SONNET'}
+                            </button>
                             <button onClick={function (): void { setContextLoaded(false); setContextData(null); loadContext(); }} className="ai-clear-btn" title="Data herladen">
                                 <Database size={11} />
                             </button>
