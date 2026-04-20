@@ -637,9 +637,9 @@ function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
                             <Field label="Leverancier" value={invoice.leverancier || ''} onChange={v => updateHeader('leverancier', v)} />
                             <Field label="Factuurnummer" value={invoice.factuurnummer || ''} onChange={v => updateHeader('factuurnummer', v)} />
                             <Field label="Datum" value={invoice.datum || ''} onChange={v => updateHeader('datum', v)} type="date" />
-                            <Field label={<Hint tip="Bedrag exclusief BTW zoals op de factuur staat. AI berekent dit automatisch.">Totaal excl. BTW</Hint>} value={String(invoice.totaal_excl ?? 0)} onChange={v => updateHeader('totaal_excl', parseFloat(v) || 0)} type="number" />
-                            <Field label="BTW bedrag" value={String(invoice.totaal_btw ?? 0)} onChange={v => updateHeader('totaal_btw', parseFloat(v) || 0)} type="number" />
-                            <Field label="Totaal incl. BTW" value={String(invoice.totaal_incl ?? 0)} onChange={v => updateHeader('totaal_incl', parseFloat(v) || 0)} type="number" />
+                            <CurrencyField label={<Hint tip="Bedrag exclusief BTW zoals op de factuur staat. AI berekent dit automatisch.">Totaal excl. BTW</Hint>} value={String(invoice.totaal_excl ?? 0)} onChange={v => updateHeader('totaal_excl', parseFloat(v) || 0)} />
+                            <CurrencyField label="BTW bedrag" value={String(invoice.totaal_btw ?? 0)} onChange={v => updateHeader('totaal_btw', parseFloat(v) || 0)} />
+                            <CurrencyField label="Totaal incl. BTW" value={String(invoice.totaal_incl ?? 0)} onChange={v => updateHeader('totaal_incl', parseFloat(v) || 0)} />
                         </div>
                     </MetalCard>
 
@@ -657,7 +657,7 @@ function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                            {['Product', 'Aantal', 'Eenheid', 'Prijs', 'BTW%', 'Subtotaal', ''].map(h => (
+                                            {['Product', 'Aantal', 'Eenheid', 'Prijs (€)', 'BTW (%)', 'Subtotaal (€)', ''].map(h => (
                                                 <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
                                             ))}
                                         </tr>
@@ -668,9 +668,9 @@ function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
                                                 <td style={{ padding: 4 }}><InlineInput value={r.product_naam} onChange={v => updateLine(i, 'product_naam', v)} /></td>
                                                 <td style={{ padding: 4, width: 70 }}><InlineInput value={String(r.hoeveelheid)} onChange={v => updateLine(i, 'hoeveelheid', parseFloat(v) || 0)} type="number" /></td>
                                                 <td style={{ padding: 4, width: 80 }}><InlineInput value={r.eenheid} onChange={v => updateLine(i, 'eenheid', v)} /></td>
-                                                <td style={{ padding: 4, width: 80 }}><InlineInput value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 60 }}><InlineInput value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
-                                                <td style={{ padding: 4, width: 90 }}><InlineInput value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
+                                                <td style={{ padding: 4, width: 92 }}><InlineInput prefix="€" value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
+                                                <td style={{ padding: 4, width: 72 }}><InlineInput suffix="%" value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
+                                                <td style={{ padding: 4, width: 102 }}><InlineInput prefix="€" value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
                                                 <td style={{ padding: 4, width: 28 }}>
                                                     <button onClick={() => removeLine(i)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
                                                         <X size={12} />
@@ -689,20 +689,36 @@ function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
     );
 }
 
-function Field({ label, value, onChange, type }: { label: React.ReactNode; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({ label, value, onChange, type, prefix, suffix }: { label: React.ReactNode; value: string; onChange: (v: string) => void; type?: string; prefix?: string; suffix?: string }) {
     return (
         <div>
             <Eyebrow>{label}</Eyebrow>
-            <input value={value} onChange={e => onChange(e.target.value)} type={type || 'text'}
-                style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13, fontVariantNumeric: 'tabular-nums', outline: 'none' }} />
+            <div style={{ position: 'relative', marginTop: 6 }}>
+                {prefix && <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontSize: 13, pointerEvents: 'none', fontWeight: 600 }}>{prefix}</span>}
+                <input value={value} onChange={e => onChange(e.target.value)} type={type || 'text'}
+                    style={{ width: '100%', padding: '9px 12px', paddingLeft: prefix ? 28 : 12, paddingRight: suffix ? 32 : 12, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13, fontVariantNumeric: 'tabular-nums', outline: 'none' }} />
+                {suffix && <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontSize: 13, pointerEvents: 'none', fontWeight: 600 }}>{suffix}</span>}
+            </div>
         </div>
     );
 }
 
-function InlineInput({ value, onChange, type }: { value: string; onChange: (v: string) => void; type?: string }) {
+function CurrencyField(props: Omit<Parameters<typeof Field>[0], 'prefix' | 'type'>) {
+    return <Field {...props} type="number" prefix="€" />;
+}
+
+function PercentField(props: Omit<Parameters<typeof Field>[0], 'suffix' | 'type'>) {
+    return <Field {...props} type="number" suffix="%" />;
+}
+
+function InlineInput({ value, onChange, type, prefix, suffix }: { value: string; onChange: (v: string) => void; type?: string; prefix?: string; suffix?: string }) {
     return (
-        <input value={value} onChange={e => onChange(e.target.value)} type={type || 'text'}
-            style={{ width: '100%', padding: '6px 8px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontSize: 12, fontVariantNumeric: 'tabular-nums', outline: 'none' }} />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            {prefix && <span style={{ position: 'absolute', left: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600 }}>{prefix}</span>}
+            <input value={value} onChange={e => onChange(e.target.value)} type={type || 'text'}
+                style={{ width: '100%', padding: '6px 8px', paddingLeft: prefix ? 20 : 8, paddingRight: suffix ? 22 : 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontSize: 12, fontVariantNumeric: 'tabular-nums', outline: 'none' }} />
+            {suffix && <span style={{ position: 'absolute', right: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600 }}>{suffix}</span>}
+        </div>
     );
 }
 
@@ -909,8 +925,8 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
                     <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <Field label="Winkel" value={parsed.winkel || ''} onChange={v => upd('winkel', v)} />
                         <Field label="Datum" value={parsed.datum || ''} onChange={v => upd('datum', v)} type="date" />
-                        <Field label="Totaal bedrag (incl BTW)" value={String(parsed.totaal_bedrag ?? 0)} onChange={v => upd('totaal_bedrag', parseFloat(v) || 0)} type="number" />
-                        <Field label="BTW %" value={String(parsed.btw_pct ?? 21)} onChange={v => upd('btw_pct', parseFloat(v) || 21)} type="number" />
+                        <CurrencyField label="Totaal bedrag (incl BTW)" value={String(parsed.totaal_bedrag ?? 0)} onChange={v => upd('totaal_bedrag', parseFloat(v) || 0)} />
+                        <PercentField label="BTW tarief" value={String(parsed.btw_pct ?? 21)} onChange={v => upd('btw_pct', parseFloat(v) || 21)} />
                         <div style={{ gridColumn: '1 / -1' }}>
                             <Field label="Categorie" value={parsed.categorie || ''} onChange={v => upd('categorie', v)} />
                         </div>
