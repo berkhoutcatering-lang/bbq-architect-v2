@@ -515,39 +515,85 @@ export async function executeAction(action: { type: string; data: Record<string,
 
     let result: Record<string, unknown> | undefined;
 
+    // Generic synoniem-mapper: vertaalt AI-variaties naar echte DB kolomnamen
+    // Wordt gebruikt door zowel insert als update
+    function normalizeForTable(table: string, rec: Record<string, unknown>) {
+        const mapField = (synonyms: string[], target: string) => {
+            if (rec[target] !== undefined) return; // target staat al goed
+            for (const s of synonyms) {
+                if (rec[s] !== undefined) {
+                    rec[target] = rec[s];
+                    delete rec[s];
+                    return;
+                }
+            }
+        };
+
+        if (table === 'events') {
+            mapField(['aantal_gasten', 'gasten'], 'guests');
+            mapField(['naam'], 'name');
+            mapField(['datum'], 'date');
+            mapField(['locatie'], 'location');
+            mapField(['prijs_pp', 'prijs_per_persoon'], 'ppp');
+            const allowed = ['name', 'date', 'guests', 'location', 'ppp', 'status', 'client_naam', 'client_adres', 'notitie', 'menu', 'menu_items', 'theme'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'offertes') {
+            mapField(['klant_naam', 'naam', 'client'], 'client_naam');
+            mapField(['klant_adres', 'adres'], 'client_adres');
+            mapField(['guests', 'gasten'], 'aantal_gasten');
+            mapField(['prijs_pp', 'basis_prijs'], 'basis_prijs_pp');
+            const allowed = ['nummer', 'status', 'client_naam', 'client_adres', 'datum', 'geldig_tot', 'notitie', 'items', 'aantal_gasten', 'basis_prijs_pp', 'korting', 'vaste_kosten', 'menu_selectie'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'facturen') {
+            mapField(['klant_naam', 'naam', 'client'], 'client_naam');
+            mapField(['klant_adres', 'adres'], 'client_adres');
+            const allowed = ['nummer', 'status', 'client_naam', 'client_adres', 'datum', 'vervaldatum', 'items'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'recepten') {
+            mapField(['name', 'titel'], 'naam');
+            mapField(['category'], 'categorie');
+            mapField(['portions', 'servings'], 'porties');
+            mapField(['prep_time', 'bereidingstijd'], 'preptime');
+            const allowed = ['naam', 'categorie', 'porties', 'preptime', 'ingredienten', 'instructies', 'notitie'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'inventory') {
+            mapField(['name'], 'naam');
+            mapField(['category'], 'categorie');
+            mapField(['stock', 'voorraad'], 'current_stock');
+            mapField(['min', 'minimum', 'minimaal'], 'min_stock');
+            mapField(['eenheid'], 'unit');
+            mapField(['price', 'prijs', 'inkoopprijs'], 'purchase_price');
+            mapField(['leverancier'], 'supplier');
+            const allowed = ['naam', 'categorie', 'current_stock', 'min_stock', 'unit', 'purchase_price', 'supplier', 'yield_factor'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'materieel') {
+            mapField(['name'], 'naam');
+            mapField(['datum', 'aanschaf', 'bought_on'], 'aanschaf_datum');
+            const allowed = ['naam', 'type', 'status', 'aanschaf_datum', 'notitie', 'logboek'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'haccp_records') {
+            mapField(['omschrijving', 'beschrijving', 'product'], 'wat');
+            mapField(['temperatuur', 'temperature'], 'temp');
+            const allowed = ['event_id', 'datum', 'tijd', 'wat', 'temp', 'type', 'notitie', 'status'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'leveranciers') {
+            mapField(['name'], 'naam');
+            mapField(['telefoon', 'phone'], 'tel');
+            const allowed = ['naam', 'type', 'contact', 'email', 'tel'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+    }
+
     if (def.op === 'insert') {
         const insertData: Record<string, unknown> = Object.assign({}, data);
-        if (def.table === 'events') {
-            // AI stuurt soms offerte-velden (aantal_gasten) of NL-synoniemen (naam/datum/locatie)
-            // Events-tabel gebruikt Engelstalige kolomnamen: name, date, guests, location, ppp
-            if (insertData.aantal_gasten !== undefined && insertData.guests === undefined) {
-                insertData.guests = insertData.aantal_gasten;
-            }
-            delete insertData.aantal_gasten;
-            if (insertData.naam !== undefined && insertData.name === undefined) {
-                insertData.name = insertData.naam;
-            }
-            delete insertData.naam;
-            if (insertData.datum !== undefined && insertData.date === undefined) {
-                insertData.date = insertData.datum;
-            }
-            delete insertData.datum;
-            if (insertData.locatie !== undefined && insertData.location === undefined) {
-                insertData.location = insertData.locatie;
-            }
-            delete insertData.locatie;
-            if (insertData.prijs_pp !== undefined && insertData.ppp === undefined) {
-                insertData.ppp = insertData.prijs_pp;
-            }
-            delete insertData.prijs_pp;
-            // Allowlist: alleen kolommen die in events-tabel bestaan
-            const allowedEventCols: Record<string, boolean> = {
-                name: true, date: true, guests: true, location: true, ppp: true,
-                status: true, client_naam: true, client_adres: true, notitie: true,
-                menu: true, menu_items: true, theme: true,
-            };
-            Object.keys(insertData).forEach(k => { if (!allowedEventCols[k]) delete insertData[k]; });
-        }
+        normalizeForTable(def.table!, insertData);
         if (def.table === 'gerechten') {
             // Normaliseer ingredienten: AI kan sturen als ingredienten, ingredients, ingredients_list, ingrediënten
             const rawIngs = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
@@ -584,35 +630,7 @@ export async function executeAction(action: { type: string; data: Record<string,
     } else if (def.op === 'update') {
         const updateData: Record<string, unknown> = Object.assign({}, data);
         delete updateData.id;
-
-        if (def.table === 'events') {
-            if (updateData.aantal_gasten !== undefined && updateData.guests === undefined) {
-                updateData.guests = updateData.aantal_gasten;
-            }
-            delete updateData.aantal_gasten;
-            if (updateData.naam !== undefined && updateData.name === undefined) {
-                updateData.name = updateData.naam;
-            }
-            delete updateData.naam;
-            if (updateData.datum !== undefined && updateData.date === undefined) {
-                updateData.date = updateData.datum;
-            }
-            delete updateData.datum;
-            if (updateData.locatie !== undefined && updateData.location === undefined) {
-                updateData.location = updateData.locatie;
-            }
-            delete updateData.locatie;
-            if (updateData.prijs_pp !== undefined && updateData.ppp === undefined) {
-                updateData.ppp = updateData.prijs_pp;
-            }
-            delete updateData.prijs_pp;
-            const allowedEventColsUpd: Record<string, boolean> = {
-                name: true, date: true, guests: true, location: true, ppp: true,
-                status: true, client_naam: true, client_adres: true, notitie: true,
-                menu: true, menu_items: true, theme: true,
-            };
-            Object.keys(updateData).forEach(k => { if (!allowedEventColsUpd[k]) delete updateData[k]; });
-        }
+        normalizeForTable(def.table!, updateData);
 
         if (def.table === 'gerechten') {
             const rawIngsUpdate = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
