@@ -127,9 +127,10 @@ export async function POST(req: NextRequest) {
 
         contentBlocks.push({ type: 'text', text: userText });
 
-        // Haiku 4.5 is uitstekend voor gestructureerde extractie en ~80% goedkoper dan Opus.
-        // Voor complexe facturen waar Haiku faalt kan later een fallback naar Sonnet/Opus worden toegevoegd.
-        const model = 'claude-haiku-4-5';
+        // Sonnet 4.6 voor beide types — hoge betrouwbaarheid voor PDFs en foto's.
+        // Bij jouw volume (~30-50 scans/maand) kost dit ~€0,10-0,15/maand terwijl
+        // de slechte-scan-fouten van Haiku wegvallen.
+        const model = 'claude-sonnet-4-6';
         console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
         const response = await client.messages.create({
