@@ -626,13 +626,40 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         });
 
     } catch (error: any) {
-        console.error('Chat API Route Error:', error);
+        // Uitgebreide logging zodat we errors in de Terminal kunnen zien
+        const details = {
+            name: error?.name,
+            message: error?.message,
+            status: error?.status,
+            type: error?.error?.type,
+            inner: error?.error?.error?.message,
+            stack: error?.stack?.split('\n').slice(0, 3).join(' | '),
+        };
+        console.error('[CHAT API ERROR]', JSON.stringify(details, null, 2));
+
         if (error instanceof Anthropic.AuthenticationError) {
-            return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
+            return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY', detail: error.message }, { status: 401 });
         }
         if (error instanceof Anthropic.RateLimitError) {
-            return NextResponse.json({ error: 'Rate limit — wacht even' }, { status: 429 });
+            return NextResponse.json({ error: 'Rate limit — wacht even', detail: error.message }, { status: 429 });
         }
-        return NextResponse.json({ error: 'Interne serverfout: ' + (error?.message || 'onbekend') }, { status: 500 });
+        if (error instanceof Anthropic.BadRequestError) {
+            return NextResponse.json({ error: 'Anthropic API fout', detail: error.message, status: error.status }, { status: 400 });
+        }
+        if (error instanceof Anthropic.NotFoundError) {
+            return NextResponse.json({
+                error: 'Model niet beschikbaar — mogelijk geen toegang tot dit model op jouw account',
+                detail: error.message,
+                hint: 'Check console.anthropic.com → Models voor beschikbare modellen',
+            }, { status: 404 });
+        }
+        if (error instanceof Anthropic.APIError) {
+            return NextResponse.json({ error: 'Anthropic API fout', detail: error.message, status: error.status }, { status: error.status || 502 });
+        }
+        return NextResponse.json({
+            error: 'Interne serverfout',
+            detail: error?.message || 'onbekend',
+            name: error?.name,
+        }, { status: 500 });
     }
 }
