@@ -437,6 +437,7 @@ function FolderInvoices() {
             invoice={parsedInvoice}
             setInvoice={setParsedInvoice}
             preview={scanPreview}
+            existingInvoices={invoices}
             onSave={saveInvoice}
             onCancel={cancelScan}
         />;
@@ -569,11 +570,87 @@ function FolderInvoices() {
     );
 }
 
-function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
+function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, onSave, onCancel }: {
     invoice: ParsedInvoice; setInvoice: (i: ParsedInvoice) => void; preview: string | null;
+    existingInvoices?: any[];
     onSave: () => void | Promise<void>; onCancel: () => void;
 }) {
     const [saving, setSaving] = useState(false);
+
+    // Validatie: bereken live welke checks wel/niet kloppen
+    const validation = useMemo(() => {
+        const checks: { id: string; status: 'ok' | 'warn' | 'error'; label: string; detail?: string }[] = [];
+
+        const excl = parseFloat(String(invoice.totaal_excl ?? 0));
+        const btw = parseFloat(String(invoice.totaal_btw ?? 0));
+        const incl = parseFloat(String(invoice.totaal_incl ?? 0));
+
+        // Check 1: totaal excl + BTW = incl (binnen 2 cent marge)
+        const berekend = excl + btw;
+        const diff = Math.abs(berekend - incl);
+        if (incl === 0 && excl === 0) {
+            checks.push({ id: 'totals', status: 'warn', label: 'Totalen ontbreken', detail: 'Geen bedragen gevonden' });
+        } else if (diff < 0.02) {
+            checks.push({ id: 'totals', status: 'ok', label: 'Totalen kloppen', detail: `€${excl.toFixed(2)} + €${btw.toFixed(2)} = €${incl.toFixed(2)}` });
+        } else {
+            checks.push({ id: 'totals', status: 'error', label: 'Totalen kloppen niet', detail: `€${excl.toFixed(2)} + €${btw.toFixed(2)} = €${berekend.toFixed(2)}, maar totaal incl zegt €${incl.toFixed(2)} (verschil €${diff.toFixed(2)})` });
+        }
+
+        // Check 2: som van subtotalen = totaal excl
+        const regels = invoice.regels || [];
+        if (regels.length > 0) {
+            const sumSubs = regels.reduce((s, r) => s + (parseFloat(String(r.subtotaal ?? 0)) || 0), 0);
+            const subsDiff = Math.abs(sumSubs - excl);
+            if (excl === 0) {
+                checks.push({ id: 'lines', status: 'warn', label: 'Regels niet gekoppeld aan totaal', detail: `Som subtotalen: €${sumSubs.toFixed(2)}` });
+            } else if (subsDiff < 0.10) {
+                checks.push({ id: 'lines', status: 'ok', label: 'Regels matchen totaal excl.', detail: `${regels.length} regel${regels.length === 1 ? '' : 's'} = €${sumSubs.toFixed(2)}` });
+            } else {
+                checks.push({ id: 'lines', status: 'warn', label: 'Regels wijken af van totaal', detail: `Som: €${sumSubs.toFixed(2)} · totaal excl: €${excl.toFixed(2)} (verschil €${subsDiff.toFixed(2)})` });
+            }
+        }
+
+        // Check 3: BTW percentage realistisch (9 of 21 in NL)
+        if (excl > 0 && btw > 0) {
+            const pct = (btw / excl) * 100;
+            if (pct > 8 && pct < 10) {
+                checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 9% (laag tarief)', detail: 'Voedsel, groente, fruit' });
+            } else if (pct > 20 && pct < 22) {
+                checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 21% (standaard)', detail: 'Niet-food / dranken / verpakking' });
+            } else {
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
+            }
+        }
+
+        // Check 4: dubbele factuur
+        if (invoice.factuurnummer && existingInvoices) {
+            const dupe = existingInvoices.find(i =>
+                i.factuurnummer === invoice.factuurnummer &&
+                i.leverancier === invoice.leverancier
+            );
+            if (dupe) {
+                checks.push({ id: 'dupe', status: 'error', label: 'Dubbele factuur!', detail: `Factuurnr ${invoice.factuurnummer} van ${invoice.leverancier} al ingeboekt` });
+            } else {
+                checks.push({ id: 'dupe', status: 'ok', label: 'Niet eerder ingeboekt', detail: 'Uniek factuurnummer' });
+            }
+        }
+
+        // Check 5: lege factuurnummer waarschuwing
+        if (!invoice.factuurnummer || String(invoice.factuurnummer).trim() === '') {
+            checks.push({ id: 'nummer', status: 'warn', label: 'Factuurnummer ontbreekt', detail: 'Handmatig invullen voor audit-trail' });
+        }
+
+        // Check 6: lege leverancier
+        if (!invoice.leverancier || String(invoice.leverancier).trim() === '' || invoice.leverancier === 'Onbekend') {
+            checks.push({ id: 'lev', status: 'warn', label: 'Leverancier onbekend', detail: 'Vul handmatig in' });
+        }
+
+        const hasErrors = checks.some(c => c.status === 'error');
+        const hasWarnings = checks.some(c => c.status === 'warn');
+        const overall: 'ok' | 'warn' | 'error' = hasErrors ? 'error' : hasWarnings ? 'warn' : 'ok';
+
+        return { checks, overall };
+    }, [invoice, existingInvoices]);
 
     function updateHeader<K extends keyof ParsedInvoice>(key: K, val: ParsedInvoice[K]) {
         setInvoice({ ...invoice, [key]: val });
@@ -607,12 +684,43 @@ function InvoiceReview({ invoice, setInvoice, preview, onSave, onCancel }: {
                     <h2 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 24, margin: 0 }}>Controleer factuur</h2>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>AI heeft de gegevens gelezen — corrigeer waar nodig en klik opslaan.</div>
                 </div>
-                <BtnPrimary icon={Save} onClick={doSave} disabled={saving}>{saving ? 'Opslaan…' : 'Opslaan'}</BtnPrimary>
+                <BtnPrimary
+                    icon={Save}
+                    onClick={doSave}
+                    disabled={saving || validation.overall === 'error'}
+                    style={validation.overall === 'error' ? { background: 'var(--red)', opacity: 0.5 } : undefined}
+                >
+                    {saving ? 'Opslaan…' : validation.overall === 'error' ? 'Los blokkers op' : 'Opslaan'}
+                </BtnPrimary>
             </div>
 
             <SectionExplain>
-                <strong style={{ color: 'var(--text)' }}>Tip:</strong> klik op elk veld om te bewerken. De AI maakt soms kleine fouten bij slechte scans — check vooral de totalen en BTW onderaan.
+                <strong style={{ color: 'var(--text)' }}>Tip:</strong> klik op elk veld om te bewerken. De AI maakt soms kleine fouten bij slechte scans — check de validatie-badges hieronder om te zien wat klopt.
             </SectionExplain>
+
+            {/* Validatie-badges */}
+            <MetalCard style={{
+                borderColor: validation.overall === 'error' ? 'rgba(239,68,68,.4)' : validation.overall === 'warn' ? 'rgba(245,158,11,.3)' : 'rgba(34,197,94,.3)',
+            }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: validation.overall === 'error' ? 'rgba(239,68,68,.05)' : validation.overall === 'warn' ? 'rgba(245,158,11,.04)' : 'rgba(34,197,94,.04)' }}>
+                    {validation.overall === 'ok' ? <Check size={16} style={{ color: 'var(--green)' }} /> : validation.overall === 'warn' ? <AlertTriangle size={16} style={{ color: 'var(--amber)' }} /> : <AlertTriangle size={16} style={{ color: 'var(--red)' }} />}
+                    <div style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>
+                        {validation.overall === 'ok' ? 'Alles ziet er goed uit — klaar om op te slaan' : validation.overall === 'warn' ? `${validation.checks.filter(c => c.status === 'warn').length} aandachtspunt${validation.checks.filter(c => c.status === 'warn').length === 1 ? '' : 'en'} — check voor opslaan` : 'Blokkers gevonden — los op voor opslaan'}
+                    </div>
+                    <span style={{ fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted-light)', fontWeight: 700 }}>
+                        {validation.checks.filter(c => c.status === 'ok').length} OK · {validation.checks.filter(c => c.status === 'warn').length} WARN · {validation.checks.filter(c => c.status === 'error').length} ERROR
+                    </span>
+                </div>
+                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {validation.checks.map(c => (
+                        <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '20px 1fr auto', gap: 10, alignItems: 'center', padding: '6px 10px', borderRadius: 6, background: c.status === 'error' ? 'rgba(239,68,68,.04)' : c.status === 'warn' ? 'rgba(245,158,11,.04)' : 'transparent' }}>
+                            {c.status === 'ok' ? <Check size={12} style={{ color: 'var(--green)' }} /> : c.status === 'warn' ? <AlertTriangle size={12} style={{ color: 'var(--amber)' }} /> : <X size={12} style={{ color: 'var(--red)' }} />}
+                            <span style={{ fontSize: 12, fontWeight: 500, color: c.status === 'error' ? 'var(--red)' : c.status === 'warn' ? 'var(--amber)' : 'var(--text)' }}>{c.label}</span>
+                            {c.detail && <span style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>{c.detail}</span>}
+                        </div>
+                    ))}
+                </div>
+            </MetalCard>
 
             <div style={{ display: 'grid', gridTemplateColumns: preview ? '1fr 1.4fr' : '1fr', gap: 16 }}>
                 {preview && (
