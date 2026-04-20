@@ -548,8 +548,25 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             .filter(m => m.role === 'user' || m.role === 'assistant')
             .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-        if (anthropicMessages.length === 0 || anthropicMessages[0].role !== 'user') {
-            return NextResponse.json({ error: 'Eerste bericht moet van gebruiker komen' }, { status: 400 });
+        // Drop leading assistant messages — Anthropic requires first message to be from user
+        while (anthropicMessages.length > 0 && anthropicMessages[0].role !== 'user') {
+            anthropicMessages.shift();
+        }
+
+        // Collapse consecutive same-role messages (Anthropic handles it but cleaner)
+        const merged: Anthropic.Messages.MessageParam[] = [];
+        for (const msg of anthropicMessages) {
+            const last = merged[merged.length - 1];
+            if (last && last.role === msg.role) {
+                // Merge content — both are strings here
+                last.content = (last.content as string) + '\n\n' + (msg.content as string);
+            } else {
+                merged.push({ ...msg });
+            }
+        }
+
+        if (merged.length === 0) {
+            return NextResponse.json({ error: 'Geen gebruikersbericht gevonden' }, { status: 400 });
         }
 
         // Model selection: default sonnet, user can request opus or haiku
@@ -562,7 +579,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             model: selectedModel,
             max_tokens: maxTokens,
             system: systemContent,
-            messages: anthropicMessages,
+            messages: merged,
         });
 
         const encoder = new TextEncoder();
