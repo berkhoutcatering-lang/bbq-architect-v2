@@ -32,10 +32,10 @@ Gebruik EXACT dit schema, geen extra velden:
 Regels:
 - Alle bedragen EXCL BTW tenzij anders aangegeven
 - Categoriseer producten logisch voor BBQ/catering context
-- Bij onzekerheid: geef je beste inschatting — niet null laten
-- Antwoord ALLEEN met de JSON, geen markdown, geen uitleg`;
+- Bij onzekerheid: geef je beste inschatting
+- Antwoord ALLEEN met geldige JSON, geen markdown fences, geen extra tekst`;
 
-const RECEIPT_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse kassabonnen van supermarkten/groothandels voor een horeca bedrijf.
+const RECEIPT_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse kassabonnen voor een horeca bedrijf.
 Je krijgt een foto van een kassabon. Extracteer in strikt JSON formaat:
 
 {
@@ -52,20 +52,44 @@ Je krijgt een foto van een kassabon. Extracteer in strikt JSON formaat:
 
 Regels:
 - Bij onleesbare bon: geef je beste inschatting
-- Antwoord ALLEEN met de JSON, geen markdown`;
+- Antwoord ALLEEN met geldige JSON, geen markdown fences, geen extra tekst`;
+
+// Try models in order — first supported one wins
+const VISION_MODELS = [
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'meta-llama/llama-4-maverick-17b-128e-instruct',
+    'llama-3.2-90b-vision-preview',
+    'llama-3.2-11b-vision-preview',
+];
+
+async function callGroqWithTimeout(body: any, apiKey: string, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 export async function POST(req: NextRequest) {
+    const t0 = Date.now();
     try {
         const apiKey = process.env.GROQ_API_KEY;
         if (!apiKey) {
-            return NextResponse.json({ error: 'GROQ_API_KEY ontbreekt in environment' }, { status: 500 });
+            return NextResponse.json({ error: 'GROQ_API_KEY ontbreekt — voeg toe aan .env.local' }, { status: 500 });
         }
 
         const body = await req.json();
         const { imageBase64, imageUrl, type } = body as { imageBase64?: string; imageUrl?: string; type: 'invoice' | 'receipt' };
 
         if (!imageBase64 && !imageUrl) {
-            return NextResponse.json({ error: 'Geef imageBase64 of imageUrl mee' }, { status: 400 });
+            return NextResponse.json({ error: 'Geen afbeelding meegegeven' }, { status: 400 });
         }
         if (!['invoice', 'receipt'].includes(type)) {
             return NextResponse.json({ error: 'type moet invoice of receipt zijn' }, { status: 400 });
@@ -77,64 +101,79 @@ export async function POST(req: NextRequest) {
             : 'Lees deze kassabon en retourneer het JSON-schema zoals geïnstrueerd.';
 
         const imageContent = imageBase64
-            ? { type: 'image_url', image_url: { url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` } }
-            : { type: 'image_url', image_url: { url: imageUrl! } };
+            ? { type: 'image_url' as const, image_url: { url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` } }
+            : { type: 'image_url' as const, image_url: { url: imageUrl! } };
 
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + apiKey,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: systemPrompt + '\n\n' + userText },
-                            imageContent,
-                        ],
-                    },
-                ],
-                temperature: 0.1,
-                max_tokens: 3000,
-                response_format: { type: 'json_object' },
-            }),
-        });
+        const messages = [{
+            role: 'user' as const,
+            content: [
+                { type: 'text' as const, text: systemPrompt + '\n\n' + userText },
+                imageContent,
+            ],
+        }];
 
-        if (!groqResponse.ok) {
-            const err = await groqResponse.text();
-            console.error('Groq vision error:', groqResponse.status, err);
-            return NextResponse.json({
-                error: 'AI kon het document niet lezen',
-                detail: err,
-                status: groqResponse.status,
-            }, { status: 502 });
-        }
+        let lastError: string | null = null;
+        let lastStatus = 0;
 
-        const data = await groqResponse.json();
-        const content = data?.choices?.[0]?.message?.content;
-        if (!content) {
-            return NextResponse.json({ error: 'AI gaf leeg antwoord' }, { status: 502 });
-        }
+        for (const model of VISION_MODELS) {
+            console.log(`[parse-document] trying model=${model} type=${type} elapsed=${Date.now() - t0}ms`);
+            try {
+                const res = await callGroqWithTimeout({
+                    model,
+                    messages,
+                    temperature: 0.1,
+                    max_tokens: 3000,
+                    response_format: { type: 'json_object' },
+                }, apiKey, 45000);
 
-        let parsed: any;
-        try {
-            parsed = JSON.parse(content);
-        } catch {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                try { parsed = JSON.parse(match[0]); } catch { parsed = null; }
+                if (!res.ok) {
+                    const err = await res.text();
+                    lastStatus = res.status;
+                    lastError = err.slice(0, 500);
+                    console.warn(`[parse-document] model=${model} status=${res.status} err=${lastError}`);
+                    // If model doesn't exist / decommissioned, try next
+                    if (res.status === 400 || res.status === 404) continue;
+                    // Other errors: stop
+                    break;
+                }
+
+                const data = await res.json();
+                const content = data?.choices?.[0]?.message?.content;
+                if (!content) {
+                    lastError = 'AI gaf leeg antwoord';
+                    continue;
+                }
+
+                let parsed: any;
+                try {
+                    parsed = JSON.parse(content);
+                } catch {
+                    const match = content.match(/\{[\s\S]*\}/);
+                    if (match) {
+                        try { parsed = JSON.parse(match[0]); } catch { /* ignore */ }
+                    }
+                }
+                if (!parsed) {
+                    lastError = 'AI antwoord kon niet als JSON worden gelezen';
+                    continue;
+                }
+
+                console.log(`[parse-document] success model=${model} total=${Date.now() - t0}ms`);
+                return NextResponse.json({ success: true, data: parsed, model, elapsedMs: Date.now() - t0 });
+            } catch (e: any) {
+                lastError = e?.name === 'AbortError' ? 'AI reageerde niet binnen 45s' : (e?.message || 'Onbekende fout');
+                console.warn(`[parse-document] model=${model} exception=${lastError}`);
+                if (e?.name === 'AbortError') break;
             }
-            if (!parsed) {
-                return NextResponse.json({ error: 'AI antwoord kon niet als JSON worden gelezen', raw: content }, { status: 502 });
-            }
         }
 
-        return NextResponse.json({ success: true, data: parsed, raw: content });
+        return NextResponse.json({
+            error: lastError || 'Geen enkel vision-model werkte',
+            status: lastStatus,
+            hint: 'Check je GROQ_API_KEY + of je account toegang heeft tot vision-modellen op console.groq.com',
+        }, { status: 502 });
     } catch (e: any) {
-        console.error('parse-document error:', e);
+        console.error('[parse-document] fatal', e);
         return NextResponse.json({ error: e?.message || 'Onbekende fout' }, { status: 500 });
     }
 }

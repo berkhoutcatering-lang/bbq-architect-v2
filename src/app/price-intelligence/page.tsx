@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -9,9 +9,8 @@ import Papa from 'papaparse';
 import {
     FileScan, Receipt, PieChart, Sparkles, Upload, Camera, X, Check,
     AlertTriangle, Loader2, Edit3, Trash2, Package, ArrowUpRight, Clock,
-    Info, HelpCircle, Plus, Search, FileText, TrendingUp, TrendingDown,
-    Store, ChevronRight, Download, Euro, CheckCircle, FileUp, CloudUpload,
-    ArrowLeft, Save, Filter,
+    Info, HelpCircle, Plus, FileText, TrendingUp, TrendingDown,
+    Store, Euro, CloudUpload, ArrowLeft, Save, FolderOpen, Zap, Lightbulb,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -126,6 +125,83 @@ function fmt2(n: number | string | null | undefined) {
     if (n === null || n === undefined || n === '') return '€\u00a00,00';
     const v = parseFloat(String(n));
     return isNaN(v) ? '€\u00a00,00' : '€\u00a0' + v.toFixed(2).replace('.', ',');
+}
+
+function ScanProgress({ step, onCancel }: { step: 'prep' | 'upload' | 'ai' | 'done' | 'error'; onCancel?: () => void }) {
+    const steps: { id: 'prep' | 'upload' | 'ai' | 'done'; label: string }[] = [
+        { id: 'prep', label: 'Bestand voorbereiden' },
+        { id: 'upload', label: 'Naar AI sturen' },
+        { id: 'ai', label: 'AI analyseert' },
+        { id: 'done', label: 'Klaar' },
+    ];
+    const stepIdx = steps.findIndex(s => s.id === step);
+    return (
+        <div style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+                <Loader2 size={28} style={{ color: GOLD, animation: 'spin 1s linear infinite' }} />
+            </div>
+            <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: GOLD, marginBottom: 18 }}>
+                {step === 'ai' ? 'AI leest je document…' : 'Bezig met verwerken…'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400, margin: '0 auto 20px' }}>
+                {steps.map((s, i) => {
+                    const done = stepIdx > i;
+                    const active = stepIdx === i;
+                    return (
+                        <div key={s.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '8px 12px', borderRadius: 8,
+                            background: active ? `${GOLD}10` : done ? 'rgba(34,197,94,.06)' : 'transparent',
+                            border: `1px solid ${active ? `${GOLD}40` : done ? 'rgba(34,197,94,.2)' : 'var(--border)'}`,
+                            transition: 'all .2s',
+                        }}>
+                            <div style={{
+                                width: 22, height: 22, borderRadius: 11,
+                                background: done ? 'var(--green)' : active ? GOLD : 'var(--color-bg-deep)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: done || active ? '#000' : 'var(--muted)', fontSize: 11, fontWeight: 700,
+                            }}>
+                                {done ? <Check size={12} /> : active ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : i + 1}
+                            </div>
+                            <span style={{ fontSize: 13, color: done || active ? 'var(--text)' : 'var(--muted)', fontWeight: active ? 600 : 500 }}>
+                                {s.label}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+            {onCancel && (
+                <div style={{ textAlign: 'center' }}>
+                    <button onClick={onCancel} style={{
+                        padding: '8px 14px', borderRadius: 8, background: 'transparent',
+                        border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', fontSize: 12,
+                    }}>
+                        Annuleren
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ErrorBanner({ error, onRetry, onDismiss }: { error: string; onRetry?: () => void; onDismiss?: () => void }) {
+    return (
+        <div style={{
+            padding: 14, borderRadius: 10, background: 'rgba(239,68,68,.08)',
+            border: '1px solid rgba(239,68,68,.3)',
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+            <AlertTriangle size={16} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--text)' }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>AI kon het document niet lezen</div>
+                <div style={{ color: 'var(--muted)', lineHeight: 1.5 }}>{error}</div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    {onRetry && <button onClick={onRetry} style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(255,191,0,.15)', border: '1px solid rgba(255,191,0,.4)', color: 'var(--brand)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>Opnieuw proberen</button>}
+                    {onDismiss && <button onClick={onDismiss} style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>Sluiten</button>}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -255,38 +331,61 @@ function FolderInvoices() {
     const { data: invoices, insert, update, remove, refetch } = useSupabase<any>('supplier_invoices', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
-    const [scanning, setScanning] = useState(false);
+    const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
     const [parsedInvoice, setParsedInvoice] = useState<ParsedInvoice | null>(null);
     const [scanPreview, setScanPreview] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<number | null>(null);
+    const [lastFile, setLastFile] = useState<File | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
+    const scanning = scanStep !== 'idle' && scanStep !== 'done' && scanStep !== 'error';
 
     async function handleFile(file: File) {
         if (!file) return;
         setError(null);
-        setScanning(true);
+        setLastFile(file);
+        setScanStep('prep');
+        const controller = new AbortController();
+        abortRef.current = controller;
         try {
             const imageBase64 = await fileToImageBase64(file);
+            if (controller.signal.aborted) return;
             setScanPreview(imageBase64);
+            setScanStep('upload');
             const res = await fetch('/api/parse-document', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ imageBase64, type: 'invoice' }),
+                signal: controller.signal,
             });
+            setScanStep('ai');
             const body = await res.json();
+            if (controller.signal.aborted) return;
             if (!res.ok) {
-                setError(body.error || 'Scan mislukt');
-                setScanning(false);
+                setError(body.error || 'Scan mislukt — probeer een duidelijkere foto of PDF');
+                setScanStep('error');
                 return;
             }
             setParsedInvoice(body.data as ParsedInvoice);
-            setScanning(false);
+            setScanStep('done');
             showToast('Factuur gelezen — controleer en boek in', 'success');
         } catch (e: any) {
+            if (e?.name === 'AbortError') { setScanStep('idle'); return; }
             setError(e.message || 'Scan mislukt');
-            setScanning(false);
+            setScanStep('error');
         }
+    }
+
+    function cancelScan() {
+        abortRef.current?.abort();
+        setScanStep('idle');
+        setScanPreview(null);
+        setError(null);
+    }
+
+    function retryScan() {
+        if (lastFile) handleFile(lastFile);
     }
 
     async function saveInvoice() {
@@ -313,12 +412,6 @@ function FolderInvoices() {
         setParsedInvoice(null);
         setScanPreview(null);
         refetch();
-    }
-
-    function cancelScan() {
-        setParsedInvoice(null);
-        setScanPreview(null);
-        setError(null);
     }
 
     function deleteInvoice(id: number) {
@@ -385,44 +478,39 @@ function FolderInvoices() {
                 <MiniStat label="Totaal incl. BTW" value={fmt2(stats.total)} icon={Euro} />
             </div>
 
-            {/* Dropzone */}
+            {/* Upload zone */}
             <MetalCard>
-                <div
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
-                    onClick={() => !scanning && fileRef.current?.click()}
-                    style={{
-                        padding: 40, textAlign: 'center', cursor: scanning ? 'wait' : 'pointer',
-                        border: `2px dashed ${scanning ? GOLD : 'var(--border-strong)'}`,
-                        margin: 14, borderRadius: 12,
-                        background: scanning ? `${GOLD}08` : 'transparent',
-                        transition: 'all .2s',
-                    }}>
-                    {scanning ? (
-                        <>
-                            <Loader2 size={32} style={{ color: GOLD, margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-                            <div style={{ fontSize: 15, fontWeight: 600, color: GOLD }}>AI leest je factuur…</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Dit duurt 5-15 seconden</div>
-                        </>
-                    ) : (
-                        <>
-                            <div style={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: 16, background: `${GOLD}18`, border: `1px solid ${GOLD}4D`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <CloudUpload size={28} style={{ color: GOLD }} />
-                            </div>
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 300 }}>Sleep factuur hierheen of klik om te kiezen</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-                                PDF, JPG of PNG · Groot bestand? Geen probleem — we verkleinen automatisch.
-                            </div>
-                        </>
-                    )}
-                    <input ref={fileRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
-                        onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-                </div>
+                {scanning ? (
+                    <ScanProgress step={scanStep as any} onCancel={cancelScan} />
+                ) : (
+                    <div
+                        onDragOver={e => e.preventDefault()}
+                        onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
+                        style={{
+                            padding: '40px 30px', textAlign: 'center',
+                            border: `2px dashed var(--border-strong)`,
+                            margin: 14, borderRadius: 12,
+                        }}>
+                        <div style={{ width: 64, height: 64, margin: '0 auto 16px', borderRadius: 16, background: `${GOLD}18`, border: `1px solid ${GOLD}4D`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <CloudUpload size={28} style={{ color: GOLD }} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginBottom: 8 }}>Upload een factuur</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
+                            Sleep hierheen of klik op een knop hieronder.<br />
+                            PDF, JPG of PNG · AI leest binnen 15 seconden.
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <BtnPrimary icon={FolderOpen} onClick={() => fileRef.current?.click()}>Kies bestand</BtnPrimary>
+                            <BtnGhost icon={Camera} onClick={() => { fileRef.current?.setAttribute('capture', 'environment'); fileRef.current?.click(); setTimeout(() => fileRef.current?.removeAttribute('capture'), 500); }}>Foto maken</BtnGhost>
+                        </div>
+                        <input ref={fileRef} type="file" accept="application/pdf,image/*" style={{ display: 'none' }}
+                            onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                    </div>
+                )}
 
-                {error && (
-                    <div style={{ margin: '0 14px 14px', padding: 12, borderRadius: 10, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: 'var(--red)' }}>
-                        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                        <div><strong>Scan mislukt:</strong> {error}</div>
+                {error && scanStep === 'error' && (
+                    <div style={{ margin: '0 14px 14px' }}>
+                        <ErrorBanner error={error} onRetry={lastFile ? retryScan : undefined} onDismiss={() => { setError(null); setScanStep('idle'); }} />
                     </div>
                 )}
             </MetalCard>
@@ -639,34 +727,50 @@ function FolderReceipts() {
     const { data: bonnen, insert, remove, refetch } = useSupabase<any>('bonnen', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
-    const [scanning, setScanning] = useState(false);
+    const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
     const [parsed, setParsed] = useState<any | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [lastFile, setLastFile] = useState<File | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const cameraRef = useRef<HTMLInputElement>(null);
+    const scanning = scanStep !== 'idle' && scanStep !== 'done' && scanStep !== 'error';
 
     async function handleFile(file: File) {
         if (!file) return;
-        setError(null); setScanning(true);
+        setError(null);
+        setLastFile(file);
+        setScanStep('prep');
+        const controller = new AbortController();
+        abortRef.current = controller;
         try {
             const imageBase64 = await fileToImageBase64(file);
+            if (controller.signal.aborted) return;
             setPreview(imageBase64);
+            setScanStep('upload');
             const res = await fetch('/api/parse-document', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ imageBase64, type: 'receipt' }),
+                signal: controller.signal,
             });
+            setScanStep('ai');
             const body = await res.json();
-            if (!res.ok) { setError(body.error || 'Scan mislukt'); setScanning(false); return; }
+            if (controller.signal.aborted) return;
+            if (!res.ok) { setError(body.error || 'Scan mislukt — probeer een duidelijkere foto'); setScanStep('error'); return; }
             setParsed(body.data);
-            setScanning(false);
+            setScanStep('done');
             showToast('Bon gelezen — controleer en bewaar', 'success');
         } catch (e: any) {
+            if (e?.name === 'AbortError') { setScanStep('idle'); return; }
             setError(e.message || 'Scan mislukt');
-            setScanning(false);
+            setScanStep('error');
         }
     }
+
+    function cancelScan() { abortRef.current?.abort(); setScanStep('idle'); setPreview(null); setError(null); }
+    function retryScan() { if (lastFile) handleFile(lastFile); }
 
     async function saveReceipt() {
         if (!parsed) return;
@@ -703,40 +807,33 @@ function FolderReceipts() {
                 <MiniStat label="Deze maand" value={bonnen.filter((b: any) => b.datum && b.datum.startsWith(new Date().toISOString().slice(0, 7))).length} icon={Clock} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <MetalCard>
+            <MetalCard>
+                {scanning ? (
+                    <ScanProgress step={scanStep as any} onCancel={cancelScan} />
+                ) : (
                     <div
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
-                        onClick={() => !scanning && fileRef.current?.click()}
-                        style={{ padding: 30, textAlign: 'center', cursor: scanning ? 'wait' : 'pointer', border: `2px dashed ${scanning ? GOLD : 'var(--border-strong)'}`, margin: 14, borderRadius: 12 }}>
-                        {scanning ? (
-                            <><Loader2 size={28} style={{ color: GOLD, margin: '0 auto 10px', animation: 'spin 1s linear infinite' }} />
-                                <div style={{ fontSize: 13, color: GOLD, fontWeight: 600 }}>AI leest bon…</div></>
-                        ) : (
-                            <><Upload size={24} style={{ color: GOLD, margin: '0 auto 10px' }} />
-                                <div style={{ fontSize: 14, fontWeight: 600 }}>Upload foto</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>JPG/PNG/PDF</div></>
-                        )}
+                        style={{ padding: '30px 20px', textAlign: 'center', border: `2px dashed var(--border-strong)`, margin: 14, borderRadius: 12 }}>
+                        <div style={{ width: 56, height: 56, margin: '0 auto 14px', borderRadius: 14, background: `${GOLD}18`, border: `1px solid ${GOLD}4D`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Receipt size={24} style={{ color: GOLD }} />
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 300, marginBottom: 6 }}>Upload kassabon</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18 }}>Fotografeer met je telefoon of upload een bestaande foto.</div>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <BtnPrimary icon={Camera} onClick={() => cameraRef.current?.click()}>Foto maken</BtnPrimary>
+                            <BtnGhost icon={FolderOpen} onClick={() => fileRef.current?.click()}>Kies bestand</BtnGhost>
+                        </div>
                         <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
-                    </div>
-                </MetalCard>
-                <MetalCard>
-                    <div onClick={() => !scanning && cameraRef.current?.click()}
-                        style={{ padding: 30, textAlign: 'center', cursor: 'pointer', border: '2px dashed var(--border-strong)', margin: 14, borderRadius: 12 }}>
-                        <Camera size={24} style={{ color: GOLD, margin: '0 auto 10px' }} />
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>Fotograferen</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>Opent camera op mobiel</div>
                         <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                     </div>
-                </MetalCard>
-            </div>
-
-            {error && (
-                <div style={{ padding: 12, borderRadius: 10, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: 'var(--red)' }}>
-                    <AlertTriangle size={14} /> <div><strong>Scan mislukt:</strong> {error}</div>
-                </div>
-            )}
+                )}
+                {error && scanStep === 'error' && (
+                    <div style={{ margin: '0 14px 14px' }}>
+                        <ErrorBanner error={error} onRetry={lastFile ? retryScan : undefined} onDismiss={() => { setError(null); setScanStep('idle'); }} />
+                    </div>
+                )}
+            </MetalCard>
 
             <MetalCard>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -838,27 +935,38 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
    FOLDER 3 — BOEKHOUDING (inzichten per leverancier + CSV-import)
    ═══════════════════════════════════════════════════════════════════ */
 
+const SUPPLIER_COLORS = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#3b82f6', '#f97316', '#ef4444', '#10b981', '#8b8bf0'];
+
 function FolderBooks() {
     const { data: invoices } = useSupabase<any>('supplier_invoices', []);
     const { data: bonnen } = useSupabase<any>('bonnen', []);
     const { data: prijzen } = useSupabase<any>('supplier_prices', []);
     const [csvOpen, setCsvOpen] = useState(false);
+    const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
 
     const bySupplier = useMemo(() => {
-        const m: Record<string, { spend: number; count: number; lastDate: string | null; products: number }> = {};
+        const m: Record<string, { spend: number; count: number; lastDate: string | null; products: number; lines: { product: string; prijs: number; eenheid: string }[] }> = {};
         (invoices || []).forEach((i: any) => {
             const key = i.leverancier || 'Onbekend';
-            if (!m[key]) m[key] = { spend: 0, count: 0, lastDate: null, products: 0 };
+            if (!m[key]) m[key] = { spend: 0, count: 0, lastDate: null, products: 0, lines: [] };
             m[key].spend += parseFloat(i.totaal_incl) || 0;
             m[key].count += 1;
             if (!m[key].lastDate || (i.datum && i.datum > m[key].lastDate)) m[key].lastDate = i.datum;
+            if (Array.isArray(i.raw_ai_response?.regels)) {
+                i.raw_ai_response.regels.forEach((r: any) => {
+                    if (r.product_naam && r.prijs_per_eenheid) {
+                        m[key].lines.push({ product: r.product_naam, prijs: parseFloat(r.prijs_per_eenheid), eenheid: r.eenheid || 'stuks' });
+                    }
+                });
+            }
         });
         (prijzen || []).forEach((p: any) => {
             const key = p.leverancier || 'Onbekend';
-            if (!m[key]) m[key] = { spend: 0, count: 0, lastDate: null, products: 0 };
+            if (!m[key]) m[key] = { spend: 0, count: 0, lastDate: null, products: 0, lines: [] };
             m[key].products += 1;
+            m[key].lines.push({ product: p.product_naam, prijs: parseFloat(p.prijs), eenheid: p.eenheid || 'stuks' });
         });
-        return Object.entries(m).map(([name, d]) => ({ name, ...d })).sort((a, b) => b.spend - a.spend);
+        return Object.entries(m).map(([name, d], i) => ({ name, color: SUPPLIER_COLORS[i % SUPPLIER_COLORS.length], ...d })).sort((a, b) => b.spend - a.spend);
     }, [invoices, prijzen]);
 
     const totalSpend = bySupplier.reduce((s, x) => s + x.spend, 0);
@@ -883,38 +991,16 @@ function FolderBooks() {
                 <BtnGhost icon={Upload} onClick={() => setCsvOpen(true)}>CSV prijslijst importeren</BtnGhost>
             </div>
 
-            <MetalCard>
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Store size={14} style={{ color: GOLD }} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Uitgaven per leverancier</span>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {bySupplier.length} leveranciers</span>
-                </div>
-                {bySupplier.length === 0 ? (
-                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
-                        Nog geen leverancier-data. Scan een factuur of importeer een CSV.
-                    </div>
-                ) : (
-                    <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {bySupplier.map(s => {
-                            const pct = totalSpend > 0 ? (s.spend / totalSpend) * 100 : 0;
-                            return (
-                                <div key={s.name} style={{ display: 'grid', gridTemplateColumns: '8px 1fr auto auto auto', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'rgba(130,130,130,.04)' }}>
-                                    <div style={{ width: 8, height: 40, background: GOLD, borderRadius: 2 }} />
-                                    <div>
-                                        <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                                        <div style={{ position: 'relative', height: 4, background: 'rgba(130,130,130,.1)', borderRadius: 2, marginTop: 6, overflow: 'hidden', maxWidth: 300 }}>
-                                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: GOLD, borderRadius: 2 }} />
-                                        </div>
-                                    </div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', minWidth: 70, textAlign: 'right' }}>{s.count} factuur · {s.products} prod.</div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', minWidth: 70 }}>{s.lastDate || '—'}</div>
-                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums', minWidth: 110, textAlign: 'right' }}>{fmt2(s.spend)}</div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </MetalCard>
+            <SupplierDonut bySupplier={bySupplier} total={totalSpend} onSelect={setSelectedSupplier} />
+
+            {selectedSupplier && (
+                <SupplierAnalysisDrawer
+                    supplierName={selectedSupplier}
+                    bySupplier={bySupplier}
+                    totalSpend={totalSpend}
+                    onClose={() => setSelectedSupplier(null)}
+                />
+            )}
 
             <div style={{ padding: 16, borderRadius: 10, background: `${GOLD}0A`, border: `1px solid ${GOLD}26`, display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
                 <Info size={16} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
@@ -1052,5 +1138,331 @@ function CSVImport({ onClose }: { onClose: () => void }) {
                 </MetalCard>
             )}
         </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUPPLIER DONUT CHART (klikbaar)
+   ═══════════════════════════════════════════════════════════════════ */
+
+type SupplierRow = { name: string; color: string; spend: number; count: number; products: number; lastDate: string | null; lines: { product: string; prijs: number; eenheid: string }[] };
+
+function SupplierDonut({ bySupplier, total, onSelect }: { bySupplier: SupplierRow[]; total: number; onSelect: (s: string) => void }) {
+    const [hovered, setHovered] = useState<string | null>(null);
+    const R = 90, IR = 60, CX = 110, CY = 110;
+    const C = 2 * Math.PI * R;
+
+    const spendSuppliers = bySupplier.filter(s => s.spend > 0);
+    const emptySuppliers = bySupplier.filter(s => s.spend === 0);
+
+    let offset = 0;
+    const segs = spendSuppliers.map(s => {
+        const pct = total > 0 ? s.spend / total : 0;
+        const len = pct * C;
+        const seg = { ...s, pct, len, offset, dash: len, gap: C - len };
+        offset += len;
+        return seg;
+    });
+    const hov = hovered ? segs.find(s => s.name === hovered) : null;
+
+    return (
+        <MetalCard>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PieChart size={14} style={{ color: GOLD }} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Uitgaven per leverancier</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>· klik op een taartpunt voor AI-advies</span>
+            </div>
+
+            {bySupplier.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Nog geen leverancier-data. Scan een factuur of importeer een CSV.
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: spendSuppliers.length > 0 ? '280px 1fr' : '1fr', gap: 28, padding: 22 }}>
+                    {spendSuppliers.length > 0 && (
+                        <div style={{ position: 'relative', width: 240, height: 240, justifySelf: 'center' }}>
+                            <svg width="240" height="240" viewBox="0 0 220 220" style={{ transform: 'rotate(-90deg)' }}>
+                                <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(130,130,130,.08)" strokeWidth={R - IR} />
+                                {segs.map(s => (
+                                    <circle key={s.name}
+                                        cx={CX} cy={CY} r={R}
+                                        fill="none" stroke={s.color}
+                                        strokeWidth={R - IR}
+                                        strokeDasharray={`${s.dash} ${s.gap}`}
+                                        strokeDashoffset={-s.offset}
+                                        style={{
+                                            transition: 'all .18s',
+                                            opacity: hovered && hovered !== s.name ? 0.3 : 1,
+                                            strokeWidth: hovered === s.name ? (R - IR) + 6 : (R - IR),
+                                            cursor: 'pointer',
+                                        }}
+                                        onMouseEnter={() => setHovered(s.name)}
+                                        onMouseLeave={() => setHovered(null)}
+                                        onClick={() => onSelect(s.name)}
+                                    />
+                                ))}
+                            </svg>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', pointerEvents: 'none' }}>
+                                {hov ? (
+                                    <>
+                                        <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>{hov.name}</div>
+                                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, color: hov.color, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt2(hov.spend)}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{(hov.pct * 100).toFixed(1)}% · klik voor AI</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>Totale inkoop</div>
+                                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt2(total)}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{spendSuppliers.length} leveranciers</div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {spendSuppliers.map(s => {
+                            const pct = total > 0 ? (s.spend / total) * 100 : 0;
+                            const isHov = hovered === s.name;
+                            return (
+                                <div key={s.name}
+                                    onMouseEnter={() => setHovered(s.name)}
+                                    onMouseLeave={() => setHovered(null)}
+                                    onClick={() => onSelect(s.name)}
+                                    style={{
+                                        display: 'grid', gridTemplateColumns: '10px 1fr auto auto', gap: 12, alignItems: 'center',
+                                        padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                                        background: isHov ? 'rgba(255,255,255,.05)' : 'rgba(130,130,130,.04)',
+                                        opacity: hovered && !isHov ? 0.5 : 1,
+                                        transition: 'all .15s',
+                                    }}>
+                                    <div style={{ width: 10, height: 30, background: s.color, borderRadius: 2 }} />
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            {s.name}
+                                            <span style={{ fontSize: 10, color: 'var(--muted-light)' }}>· {s.count} fact · {s.products} prod.</span>
+                                        </div>
+                                        <div style={{ position: 'relative', height: 4, background: 'rgba(130,130,130,.1)', borderRadius: 2, marginTop: 4, overflow: 'hidden' }}>
+                                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: s.color, borderRadius: 2 }} />
+                                        </div>
+                                    </div>
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums', minWidth: 100, textAlign: 'right' }}>{fmt2(s.spend)}</div>
+                                    <Sparkles size={14} style={{ color: GOLD }} />
+                                </div>
+                            );
+                        })}
+                        {emptySuppliers.length > 0 && (
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                                <div style={{ fontSize: 10, letterSpacing: '.15em', color: 'var(--muted-light)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Alleen prijslijst (nog geen facturen)</div>
+                                {emptySuppliers.map(s => (
+                                    <div key={s.name} onClick={() => onSelect(s.name)} style={{ padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>{s.name}</span>
+                                        <span>{s.products} producten</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </MetalCard>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUPPLIER ANALYSIS DRAWER (AI conclusies)
+   ═══════════════════════════════════════════════════════════════════ */
+
+type SupplierAnalysis = {
+    headline: string;
+    verdict: 'green' | 'gold' | 'red';
+    body: string;
+    savings_tips: { product: string; action: string; impact: string }[];
+    categories_strong: string[];
+    categories_weak: string[];
+    next_action: string;
+};
+
+function SupplierAnalysisDrawer({ supplierName, bySupplier, totalSpend, onClose }: {
+    supplierName: string;
+    bySupplier: SupplierRow[];
+    totalSpend: number;
+    onClose: () => void;
+}) {
+    const [loading, setLoading] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+    const [analysis, setAnalysis] = useState<SupplierAnalysis | null>(null);
+    const [cheaperElsewhere, setCheaperElsewhere] = useState<any[]>([]);
+    const [error, setError] = useState<string | null>(null);
+
+    const self = bySupplier.find(s => s.name === supplierName);
+    const others = bySupplier.filter(s => s.name !== supplierName);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/supplier-analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    leverancier: supplierName,
+                    context: {
+                        self: self ? { count: self.count, spend: self.spend, products: self.lines.map(l => l.product).slice(0, 20), lines: self.lines.slice(0, 30) } : { count: 0, spend: 0, products: [], lines: [] },
+                        others: others.map(o => ({ leverancier: o.name, spend: o.spend, count: o.count, lines: o.lines.slice(0, 30) })),
+                        totalSpend,
+                    },
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) { setError(body.error || 'Kon analyse niet laden'); setLoading(false); return; }
+            setAnalysis(body.analysis);
+            setCheaperElsewhere(body.rawData?.cheaperElsewhere || []);
+        } catch (e: any) {
+            setError(e?.message || 'Netwerkfout');
+        } finally {
+            setLoading(false);
+            setLoaded(true);
+        }
+    }, [supplierName, self, others, totalSpend]);
+
+    useEffect(() => {
+        if (!loaded) load();
+    }, [loaded, load]);
+
+    const toneColor = analysis?.verdict === 'red' ? 'var(--red)' : analysis?.verdict === 'green' ? 'var(--green)' : GOLD;
+
+    return (
+        <>
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', zIndex: 9998 }} />
+            <aside style={{
+                position: 'fixed', right: 0, top: 0, height: '100vh', width: 680, maxWidth: '100vw',
+                background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)',
+                zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column',
+            }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: `linear-gradient(180deg, ${GOLD}15, transparent)`, position: 'relative' }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <Sparkles size={14} style={{ color: GOLD }} />
+                                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: '.15em', textTransform: 'uppercase' }}>AI Leverancier-analyse</span>
+                            </div>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300 }}>{supplierName}</div>
+                            {self && (
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                                    {fmt2(self.spend)} uitgegeven · {self.count} facturen · {self.products} producten getracked
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <X size={16} />
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
+                    {loading && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
+                            <Sparkles size={36} style={{ color: GOLD, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                            <div style={{ fontSize: 14, color: 'var(--muted)' }}>AI vergelijkt {supplierName} met andere leveranciers…</div>
+                        </div>
+                    )}
+
+                    {error && !loading && (
+                        <ErrorBanner error={error} onRetry={load} onDismiss={() => setError(null)} />
+                    )}
+
+                    {analysis && !loading && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            <div style={{ padding: 18, borderRadius: 12, background: `${toneColor}10`, border: `1px solid ${toneColor}40` }}>
+                                <div style={{ fontSize: 10, letterSpacing: '.2em', textTransform: 'uppercase', color: toneColor, fontWeight: 700, marginBottom: 6 }}>
+                                    {analysis.verdict === 'green' ? 'Blijf hier kopen' : analysis.verdict === 'red' ? 'Heroverwegen' : 'Voorwaardelijk houden'}
+                                </div>
+                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, fontWeight: 400, lineHeight: 1.3, color: 'var(--text)' }}>
+                                    {analysis.headline}
+                                </div>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginTop: 10 }}>
+                                    {analysis.body}
+                                </div>
+                            </div>
+
+                            {analysis.savings_tips?.length > 0 && (
+                                <div>
+                                    <Eyebrow>Concrete besparingen</Eyebrow>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                                        {analysis.savings_tips.map((tip, i) => (
+                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 12, alignItems: 'center', padding: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(34,197,94,.04)' }}>
+                                                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(34,197,94,.15)', border: '1px solid rgba(34,197,94,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <Lightbulb size={16} style={{ color: 'var(--green)' }} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: 13, fontWeight: 600 }}>{tip.product}</div>
+                                                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{tip.action}</div>
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{tip.impact}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {cheaperElsewhere.length > 0 && (
+                                <div>
+                                    <Eyebrow>Goedkoper bij andere leveranciers (harde cijfers)</Eyebrow>
+                                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {cheaperElsewhere.slice(0, 5).map((c: any, i: number) => (
+                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                                <div>
+                                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{c.product}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                                                        <span style={{ color: 'var(--red)' }}>{supplierName} {fmt2(c.selfPrice)}</span> → <span style={{ color: 'var(--green)' }}>{c.bestLev} {fmt2(c.bestPrice)}</span>
+                                                    </div>
+                                                </div>
+                                                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>−{c.savingsPct.toFixed(1)}%</span>
+                                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>per {c.eenheid || 'eenheid'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                {analysis.categories_strong?.length > 0 && (
+                                    <div style={{ padding: 14, borderRadius: 10, border: '1px solid rgba(34,197,94,.25)', background: 'rgba(34,197,94,.04)' }}>
+                                        <Eyebrow><span style={{ color: 'var(--green)' }}>Sterk in</span></Eyebrow>
+                                        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {analysis.categories_strong.map((c, i) => <Pill key={i} variant="ok">{c}</Pill>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {analysis.categories_weak?.length > 0 && (
+                                    <div style={{ padding: 14, borderRadius: 10, border: '1px solid rgba(239,68,68,.25)', background: 'rgba(239,68,68,.04)' }}>
+                                        <Eyebrow><span style={{ color: 'var(--red)' }}>Elders kopen</span></Eyebrow>
+                                        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {analysis.categories_weak.map((c, i) => <Pill key={i} variant="danger">{c}</Pill>)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ padding: 14, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}40`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                <Zap size={16} style={{ color: GOLD, flexShrink: 0, marginTop: 2 }} />
+                                <div>
+                                    <div style={{ fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: GOLD, fontWeight: 700, marginBottom: 4 }}>Volgende stap</div>
+                                    <div style={{ fontSize: 13, lineHeight: 1.5 }}>{analysis.next_action}</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {analysis && !loading && (
+                    <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end', background: 'var(--color-bg-deep)' }}>
+                        <BtnGhost icon={Sparkles} onClick={load}>Opnieuw analyseren</BtnGhost>
+                    </div>
+                )}
+            </aside>
+        </>
     );
 }
