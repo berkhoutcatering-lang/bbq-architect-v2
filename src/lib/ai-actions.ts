@@ -517,6 +517,37 @@ export async function executeAction(action: { type: string; data: Record<string,
 
     if (def.op === 'insert') {
         const insertData: Record<string, unknown> = Object.assign({}, data);
+        if (def.table === 'events') {
+            // AI stuurt soms offerte-velden (aantal_gasten) of NL-synoniemen (naam/datum/locatie)
+            // Events-tabel gebruikt Engelstalige kolomnamen: name, date, guests, location, ppp
+            if (insertData.aantal_gasten !== undefined && insertData.guests === undefined) {
+                insertData.guests = insertData.aantal_gasten;
+            }
+            delete insertData.aantal_gasten;
+            if (insertData.naam !== undefined && insertData.name === undefined) {
+                insertData.name = insertData.naam;
+            }
+            delete insertData.naam;
+            if (insertData.datum !== undefined && insertData.date === undefined) {
+                insertData.date = insertData.datum;
+            }
+            delete insertData.datum;
+            if (insertData.locatie !== undefined && insertData.location === undefined) {
+                insertData.location = insertData.locatie;
+            }
+            delete insertData.locatie;
+            if (insertData.prijs_pp !== undefined && insertData.ppp === undefined) {
+                insertData.ppp = insertData.prijs_pp;
+            }
+            delete insertData.prijs_pp;
+            // Allowlist: alleen kolommen die in events-tabel bestaan
+            const allowedEventCols: Record<string, boolean> = {
+                name: true, date: true, guests: true, location: true, ppp: true,
+                status: true, client_naam: true, client_adres: true, notitie: true,
+                menu: true, menu_items: true, theme: true,
+            };
+            Object.keys(insertData).forEach(k => { if (!allowedEventCols[k]) delete insertData[k]; });
+        }
         if (def.table === 'gerechten') {
             // Normaliseer ingredienten: AI kan sturen als ingredienten, ingredients, ingredients_list, ingrediënten
             const rawIngs = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
@@ -553,6 +584,35 @@ export async function executeAction(action: { type: string; data: Record<string,
     } else if (def.op === 'update') {
         const updateData: Record<string, unknown> = Object.assign({}, data);
         delete updateData.id;
+
+        if (def.table === 'events') {
+            if (updateData.aantal_gasten !== undefined && updateData.guests === undefined) {
+                updateData.guests = updateData.aantal_gasten;
+            }
+            delete updateData.aantal_gasten;
+            if (updateData.naam !== undefined && updateData.name === undefined) {
+                updateData.name = updateData.naam;
+            }
+            delete updateData.naam;
+            if (updateData.datum !== undefined && updateData.date === undefined) {
+                updateData.date = updateData.datum;
+            }
+            delete updateData.datum;
+            if (updateData.locatie !== undefined && updateData.location === undefined) {
+                updateData.location = updateData.locatie;
+            }
+            delete updateData.locatie;
+            if (updateData.prijs_pp !== undefined && updateData.ppp === undefined) {
+                updateData.ppp = updateData.prijs_pp;
+            }
+            delete updateData.prijs_pp;
+            const allowedEventColsUpd: Record<string, boolean> = {
+                name: true, date: true, guests: true, location: true, ppp: true,
+                status: true, client_naam: true, client_adres: true, notitie: true,
+                menu: true, menu_items: true, theme: true,
+            };
+            Object.keys(updateData).forEach(k => { if (!allowedEventColsUpd[k]) delete updateData[k]; });
+        }
 
         if (def.table === 'gerechten') {
             const rawIngsUpdate = data.ingredienten || data.ingredients || data.ingredients_list || (data as any)['ingrediënten'];
