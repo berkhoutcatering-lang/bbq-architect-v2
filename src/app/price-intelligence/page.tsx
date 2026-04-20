@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { fileToImageBase64 } from '@/lib/documentToImage';
+import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
 import Papa from 'papaparse';
 import {
     FileScan, Receipt, PieChart, Sparkles, Upload, Camera, X, Check,
@@ -349,21 +349,24 @@ function FolderInvoices() {
         const controller = new AbortController();
         abortRef.current = controller;
         try {
-            const imageBase64 = await fileToImageBase64(file);
+            const doc: PreparedDocument = await prepareDocument(file);
             if (controller.signal.aborted) return;
-            setScanPreview(imageBase64);
+            setScanPreview(doc.base64);
             setScanStep('upload');
+            const payload: any = { type: 'invoice' };
+            if (doc.kind === 'pdf') payload.pdfBase64 = doc.base64;
+            else payload.imageBase64 = doc.base64;
             const res = await fetch('/api/parse-document', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64, type: 'invoice' }),
+                body: JSON.stringify(payload),
                 signal: controller.signal,
             });
             setScanStep('ai');
             const body = await res.json();
             if (controller.signal.aborted) return;
             if (!res.ok) {
-                setError(body.error || 'Scan mislukt — probeer een duidelijkere foto of PDF');
+                setError(body.detail || body.error || 'Scan mislukt — probeer een duidelijkere foto of PDF');
                 setScanStep('error');
                 return;
             }
@@ -745,20 +748,23 @@ function FolderReceipts() {
         const controller = new AbortController();
         abortRef.current = controller;
         try {
-            const imageBase64 = await fileToImageBase64(file);
+            const doc: PreparedDocument = await prepareDocument(file);
             if (controller.signal.aborted) return;
-            setPreview(imageBase64);
+            setPreview(doc.base64);
             setScanStep('upload');
+            const payload: any = { type: 'receipt' };
+            if (doc.kind === 'pdf') payload.pdfBase64 = doc.base64;
+            else payload.imageBase64 = doc.base64;
             const res = await fetch('/api/parse-document', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64, type: 'receipt' }),
+                body: JSON.stringify(payload),
                 signal: controller.signal,
             });
             setScanStep('ai');
             const body = await res.json();
             if (controller.signal.aborted) return;
-            if (!res.ok) { setError(body.error || 'Scan mislukt — probeer een duidelijkere foto'); setScanStep('error'); return; }
+            if (!res.ok) { setError(body.detail || body.error || 'Scan mislukt — probeer een duidelijkere foto'); setScanStep('error'); return; }
             setParsed(body.data);
             setScanStep('done');
             showToast('Bon gelezen — controleer en bewaar', 'success');

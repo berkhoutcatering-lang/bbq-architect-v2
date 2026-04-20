@@ -1,52 +1,62 @@
 /**
- * Converts a File (PDF or image) to a base64 data URL (JPEG).
- * PDFs are rendered to image via pdfjs-dist, page 1 only.
- * Images are loaded, downscaled to max 1600px, and re-encoded as JPEG.
+ * Smart document loader:
+ * - PDF → returned as base64 with application/pdf mime (Claude reads PDFs natively)
+ * - Image → downscaled to max 1600px, JPEG at 0.85 quality, returned as base64 data URL
+ *
+ * No pdfjs dependency on the critical path — avoids hangs when the worker
+ * can't load in production environments.
  */
 
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.85;
 
-export async function fileToImageBase64(file: File): Promise<string> {
+export type PreparedDocument = {
+    kind: 'pdf' | 'image';
+    base64: string; // data URL
+    mimeType: string;
+    sizeBytes: number;
+    thumbnailUrl: string; // blob URL for instant preview
+};
+
+export async function prepareDocument(file: File): Promise<PreparedDocument> {
+    const thumbnailUrl = URL.createObjectURL(file);
+
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        return pdfFirstPageToBase64(file);
+        const base64 = await fileToDataUrl(file);
+        return {
+            kind: 'pdf',
+            base64,
+            mimeType: 'application/pdf',
+            sizeBytes: file.size,
+            thumbnailUrl,
+        };
     }
+
     if (file.type.startsWith('image/')) {
-        return imageFileToBase64(file);
+        const base64 = await imageFileToDownscaledJpeg(file);
+        return {
+            kind: 'image',
+            base64,
+            mimeType: 'image/jpeg',
+            sizeBytes: file.size,
+            thumbnailUrl,
+        };
     }
-    throw new Error('Alleen PDF en afbeeldingen worden ondersteund (kreeg: ' + file.type + ')');
+
+    throw new Error('Alleen PDF en afbeeldingen worden ondersteund (kreeg: ' + (file.type || 'onbekend') + ')');
 }
 
-async function imageFileToBase64(file: File): Promise<string> {
+function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Kon bestand niet lezen'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function imageFileToDownscaledJpeg(file: File): Promise<string> {
     const bitmap = await createImageBitmap(file);
-    return drawToJpeg(bitmap);
-}
-
-async function pdfFirstPageToBase64(file: File): Promise<string> {
-    const pdfjs = await import('pdfjs-dist');
-    // Next.js dynamic import: set workerSrc to the worker bundled with pdfjs
-    // Using CDN worker URL to avoid bundler complexity
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfjsAny = pdfjs as any;
-    if (pdfjsAny.GlobalWorkerOptions && !pdfjsAny.GlobalWorkerOptions.workerSrc) {
-        pdfjsAny.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsAny.version}/pdf.worker.min.mjs`;
-    }
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: buf }).promise;
-    const page = await pdf.getPage(1);
-    const baseViewport = page.getViewport({ scale: 1 });
-    const scale = Math.min(2, MAX_DIMENSION / Math.max(baseViewport.width, baseViewport.height));
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d')!;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-}
-
-function drawToJpeg(bitmap: ImageBitmap): string {
     const { width, height } = bitmap;
     const maxDim = Math.max(width, height);
     const scale = maxDim > MAX_DIMENSION ? MAX_DIMENSION / maxDim : 1;
@@ -56,9 +66,14 @@ function drawToJpeg(bitmap: ImageBitmap): string {
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d')!;
-    // White bg for transparent PNGs
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(bitmap, 0, 0, w, h);
     return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+}
+
+// Legacy export for backwards compat with existing code paths
+export async function fileToImageBase64(file: File): Promise<string> {
+    const prepared = await prepareDocument(file);
+    return prepared.base64;
 }
