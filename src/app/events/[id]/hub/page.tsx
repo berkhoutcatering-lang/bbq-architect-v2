@@ -784,7 +784,180 @@ export default function EventHubPage() {
               </div>
             </div>
           </div>
+          {/* ═════════ KEUKEN COMMAND — Inkooplijst + HACCP + Draaiboek ═════════ */}
+          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+            <EventInkooplijstCard eventId={eventId} eventName={event.name} menuGroups={menuGroups} recepten={recepten} gerechten={gerechten} />
+            <EventHaccpCard eventId={eventId} />
+            <EventDraaiboekCard event={event} onSave={async (draaiboek) => {
+              await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
+              setEvent({ ...event, draaiboek });
+            }} />
+          </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INKOOPLIJST CARD — met AI-generator uit menu
+   ═══════════════════════════════════════════════════════════════════ */
+function EventInkooplijstCard({ eventId, eventName, menuGroups, recepten, gerechten }: { eventId: number; eventName: string; menuGroups: any[]; recepten: any[]; gerechten: any[] }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [aiBusy, setAiBusy] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('inkooplijsten').select('*').eq('event_id', eventId).maybeSingle();
+      if (data?.items) setItems(Array.isArray(data.items) ? data.items : []);
+      setLoading(false);
+    })();
+  }, [eventId]);
+  async function saveItems(next: any[]) {
+    setItems(next);
+    const { data: existing } = await supabase.from('inkooplijsten').select('id').eq('event_id', eventId).maybeSingle();
+    if (existing) {
+      await supabase.from('inkooplijsten').update({ items: next } as any).eq('id', existing.id);
+    } else {
+      await supabase.from('inkooplijsten').insert([{ event_id: eventId, items: next }] as any);
+    }
+  }
+  async function generateFromMenu() {
+    setAiBusy(true);
+    try {
+      const menuDescription = menuGroups.map(g => `${g.title}: ${g.items.map((i: any) => i.n).join(', ')}`).join(' | ');
+      const existing = [...(recepten || []).map((r: any) => ({ naam: r.naam, categorie: r.categorie })), ...(gerechten || []).map((g: any) => ({ naam: g.naam }))];
+      const res = await fetch('/api/recipe-generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'menu', prompt: `Genereer inkooplijst voor event "${eventName}" met menu: ${menuDescription}. Geef alleen de samengevatte_inkooplijst met concrete producten, hoeveelheden (kg/L/stuks) en categorieën.`,
+          existing, options: { gasten: 20, gangen: menuGroups.length },
+          model: 'haiku',
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) { alert('AI fout: ' + (body.error || 'onbekend')); return; }
+      const inkoop = body.data?.samengevatte_inkooplijst || [];
+      const mapped = inkoop.map((i: any) => ({ naam: i.product, hoeveelheid: i.totale_hoeveelheid, eenheid: i.eenheid, categorie: i.categorie, besteld: false }));
+      await saveItems(mapped);
+    } catch (e: any) {
+      alert('Fout: ' + (e.message || 'onbekend'));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+  return (
+    <div className="metal">
+      <div className="metal-head" style={{ padding: '12px 16px' }}>
+        <div className="hstack"><ClipboardList size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>Inkooplijst</span>{items.length > 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {items.length} items</span>}</div>
+        <button className="btn btn-ghost btn-sm" onClick={generateFromMenu} disabled={aiBusy || menuGroups.length === 0}><Sparkles size={12} />{aiBusy ? 'AI denkt...' : 'AI uit menu'}</button>
+      </div>
+      <div style={{ padding: 12, maxHeight: 360, overflowY: 'auto' }}>
+        {loading ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>Laden...</div>
+          : items.length === 0 ? (
+            <div style={{ padding: '8px 4px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+              Nog geen inkooplijst. Klik <button onClick={generateFromMenu} disabled={aiBusy} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>AI uit menu</button> om automatisch te laten genereren uit de menu-items.
+            </div>
+          ) : items.map((it: any, i: number) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 8, padding: '6px 4px', fontSize: 12, alignItems: 'center', borderBottom: i < items.length - 1 ? '1px solid rgba(130,130,130,.08)' : 'none' }}>
+              <input type="checkbox" checked={!!it.besteld} onChange={e => saveItems(items.map((x, idx) => idx === i ? { ...x, besteld: e.target.checked } : x))} />
+              <span style={{ textDecoration: it.besteld ? 'line-through' : 'none', opacity: it.besteld ? 0.5 : 1 }}>{it.naam}</span>
+              <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>{it.categorie || ''}</span>
+              <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.hoeveelheid}</span>
+              <span style={{ color: 'var(--brand-gold)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{it.eenheid}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HACCP QUICK-LOG — temperatuur meting in één klik
+   ═══════════════════════════════════════════════════════════════════ */
+function EventHaccpCard({ eventId }: { eventId: number }) {
+  const [records, setRecords] = useState<any[]>([]);
+  const [temp, setTemp] = useState('');
+  const [wat, setWat] = useState('');
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('haccp_records').select('*').eq('event_id', eventId).order('created_at', { ascending: false }).limit(10);
+      setRecords(data || []);
+    })();
+  }, [eventId]);
+  async function logMeting() {
+    if (!temp || !wat) return;
+    const tempNum = parseFloat(temp);
+    const status = tempNum < 7 ? 'ok' : tempNum > 63 ? 'ok' : 'warn';
+    const { data } = await supabase.from('haccp_records').insert([{ event_id: eventId, temp: tempNum, wat, status, type: 'kern' }] as any).select().single();
+    if (data) setRecords([data, ...records].slice(0, 10));
+    setTemp(''); setWat('');
+  }
+  return (
+    <div className="metal">
+      <div className="metal-head" style={{ padding: '12px 16px' }}>
+        <div className="hstack"><ShieldCheck size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>HACCP log</span>{records.length > 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {records.length}</span>}</div>
+      </div>
+      <div style={{ padding: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px auto', gap: 6, marginBottom: 10 }}>
+          <input value={wat} onChange={e => setWat(e.target.value)} placeholder="bv. kippendij" style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
+          <input type="number" step="0.1" value={temp} onChange={e => setTemp(e.target.value)} placeholder="°C" style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
+          <button className="btn btn-primary btn-sm" onClick={logMeting} disabled={!temp || !wat}><Plus size={11} />Log</button>
+        </div>
+        {records.length === 0 ? (
+          <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)' }}>Nog geen metingen. Log kerntemperaturen hierboven.</div>
+        ) : records.map(r => (
+          <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 4px', fontSize: 11, borderBottom: '1px solid rgba(130,130,130,.08)' }}>
+            <span style={{ flex: 1 }}>{r.wat}</span>
+            <span style={{ fontWeight: 700, color: r.status === 'ok' ? 'var(--green)' : r.status === 'warn' ? 'var(--amber)' : 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>{r.temp}°C</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DRAAIBOEK — tijdlijn voor event-dag
+   ═══════════════════════════════════════════════════════════════════ */
+function EventDraaiboekCard({ event, onSave }: { event: any; onSave: (d: any[]) => void }) {
+  const [items, setItems] = useState<any[]>(() => {
+    if (Array.isArray(event.draaiboek)) return event.draaiboek;
+    if (typeof event.draaiboek === 'string') { try { const p = JSON.parse(event.draaiboek); return Array.isArray(p) ? p : []; } catch { return []; } }
+    return [];
+  });
+  const [tijd, setTijd] = useState('');
+  const [wat, setWat] = useState('');
+  async function add() {
+    if (!tijd || !wat) return;
+    const next = [...items, { tijd, wat }].sort((a, b) => (a.tijd || '').localeCompare(b.tijd || ''));
+    setItems(next); onSave(next);
+    setTijd(''); setWat('');
+  }
+  async function remove(i: number) {
+    const next = items.filter((_, idx) => idx !== i);
+    setItems(next); onSave(next);
+  }
+  return (
+    <div className="metal">
+      <div className="metal-head" style={{ padding: '12px 16px' }}>
+        <div className="hstack"><Calendar size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>Draaiboek</span>{items.length > 0 && <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {items.length} stappen</span>}</div>
+      </div>
+      <div style={{ padding: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr auto', gap: 6, marginBottom: 10 }}>
+          <input type="time" value={tijd} onChange={e => setTijd(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
+          <input value={wat} onChange={e => setWat(e.target.value)} placeholder="bv. Voorgerecht uit" style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
+          <button className="btn btn-primary btn-sm" onClick={add} disabled={!tijd || !wat}><Plus size={11} /></button>
+        </div>
+        {items.length === 0 ? (
+          <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)' }}>Nog geen tijdlijn. Plan service-momenten hierboven (bv. 17:00 Welkom, 18:00 Voorgerecht).</div>
+        ) : items.map((it, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 8, padding: '5px 4px', fontSize: 11, alignItems: 'center', borderBottom: i < items.length - 1 ? '1px solid rgba(130,130,130,.08)' : 'none' }}>
+            <span style={{ fontWeight: 700, color: 'var(--brand-gold)', fontVariantNumeric: 'tabular-nums' }}>{it.tijd}</span>
+            <span>{it.wat}</span>
+            <button onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2, fontSize: 13 }}>×</button>
+          </div>
+        ))}
       </div>
     </div>
   );
