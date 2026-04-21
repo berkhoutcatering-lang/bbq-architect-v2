@@ -178,12 +178,15 @@ body {
 }
 
 .btn-brand {
-  background: var(--brand);
-  color: #1a1a1a;
+  background: #fff;
+  color: #000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 700;
 }
 
 .btn-brand:hover {
-  filter: brightness(1.1);
+  background: rgba(255, 255, 255, 0.9);
+  filter: none;
 }
 
 .btn:disabled,

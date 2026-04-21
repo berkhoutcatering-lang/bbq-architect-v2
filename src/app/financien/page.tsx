@@ -46,7 +46,8 @@ export default function Financien() {
     const LABOR_COST_PER_HOUR = 35.00;
 
     const financialData = useMemo(function () {
-        if (!offertes.length || !gerechtenData.length || !urenLogs.length) return { months: [] as any[], totalOmzet: 0, totalNetto: 0, overalMarge: 0, totalFoodcost: 0, totalLabor: 0 };
+        // Toon al data zolang er offertes zijn — gerechten/uren zijn optioneel voor foodcost/labor
+        if (!offertes.length) return { months: [] as any[], totalOmzet: 0, totalNetto: 0, overalMarge: 0, totalFoodcost: 0, totalLabor: 0 };
 
         const monthsMap: Record<string, any> = {};
         for (let i = 1; i <= 12; i++) {

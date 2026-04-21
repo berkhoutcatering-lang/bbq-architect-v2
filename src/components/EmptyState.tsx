@@ -52,8 +52,8 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
           </button>
         )}
 
-        {/* AI Suggestion Chips */}
-        {chips.length > 0 && (
+        {/* AI Suggestion Chips — alleen tonen als handler gezet is */}
+        {chips.length > 0 && onAiChip && (
           <div className="w-full pt-4" style={{ borderTop: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>
               <Sparkles size={12} className="mr-1 inline-block align-middle" style={{ color: 'var(--color-accent-gold)' }} />
