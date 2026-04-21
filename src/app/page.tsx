@@ -6,7 +6,8 @@ import Link from "next/link";
 import {
   Calendar, ChefHat, Clock, FileText, TrendingUp, AlertTriangle, ArrowRight,
   Package, Users, Euro, Flame, CheckCircle2, Bell, Settings, Search, BarChart3,
-  MapPin, ChevronRight, ChevronDown, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed
+  MapPin, ChevronRight, ChevronDown, Sparkles, Shield, Star, ShoppingCart, UtensilsCrossed,
+  Plus, FileScan, X, TrendingDown
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
@@ -45,6 +46,8 @@ export default function DashboardPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showAllNudges, setShowAllNudges] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [weekDrawerOpen, setWeekDrawerOpen] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -236,6 +239,18 @@ export default function DashboardPage() {
     return { day, month: months[monthIndex >= 0 && monthIndex < 12 ? monthIndex : 0], year };
   };
 
+  // HERO-data: eerstkomend event + deze week totals
+  const heroEvent = nextEventsList[0] || null;
+  const daysToHero = heroEvent ? Math.max(0, Math.ceil((new Date(heroEvent.date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+  const weekGuests = weekEvents.reduce((s: number, e: any) => s + (e.guests || 0), 0);
+  const weekRevenue = weekEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
+  const heroRevenue = heroEvent ? (heroEvent.guests || 0) * (heroEvent.ppp || 0) : 0;
+
+  // Maand statistieken
+  const curMonthPrefix = new Date().toISOString().slice(0, 7);
+  const monthEvents = events.filter((e: any) => e.date?.startsWith(curMonthPrefix));
+  const monthRevenue = monthEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
+
   if (!isMounted) {
     return (
       <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center text-white/50">
@@ -281,27 +296,27 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit']">
-        <div className="mb-6 md:mb-10 flex items-end justify-between">
+      <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit'] dashboard-main">
+        <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
+        <div className="mb-6 md:mb-8 flex items-end justify-between">
           <div>
             <h2 className="text-2xl md:text-3xl font-extralight text-white tracking-tight mb-1">
               {greeting}, <span className="font-normal">Pitmaster</span>
             </h2>
-            <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">Command Center — alles onder controle.</p>
+            <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">
+              {heroEvent ? `Nog ${daysToHero} dag${daysToHero === 1 ? '' : 'en'} tot ${heroEvent.name}` : 'Geen events gepland — tijd voor nieuwe boekingen.'}
+            </p>
           </div>
           <button
             onClick={() => setWizardOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-semibold transition-all active:scale-95"
-            style={{ background: 'linear-gradient(135deg, #c4a35a, #a8893e)', color: '#000' }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90"
           >
             <span className="text-lg leading-none">+</span>
             <span className="hidden md:inline">Nieuw Event</span>
           </button>
         </div>
 
-        <WeekStrip events={nextEventsList} />
-
-        {/* Onboarding Progress */}
+        {/* Onboarding Progress (alleen voor nieuwe users) */}
         <OnboardingProgress
           klanten={klanten}
           offertes={offertes}
@@ -312,7 +327,93 @@ export default function DashboardPage() {
           gerechten={gerechtenData}
         />
 
-        {/* Zone 1: Aandacht Nu */}
+        {/* ═════════ HERO ─ eerstkomend event + week overzicht ═════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4 mb-6">
+          {/* Links: Focus op eerstkomend event — clean dark card, geen kleuraccenten */}
+          {heroEvent ? (
+            <button
+              onClick={() => setSelectedEvent(heroEvent)}
+              className="text-left p-6 md:p-8 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer"
+              style={{ background: 'var(--card)' }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[var(--muted)]">Eerstkomende event</span>
+              </div>
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[26px] md:text-[32px] font-['Outfit'] font-bold text-white leading-tight mb-1 truncate">{heroEvent.name}</h3>
+                  <p className="text-[13px] text-[var(--muted)]">{heroEvent.location || 'Locatie tbd'}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[52px] font-bold text-white leading-none tabular-nums">{daysToHero}</div>
+                  <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold mt-1">dag{daysToHero === 1 ? '' : 'en'}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
+                  <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Datum</div>
+                  <div className="text-[14px] text-white font-bold tabular-nums">{formatDate(heroEvent.date).day} {formatDate(heroEvent.date).month}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
+                  <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Gasten</div>
+                  <div className="text-[14px] text-white font-bold tabular-nums">{heroEvent.guests || 0}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
+                  <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Omzet</div>
+                  <div className="text-[14px] text-white font-bold tabular-nums">{formatCurrency(heroRevenue)}</div>
+                </div>
+              </div>
+            </button>
+          ) : (
+            <div className="p-6 md:p-8 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)]">
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <Calendar className="w-10 h-10 text-[var(--muted-light)] opacity-40 mb-3" />
+                <h3 className="text-[18px] font-bold text-white mb-1">Nog geen events gepland</h3>
+                <p className="text-[12px] text-[var(--muted)] mb-4">Plan je eerste BBQ-event en zie hier de aftelling</p>
+                <button onClick={() => setWizardOpen(true)} className="px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black">+ Nieuw Event</button>
+              </div>
+            </div>
+          )}
+
+          {/* Rechts: Week + financials — consistent dark tiles */}
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => setWeekDrawerOpen(true)}
+              className="text-left p-5 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[var(--muted)]">Deze week</span>
+                <span className="text-[10px] text-[var(--muted)]">klik voor lijst</span>
+              </div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-[36px] font-bold text-white leading-none tabular-nums">{weekEvents.length}</span>
+                <span className="text-[12px] text-[var(--muted)] font-semibold">event{weekEvents.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="mt-2 text-[11px] text-[var(--muted)]">
+                <Users className="w-3 h-3 inline mr-1" /> {weekGuests} gasten · <Euro className="w-3 h-3 inline mx-0.5" /> {formatCurrency(weekRevenue)}
+              </div>
+            </button>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/facturen" className="no-underline">
+                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
+                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Open facturen</div>
+                  <div className="text-[20px] font-bold text-white tabular-nums">{formatCurrency(openFacturenBedrag)}</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-1">{openFacturen.length} stuks</div>
+                </div>
+              </Link>
+              <Link href="/offertes" className="no-underline">
+                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
+                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
+                  <div className="text-[20px] font-bold text-white tabular-nums">{formatCurrency(prognose)}</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} offertes open</div>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ═════════ AANDACHT NODIG — alleen als er acties zijn ═════════ */}
         {liveActions.length > 0 && (
           <div className="mb-6 md:mb-8">
             <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
@@ -323,7 +424,7 @@ export default function DashboardPage() {
               {liveActions.map((action) => {
                 const isHigh = action.urgency === 'high';
                 return (
-                  <Link key={action.id} href={action.link}>
+                  <Link key={action.id} href={action.link} className="no-underline">
                     <MetallicCard
                       className="p-4 group"
                       accent={isHigh ? 'var(--red)' : 'var(--amber)'}
@@ -336,7 +437,7 @@ export default function DashboardPage() {
                           }
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-[13px] font-medium truncate ${isHigh ? 'text-red-400' : 'text-amber-300'}`}>
+                          <p className={`text-[13px] font-bold truncate no-underline ${isHigh ? 'text-red-400' : 'text-amber-300'}`} style={{ textDecoration: 'none' }}>
                             {action.message}
                           </p>
                         </div>
@@ -350,370 +451,318 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Zone 2: AI Inzichten */}
+        {/* ═════════ GROTE ACTIE KAARTEN ═════════ */}
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)] mb-3">Snel aan de slag</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          {[
+            { icon: Plus, label: 'Nieuw Event', desc: 'Boeking starten', action: () => setWizardOpen(true) },
+            { icon: FileText, label: 'Offerte', desc: 'Aan klant sturen', href: '/offertes' },
+            { icon: FileScan, label: 'Factuur scannen', desc: 'AI leest mee', href: '/price-intelligence' },
+            { icon: Calendar, label: 'Agenda', desc: 'Planning bekijken', href: '/agenda' },
+            { icon: Package, label: 'Voorraad', desc: 'Tekorten checken', href: '/voorraad' },
+            { icon: UtensilsCrossed, label: 'Menu', desc: 'Gerechten beheer', href: '/menu-engineering' },
+          ].map((a) => {
+            const inner = (
+              <div className="group p-4 rounded-xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/25 hover:bg-white/5 transition-all duration-150 cursor-pointer h-full">
+                <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-3 group-hover:bg-white/10 transition-colors">
+                  <a.icon className="w-4 h-4 text-white/80" />
+                </div>
+                <div className="text-[13px] font-bold text-white mb-0.5">{a.label}</div>
+                <div className="text-[10px] text-[var(--muted)]">{a.desc}</div>
+              </div>
+            );
+            return a.href ? (
+              <Link key={a.label} href={a.href} className="no-underline">{inner}</Link>
+            ) : (
+              <button key={a.label} onClick={a.action} className="text-left w-full bg-transparent p-0 border-0">{inner}</button>
+            );
+          })}
+        </div>
+
+        {/* ═════════ KOMENDE EVENTS (groot) + PIPELINE (klein) ═════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4 mb-6">
+          <MetallicCard className="p-5 md:p-6" hover={false}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-[var(--color-accent-gold)]/10">
+                  <Calendar className="w-4 h-4 text-[var(--color-accent-gold)]" />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">Aankomende events</h3>
+                  <p className="text-[11px] text-[var(--muted)]">Klik voor details</p>
+                </div>
+              </div>
+              <Link href="/events" className="text-[11px] font-medium text-[var(--muted)] hover:text-white flex items-center gap-1">
+                Alles <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+            {nextEventsList.length === 0 ? (
+              <div className="text-center py-10">
+                <Calendar className="w-8 h-8 mx-auto mb-2 text-[var(--muted-light)] opacity-40" />
+                <p className="text-[13px] text-[var(--muted)] mb-3">Nog geen events gepland</p>
+                <button onClick={() => setWizardOpen(true)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[var(--color-accent-gold)] text-black">+ Nieuw event</button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {nextEventsList.map((event: any) => {
+                  const date = formatDate(event.date);
+                  const days = Math.max(0, Math.ceil((new Date(event.date).getTime() - new Date(today).getTime()) / 86400000));
+                  return (
+                    <button key={event.id} onClick={() => setSelectedEvent(event)} className="w-full group flex items-center gap-4 p-3 rounded-xl bg-[var(--color-bg-deep)] hover:border-white/20 border border-transparent transition-all text-left">
+                      <div className="flex-shrink-0 w-12 text-center">
+                        <div className="text-[20px] font-bold text-white leading-none">{date.day}</div>
+                        <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold mt-0.5">{date.month}</div>
+                      </div>
+                      <div className="w-px h-10 bg-[var(--border)]" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <StatusDot status={event.status} />
+                          <span className="text-[13px] font-bold text-white truncate">{event.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[10.5px] text-[var(--muted)]">
+                          <span><Users className="w-3 h-3 inline mr-1" />{event.guests}p</span>
+                          <span className="truncate"><MapPin className="w-3 h-3 inline mr-1" />{event.location || 'tbd'}</span>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-[13px] font-bold text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</div>
+                        <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold">over {days} dag{days === 1 ? '' : 'en'}</div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[var(--muted-light)] group-hover:text-white transition-colors" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </MetallicCard>
+
+          {/* Pipeline top offertes */}
+          <MetallicCard className="p-5 md:p-6" hover={false}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-[var(--blue)]/10">
+                  <TrendingUp className="w-4 h-4 text-[var(--blue)]" />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">Top offertes</h3>
+                  <p className="text-[11px] text-[var(--muted)]">Open in pipeline</p>
+                </div>
+              </div>
+              <Link href="/offertes" className="text-[11px] font-medium text-[var(--muted)] hover:text-white flex items-center gap-1">Alles <ArrowRight className="w-3 h-3" /></Link>
+            </div>
+            {openOffertes.length > 0 ? (
+              <>
+                <div className="space-y-3">
+                  {openOffertes.sort((a: any, b: any) => {
+                    const ta = calcLineTotals(a.items).totaal || (a.aantal_gasten || 0) * (a.basis_prijs_pp || 0);
+                    const tb = calcLineTotals(b.items).totaal || (b.aantal_gasten || 0) * (b.basis_prijs_pp || 0);
+                    return tb - ta;
+                  }).slice(0, 5).map((off: any) => {
+                    const fromItems = calcLineTotals(off.items).totaal;
+                    const eventTotal = fromItems > 0 ? fromItems : (off.aantal_gasten || 0) * (off.basis_prijs_pp || 0);
+                    const percentage = prognose > 0 ? (eventTotal / prognose) * 100 : 0;
+                    return (
+                      <Link key={off.id} href="/offertes" className="block group">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-[11.5px] text-white truncate max-w-[140px] font-medium group-hover:text-[var(--color-accent-gold)] transition-colors">{off.client_naam || off.nummer}</span>
+                          <span className="text-[11.5px] text-white tabular-nums">{formatCurrency(eventTotal)}</span>
+                        </div>
+                        <div className="h-1.5 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-white/70 transition-all duration-700" style={{ width: `${percentage}%` }} />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="mt-5 pt-4 border-t border-[var(--card-solid)] flex justify-between items-center">
+                  <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)]">Totaal prognose</span>
+                  <span className="text-[16px] font-bold text-white tabular-nums">{formatCurrency(prognose)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-10 text-[12px] text-[var(--muted)]">Geen open offertes</div>
+            )}
+          </MetallicCard>
+        </div>
+
+        {/* ═════════ ZAAK-GEZONDHEID (4 grote stats) ═════════ */}
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)] mb-3">Zaak in één oogopslag</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <BigStatCard icon={Calendar} color="var(--blue)" label="Bevestigde events" value={confirmedEvents.length.toString()} sub="dit jaar" href="/events" />
+          <BigStatCard icon={Euro} color="var(--emerald)" label="Omzet gerealiseerd" value={formatCurrency(totalRevenue)} sub={`${betaaldFacturen.length} betaalde facturen`} href="/financien" />
+          <BigStatCard icon={Users} color="var(--sky)" label="Totaal gasten" value={events.reduce((sum: number, e: any) => sum + (e.guests || 0), 0).toString()} sub="over alle events" href="/events" />
+          <BigStatCard icon={Euro} color="var(--color-accent-gold)" label="Deze maand" value={formatCurrency(monthRevenue)} sub={`${monthEvents.length} event${monthEvents.length === 1 ? '' : 's'}`} />
+        </div>
+
+        {/* ═════════ AI INZICHTEN (klein, collapsed) ═════════ */}
         {aiNudges.length > 0 && (
-          <div className="mb-6 md:mb-8">
-            <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-              <Sparkles className="w-3.5 h-3.5 inline-block mr-2 text-[var(--color-accent-gold)]" />
-              AI Inzichten
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {visibleNudges.map((nudge, idx) => {
-                const borderColor = nudge.type === 'warning' ? 'var(--amber)' : nudge.type === 'positive' ? 'var(--emerald)' : 'var(--blue)';
-                const bgTint = nudge.type === 'warning' ? 'bg-amber-500/10' : nudge.type === 'positive' ? 'bg-emerald-500/10' : 'bg-blue-500/10';
+          <MetallicCard className="p-5 mb-6" hover={false}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-[var(--color-accent-gold)]/10">
+                <Sparkles className="w-4 h-4 text-[var(--color-accent-gold)]" />
+              </div>
+              <div>
+                <h3 className="text-[14px] font-medium text-white">AI inzichten</h3>
+                <p className="text-[11px] text-[var(--muted)]">{aiNudges.length} tip{aiNudges.length === 1 ? '' : 's'} voor jouw zaak</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {visibleNudges.map((nudge) => {
                 const textColor = nudge.type === 'warning' ? 'text-amber-300' : nudge.type === 'positive' ? 'text-emerald-300' : 'text-blue-300';
                 return (
-                  <Link key={nudge.id} href={nudge.link}>
-                    <div
-                      className="opacity-0 animate-[fadeInUp_0.4s_ease-out_forwards]"
-                      style={{ animationDelay: `${idx * 80}ms` }}
-                    >
-                      <MetallicCard className="p-4 group relative overflow-hidden" accent={borderColor}>
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full"
-                          style={{ background: `linear-gradient(to bottom, ${borderColor}, transparent)` }}
-                        />
-                        <div className="flex items-center gap-3 pl-2">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${bgTint}`}>
-                            <span className="text-[16px] leading-none">{nudge.icon}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] font-medium truncate ${textColor}`}>
-                              {nudge.message}
-                            </p>
-                          </div>
-                          <ArrowRight className="w-4 h-4 text-[var(--muted)] group-hover:translate-x-1 transition-transform shrink-0" />
-                        </div>
-                      </MetallicCard>
-                    </div>
+                  <Link key={nudge.id} href={nudge.link} className="flex items-center gap-3 p-2.5 rounded-lg bg-[var(--color-bg-deep)] hover:bg-[#17171c] transition-colors no-underline" style={{ textDecoration: 'none' }}>
+                    <span className="text-[16px]">{nudge.icon}</span>
+                    <span className={`text-[12px] ${textColor} flex-1 truncate`} style={{ textDecoration: 'none' }}>{nudge.message}</span>
+                    <ArrowRight className="w-3 h-3 text-[var(--muted-light)]" />
                   </Link>
                 );
               })}
             </div>
             {aiNudges.length > 4 && (
-              <button
-                onClick={() => setShowAllNudges(!showAllNudges)}
-                className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted)] hover:text-white transition-colors uppercase tracking-[0.1em] mx-auto"
-              >
-                {showAllNudges ? 'Minder tonen' : `Meer tonen (${aiNudges.length - 4})`}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showAllNudges ? 'rotate-180' : ''}`} />
+              <button onClick={() => setShowAllNudges(!showAllNudges)} className="mt-3 text-[11px] text-[var(--muted)] hover:text-white flex items-center gap-1 mx-auto">
+                {showAllNudges ? 'Minder tonen' : `Nog ${aiNudges.length - 4} tips tonen`}
+                <ChevronDown className={`w-3 h-3 transition-transform ${showAllNudges ? 'rotate-180' : ''}`} />
               </button>
             )}
-          </div>
+          </MetallicCard>
         )}
 
-        {/* Zone 3: Zaak-gezondheid */}
-        <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-          <BarChart3 className="w-3.5 h-3.5 inline-block mr-2 text-[var(--blue)]" />
-          Zaak-gezondheid
-        </h3>
-        <div className="dash-kpi-grid">
-          <DrillDownKPI
-            icon={<Calendar className="w-4 h-4 text-[var(--blue)]" />}
-            label="Bevestigde Events"
-            value={confirmedEvents.length.toString()}
-            subtitle={`totaal geregistreerd dit jaar`}
-            accentColor="var(--blue)"
-            trend="+12%"
-            href="/events"
-            items={nextEventsList.slice(0, 4).map((e: any) => ({
-              label: `${e.name || 'Event'} — ${e.guests || 0}p`,
-              value: formatDate(e.date).day + ' ' + formatDate(e.date).month,
-              href: '/agenda',
-              color: e.status === 'confirmed' ? 'var(--blue)' : 'var(--muted)',
-            }))}
-          />
-          <DrillDownKPI
-            icon={<Euro className="w-4 h-4 text-emerald-400" />}
-            label="Gerealiseerde Omzet"
-            value={formatCurrency(totalRevenue)}
-            subtitle={`${betaaldFacturen.length} betaalde facturen`}
-            accentColor="var(--emerald)"
-            trend="+8.2%"
-            href="/financien"
-            items={(() => {
-              const topFacturen = betaaldFacturen
-                .map((f: any) => {
-                  let bedrag = 0;
-                  (f.items || []).forEach((item: any) => { bedrag += (item.qty || 0) * (item.prijs || 0); });
-                  return { label: f.client_naam || f.factuur_nummer || 'Factuur', value: formatCurrency(bedrag) };
-                })
-                .sort((a: any, b: any) => parseFloat(b.value.replace(/[^\d,-]/g, '').replace(',', '.')) - parseFloat(a.value.replace(/[^\d,-]/g, '').replace(',', '.')))
-                .slice(0, 4);
-              return topFacturen;
-            })()}
-          />
-          <DrillDownKPI
-            icon={<FileText className="w-4 h-4 text-[var(--indigo)]" />}
-            label="Open Facturen & Prognose"
-            value={formatCurrency(prognose + openFacturenBedrag)}
-            subtitle={`${formatCurrency(openFacturenBedrag)} facturen / ${formatCurrency(prognose)} open offertes`}
-            accentColor="var(--indigo)"
-            trend="-3%"
-            href="/facturen"
-            items={[
-              { label: 'Open facturen', value: formatCurrency(openFacturenBedrag), color: 'var(--amber)' },
-              { label: 'Open offertes', value: formatCurrency(prognose), color: 'var(--indigo)' },
-              ...openFacturen.slice(0, 3).map((f: any) => {
-                let bedrag = 0;
-                (f.items || []).forEach((item: any) => { bedrag += (item.qty || 0) * (item.prijs || 0); });
-                return { label: f.client_naam || f.factuur_nummer || 'Factuur', value: formatCurrency(bedrag), href: '/facturen' };
-              }),
-            ]}
-          />
-          <DrillDownKPI
-            icon={<Users className="w-4 h-4 text-sky-400" />}
-            label="Totaal Gasten"
-            value={events.reduce((sum: number, e: any) => sum + (e.guests || 0), 0).toString()}
-            subtitle="over alle geregistreerde events"
-            accentColor="var(--sky)"
-            trend="+24%"
-            href="/events"
-            items={(() => {
-              const byType: Record<string, number> = {};
-              events.forEach((e: any) => {
-                const type = e.type || 'Overig';
-                byType[type] = (byType[type] || 0) + (e.guests || 0);
-              });
-              return Object.entries(byType)
-                .sort(([, a], [, b]) => (b as number) - (a as number))
-                .slice(0, 5)
-                .map(([type, guests]) => ({ label: type, value: `${guests} gasten` }));
-            })()}
-          />
-        </div>
-
-        <div className="dash-content-grid">
-          <div className="dash-main-col">
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-[var(--color-accent-gold)]/10 border border-[var(--color-accent-gold)]/20">
-                    <Calendar className="w-4 h-4 text-[var(--color-accent-gold)]" />
-                  </div>
-                  <div>
-                    <h3 className="text-[15px] font-medium text-white tracking-tight">Aankomende Events</h3>
-                    <p className="text-[11px] text-[var(--muted-light)]">Geplande reserveringen en opties</p>
-                  </div>
+        {/* ═════════ RECENTE ACTIVITEIT (compact) ═════════ */}
+        {recentActivity.length > 0 && (
+          <MetallicCard className="p-5" hover={false}>
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)] mb-3">Recente activiteit</h3>
+            <div className="flex flex-col gap-2">
+              {recentActivity.map((item, i) => (
+                <div key={i} className="flex items-center gap-3 py-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.dot }} />
+                  <span className="text-[12px] text-[var(--text)] flex-1 truncate">{item.text}</span>
+                  <span className="text-[10px] text-[var(--muted)] tabular-nums">{item.time === 'recent' ? 'nu' : new Date(item.ts).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <Link href="/events" className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--muted)] hover:text-white transition-colors uppercase tracking-[0.1em]">
-                  Alle events <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-
-              {nextEventsList.length === 0 ? (
-                <p className="text-center text-[13px] text-[var(--color-text-ghost)] py-6">Geen aankomende events.</p>
-              ) : (
-                <div className="space-y-2">
-                  {nextEventsList.map((event: any) => {
-                    const date = formatDate(event.date);
-                    return (
-                      <Link key={event.id} href={`/agenda`} className="group flex items-center gap-3 md:gap-5 p-3 md:p-4 rounded-xl bg-[var(--color-bg-deep)] hover:bg-[#121216] border border-transparent hover:border-[var(--card-solid)] transition-all duration-300">
-                        <div className="flex-shrink-0 w-11 md:w-14 text-center">
-                          <p className="text-[18px] md:text-[22px] font-light text-white leading-none">{date.day}</p>
-                          <p className="text-[9px] md:text-[10px] uppercase tracking-[0.15em] md:tracking-[0.2em] text-[var(--muted)] mt-0.5">{date.month}</p>
-                        </div>
-                        <div className="w-px h-8 md:h-10 bg-[var(--border)]" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 md:mb-1">
-                            <StatusDot status={event.status} />
-                            <p className="text-[12px] md:text-[13.5px] font-medium text-white truncate">{event.name}</p>
-                          </div>
-                          <div className="flex items-center gap-3 md:gap-4 text-[10px] md:text-[11.5px] text-[var(--muted)]">
-                            <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {event.guests}p</span>
-                            <span className="flex items-center gap-1 truncate"><MapPin className="w-3 h-3 shrink-0" /> {event.location || 'Onbekend'}</span>
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0 hidden sm:block">
-                          <p className="text-[15px] font-light text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</p>
-                          <p className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mt-0.5">{event.status === 'confirmed' ? 'Bevestigd' : event.status === 'completed' ? 'Afgerond' : event.status === 'optie' ? 'Optie' : 'Nieuw'}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[var(--color-text-ghost)] group-hover:text-[#666] transition-colors flex-shrink-0" />
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </MetallicCard>
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-emerald-400/10 border border-emerald-400/20">
-                    <ChefHat className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-[15px] font-medium text-white tracking-tight">Actuele Productielijst (Prep)</h3>
-                    <p className="text-[11px] text-[var(--color-text-ghost)]">{prepEvents.length > 0 ? `${prepEvents[0].client_naam} • ${prepEvents[0].datum}` : "Geen geaccepteerde/goedgekeurde offertes nabij."}</p>
-                  </div>
-                </div>
-                {prepEvents.length > 0 && <span className="text-[11px] font-medium text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">{prepEvents[0].aantal_gasten}p</span>}
-              </div>
-
-              {prepEvents.length > 0 ? (
-                <div className="space-y-4">
-                  {prepEvents.slice(0, 2).map((offerte: any, oIndex: number) => {
-                    const sel = safeJsonParse(offerte.menu_selectie, {});
-                    const prepItems: { dish: string; gang: string }[] = [];
-                    gangenData.sort((a: any, b: any) => (a.volgorde || 0) - (b.volgorde || 0)).forEach((g: any) => {
-                      const dishes = sel[g.slug] || [];
-                      dishes.forEach((d: any) => {
-                        const dishName = typeof d === 'string' ? d : (d.naam || d.gerecht_naam || 'Onbekend gerecht');
-                        prepItems.push({ dish: dishName, gang: g.naam });
-                      });
-                    });
-
-                    return prepItems.length > 0 ? (
-                      <div key={offerte.id} className="space-y-2">
-                        {oIndex > 0 && <div className="h-px w-full bg-[var(--color-bg-elevated)] my-4" />}
-                        <div className="mb-2 text-[12px] font-semibold text-[var(--color-accent-silver)] tracking-wide">{offerte.client_naam}</div>
-                        {prepItems.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-4 p-3.5 rounded-xl bg-[var(--color-bg-deep)] border border-[var(--color-bg-elevated)]">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--sidebar-bg-hover)]">
-                              <Clock className="w-4 h-4 text-[var(--color-text-ghost)]" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-[13px] text-white font-medium">{item.dish}</p>
-                              <p className="text-[11px] text-[var(--muted-light)]">{item.gang}</p>
-                            </div>
-                            <span className="text-[10px] uppercase tracking-[0.15em] px-2.5 py-1 rounded-full text-[var(--muted)] bg-[var(--sidebar-bg-hover)] border border-[var(--border)]">
-                              Prep To Do
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-[13px] text-[var(--color-text-ghost)]">Geen actuele prep voor vandaag</p>
-                </div>
-              )}
-            </MetallicCard>
-
-          </div>
-
-          <div className="dash-side-col">
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--muted)] mb-3 md:mb-4">Snelle Acties</h3>
-              <div className="dash-actions-grid">
-                {[
-                  { icon: <FileText className="w-4 h-4" />, label: "Offertes", href: "/offertes" },
-                  { icon: <Calendar className="w-4 h-4" />, label: "Agenda", href: "/agenda" },
-                  { icon: <ShoppingCart className="w-4 h-4" />, label: "Inkoop", href: "/inkoop" },
-                  { icon: <UtensilsCrossed className="w-4 h-4" />, label: "Menu", href: "/menu-engineering" },
-                  { icon: <Shield className="w-4 h-4" />, label: "HACCP", href: "/haccp" },
-                  { icon: <Calendar className="w-4 h-4" />, label: "Kalender", href: "/api/calendar/ical" },
-                  { icon: <Settings className="w-4 h-4" />, label: "Integraties", href: "/instellingen/integraties" },
-                  { icon: <BarChart3 className="w-4 h-4" />, label: "Analytics", href: "/financien" },
-                ].map((action) => (
-                  <Link key={action.label} href={action.href} className="flex flex-col items-center justify-center gap-2 p-3 md:p-4 min-h-[64px] rounded-xl bg-[var(--color-bg-deep)] border border-[var(--color-bg-elevated)] hover:border-[var(--blue)]/30 hover:bg-[#121216] active:scale-95 transition-all duration-200 group">
-                    <div className="text-[var(--color-text-muted)] group-hover:text-[var(--blue)] transition-colors">{action.icon}</div>
-                    <span className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors text-center leading-tight">{action.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </MetallicCard>
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/20">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                </div>
-                <h3 className="text-[15px] font-medium text-white tracking-tight">Meldingen Center</h3>
-              </div>
-              {liveActions.length > 0 ? (
-                <div className="space-y-2">
-                  {liveActions.map((action, i) => (
-                    <Link key={i} href={action.link} className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-bg-deep)] hover:bg-[#121216] border border-transparent hover:border-[var(--card-solid)] transition-all duration-300 group">
-                      <StatusDot status={action.urgency} />
-                      <span className="text-[12.5px] font-medium text-[var(--muted)] group-hover:text-white transition-colors flex-1 line-clamp-1">{action.message}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-[var(--muted-light)] group-hover:text-white transition-colors" />
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-[13px] text-[var(--color-text-ghost)]">Geen lopende acties of alerts ontdekt.</div>
-              )}
-            </MetallicCard>
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <div className="flex flex-col mb-5">
-                <h3 className="text-[15px] font-medium text-white tracking-tight leading-none">Recente activiteit</h3>
-                <p className="text-[10px] text-[var(--color-text-ghost)] mt-1.5 uppercase tracking-wider">Laatste updates van vandaag</p>
-              </div>
-              <div className="space-y-4">
-                {recentActivity.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between pb-3 last:pb-0 last:border-0 border-b border-[var(--color-bg-elevated)]/50">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.dot }} />
-                      <span className="text-[12.5px] font-medium text-[var(--color-text-secondary)]">{item.text}</span>
-                    </div>
-                    <span className="text-[10px] font-medium text-[var(--color-text-ghost)] whitespace-nowrap ml-4">
-                      {item.time === 'recent' ? 'nu' : new Date(item.ts).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                ))}
-                {recentActivity.length === 0 && (
-                  <p className="text-[13px] text-[var(--color-text-ghost)]">Nog geen activiteit geregistreerd.</p>
-                )}
-              </div>
-            </MetallicCard>
-
-            <MetallicCard className="p-4 md:p-6" hover={false}>
-              <h3 className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-4">Pipeline Top Offertes</h3>
-              {openOffertes.length > 0 ? (
-                <>
-                  <div className="space-y-3">
-                    {openOffertes.sort((a: any, b: any) => { const ta = calcLineTotals(a.items).totaal || (a.aantal_gasten || 0) * (a.basis_prijs_pp || 0); const tb = calcLineTotals(b.items).totaal || (b.aantal_gasten || 0) * (b.basis_prijs_pp || 0); return tb - ta; }).slice(0, 4).map((off: any) => {
-                      const fromItems = calcLineTotals(off.items).totaal;
-                      const eventTotal = fromItems > 0 ? fromItems : (off.aantal_gasten || 0) * (off.basis_prijs_pp || 0);
-                      const percentage = prognose > 0 ? (eventTotal / prognose) * 100 : 0;
-                      return (
-                        <div key={off.id}>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] text-[var(--muted)] truncate max-w-[140px] font-medium">{off.client_naam || off.nummer}</span>
-                            <span className="text-[11px] text-[var(--muted)] tabular-nums">{formatCurrency(eventTotal)}</span>
-                          </div>
-                          <div className="h-1 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent-gold)] to-[#d4b36a] transition-all duration-700" style={{ width: `${percentage}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-[var(--color-bg-elevated)] flex justify-between items-center">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-text-muted)]">Totaal Prognose</span>
-                    <span className="text-[15px] font-medium text-white tabular-nums">{formatCurrency(prognose)}</span>
-                  </div>
-                </>
-              ) : (
-                <div className="text-[13px] text-[var(--color-text-ghost)]">Geen actuele pijplijn of concept offertes.</div>
-              )}
-            </MetallicCard>
-
-            <div className="relative px-6 py-5">
-              <div className="absolute left-6 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-[var(--color-accent-gold)]/30 to-transparent" />
-              <blockquote className="pl-5">
-                <p className="text-[12px] text-[var(--muted)] italic leading-relaxed font-light">
-                  &ldquo;A perfect dish is no accident. It&apos;s the seamless execution of logistics, craft, and fire.&rdquo;
-                </p>
-                <footer className="mt-2 text-[10px] uppercase tracking-[0.2em] text-[var(--muted-light)]">— Mathijs Berkhout</footer>
-              </blockquote>
+              ))}
             </div>
-
-          </div>
-        </div>
+          </MetallicCard>
+        )}
       </main>
+
+      {/* ═════════ DRAWERS ═════════ */}
+      {selectedEvent && <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {weekDrawerOpen && <WeekDetailDrawer events={weekEvents} onClose={() => setWeekDrawerOpen(false)} onSelect={(e) => { setWeekDrawerOpen(false); setSelectedEvent(e); }} />}
 
       <EventWizard
         isOpen={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onComplete={() => ev.refetch?.()}
       />
+    </div>
+  );
+}
+
+/** Grote kliibare stat-kaart — clean, geen felle accenten */
+function BigStatCard({ icon: Icon, color, label, value, sub, href }: { icon: any; color: string; label: string; value: string; sub: string; href?: string }) {
+  void color; // color prop behouden voor compat, maar niet visueel gebruikt
+  const content = (
+    <div className="p-5 rounded-xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors h-full">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10">
+          <Icon className="w-4 h-4 text-white/70" />
+        </div>
+        <span className="text-[10px] uppercase tracking-[0.15em] font-bold text-[var(--muted)]">{label}</span>
+      </div>
+      <div className="text-[26px] font-bold text-white tabular-nums leading-tight">{value}</div>
+      <div className="text-[11px] text-[var(--muted)] mt-1">{sub}</div>
+    </div>
+  );
+  return href ? <Link href={href} className="no-underline">{content}</Link> : content;
+}
+
+/** Drawer: details van een event */
+function EventDetailDrawer({ event, onClose }: { event: any; onClose: () => void }) {
+  const revenue = (event.guests || 0) * (event.ppp || 0);
+  const days = Math.max(0, Math.ceil((new Date(event.date).getTime() - new Date().getTime()) / 86400000));
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.2em', color: 'var(--color-accent-gold)', fontWeight: 700, marginBottom: 4 }}>Nog {days} dag{days === 1 ? '' : 'en'}</div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, color: '#fff' }}>{event.name || 'Event'}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{event.location || 'Locatie nog niet ingesteld'}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Datum</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.date}</div>
+            </div>
+            <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Gasten</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.guests || 0}p</div>
+            </div>
+            <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Status</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', textTransform: 'capitalize' }}>{event.status || 'nieuw'}</div>
+            </div>
+          </div>
+          <div style={{ padding: 16, borderRadius: 10, background: 'linear-gradient(135deg, rgba(196,163,90,.15), rgba(168,137,62,.05))', border: '1px solid rgba(196,163,90,.3)' }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.2em', color: 'var(--color-accent-gold)', fontWeight: 700, marginBottom: 6 }}>Verwachte omzet</div>
+            <div style={{ fontSize: 32, fontFamily: 'Outfit, sans-serif', fontWeight: 400, color: 'var(--color-accent-gold)', fontVariantNumeric: 'tabular-nums' }}>
+              {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(revenue)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              {event.guests || 0} gasten × €{(event.ppp || 0).toFixed(2)} per persoon
+            </div>
+          </div>
+          {event.client_naam && (
+            <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Klant</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.client_naam}</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href={`/agenda`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--color-accent-gold)', color: '#000', textAlign: 'center', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>Open in agenda</Link>
+            <Link href={`/events`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', color: '#fff', textAlign: 'center', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Event bewerken</Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Drawer: lijst van events deze week */
+function WeekDetailDrawer({ events, onClose, onSelect }: { events: any[]; onClose: () => void; onSelect: (e: any) => void }) {
+  const totalGuests = events.reduce((s, e) => s + (e.guests || 0), 0);
+  const totalRevenue = events.reduce((s, e) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: '#fff' }}>Deze week</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{events.length} event{events.length === 1 ? '' : 's'} · {totalGuests} gasten · {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(totalRevenue)}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {events.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Geen events gepland deze week.</div>
+          ) : (
+            events.sort((a, b) => a.date < b.date ? -1 : 1).map((ev) => (
+              <button key={ev.id} onClick={() => onSelect(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', cursor: 'pointer', color: '#fff', textAlign: 'left' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{ev.date} · {ev.guests || 0}p · {ev.location || 'tbd'}</div>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-accent-gold)', fontVariantNumeric: 'tabular-nums' }}>
+                  {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format((ev.guests || 0) * (ev.ppp || 0))}
+                </span>
+                <ChevronRight size={14} style={{ color: 'var(--muted-light)' }} />
+              </button>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
