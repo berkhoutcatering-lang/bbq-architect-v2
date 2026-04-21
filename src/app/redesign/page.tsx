@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
-import type { ReactNode, CSSProperties } from 'react';
+import type { ReactNode, CSSProperties, JSX } from 'react';
 import {
   LayoutDashboard, PartyPopper, FileText, Receipt, HeartHandshake,
   ChefHat, ClipboardList, Package, ShieldCheck, Euro, BarChart3,
