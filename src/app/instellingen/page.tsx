@@ -130,60 +130,8 @@ export default function Instellingen() {
                         </div>
                     </div>
 
-                    {/* Colors — 5 thema-kleuren (app-breed, inclusief achtergrond + tekst) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                        <ColorField label="Achtergrond" sub="App background, basis-tint" value={form.brand_background || '#0a0a0d'} onChange={(v) => setField('brand_background', v)} />
-                        <ColorField label="Tekst" sub="Primaire letterkleur" value={form.brand_text || '#ffffff'} onChange={(v) => setField('brand_text', v)} />
-                        <ColorField label="Kaarten" sub="Cards, drawers, modals" value={form.brand_card || '#15151a'} onChange={(v) => setField('brand_card', v)} />
-                        <ColorField label="Primair accent" sub="Knoppen, highlights" value={form.brand_primary || '#c4a35a'} onChange={(v) => setField('brand_primary', v)} />
-                        <ColorField label="Tweede accent" sub="Gradient, hover-state" value={form.brand_accent || ''} onChange={(v) => setField('brand_accent', v)} placeholder="Auto (donkerder)" />
-                    </div>
-
-                    {/* Preset-thema's */}
-                    <div style={{ marginTop: 14 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Kant-en-klaar thema's</div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {[
-                                { naam: 'Dark BBQ (default)', bg: '#0a0a0d', text: '#ffffff', card: '#15151a', primary: '#c4a35a', accent: '#a8893e', secondary: '#1a1a1a' },
-                                { naam: 'Licht groen + goud', bg: '#e8ede4', text: '#1a1a1a', card: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#d4dbcf' },
-                                { naam: 'Mat zwart + goud', bg: '#000000', text: '#ffffff', card: '#0f0f0f', primary: '#d4af37', accent: '#b8942d', secondary: '#0a0a0a' },
-                                { naam: 'Vuur & Rook', bg: '#1a0f0d', text: '#f5e6d3', card: '#2a1814', primary: '#e85d04', accent: '#9d0208', secondary: '#0d0807' },
-                                { naam: 'Bos-groen', bg: '#1a2a24', text: '#f0ebe0', card: '#2a3d36', primary: '#52796f', accent: '#354f52', secondary: '#0f1a16' },
-                                { naam: 'Wit/Beige', bg: '#faf7f0', text: '#1a1a1a', card: '#ffffff', primary: '#8b7355', accent: '#6f5a42', secondary: '#efe8d8' },
-                                { naam: 'Koper', bg: '#1e1410', text: '#f5e6d3', card: '#2e241e', primary: '#b87333', accent: '#8b4513', secondary: '#14090a' },
-                                { naam: 'Royal Blauw', bg: '#0f172a', text: '#ffffff', card: '#1e293b', primary: '#3b82f6', accent: '#1e40af', secondary: '#070d19' },
-                            ].map(function (p) {
-                                return (
-                                    <button key={p.naam} onClick={function () { setForm(function (prev: any) { return Object.assign({}, prev, { brand_background: p.bg, brand_text: p.text, brand_card: p.card, brand_primary: p.primary, brand_accent: p.accent, brand_secondary: p.secondary }); }); }}
-                                        style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', background: p.bg, color: p.text, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ display: 'inline-flex', gap: 2 }}>
-                                            <span style={{ width: 12, height: 12, borderRadius: 3, background: p.primary, border: '1px solid ' + p.accent }} />
-                                            <span style={{ width: 12, height: 12, borderRadius: 3, background: p.accent }} />
-                                        </span>
-                                        <span style={{ fontWeight: 600 }}>{p.naam}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Live preview met alle kleuren */}
-                    <div style={{ marginTop: 16, padding: 18, borderRadius: 12, background: form.brand_background || '#0a0a0d', border: '1px solid ' + (form.brand_card || '#15151a') }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: form.brand_text ? (form.brand_text + '99') : 'rgba(255,255,255,.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Live preview — zo ziet je app eruit</div>
-                        <div style={{ padding: 14, borderRadius: 10, background: form.brand_card || '#15151a', marginBottom: 10 }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: (form.brand_primary || '#c4a35a'), letterSpacing: '.15em', textTransform: 'uppercase', marginBottom: 4 }}>Eerstkomende event</div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: form.brand_text || '#fff', marginBottom: 8 }}>{form.bedrijfsnaam || 'Hop & Bites'}</div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button style={{ padding: '6px 14px', borderRadius: 6, background: form.brand_primary || '#c4a35a', color: form.brand_card || '#000', border: 'none', fontSize: 11, fontWeight: 700 }}>OFFERTE MAKEN</button>
-                                <button style={{ padding: '6px 14px', borderRadius: 6, background: 'transparent', color: form.brand_accent || form.brand_primary || '#c4a35a', border: '1px solid ' + (form.brand_accent || form.brand_primary || '#c4a35a'), fontSize: 11, fontWeight: 700 }}>VERZENDEN</button>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,.12)', color: '#ef4444', fontSize: 10, fontWeight: 700, border: '1px solid rgba(239,68,68,.3)' }}>LAAG OP VOORRAAD</span>
-                            <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,.12)', color: '#22c55e', fontSize: 10, fontWeight: 700, border: '1px solid rgba(34,197,94,.3)' }}>BEVESTIGD</span>
-                        </div>
-                        <div style={{ fontSize: 10, color: form.brand_text ? (form.brand_text + '66') : 'rgba(255,255,255,.4)', marginTop: 10, fontStyle: 'italic' }}>Rood/groen waarschuwingen blijven betekenisvol — die veranderen niet mee.</div>
-                    </div>
+                    {/* Curated thema-presets — geen eigen kleuren kiezen, alleen kant-en-klare combinaties */}
+                    <ThemePresetPicker form={form} setForm={setForm} />
                 </div>
             </div>
 
@@ -283,6 +231,119 @@ export default function Instellingen() {
                 />
             )}
         </>
+    );
+}
+
+// ── Curated thema's — elk met zorgvuldig afgestemde 5 kleuren ──
+const THEMES = [
+    {
+        id: 'dark-bbq',
+        naam: 'Dark BBQ',
+        omschrijving: 'Het origineel — diep donker met warme gouden accenten',
+        bg: '#0a0a0d', card: '#15151a', text: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#1a1a1a',
+    },
+    {
+        id: 'mat-zwart-goud',
+        naam: 'Mat Zwart + Goud',
+        omschrijving: 'Echt zwart met felle goud-accenten — premium uitstraling',
+        bg: '#050505', card: '#111111', text: '#f5f5f5', primary: '#d4af37', accent: '#b8942d', secondary: '#0a0a0a',
+    },
+    {
+        id: 'licht-goud',
+        naam: 'Licht Warm + Goud',
+        omschrijving: 'Beige achtergrond, witte kaarten, zwarte tekst — rustig en professioneel',
+        bg: '#f4efe6', card: '#ffffff', text: '#1a1a1a', primary: '#a8893e', accent: '#8b7355', secondary: '#e8e0d0',
+    },
+    {
+        id: 'mat-wit-zwart',
+        naam: 'Mat Wit + Zwart',
+        omschrijving: 'Clean wit met zwart als hoofdaccent — editoriale stijl',
+        bg: '#fafafa', card: '#ffffff', text: '#0a0a0a', primary: '#1a1a1a', accent: '#404040', secondary: '#efefef',
+    },
+    {
+        id: 'bos-natuur',
+        naam: 'Bos & Natuur',
+        omschrijving: 'Donker bosgroen met gedempte sage accenten — organisch',
+        bg: '#1a2a24', card: '#253832', text: '#f0ebe0', primary: '#8ab89c', accent: '#5c8875', secondary: '#0f1a16',
+    },
+    {
+        id: 'midnight-blauw',
+        naam: 'Midnight Blauw',
+        omschrijving: 'Diep marineblauw met licht staalblauwe accenten — professioneel',
+        bg: '#0a1424', card: '#152238', text: '#ffffff', primary: '#60a5fa', accent: '#3b82f6', secondary: '#050b18',
+    },
+    {
+        id: 'koper-rook',
+        naam: 'Koper & Rook',
+        omschrijving: 'Warme bruintinten met koperen highlights — rustieke keuken',
+        bg: '#1f1813', card: '#2e241e', text: '#f0e6d8', primary: '#c17e4a', accent: '#8b5a2b', secondary: '#120c08',
+    },
+    {
+        id: 'wijnrood',
+        naam: 'Bordeaux',
+        omschrijving: 'Diep wijnrood met zachte crème accenten — gastronomisch',
+        bg: '#1c0a0f', card: '#2a1118', text: '#f5e6d3', primary: '#c9a961', accent: '#9f7e42', secondary: '#0e0507',
+    },
+] as const;
+
+function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) => void }) {
+    function applyTheme(t: typeof THEMES[number]) {
+        setForm((prev: any) => Object.assign({}, prev, {
+            brand_background: t.bg, brand_text: t.text, brand_card: t.card,
+            brand_primary: t.primary, brand_accent: t.accent, brand_secondary: t.secondary,
+        }));
+    }
+    const currentId = THEMES.find(t => t.bg === form.brand_background && t.primary === form.brand_primary)?.id;
+    return (
+        <div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14 }}>
+                Kies een thema — we hebben elk zorgvuldig afgestemd zodat tekst goed leesbaar is, knoppen opvallen en het nergens kermis wordt. Klik &quot;Opslaan&quot; onderaan om toe te passen.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {THEMES.map(t => {
+                    const isCurrent = currentId === t.id;
+                    return (
+                        <button key={t.id} onClick={() => applyTheme(t)}
+                            style={{
+                                padding: 0, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                                border: isCurrent ? '2px solid ' + t.primary : '1px solid var(--border)',
+                                background: 'transparent', textAlign: 'left', color: 'var(--text)',
+                                transition: 'transform .15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
+                            {/* Visuele mini-preview van het thema */}
+                            <div style={{ padding: 14, background: t.bg, borderBottom: '1px solid ' + t.card }}>
+                                <div style={{ padding: 10, borderRadius: 8, background: t.card, marginBottom: 8 }}>
+                                    <div style={{ fontSize: 9, color: t.primary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>Event</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>Hop &amp; Bites</div>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: t.primary, color: t.card, fontSize: 9, fontWeight: 700 }}>OFFERTE</span>
+                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: 'transparent', border: '1px solid ' + t.accent, color: t.accent, fontSize: 9, fontWeight: 700 }}>FACTUUR</span>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 3 }}>
+                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.primary }} title="Primair" />
+                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.accent }} title="Accent" />
+                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.card, border: '1px solid ' + t.accent }} title="Kaart" />
+                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.bg, border: '1px solid ' + t.accent }} title="Achtergrond" />
+                                </div>
+                            </div>
+                            <div style={{ padding: '10px 14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{t.naam}</span>
+                                    {isCurrent && <span style={{ fontSize: 9, fontWeight: 700, color: t.primary, letterSpacing: '.1em' }}>✓ ACTIEF</span>}
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.3 }}>{t.omschrijving}</div>
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+            <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)', fontSize: 11, color: 'var(--muted)' }}>
+                <strong style={{ color: 'var(--text)' }}>Belangrijk:</strong> rood/groen waarschuwingen (lage voorraad, bevestigd) blijven altijd hun betekenis houden — die veranderen niet mee met het gekozen thema.
+            </div>
+        </div>
     );
 }
 
