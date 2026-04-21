@@ -106,11 +106,12 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { prompt, mode = 'recipe', existing = [], options = {} } = body as {
+        const { prompt, mode = 'recipe', existing = [], options = {}, model: modelChoice } = body as {
             prompt?: string;
             mode?: GenerateMode;
             existing?: ExistingDish[];
             options?: any;
+            model?: 'haiku' | 'sonnet' | 'opus';
         };
 
         if (!prompt && mode !== 'enrich' && mode !== 'scale') {
@@ -120,11 +121,18 @@ export async function POST(req: NextRequest) {
         const client = new Anthropic({ apiKey });
         const userMessage = buildUserMessage(mode, prompt || '', existing, options);
 
-        console.log(`[recipe-generate] mode=${mode} existingCount=${existing.length}`);
+        // Sonnet default voor recepten (kwaliteit boven snelheid). Haiku kan voor simpele enrich/scale.
+        const MODEL_MAP = {
+            haiku: 'claude-haiku-4-5',
+            sonnet: 'claude-sonnet-4-6',
+            opus: 'claude-opus-4-7',
+        } as const;
+        const model = MODEL_MAP[modelChoice || 'sonnet'] || MODEL_MAP.sonnet;
+        console.log(`[recipe-generate] model=${model} mode=${mode} existingCount=${existing.length}`);
 
         // Streaming om timeouts te voorkomen bij lange outputs
         const stream = client.messages.stream({
-            model: 'claude-sonnet-4-6',
+            model,
             max_tokens: 8000,
             system: SYSTEM_PROMPT,
             messages: [{ role: 'user', content: userMessage }],

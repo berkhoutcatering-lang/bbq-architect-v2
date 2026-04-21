@@ -5,9 +5,8 @@ import Anthropic from '@anthropic-ai/sdk';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-const INVOICE_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse leveranciersfacturen voor een horeca/catering bedrijf.
-Je krijgt een factuur (PDF of foto). Extracteer de gegevens in strikt JSON formaat.
-Gebruik EXACT dit schema, geen extra velden:
+const INVOICE_SYSTEM_PROMPT = `Lees Nederlandse leveranciersfactuur → retourneer alleen JSON.
+Geen uitleg, geen markdown, geen denk-tekst. Direct JSON.
 
 {
   "leverancier": "string (naam van de leverancier)",
@@ -42,8 +41,8 @@ Regels:
 - Bij onzekerheid: geef je beste inschatting — niet null laten behalve waar expliciet toegestaan
 - Antwoord ALLEEN met geldige JSON, geen markdown fences, geen extra tekst`;
 
-const RECEIPT_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse kassabonnen voor een horeca bedrijf.
-Je krijgt een foto van een kassabon. Extracteer in strikt JSON formaat:
+const RECEIPT_SYSTEM_PROMPT = `Lees Nederlandse kassabon → retourneer alleen JSON.
+Geen uitleg, geen markdown. Direct JSON met dit schema:
 
 {
   "winkel": "string (naam supermarkt/winkel)",
@@ -79,7 +78,8 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { imageBase64, pdfBase64, imageUrl, type } = body as {
+        const { imageBase64, pdfBase64, imageUrl, type, model: modelChoice } = body as {
+            model?: 'haiku' | 'sonnet' | 'opus';
             imageBase64?: string;
             pdfBase64?: string;
             imageUrl?: string;
@@ -94,9 +94,7 @@ export async function POST(req: NextRequest) {
         }
 
         const systemPrompt = type === 'invoice' ? INVOICE_SYSTEM_PROMPT : RECEIPT_SYSTEM_PROMPT;
-        const userText = type === 'invoice'
-            ? 'Lees deze factuur en retourneer het JSON-schema zoals geïnstrueerd.'
-            : 'Lees deze kassabon en retourneer het JSON-schema zoals geïnstrueerd.';
+        const userText = 'JSON.';
 
         const client = new Anthropic({ apiKey });
 
@@ -133,10 +131,14 @@ export async function POST(req: NextRequest) {
 
         contentBlocks.push({ type: 'text', text: userText });
 
-        // Sonnet 4.6 voor beide types — hoge betrouwbaarheid voor PDFs en foto's.
-        // Bij jouw volume (~30-50 scans/maand) kost dit ~€0,10-0,15/maand terwijl
-        // de slechte-scan-fouten van Haiku wegvallen.
-        const model = 'claude-sonnet-4-6';
+        // Model-keuze: Haiku default (2-3x sneller, goedkoper, prima voor structured extract).
+        // Sonnet/Opus als gebruiker meer nauwkeurigheid wil bij slechte scans.
+        const MODEL_MAP = {
+            haiku: 'claude-haiku-4-5',
+            sonnet: 'claude-sonnet-4-6',
+            opus: 'claude-opus-4-7',
+        } as const;
+        const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
         // Streaming voorkomt timeouts bij lange facturen; .finalMessage() geeft de volledige response terug

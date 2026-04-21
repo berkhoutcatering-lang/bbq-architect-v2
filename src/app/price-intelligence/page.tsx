@@ -91,6 +91,34 @@ function BtnGhost({ children, icon: I, right: R, onClick, style }: { children: R
     );
 }
 
+function ModelToggle({ value, onChange }: { value: 'haiku' | 'sonnet' | 'opus'; onChange: (v: 'haiku' | 'sonnet' | 'opus') => void }) {
+    const MODELS: { id: 'haiku' | 'sonnet' | 'opus'; label: string; tagline: string }[] = [
+        { id: 'haiku', label: 'Haiku', tagline: 'Snel · ±8s' },
+        { id: 'sonnet', label: 'Sonnet', tagline: 'Nauwkeurig · ±20s' },
+        { id: 'opus', label: 'Opus', tagline: 'Premium · ±30s' },
+    ];
+    return (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: 3, borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+            {MODELS.map(m => {
+                const active = value === m.id;
+                return (
+                    <button key={m.id} onClick={() => onChange(m.id)}
+                        title={m.tagline}
+                        style={{
+                            padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                            border: 'none',
+                            background: active ? 'var(--brand-primary)' : 'transparent',
+                            color: active ? '#000' : 'var(--muted)',
+                            transition: 'all .15s', letterSpacing: '.05em',
+                        }}>
+                        {m.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 function Pill({ variant = 'draft', children, onClick }: { variant?: 'brand' | 'draft' | 'ok' | 'warn' | 'danger'; children: React.ReactNode; onClick?: () => void }) {
     const map: Record<string, React.CSSProperties> = {
         brand: { background: 'rgba(255,191,0,.12)', color: 'var(--brand)', borderColor: 'rgba(255,191,0,.3)' },
@@ -558,6 +586,8 @@ function FolderInvoices() {
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
+    const [aiModel, setAiModel] = useState<'haiku' | 'sonnet' | 'opus'>(typeof window !== 'undefined' ? (localStorage.getItem('pi_ai_model') as any) || 'haiku' : 'haiku');
+    useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('pi_ai_model', aiModel); }, [aiModel]);
     const [parsedInvoice, setParsedInvoice] = useState<ParsedInvoice | null>(null);
     const [scanPreview, setScanPreview] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -582,7 +612,7 @@ function FolderInvoices() {
             if (controller.signal.aborted) return;
             setScanPreview(doc.base64);
             setScanStep('upload');
-            const payload: any = { type: 'invoice' };
+            const payload: any = { type: 'invoice', model: aiModel };
             if (doc.kind === 'pdf') payload.pdfBase64 = doc.base64;
             else payload.imageBase64 = doc.base64;
             const res = await fetch('/api/parse-document', {
@@ -805,10 +835,12 @@ function FolderInvoices() {
                             <CloudUpload size={28} style={{ color: GOLD }} />
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginBottom: 8 }}>Upload één of meerdere facturen</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
                             Sleep meerdere tegelijk erin — worden sequentieel verwerkt.<br />
                             PDF, JPG of PNG · AI leest binnen 15 seconden per factuur.
                         </div>
+                        <ModelToggle value={aiModel} onChange={setAiModel} />
+                        <div style={{ height: 10 }} />
                         <div style={{ fontSize: 11, color: GOLD, marginBottom: 18, fontWeight: 500 }}>
                             💡 Tip: houd <kbd style={{ padding: '1px 6px', border: `1px solid ${GOLD}4D`, borderRadius: 4, background: `${GOLD}18`, fontFamily: 'monospace', fontSize: 10 }}>⌘</kbd> of <kbd style={{ padding: '1px 6px', border: `1px solid ${GOLD}4D`, borderRadius: 4, background: `${GOLD}18`, fontFamily: 'monospace', fontSize: 10 }}>Shift</kbd> ingedrukt in Finder om meerdere facturen tegelijk te selecteren
                         </div>
@@ -1556,6 +1588,8 @@ function FolderReceipts() {
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
+    const [aiModel, setAiModel] = useState<'haiku' | 'sonnet' | 'opus'>(typeof window !== 'undefined' ? (localStorage.getItem('pi_ai_model') as any) || 'haiku' : 'haiku');
+    useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('pi_ai_model', aiModel); }, [aiModel]);
     const [parsed, setParsed] = useState<any | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -1578,7 +1612,7 @@ function FolderReceipts() {
             if (controller.signal.aborted) return;
             setPreview(doc.base64);
             setScanStep('upload');
-            const payload: any = { type: 'receipt' };
+            const payload: any = { type: 'receipt', model: aiModel };
             if (doc.kind === 'pdf') payload.pdfBase64 = doc.base64;
             else payload.imageBase64 = doc.base64;
             const res = await fetch('/api/parse-document', {
@@ -1665,6 +1699,7 @@ function FolderReceipts() {
                             <Receipt size={24} style={{ color: GOLD }} />
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 300, marginBottom: 6 }}>Upload kassabon</div>
+                        <div style={{ marginBottom: 10 }}><ModelToggle value={aiModel} onChange={setAiModel} /></div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18 }}>Fotografeer met je telefoon of upload een bestaande foto.</div>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                             <BtnPrimary icon={Camera} onClick={() => cameraRef.current?.click()}>Foto maken</BtnPrimary>
