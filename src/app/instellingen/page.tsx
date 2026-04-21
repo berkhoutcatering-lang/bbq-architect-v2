@@ -130,77 +130,59 @@ export default function Instellingen() {
                         </div>
                     </div>
 
-                    {/* Colors — 3 huiskleuren */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                        <div className="field">
-                            <label>Primair (hoofdkleur)</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input type="color" value={form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
-                                <input value={form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} placeholder="#c4a35a" style={{ flex: 1 }} />
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Knoppen, highlights, pictogrammen</div>
-                        </div>
-                        <div className="field">
-                            <label>Accent (tweede)</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input type="color" value={form.brand_accent || form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_accent', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
-                                <input value={form.brand_accent || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_accent', e.target.value); }} placeholder="Auto (donkerder)" style={{ flex: 1 }} />
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Gradient-einde, hover-state</div>
-                        </div>
-                        <div className="field">
-                            <label>Donker (basis)</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input type="color" value={form.brand_secondary || '#1a1a1a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_secondary', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
-                                <input value={form.brand_secondary || '#1a1a1a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_secondary', e.target.value); }} placeholder="#1a1a1a" style={{ flex: 1 }} />
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Achtergrond-tint, sidebar</div>
-                        </div>
+                    {/* Colors — 5 thema-kleuren (app-breed, inclusief achtergrond + tekst) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                        <ColorField label="Achtergrond" sub="App background, basis-tint" value={form.brand_background || '#0a0a0d'} onChange={(v) => setField('brand_background', v)} />
+                        <ColorField label="Tekst" sub="Primaire letterkleur" value={form.brand_text || '#ffffff'} onChange={(v) => setField('brand_text', v)} />
+                        <ColorField label="Kaarten" sub="Cards, drawers, modals" value={form.brand_card || '#15151a'} onChange={(v) => setField('brand_card', v)} />
+                        <ColorField label="Primair accent" sub="Knoppen, highlights" value={form.brand_primary || '#c4a35a'} onChange={(v) => setField('brand_primary', v)} />
+                        <ColorField label="Tweede accent" sub="Gradient, hover-state" value={form.brand_accent || ''} onChange={(v) => setField('brand_accent', v)} placeholder="Auto (donkerder)" />
                     </div>
 
-                    {/* Preset-kleuren */}
-                    <div style={{ marginTop: 12 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Presets</div>
+                    {/* Preset-thema's */}
+                    <div style={{ marginTop: 14 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Kant-en-klaar thema's</div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {[
-                                { naam: 'BBQ Goud', primary: '#c4a35a', accent: '#a8893e', donker: '#1a1a1a' },
-                                { naam: 'Vuur & Rook', primary: '#e85d04', accent: '#9d0208', donker: '#1a0f0d' },
-                                { naam: 'Bos & Ei', primary: '#52796f', accent: '#354f52', donker: '#2f3e46' },
-                                { naam: 'Koper', primary: '#b87333', accent: '#8b4513', donker: '#1e1410' },
-                                { naam: 'Royal Blauw', primary: '#3b82f6', accent: '#1e40af', donker: '#0f172a' },
-                                { naam: 'Wijn', primary: '#7f1d1d', accent: '#4a0404', donker: '#1c0a0a' },
+                                { naam: 'Dark BBQ (default)', bg: '#0a0a0d', text: '#ffffff', card: '#15151a', primary: '#c4a35a', accent: '#a8893e', secondary: '#1a1a1a' },
+                                { naam: 'Licht groen + goud', bg: '#e8ede4', text: '#1a1a1a', card: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#d4dbcf' },
+                                { naam: 'Mat zwart + goud', bg: '#000000', text: '#ffffff', card: '#0f0f0f', primary: '#d4af37', accent: '#b8942d', secondary: '#0a0a0a' },
+                                { naam: 'Vuur & Rook', bg: '#1a0f0d', text: '#f5e6d3', card: '#2a1814', primary: '#e85d04', accent: '#9d0208', secondary: '#0d0807' },
+                                { naam: 'Bos-groen', bg: '#1a2a24', text: '#f0ebe0', card: '#2a3d36', primary: '#52796f', accent: '#354f52', secondary: '#0f1a16' },
+                                { naam: 'Wit/Beige', bg: '#faf7f0', text: '#1a1a1a', card: '#ffffff', primary: '#8b7355', accent: '#6f5a42', secondary: '#efe8d8' },
+                                { naam: 'Koper', bg: '#1e1410', text: '#f5e6d3', card: '#2e241e', primary: '#b87333', accent: '#8b4513', secondary: '#14090a' },
+                                { naam: 'Royal Blauw', bg: '#0f172a', text: '#ffffff', card: '#1e293b', primary: '#3b82f6', accent: '#1e40af', secondary: '#070d19' },
                             ].map(function (p) {
                                 return (
-                                    <button key={p.naam} onClick={function () { setForm(function (prev: any) { return Object.assign({}, prev, { brand_primary: p.primary, brand_accent: p.accent, brand_secondary: p.donker }); }); }}
-                                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <button key={p.naam} onClick={function () { setForm(function (prev: any) { return Object.assign({}, prev, { brand_background: p.bg, brand_text: p.text, brand_card: p.card, brand_primary: p.primary, brand_accent: p.accent, brand_secondary: p.secondary }); }); }}
+                                        style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', background: p.bg, color: p.text, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                         <span style={{ display: 'inline-flex', gap: 2 }}>
-                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.primary }} />
-                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.accent }} />
-                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.donker, border: '1px solid rgba(255,255,255,.1)' }} />
+                                            <span style={{ width: 12, height: 12, borderRadius: 3, background: p.primary, border: '1px solid ' + p.accent }} />
+                                            <span style={{ width: 12, height: 12, borderRadius: 3, background: p.accent }} />
                                         </span>
-                                        {p.naam}
+                                        <span style={{ fontWeight: 600 }}>{p.naam}</span>
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* Preview */}
-                    <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: form.brand_secondary || '#1a1a1a', border: '1px solid rgba(255,255,255,.1)' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Live preview</div>
-                        <div style={{ height: 3, background: 'linear-gradient(to right, ' + (form.brand_primary || '#c4a35a') + ', ' + (form.brand_accent || form.brand_primary || '#c4a35a') + ')', borderRadius: 2, marginBottom: 12 }} />
-                        <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                            {form.logo_url ? (
-                                <img src={form.logo_url} alt="Preview" style={{ maxHeight: 36, objectFit: 'contain' }} />
-                            ) : (
-                                <span style={{ fontSize: 18, fontWeight: 800, color: form.brand_primary || '#c4a35a' }}>{form.bedrijfsnaam || 'Hop & Bites'}</span>
-                            )}
+                    {/* Live preview met alle kleuren */}
+                    <div style={{ marginTop: 16, padding: 18, borderRadius: 12, background: form.brand_background || '#0a0a0d', border: '1px solid ' + (form.brand_card || '#15151a') }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: form.brand_text ? (form.brand_text + '99') : 'rgba(255,255,255,.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Live preview — zo ziet je app eruit</div>
+                        <div style={{ padding: 14, borderRadius: 10, background: form.brand_card || '#15151a', marginBottom: 10 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: (form.brand_primary || '#c4a35a'), letterSpacing: '.15em', textTransform: 'uppercase', marginBottom: 4 }}>Eerstkomende event</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: form.brand_text || '#fff', marginBottom: 8 }}>{form.bedrijfsnaam || 'Hop & Bites'}</div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button style={{ padding: '6px 14px', borderRadius: 6, background: form.brand_primary || '#c4a35a', color: form.brand_card || '#000', border: 'none', fontSize: 11, fontWeight: 700 }}>OFFERTE MAKEN</button>
+                                <button style={{ padding: '6px 14px', borderRadius: 6, background: 'transparent', color: form.brand_accent || form.brand_primary || '#c4a35a', border: '1px solid ' + (form.brand_accent || form.brand_primary || '#c4a35a'), fontSize: 11, fontWeight: 700 }}>VERZENDEN</button>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
-                            <button style={{ padding: '6px 14px', borderRadius: 6, background: form.brand_primary || '#c4a35a', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>OFFERTE</button>
-                            <button style={{ padding: '6px 14px', borderRadius: 6, background: 'transparent', color: form.brand_accent || form.brand_primary || '#c4a35a', border: '1px solid ' + (form.brand_accent || form.brand_primary || '#c4a35a'), fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>FACTUUR</button>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,.12)', color: '#ef4444', fontSize: 10, fontWeight: 700, border: '1px solid rgba(239,68,68,.3)' }}>LAAG OP VOORRAAD</span>
+                            <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,.12)', color: '#22c55e', fontSize: 10, fontWeight: 700, border: '1px solid rgba(34,197,94,.3)' }}>BEVESTIGD</span>
                         </div>
-                        <div style={{ height: 3, background: 'linear-gradient(to right, ' + (form.brand_primary || '#c4a35a') + ', ' + (form.brand_accent || form.brand_primary || '#c4a35a') + ')', borderRadius: 2 }} />
+                        <div style={{ fontSize: 10, color: form.brand_text ? (form.brand_text + '66') : 'rgba(255,255,255,.4)', marginTop: 10, fontStyle: 'italic' }}>Rood/groen waarschuwingen blijven betekenisvol — die veranderen niet mee.</div>
                     </div>
                 </div>
             </div>
@@ -301,6 +283,22 @@ export default function Instellingen() {
                 />
             )}
         </>
+    );
+}
+
+// ── Herbruikbare kleur-picker met label, hex-input en omschrijving ──
+function ColorField({ label, sub, value, onChange, placeholder }: { label: string; sub?: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+    const colorValue = value || placeholder?.match(/#[0-9a-f]{6}/i)?.[0] || '#000000';
+    return (
+        <div className="field">
+            <label>{label}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="color" value={colorValue} onChange={(e) => onChange(e.target.value)}
+                    style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
+                <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || colorValue} style={{ flex: 1 }} />
+            </div>
+            {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+        </div>
     );
 }
 
