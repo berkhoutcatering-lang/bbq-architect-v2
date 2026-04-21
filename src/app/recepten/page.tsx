@@ -450,7 +450,7 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
             </Section>
 
             {recipe.battle_plan && recipe.battle_plan.length > 0 && (
-                <Section title={`Battle plan · prep-volgorde`}>
+                <Section title={`Werkvolgorde · wanneer doe je wat`}>
                     <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {recipe.battle_plan.map((s, i) => (
                             <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>
@@ -635,7 +635,7 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
 
                     {/* BATTLE PLAN */}
                     {recipe.battle_plan && recipe.battle_plan.length > 0 && (
-                        <Section title={`Battle plan · prep-volgorde`}>
+                        <Section title={`Werkvolgorde · wanneer doe je wat`}>
                             <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {recipe.battle_plan.map((s, i) => (
                                     <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>

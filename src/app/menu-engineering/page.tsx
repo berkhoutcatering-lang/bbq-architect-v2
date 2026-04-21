@@ -441,10 +441,10 @@ export default function MenuEngineering() {
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => setBcgDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <BarChart3 size={14} /> BCG Analyse
+            <BarChart3 size={14} /> Winnaars & Verliezers
           </button>
           <button onClick={() => setMapDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <LayoutGrid size={14} /> Map Station
+            <LayoutGrid size={14} /> Menukaart indelen
           </button>
           <button
             onClick={() => { setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds([]); }}
@@ -546,7 +546,7 @@ export default function MenuEngineering() {
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1300, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Map Station</h2>
+                <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Menukaart indelen</h2>
                 <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>{alleMapGerechten} gerechten ingedeeld · {gerechten.length - alleMapGerechten} in pool</p>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -868,7 +868,7 @@ function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bc
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1200, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>BCG Menu Analyse</h2>
+            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Winnaars & Verliezers</h2>
             <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Gerechten geclassificeerd op populariteit en marge</p>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>

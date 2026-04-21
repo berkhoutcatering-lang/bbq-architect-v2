@@ -58,6 +58,7 @@ function PillSelect({ options, value, onChange, color = 'var(--blue)' }: { optio
 export default function KlantGesprek() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
   const showToast = useToast();
   const { settings } = useSettings();
   const { data: gerechten } = useSupabase('gerechten', []);
@@ -362,12 +363,77 @@ export default function KlantGesprek() {
       {/* ═══════════════ STAP 3: MENU ═══════════════ */}
       {step === 2 && (
         <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--emerald)">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <UtensilsCrossed size={16} className="text-emerald-400" />
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Menu wensen</span>
             </div>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--emerald)' }}>{totalMenuDishes} gekozen</span>
+          </div>
+          {/* AI-menu suggestie banner */}
+          <div style={{ padding: 14, borderRadius: 10, background: 'linear-gradient(135deg, rgba(196,163,90,.12), rgba(255,255,255,.02))', border: '1px solid rgba(196,163,90,.25)', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(196,163,90,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Sparkles size={16} style={{ color: '#c4a35a' }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 2 }}>Claude stelt menu voor</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>Op basis van klant ({klant.type}), {event.gasten} gasten, {event.binnenBuiten.toLowerCase()}. Klik om matchende gerechten uit jouw pool te selecteren.</div>
+            </div>
+            <button onClick={async function () {
+              setAiSuggesting(true);
+              try {
+                const existing = gerechten.map(function (g: any) { return { naam: g.naam, gang: g.gang_slug, tags: g.tags }; });
+                const hints = [
+                  klant.type + ' klant',
+                  event.gasten + ' gasten',
+                  event.binnenBuiten,
+                  menuExtra.speciale_wensen || '',
+                  menuExtra.dieet_opmerkingen || '',
+                ].filter(Boolean).join(', ');
+                const res = await fetch('/api/recipe-generate', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    mode: 'menu',
+                    prompt: 'Menu voor klantgesprek: ' + hints,
+                    existing,
+                    options: { gasten: event.gasten, gangen: String(sortedGangen.length || 3) },
+                  }),
+                });
+                const body = await res.json();
+                if (!res.ok) { showToast('AI fout: ' + (body.error || 'onbekend'), 'error'); return; }
+                // Match generated dishes tegen bestaande gerechten per gang
+                const suggestie: Record<string, string[]> = {};
+                (body.data.gerechten || []).forEach(function (g: any) {
+                  const targetGang = (g.gang || '').toLowerCase();
+                  // Vind match in gerechten tabel op naam (fuzzy)
+                  const qLow = g.naam.toLowerCase();
+                  const match = gerechten.find(function (ex: any) {
+                    return ex.naam.toLowerCase() === qLow || ex.naam.toLowerCase().includes(qLow.slice(0, 12));
+                  });
+                  if (match) {
+                    const slug = match.gang_slug;
+                    if (!suggestie[slug]) suggestie[slug] = [];
+                    if (!suggestie[slug].includes(match.naam)) suggestie[slug].push(match.naam);
+                  } else {
+                    // Voeg suggestie op basis van gang-naam
+                    const targetSlug = sortedGangen.find(function (s: any) { return s.naam.toLowerCase().includes(targetGang) || targetGang.includes(s.slug); })?.slug;
+                    if (targetSlug) {
+                      if (!suggestie[targetSlug]) suggestie[targetSlug] = [];
+                      if (!suggestie[targetSlug].includes(g.naam)) suggestie[targetSlug].push(g.naam);
+                    }
+                  }
+                });
+                setMenuSelectie(suggestie);
+                showToast('✨ Menu voorgesteld — bekijk en pas aan', 'success');
+              } catch (e: any) {
+                showToast('Fout: ' + (e.message || 'onbekend'), 'error');
+              } finally {
+                setAiSuggesting(false);
+              }
+            }} disabled={aiSuggesting} style={{ padding: '8px 14px', borderRadius: 8, background: '#c4a35a', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+              <Sparkles size={13} /> {aiSuggesting ? 'Claude denkt na...' : 'Stel menu voor'}
+            </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {sortedGangen.length === 0 ? (

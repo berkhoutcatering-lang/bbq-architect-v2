@@ -153,8 +153,8 @@ export default function Logistiek() {
             <PageHeader title="Logistiek" description="Plan transport en check je materiaallijsten voor events" />
 
             <div className="tab-bar">
-                <button className={'tab-btn' + (tab === 'buscheck' ? ' active' : '')} onClick={function () { setTab('buscheck'); }}>🚛 Bus-Check</button>
-                <button className={'tab-btn' + (tab === 'rtr' ? ' active' : '')} onClick={function () { setTab('rtr'); }}>📦 RTR Checklist</button>
+                <button className={'tab-btn' + (tab === 'buscheck' ? ' active' : '')} onClick={function () { setTab('buscheck'); }}>🚛 Alles in de bus</button>
+                <button className={'tab-btn' + (tab === 'rtr' ? ' active' : '')} onClick={function () { setTab('rtr'); }}>📦 Klaar voor vertrek</button>
                 <button className={'tab-btn' + (tab === 'pack' ? ' active' : '')} onClick={function () { setTab('pack'); }}>📋 Paklijsten</button>
             </div>
 
