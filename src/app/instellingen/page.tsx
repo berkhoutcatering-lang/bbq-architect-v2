@@ -91,7 +91,7 @@ export default function Instellingen() {
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div className="panel-head"><h3><Palette size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Huisstijl</h3></div>
                 <div className="panel-body">
-                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze instellingen bepalen hoe je facturen, offertes en klantpagina&apos;s eruitzien.</p>
+                    <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>Deze kleuren bepalen de huisstijl van <strong>de hele app</strong> — knoppen, accenten, sidebar — én van je facturen, offertes en klantpagina&apos;s.</p>
 
                     {/* Logo upload */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
