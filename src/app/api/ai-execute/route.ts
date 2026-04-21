@@ -1,14 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabase } from '@/lib/supabase-server';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-async function generateInkooplijst(params: Record<string, any>): Promise<Record<string, any>> {
+// Route draait authenticated via createServerSupabase() → queries respecteren
+// RLS en lopen onder de user's organization_id. Vroeger werd hier de anon-
+// browser-client gebruikt, wat data lekte buiten de org-scope zodra de
+// "Allow all for anon" policies werden gedropt.
+
+async function getActiveOrgId(sb: SupabaseClient): Promise<string | null> {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+    const { data } = await sb.from('organization_members').select('organization_id').eq('user_id', user.id).eq('status', 'active').limit(1);
+    return data && data[0] ? (data[0].organization_id as string) : null;
+}
+
+async function bulkCreateGerechten(sb: SupabaseClient, orgId: string | null, params: Record<string, any>): Promise<Record<string, any>> {
+    const gerechten: any[] = params.gerechten || [];
+    if (gerechten.length === 0) return { error: 'Geen gerechten opgegeven', inserted: 0, errors: [] };
+    if (!orgId) return { error: 'Geen actieve organisatie gevonden', inserted: 0, errors: [] };
+
+    const rows = gerechten.map((g: any, i: number) => ({
+        naam: g.naam || 'Nieuw Gerecht',
+        gang_slug: g.gang_slug || 'anders',
+        beschrijving: g.beschrijving || '',
+        bereidingswijze: Array.isArray(g.bereidingswijze) ? g.bereidingswijze.join('\n') : (g.bereidingswijze || ''),
+        ingredienten: Array.isArray(g.ingredienten) ? g.ingredienten : [],
+        allergenen: g.allergenen || [],
+        tags: g.tags || [],
+        actief: false,
+        volgorde: 900 + i,
+        organization_id: orgId,
+    }));
+
+    const results = await Promise.allSettled(rows.map((row) => sb.from('gerechten').insert(row).select().single()));
+    const inserted = results.filter((r) => r.status === 'fulfilled' && !(r as any).value?.error).length;
+    const errors = results
+        .filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && (r as any).value?.error))
+        .map((r) => r.status === 'rejected' ? String((r as any).reason?.message || 'onbekend') : String((r as any).value.error?.message || 'onbekend'));
+
+    return { inserted, total: rows.length, errors };
+}
+
+async function generateInkooplijst(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
     const event_id = params.event_id;
     if (!event_id) return { error: 'event_id is verplicht' };
-    if (!supabase) return { error: 'Geen database verbinding' };
 
-    const eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    const eventRes = await sb.from('events').select('*').eq('id', event_id).single();
     if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden (id: ' + event_id + ')' };
     const event = eventRes.data;
     const gasten = event.guests || 1;
@@ -16,11 +55,11 @@ async function generateInkooplijst(params: Record<string, any>): Promise<Record<
     const menuIds = event.menu || [];
     let recepten: any[] = [];
     if (menuIds.length > 0) {
-        const recRes = await supabase.from('recepten').select('*').in('id', menuIds);
+        const recRes = await sb.from('recepten').select('*').in('id', menuIds);
         recepten = recRes.data || [];
     }
 
-    const invRes = await supabase.from('inventory').select('naam,current_stock,unit,purchase_price');
+    const invRes = await sb.from('inventory').select('naam,current_stock,unit,purchase_price');
     const inventory = invRes.data || [];
     const invMap: Record<string, any> = {};
     inventory.forEach(function (i: any) { invMap[(i.naam || '').toLowerCase().trim()] = i; });
@@ -77,29 +116,28 @@ async function generateInkooplijst(params: Record<string, any>): Promise<Record<
     };
 }
 
-async function generateEventBriefing(params: Record<string, any>): Promise<Record<string, any>> {
+async function generateEventBriefing(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
     const event_id = params.event_id;
     if (!event_id) return { error: 'event_id is verplicht' };
-    if (!supabase) return { error: 'Geen database verbinding' };
 
-    const eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    const eventRes = await sb.from('events').select('*').eq('id', event_id).single();
     if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
     const event = eventRes.data;
 
     const menuIds = event.menu || [];
     let recepten: any[] = [];
     if (menuIds.length > 0) {
-        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime').in('id', menuIds);
+        const recRes = await sb.from('recepten').select('id,naam,categorie,porties,preptime').in('id', menuIds);
         recepten = recRes.data || [];
     }
 
-    const prepRes = await supabase.from('prep_tasks').select('*').eq('event_id', event_id).order('dagen');
+    const prepRes = await sb.from('prep_tasks').select('*').eq('event_id', event_id).order('dagen');
     const prep_tasks = prepRes.data || [];
 
-    const offRes = await supabase.from('offertes').select('id,nummer,status,basis_prijs_pp,aantal_gasten,korting,items').eq('event_id', event_id).limit(1);
+    const offRes = await sb.from('offertes').select('id,nummer,status,basis_prijs_pp,aantal_gasten,korting,items').eq('event_id', event_id).limit(1);
     const offerte = offRes.data && offRes.data[0] ? offRes.data[0] : null;
 
-    const hacRes = await supabase.from('haccp_records').select('id,datum,tijd,wat,temp,status').eq('event_id', event_id).order('datum').limit(20);
+    const hacRes = await sb.from('haccp_records').select('id,datum,tijd,wat,temp,status').eq('event_id', event_id).order('datum').limit(20);
     const haccp = hacRes.data || [];
 
     return {
@@ -120,22 +158,21 @@ async function generateEventBriefing(params: Record<string, any>): Promise<Recor
     };
 }
 
-async function getEventWinstgevendheid(params: Record<string, any>): Promise<Record<string, any>> {
+async function getEventWinstgevendheid(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
     const event_id = params.event_id;
     if (!event_id) return { error: 'event_id is verplicht' };
-    if (!supabase) return { error: 'Geen database verbinding' };
 
-    const eventRes = await supabase.from('events').select('*').eq('id', event_id).single();
+    const eventRes = await sb.from('events').select('*').eq('id', event_id).single();
     if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
     const event = eventRes.data;
 
-    const facRes = await supabase.from('facturen').select('*').eq('event_id', event_id);
+    const facRes = await sb.from('facturen').select('*').eq('event_id', event_id);
     const facturen = facRes.data || [];
 
-    const urenRes = await supabase.from('time_logs').select('*').eq('event_id', event_id);
+    const urenRes = await sb.from('time_logs').select('*').eq('event_id', event_id);
     const time_logs = urenRes.data || [];
 
-    const inkoopRes = await supabase.from('inkooplijsten').select('*').eq('event_id', event_id);
+    const inkoopRes = await sb.from('inkooplijsten').select('*').eq('event_id', event_id);
     const inkoop = inkoopRes.data || [];
 
     function calcItemsTotaal(items: any): number {
@@ -188,15 +225,13 @@ async function getEventWinstgevendheid(params: Record<string, any>): Promise<Rec
     };
 }
 
-async function getCrossModuleContext(): Promise<Record<string, any>> {
-    if (!supabase) return { error: 'Geen database verbinding' };
-
+async function getCrossModuleContext(sb: SupabaseClient): Promise<Record<string, any>> {
     const [eventsRes, offertesRes, facturenRes, invRes, settingsRes] = await Promise.all([
-        supabase.from('events').select('*').order('date', { ascending: true }).limit(10),
-        supabase.from('offertes').select('*').order('id', { ascending: false }).limit(20),
-        supabase.from('facturen').select('*').order('id', { ascending: false }).limit(20),
-        supabase.from('inventory').select('*'),
-        supabase.from('settings').select('*').single(),
+        sb.from('events').select('*').order('date', { ascending: true }).limit(10),
+        sb.from('offertes').select('*').order('id', { ascending: false }).limit(20),
+        sb.from('facturen').select('*').order('id', { ascending: false }).limit(20),
+        sb.from('inventory').select('*'),
+        sb.from('settings').select('*').single(),
     ]);
 
     // Return in het format dat formatContextForPrompt verwacht
@@ -223,18 +258,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const { tool, params } = body;
         let result: Record<string, any>;
 
+        const sb = await createServerSupabase();
+        const orgId = await getActiveOrgId(sb);
+
         switch (tool) {
             case 'generateInkooplijst':
-                result = await generateInkooplijst(params || {});
+                result = await generateInkooplijst(sb, params || {});
                 break;
             case 'generateEventBriefing':
-                result = await generateEventBriefing(params || {});
+                result = await generateEventBriefing(sb, params || {});
                 break;
             case 'getEventWinstgevendheid':
-                result = await getEventWinstgevendheid(params || {});
+                result = await getEventWinstgevendheid(sb, params || {});
                 break;
             case 'getCrossModuleContext':
-                result = await getCrossModuleContext();
+                result = await getCrossModuleContext(sb);
+                break;
+            case 'bulkCreateGerechten':
+                result = await bulkCreateGerechten(sb, orgId, params || {});
                 break;
             default:
                 return NextResponse.json({ error: 'Onbekende tool: ' + tool }, { status: 400 });

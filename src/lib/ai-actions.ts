@@ -503,7 +503,7 @@ export function parseActions(text: string | null | undefined): ParseActionsResul
 }
 
 // ─── Voer een actie uit via Supabase ─────────────────────────────────────────
-export async function executeAction(action: { type: string; data: Record<string, unknown> }, supabase: SupabaseClient): Promise<Record<string, unknown> | undefined> {
+export async function executeAction(action: { type: string; data: Record<string, unknown> }, supabase: SupabaseClient, orgId?: string | null, aiConversationId?: number | null): Promise<Record<string, unknown> | undefined> {
     if (!supabase) throw new Error('Geen database-verbinding');
     const { type, data } = action;
     const def = ACTION_TYPES[type];
@@ -620,9 +620,20 @@ export async function executeAction(action: { type: string; data: Record<string,
                 kostprijs_pp: true, service_image: true, battle_plan_steps: true, target_prep_time: true,
                 hardware_items: true, ingredienten_winkels: true, ingredient_costs: true,
                 verkoopprijs: true, pos_enabled: true, pos_categorie: true, pos_prijs: true,
-                pos_volgorde: true, btw_tarief: true
+                pos_volgorde: true, btw_tarief: true, organization_id: true, ai_conversation_id: true
             };
             Object.keys(insertData).forEach(function (k) { if (!allowedGerechtCols[k]) delete insertData[k]; });
+        }
+        // RLS org_insert policy vereist dat organization_id matcht met user_org_ids().
+        // Zonder dit failt élke insert met 42501.
+        if (orgId && !insertData.organization_id) {
+            insertData.organization_id = orgId;
+        }
+        // Audit trail: koppel insert aan het gesprek dat hem aanmaakte, zodat
+        // we later kunnen herleiden (en rollbacken) welke AI-chat welke data
+        // heeft geproduceerd. Null bij Operator (geen persisted conversation).
+        if (aiConversationId && (def.table === 'gerechten' || def.table === 'events' || def.table === 'offertes' || def.table === 'recepten')) {
+            insertData.ai_conversation_id = aiConversationId;
         }
         const res = await supabase.from(def.table!).insert(insertData).select().single();
         if (res.error) throw res.error;

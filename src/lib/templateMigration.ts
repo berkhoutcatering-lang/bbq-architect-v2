@@ -40,6 +40,10 @@ function estimateBlockHeight(block: TemplateBlock, contentWidth?: number): numbe
       const lines = Math.max(1, Math.ceil(block.content.length / charsPerLine));
       return lines * block.fontSize * ptToMm * block.lineHeight + 2;
     }
+    case 'shape': return 20;
+    case 'icon': return block.size + 2;
+    case 'stamp': return 40;
+    case 'border_frame': return 0; // frame overlays, doesn't consume flow
     default: return 20;
   }
 }

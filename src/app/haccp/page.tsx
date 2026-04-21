@@ -13,6 +13,7 @@ import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import FieldTooltip from '@/components/FieldTooltip';
 import VoiceInput from '@/components/VoiceInput';
+import HaccpControlCenter from '@/components/redesign/HaccpControlCenter';
 import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull } from 'lucide-react';
 import type { HaccpRecord, DbEvent, Offerte } from '@/types';
 
@@ -51,7 +52,7 @@ export default function HACCP() {
         wat: [{ required: 'Selecteer een product' }],
         temp: [{ required: 'Vul een temperatuur in' }],
     });
-    const [tab, setTab] = useState('overzicht');
+    const [tab, setTab] = useState('control');
     const [filterEvent, setFilterEvent] = useState('');
     const [isMobile, setIsMobile] = useState(false);
     const [form, setForm] = useState<HaccpForm>({
@@ -160,7 +161,7 @@ export default function HACCP() {
     const [initialTabSet, setInitialTabSet] = useState(false);
     useEffect(function () {
         if (!initialTabSet) {
-            setTab(window.innerWidth < 768 ? 'quicklog' : 'overzicht');
+            setTab(window.innerWidth < 768 ? 'quicklog' : 'control');
             setInitialTabSet(true);
         }
     }, [initialTabSet]);
@@ -253,11 +254,20 @@ export default function HACCP() {
             <PageHint id="haccp" title="HACCP Monitoring" description="Log temperaturen via Quick Log (ideaal op mobiel). Alle metingen worden gekoppeld aan events voor compliance-dossiers." />
 
             <div className="tab-bar">
+                <button className={'tab-btn' + (tab === 'control' ? ' active' : '')} onClick={function () { setTab('control'); }} style={tab === 'control' ? { borderColor: 'var(--brand)', color: 'var(--brand)' } : {}}>CONTROL</button>
                 <button className={'tab-btn' + (tab === 'quicklog' ? ' active' : '')} onClick={function () { setTab('quicklog'); }} style={tab === 'quicklog' ? { borderColor: 'var(--brand)', color: 'var(--brand)' } : {}}>QUICK LOG</button>
                 <button className={'tab-btn' + (tab === 'overzicht' ? ' active' : '')} onClick={function () { setTab('overzicht'); }}>OVERZICHT</button>
                 <button className={'tab-btn' + (tab === 'registratie' ? ' active' : '')} onClick={function () { setTab('registratie'); }}>REGISTRATIE</button>
                 <button className={'tab-btn' + (tab === 'dossier' ? ' active' : '')} onClick={function () { setTab('dossier'); }}>DOSSIER</button>
             </div>
+
+            {tab === 'control' && (
+                <HaccpControlCenter
+                    records={records}
+                    onNew={function () { setTab('quicklog'); }}
+                    onExport={function () { setTab('dossier'); }}
+                />
+            )}
 
             {/* ═══════════════ QUICK LOG TAB ═══════════════ */}
             {tab === 'quicklog' && (

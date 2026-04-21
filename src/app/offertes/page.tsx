@@ -673,9 +673,19 @@ export default function Offertes() {
                                     return opmerking ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{opmerking.length > 80 ? opmerking.substring(0, 80) + '...' : opmerking}</div> : null;
                                 })()}
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                <span className={'pill ' + (pillMap[o.status] || 'pill-blue')}>{o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={function (e) { e.stopPropagation(); window.location.href = '/offertes/' + o.id + '/view'; }}
+                                    title="Bekijk in nieuwe Margin Doctor weergave"
+                                    style={{ padding: '6px 12px', fontSize: 11.5, letterSpacing: '.05em', textTransform: 'uppercase' }}
+                                >
+                                    Margin view
+                                </button>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
+                                    <span className={'pill ' + (pillMap[o.status] || 'pill-blue')}>{o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span>
+                                </div>
                             </div>
                         </div>
                     );

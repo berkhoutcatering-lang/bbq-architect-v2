@@ -5,7 +5,8 @@ import { useDraggable } from '@dnd-kit/core';
 import {
   Image, Type, User, BadgeCheck, Table, ChefHat, Calculator,
   CreditCard, Minus, ArrowDownUp, ImagePlus, PanelBottom, Thermometer,
-  Search, Building2, FileText, DollarSign, Calendar, X
+  Search, Building2, FileText, DollarSign, Calendar, X,
+  Square, Star, Stamp, Frame
 } from 'lucide-react';
 import type { BlockPaletteItem } from '@/types/template.types';
 import { TEMPLATE_VARIABLES, CATEGORY_LABELS, type TemplateVariable } from '@/lib/templateVariables';
@@ -13,6 +14,7 @@ import { TEMPLATE_VARIABLES, CATEGORY_LABELS, type TemplateVariable } from '@/li
 const ICON_MAP: Record<string, typeof Image> = {
   Image, Type, User, Badge: BadgeCheck, Table, ChefHat, Calculator,
   CreditCard, Minus, ArrowDownUp, ImagePlus, PanelBottom, Thermometer,
+  Square, Star, Stamp, Frame,
 };
 
 const CATEGORY_LABEL_MAP: Record<string, string> = {

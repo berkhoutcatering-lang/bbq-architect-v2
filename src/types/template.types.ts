@@ -169,6 +169,46 @@ export interface HaccpTableBlock extends TemplateBlockBase {
   };
 }
 
+// ── Decoratieve Blokken ──
+
+export interface ShapeBlock extends TemplateBlockBase {
+  type: 'shape';
+  shape: 'rectangle' | 'rounded_rectangle' | 'circle' | 'ellipse' | 'line' | 'triangle' | 'diamond';
+  fillColor: string;   // hex or 'none' or 'brand_primary' etc.
+  strokeColor: string; // hex or 'none'
+  strokeWidth: number; // pt
+  cornerRadius: number; // mm (for rounded_rectangle)
+  opacity: number; // 0-1
+}
+
+export interface IconBlock extends TemplateBlockBase {
+  type: 'icon';
+  icon: 'star' | 'heart' | 'check' | 'plus' | 'arrow_right' | 'flame' | 'leaf' | 'sparkle' | 'circle_dot' | 'diamond_small';
+  color: string; // hex or brand variable
+  size: number; // mm
+}
+
+export interface StampBlock extends TemplateBlockBase {
+  type: 'stamp';
+  text: string;         // primary text e.g. 'BETAALD'
+  subtext: string;      // optional secondary text
+  color: string;        // ring + text colour
+  shape: 'circle' | 'rounded' | 'square';
+  borderStyle: 'solid' | 'double' | 'dashed';
+  rotation: number;     // degrees (-45 to 45)
+  fontSize: number;     // pt (primary text)
+}
+
+export interface BorderFrameBlock extends TemplateBlockBase {
+  type: 'border_frame';
+  style: 'corners' | 'single' | 'double' | 'rounded' | 'dashed' | 'dotted' | 'ornament';
+  color: string;
+  thickness: number;    // pt
+  inset: number;        // mm from page edge (ignored when block has explicit x/y/width/height)
+  cornerSize: number;   // mm (for 'corners' and 'ornament' styles)
+  useBlockBounds: boolean; // if true, use block x/y/w/h; if false, span entire page inset
+}
+
 // ── Discriminated Union ──
 export type TemplateBlock =
   | LogoBlock
@@ -183,7 +223,11 @@ export type TemplateBlock =
   | SpacerBlock
   | ImageBlock
   | FooterBlock
-  | HaccpTableBlock;
+  | HaccpTableBlock
+  | ShapeBlock
+  | IconBlock
+  | StampBlock
+  | BorderFrameBlock;
 
 // ── Page Settings ──
 export interface PageSettings {

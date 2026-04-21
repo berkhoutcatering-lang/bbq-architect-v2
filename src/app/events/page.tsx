@@ -13,6 +13,7 @@ import FieldError from '@/components/FieldError';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import EventTimeline from '@/components/EventTimeline';
+import EventsTimeline from '@/components/redesign/EventsTimeline';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
@@ -469,33 +470,15 @@ export default function Events() {
 
     return (
         <>
-            <PageHeader
-                title={'Events (' + filtered.length + (filtered.length !== events.length ? ' / ' + events.length : '') + ')'}
-                actions={<>
-                    <a href="/api/calendar/ical" download className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }} title="Download iCal voor Google Calendar / Outlook">
-                        <CalendarPlus size={14} /> Kalender Export
-                    </a>
-                    <button className="btn btn-brand" onClick={newEvent}><Plus size={14} /> Nieuw Event</button>
-                </>}
+            <EventsTimeline
+                events={sorted}
+                offertes={offertes.data}
+                prepTasks={prepTasks as unknown as { id: number; event_id: number; done: boolean; }[]}
+                onOpen={function (ev) { editEvent(ev); }}
+                onNew={newEvent}
             />
-            <div style={{ marginBottom: 12 }}>
-                <input
-                    value={searchQuery}
-                    onChange={function (e) { setSearchQuery(e.target.value); }}
-                    placeholder="Zoek op naam, locatie of klant..."
-                    aria-label="Zoek events"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginBottom: 8 }}
-                />
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
-                    {['alle', 'pending', 'optie', 'confirmed', 'completed'].map(function (s) {
-                        const labels: Record<string, string> = { alle: 'Alle', pending: 'Nieuw', optie: 'Optie', confirmed: 'Bevestigd', completed: 'Afgerond' };
-                        return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
-                            onClick={function () { setFilterStatus(s); }}
-                            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{labels[s]}</button>;
-                    })}
-                </div>
-            </div>
-            <PageHint id="events" title="Events Beheren" description="Maak events aan, koppel offertes en beheer je planning. Klik op een event om het te bewerken, of gebruik 'Offerte' voor directe offerte-creatie." />
+            {/* Legacy list kept as fallback if redesign fails — hidden in prod */}
+            {false && (
             <PageSection>
             <div className="panel">
                 {events.length === 0 && <EmptyState page="/events" onAction={newEvent} />}
@@ -571,6 +554,7 @@ export default function Events() {
                 })}
             </div>
             </PageSection>
+            )}
 
             {/* Mobile Quick-Action Bar */}
             {isMobile && (

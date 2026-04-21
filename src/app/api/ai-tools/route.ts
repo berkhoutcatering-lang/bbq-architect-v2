@@ -1,12 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabase } from '@/lib/supabase-server';
 
-function getSupabase(): SupabaseClient {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+// Gebruikt de server-client mét user-session uit cookies. Queries draaien
+// dus onder de authenticated user en worden door RLS org-scoped. Vroeger
+// gebruikte deze route een kale anon-client zonder JWT, waardoor alle
+// tools buiten de org-scope liepen en afhankelijk waren van "Allow all for
+// anon" RLS-policies.
+async function getSupabase(): Promise<SupabaseClient> {
+    return await createServerSupabase();
+}
+
+async function getActiveOrgId(sb: SupabaseClient): Promise<string | null> {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return null;
+    const { data } = await sb.from('organization_members').select('organization_id').eq('user_id', user.id).eq('status', 'active').limit(1);
+    return data && data[0] ? (data[0].organization_id as string) : null;
 }
 
 function calcOfferteTotaal(o: Record<string, any>): number {
@@ -65,7 +75,7 @@ async function handleGetEventDetail(sb: SupabaseClient, params: Record<string, a
     return { event: data, menu_recepten: menuRecepten };
 }
 
-async function handleCreateEvent(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateEvent(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const { data, error } = await sb.from('events').insert([{
         name: params.name,
         date: params.date,
@@ -74,7 +84,8 @@ async function handleCreateEvent(sb: SupabaseClient, params: Record<string, any>
         ppp: params.ppp || 45,
         client_naam: params.client_naam || '',
         type: params.type || 'Particulier',
-        status: 'pending'
+        status: 'pending',
+        organization_id: orgId,
     }]).select().single();
     if (error) throw new Error(error.message);
     return { created: data, message: 'Event "' + params.name + '" aangemaakt op ' + params.date };
@@ -286,7 +297,7 @@ function normalizeBereidingswijze(params: Record<string, any>): string {
     return Array.isArray(raw) ? raw.join('\n') : String(raw || '');
 }
 
-async function handleCreateGerecht(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateGerecht(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const safeSlug = await resolveGangSlug(sb, params.gang_slug);
     const rawIngs = params.ingredienten || params.ingredients || params.ingredients_list || [];
 
@@ -299,13 +310,14 @@ async function handleCreateGerecht(sb: SupabaseClient, params: Record<string, an
         tags: params.tags || [],
         allergenen: params.allergenen || [],
         actief: false,
-        volgorde: 99
+        volgorde: 99,
+        organization_id: orgId,
     }]).select().single();
     if (error) throw new Error(error.message);
     return { created: data, message: '"' + params.naam + '" toegevoegd aan ' + safeSlug };
 }
 
-async function handleCreateGerechtBulk(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateGerechtBulk(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const gerechten: any[] = params.gerechten || [];
     if (gerechten.length === 0) return { error: 'Geen gerechten opgegeven' };
 
@@ -323,7 +335,8 @@ async function handleCreateGerechtBulk(sb: SupabaseClient, params: Record<string
             tags: g.tags || [],
             allergenen: g.allergenen || [],
             actief: false,
-            volgorde: 900 + i
+            volgorde: 900 + i,
+            organization_id: orgId,
         });
     }
 
@@ -437,13 +450,14 @@ async function handleGetReceptDetail(sb: SupabaseClient, params: Record<string, 
     return { recept: data };
 }
 
-async function handlePlanEventFull(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handlePlanEventFull(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const eventPayload = {
         klant_naam: params.klant_naam,
         datum: params.datum,
         aantal_personen: params.aantal_gasten,
         status: 'bevestigd',
-        notities: (params.notities || '') + '\n[AI] Geplande Menu Selectie: ' + (params.menu_selectie || []).join(', ')
+        notities: (params.notities || '') + '\n[AI] Geplande Menu Selectie: ' + (params.menu_selectie || []).join(', '),
+        organization_id: orgId,
     };
 
     const { data: eventData, error: eventErr } = await sb.from('events').insert(eventPayload).select();
@@ -458,7 +472,8 @@ async function handlePlanEventFull(sb: SupabaseClient, params: Record<string, an
             taak_naam: pt.taak + (pt.context_gerecht ? ' (' + pt.context_gerecht + ')' : ''),
             datum: pt.datum_uitvoer,
             status: 'todo',
-            verantwoordelijke: pt.toegewezen_aan || 'Keuken'
+            verantwoordelijke: pt.toegewezen_aan || 'Keuken',
+            organization_id: orgId,
         }));
 
         const { data: taskData, error: taskErr } = await sb.from('prep_tasks').insert(tasksPayload).select();
@@ -513,7 +528,7 @@ async function handleEngineerMenuProfitability(sb: SupabaseClient, params: Recor
     };
 }
 
-async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const { data, error } = await sb.from('recepten').insert([{
         naam: params.naam,
         categorie: params.categorie,
@@ -521,7 +536,8 @@ async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any
         preptime: params.preptime || 30,
         ingredienten: params.ingredienten || [],
         instructies: params.instructies || '',
-        notitie: params.notitie || ''
+        notitie: params.notitie || '',
+        organization_id: orgId,
     }]).select().single();
     if (error) throw new Error(error.message);
     return { created: data, message: 'Recept "' + params.naam + '" toegevoegd aan The Vault' };
@@ -556,7 +572,7 @@ async function handleCalcPortiesVoor(sb: SupabaseClient, params: Record<string, 
     };
 }
 
-async function handleGenerateSmartQuote(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleGenerateSmartQuote(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const { data: lastRows } = await sb.from('offertes').select('nummer').order('id', { ascending: false }).limit(1);
     let nextNum = 1;
     if (lastRows && lastRows.length > 0 && lastRows[0].nummer) {
@@ -577,7 +593,8 @@ async function handleGenerateSmartQuote(sb: SupabaseClient, params: Record<strin
         menu_selectie: params.menu_selectie || [],
         aantal_gasten: params.aantal_gasten,
         basis_prijs_pp: params.basis_prijs_pp,
-        vaste_kosten: (params.vaste_kosten || []).map((k: any) => ({ naam: k.naam, bedrag: parseFloat(k.bedrag) || 0 }))
+        vaste_kosten: (params.vaste_kosten || []).map((k: any) => ({ naam: k.naam, bedrag: parseFloat(k.bedrag) || 0 })),
+        organization_id: orgId,
     };
 
     const { data, error } = await sb.from('offertes').insert(payload).select();
@@ -765,7 +782,7 @@ async function handleGetInkoopPerWinkel(sb: SupabaseClient): Promise<Record<stri
     return { per_winkel: perWinkel };
 }
 
-async function handleProcessReceipt(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleProcessReceipt(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     if (!params.items || !Array.isArray(params.items)) throw new Error("Geen items gevonden op het bonnetje.");
     const updates: string[] = [];
     const newItems: string[] = [];
@@ -789,7 +806,8 @@ async function handleProcessReceipt(sb: SupabaseClient, params: Record<string, a
                 minimale_hoeveelheid: 0,
                 eenheid: 'stuk',
                 prijs_per_eenheid: item.prijs,
-                leverancier_info: params.winkel
+                leverancier_info: params.winkel,
+                organization_id: orgId,
             }).select();
             if (inserted && inserted.length > 0) newItems.push(item.naam + ' (' + item.aantal + 'x toegevoegd)');
         }
@@ -816,14 +834,15 @@ async function handleProcessReceipt(sb: SupabaseClient, params: Record<string, a
     };
 }
 
-async function handleOptimizeShoppingList(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleOptimizeShoppingList(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const payload: Record<string, any> = {
         periode_start: params.periode_start,
         periode_eind: params.periode_eind,
         event_nummers: params.event_nummers || [],
         leveranciers_lijsten: params.leveranciers_lijsten || [],
         totaal_geschatte_kosten: params.totaal_geschatte_kosten || 0,
-        aangemaakt_op: new Date().toISOString()
+        aangemaakt_op: new Date().toISOString(),
+        organization_id: orgId,
     };
 
     const { data, error } = await sb.from('inkooplijsten').insert(payload).select();
@@ -834,7 +853,7 @@ async function handleOptimizeShoppingList(sb: SupabaseClient, params: Record<str
     return data![0];
 }
 
-async function handlePredictHardwareNeeds(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handlePredictHardwareNeeds(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     if (!params.benodigd_materieel || params.benodigd_materieel.length === 0) {
         return { summary: "Geen bijzonder materieel nodig voor dit event." };
     }
@@ -844,7 +863,8 @@ async function handlePredictHardwareNeeds(sb: SupabaseClient, params: Record<str
         item_naam: item.item_naam,
         aantal: item.aantal,
         reden: item.reden,
-        status: 'inpakken'
+        status: 'inpakken',
+        organization_id: orgId,
     }));
 
     await sb.from('event_materieel').insert(payload);
@@ -868,14 +888,15 @@ async function handleGetHaccpLogs(sb: SupabaseClient, params: Record<string, any
     return { logs: data || [], count: (data || []).length };
 }
 
-async function handleCreateHaccpLog(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateHaccpLog(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const { data, error } = await sb.from('haccp_logs').insert([{
         product: params.product,
         temperatuur: params.temperatuur,
         chef: params.chef || 'AI Copilot',
         event_id: params.event_id || null,
         notitie: params.notitie || '',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        organization_id: orgId,
     }]).select().single();
     if (error) throw new Error(error.message);
     const veilig = params.temperatuur >= 75 || params.temperatuur <= 7;
@@ -1077,14 +1098,14 @@ async function handleFilterSystemData(sb: SupabaseClient, params: Record<string,
     };
 }
 
-async function handleSaveConversation(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleSaveConversation(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     let folder_id: string | null = null;
     if (params.folder_naam) {
         const { data: existing } = await sb.from('ai_conversation_folders').select('id').ilike('naam', params.folder_naam).limit(1);
         if (existing && existing.length > 0) {
             folder_id = existing[0].id;
         } else {
-            const { data: newFolder } = await sb.from('ai_conversation_folders').insert([{ naam: params.folder_naam }]).select().single();
+            const { data: newFolder } = await sb.from('ai_conversation_folders').insert([{ naam: params.folder_naam, organization_id: orgId }]).select().single();
             if (newFolder) folder_id = newFolder.id;
         }
     }
@@ -1099,16 +1120,17 @@ async function handleGetConversations(sb: SupabaseClient, params: Record<string,
     return { conversations: data || [] };
 }
 
-async function handleCreateFolder(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
+async function handleCreateFolder(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
     const { data, error } = await sb.from('ai_conversation_folders').insert([{
         naam: params.naam,
-        kleur: params.kleur || '#FFBF00'
+        kleur: params.kleur || '#FFBF00',
+        organization_id: orgId,
     }]).select().single();
     if (error) throw new Error(error.message);
     return { created: data };
 }
 
-type ToolHandler = (sb: SupabaseClient, params: Record<string, any>) => Promise<Record<string, any>>;
+type ToolHandler = (sb: SupabaseClient, params: Record<string, any>, orgId?: string | null) => Promise<Record<string, any>>;
 
 const TOOL_HANDLERS: Record<string, ToolHandler> = {
     getUpcomingEvents: handleGetUpcomingEvents,
@@ -1188,8 +1210,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const handler = TOOL_HANDLERS[tool];
         if (!handler) return NextResponse.json({ error: 'Onbekende tool: ' + tool }, { status: 400 });
 
-        const sb = getSupabase();
-        const result = await handler(sb, params || {});
+        const sb = await getSupabase();
+        const orgId = await getActiveOrgId(sb);
+        const result = await handler(sb, params || {}, orgId);
         return NextResponse.json({ ok: true, result, tool });
 
     } catch (err: any) {

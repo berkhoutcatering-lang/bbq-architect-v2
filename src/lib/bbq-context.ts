@@ -56,7 +56,7 @@ async function loadAgendaContext(sb: SupabaseClient): Promise<Record<string, unk
 }
 
 async function loadOffortesContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data } = await sb.from('offertes').select('id,nummer,status,client_naam,datum,vervaldatum,aantal_gasten,basis_prijs_pp,items,korting,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(30);
+    const { data } = await sb.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,items,korting,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(30);
     const offertes = (data || []) as OfferteContext[];
     const totaal = offertes.reduce(function (s, o) { return s + calcOfferteTotaal(o); }, 0);
     const open = offertes.filter(function (o) { return (o as Record<string, unknown>).status === 'concept' || (o as Record<string, unknown>).status === 'verzonden'; });

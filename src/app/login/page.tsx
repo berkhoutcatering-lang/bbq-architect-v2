@@ -124,13 +124,6 @@ export default function LoginPage() {
               >
                 🔥 Hop &amp; Bites (Catering)
               </button>
-              <button
-                type="button"
-                onClick={function () { setEmail('sammie.berkhout2006@gmail.com'); setPassword('Sam2006berkhout##'); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--color-accent-gold)', textAlign: 'left' }}
-              >
-                🛡️ Platform Admin (Sammie)
-              </button>
             </div>
           </div>
         )}

@@ -29,7 +29,10 @@
       "WebFetch(domain:support.caterzen.com)",
       "WebFetch(domain:www.flexcateringhq.com)",
       "mcp__88f10787-7356-4f17-89d7-2012a75687ac__list_projects",
-      "mcp__Claude_in_Chrome__tabs_context_mcp"
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__88f10787-7356-4f17-89d7-2012a75687ac__list_tables",
+      "mcp__88f10787-7356-4f17-89d7-2012a75687ac__execute_sql",
+      "mcp__88f10787-7356-4f17-89d7-2012a75687ac__get_advisors"
     ]
   }
 }

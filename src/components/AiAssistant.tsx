@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { parseActions, executeAction, loadPageContextData } from '@/lib/ai-actions';
+import { formatDbError } from '@/lib/aiErrorMessages';
 import type { ParsedAction } from '@/lib/ai-actions';
 import { PAGE_CHIPS } from '@/lib/constants';
 import { ShoppingCart, FileText, ListChecks, PieChart, Plus, X, Check, Loader2, Send, ArrowRight, AlertTriangle, Trash2, Zap, RotateCcw, Database, Bot } from 'lucide-react';
@@ -37,6 +39,7 @@ interface DishSelections {
 // ─── AI System Operator — floating widget ─────────────────────────────────────
 export default function AiAssistant(): React.ReactElement {
     const pathname = usePathname();
+    const { orgId, userRole } = useOrg();
     const [isOpen, setIsOpen] = useState<boolean>(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState<string>('');
@@ -48,6 +51,7 @@ export default function AiAssistant(): React.ReactElement {
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLTextAreaElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const abortCtrlRef = useRef<AbortController | null>(null);
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [folders, setFolders] = useState<any[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -66,16 +70,58 @@ export default function AiAssistant(): React.ReactElement {
     let pageName = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
     pageName = pageName.charAt(0).toUpperCase() + pageName.slice(1);
 
-    // ── Reset bij pagina-wissel ───────────────────────────────────────────────
+    // LocalStorage-key per pagina: gesprek blijft bewaard bij page-switch.
+    const storageKey = 'bbq_operator_msgs:' + pathname;
+
+    // ── Load/reset bij pagina-wissel ──────────────────────────────────────────
+    // Probeer eerst opgeslagen gesprek te herstellen uit localStorage,
+    // anders toon welkom-bericht.
     useEffect(function () {
-        setMessages([{
-            role: 'assistant',
-            content: 'Hallo! Ik ben je **BBQ System Operator** op ' + pageName + '.\n\nIk kan data lezen, acties uitvoeren en gerechten direct in je systeem zetten. Wat wil je doen?',
-            actions: [],
-        }]);
+        let restored: ChatMessage[] | null = null;
+        try {
+            if (typeof window !== 'undefined') {
+                const raw = window.localStorage.getItem(storageKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw) as ChatMessage[];
+                    if (Array.isArray(parsed) && parsed.length > 0) restored = parsed;
+                }
+            }
+        } catch { /* corrupted state → fallback op welkom */ }
+
+        if (restored) {
+            setMessages(restored);
+        } else {
+            setMessages([{
+                role: 'assistant',
+                content: 'Hallo! Ik ben je **BBQ System Operator** op ' + pageName + '.\n\nIk kan data lezen, acties uitvoeren en gerechten direct in je systeem zetten. Wat wil je doen?',
+                actions: [],
+            }]);
+        }
         setContextData(null);
         setContextLoaded(false);
         setDishSelections({});
+    }, [pathname]);
+
+    // Persist messages → localStorage bij elke wijziging. Debounced via
+    // React's batching; 1 schrijf per render is prima voor <100 berichten.
+    useEffect(function () {
+        if (messages.length === 0) return;
+        try {
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(storageKey, JSON.stringify(messages));
+            }
+        } catch { /* quota full → negeer, functioneel geen blocker */ }
+    }, [messages, storageKey]);
+
+    // Abort lopende stream als component unmount of pad wijzigt — voorkomt
+    // verspilde tokens bij navigatie tijdens streaming.
+    useEffect(function () {
+        return function () {
+            if (abortCtrlRef.current) {
+                abortCtrlRef.current.abort();
+                abortCtrlRef.current = null;
+            }
+        };
     }, [pathname]);
 
     // ── Context laden bij openen ──────────────────────────────────────────────
@@ -150,7 +196,14 @@ export default function AiAssistant(): React.ReactElement {
         });
         setIsLoading(true);
 
+        // Abort een eventueel lopende vorige request voordat we een nieuwe
+        // starten. Voorkomt dat de gebruiker tokens verspilt door snel
+        // achter elkaar te versturen.
+        if (abortCtrlRef.current) {
+            abortCtrlRef.current.abort();
+        }
         const controller = new AbortController();
+        abortCtrlRef.current = controller;
         const timeout = setTimeout(function () { controller.abort(); }, 30000);
 
         try {
@@ -163,6 +216,7 @@ export default function AiAssistant(): React.ReactElement {
                     mode: 'context',
                     contextData: contextData,
                     model: aiModel,
+                    userRole: userRole,
                 }),
                 signal: controller.signal,
             });
@@ -170,15 +224,19 @@ export default function AiAssistant(): React.ReactElement {
             if (!res.ok) throw new Error(res.status === 429 ? 'AI is even overbelast — probeer het over 15 seconden opnieuw.' : 'Netwerkfout (' + res.status + ')');
 
             // ── Streaming afhandeling ───────────────────────────────────────
+            // decoder.decode({stream:true}) + lineBuffer voorkomen mojibake
+            // (halve UTF-8 chars) en kapotte JSON.parse op SSE-chunkgrenzen.
             const reader = res.body!.getReader();
-            const decoder = new TextDecoder();
+            const decoder = new TextDecoder('utf-8');
             let accumulatedText = '';
+            let lineBuffer = '';
 
             while (true) {
                 const chunk = await reader.read();
                 if (chunk.done) break;
-                const chunkText = decoder.decode(chunk.value);
-                const lines = chunkText.split('\n');
+                lineBuffer += decoder.decode(chunk.value, { stream: true });
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop() || '';
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
                         const raw = line.slice(6);
@@ -402,6 +460,7 @@ export default function AiAssistant(): React.ReactElement {
                         ingredienten: Array.isArray(gd.ingredienten) ? gd.ingredienten.map(function (i: any): { naam: string; qty_pp: number; unit: string } { return typeof i === 'string' ? { naam: i, qty_pp: 0, unit: 'g' } : i; }) : [],
                         allergenen: gd.allergenen || [],
                         actief: false,
+                        organization_id: orgId,
                     };
                     const ins = await supabase.from('gerechten').insert(insertRow).select().single();
                     if (ins.error) throw new Error(ins.error.message);
@@ -446,7 +505,7 @@ export default function AiAssistant(): React.ReactElement {
             }
 
             // ── Standaard acties via Supabase ─────────────────────────────
-            const result = await executeAction(action, supabase!);
+            const result = await executeAction(action, supabase!, orgId);
             setActionStatus(msgIdx, actionId, 'done');
             const isInsert = action.meta && action.meta.op === 'insert';
             const resultId = result && (result as any).id;
@@ -461,9 +520,10 @@ export default function AiAssistant(): React.ReactElement {
             });
 
         } catch (err: any) {
-            setActionStatus(msgIdx, actionId, 'error', err.message);
+            const friendly = formatDbError(err);
+            setActionStatus(msgIdx, actionId, 'error', friendly);
             setMessages(function (prev: ChatMessage[]): ChatMessage[] {
-                return [...prev, { role: 'assistant', content: '❌ Mislukt: ' + err.message, actions: [] }];
+                return [...prev, { role: 'assistant', content: '❌ ' + friendly, actions: [] }];
             });
         }
     }
@@ -769,7 +829,18 @@ export default function AiAssistant(): React.ReactElement {
         <div className="ai-assistant-container">
             <button
                 className={'ai-toggle-btn' + (isOpen ? ' active' : '')}
-                onClick={function (): void { setIsOpen(function (v: boolean): boolean { return !v; }); }}
+                onClick={function (): void {
+                    setIsOpen(function (v: boolean): boolean {
+                        // Bij dichtklappen: cancel een eventueel lopende
+                        // stream zodat we geen tokens verspillen aan een
+                        // antwoord dat niemand meer leest.
+                        if (v && abortCtrlRef.current) {
+                            abortCtrlRef.current.abort();
+                            abortCtrlRef.current = null;
+                        }
+                        return !v;
+                    });
+                }}
                 title="BBQ System Operator"
                 id="ai-toggle-btn"
             >

@@ -394,6 +394,111 @@ export default function BlockPropertiesPanel({ block, documentType, onUpdate, on
         </Section>
       )}
 
+      {/* Shape */}
+      {block.type === 'shape' && (
+        <>
+          <Section title="Vorm" defaultOpen>
+            <SelectInput label="Type" value={block.shape} onChange={function (v) { onUpdate({ shape: v }); }}
+              options={[
+                { value: 'rectangle', label: 'Rechthoek' },
+                { value: 'rounded_rectangle', label: 'Afgeronde rechthoek' },
+                { value: 'circle', label: 'Cirkel' },
+                { value: 'ellipse', label: 'Ellips' },
+                { value: 'line', label: 'Lijn' },
+                { value: 'triangle', label: 'Driehoek' },
+                { value: 'diamond', label: 'Ruit' },
+              ]} />
+            {block.shape === 'rounded_rectangle' && (
+              <NumberInput label="Hoekradius" value={block.cornerRadius} onChange={function (v) { onUpdate({ cornerRadius: v }); }} min={0} max={30} suffix="mm" />
+            )}
+          </Section>
+          <Section title="Stijl" defaultOpen>
+            <ColorInput label="Vulkleur" value={block.fillColor === 'none' ? '#e0e0e0' : block.fillColor} onChange={function (v) { onUpdate({ fillColor: v }); }} />
+            <CheckboxInput label="Geen vulling" checked={block.fillColor === 'none'} onChange={function (v) { onUpdate({ fillColor: v ? 'none' : '#e0e0e0' }); }} />
+            <ColorInput label="Randkleur" value={block.strokeColor === 'none' ? '#333333' : block.strokeColor} onChange={function (v) { onUpdate({ strokeColor: v }); }} />
+            <CheckboxInput label="Geen rand" checked={block.strokeColor === 'none'} onChange={function (v) { onUpdate({ strokeColor: v ? 'none' : '#333333' }); }} />
+            <NumberInput label="Randdikte" value={block.strokeWidth} onChange={function (v) { onUpdate({ strokeWidth: v }); }} min={0} max={10} step={0.5} suffix="pt" />
+            <NumberInput label="Transparantie" value={Math.round(block.opacity * 100)} onChange={function (v) { onUpdate({ opacity: v / 100 }); }} min={0} max={100} suffix="%" />
+          </Section>
+        </>
+      )}
+
+      {/* Icon */}
+      {block.type === 'icon' && (
+        <Section title="Icoon" defaultOpen>
+          <SelectInput label="Symbool" value={block.icon} onChange={function (v) { onUpdate({ icon: v }); }}
+            options={[
+              { value: 'star', label: 'Ster' },
+              { value: 'heart', label: 'Hart' },
+              { value: 'check', label: 'Vinkje' },
+              { value: 'plus', label: 'Plus' },
+              { value: 'arrow_right', label: 'Pijl rechts' },
+              { value: 'flame', label: 'Vlam' },
+              { value: 'leaf', label: 'Blad' },
+              { value: 'sparkle', label: 'Glinstering' },
+              { value: 'circle_dot', label: 'Cirkel + stip' },
+              { value: 'diamond_small', label: 'Kleine ruit' },
+            ]} />
+          <ColorInput label="Kleur" value={block.color} onChange={function (v) { onUpdate({ color: v }); }} />
+          <NumberInput label="Grootte" value={block.size} onChange={function (v) { onUpdate({ size: v }); }} min={3} max={60} suffix="mm" />
+        </Section>
+      )}
+
+      {/* Stamp */}
+      {block.type === 'stamp' && (
+        <>
+          <Section title="Tekst" defaultOpen>
+            <TextAreaInput label="Hoofdtekst" value={block.text} documentType={documentType}
+              onChange={function (v) { onUpdate({ text: v }); }}
+              onInsertVar={function (v) { onUpdate({ text: block.text + v }); }} />
+            <TextAreaInput label="Subtekst" value={block.subtext} documentType={documentType}
+              onChange={function (v) { onUpdate({ subtext: v }); }}
+              onInsertVar={function (v) { onUpdate({ subtext: block.subtext + v }); }} />
+            <NumberInput label="Lettergrootte" value={block.fontSize} onChange={function (v) { onUpdate({ fontSize: v }); }} min={8} max={28} suffix="pt" />
+          </Section>
+          <Section title="Vorm">
+            <SelectInput label="Vorm" value={block.shape} onChange={function (v) { onUpdate({ shape: v }); }}
+              options={[{ value: 'circle', label: 'Cirkel' }, { value: 'rounded', label: 'Afgerond' }, { value: 'square', label: 'Vierkant' }]} />
+            <SelectInput label="Randstijl" value={block.borderStyle} onChange={function (v) { onUpdate({ borderStyle: v }); }}
+              options={[{ value: 'solid', label: 'Enkel' }, { value: 'double', label: 'Dubbel' }, { value: 'dashed', label: 'Gestreept' }]} />
+            <ColorInput label="Kleur" value={block.color} onChange={function (v) { onUpdate({ color: v }); }} />
+            <NumberInput label="Rotatie" value={block.rotation} onChange={function (v) { onUpdate({ rotation: v }); }} min={-45} max={45} suffix="°" />
+          </Section>
+        </>
+      )}
+
+      {/* Border Frame */}
+      {block.type === 'border_frame' && (
+        <>
+          <Section title="Randstijl" defaultOpen>
+            <SelectInput label="Stijl" value={block.style} onChange={function (v) { onUpdate({ style: v }); }}
+              options={[
+                { value: 'corners', label: 'Hoek-accenten' },
+                { value: 'single', label: 'Enkele lijn' },
+                { value: 'double', label: 'Dubbele lijn' },
+                { value: 'rounded', label: 'Afgerond' },
+                { value: 'dashed', label: 'Gestreept' },
+                { value: 'dotted', label: 'Gestippeld' },
+                { value: 'ornament', label: 'Ornament' },
+              ]} />
+            <ColorInput label="Kleur" value={block.color} onChange={function (v) { onUpdate({ color: v }); }} />
+            <NumberInput label="Dikte" value={block.thickness} onChange={function (v) { onUpdate({ thickness: v }); }} min={0.5} max={6} step={0.5} suffix="pt" />
+            {(block.style === 'corners' || block.style === 'ornament') && (
+              <NumberInput label="Hoekgrootte" value={block.cornerSize} onChange={function (v) { onUpdate({ cornerSize: v }); }} min={4} max={40} suffix="mm" />
+            )}
+          </Section>
+          <Section title="Positionering">
+            <CheckboxInput label="Volg blokafmeting" checked={block.useBlockBounds} onChange={function (v) { onUpdate({ useBlockBounds: v }); }} />
+            {!block.useBlockBounds && (
+              <NumberInput label="Inspringing" value={block.inset} onChange={function (v) { onUpdate({ inset: v }); }} min={0} max={30} suffix="mm" />
+            )}
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, fontStyle: 'italic', lineHeight: 1.4 }}>
+              {block.useBlockBounds ? 'Rand volgt dit blok — sleep hem naar de gewenste plek.' : 'Rand spant de hele pagina af met de ingestelde inspringing.'}
+            </div>
+          </Section>
+        </>
+      )}
+
       {/* Items table - compact */}
       {block.type === 'items_table' && (
         <>

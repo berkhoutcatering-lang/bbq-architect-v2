@@ -10,6 +10,7 @@ import type {
   LogoBlock, TextBlock, ClientInfoBlock, DocumentBadgeBlock,
   ItemsTableBlock, MenuBlock, TotalsBlock, PaymentDetailsBlock,
   DividerBlock, SpacerBlock, ImageBlock, FooterBlock, HaccpTableBlock,
+  ShapeBlock, IconBlock, StampBlock, BorderFrameBlock,
 } from '@/types/template.types';
 import { interpolateVariables, resolveColor } from '@/lib/templateVariables';
 
@@ -488,6 +489,303 @@ function renderImageBlock(doc: any, block: ImageBlock, ctx: RenderContext, curso
   return h + 2;
 }
 
+// ── Decoratieve Blok Renderers ──
+
+function renderShapeBlock(doc: any, block: ShapeBlock, ctx: RenderContext, cursor: Cursor): number {
+  const x = cursor.margins.left;
+  const y = cursor.y;
+  const w = cursor.contentWidth;
+  const h = block.height || 20;
+
+  const hasFill = block.fillColor && block.fillColor !== 'none';
+  const hasStroke = block.strokeColor && block.strokeColor !== 'none' && block.strokeWidth > 0;
+
+  if (hasFill) doc.setFillColor(...hexToRgb(resolveColor(block.fillColor, ctx.branding)));
+  if (hasStroke) {
+    doc.setDrawColor(...hexToRgb(resolveColor(block.strokeColor, ctx.branding)));
+    doc.setLineWidth(block.strokeWidth * 0.264583);
+  }
+
+  const style = hasFill && hasStroke ? 'FD' : hasFill ? 'F' : hasStroke ? 'S' : 'S';
+
+  // Opacity support
+  if (block.opacity !== undefined && block.opacity < 1) {
+    doc.saveGraphicsState?.();
+    doc.setGState?.(new (doc as any).GState({ opacity: block.opacity }));
+  }
+
+  switch (block.shape) {
+    case 'rectangle':
+      doc.rect(x, y, w, h, style);
+      break;
+    case 'rounded_rectangle':
+      doc.roundedRect(x, y, w, h, block.cornerRadius || 3, block.cornerRadius || 3, style);
+      break;
+    case 'circle': {
+      const r = Math.min(w, h) / 2;
+      doc.circle(x + w / 2, y + h / 2, r, style);
+      break;
+    }
+    case 'ellipse':
+      doc.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, style);
+      break;
+    case 'line':
+      doc.line(x, y + h / 2, x + w, y + h / 2);
+      break;
+    case 'triangle':
+      doc.triangle(x + w / 2, y, x, y + h, x + w, y + h, style);
+      break;
+    case 'diamond':
+      doc.triangle(x + w / 2, y, x, y + h / 2, x + w, y + h / 2, style);
+      doc.triangle(x, y + h / 2, x + w, y + h / 2, x + w / 2, y + h, style);
+      break;
+  }
+
+  if (block.opacity !== undefined && block.opacity < 1) doc.restoreGraphicsState?.();
+  doc.setLineDashPattern?.([]);
+
+  return h + 2;
+}
+
+function renderIconBlock(doc: any, block: IconBlock, ctx: RenderContext, cursor: Cursor): number {
+  const color = resolveColor(block.color, ctx.branding);
+  const rgb = hexToRgb(color);
+  const size = block.size;
+  const cx = cursor.margins.left + size / 2;
+  const cy = cursor.y + size / 2;
+
+  doc.setDrawColor(...rgb);
+  doc.setFillColor(...rgb);
+  doc.setLineWidth(Math.max(size * 0.08, 0.3));
+
+  switch (block.icon) {
+    case 'star': {
+      const r = size / 2;
+      const points: number[][] = [];
+      for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI / 5) * i - Math.PI / 2;
+        const rad = i % 2 === 0 ? r : r * 0.4;
+        points.push([cx + Math.cos(angle) * rad, cy + Math.sin(angle) * rad]);
+      }
+      const lines = points.slice(1).map(function (p, i) { return [p[0] - points[i][0], p[1] - points[i][1]]; });
+      lines.push([points[0][0] - points[9][0], points[0][1] - points[9][1]]);
+      doc.lines(lines, points[0][0], points[0][1], [1, 1], 'F', true);
+      break;
+    }
+    case 'heart': {
+      const r = size / 4;
+      doc.circle(cx - r, cy - r / 2, r, 'F');
+      doc.circle(cx + r, cy - r / 2, r, 'F');
+      doc.triangle(cx - 2 * r, cy - r / 2, cx + 2 * r, cy - r / 2, cx, cy + 2 * r, 'F');
+      break;
+    }
+    case 'check': {
+      doc.setLineWidth(size * 0.15);
+      doc.line(cx - size / 3, cy, cx - size / 10, cy + size / 4);
+      doc.line(cx - size / 10, cy + size / 4, cx + size / 3, cy - size / 3);
+      break;
+    }
+    case 'plus': {
+      doc.setLineWidth(size * 0.15);
+      doc.line(cx - size / 3, cy, cx + size / 3, cy);
+      doc.line(cx, cy - size / 3, cx, cy + size / 3);
+      break;
+    }
+    case 'arrow_right': {
+      doc.setLineWidth(size * 0.12);
+      doc.line(cx - size / 3, cy, cx + size / 3, cy);
+      doc.line(cx + size / 6, cy - size / 4, cx + size / 3, cy);
+      doc.line(cx + size / 6, cy + size / 4, cx + size / 3, cy);
+      break;
+    }
+    case 'flame': {
+      // Stylised flame: droplet-like triangle
+      doc.triangle(cx, cy - size / 2, cx - size / 3, cy + size / 3, cx + size / 3, cy + size / 3, 'F');
+      doc.circle(cx, cy + size / 6, size / 4, 'F');
+      break;
+    }
+    case 'leaf': {
+      doc.ellipse(cx, cy, size / 2, size / 3.5, 'F');
+      doc.setLineWidth(size * 0.06);
+      doc.setDrawColor(255, 255, 255);
+      doc.line(cx - size / 2, cy, cx + size / 2, cy);
+      break;
+    }
+    case 'sparkle': {
+      // 4-point diamond sparkle
+      doc.triangle(cx, cy - size / 2, cx - size / 6, cy, cx + size / 6, cy, 'F');
+      doc.triangle(cx, cy + size / 2, cx - size / 6, cy, cx + size / 6, cy, 'F');
+      doc.triangle(cx - size / 2, cy, cx, cy - size / 6, cx, cy + size / 6, 'F');
+      doc.triangle(cx + size / 2, cy, cx, cy - size / 6, cx, cy + size / 6, 'F');
+      break;
+    }
+    case 'circle_dot': {
+      doc.circle(cx, cy, size / 2, 'S');
+      doc.circle(cx, cy, size / 6, 'F');
+      break;
+    }
+    case 'diamond_small': {
+      doc.triangle(cx, cy - size / 2, cx - size / 2, cy, cx + size / 2, cy, 'F');
+      doc.triangle(cx, cy + size / 2, cx - size / 2, cy, cx + size / 2, cy, 'F');
+      break;
+    }
+  }
+
+  return size + 2;
+}
+
+function renderStampBlock(doc: any, block: StampBlock, ctx: RenderContext, cursor: Cursor): number {
+  const text = interpolateVariables(block.text, ctx.variables).toUpperCase();
+  const subtext = block.subtext ? interpolateVariables(block.subtext, ctx.variables).toUpperCase() : '';
+  const color = resolveColor(block.color, ctx.branding);
+  const rgb = hexToRgb(color);
+
+  const w = block.width || 50;
+  const h = block.height || 50;
+  const cx = cursor.margins.left + w / 2;
+  const cy = cursor.y + h / 2;
+
+  // Rotation via transformation matrix
+  const rot = block.rotation || 0;
+  if (rot !== 0) {
+    doc.saveGraphicsState?.();
+    const rad = (rot * Math.PI) / 180;
+    doc.setCurrentTransformationMatrix?.(
+      Math.cos(rad), Math.sin(rad), -Math.sin(rad), Math.cos(rad),
+      cx - cx * Math.cos(rad) + cy * Math.sin(rad),
+      cy - cx * Math.sin(rad) - cy * Math.cos(rad),
+    );
+  }
+
+  doc.setDrawColor(...rgb);
+  doc.setLineWidth(1.5);
+
+  if (block.borderStyle === 'dashed') doc.setLineDashPattern([2, 1]);
+  else doc.setLineDashPattern([]);
+
+  // Outer shape
+  if (block.shape === 'circle') {
+    doc.circle(cx, cy, Math.min(w, h) / 2, 'S');
+    if (block.borderStyle === 'double') doc.circle(cx, cy, Math.min(w, h) / 2 - 1.5, 'S');
+  } else if (block.shape === 'square') {
+    doc.rect(cursor.margins.left, cursor.y, w, h, 'S');
+    if (block.borderStyle === 'double') doc.rect(cursor.margins.left + 1.5, cursor.y + 1.5, w - 3, h - 3, 'S');
+  } else {
+    doc.roundedRect(cursor.margins.left, cursor.y, w, h, 3, 3, 'S');
+    if (block.borderStyle === 'double') doc.roundedRect(cursor.margins.left + 1.5, cursor.y + 1.5, w - 3, h - 3, 2, 2, 'S');
+  }
+
+  doc.setLineDashPattern([]);
+
+  // Text
+  doc.setTextColor(...rgb);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(block.fontSize);
+  doc.text(text, cx, cy + (subtext ? -1 : 2), { align: 'center' });
+
+  if (subtext) {
+    doc.setFontSize(Math.max(block.fontSize * 0.55, 6));
+    doc.setFont('helvetica', 'normal');
+    doc.text(subtext, cx, cy + 5, { align: 'center' });
+  }
+
+  if (rot !== 0) doc.restoreGraphicsState?.();
+
+  return h + 2;
+}
+
+function renderBorderFrameBlock(doc: any, block: BorderFrameBlock, ctx: RenderContext, cursor: Cursor): number {
+  const color = resolveColor(block.color, ctx.branding);
+  const rgb = hexToRgb(color);
+  doc.setDrawColor(...rgb);
+  doc.setLineWidth(block.thickness * 0.264583);
+
+  // Determine frame bounds
+  let x: number; let y: number; let w: number; let h: number;
+  if (block.useBlockBounds && block.width && block.height) {
+    x = cursor.margins.left;
+    y = cursor.y;
+    w = block.width;
+    h = block.height;
+  } else {
+    const inset = block.inset || 6;
+    x = inset;
+    y = inset;
+    w = cursor.pageWidth - inset * 2;
+    h = cursor.pageHeight - inset * 2;
+  }
+
+  const corner = block.cornerSize || 10;
+
+  switch (block.style) {
+    case 'single':
+      doc.setLineDashPattern([]);
+      doc.rect(x, y, w, h, 'S');
+      break;
+    case 'rounded':
+      doc.setLineDashPattern([]);
+      doc.roundedRect(x, y, w, h, 4, 4, 'S');
+      break;
+    case 'double':
+      doc.setLineDashPattern([]);
+      doc.rect(x, y, w, h, 'S');
+      doc.rect(x + 2, y + 2, w - 4, h - 4, 'S');
+      break;
+    case 'dashed':
+      doc.setLineDashPattern([3, 1.5]);
+      doc.rect(x, y, w, h, 'S');
+      doc.setLineDashPattern([]);
+      break;
+    case 'dotted':
+      doc.setLineDashPattern([0.6, 0.8]);
+      doc.rect(x, y, w, h, 'S');
+      doc.setLineDashPattern([]);
+      break;
+    case 'corners':
+      doc.setLineDashPattern([]);
+      // Top-left
+      doc.line(x, y, x + corner, y);
+      doc.line(x, y, x, y + corner);
+      // Top-right
+      doc.line(x + w - corner, y, x + w, y);
+      doc.line(x + w, y, x + w, y + corner);
+      // Bottom-left
+      doc.line(x, y + h - corner, x, y + h);
+      doc.line(x, y + h, x + corner, y + h);
+      // Bottom-right
+      doc.line(x + w - corner, y + h, x + w, y + h);
+      doc.line(x + w, y + h - corner, x + w, y + h);
+      break;
+    case 'ornament': {
+      doc.setLineDashPattern([]);
+      // Thin outer line
+      doc.setLineWidth(block.thickness * 0.15);
+      doc.rect(x, y, w, h, 'S');
+      // Ornamental corner marks: small triangle + dot on each corner
+      doc.setLineWidth(block.thickness * 0.264583);
+      doc.setFillColor(...rgb);
+      const s = corner / 2;
+      // top-left
+      doc.triangle(x, y, x + s, y, x, y + s, 'F');
+      // top-right
+      doc.triangle(x + w, y, x + w - s, y, x + w, y + s, 'F');
+      // bottom-left
+      doc.triangle(x, y + h, x + s, y + h, x, y + h - s, 'F');
+      // bottom-right
+      doc.triangle(x + w, y + h, x + w - s, y + h, x + w, y + h - s, 'F');
+      // Small circle accents mid-sides
+      const r = Math.max(s * 0.25, 0.8);
+      doc.circle(x + w / 2, y, r, 'F');
+      doc.circle(x + w / 2, y + h, r, 'F');
+      doc.circle(x, y + h / 2, r, 'F');
+      doc.circle(x + w, y + h / 2, r, 'F');
+      break;
+    }
+  }
+  doc.setLineDashPattern([]);
+  return 0; // Frame doesn't advance cursor in flow mode
+}
+
 // ── Block Condition Evaluator ──
 function evaluateConditions(conditions: TemplateBlock['conditions'], ctx: RenderContext): boolean {
   if (!conditions || conditions.length === 0) return true;
@@ -525,6 +823,10 @@ const RENDERERS: Record<string, (doc: any, block: any, ctx: RenderContext, curso
   image: renderImageBlock,
   footer: renderFooterBlock,
   haccp_table: renderHaccpTableBlock,
+  shape: renderShapeBlock,
+  icon: renderIconBlock,
+  stamp: renderStampBlock,
+  border_frame: renderBorderFrameBlock,
 };
 
 // ── Main Render Function ──

@@ -2,7 +2,9 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { parseActions, executeAction } from '@/lib/ai-actions';
+import { formatDbError } from '@/lib/aiErrorMessages';
 import { Bot, Check, Flame, Folder, FolderTree, HelpCircle, Loader2, Menu, MessageSquare, PanelLeft, Plus, Save, Send, Trash2, User, X, Zap } from 'lucide-react';
 
 const BRAINSTORM_SUGGESTIONS = [
@@ -49,6 +51,7 @@ interface Conversation {
 }
 
 export default function AiStudioPage() {
+    const { orgId, userRole } = useOrg();
     const [mode, setMode] = useState('brainstorm');
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
@@ -67,6 +70,7 @@ export default function AiStudioPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const abortCtrlRef = useRef<AbortController | null>(null);
 
     const FOLDER_COLORS = ['var(--brand)', 'var(--green)', 'var(--blue)', 'var(--purple)', 'var(--red)', 'var(--amber)', 'var(--cyan)', 'var(--pink)'];
 
@@ -130,6 +134,7 @@ export default function AiStudioPage() {
                 titel: titel || 'Gesprek ' + new Date().toLocaleDateString('nl-NL'),
                 modus: mode,
                 messages: msgToSave,
+                organization_id: orgId,
             }).select().single();
             if (res.data) {
                 setActiveConversation(res.data);
@@ -163,6 +168,7 @@ export default function AiStudioPage() {
             const res = await supabase.from('ai_conversation_folders').insert({
                 naam: newFolderName.trim(),
                 kleur: newFolderColor,
+                organization_id: orgId,
             }).select().single();
             if (res.data) {
                 setFolders(function (prev) { return [...prev, res.data]; });
@@ -234,6 +240,12 @@ export default function AiStudioPage() {
             };
         }
 
+        // Abort lopende vorige stream — voorkom tokenverspilling bij snel
+        // achter elkaar typen of modus-switchen.
+        if (abortCtrlRef.current) abortCtrlRef.current.abort();
+        const controller = new AbortController();
+        abortCtrlRef.current = controller;
+
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -243,7 +255,9 @@ export default function AiStudioPage() {
                     pageContext: '/ai-chat',
                     mode: mode === 'brainstorm' ? 'brainstorm' : 'qa',
                     contextData: ctxData,
+                    userRole: userRole,
                 }),
+                signal: controller.signal,
             });
 
             if (!res.ok) {
@@ -359,6 +373,7 @@ export default function AiStudioPage() {
                 const fRes = await supabase.from('ai_conversation_folders').insert({
                     naam: action.data.naam,
                     kleur: action.data.kleur || 'var(--brand)',
+                    organization_id: orgId,
                 }).select().single();
                 if (fRes.data) {
                     setFolders(function (prev) { return [...prev, fRes.data]; });
@@ -383,7 +398,7 @@ export default function AiStudioPage() {
                 return;
             }
 
-            const result = await executeAction(action, supabase);
+            const result = await executeAction(action, supabase, orgId, activeConversation?.id ?? null);
             setMessages(function (prev) {
                 return prev.map(function (m, i) {
                     if (i !== msgIdx) return m;
@@ -403,18 +418,19 @@ export default function AiStudioPage() {
             });
 
         } catch (err: any) {
+            const friendly = formatDbError(err);
             setMessages(function (prev) {
                 return prev.map(function (m, i) {
                     if (i !== msgIdx) return m;
                     return Object.assign({}, m, {
                         actions: m.actions.map(function (a: any) {
-                            return a.id === actionId ? Object.assign({}, a, { status: 'error', error: err.message }) : a;
+                            return a.id === actionId ? Object.assign({}, a, { status: 'error', error: friendly }) : a;
                         }),
                     });
                 });
             });
             setMessages(function (prev) {
-                return [...prev, { role: 'assistant', content: '❌ Mislukt: ' + err.message, actions: [] }];
+                return [...prev, { role: 'assistant', content: '❌ ' + friendly, actions: [] }];
             });
         }
     }

@@ -84,25 +84,42 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   }, [user, authLoading]);
 
   // Load members when orgId changes
+  // Er is geen FK van organization_members.user_id naar profiles (beide verwijzen naar auth.users),
+  // dus we doen twee queries en joinen in JS.
   const loadMembers = useCallback(async function () {
     if (!supabase || !orgId) return;
 
-    const { data } = await supabase
+    const { data: memberRows } = await supabase
       .from('organization_members')
-      .select('*, profiles!organization_members_user_id_fkey(naam, email, avatar_url)')
+      .select('*')
       .eq('organization_id', orgId);
 
-    if (data) {
-      setMembers(data.map(function (m: Record<string, unknown>) {
-        const prof = m.profiles as Record<string, unknown> | null;
-        return {
-          ...m,
-          naam: prof?.naam as string || '',
-          email: prof?.email as string || '',
-          avatar_url: prof?.avatar_url as string || null,
-        } as OrganizationMember;
-      }));
+    if (!memberRows || memberRows.length === 0) {
+      setMembers([]);
+      return;
     }
+
+    const userIds = memberRows.map(function (m: Record<string, unknown>) { return m.user_id as string; }).filter(Boolean);
+    const profileMap: Record<string, Record<string, unknown>> = {};
+    if (userIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('user_id, naam, email, avatar_url')
+        .in('user_id', userIds);
+      (profs || []).forEach(function (p: Record<string, unknown>) {
+        profileMap[p.user_id as string] = p;
+      });
+    }
+
+    setMembers(memberRows.map(function (m: Record<string, unknown>) {
+      const prof = profileMap[m.user_id as string] || null;
+      return {
+        ...m,
+        naam: prof?.naam as string || '',
+        email: prof?.email as string || '',
+        avatar_url: prof?.avatar_url as string || null,
+      } as OrganizationMember;
+    }));
   }, [orgId]);
 
   useEffect(function () {

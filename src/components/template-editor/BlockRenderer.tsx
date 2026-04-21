@@ -2,7 +2,7 @@
 
 import type { TemplateBlock, PdfTemplate } from '@/types/template.types';
 import { TEMPLATE_VARIABLES } from '@/lib/templateVariables';
-import { Image, ChefHat, Thermometer } from 'lucide-react';
+import { Image, Star, Heart, Check, Plus, ArrowRight, Flame, Leaf, Sparkles, Circle, Diamond } from 'lucide-react';
 
 // ── Unit conversion: match jsPDF output on the 2.5px/mm canvas ──
 const MM = 2.5;          // 1mm = 2.5px on canvas
@@ -252,6 +252,148 @@ export default function BlockRenderer({ block, documentType }: { block: Template
           </table>
         </div>
       );
+
+    case 'shape': {
+      const fill = block.fillColor && block.fillColor !== 'none' ? resolveC(block.fillColor) : 'transparent';
+      const stroke = block.strokeColor && block.strokeColor !== 'none' ? resolveC(block.strokeColor) : 'transparent';
+      const opacity = block.opacity ?? 1;
+      const baseStyle: React.CSSProperties = {
+        width: '100%', height: '100%', background: fill,
+        border: stroke !== 'transparent' ? (block.strokeWidth * 0.5) + 'px solid ' + stroke : 'none',
+        opacity,
+      };
+      if (block.shape === 'circle' || block.shape === 'ellipse') {
+        return <div style={{ ...baseStyle, borderRadius: '50%' }} />;
+      }
+      if (block.shape === 'rounded_rectangle') {
+        return <div style={{ ...baseStyle, borderRadius: (block.cornerRadius * MM) + 'px' }} />;
+      }
+      if (block.shape === 'rectangle') {
+        return <div style={baseStyle} />;
+      }
+      if (block.shape === 'line') {
+        return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center' }}>
+          <div style={{ width: '100%', height: Math.max(1, block.strokeWidth * 0.5) + 'px', background: stroke !== 'transparent' ? stroke : '#333', opacity }} />
+        </div>;
+      }
+      if (block.shape === 'triangle') {
+        return <div style={{ width: '100%', height: '100%', opacity }}>
+          <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <polygon points="50,0 0,100 100,100" fill={fill} stroke={stroke} strokeWidth={block.strokeWidth} />
+          </svg>
+        </div>;
+      }
+      if (block.shape === 'diamond') {
+        return <div style={{ width: '100%', height: '100%', opacity }}>
+          <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <polygon points="50,0 100,50 50,100 0,50" fill={fill} stroke={stroke} strokeWidth={block.strokeWidth} />
+          </svg>
+        </div>;
+      }
+      return <div style={baseStyle} />;
+    }
+
+    case 'icon': {
+      const ICON_MAP: Record<string, typeof Star> = {
+        star: Star, heart: Heart, check: Check, plus: Plus, arrow_right: ArrowRight,
+        flame: Flame, leaf: Leaf, sparkle: Sparkles, circle_dot: Circle, diamond_small: Diamond,
+      };
+      const Ico = ICON_MAP[block.icon] || Star;
+      const px = block.size * MM;
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Ico size={px} color={resolveC(block.color)} fill={block.icon === 'star' || block.icon === 'heart' || block.icon === 'flame' || block.icon === 'leaf' || block.icon === 'sparkle' || block.icon === 'diamond_small' ? resolveC(block.color) : 'none'} strokeWidth={2} />
+        </div>
+      );
+    }
+
+    case 'stamp': {
+      const c = resolveC(block.color);
+      const borderStyle = block.borderStyle === 'dashed' ? 'dashed' : 'solid';
+      const isDouble = block.borderStyle === 'double';
+      const shapeStyle: React.CSSProperties = {
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        border: '1.5px ' + borderStyle + ' ' + c, color: c,
+        transform: 'rotate(' + block.rotation + 'deg)',
+        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        boxShadow: isDouble ? 'inset 0 0 0 3px transparent, inset 0 0 0 4px ' + c : 'none',
+      };
+      if (block.shape === 'circle') shapeStyle.borderRadius = '50%';
+      else if (block.shape === 'rounded') shapeStyle.borderRadius = '8px';
+      return (
+        <div style={shapeStyle}>
+          <div style={{ fontSize: block.fontSize * PT, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1 }}>
+            {resolveVars(block.text)}
+          </div>
+          {block.subtext && (
+            <div style={{ fontSize: Math.max(block.fontSize * 0.55, 6) * PT, marginTop: 2, letterSpacing: '0.08em' }}>
+              {resolveVars(block.subtext).toUpperCase()}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case 'border_frame': {
+      const c = resolveC(block.color);
+      const t = Math.max(block.thickness * 0.5, 1);
+
+      if (block.style === 'corners') {
+        const s = (block.cornerSize * MM) + 'px';
+        return (
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: s, height: t + 'px', background: c }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, width: t + 'px', height: s, background: c }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, width: s, height: t + 'px', background: c }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, width: t + 'px', height: s, background: c }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: s, height: t + 'px', background: c }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: t + 'px', height: s, background: c }} />
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: s, height: t + 'px', background: c }} />
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: t + 'px', height: s, background: c }} />
+          </div>
+        );
+      }
+
+      if (block.style === 'double') {
+        return (
+          <div style={{ width: '100%', height: '100%', border: t + 'px solid ' + c, padding: 3 }}>
+            <div style={{ width: '100%', height: '100%', border: t + 'px solid ' + c }} />
+          </div>
+        );
+      }
+
+      if (block.style === 'ornament') {
+        const s = (block.cornerSize * MM) / 2 + 'px';
+        return (
+          <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid ' + c }}>
+            {[{ t: 0, l: 0 }, { t: 0, r: 0 }, { b: 0, l: 0 }, { b: 0, r: 0 }].map(function (p, i) {
+              const rot = i === 0 ? 0 : i === 1 ? 90 : i === 2 ? 270 : 180;
+              return (
+                <div key={i} style={{
+                  position: 'absolute', top: p.t, left: p.l, right: p.r, bottom: p.b,
+                  width: s, height: s,
+                  background: c, clipPath: 'polygon(0 0, 100% 0, 0 100%)', transform: 'rotate(' + rot + 'deg)',
+                }} />
+              );
+            })}
+            <div style={{ position: 'absolute', top: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: c }} />
+            <div style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: c }} />
+            <div style={{ position: 'absolute', left: -2, top: '50%', transform: 'translateY(-50%)', width: 4, height: 4, borderRadius: '50%', background: c }} />
+            <div style={{ position: 'absolute', right: -2, top: '50%', transform: 'translateY(-50%)', width: 4, height: 4, borderRadius: '50%', background: c }} />
+          </div>
+        );
+      }
+
+      const styleKey = block.style === 'rounded' ? 'solid' : block.style;
+      return (
+        <div style={{
+          width: '100%', height: '100%',
+          border: t + 'px ' + styleKey + ' ' + c,
+          borderRadius: block.style === 'rounded' ? '6px' : '0',
+        }} />
+      );
+    }
 
     default:
       return <div style={{ padding: 2 * MM, color: '#999', fontSize: 10 * PT }}>Onbekend blok: {(block as TemplateBlock).type}</div>;
