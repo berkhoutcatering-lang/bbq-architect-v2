@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const INVOICE_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse leveranciersfacturen voor een horeca/catering bedrijf.
 Je krijgt een factuur (PDF of foto). Extracteer de gegevens in strikt JSON formaat.
@@ -22,9 +22,12 @@ Gebruik EXACT dit schema, geen extra velden:
       "product_naam": "string",
       "hoeveelheid": number,
       "eenheid": "string (kg/L/stuks/doos/etc)",
-      "prijs_per_eenheid": number,
+      "prijs_per_eenheid": number (werkelijk betaalde prijs per eenheid — dus INCL bulk/actie korting),
+      "prijs_normaal": number of null (reguliere stuksprijs ZONDER bulkkorting — alleen vullen als op de factuur zichtbaar is dat er korting geldt, anders null),
+      "korting_type": "bulk" | "actie" | "staffel" | null (type korting; "bulk"/"staffel" bij staffelkorting zoals 3 voor €5,09 ipv €5,99; "actie" bij tijdelijke aanbieding; null als geen korting),
+      "korting_bedrag": number of null (totale korting op deze regel in euro's, excl BTW),
       "btw_pct": number (meestal 9 of 21),
-      "subtotaal": number,
+      "subtotaal": number (werkelijk regelsubtotaal excl BTW na korting),
       "categorie": "string (Vlees/Vis/Groenten/Zuivel/Kruiden/Sauzen/Dranken/Brood/Hout/Verpakking/Overig)"
     }
   ]
@@ -32,8 +35,11 @@ Gebruik EXACT dit schema, geen extra velden:
 
 Regels:
 - Alle bedragen EXCL BTW tenzij anders aangegeven
+- BELANGRIJK — BTW: geef ALTIJD het werkelijke percentage (9 of 21). Nederlandse facturen gebruiken soms codes: "1" of "L" = 9% (laag), "2" of "H" = 21% (hoog). Vertaal deze codes naar het percentage. Geef NOOIT 1, 2 of 0 als btw_pct — altijd 9 of 21 (of 0 als 0% BTW). Bij twijfel is 21% standaard.
+- BELANGRIJK — bulkkorting bij Makro/Sligro: veel facturen tonen "1 stuks €5,99" én "staffelprijs €5,09 per 3". Vul in dat geval prijs_per_eenheid=5.09, prijs_normaal=5.99, korting_type="bulk", korting_bedrag=(verschil × hoeveelheid)
+- Als er geen zichtbare korting is: zet prijs_normaal, korting_type en korting_bedrag op null
 - Categoriseer producten logisch voor BBQ/catering context
-- Bij onzekerheid: geef je beste inschatting — niet null laten
+- Bij onzekerheid: geef je beste inschatting — niet null laten behalve waar expliciet toegestaan
 - Antwoord ALLEEN met geldige JSON, geen markdown fences, geen extra tekst`;
 
 const RECEIPT_SYSTEM_PROMPT = `Je bent een expert in het lezen van Nederlandse kassabonnen voor een horeca bedrijf.
@@ -133,12 +139,14 @@ export async function POST(req: NextRequest) {
         const model = 'claude-sonnet-4-6';
         console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
-        const response = await client.messages.create({
+        // Streaming voorkomt timeouts bij lange facturen; .finalMessage() geeft de volledige response terug
+        const stream = client.messages.stream({
             model,
-            max_tokens: 4000,
+            max_tokens: 16000,
             system: systemPrompt,
             messages: [{ role: 'user', content: contentBlocks }],
         });
+        const response = await stream.finalMessage();
 
         // Extract text content from response
         const textBlock = response.content.find(b => b.type === 'text');
@@ -146,21 +154,60 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Claude gaf geen tekst antwoord' }, { status: 502 });
         }
         const content = textBlock.text;
+        const stopReason = response.stop_reason;
+        const truncated = stopReason === 'max_tokens';
 
-        let parsed: any;
-        try {
-            parsed = JSON.parse(content);
-        } catch {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                try { parsed = JSON.parse(match[0]); } catch { parsed = null; }
-            }
+        // Strip common wrappers: ```json ... ```, ``` ... ```, leading/trailing prose
+        function cleanJson(s: string): string {
+            let t = s.trim();
+            // Markdown fences (```json\n...\n``` or ```\n...\n```)
+            const fence = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (fence) t = fence[1].trim();
+            return t;
         }
+
+        let parsed: any = null;
+        const tries: string[] = [
+            content,
+            cleanJson(content),
+        ];
+        // Last-resort: extract biggest {...} block
+        const biggest = content.match(/\{[\s\S]*\}/);
+        if (biggest) tries.push(biggest[0]);
+
+        for (const candidate of tries) {
+            try { parsed = JSON.parse(candidate); break; } catch { /* try next */ }
+        }
+
         if (!parsed) {
+            console.error(`[parse-document] JSON parse failed stop=${stopReason} len=${content.length}`);
             return NextResponse.json({
-                error: 'AI antwoord kon niet als JSON worden gelezen',
-                raw: content.slice(0, 500),
+                error: truncated
+                    ? 'Factuur te lang — AI werd afgekapt. Probeer een kleinere factuur of splits in meerdere pagina\'s.'
+                    : 'AI antwoord was geen geldige JSON — probeer opnieuw of gebruik een duidelijkere scan',
+                raw: content.slice(0, 800),
+                stopReason,
             }, { status: 502 });
+        }
+
+        // Safety net: Nederlandse facturen gebruiken soms BTW-codes (1/L = 9%, 2/H = 21%).
+        // Normaliseer hier voor het geval AI deze codes toch overneemt.
+        function normalizeBtw(val: any): number {
+            const n = parseFloat(val);
+            if (isNaN(n)) return 21;
+            if (n === 1) return 9;   // code 1 = laag tarief
+            if (n === 2) return 21;  // code 2 = hoog tarief
+            if (n <= 3) return 21;   // onwaarschijnlijk laag → normaliseer naar hoog
+            return n;
+        }
+        if (parsed && Array.isArray(parsed.regels)) {
+            parsed.regels = parsed.regels.map((r: any) => ({
+                ...r,
+                btw_pct: normalizeBtw(r.btw_pct),
+            }));
+        }
+        if (parsed && typeof parsed.btw_pct !== 'undefined') {
+            parsed.btw_pct = normalizeBtw(parsed.btw_pct);
         }
 
         console.log(`[parse-document] success total=${Date.now() - t0}ms tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out`);

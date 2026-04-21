@@ -5,12 +5,14 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
+import { supabase } from '@/lib/supabase';
 import Papa from 'papaparse';
 import {
     FileScan, Receipt, PieChart, Sparkles, Upload, Camera, X, Check,
     AlertTriangle, Loader2, Edit3, Trash2, Package, ArrowUpRight, Clock,
     Info, HelpCircle, Plus, FileText, TrendingUp, TrendingDown,
     Store, Euro, CloudUpload, ArrowLeft, Save, FolderOpen, Zap, Lightbulb,
+    ExternalLink, Download, Archive, BarChart3, Calendar, Filter, Wallet,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -246,12 +248,16 @@ function getProductPriceHistory(productNaam: string, supplierPrices: any[], invo
         }
     }
     // Uit eerder gescande factuur-regels (via raw_ai_response)
+    // Gebruik prijs_normaal (reguliere stuksprijs) indien bekend — anders zie je bulkkorting als prijsdaling
     for (const inv of invoices || []) {
         const regels = inv.raw_ai_response?.regels || [];
         for (const r of regels) {
             if (!r.product_naam) continue;
             if (fuzzyScore(low, r.product_naam) > 0.6) {
-                history.push({ prijs: parseFloat(r.prijs_per_eenheid) || 0, datum: inv.datum, bron: 'factuur' });
+                const referentiePrijs = r.prijs_normaal != null && r.prijs_normaal > 0
+                    ? parseFloat(r.prijs_normaal)
+                    : parseFloat(r.prijs_per_eenheid) || 0;
+                history.push({ prijs: referentiePrijs, datum: inv.datum, bron: 'factuur' });
             }
         }
     }
@@ -461,6 +467,65 @@ export default function PriceIntelligence() {
    FOLDER 1 — AI FACTUUR LEZEN
    ═══════════════════════════════════════════════════════════════════ */
 
+const ARCHIVE_BUCKET = 'bonnen';
+
+function slugify(s: string): string {
+    return (s || 'onbekend')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\([^)]*\)/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'onbekend';
+}
+
+/** Normaliseer BTW codes (1/2) naar echte percentages (9/21). Makro/Sligro gebruiken codes. */
+function normalizeBtwPct(val: any): number {
+    const n = parseFloat(String(val));
+    if (isNaN(n)) return 21;
+    if (n === 1) return 9;
+    if (n === 2 || n === 3) return 21;
+    if (n > 0 && n < 5) return 21;
+    return n;
+}
+
+/** Normaliseer een AI-geparste factuur: repareer BTW-codes op header + regels. */
+function normalizeParsedInvoice(data: any): any {
+    if (!data || typeof data !== 'object') return data;
+    const out = { ...data };
+    if (Array.isArray(out.regels)) {
+        out.regels = out.regels.map((r: any) => ({
+            ...r,
+            btw_pct: normalizeBtwPct(r.btw_pct),
+        }));
+    }
+    if (typeof out.btw_pct !== 'undefined') {
+        out.btw_pct = normalizeBtwPct(out.btw_pct);
+    }
+    return out;
+}
+
+async function uploadDocumentToArchive(file: File, type: 'invoice' | 'receipt', meta: { supplier: string; datum?: string | null; factuurnummer?: string | null }): Promise<string | null> {
+    if (!supabase) return null;
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const folder = type === 'invoice' ? 'facturen' : 'kassabonnen';
+    const supplierDir = slugify(meta.supplier || 'onbekend');
+    const datePart = (meta.datum || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const idPart = slugify(meta.factuurnummer || Date.now().toString(36));
+    const path = `${folder}/${supplierDir}/${datePart}_${idPart}.${ext}`;
+    const { error: upErr } = await supabase.storage.from(ARCHIVE_BUCKET).upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type || undefined,
+    });
+    if (upErr) {
+        console.error('[archive] upload mislukt:', upErr);
+        return null;
+    }
+    const { data } = supabase.storage.from(ARCHIVE_BUCKET).getPublicUrl(path);
+    return data.publicUrl || null;
+}
+
 type ParsedInvoice = {
     leverancier: string;
     factuurnummer?: string | null;
@@ -480,6 +545,10 @@ type ParsedInvoiceLine = {
     btw_pct: number;
     subtotaal: number;
     categorie?: string;
+    // Bulk/staffelkorting: prijs_normaal is de single-unit prijs, prijs_per_eenheid is de toegepaste prijs (bulk/actie)
+    prijs_normaal?: number | null;
+    korting_type?: 'bulk' | 'actie' | 'staffel' | null;
+    korting_bedrag?: number | null;
 };
 
 function FolderInvoices() {
@@ -498,6 +567,7 @@ function FolderInvoices() {
     const [queueTotal, setQueueTotal] = useState(0);
     const abortRef = useRef<AbortController | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
+    const cameraRef = useRef<HTMLInputElement>(null);
     const scanning = scanStep !== 'idle' && scanStep !== 'done' && scanStep !== 'error';
 
     async function handleFile(file: File) {
@@ -529,7 +599,7 @@ function FolderInvoices() {
                 setScanStep('error');
                 return;
             }
-            setParsedInvoice(body.data as ParsedInvoice);
+            setParsedInvoice(normalizeParsedInvoice(body.data) as ParsedInvoice);
             setScanStep('done');
             showToast('Factuur gelezen — controleer en boek in', 'success');
         } catch (e: any) {
@@ -600,6 +670,15 @@ function FolderInvoices() {
 
         const { regels = [], ...header } = parsedInvoice;
         try {
+            // Archiveer originele bestand in Supabase Storage — gegroepeerd per leverancier
+            let fileUrl: string | null = null;
+            if (lastFile) {
+                fileUrl = await uploadDocumentToArchive(lastFile, 'invoice', {
+                    supplier: header.leverancier || 'Onbekend',
+                    datum: header.datum,
+                    factuurnummer: header.factuurnummer,
+                });
+            }
             await insert({
                 leverancier: header.leverancier || 'Onbekend',
                 factuurnummer: header.factuurnummer || null,
@@ -609,6 +688,7 @@ function FolderInvoices() {
                 totaal_incl: header.totaal_incl || 0,
                 valuta: header.valuta || 'EUR',
                 status: 'review',
+                file_url: fileUrl,
                 raw_ai_response: parsedInvoice,
             } as any);
             showToast(`Factuur opgeslagen · ${regels.length} regels`, 'success');
@@ -659,25 +739,26 @@ function FolderInvoices() {
     if (editingId) {
         const existing = invoices.find((i: any) => i.id === editingId);
         if (existing) {
-            const asInvoice: ParsedInvoice = existing.raw_ai_response || {
-                leverancier: existing.leverancier,
-                factuurnummer: existing.factuurnummer,
-                datum: existing.datum,
-                totaal_excl: existing.totaal_excl,
-                totaal_btw: existing.totaal_btw,
-                totaal_incl: existing.totaal_incl,
-                regels: [],
-            };
-            return <InvoiceReview
-                invoice={asInvoice}
-                setInvoice={(inv) => { /* edit mode — direct update on save */ void inv; }}
-                preview={null}
-                onSave={async () => {
-                    await update(editingId, { status: 'booked' } as any);
-                    showToast('Status bijgewerkt', 'success');
-                    setEditingId(null);
+            return <EditInvoiceWrapper
+                existing={existing}
+                previewUrl={existing.file_url || null}
+                onDone={() => { setEditingId(null); refetch(); }}
+                onSaveInvoice={async (edited) => {
+                    const { regels = [], ...header } = edited;
+                    await update(editingId, {
+                        leverancier: header.leverancier || 'Onbekend',
+                        factuurnummer: header.factuurnummer || null,
+                        datum: header.datum || null,
+                        totaal_excl: header.totaal_excl || 0,
+                        totaal_btw: header.totaal_btw || 0,
+                        totaal_incl: header.totaal_incl || 0,
+                        raw_ai_response: { ...edited, regels },
+                    } as any);
+                    showToast('Factuur bijgewerkt', 'success');
                 }}
-                onCancel={() => setEditingId(null)}
+                inventory={inventoryData}
+                supplierPrices={supplierPricesData}
+                existingInvoices={invoices}
             />;
         }
     }
@@ -724,16 +805,27 @@ function FolderInvoices() {
                             <CloudUpload size={28} style={{ color: GOLD }} />
                         </div>
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginBottom: 8 }}>Upload één of meerdere facturen</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
                             Sleep meerdere tegelijk erin — worden sequentieel verwerkt.<br />
                             PDF, JPG of PNG · AI leest binnen 15 seconden per factuur.
                         </div>
+                        <div style={{ fontSize: 11, color: GOLD, marginBottom: 18, fontWeight: 500 }}>
+                            💡 Tip: houd <kbd style={{ padding: '1px 6px', border: `1px solid ${GOLD}4D`, borderRadius: 4, background: `${GOLD}18`, fontFamily: 'monospace', fontSize: 10 }}>⌘</kbd> of <kbd style={{ padding: '1px 6px', border: `1px solid ${GOLD}4D`, borderRadius: 4, background: `${GOLD}18`, fontFamily: 'monospace', fontSize: 10 }}>Shift</kbd> ingedrukt in Finder om meerdere facturen tegelijk te selecteren
+                        </div>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <BtnPrimary icon={FolderOpen} onClick={() => fileRef.current?.click()}>Kies bestand(en)</BtnPrimary>
-                            <BtnGhost icon={Camera} onClick={() => { fileRef.current?.setAttribute('capture', 'environment'); fileRef.current?.click(); setTimeout(() => fileRef.current?.removeAttribute('capture'), 500); }}>Foto maken</BtnGhost>
+                            <BtnPrimary icon={FolderOpen} onClick={() => fileRef.current?.click()}>Selecteer facturen</BtnPrimary>
+                            <BtnGhost icon={Camera} onClick={() => cameraRef.current?.click()}>Foto maken</BtnGhost>
                         </div>
                         <input ref={fileRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }}
-                            onChange={e => e.target.files && e.target.files.length > 0 && handleFiles(e.target.files)} />
+                            onChange={e => {
+                                if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
+                                e.target.value = '';
+                            }} />
+                        <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                            onChange={e => {
+                                if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
+                                e.target.value = '';
+                            }} />
                     </div>
                 )}
 
@@ -763,6 +855,7 @@ function FolderInvoices() {
                 ) : (
                     <InvoiceListTable
                         invoices={invoices}
+                        onEdit={(id) => setEditingId(id)}
                         onDelete={(id) => showConfirm('Deze factuur verwijderen? Dit kan niet ongedaan gemaakt worden.', () => remove(id).then(() => { showToast('Factuur verwijderd', 'success'); refetch(); }))}
                     />
                 )}
@@ -858,7 +951,42 @@ function DuplicateCleanup({ invoices, onRemove }: { invoices: any[]; onRemove: (
    INVOICE LIST TABLE — met dupe-badges per rij
    ═══════════════════════════════════════════════════════════════════ */
 
-function InvoiceListTable({ invoices, onDelete }: { invoices: any[]; onDelete: (id: number) => void }) {
+/** Edit-wrapper: houdt lokale state zodat gebruiker kan editen en on-save persisteert naar DB */
+function EditInvoiceWrapper({ existing, previewUrl, onSaveInvoice, onDone, inventory, supplierPrices, existingInvoices }: {
+    existing: any;
+    previewUrl: string | null;
+    onSaveInvoice: (inv: ParsedInvoice) => Promise<void>;
+    onDone: () => void;
+    inventory?: any[];
+    supplierPrices?: any[];
+    existingInvoices?: any[];
+}) {
+    const rawInvoice: any = existing.raw_ai_response || {
+        leverancier: existing.leverancier,
+        factuurnummer: existing.factuurnummer,
+        datum: existing.datum,
+        totaal_excl: existing.totaal_excl,
+        totaal_btw: existing.totaal_btw,
+        totaal_incl: existing.totaal_incl,
+        regels: [],
+    };
+    const [inv, setInv] = useState<ParsedInvoice>(normalizeParsedInvoice(rawInvoice));
+    return (
+        <InvoiceReview
+            invoice={inv}
+            setInvoice={setInv}
+            preview={previewUrl}
+            existingInvoices={existingInvoices}
+            inventory={inventory}
+            supplierPrices={supplierPrices}
+            editingId={existing.id}
+            onSave={async () => { await onSaveInvoice(inv); onDone(); }}
+            onCancel={onDone}
+        />
+    );
+}
+
+function InvoiceListTable({ invoices, onEdit, onDelete }: { invoices: any[]; onEdit: (id: number) => void; onDelete: (id: number) => void }) {
     // Vind welke invoices een dupe-partner hebben
     const dupeMap = useMemo(() => {
         const map: Record<number, 'exact' | 'likely' | 'possible'> = {};
@@ -904,9 +1032,20 @@ function InvoiceListTable({ invoices, onDelete }: { invoices: any[]; onDelete: (
                                 </Pill>
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                                <button onClick={() => onDelete(inv.id)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }} title="Verwijderen">
-                                    <Trash2 size={14} />
-                                </button>
+                                <div style={{ display: 'inline-flex', gap: 2 }}>
+                                    <button onClick={() => onEdit(inv.id)} style={{ background: 'transparent', border: 'none', color: GOLD, cursor: 'pointer', padding: 4 }} title="Openen / bewerken">
+                                        <Edit3 size={14} />
+                                    </button>
+                                    {inv.file_url && (
+                                        <a href={inv.file_url} target="_blank" rel="noopener noreferrer"
+                                            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 4, color: GOLD, textDecoration: 'none' }} title="Bekijk origineel bestand">
+                                            <ExternalLink size={14} />
+                                        </a>
+                                    )}
+                                    <button onClick={() => onDelete(inv.id)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }} title="Verwijderen">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     );
@@ -916,14 +1055,36 @@ function InvoiceListTable({ invoices, onDelete }: { invoices: any[]; onDelete: (
     );
 }
 
-function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, inventory, supplierPrices, onSave, onCancel }: {
+function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, inventory, supplierPrices, editingId, onSave, onCancel }: {
     invoice: ParsedInvoice; setInvoice: (i: ParsedInvoice) => void; preview: string | null;
     existingInvoices?: any[];
     inventory?: any[];
     supplierPrices?: any[];
+    editingId?: number;
     onSave: () => void | Promise<void>; onCancel: () => void;
 }) {
     const [saving, setSaving] = useState(false);
+
+    // BTW auto-repair: als er regels zijn met codes (1/2) ipv percentages (9/21),
+    // zet ze om ZODRA de data binnenkomt (via setInvoice in parent). Draait altijd,
+    // niet alleen op mount, zodat HMR/late-arriving data óók wordt gerepareerd.
+    useEffect(() => {
+        const regels = invoice.regels || [];
+        let needsFix = false;
+        const fixed = regels.map(r => {
+            const n = parseFloat(String(r.btw_pct));
+            if (!isNaN(n) && n > 0 && n < 5) {
+                needsFix = true;
+                if (n === 1) return { ...r, btw_pct: 9 };
+                return { ...r, btw_pct: 21 };
+            }
+            return r;
+        });
+        if (needsFix) {
+            setInvoice({ ...invoice, regels: fixed });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [invoice.regels]);
 
     // Keyboard shortcuts: Cmd+S = save, Esc = annuleer, Cmd+D = duplicate regel
     useEffect(() => {
@@ -983,20 +1144,33 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
         }
 
         // Check 3: BTW percentage realistisch (9 of 21 in NL)
+        // Bij mixed-rate facturen (voedsel + non-food) is de blended rate tussen 9-21% — dat is normaal
         if (excl > 0 && btw > 0) {
             const pct = (btw / excl) * 100;
+            const regels = invoice.regels || [];
+            const uniqueRates = Array.from(new Set(regels.map(r => Math.round(parseFloat(String(r.btw_pct)) || 0)).filter(n => n > 0)));
+            const allValidRates = uniqueRates.length > 0 && uniqueRates.every(r => r === 9 || r === 21 || r === 0);
+            const isMixed = uniqueRates.includes(9) && uniqueRates.includes(21);
+
             if (pct > 8 && pct < 10) {
                 checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 9% (laag tarief)', detail: 'Voedsel, groente, fruit' });
             } else if (pct > 20 && pct < 22) {
                 checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 21% (standaard)', detail: 'Niet-food / dranken / verpakking' });
+            } else if (isMixed && pct > 8 && pct < 22) {
+                checks.push({ id: 'btw', status: 'ok', label: `BTW ${pct.toFixed(1)}% — mix van 9% en 21%`, detail: 'Gewogen gemiddelde van voedsel en non-food regels' });
+            } else if (allValidRates && uniqueRates.length === 1) {
+                // Alle regels hebben zelfde tarief maar blended klopt niet met totalen — mogelijk rondafwijking
+                const onlyRate = uniqueRates[0];
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% wijkt af van verwachte ${onlyRate}%`, detail: 'Check totaal BTW of regel-subtotalen' });
             } else {
                 checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
             }
         }
 
-        // Check 4: dubbele factuur (fuzzy matching)
+        // Check 4: dubbele factuur (fuzzy matching) — skip de huidig-bewerkte factuur zelf
         if (existingInvoices && existingInvoices.length > 0) {
-            const dupes = detectDuplicates(invoice, existingInvoices);
+            const others = editingId ? existingInvoices.filter((e: any) => e.id !== editingId) : existingInvoices;
+            const dupes = detectDuplicates(invoice, others);
             const exact = dupes.find(d => d.type === 'exact');
             const likely = dupes.find(d => d.type === 'likely');
             const possible = dupes.find(d => d.type === 'possible');
@@ -1032,6 +1206,15 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
         setInvoice({ ...invoice, [key]: val });
     }
     function updateLine(idx: number, key: keyof ParsedInvoiceLine, val: any) {
+        // BTW auto-normalize: Nederlandse facturen gebruiken soms codes (1=9%, 2=21%)
+        if (key === 'btw_pct') {
+            const n = parseFloat(String(val));
+            if (!isNaN(n)) {
+                if (n === 1) val = 9;
+                else if (n === 2 || n === 3) val = 21;
+                else if (n > 0 && n < 5) val = 21;
+            }
+        }
         const lines = [...(invoice.regels || [])];
         lines[idx] = { ...lines[idx], [key]: val };
         setInvoice({ ...invoice, regels: lines });
@@ -1104,10 +1287,17 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                             <FileScan size={14} style={{ color: GOLD }} />
                             <span style={{ fontSize: 13, fontWeight: 600 }}>Gescand document</span>
+                            <a href={preview} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', fontSize: 11, color: GOLD, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <ExternalLink size={11} /> Open in nieuw venster
+                            </a>
                         </div>
                         <div style={{ padding: 14, maxHeight: 700, overflow: 'auto' }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={preview} alt="Factuur preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)' }} />
+                            {(preview.includes('.pdf') || preview.startsWith('data:application/pdf')) ? (
+                                <iframe src={preview} style={{ width: '100%', height: 640, border: '1px solid var(--border)', borderRadius: 8 }} title="Factuur preview" />
+                            ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={preview} alt="Factuur preview" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)' }} />
+                            )}
                         </div>
                     </MetalCard>
                 )}
@@ -1141,21 +1331,56 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                            {['Product', 'Aantal', 'Eenheid', 'Prijs (€)', 'BTW (%)', 'Subtotaal (€)', ''].map(h => (
-                                                <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
+                                            {[
+                                                { label: 'Product' },
+                                                { label: 'Aantal' },
+                                                { label: 'Eenheid' },
+                                                { label: 'Normaal €', tip: 'Reguliere stuksprijs zonder bulk-/staffelkorting. Laat leeg als er geen korting is.' },
+                                                { label: 'Betaald €', tip: 'Werkelijk betaalde prijs per eenheid (na bulk-/staffelkorting)' },
+                                                { label: 'Korting' },
+                                                { label: 'BTW %' },
+                                                { label: 'Subtotaal €' },
+                                                { label: '' },
+                                            ].map(h => (
+                                                <th key={h.label} title={h.tip} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, cursor: h.tip ? 'help' : 'default' }}>{h.label}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {(invoice.regels || []).map((r, i) => (
+                                        {(invoice.regels || []).map((r, i) => {
+                                            const hasBulk = r.prijs_normaal != null && r.prijs_normaal > 0 && r.prijs_normaal > r.prijs_per_eenheid;
+                                            const kortingPct = hasBulk ? Math.round(((r.prijs_normaal! - r.prijs_per_eenheid) / r.prijs_normaal!) * 100) : 0;
+                                            return (
                                             <React.Fragment key={i}>
                                                 <tr style={{ borderBottom: (inventory || supplierPrices) ? 'none' : '1px solid var(--border)' }}>
                                                     <td style={{ padding: 4 }}><InlineInput value={r.product_naam} onChange={v => updateLine(i, 'product_naam', v)} /></td>
-                                                    <td style={{ padding: 4, width: 70 }}><InlineInput value={String(r.hoeveelheid)} onChange={v => updateLine(i, 'hoeveelheid', parseFloat(v) || 0)} type="number" /></td>
-                                                    <td style={{ padding: 4, width: 80 }}><InlineInput value={r.eenheid} onChange={v => updateLine(i, 'eenheid', v)} /></td>
-                                                    <td style={{ padding: 4, width: 92 }}><InlineInput prefix="€" value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
-                                                    <td style={{ padding: 4, width: 72 }}><InlineInput suffix="%" value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
-                                                    <td style={{ padding: 4, width: 102 }}><InlineInput prefix="€" value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 64 }}><InlineInput value={String(r.hoeveelheid)} onChange={v => updateLine(i, 'hoeveelheid', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 72 }}><InlineInput value={r.eenheid} onChange={v => updateLine(i, 'eenheid', v)} /></td>
+                                                    <td style={{ padding: 4, width: 90 }}>
+                                                        <InlineInput prefix="€" value={r.prijs_normaal != null ? String(r.prijs_normaal) : ''} onChange={v => {
+                                                            const num = v === '' ? null : parseFloat(v);
+                                                            updateLine(i, 'prijs_normaal', num);
+                                                            // Auto-set korting_type op basis van normaal vs betaald
+                                                            if (num != null && num > r.prijs_per_eenheid) {
+                                                                updateLine(i, 'korting_type', r.korting_type || 'bulk');
+                                                            } else if (num == null || num <= r.prijs_per_eenheid) {
+                                                                updateLine(i, 'korting_type', null);
+                                                            }
+                                                        }} type="number" />
+                                                    </td>
+                                                    <td style={{ padding: 4, width: 90 }}><InlineInput prefix="€" value={String(r.prijs_per_eenheid)} onChange={v => updateLine(i, 'prijs_per_eenheid', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 86 }}>
+                                                        {hasBulk ? (
+                                                            <span title={`${r.korting_type || 'bulk'}-korting — ${fmt2(r.prijs_normaal! - r.prijs_per_eenheid)} per eenheid`}
+                                                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 6px', borderRadius: 4, background: '#10b98120', color: '#10b981', border: '1px solid #10b98140', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                                <TrendingDown size={10} /> −{kortingPct}%
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ color: 'var(--muted-light)', fontSize: 10 }}>—</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: 4, width: 82 }}><InlineInput suffix="%" value={String(r.btw_pct)} onChange={v => updateLine(i, 'btw_pct', parseFloat(v) || 0)} type="number" /></td>
+                                                    <td style={{ padding: 4, width: 92 }}><InlineInput prefix="€" value={String(r.subtotaal)} onChange={v => updateLine(i, 'subtotaal', parseFloat(v) || 0)} type="number" /></td>
                                                     <td style={{ padding: 4, width: 28 }}>
                                                         <button onClick={() => removeLine(i)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
                                                             <X size={12} />
@@ -1164,13 +1389,14 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                                                 </tr>
                                                 {(inventory || supplierPrices) && (
                                                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                                                        <td colSpan={7} style={{ padding: '0 4px 6px 10px' }}>
+                                                        <td colSpan={9} style={{ padding: '0 4px 6px 10px' }}>
                                                             <LineInsights line={r} inventory={inventory || []} supplierPrices={supplierPrices || []} invoices={existingInvoices || []} />
                                                         </td>
                                                     </tr>
                                                 )}
                                             </React.Fragment>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             )}
@@ -1247,7 +1473,13 @@ function LineInsights({ line, inventory, supplierPrices, invoices }: {
     const match = useMemo(() => matchInventoryItem(line.product_naam, inventory), [line.product_naam, inventory]);
     const history = useMemo(() => getProductPriceHistory(line.product_naam, supplierPrices, invoices), [line.product_naam, supplierPrices, invoices]);
 
-    const currentPrice = parseFloat(String(line.prijs_per_eenheid || 0));
+    // Vergelijk altijd normaal-prijs vs normaal-prijs — zo telt een bulkkorting NIET als prijsdaling
+    // Als deze regel bulkkorting heeft, gebruik prijs_normaal als referentie; anders prijs_per_eenheid
+    const hasBulk = line.prijs_normaal != null && line.prijs_normaal > 0 && line.prijs_normaal > line.prijs_per_eenheid;
+    const referencePrice = hasBulk
+        ? parseFloat(String(line.prijs_normaal || 0))
+        : parseFloat(String(line.prijs_per_eenheid || 0));
+    const currentPrice = referencePrice;
     const historyPrices = history.map(h => h.prijs);
     const avgHistory = historyPrices.length > 0 ? historyPrices.reduce((s, p) => s + p, 0) / historyPrices.length : 0;
     const pctChange = avgHistory > 0 && currentPrice > 0 ? ((currentPrice - avgHistory) / avgHistory) * 100 : null;
@@ -1274,9 +1506,9 @@ function LineInsights({ line, inventory, supplierPrices, invoices }: {
                 </div>
             )}
 
-            {/* % change vs gemiddelde */}
+            {/* % change vs gemiddelde — altijd op basis van normaalprijs */}
             {pctChange !== null && Math.abs(pctChange) > 3 && (
-                <span title={`Gemiddeld was ${fmt2(avgHistory)} over ${historyPrices.length} eerdere facturen`}
+                <span title={`Normaalprijs vergeleken — was gemiddeld ${fmt2(avgHistory)} over ${historyPrices.length} eerdere facturen${hasBulk ? ' (bulk-/staffelkorting is hierbij buiten beschouwing gelaten)' : ''}`}
                     style={{ fontSize: 10, fontWeight: 700, color: pctChange > 0 ? 'var(--red)' : 'var(--green)', whiteSpace: 'nowrap' }}>
                     {pctChange > 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(0)}%
                 </span>
@@ -1288,10 +1520,12 @@ function LineInsights({ line, inventory, supplierPrices, invoices }: {
 function InlineInput({ value, onChange, type, prefix, suffix }: { value: string; onChange: (v: string) => void; type?: string; prefix?: string; suffix?: string }) {
     return (
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            {prefix && <span style={{ position: 'absolute', left: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600 }}>{prefix}</span>}
+            {prefix && <span style={{ position: 'absolute', left: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600, zIndex: 1 }}>{prefix}</span>}
             <input value={value} onChange={e => onChange(e.target.value)} type={type || 'text'}
-                style={{ width: '100%', padding: '6px 8px', paddingLeft: prefix ? 20 : 8, paddingRight: suffix ? 22 : 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontSize: 12, fontVariantNumeric: 'tabular-nums', outline: 'none' }} />
-            {suffix && <span style={{ position: 'absolute', right: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600 }}>{suffix}</span>}
+                className="bbq-inline-input"
+                style={{ width: '100%', padding: '6px 8px', paddingLeft: prefix ? 20 : 8, paddingRight: suffix ? 22 : 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', fontSize: 12, fontVariantNumeric: 'tabular-nums', outline: 'none', MozAppearance: 'textfield' as any }} />
+            {suffix && <span style={{ position: 'absolute', right: 7, color: 'var(--muted)', fontSize: 11, pointerEvents: 'none', fontWeight: 600, zIndex: 1 }}>{suffix}</span>}
+            <style>{`.bbq-inline-input::-webkit-outer-spin-button,.bbq-inline-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}`}</style>
         </div>
     );
 }
@@ -1318,6 +1552,7 @@ function MiniStat({ label, value, sub, tone, icon: I }: { label: React.ReactNode
 
 function FolderReceipts() {
     const { data: bonnen, insert, remove, refetch } = useSupabase<any>('bonnen', []);
+    const { data: invoices, remove: removeInvoice } = useSupabase<any>('supplier_invoices', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [scanStep, setScanStep] = useState<'idle' | 'prep' | 'upload' | 'ai' | 'done' | 'error'>('idle');
@@ -1325,6 +1560,7 @@ function FolderReceipts() {
     const [preview, setPreview] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [lastFile, setLastFile] = useState<File | null>(null);
+    const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
     const abortRef = useRef<AbortController | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const cameraRef = useRef<HTMLInputElement>(null);
@@ -1355,7 +1591,7 @@ function FolderReceipts() {
             const body = await res.json();
             if (controller.signal.aborted) return;
             if (!res.ok) { setError(body.detail || body.error || 'Scan mislukt — probeer een duidelijkere foto'); setScanStep('error'); return; }
-            setParsed(body.data);
+            setParsed(normalizeParsedInvoice(body.data));
             setScanStep('done');
             showToast('Bon gelezen — controleer en bewaar', 'success');
         } catch (e: any) {
@@ -1370,6 +1606,15 @@ function FolderReceipts() {
 
     async function saveReceipt() {
         if (!parsed) return;
+        // Archiveer originele foto/bon in Supabase Storage — per winkel
+        let fileUrl: string | null = null;
+        if (lastFile) {
+            fileUrl = await uploadDocumentToArchive(lastFile, 'receipt', {
+                supplier: parsed.winkel || 'Onbekend',
+                datum: parsed.datum,
+                factuurnummer: null,
+            });
+        }
         await insert({
             winkel: parsed.winkel || 'Onbekend',
             datum: parsed.datum || null,
@@ -1379,8 +1624,9 @@ function FolderReceipts() {
             raw_analysis: parsed.regels || [],
             notities: parsed.notities || null,
             status: 'review',
+            foto_url: fileUrl,
         } as any);
-        showToast('Bon opgeslagen', 'success');
+        showToast('Bon opgeslagen · foto gearchiveerd', 'success');
         setParsed(null); setPreview(null);
         refetch();
     }
@@ -1391,16 +1637,20 @@ function FolderReceipts() {
         return <ReceiptReview parsed={parsed} setParsed={setParsed} preview={preview} onSave={saveReceipt} onCancel={() => { setParsed(null); setPreview(null); }} />;
     }
 
+    const archivedCount = (invoices || []).filter((i: any) => i.file_url).length + (bonnen || []).filter((b: any) => b.foto_url).length;
+    const totalFiles = (invoices || []).length + (bonnen || []).length;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <SectionExplain>
-                <strong style={{ color: 'var(--text)' }}>Zo werkt bonnen scannen:</strong> fotografeer een kassabon met je telefoon, of upload een foto. AI leest winkel, totaal, BTW en regels. Ideaal voor Makro, Jumbo, Albert Heijn tussenaankopen.
+                <strong style={{ color: 'var(--text)' }}>Jouw bonnenarchief:</strong> elke factuur of kassabon die je uploadt krijgt automatisch een <strong style={{ color: GOLD }}>eigen map per leverancier</strong>. Het originele bestand wordt bewaard, zodat je altijd terug kunt klikken. Scan hier een nieuwe bon, of blader hieronder door je mappen.
             </SectionExplain>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                <MiniStat label="Bonnen totaal" value={bonnen.length} icon={Receipt} />
-                <MiniStat label="Totaalbedrag" value={fmt2(total)} icon={Euro} />
-                <MiniStat label="Deze maand" value={bonnen.filter((b: any) => b.datum && b.datum.startsWith(new Date().toISOString().slice(0, 7))).length} icon={Clock} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                <MiniStat label="Bonnen" value={bonnen.length} icon={Receipt} />
+                <MiniStat label="Facturen" value={(invoices || []).length} icon={FileText} />
+                <MiniStat label="Gearchiveerd" value={`${archivedCount}/${totalFiles}`} sub="met origineel bestand" icon={Archive} tone={archivedCount > 0 ? 'ok' : undefined} />
+                <MiniStat label="Kassabonnen totaal" value={fmt2(total)} icon={Euro} />
             </div>
 
             <MetalCard>
@@ -1431,43 +1681,163 @@ function FolderReceipts() {
                 )}
             </MetalCard>
 
+            <SupplierFolderTree
+                invoices={invoices || []}
+                bonnen={bonnen || []}
+                expanded={expandedFolders}
+                onToggle={(k) => setExpandedFolders(prev => ({ ...prev, [k]: !prev[k] }))}
+                onDeleteReceipt={(id) => showConfirm('Bon verwijderen?', () => remove(id).then(() => showToast('Verwijderd', 'success')))}
+                onDeleteInvoice={(id) => showConfirm('Factuur verwijderen?', () => removeInvoice(id).then(() => showToast('Verwijderd', 'success')))}
+            />
+        </div>
+    );
+}
+
+/** Mappen-view: alle gearchiveerde bestanden (facturen + bonnen) gegroepeerd per leverancier/winkel */
+function SupplierFolderTree({ invoices, bonnen, expanded, onToggle, onDeleteReceipt, onDeleteInvoice }: {
+    invoices: any[];
+    bonnen: any[];
+    expanded: Record<string, boolean>;
+    onToggle: (key: string) => void;
+    onDeleteReceipt: (id: number) => void;
+    onDeleteInvoice: (id: number) => void;
+}) {
+    type FileEntry = {
+        type: 'invoice' | 'receipt';
+        id: number;
+        name: string;
+        date: string | null;
+        url: string | null;
+        total: number;
+        rows: number;
+        categorie?: string;
+    };
+
+    const folders = useMemo(() => {
+        const m: Record<string, FileEntry[]> = {};
+        invoices.forEach((inv) => {
+            const key = inv.leverancier || 'Onbekend';
+            if (!m[key]) m[key] = [];
+            m[key].push({
+                type: 'invoice',
+                id: inv.id,
+                name: inv.factuurnummer || `Factuur ${inv.id}`,
+                date: inv.datum,
+                url: inv.file_url || null,
+                total: parseFloat(inv.totaal_incl) || 0,
+                rows: Array.isArray(inv.raw_ai_response?.regels) ? inv.raw_ai_response.regels.length : 0,
+            });
+        });
+        bonnen.forEach((b) => {
+            const key = b.winkel || 'Onbekend';
+            if (!m[key]) m[key] = [];
+            m[key].push({
+                type: 'receipt',
+                id: b.id,
+                name: `Bon · ${b.datum || b.created_at?.slice(0, 10) || b.id}`,
+                date: b.datum,
+                url: b.foto_url || null,
+                total: parseFloat(b.totaal_bedrag) || 0,
+                rows: Array.isArray(b.raw_analysis) ? b.raw_analysis.length : 0,
+                categorie: b.categorie,
+            });
+        });
+        return Object.entries(m).map(([name, files]) => ({
+            name,
+            files: files.sort((a, b) => {
+                if (!a.date) return 1;
+                if (!b.date) return -1;
+                return b.date.localeCompare(a.date);
+            }),
+            total: files.reduce((s, f) => s + f.total, 0),
+            count: files.length,
+        })).sort((a, b) => b.total - a.total);
+    }, [invoices, bonnen]);
+
+    if (folders.length === 0) {
+        return (
             <MetalCard>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Receipt size={14} style={{ color: GOLD }} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Gescande bonnen</span>
+                    <FolderOpen size={14} style={{ color: GOLD }} />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Mappen per leverancier</span>
                 </div>
-                {bonnen.length === 0 ? (
-                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Nog geen bonnen. Upload je eerste.</div>
-                ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                        <thead>
-                            <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
-                                {['Winkel', 'Datum', 'Categorie', 'Bedrag', 'BTW%', 'Regels', ''].map(h => (
-                                    <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Bedrag' ? 'right' : 'left', fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {bonnen.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((b: any) => (
-                                <tr key={b.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>{b.winkel}</td>
-                                    <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{b.datum || '—'}</td>
-                                    <td style={{ padding: '10px 12px' }}>{b.categorie ? <Pill variant="brand">{b.categorie}</Pill> : <span style={{ color: 'var(--muted-light)' }}>—</span>}</td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(b.totaal_bedrag)}</td>
-                                    <td style={{ padding: '10px 12px', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{b.btw_pct || 21}%</td>
-                                    <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{Array.isArray(b.raw_analysis) ? b.raw_analysis.length : '—'}</td>
-                                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                                        <button onClick={() => showConfirm('Bon verwijderen?', () => remove(b.id).then(() => showToast('Verwijderd', 'success')))} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Nog geen bestanden. Upload een factuur of bon — er wordt automatisch een map aangemaakt per leverancier.
+                </div>
             </MetalCard>
-        </div>
+        );
+    }
+
+    return (
+        <MetalCard>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderOpen size={14} style={{ color: GOLD }} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Mappen per leverancier</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {folders.length} leverancier{folders.length === 1 ? '' : 's'} · {folders.reduce((s, f) => s + f.count, 0)} bestand{folders.reduce((s, f) => s + f.count, 0) === 1 ? '' : 'en'}</span>
+            </div>
+            <div>
+                {folders.map((folder, idx) => {
+                    const isExpanded = expanded[folder.name] ?? idx < 3; // default: eerste 3 open
+                    return (
+                        <div key={folder.name} style={{ borderBottom: idx < folders.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                            <button
+                                onClick={() => onToggle(folder.name)}
+                                style={{
+                                    width: '100%', padding: '12px 18px', background: 'transparent', border: 'none',
+                                    display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: 'var(--text)',
+                                    fontSize: 13, textAlign: 'left',
+                                }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s', color: GOLD }}>▶</span>
+                                <FolderOpen size={14} style={{ color: isExpanded ? GOLD : 'var(--muted)' }} />
+                                <span style={{ fontWeight: 600, flex: 1 }}>{folder.name}</span>
+                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{folder.count} bestand{folder.count === 1 ? '' : 'en'}</span>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums', minWidth: 70, textAlign: 'right' }}>{fmt2(folder.total)}</span>
+                            </button>
+                            {isExpanded && (
+                                <div style={{ padding: '4px 14px 14px 50px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                                    {folder.files.map((f) => (
+                                        <div key={`${f.type}-${f.id}`} style={{
+                                            padding: 10, borderRadius: 8, border: '1px solid var(--border)',
+                                            background: 'var(--color-bg-deep)',
+                                            display: 'flex', flexDirection: 'column', gap: 4, position: 'relative',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                {f.type === 'invoice' ? <FileText size={12} style={{ color: GOLD }} /> : <Receipt size={12} style={{ color: GOLD }} />}
+                                                <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                                                    {f.type === 'invoice' ? 'Factuur' : 'Bon'}
+                                                </span>
+                                                {f.categorie && <Pill variant="brand">{f.categorie}</Pill>}
+                                            </div>
+                                            <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.name}>{f.name}</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+                                                <span style={{ color: 'var(--muted)' }}>{f.date || '—'}</span>
+                                                <span style={{ fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(f.total)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                                                {f.url ? (
+                                                    <a href={f.url} target="_blank" rel="noopener noreferrer"
+                                                        style={{ fontSize: 10, color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
+                                                        <ExternalLink size={10} /> Open origineel
+                                                    </a>
+                                                ) : (
+                                                    <span style={{ fontSize: 10, color: 'var(--muted-light)' }}>Geen bestand</span>
+                                                )}
+                                                <button
+                                                    onClick={() => f.type === 'invoice' ? onDeleteInvoice(f.id) : onDeleteReceipt(f.id)}
+                                                    style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
+                                                    title="Verwijderen">
+                                                    <Trash2 size={11} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </MetalCard>
     );
 }
 
@@ -1537,8 +1907,13 @@ function FolderBooks() {
     const { data: invoices } = useSupabase<any>('supplier_invoices', []);
     const { data: bonnen } = useSupabase<any>('bonnen', []);
     const { data: prijzen } = useSupabase<any>('supplier_prices', []);
+    const showToast = useToast();
     const [csvOpen, setCsvOpen] = useState(false);
     const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+    const [archiveOpen, setArchiveOpen] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [comparisonOpen, setComparisonOpen] = useState(false);
 
     const bySupplier = useMemo(() => {
         const m: Record<string, { spend: number; count: number; lastDate: string | null; products: number; lines: { product: string; prijs: number; eenheid: string }[] }> = {};
@@ -1568,27 +1943,262 @@ function FolderBooks() {
     const totalSpend = bySupplier.reduce((s, x) => s + x.spend, 0);
     const totalReceipts = (bonnen || []).reduce((s: number, b: any) => s + (parseFloat(b.totaal_bedrag) || 0), 0);
 
+    // Maand-trend: laatste 6 maanden totaal
+    const monthlyTrend = useMemo(() => {
+        const months: { key: string; label: string; total: number }[] = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = d.toISOString().slice(0, 7);
+            const label = d.toLocaleDateString('nl-NL', { month: 'short' });
+            months.push({ key, label, total: 0 });
+        }
+        (invoices || []).forEach((i: any) => {
+            if (!i.datum) return;
+            const k = i.datum.slice(0, 7);
+            const m = months.find(x => x.key === k);
+            if (m) m.total += parseFloat(i.totaal_incl) || 0;
+        });
+        (bonnen || []).forEach((b: any) => {
+            if (!b.datum) return;
+            const k = b.datum.slice(0, 7);
+            const m = months.find(x => x.key === k);
+            if (m) m.total += parseFloat(b.totaal_bedrag) || 0;
+        });
+        return months;
+    }, [invoices, bonnen]);
+
+    // Deze maand vs vorige maand delta
+    const monthDelta = useMemo(() => {
+        if (monthlyTrend.length < 2) return null;
+        const cur = monthlyTrend[monthlyTrend.length - 1].total;
+        const prev = monthlyTrend[monthlyTrend.length - 2].total;
+        if (prev === 0) return null;
+        return { pct: ((cur - prev) / prev) * 100, cur, prev };
+    }, [monthlyTrend]);
+
+    // Categorie-uitgaven (uit factuur-regels)
+    const byCategorie = useMemo(() => {
+        const m: Record<string, number> = {};
+        (invoices || []).forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            regels.forEach((r: any) => {
+                const cat = r.categorie || 'Overig';
+                const sub = parseFloat(r.subtotaal) || 0;
+                m[cat] = (m[cat] || 0) + sub;
+            });
+        });
+        (bonnen || []).forEach((b: any) => {
+            if (b.categorie) {
+                m[b.categorie] = (m[b.categorie] || 0) + (parseFloat(b.totaal_bedrag) || 0);
+            }
+        });
+        return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    }, [invoices, bonnen]);
+
+    // BTW totaal dit kwartaal
+    const btwThisQuarter = useMemo(() => {
+        const now = new Date();
+        const q = Math.floor(now.getMonth() / 3);
+        const qStart = new Date(now.getFullYear(), q * 3, 1);
+        const qEnd = new Date(now.getFullYear(), q * 3 + 3, 0);
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        let btw = 0;
+        (invoices || []).forEach((i: any) => {
+            if (i.datum && i.datum >= iso(qStart) && i.datum <= iso(qEnd)) {
+                btw += parseFloat(i.totaal_btw) || 0;
+            }
+        });
+        return { btw, label: `Q${q + 1} ${now.getFullYear()}` };
+    }, [invoices]);
+
+    // Prijsalarmen: producten 15%+ duurder dan gemiddelde
+    const prijsalarmen = useMemo(() => {
+        const productMap: Record<string, { prijzen: { prijs: number; datum: string | null; leverancier: string }[]; eenheid: string }> = {};
+        (invoices || []).forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            regels.forEach((r: any) => {
+                if (!r.product_naam) return;
+                const key = r.product_naam.toLowerCase().trim();
+                if (!productMap[key]) productMap[key] = { prijzen: [], eenheid: r.eenheid || 'stuks' };
+                // Gebruik normaalprijs indien beschikbaar (excl bulkkorting)
+                const p = r.prijs_normaal != null && r.prijs_normaal > 0
+                    ? parseFloat(r.prijs_normaal)
+                    : parseFloat(r.prijs_per_eenheid) || 0;
+                if (p > 0) productMap[key].prijzen.push({ prijs: p, datum: inv.datum, leverancier: inv.leverancier });
+            });
+        });
+        const alarms: { product: string; eenheid: string; gem: number; laatst: number; pct: number; leverancier: string }[] = [];
+        Object.entries(productMap).forEach(([product, d]) => {
+            if (d.prijzen.length < 2) return;
+            const sorted = d.prijzen.slice().sort((a, b) => {
+                if (!a.datum) return 1;
+                if (!b.datum) return -1;
+                return b.datum.localeCompare(a.datum);
+            });
+            const laatst = sorted[0];
+            const eerdere = sorted.slice(1);
+            const gem = eerdere.reduce((s, x) => s + x.prijs, 0) / eerdere.length;
+            if (gem === 0) return;
+            const pct = ((laatst.prijs - gem) / gem) * 100;
+            if (pct >= 15) {
+                alarms.push({ product, eenheid: d.eenheid, gem, laatst: laatst.prijs, pct, leverancier: laatst.leverancier });
+            }
+        });
+        return alarms.sort((a, b) => b.pct - a.pct).slice(0, 5);
+    }, [invoices]);
+
+    // CSV export: alle factuur-regels + totals voor accountant
+    function exportToCSV() {
+        const rows: any[] = [];
+        (invoices || []).forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            if (regels.length === 0) {
+                rows.push({
+                    datum: inv.datum || '',
+                    leverancier: inv.leverancier || '',
+                    factuurnummer: inv.factuurnummer || '',
+                    product: '',
+                    hoeveelheid: '',
+                    eenheid: '',
+                    prijs_per_eenheid: '',
+                    btw_pct: '',
+                    subtotaal_excl: inv.totaal_excl || 0,
+                    btw: inv.totaal_btw || 0,
+                    totaal_incl: inv.totaal_incl || 0,
+                    categorie: '',
+                });
+            } else {
+                regels.forEach((r: any) => {
+                    rows.push({
+                        datum: inv.datum || '',
+                        leverancier: inv.leverancier || '',
+                        factuurnummer: inv.factuurnummer || '',
+                        product: r.product_naam || '',
+                        hoeveelheid: r.hoeveelheid || '',
+                        eenheid: r.eenheid || '',
+                        prijs_per_eenheid: r.prijs_per_eenheid || '',
+                        btw_pct: r.btw_pct || '',
+                        subtotaal_excl: r.subtotaal || '',
+                        btw: '',
+                        totaal_incl: '',
+                        categorie: r.categorie || '',
+                    });
+                });
+            }
+        });
+        if (rows.length === 0) {
+            showToast('Geen facturen om te exporteren', 'info');
+            return;
+        }
+        const csv = Papa.unparse(rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bbq-boekhouding-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`${rows.length} regels geëxporteerd`, 'success');
+    }
+
     if (csvOpen) return <CSVImport onClose={() => setCsvOpen(false)} />;
+    if (archiveOpen) return <SupplierArchive invoices={invoices || []} bonnen={bonnen || []} onClose={() => setArchiveOpen(false)} />;
+
+    const totaalInkoop = totalSpend + totalReceipts;
+    // "Deze maand": als er geen data is, pak de laatste maand mét data
+    const lastMonthWithData = monthlyTrend.slice().reverse().find(m => m.total > 0);
+    const lastMonthIdx = lastMonthWithData ? monthlyTrend.findIndex(m => m.key === lastMonthWithData.key) : -1;
+    const curMaand = lastMonthWithData?.total || 0;
+    const curMaandLabel = lastMonthWithData ? new Date(lastMonthWithData.key + '-01').toLocaleDateString('nl-NL', { month: 'long' }) : 'deze maand';
+    const vorigeMaand = lastMonthIdx > 0 ? monthlyTrend[lastMonthIdx - 1].total : 0;
+    const vorigeMaandLabel = lastMonthIdx > 0 ? new Date(monthlyTrend[lastMonthIdx - 1].key + '-01').toLocaleDateString('nl-NL', { month: 'long' }) : '';
+    const topCategorie = byCategorie[0];
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <SectionExplain>
-                <strong style={{ color: 'var(--text)' }}>Zo werkt boekhouding-overzicht:</strong> hier zie je al je ingaande uitgaven per leverancier — verzameld uit ingescande facturen, kassabonnen en handmatig geïmporteerde CSV-prijslijsten. Kies een leverancier voor detail of gebruik de CSV-knop voor snelle prijsimport.
-            </SectionExplain>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* HERO — grote taart + 3 duidelijke cijfers */}
+            <MetalCard>
+                <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 24, padding: 30, alignItems: 'center' }}>
+                    <CategoryDonut data={byCategorie} total={totaalInkoop} onSliceClick={setSelectedCategory} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <HeroStat label={`Besteed in ${curMaandLabel}`} value={fmt2(curMaand)} delta={vorigeMaand > 0 && curMaand > 0 ? { pct: ((curMaand - vorigeMaand) / vorigeMaand) * 100, cur: curMaand, prev: vorigeMaand } : null} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <MiniTile label={vorigeMaandLabel ? `In ${vorigeMaandLabel}` : 'Vorige maand'} value={fmt2(vorigeMaand)} />
+                            <MiniTile label="Top categorie" value={topCategorie ? topCategorie[0] : '—'} sub={topCategorie ? fmt2(topCategorie[1]) : ''} color={topCategorie ? SUPPLIER_COLORS[0] : undefined} />
+                        </div>
+                        {prijsalarmen.length > 0 ? (
+                            <div style={{ padding: 14, borderRadius: 10, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <AlertTriangle size={20} style={{ color: 'var(--red)', flexShrink: 0 }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>{prijsalarmen.length} product{prijsalarmen.length === 1 ? '' : 'en'} 15%+ duurder</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>dan het gemiddelde — check hieronder voor details</div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ padding: 14, borderRadius: 10, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.25)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <Check size={20} style={{ color: 'var(--green)', flexShrink: 0 }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Prijzen stabiel</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>Geen sterke stijgingen deze periode</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </MetalCard>
 
+            {/* GROTE ACTIE KNOPPEN */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                <MiniStat label="Totale inkoop" value={fmt2(totalSpend)} sub={`${bySupplier.length} leveranciers`} icon={Euro} />
-                <MiniStat label={<Hint tip="Som van alle geboekte en ingescande leverancier-facturen.">Facturen</Hint>} value={fmt2(totalSpend)} sub={`${invoices.length} documenten`} icon={FileText} />
-                <MiniStat label="Kassabonnen" value={fmt2(totalReceipts)} sub={`${bonnen.length} bonnen`} icon={Receipt} />
-                <MiniStat label="Getrackte prijzen" value={prijzen.length} sub="CSV + scans" icon={TrendingUp} />
+                <ActionCard icon={Store} title="Leveranciers vergelijken" desc="Zie wie goedkoper is" onClick={() => setComparisonOpen(true)} />
+                <ActionCard icon={Archive} title="Archief bekijken" desc="Alle originele bestanden" onClick={() => setArchiveOpen(true)} />
+                <ActionCard icon={Download} title="Export CSV" desc="Voor accountant" onClick={exportToCSV} />
+                <ActionCard icon={Upload} title="Prijslijst importeren" desc="CSV-bestand inlezen" onClick={() => setCsvOpen(true)} />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <BtnGhost icon={Upload} onClick={() => setCsvOpen(true)}>CSV prijslijst importeren</BtnGhost>
-            </div>
+            {/* MAANDTREND — alleen tonen als er minstens 1 maand data heeft */}
+            {monthlyTrend.some(m => m.total > 0) && (
+                <MetalCard>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BarChart3 size={16} style={{ color: GOLD }} />
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>Uitgaven per maand</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>Klik op een maand voor de facturen</span>
+                    </div>
+                    <MonthlyTrendChart data={monthlyTrend} onMonthClick={setSelectedMonth} />
+                </MetalCard>
+            )}
 
+            {/* TOP 3 PRIJSALARMEN (grote kaarten) */}
+            {prijsalarmen.length > 0 && (
+                <MetalCard>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <AlertTriangle size={16} style={{ color: 'var(--red)' }} />
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>Waar jij nu meer betaalt</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>Top {Math.min(prijsalarmen.length, 3)} duurdere producten</span>
+                    </div>
+                    <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                        {prijsalarmen.slice(0, 3).map((a, i) => (
+                            <div key={i} style={{ padding: 14, borderRadius: 10, background: 'rgba(239,68,68,.04)', border: '1px solid rgba(239,68,68,.15)' }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.product}</div>
+                                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 10 }}>{a.leverancier}</div>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
+                                    <span style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Outfit, sans-serif', color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>€{a.laatst.toFixed(2)}</span>
+                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>nu</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>gemiddeld <span style={{ color: 'var(--text)' }}>€{a.gem.toFixed(2)}</span> · <span style={{ color: 'var(--red)', fontWeight: 700 }}>↑ {a.pct.toFixed(0)}%</span></div>
+                            </div>
+                        ))}
+                    </div>
+                </MetalCard>
+            )}
+
+            {/* LEVERANCIERS DONUT — al bestond */}
             <SupplierDonut bySupplier={bySupplier} total={totalSpend} onSelect={setSelectedSupplier} />
 
+            {/* Drawers */}
+            {selectedMonth && <MonthDetailDrawer monthKey={selectedMonth} invoices={invoices || []} bonnen={bonnen || []} onClose={() => setSelectedMonth(null)} />}
+            {selectedCategory && <CategoryDetailDrawer category={selectedCategory} invoices={invoices || []} onClose={() => setSelectedCategory(null)} />}
+            {comparisonOpen && <SupplierComparisonDrawer invoices={invoices || []} onClose={() => setComparisonOpen(false)} />}
             {selectedSupplier && (
                 <SupplierAnalysisDrawer
                     supplierName={selectedSupplier}
@@ -1598,13 +2208,546 @@ function FolderBooks() {
                 />
             )}
 
-            <div style={{ padding: 16, borderRadius: 10, background: `${GOLD}0A`, border: `1px solid ${GOLD}26`, display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                <Info size={16} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-                <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: '.15em', textTransform: 'uppercase', marginBottom: 6 }}>Tip</div>
-                    Hoe meer facturen en bonnen je scant, hoe preciezer dit overzicht wordt. De AI categoriseert automatisch — klopt iets niet? Open de factuur/bon en corrigeer. Alle wijzigingen reflecteren hier direct.
+            {/* BTW TILE onderaan — subtiel, voor later */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <MetalCard>
+                    <div style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: `${GOLD}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Wallet size={20} style={{ color: GOLD }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>BTW {btwThisQuarter.label}</div>
+                            <div style={{ fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmt2(btwThisQuarter.btw)}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>te declareren bij belastingdienst</div>
+                        </div>
+                    </div>
+                </MetalCard>
+                <MetalCard>
+                    <div style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: `${GOLD}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Euro size={20} style={{ color: GOLD }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>Totaal ingekocht</div>
+                            <div style={{ fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmt2(totaalInkoop)}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>over {invoices.length} facturen + {bonnen.length} bonnen</div>
+                        </div>
+                    </div>
+                </MetalCard>
+            </div>
+        </div>
+    );
+}
+
+/** Groot hero-getal met delta */
+function HeroStat({ label, value, delta }: { label: string; value: string; delta: { pct: number; cur: number; prev: number } | null }) {
+    return (
+        <div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 600, marginBottom: 4 }}>{label}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                <span style={{ fontSize: 42, fontFamily: 'Outfit, sans-serif', fontWeight: 400, color: GOLD, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</span>
+                {delta && (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: delta.pct > 10 ? 'var(--red)' : delta.pct < -10 ? 'var(--green)' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {delta.pct > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                        {Math.abs(delta.pct).toFixed(0)}% t.o.v. vorige maand
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/** Klein tegel */
+function MiniTile({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+    return (
+        <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 600, marginBottom: 4 }}>{label}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                {color && <span style={{ width: 8, height: 8, borderRadius: 2, background: color }} />}
+                <span style={{ fontSize: 18, fontFamily: 'Outfit, sans-serif', fontWeight: 500, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+                {sub && <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>· {sub}</span>}
+            </div>
+        </div>
+    );
+}
+
+/** Grote klikbare actie-kaart */
+function ActionCard({ icon: Icon, title, desc, onClick }: { icon: any; title: string; desc: string; onClick: () => void }) {
+    return (
+        <button onClick={onClick} style={{
+            padding: 18, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)',
+            textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10,
+            transition: 'all .15s', color: 'var(--text)',
+        }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: `${GOLD}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={18} style={{ color: GOLD }} />
+            </div>
+            <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{title}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{desc}</div>
+            </div>
+        </button>
+    );
+}
+
+/** Echt SVG taartdiagram — met total in het midden en klikbare slices */
+function CategoryDonut({ data, total, onSliceClick }: { data: [string, number][]; total: number; onSliceClick: (cat: string) => void }) {
+    const [hover, setHover] = useState<string | null>(null);
+    const size = 280;
+    const cx = size / 2;
+    const cy = size / 2;
+    const rOuter = 120;
+    const rInner = 78;
+    const totalVal = data.reduce((s, [, v]) => s + v, 0);
+
+    if (totalVal === 0 || data.length === 0) {
+        return (
+            <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                <PieChart size={40} style={{ color: 'var(--muted-light)', opacity: 0.4 }} />
+                <div>Nog geen data</div>
+                <div style={{ fontSize: 10 }}>Scan een factuur om te starten</div>
+            </div>
+        );
+    }
+
+    let currentAngle = -Math.PI / 2;
+    const slices = data.map(([cat, val], i) => {
+        const angle = (val / totalVal) * 2 * Math.PI;
+        const x1o = cx + rOuter * Math.cos(currentAngle);
+        const y1o = cy + rOuter * Math.sin(currentAngle);
+        const x2o = cx + rOuter * Math.cos(currentAngle + angle);
+        const y2o = cy + rOuter * Math.sin(currentAngle + angle);
+        const x1i = cx + rInner * Math.cos(currentAngle + angle);
+        const y1i = cy + rInner * Math.sin(currentAngle + angle);
+        const x2i = cx + rInner * Math.cos(currentAngle);
+        const y2i = cy + rInner * Math.sin(currentAngle);
+        const largeArc = angle > Math.PI ? 1 : 0;
+        const path = `M ${x1o} ${y1o} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${x2o} ${y2o} L ${x1i} ${y1i} A ${rInner} ${rInner} 0 ${largeArc} 0 ${x2i} ${y2i} Z`;
+        const midAngle = currentAngle + angle / 2;
+        const labelR = (rOuter + rInner) / 2;
+        const lx = cx + labelR * Math.cos(midAngle);
+        const ly = cy + labelR * Math.sin(midAngle);
+        currentAngle += angle;
+        const pct = (val / totalVal) * 100;
+        return { cat, val, path, color: SUPPLIER_COLORS[i % SUPPLIER_COLORS.length], pct, lx, ly };
+    });
+
+    const hoveredSlice = hover ? slices.find(s => s.cat === hover) : null;
+    const centerLabel = hoveredSlice ? hoveredSlice.cat : 'Totaal';
+    const centerValue = hoveredSlice ? fmt2(hoveredSlice.val) : fmt2(total);
+    const centerSub = hoveredSlice ? `${hoveredSlice.pct.toFixed(0)}% van uitgaven` : `${data.length} categorie${data.length === 1 ? '' : 'ën'}`;
+
+    return (
+        <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                {slices.map(s => (
+                    <path
+                        key={s.cat}
+                        d={s.path}
+                        fill={s.color}
+                        stroke="var(--card)"
+                        strokeWidth={2}
+                        opacity={hover === null || hover === s.cat ? 1 : 0.3}
+                        style={{ cursor: 'pointer', transition: 'opacity .15s, transform .15s', transformOrigin: `${cx}px ${cy}px`, transform: hover === s.cat ? 'scale(1.03)' : 'scale(1)' }}
+                        onMouseEnter={() => setHover(s.cat)}
+                        onMouseLeave={() => setHover(null)}
+                        onClick={() => onSliceClick(s.cat)}
+                    >
+                        <title>{s.cat}: {fmt2(s.val)} ({s.pct.toFixed(0)}%) — klik voor details</title>
+                    </path>
+                ))}
+                {slices.filter(s => s.pct >= 6).map(s => (
+                    <text key={`lbl-${s.cat}`} x={s.lx} y={s.ly} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 10, fontWeight: 700, fill: 'rgba(0,0,0,.75)', pointerEvents: 'none' }}>
+                        {s.pct.toFixed(0)}%
+                    </text>
+                ))}
+            </svg>
+            {/* Center tekst */}
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 600 }}>{centerLabel}</div>
+                <div style={{ fontSize: 28, fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontVariantNumeric: 'tabular-nums', color: hoveredSlice ? hoveredSlice.color : GOLD, lineHeight: 1.1 }}>{centerValue}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{centerSub}</div>
+            </div>
+        </div>
+    );
+}
+
+function MonthlyTrendChart({ data, onMonthClick }: { data: { key: string; label: string; total: number }[]; onMonthClick?: (key: string) => void }) {
+    const max = Math.max(...data.map(d => d.total), 1);
+    return (
+        <div style={{ padding: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 140 }}>
+                {data.map((m, i) => {
+                    const h = (m.total / max) * 100;
+                    const isCurrent = i === data.length - 1;
+                    const clickable = m.total > 0 && !!onMonthClick;
+                    return (
+                        <div key={m.key}
+                            onClick={() => clickable && onMonthClick!(m.key)}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: clickable ? 'pointer' : 'default' }}
+                            title={clickable ? `${m.label}: ${fmt2(m.total)} — klik voor details` : `${m.label}: ${fmt2(m.total)}`}>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', height: 14 }}>{m.total > 0 ? `€${Math.round(m.total)}` : ''}</div>
+                            <div style={{ width: '100%', height: `${h}%`, minHeight: m.total > 0 ? 2 : 0, background: isCurrent ? GOLD : `${GOLD}66`, borderRadius: '4px 4px 0 0', transition: 'all .2s' }} className={clickable ? 'hover-brighten' : ''} />
+                            <div style={{ fontSize: 10, color: isCurrent ? GOLD : 'var(--muted)', fontWeight: isCurrent ? 700 : 500, textTransform: 'uppercase', letterSpacing: '.05em' }}>{m.label}</div>
+                        </div>
+                    );
+                })}
+            </div>
+            {onMonthClick && <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>Klik op een balk voor alle facturen in die maand</div>}
+            <style>{`.hover-brighten:hover{filter:brightness(1.3);}`}</style>
+        </div>
+    );
+}
+
+function CategoryBreakdown({ data, onCategoryClick }: { data: [string, number][]; onCategoryClick?: (cat: string) => void }) {
+    if (data.length === 0) {
+        return <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>Nog geen gecategoriseerde uitgaven. Scan een factuur om te beginnen.</div>;
+    }
+    const max = data[0][1];
+    const total = data.reduce((s, [, v]) => s + v, 0);
+    return (
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.map(([cat, val], i) => {
+                const w = (val / max) * 100;
+                const pct = total > 0 ? (val / total) * 100 : 0;
+                const clickable = !!onCategoryClick;
+                return (
+                    <div key={cat}
+                        onClick={() => clickable && onCategoryClick!(cat)}
+                        style={{ cursor: clickable ? 'pointer' : 'default', padding: 2, borderRadius: 4, transition: 'background .15s' }}
+                        className={clickable ? 'hover-bg' : ''}
+                        title={clickable ? `Klik voor alle ${cat}-producten` : undefined}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 11 }}>
+                            <span style={{ fontWeight: 500 }}>{cat}</span>
+                            <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt2(val)} <span style={{ color: 'var(--muted-light)' }}>· {pct.toFixed(0)}%</span></span>
+                        </div>
+                        <div style={{ height: 6, background: 'rgba(130,130,130,.08)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${w}%`, height: '100%', background: SUPPLIER_COLORS[i % SUPPLIER_COLORS.length], transition: 'width .3s' }} />
+                        </div>
+                    </div>
+                );
+            })}
+            {onCategoryClick && <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginTop: 6 }}>Klik op een categorie voor productoverzicht + prijshistorie</div>}
+            <style>{`.hover-bg:hover{background:rgba(196,163,90,.08);}`}</style>
+        </div>
+    );
+}
+
+/** Drawer: alle facturen in een specifieke maand */
+function MonthDetailDrawer({ monthKey, invoices, bonnen, onClose }: { monthKey: string; invoices: any[]; bonnen: any[]; onClose: () => void }) {
+    const monthInvoices = invoices.filter((i: any) => i.datum?.slice(0, 7) === monthKey);
+    const monthBonnen = bonnen.filter((b: any) => b.datum?.slice(0, 7) === monthKey);
+    const total = monthInvoices.reduce((s: number, i: any) => s + (parseFloat(i.totaal_incl) || 0), 0)
+        + monthBonnen.reduce((s: number, b: any) => s + (parseFloat(b.totaal_bedrag) || 0), 0);
+    const label = new Date(monthKey + '-01').toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+            <div onClick={e => e.stopPropagation()} style={{ width: 'min(680px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Uitgaven {label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{monthInvoices.length} factuur{monthInvoices.length === 1 ? '' : 'en'} · {monthBonnen.length} bon{monthBonnen.length === 1 ? '' : 'nen'} · totaal {fmt2(total)}</div>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                </div>
+                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {monthInvoices.length === 0 && monthBonnen.length === 0 && (
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Geen facturen of bonnen in deze maand.</div>
+                    )}
+                    {monthInvoices.map((inv: any) => (
+                        <a key={`inv-${inv.id}`} href={inv.file_url || '#'} target="_blank" rel="noopener noreferrer"
+                            onClick={e => { if (!inv.file_url) e.preventDefault(); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'var(--text)', transition: 'border-color .15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+                            <FileText size={14} style={{ color: GOLD }} />
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.leverancier}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{inv.factuurnummer || '—'} · {inv.datum}</div>
+                            </div>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(inv.totaal_incl)}</span>
+                            {inv.file_url && <ExternalLink size={12} style={{ color: 'var(--muted)' }} />}
+                        </a>
+                    ))}
+                    {monthBonnen.map((b: any) => (
+                        <a key={`bon-${b.id}`} href={b.foto_url || '#'} target="_blank" rel="noopener noreferrer"
+                            onClick={e => { if (!b.foto_url) e.preventDefault(); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'var(--text)' }}>
+                            <Receipt size={14} style={{ color: GOLD }} />
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{b.winkel}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Bon · {b.datum} {b.categorie ? `· ${b.categorie}` : ''}</div>
+                            </div>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(b.totaal_bedrag)}</span>
+                            {b.foto_url && <ExternalLink size={12} style={{ color: 'var(--muted)' }} />}
+                        </a>
+                    ))}
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** Drawer: alle producten in een categorie met prijshistorie per product */
+function CategoryDetailDrawer({ category, invoices, onClose }: { category: string; invoices: any[]; onClose: () => void }) {
+    const products = useMemo(() => {
+        const m: Record<string, { naam: string; eenheid: string; prijzen: { prijs: number; datum: string | null; leverancier: string; hoeveelheid: number }[] }> = {};
+        invoices.forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            regels.forEach((r: any) => {
+                if ((r.categorie || 'Overig') !== category) return;
+                const key = (r.product_naam || '').toLowerCase().trim();
+                if (!key) return;
+                if (!m[key]) m[key] = { naam: r.product_naam, eenheid: r.eenheid || 'stuks', prijzen: [] };
+                const p = r.prijs_normaal != null && r.prijs_normaal > 0 ? parseFloat(r.prijs_normaal) : parseFloat(r.prijs_per_eenheid) || 0;
+                if (p > 0) m[key].prijzen.push({ prijs: p, datum: inv.datum, leverancier: inv.leverancier, hoeveelheid: parseFloat(r.hoeveelheid) || 0 });
+            });
+        });
+        return Object.values(m).map(p => {
+            const sorted = p.prijzen.slice().sort((a, b) => {
+                if (!a.datum) return 1;
+                if (!b.datum) return -1;
+                return b.datum.localeCompare(a.datum);
+            });
+            const gem = p.prijzen.length > 0 ? p.prijzen.reduce((s, x) => s + x.prijs, 0) / p.prijzen.length : 0;
+            const totaalGekocht = p.prijzen.reduce((s, x) => s + (x.prijs * x.hoeveelheid), 0);
+            return { ...p, prijzen: sorted, gem, laatst: sorted[0], totaalGekocht };
+        }).sort((a, b) => b.totaalGekocht - a.totaalGekocht);
+    }, [invoices, category]);
+
+    const totaal = products.reduce((s, p) => s + p.totaalGekocht, 0);
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+            <div onClick={e => e.stopPropagation()} style={{ width: 'min(780px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Categorie: {category}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{products.length} product{products.length === 1 ? '' : 'en'} · totaal ingekocht {fmt2(totaal)}</div>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                </div>
+                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {products.length === 0 && (
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Geen producten in deze categorie.</div>
+                    )}
+                    {products.map((p, i) => {
+                        const prices = p.prijzen.slice().reverse().map(x => x.prijs);
+                        const trend = prices.length >= 2 ? ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100 : 0;
+                        return (
+                            <div key={i} style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                    <div>
+                                        <div style={{ fontSize: 13, fontWeight: 600 }}>{p.naam}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.prijzen.length}× gekocht · {p.laatst.leverancier}</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>€{p.laatst.prijs.toFixed(2)}<span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>/{p.eenheid}</span></div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>gem. €{p.gem.toFixed(2)}</div>
+                                    </div>
+                                </div>
+                                {prices.length >= 2 && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <PriceSparkline prices={prices} />
+                                        {Math.abs(trend) > 3 && (
+                                            <span style={{ fontSize: 10, fontWeight: 700, color: trend > 0 ? 'var(--red)' : 'var(--green)' }}>
+                                                {trend > 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(0)}% over {p.prijzen.length} inkopen
+                                            </span>
+                                        )}
+                                        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>totaal {fmt2(p.totaalGekocht)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** Drawer: leveranciers-vergelijking — zelfde product bij verschillende suppliers */
+function SupplierComparisonDrawer({ invoices, onClose }: { invoices: any[]; onClose: () => void }) {
+    const comparisons = useMemo(() => {
+        // Verzamel per product (genormaliseerde naam) de prijzen per leverancier
+        const productMap: Record<string, { naam: string; eenheid: string; perSupplier: Record<string, number[]> }> = {};
+        invoices.forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            regels.forEach((r: any) => {
+                const key = (r.product_naam || '').toLowerCase().trim();
+                if (!key) return;
+                if (!productMap[key]) productMap[key] = { naam: r.product_naam, eenheid: r.eenheid || 'stuks', perSupplier: {} };
+                const sup = inv.leverancier || 'Onbekend';
+                const p = r.prijs_normaal != null && r.prijs_normaal > 0 ? parseFloat(r.prijs_normaal) : parseFloat(r.prijs_per_eenheid) || 0;
+                if (p > 0) {
+                    if (!productMap[key].perSupplier[sup]) productMap[key].perSupplier[sup] = [];
+                    productMap[key].perSupplier[sup].push(p);
+                }
+            });
+        });
+        // Filter alleen producten bij ≥2 leveranciers
+        return Object.values(productMap)
+            .filter(p => Object.keys(p.perSupplier).length >= 2)
+            .map(p => {
+                const suppliers = Object.entries(p.perSupplier).map(([name, prijzen]) => ({
+                    name,
+                    avg: prijzen.reduce((s, v) => s + v, 0) / prijzen.length,
+                    count: prijzen.length,
+                }));
+                suppliers.sort((a, b) => a.avg - b.avg);
+                const cheapest = suppliers[0];
+                const dearest = suppliers[suppliers.length - 1];
+                const saving = dearest.avg - cheapest.avg;
+                const savingPct = (saving / dearest.avg) * 100;
+                return { ...p, suppliers, cheapest, dearest, saving, savingPct };
+            })
+            .sort((a, b) => b.savingPct - a.savingPct);
+    }, [invoices]);
+
+    const totaalPotentie = comparisons.reduce((s, c) => s + c.saving, 0);
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+            <div onClick={e => e.stopPropagation()} style={{ width: 'min(820px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Leveranciersvergelijking</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{comparisons.length} product{comparisons.length === 1 ? '' : 'en'} bij meerdere leveranciers · potentiële besparing per eenheid: {fmt2(totaalPotentie)}</div>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                </div>
+                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {comparisons.length === 0 && (
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                            Geen producten gevonden bij meerdere leveranciers. Scan facturen van andere leveranciers om vergelijkingen te zien.
+                        </div>
+                    )}
+                    {comparisons.map((c, i) => (
+                        <div key={i} style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>{c.naam}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>per {c.eenheid}</div>
+                                </div>
+                                {c.savingPct >= 5 && (
+                                    <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,.15)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)', fontSize: 11, fontWeight: 700 }}>
+                                        Bespaar {c.savingPct.toFixed(0)}% · €{c.saving.toFixed(2)}/{c.eenheid}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {c.suppliers.map((s, j) => {
+                                    const isLow = j === 0;
+                                    const isHigh = j === c.suppliers.length - 1;
+                                    const widthPct = (s.avg / c.dearest.avg) * 100;
+                                    return (
+                                        <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11 }}>
+                                            <span style={{ width: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isLow ? 'var(--green)' : isHigh ? 'var(--muted)' : 'var(--text)', fontWeight: isLow ? 700 : 500 }} title={s.name}>
+                                                {isLow && '✓ '}{s.name}
+                                            </span>
+                                            <div style={{ flex: 1, height: 8, background: 'rgba(130,130,130,.08)', borderRadius: 4, overflow: 'hidden' }}>
+                                                <div style={{ width: `${widthPct}%`, height: '100%', background: isLow ? 'var(--green)' : isHigh ? 'var(--red)' : GOLD, transition: 'width .3s' }} />
+                                            </div>
+                                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: isLow ? 700 : 500, color: isLow ? 'var(--green)' : 'var(--text)', minWidth: 60, textAlign: 'right' }}>€{s.avg.toFixed(2)}</span>
+                                            <span style={{ fontSize: 10, color: 'var(--muted)', minWidth: 30, textAlign: 'right' }}>({s.count}×)</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SupplierArchive({ invoices, bonnen, onClose }: { invoices: any[]; bonnen: any[]; onClose: () => void }) {
+    const grouped = useMemo(() => {
+        const m: Record<string, { type: 'invoice' | 'receipt'; name: string; date: string | null; url: string; id: number; totaal: number }[]> = {};
+        invoices.forEach((inv) => {
+            if (!inv.file_url) return;
+            const key = inv.leverancier || 'Onbekend';
+            if (!m[key]) m[key] = [];
+            m[key].push({
+                type: 'invoice',
+                name: inv.factuurnummer || `Factuur ${inv.id}`,
+                date: inv.datum,
+                url: inv.file_url,
+                id: inv.id,
+                totaal: parseFloat(inv.totaal_incl) || 0,
+            });
+        });
+        bonnen.forEach((b) => {
+            if (!b.foto_url) return;
+            const key = b.winkel || 'Onbekend';
+            if (!m[key]) m[key] = [];
+            m[key].push({
+                type: 'receipt',
+                name: `Bon ${b.id}`,
+                date: b.datum,
+                url: b.foto_url,
+                id: b.id,
+                totaal: parseFloat(b.totaal_bedrag) || 0,
+            });
+        });
+        for (const k of Object.keys(m)) {
+            m[k].sort((a, b) => {
+                if (!a.date) return 1;
+                if (!b.date) return -1;
+                return b.date.localeCompare(a.date);
+            });
+        }
+        return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+    }, [invoices, bonnen]);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <BtnGhost icon={ArrowLeft} onClick={onClose}>Terug</BtnGhost>
+                <div>
+                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Bestandsarchief</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Alle gearchiveerde facturen en bonnen, gegroepeerd per leverancier.</div>
+                </div>
+            </div>
+
+            {grouped.length === 0 ? (
+                <MetalCard>
+                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                        Nog geen gearchiveerde bestanden. Upload een factuur of bon om te beginnen.
+                    </div>
+                </MetalCard>
+            ) : (
+                grouped.map(([supplier, files]) => (
+                    <MetalCard key={supplier}>
+                        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <Store size={14} style={{ color: GOLD }} />
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{supplier}</span>
+                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {files.length} bestand{files.length === 1 ? '' : 'en'} · totaal {fmt2(files.reduce((s, f) => s + f.totaal, 0))}</span>
+                        </div>
+                        <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+                            {files.map((f, i) => (
+                                <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+                                    style={{ display: 'block', padding: 10, borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'var(--text)', transition: 'all .15s' }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        {f.type === 'invoice' ? <FileText size={14} style={{ color: GOLD }} /> : <Receipt size={14} style={{ color: GOLD }} />}
+                                        <span style={{ fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                                    </div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>{f.date || 'geen datum'}</div>
+                                    <div style={{ fontSize: 11, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt2(f.totaal)}</div>
+                                    <div style={{ marginTop: 6, fontSize: 9, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        <ExternalLink size={9} /> Open origineel
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    </MetalCard>
+                ))
+            )}
         </div>
     );
 }

@@ -7,7 +7,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
-import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight } from 'lucide-react';
+import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, ChefHat, Users, Euro, Save, ShoppingCart, AlertTriangle, Check } from 'lucide-react';
 
 import GerechtKaart, { GANGEN, type GerechtData, type GangConfig, getGang } from './GerechtKaart';
 import GerechtDetailsModal from './GerechtDetailsModal';
@@ -41,6 +41,10 @@ export default function MenuEngineering() {
   const [selectLimit, setSelectLimit] = useState(20);
 
   const [toast, setToast] = useState<string | null>(null);
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [bcgDrawerOpen, setBcgDrawerOpen] = useState(false);
+  const [mapDrawerOpen, setMapDrawerOpen] = useState(false);
+  const [composedMenu, setComposedMenu] = useState<any | null>(null);
 
   function toggleSelect(id: number) {
     setSelectedIds(function (prev) {
@@ -342,6 +346,7 @@ export default function MenuEngineering() {
     );
   }
 
+  const GOLD = '#c4a35a';
   return (
     <div style={{ paddingBottom: 40 }}>
 
@@ -356,302 +361,539 @@ export default function MenuEngineering() {
         </div>
       )}
 
-      <PageHeader
-        title="Menu Engineering"
-        description="Beoordeel, sorteer en publiceer je gerechten via het Map Station"
-      />
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 700, marginBottom: 6 }}>De keuken</div>
+          <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Menu Engineering</h1>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.totaal} gerechten · AI componeert menu&apos;s in jouw stijl</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <a href="/gerechten"
+            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+            <Plus size={14} /> Nieuw gerecht
+          </a>
+          <button onClick={() => setAiMenuOpen(true)}
+            style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none' }}>
+            <Sparkles size={14} /> AI Menu Componeren
+          </button>
+        </div>
+      </div>
 
-      <PageHint id="menu-engineering" title="Menu Engineering" description="Analyseer je menu op populariteit en marge. Gebruik de BCG Matrix om Stars en Dogs te identificeren." />
+      {/* HERO BANNER */}
+      <div style={{ padding: 20, borderRadius: 16, background: 'linear-gradient(135deg, rgba(196,163,90,.12), rgba(255,255,255,.02))', border: '1px solid rgba(196,163,90,.25)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(196,163,90,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Wand2 size={22} style={{ color: GOLD }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>Compleet menu met één vraag</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Vul gasten + thema + dieet in — Claude maakt een volledig menu met gangen, inkooplijst, kostprijs en adviesprijs. Jouw bestaande gerechten als stijl-basis.</div>
+        </div>
+        <button onClick={() => setAiMenuOpen(true)} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Sparkles size={13} /> Componeer menu
+        </button>
+      </div>
 
       {gerechten.length === 0 && <EmptyState page="/menu-engineering" />}
 
-      <PageSection title="Overzicht">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Totaal', value: stats.totaal, sub: 'gerechten' },
-            { label: 'Actief', value: stats.actief, sub: 'gepubliceerd' },
-            { label: 'Met kostprijs', value: stats.metKostprijs, sub: 'berekend' },
-            { label: 'Gem. marge', value: stats.gemMarge + '%', sub: 'op €45 menu' },
-          ].map(function (s) {
-            return (
-              <div key={s.label} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{s.value}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.3)', marginTop: 2 }}>{s.sub}</div>
-              </div>
-            );
-          })}
-        </div>
-      </PageSection>
+      {/* STATS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+        {[
+          { label: 'Totaal gerechten', value: stats.totaal, sub: `${stats.actief} actief` },
+          { label: 'Met kostprijs', value: stats.metKostprijs, sub: 'berekend' },
+          { label: 'Gem. marge', value: stats.gemMarge + '%', sub: 'op €45 menu' },
+          { label: 'BCG-analyse', value: bcgStats?.stars || 0, sub: `${bcgStats?.stars || 0} stars · ${bcgStats?.dogs || 0} dogs` },
+        ].map(function (s) {
+          return (
+            <div key={s.label} style={{ padding: 14, borderRadius: 10, background: 'var(--card)', border: '1px solid var(--card-solid)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{s.sub}</div>
+            </div>
+          );
+        })}
+      </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,.3)' }} />
+      {/* TOOLBAR */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input
             type="text"
             value={search}
-            onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setSearch(e.target.value); }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Zoek gerechten..."
-            style={{
-              width: '100%', paddingLeft: 34, padding: '9px 12px 9px 34px',
-              background: 'var(--card)', border: '1px solid var(--border)',
-              borderRadius: 8, color: 'var(--text)', fontSize: 13, outline: 'none'
-            }}
+            style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 13, outline: 'none' }}
           />
         </div>
-
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <button
-            onClick={function () { setGangFilter('alle'); }}
-            style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border)', background: gangFilter === 'alle' ? 'rgba(59,130,246,.15)' : 'transparent', color: gangFilter === 'alle' ? 'var(--blue)' : 'rgba(255,255,255,.5)' }}
-          >
+          <button onClick={() => setGangFilter('alle')} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: gangFilter === 'alle' ? '1px solid #fff' : '1px solid var(--card-solid)', background: gangFilter === 'alle' ? '#fff' : 'var(--card)', color: gangFilter === 'alle' ? '#000' : '#fff' }}>
             Alle
           </button>
           {GANGEN.map(function (g) {
             const active = gangFilter === g.slug;
             return (
-              <button
-                key={g.slug}
-                onClick={function () { setGangFilter(active ? 'alle' : g.slug); }}
-                style={{ padding: '8px 14px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (active ? 'var(--blue)' : 'var(--border)'), background: active ? 'rgba(59,130,246,.15)' : 'transparent', color: active ? 'var(--blue)' : 'rgba(255,255,255,.5)' }}
-              >
+              <button key={g.slug} onClick={() => setGangFilter(active ? 'alle' : g.slug)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: active ? '1px solid #fff' : '1px solid var(--card-solid)', background: active ? '#fff' : 'var(--card)', color: active ? '#000' : '#fff' }}>
                 {g.icon} {g.label}
               </button>
             );
           })}
         </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setBcgDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <BarChart3 size={14} /> BCG Analyse
+          </button>
+          <button onClick={() => setMapDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <LayoutGrid size={14} /> Map Station
+          </button>
+          <button
+            onClick={() => { setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds([]); }}
+            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: selectionMode ? '#fff' : 'var(--card)', color: selectionMode ? '#000' : '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {selectionMode ? <CheckCheck size={14} /> : <CheckSquare size={14} />}
+            Selecteer
+          </button>
+        </div>
+      </div>
 
-        <div style={{ display: 'flex', background: 'rgba(255,255,255,.06)', borderRadius: 8, padding: 3, gap: 2 }}>
-          {([['kaarten', '⊞ Kaarten'], ['matrix', '📈 BCG Matrix'], ['map', '🗂 Map Station']] as [string, string][]).map(function (pair) {
-            const isActive = view === pair[0];
+      {/* Selection bar */}
+      {selectionMode && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>Selectie · {selectedIds.length} geselecteerd</span>
+          <button onClick={selectVisible} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Selecteer zichtbare</button>
+          <button onClick={clearSelection} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Deselecteer</button>
+          {selectedIds.length > 0 && (
+            <button onClick={deleteSelected} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.1)', color: '#fca5a5', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Trash2 size={12} /> Verwijder ({selectedIds.length})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* GRID */}
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>{filtered.length} gerechten</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          {filtered.map(function (g) {
             return (
-              <button
-                key={pair[0]}
-                onClick={function () { setView(pair[0]); }}
-                style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: isActive ? 'rgba(255,255,255,.12)' : 'transparent', color: isActive ? '#fff' : 'rgba(255,255,255,.45)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-              >
-                {pair[1]}
-              </button>
+              <GerechtKaart
+                key={g.id}
+                gerecht={g}
+                geselecteerd={inMap.has(g.id)}
+                onMoveToMap={openGangPicker}
+                onViewDetails={setViewingGerecht}
+                selectionMode={selectionMode}
+                isSelected={(id: number) => selectedIds.includes(id)}
+                onToggleSelect={toggleSelect}
+              />
             );
           })}
         </div>
-
-        <button
-          onClick={function () {
-            setSelectionMode(!selectionMode);
-            if (selectionMode) setSelectedIds([]);
-          }}
-          style={{
-            padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            border: '1px solid ' + (selectionMode ? 'var(--blue)' : 'var(--border)'),
-            background: selectionMode ? 'rgba(59,130,246,.15)' : 'transparent',
-            color: selectionMode ? 'var(--blue)' : 'rgba(255,255,255,.5)',
-            display: 'flex', alignItems: 'center', gap: 6, transition: '0.2s'
-          }}
-        >
-          {selectionMode ? <CheckCheck size={16} /> : <CheckSquare size={16} />}
-          {selectionMode ? 'Selectie aan' : 'Selectiemodus'}
-        </button>
-
-        {selectionMode && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.05)',
-              border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 32
-            }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', fontWeight: 700 }}>Max</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={selectLimit}
-                onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setSelectLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1))); }}
-                style={{
-                  width: 40, background: 'transparent', border: 'none', color: '#fff',
-                  fontSize: 12, fontWeight: 700, outline: 'none', textAlign: 'center'
-                }}
-              />
-            </div>
-
-            <button
-              onClick={selectVisible}
-              style={{ padding: '0 14px', height: 36, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              Selecteer {selectLimit}
-            </button>
-
-            <button
-              onClick={clearSelection}
-              style={{ padding: '0 14px', height: 36, borderRadius: 8, border: '1px solid var(--border)', background: 'rgba(255,255,255,.05)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
-            >
-              Deselecteer
-            </button>
-
-            {selectedIds.length > 0 && (
-              <button
-                onClick={deleteSelected}
-                style={{ padding: '0 14px', height: 36, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: 'var(--red)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                <Trash2 size={16} />
-                Verwijder ({selectedIds.length})
-              </button>
-            )}
-          </div>
+        {filtered.length === 0 && gerechten.length > 0 && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Geen gerechten gevonden — pas je filters aan.</div>
         )}
       </div>
 
-      {view === 'kaarten' && (
-        <div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', marginBottom: 14 }}>
-            {filtered.length} gerechten
-            {inMap.size > 0 && <span style={{ marginLeft: 8 }}>• <span style={{ color: 'var(--purple)' }}>{inMap.size} in Map Station</span></span>}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 14 }}>
-            {filtered.map(function (g) {
-              return (
-                <GerechtKaart
-                  key={g.id}
-                  gerecht={g}
-                  geselecteerd={inMap.has(g.id)}
-                  onMoveToMap={openGangPicker}
-                  onViewDetails={setViewingGerecht}
-                  selectionMode={selectionMode}
-                  isSelected={function (id: number) { return selectedIds.includes(id); }}
-                  onToggleSelect={toggleSelect}
-                />
-              );
-            })}
-          </div>
-          {filtered.length === 0 && (
-            <EmptyState page="/menu-engineering" />
-          )}
-        </div>
+      {/* AI MENU COMPOSE MODAL */}
+      {aiMenuOpen && (
+        <AiMenuComposer
+          onClose={() => setAiMenuOpen(false)}
+          existingGerechten={gerechten}
+          onComposed={(menu) => { setComposedMenu(menu); setAiMenuOpen(false); }}
+        />
       )}
 
-      {view === 'matrix' && (
-        <div>
-          {/* BCG Summary Stats */}
-          {bcgStats && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3" style={{ marginBottom: 20 }}>
-              {[
-                { label: 'Geanalyseerd', value: bcgStats.totaal, color: 'var(--color-accent-gold)' },
-                { label: 'Stars', value: bcgStats.stars, color: '#4ade80' },
-                { label: 'Puzzles', value: bcgStats.puzzles, color: '#60a5fa' },
-                { label: 'Plowhorses', value: bcgStats.plowhorses, color: '#fbbf24' },
-                { label: 'Dogs', value: bcgStats.dogs, color: '#f87171' },
-              ].map(function (s) {
-                return (
-                  <div key={s.label} style={{ background: 'var(--sidebar-bg-hover)', border: '1px solid var(--color-border-hover)', borderRadius: 10, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* BCG Scatter Plot */}
-          <BCGMatrix dishes={bcgAnalysis.dishes} medianPop={bcgAnalysis.medianPop} medianMargin={bcgAnalysis.medianMargin} />
-
-          {/* Quadrant Classification Cards */}
-          <QuadrantCards dishes={bcgAnalysis.dishes} />
-        </div>
+      {/* MENU PREVIEW DRAWER */}
+      {composedMenu && (
+        <MenuPreviewDrawer
+          menu={composedMenu}
+          onClose={() => setComposedMenu(null)}
+          onSaveAsDishes={async (dishes) => {
+            if (!supabase) return;
+            const rows = dishes.map(d => ({
+              naam: d.naam,
+              gang_slug: (d.gang || 'hoofdgerecht').toLowerCase(),
+              beschrijving: d.beschrijving,
+              tags: d.tags,
+              allergenen: d.allergenen,
+              kostprijs_pp: d.geschatte_kostprijs_pp,
+              ingredienten: d.ingredienten,
+              bereidingswijze: Array.isArray(d.instructies) ? d.instructies.join('\n') : d.instructies,
+              actief: true,
+            }));
+            const { error } = await supabase.from('gerechten').insert(rows);
+            if (error) { showToast('❌ ' + error.message); return; }
+            showToast(`✅ ${rows.length} gerechten toegevoegd`);
+            // refetch
+            const { data } = await supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze').order('volgorde');
+            setGerechten(data || []);
+            setComposedMenu(null);
+          }}
+        />
       )}
 
-      {view === 'map' && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>🗂 Map Station</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>
-                {alleMapGerechten} gerechten ingedeeld • {gerechten.length - alleMapGerechten} nog niet
-              </div>
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              <button
-                onClick={aiAutoSort}
-                style={{ background: 'rgba(167,139,250,.1)', border: '1px solid rgba(167,139,250,.2)', color: 'var(--purple)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-              >
-                ✨ AI auto-sort
-              </button>
-              <button
-                onClick={function () { const m: Record<string, GerechtData[]> = {}; GANGEN.forEach(function (g) { m[g.slug] = []; }); setMapData(m); }}
-                style={{ background: 'transparent', border: '1px solid var(--border)', color: 'rgba(255,255,255,.4)', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}
-              >
-                Reset
-              </button>
-            </div>
-          </div>
+      {/* BCG DRAWER */}
+      {bcgDrawerOpen && (
+        <BCGDrawer
+          onClose={() => setBcgDrawerOpen(false)}
+          bcgAnalysis={bcgAnalysis}
+          bcgStats={bcgStats}
+        />
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.35)', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>
-                Pool — {ongemapt.length} gerechten
+      {/* MAP STATION DRAWER */}
+      {mapDrawerOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 999, overflow: 'auto', padding: 24 }} onClick={() => setMapDrawerOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1300, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Map Station</h2>
+                <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>{alleMapGerechten} gerechten ingedeeld · {gerechten.length - alleMapGerechten} in pool</p>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>
-                {ongemapt.map(function (g) {
-                  const gang = getGang(g.gang_slug);
-                  return (
-                    <div
-                      key={g.id}
-                      draggable
-                      onDragStart={function (e: React.DragEvent) { e.dataTransfer.setData('gerecht_id', String(g.id)); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 9, cursor: 'grab', transition: 'border-color .15s' }}
-                      onClick={function () { openGangPicker(g); }}
-                    >
-                      <span style={{ fontSize: 14 }}>{gang.icon}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</div>
-                        <div style={{ fontSize: 12, color: gang.kleur, fontWeight: 600 }}>{gang.label}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={aiAutoSort} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={13} /> AI auto-sort
+                </button>
+                <button onClick={() => { const m: Record<string, GerechtData[]> = {}; GANGEN.forEach(g => { m[g.slug] = []; }); setMapData(m); }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Reset</button>
+                <button onClick={() => setMapDrawerOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>Pool · {ongemapt.length}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 600, overflowY: 'auto', paddingRight: 4 }}>
+                  {ongemapt.map(function (g) {
+                    const gang = getGang(g.gang_slug);
+                    return (
+                      <div key={g.id} draggable onDragStart={(e) => e.dataTransfer.setData('gerecht_id', String(g.id))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--card)', border: '1px solid var(--card-solid)', borderRadius: 8, cursor: 'grab' }}
+                        onClick={() => openGangPicker(g)}>
+                        <span style={{ fontSize: 14 }}>{gang.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>{gang.label}</div>
+                        </div>
+                        <ArrowRight size={12} style={{ color: 'var(--muted)' }} />
                       </div>
-                      <ArrowRight size={14} style={{ color: 'rgba(255,255,255,.2)' }} />
-                    </div>
+                    );
+                  })}
+                  {ongemapt.length === 0 && <div style={{ textAlign: 'center', padding: 24, fontSize: 11, color: 'var(--muted)', border: '1px dashed var(--card-solid)', borderRadius: 8 }}>Alles ingedeeld</div>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {GANGEN.map(function (gang) {
+                  const lijst = mapData[gang.slug] || [];
+                  return (
+                    <MapStation key={gang.slug} gang={gang} gerechten={lijst} onRemove={removeFromMap} onPublish={publishGang} onDrop={(gerechthId: string) => {
+                      const g = gerechten.find(x => String(x.id) === String(gerechthId));
+                      if (g) placeInMap(g, gang.slug);
+                    }} />
                   );
                 })}
-                {ongemapt.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '24px', fontSize: 12, color: 'rgba(255,255,255,.2)', border: '1px dashed var(--border)', borderRadius: 9 }}>
-                    ✅ Alle gerechten zijn ingedeeld!
-                  </div>
-                )}
               </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {GANGEN.map(function (gang) {
-                const lijst = mapData[gang.slug] || [];
-                return (
-                  <MapStation
-                    key={gang.slug}
-                    gang={gang}
-                    gerechten={lijst}
-                    onRemove={removeFromMap}
-                    onPublish={publishGang}
-                    onDrop={function (gerechthId: string) {
-                      const g = gerechten.find(function (x) { return String(x.id) === String(gerechthId); });
-                      if (g) placeInMap(g, gang.slug);
-                    }}
-                  />
-                );
-              })}
             </div>
           </div>
         </div>
       )}
 
-      <GangPickerModal
-        gerecht={picking}
-        onPick={placeInMap}
-        onClose={function () { setPicking(null); }}
-      />
-
+      <GangPickerModal gerecht={picking} onPick={placeInMap} onClose={() => setPicking(null)} />
       <GerechtDetailsModal
         gerecht={viewingGerecht}
         onSave={handleSaveDetails}
         onDelete={handleDeleteDetails}
-        onClose={function () { setViewingGerecht(null); }}
-        onError={function (msg: string) { showToast('❌ ' + msg); }}
+        onClose={() => setViewingGerecht(null)}
+        onError={(msg: string) => showToast('❌ ' + msg)}
         supabase={supabase}
       />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AI MENU COMPOSER MODAL
+   ═══════════════════════════════════════════════════════════════════ */
+
+function AiMenuComposer({ onClose, existingGerechten, onComposed }: {
+  onClose: () => void;
+  existingGerechten: any[];
+  onComposed: (menu: any) => void;
+}) {
+  const [prompt, setPrompt] = useState('');
+  const [gasten, setGasten] = useState(20);
+  const [gangen, setGangen] = useState('3');
+  const [status, setStatus] = useState<'idle' | 'generating' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const EXAMPLES = [
+    'Zomers BBQ-menu voor familie, lichtgekruid',
+    'Stoer BBQ-menu met flinke vleesgangen, borrelstijl',
+    'Vega/vegan menu met BBQ-twist',
+    'Aziatisch geïnspireerd BBQ-menu',
+    'Klassiek Nederlands menu voor bruiloft',
+  ];
+
+  async function compose() {
+    if (!prompt.trim()) return;
+    setStatus('generating');
+    setError(null);
+    try {
+      const existing = (existingGerechten || []).map((g: any) => ({
+        naam: g.naam,
+        gang: g.gang_slug,
+        categorie: g.gang_slug,
+        tags: g.tags,
+      }));
+      const res = await fetch('/api/recipe-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          mode: 'menu',
+          existing,
+          options: { gasten, gangen },
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error || 'AI fout');
+        setStatus('error');
+        return;
+      }
+      onComposed(body.data);
+    } catch (e: any) {
+      setError(e.message || 'Onbekende fout');
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 60 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(720px, 92vw)', maxHeight: '82vh', background: 'var(--bg)', border: '1px solid var(--card-solid)', borderRadius: 16, overflow: 'auto' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={16} style={{ color: '#c4a35a' }} />
+              <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: '#fff', margin: 0 }}>AI Menu componeren</h2>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Claude Sonnet 4.6 · gebruikt jouw {existingGerechten.length} gerechten als stijl-basis</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+        </div>
+
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8, display: 'block' }}>Wat voor menu wil je?</label>
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
+              placeholder="bijv. zomers BBQ-menu voor 30 gasten, lichtgekruid, 1 vega hoofdgang"
+              style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {EXAMPLES.map((ex) => (
+              <button key={ex} onClick={() => setPrompt(ex)}
+                style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
+                {ex}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6, display: 'block' }}>Aantal gasten</label>
+              <input type="number" min={1} max={500} value={gasten} onChange={(e) => setGasten(parseInt(e.target.value) || 20)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, outline: 'none' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6, display: 'block' }}>Aantal gangen</label>
+              <select value={gangen} onChange={(e) => setGangen(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, outline: 'none' }}>
+                <option value="2">2 (hoofd + dessert)</option>
+                <option value="3">3 (voorgerecht + hoofd + dessert)</option>
+                <option value="4">4 (voor + hoofd + bijgerecht + dessert)</option>
+                <option value="5">5 (amuse + voor + hoofd + kaas + dessert)</option>
+              </select>
+            </div>
+          </div>
+
+          {status === 'error' && error && (
+            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: '#fca5a5', display: 'flex', gap: 8 }}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+            <button onClick={compose} disabled={!prompt.trim() || status === 'generating'}
+              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: prompt.trim() && status !== 'generating' ? '#fff' : 'rgba(255,255,255,.3)', color: '#000', fontSize: 12, fontWeight: 700, cursor: prompt.trim() && status !== 'generating' ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {status === 'generating' ? <><Loader2 size={14} className="spin" /> Claude componeert... (kan 30-60s duren)</> : <><Sparkles size={14} /> Componeer menu</>}
+            </button>
+          </div>
+          <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MENU PREVIEW DRAWER
+   ═══════════════════════════════════════════════════════════════════ */
+
+function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
+  menu: any;
+  onClose: () => void;
+  onSaveAsDishes: (dishes: any[]) => void | Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const gerechten = menu.gerechten || [];
+  const inkooplijst = menu.samengevatte_inkooplijst || [];
+
+  // Groepeer per gang
+  const byGang = gerechten.reduce((acc: Record<string, any[]>, g: any) => {
+    const key = g.gang || g.categorie || 'Anders';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(g);
+    return acc;
+  }, {});
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1001, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(780px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--card-solid)', overflow: 'auto' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Sparkles size={12} style={{ color: '#c4a35a' }} /> AI Menu
+            </div>
+            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 600, color: '#fff', margin: 0 }}>{menu.menu_naam || 'Nieuw menu'}</h2>
+            {menu.thema && <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 4 }}>{menu.thema}</p>}
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+        </div>
+
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* STATS */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <PreviewStat icon={Users} label="Gasten" value={`${menu.aantal_gasten || 20}`} />
+            <PreviewStat icon={ChefHat} label="Gerechten" value={`${gerechten.length}`} />
+            <PreviewStat icon={Euro} label="Kost/p" value={menu.totale_kostprijs_pp ? `€${Number(menu.totale_kostprijs_pp).toFixed(2)}` : '—'} />
+            <PreviewStat icon={Euro} label="Advies/p" value={menu.adviesprijs_pp ? `€${Number(menu.adviesprijs_pp).toFixed(2)}` : '—'} highlight />
+          </div>
+
+          {/* GERECHTEN PER GANG */}
+          {Object.entries(byGang).map(([gang, list]) => {
+            const items = list as any[];
+            return (
+              <div key={gang}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 8 }}>{gang} · {items.length}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((g: any, i: number) => (
+                    <div key={i} style={{ padding: 14, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{g.naam}</div>
+                          {g.beschrijving && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{g.beschrijving}</div>}
+                        </div>
+                        {g.geschatte_kostprijs_pp && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#c4a35a', fontVariantNumeric: 'tabular-nums' }}>€{Number(g.geschatte_kostprijs_pp).toFixed(2)}</span>
+                        )}
+                      </div>
+                      {g.tags && g.tags.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {g.tags.slice(0, 4).map((t: string) => (
+                            <span key={t} style={{ padding: '2px 6px', borderRadius: 3, background: 'rgba(196,163,90,.12)', color: '#c4a35a', fontSize: 9, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                      {g.ingredienten && g.ingredienten.length > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>
+                          <strong style={{ color: '#fff' }}>Ingr:</strong> {g.ingredienten.slice(0, 6).map((i: any) => `${i.hoeveelheid}${i.eenheid} ${i.naam}`).join(', ')}{g.ingredienten.length > 6 ? '...' : ''}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* INKOOPLIJST */}
+          {inkooplijst.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ShoppingCart size={12} /> Samengevatte inkooplijst · {inkooplijst.length} items
+              </div>
+              <div style={{ padding: 12, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+                {inkooplijst.map((item: any, i: number) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 10, padding: '6px 0', fontSize: 12, color: '#fff', borderBottom: i < inkooplijst.length - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
+                    <span>{item.product}</span>
+                    <span style={{ color: 'var(--muted)', fontSize: 10, textTransform: 'uppercase' }}>{item.categorie}</span>
+                    <span style={{ color: '#fff', fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'right' }}>{item.totale_hoeveelheid}</span>
+                    <span style={{ color: '#c4a35a', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', minWidth: 36, textAlign: 'left' }}>{item.eenheid}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ACTIES */}
+          <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: 'var(--bg)', paddingTop: 12 }}>
+            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Sluiten</button>
+            <button onClick={async () => { setSaving(true); await onSaveAsDishes(gerechten); setSaving(false); }} disabled={saving || gerechten.length === 0}
+              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: '#c4a35a', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {saving ? <><Loader2 size={14} className="spin" /> Opslaan...</> : <><Save size={14} /> Voeg alle {gerechten.length} gerechten toe</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewStat({ icon: Icon, label, value, highlight }: { icon: any; label: string; value: string; highlight?: boolean }) {
+  return (
+    <div style={{ padding: 10, borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <Icon size={10} /> {label}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: highlight ? '#c4a35a' : '#fff', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BCG DRAWER
+   ═══════════════════════════════════════════════════════════════════ */
+
+function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bcgAnalysis: any; bcgStats: any }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 999, overflow: 'auto', padding: 24 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1200, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>BCG Menu Analyse</h2>
+            <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Gerechten geclassificeerd op populariteit en marge</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+        </div>
+
+        {bcgStats && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+            {[
+              { label: 'Geanalyseerd', value: bcgStats.totaal, color: '#fff' },
+              { label: '⭐ Stars', value: bcgStats.stars, color: '#4ade80' },
+              { label: '🧩 Puzzles', value: bcgStats.puzzles, color: '#60a5fa' },
+              { label: '🐴 Plowhorses', value: bcgStats.plowhorses, color: '#fbbf24' },
+              { label: '🐕 Dogs', value: bcgStats.dogs, color: '#f87171' },
+            ].map((s) => (
+              <div key={s.label} style={{ padding: 12, borderRadius: 10, background: 'var(--card)', border: '1px solid var(--card-solid)' }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <BCGMatrix dishes={bcgAnalysis.dishes} medianPop={bcgAnalysis.medianPop} medianMargin={bcgAnalysis.medianMargin} />
+        <QuadrantCards dishes={bcgAnalysis.dishes} />
+      </div>
     </div>
   );
 }
