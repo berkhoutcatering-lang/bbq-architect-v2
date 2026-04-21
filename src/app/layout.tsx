@@ -7,6 +7,7 @@ import ConfirmProvider from "@/components/ConfirmDialog";
 import GlobalToast from "@/components/GlobalToast";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import AppShell from "@/components/AppShell";
+import ThemeProvider from "@/components/ThemeProvider";
 
 import type { Viewport } from 'next';
 
@@ -38,9 +39,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <OrgProvider>
             <ToastProvider>
               <ConfirmProvider>
-                <AppShell>
-                  {children}
-                </AppShell>
+                <ThemeProvider>
+                  <AppShell>
+                    {children}
+                  </AppShell>
+                </ThemeProvider>
                 <GlobalToast />
                 <ServiceWorkerRegistrar />
               </ConfirmProvider>

@@ -130,39 +130,77 @@ export default function Instellingen() {
                         </div>
                     </div>
 
-                    {/* Colors */}
-                    <div className="form-grid">
+                    {/* Colors — 3 huiskleuren */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                         <div className="field">
-                            <label>Primaire kleur</label>
+                            <label>Primair (hoofdkleur)</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input type="color" value={form.brand_primary || '#9e781c'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
-                                <input value={form.brand_primary || '#9e781c'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} placeholder="#9e781c" style={{ flex: 1 }} />
+                                <input type="color" value={form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
+                                <input value={form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_primary', e.target.value); }} placeholder="#c4a35a" style={{ flex: 1 }} />
                             </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Knoppen, highlights, pictogrammen</div>
                         </div>
                         <div className="field">
-                            <label>Accent kleur (optioneel)</label>
+                            <label>Accent (tweede)</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input type="color" value={form.brand_accent || form.brand_primary || '#9e781c'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_accent', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
+                                <input type="color" value={form.brand_accent || form.brand_primary || '#c4a35a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_accent', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
                                 <input value={form.brand_accent || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_accent', e.target.value); }} placeholder="Auto (donkerder)" style={{ flex: 1 }} />
                             </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Gradient-einde, hover-state</div>
+                        </div>
+                        <div className="field">
+                            <label>Donker (basis)</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input type="color" value={form.brand_secondary || '#1a1a1a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_secondary', e.target.value); }} style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
+                                <input value={form.brand_secondary || '#1a1a1a'} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('brand_secondary', e.target.value); }} placeholder="#1a1a1a" style={{ flex: 1 }} />
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Achtergrond-tint, sidebar</div>
+                        </div>
+                    </div>
+
+                    {/* Preset-kleuren */}
+                    <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Presets</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {[
+                                { naam: 'BBQ Goud', primary: '#c4a35a', accent: '#a8893e', donker: '#1a1a1a' },
+                                { naam: 'Vuur & Rook', primary: '#e85d04', accent: '#9d0208', donker: '#1a0f0d' },
+                                { naam: 'Bos & Ei', primary: '#52796f', accent: '#354f52', donker: '#2f3e46' },
+                                { naam: 'Koper', primary: '#b87333', accent: '#8b4513', donker: '#1e1410' },
+                                { naam: 'Royal Blauw', primary: '#3b82f6', accent: '#1e40af', donker: '#0f172a' },
+                                { naam: 'Wijn', primary: '#7f1d1d', accent: '#4a0404', donker: '#1c0a0a' },
+                            ].map(function (p) {
+                                return (
+                                    <button key={p.naam} onClick={function () { setForm(function (prev: any) { return Object.assign({}, prev, { brand_primary: p.primary, brand_accent: p.accent, brand_secondary: p.donker }); }); }}
+                                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ display: 'inline-flex', gap: 2 }}>
+                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.primary }} />
+                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.accent }} />
+                                            <span style={{ width: 10, height: 10, borderRadius: 2, background: p.donker, border: '1px solid rgba(255,255,255,.1)' }} />
+                                        </span>
+                                        {p.naam}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* Preview */}
-                    <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: '#fafaf7', border: '1px solid #eee' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Preview</div>
-                        <div style={{ height: 3, background: form.brand_primary || '#9e781c', borderRadius: 2, marginBottom: 12 }} />
+                    <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: form.brand_secondary || '#1a1a1a', border: '1px solid rgba(255,255,255,.1)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,.5)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Live preview</div>
+                        <div style={{ height: 3, background: 'linear-gradient(to right, ' + (form.brand_primary || '#c4a35a') + ', ' + (form.brand_accent || form.brand_primary || '#c4a35a') + ')', borderRadius: 2, marginBottom: 12 }} />
                         <div style={{ textAlign: 'center', marginBottom: 12 }}>
                             {form.logo_url ? (
                                 <img src={form.logo_url} alt="Preview" style={{ maxHeight: 36, objectFit: 'contain' }} />
                             ) : (
-                                <span style={{ fontSize: 16, fontWeight: 800, color: form.brand_primary || '#9e781c' }}>{form.bedrijfsnaam || 'Bedrijfsnaam'}</span>
+                                <span style={{ fontSize: 18, fontWeight: 800, color: form.brand_primary || '#c4a35a' }}>{form.bedrijfsnaam || 'Hop & Bites'}</span>
                             )}
                         </div>
-                        <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: 6, background: form.brand_primary || '#9e781c', color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em' }}>
-                            FACTUUR
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                            <button style={{ padding: '6px 14px', borderRadius: 6, background: form.brand_primary || '#c4a35a', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>OFFERTE</button>
+                            <button style={{ padding: '6px 14px', borderRadius: 6, background: 'transparent', color: form.brand_accent || form.brand_primary || '#c4a35a', border: '1px solid ' + (form.brand_accent || form.brand_primary || '#c4a35a'), fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>FACTUUR</button>
                         </div>
-                        <div style={{ height: 3, background: form.brand_primary || '#9e781c', borderRadius: 2, marginTop: 12 }} />
+                        <div style={{ height: 3, background: 'linear-gradient(to right, ' + (form.brand_primary || '#c4a35a') + ', ' + (form.brand_accent || form.brand_primary || '#c4a35a') + ')', borderRadius: 2 }} />
                     </div>
                 </div>
             </div>
