@@ -121,22 +121,32 @@ export async function POST(req: NextRequest) {
         const client = new Anthropic({ apiKey });
         const userMessage = buildUserMessage(mode, prompt || '', existing, options);
 
-        // Sonnet default voor recepten (kwaliteit boven snelheid). Haiku kan voor simpele enrich/scale.
+        // Slimme default per mode:
+        // - recipe/menu = creatief werk → Sonnet (default)
+        // - enrich/scale = simpele structured tasks → Haiku (3× sneller, 5× goedkoper)
         const MODEL_MAP = {
             haiku: 'claude-haiku-4-5',
             sonnet: 'claude-sonnet-4-6',
             opus: 'claude-opus-4-7',
         } as const;
-        const model = MODEL_MAP[modelChoice || 'sonnet'] || MODEL_MAP.sonnet;
+        const simpleMode = mode === 'enrich' || mode === 'scale';
+        const defaultModel = simpleMode ? 'haiku' : 'sonnet';
+        const model = MODEL_MAP[modelChoice || defaultModel] || MODEL_MAP.sonnet;
         console.log(`[recipe-generate] model=${model} mode=${mode} existingCount=${existing.length}`);
 
-        // Streaming om timeouts te voorkomen bij lange outputs
+        // Optimalisaties:
+        // - Prompt caching op system prompt (scheelt ~50% latency + ~90% cost bij repeat binnen 5min)
+        // - Thinking uit voor structured JSON-output (geen denktokens nodig)
+        // - max_tokens scaled per mode (enrich/scale zijn kort, menu is lang)
+        const maxTokens = mode === 'menu' ? 8000 : mode === 'recipe' ? 4000 : 2500;
+        const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
         const stream = client.messages.stream({
             model,
-            max_tokens: 8000,
-            system: SYSTEM_PROMPT,
+            max_tokens: maxTokens,
+            system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userMessage }],
-        });
+            ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
+        } as any);
         const response = await stream.finalMessage();
 
         const textBlock = response.content.find(b => b.type === 'text');

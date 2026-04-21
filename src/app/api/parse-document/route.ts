@@ -141,13 +141,18 @@ export async function POST(req: NextRequest) {
         const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
-        // Streaming voorkomt timeouts bij lange facturen; .finalMessage() geeft de volledige response terug
+        // Optimalisaties:
+        // - Prompt caching op system prompt (5min TTL, ~50% sneller + ~90% goedkoper bij repeat)
+        // - Thinking uit voor structured extraction (geen denk-tokens nodig)
+        // - max_tokens scaled per type (invoices >> receipts)
+        const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
         const stream = client.messages.stream({
             model,
-            max_tokens: 16000,
-            system: systemPrompt,
+            max_tokens: type === 'invoice' ? 16000 : 4000,
+            system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: contentBlocks }],
-        });
+            ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
+        } as any);
         const response = await stream.finalMessage();
 
         // Extract text content from response
