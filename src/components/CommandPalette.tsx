@@ -90,13 +90,14 @@ export default function CommandPalette() {
         const term = '%' + q + '%';
 
         try {
-            const [evRes, offRes, facRes, recRes, gerRes, invRes] = await Promise.all([
+            const [evRes, offRes, facRes, recRes, gerRes, invRes, klRes] = await Promise.all([
                 supabase.from('events').select('id,name,date,guests,location,status,client_naam').or('name.ilike.' + term + ',client_naam.ilike.' + term + ',location.ilike.' + term).limit(5),
                 supabase.from('offertes').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term + ',notitie.ilike.' + term).limit(5),
                 supabase.from('facturen').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term).limit(5),
                 supabase.from('recepten').select('id,naam,categorie').ilike('naam', term).limit(5),
                 supabase.from('gerechten').select('id,naam,categorie').ilike('naam', term).limit(5),
                 supabase.from('inventory').select('id,naam,categorie,current_stock,unit').ilike('naam', term).limit(5),
+                supabase.from('klanten').select('id,naam,bedrijf,type,plaats').or('naam.ilike.' + term + ',bedrijf.ilike.' + term + ',plaats.ilike.' + term).limit(5),
             ]);
 
             const items: SearchResult[] = [];
@@ -173,23 +174,17 @@ export default function CommandPalette() {
                 });
             });
 
-            // Extract unique client names as results
-            const clientNames = new Set<string>();
-            (evRes.data || []).forEach(function (e: any) { if (e.client_naam) clientNames.add(e.client_naam); });
-            (offRes.data || []).forEach(function (o: any) { if (o.client_naam) clientNames.add(o.client_naam); });
-            (facRes.data || []).forEach(function (f: any) { if (f.client_naam) clientNames.add(f.client_naam); });
-            clientNames.forEach(function (name) {
-                if (name.toLowerCase().includes(q.toLowerCase())) {
-                    items.push({
-                        id: 'klant_' + name,
-                        type: 'klant',
-                        title: name,
-                        subtitle: 'Klant',
-                        href: '/klanten?zoek=' + encodeURIComponent(name),
-                        icon: Users,
-                        accent: '#ec4899',
-                    });
-                }
+            // Klanten uit eigen tabel (primair)
+            (klRes.data || []).forEach(function (k: any) {
+                items.push({
+                    id: 'klant_' + k.id,
+                    type: 'klant',
+                    title: k.naam,
+                    subtitle: [k.bedrijf, k.type, k.plaats].filter(Boolean).join(' • ') || 'Klant',
+                    href: '/klanten?zoek=' + encodeURIComponent(k.naam),
+                    icon: Users,
+                    accent: '#ec4899',
+                });
             });
 
             // Also include matching pages
