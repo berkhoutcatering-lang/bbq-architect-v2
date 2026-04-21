@@ -463,12 +463,20 @@ export default function DashboardPage() {
             { icon: UtensilsCrossed, label: 'Menu', desc: 'Gerechten beheer', href: '/menu-engineering' },
           ].map((a) => {
             const inner = (
-              <div className="group p-4 rounded-xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/25 hover:bg-white/5 transition-all duration-150 cursor-pointer h-full">
-                <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-3 group-hover:bg-white/10 transition-colors">
-                  <a.icon className="w-4 h-4 text-white/80" />
+              <div className="group p-4 rounded-xl cursor-pointer h-full transition-all duration-150"
+                style={{
+                  border: '1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent)',
+                  background: 'var(--card)',
+                  boxShadow: '0 0 0 1px color-mix(in srgb, var(--brand-primary) 8%, transparent), 0 4px 12px color-mix(in srgb, var(--brand-primary) 6%, transparent)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 0 1px color-mix(in srgb, var(--brand-primary) 40%, transparent), 0 4px 16px color-mix(in srgb, var(--brand-primary) 20%, transparent)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 0 1px color-mix(in srgb, var(--brand-primary) 8%, transparent), 0 4px 12px color-mix(in srgb, var(--brand-primary) 6%, transparent)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
+                  style={{ background: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)', border: '1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent)' }}>
+                  <a.icon className="w-4 h-4" style={{ color: 'var(--brand-primary)' }} />
                 </div>
-                <div className="text-[13px] font-bold text-white mb-0.5">{a.label}</div>
-                <div className="text-[10px] text-[var(--muted)]">{a.desc}</div>
+                <div className="text-[13px] font-bold" style={{ color: 'var(--text)' }}>{a.label}</div>
+                <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{a.desc}</div>
               </div>
             );
             return a.href ? (
@@ -661,15 +669,21 @@ export default function DashboardPage() {
 function BigStatCard({ icon: Icon, color, label, value, sub, href }: { icon: any; color: string; label: string; value: string; sub: string; href?: string }) {
   void color; // color prop behouden voor compat, maar niet visueel gebruikt
   const content = (
-    <div className="p-5 rounded-xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors h-full">
+    <div className="p-5 rounded-xl h-full transition-all"
+      style={{
+        border: '1px solid color-mix(in srgb, var(--brand-primary) 25%, transparent)',
+        background: 'var(--card)',
+        boxShadow: '0 0 0 1px color-mix(in srgb, var(--brand-primary) 6%, transparent)',
+      }}>
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10">
-          <Icon className="w-4 h-4 text-white/70" />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent)' }}>
+          <Icon className="w-4 h-4" style={{ color: 'var(--brand-primary)' }} />
         </div>
-        <span className="text-[10px] uppercase tracking-[0.15em] font-bold text-[var(--muted)]">{label}</span>
+        <span className="text-[10px] uppercase tracking-[0.15em] font-bold" style={{ color: 'var(--muted)' }}>{label}</span>
       </div>
-      <div className="text-[26px] font-bold text-white tabular-nums leading-tight">{value}</div>
-      <div className="text-[11px] text-[var(--muted)] mt-1">{sub}</div>
+      <div className="text-[26px] font-bold tabular-nums leading-tight" style={{ color: 'var(--text)' }}>{value}</div>
+      <div className="text-[11px] mt-1" style={{ color: 'var(--muted)' }}>{sub}</div>
     </div>
   );
   return href ? <Link href={href} className="no-underline">{content}</Link> : content;

@@ -2275,17 +2275,19 @@ function MiniTile({ label, value, sub, color }: { label: string; value: string; 
 function ActionCard({ icon: Icon, title, desc, onClick }: { icon: any; title: string; desc: string; onClick: () => void }) {
     return (
         <button onClick={onClick} style={{
-            padding: 18, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)',
+            padding: 18, borderRadius: 12, background: 'var(--card)',
+            border: '1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent)',
+            boxShadow: '0 0 0 1px color-mix(in srgb, var(--brand-primary) 8%, transparent), 0 4px 12px color-mix(in srgb, var(--brand-primary) 6%, transparent)',
             textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10,
             transition: 'all .15s', color: 'var(--text)',
         }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: `${GOLD}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={18} style={{ color: GOLD }} />
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 0 0 1px color-mix(in srgb, var(--brand-primary) 40%, transparent), 0 4px 16px color-mix(in srgb, var(--brand-primary) 25%, transparent)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 0 0 1px color-mix(in srgb, var(--brand-primary) 8%, transparent), 0 4px 12px color-mix(in srgb, var(--brand-primary) 6%, transparent)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)', border: '1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={18} style={{ color: 'var(--brand-primary)' }} />
             </div>
             <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{title}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, color: 'var(--text)' }}>{title}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>{desc}</div>
             </div>
         </button>
