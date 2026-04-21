@@ -24,11 +24,12 @@ import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
-import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles } from 'lucide-react';
+import AiOfferteWizard from '@/components/AiOfferteWizard';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
 export default function Offertes() {
-    const { data: offertes, insert, update, remove } = useSupabase<Offerte>('offertes', []);
+    const { data: offertes, insert, update, remove, refetch: loadOffertes } = useSupabase<Offerte>('offertes', []);
     const facturen = useSupabase<Factuur>('facturen', []);
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
@@ -40,6 +41,7 @@ export default function Offertes() {
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [showWizard, setShowWizard] = useState(false);
     const [showWizardForExisting, setShowWizardForExisting] = useState(false);
+    const [showAiWizard, setShowAiWizard] = useState(false);
     const [showMenuBuilder, setShowMenuBuilder] = useState(false);
     const [vasteKostenInput, setVasteKostenInput] = useState<Record<string, any>>({ naam: '', bedrag: '' });
     const [filterStatus, setFilterStatus] = useState<string>('alle');
@@ -601,10 +603,16 @@ export default function Offertes() {
                 actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileDown size={14} /> CSV</button>
                     <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><UtensilsCrossed size={14} /> Stel Menu Samen</button>
+                    <button className="btn-gold-outline" onClick={function () { setShowAiWizard(true); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} /> AI Offerte</button>
                     <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe Offerte</button>
                 </>}
             />
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
+            <AiOfferteWizard
+                open={showAiWizard}
+                onClose={function () { setShowAiWizard(false); }}
+                onSaved={function (id) { showToast('✨ AI-offerte opgeslagen als concept', 'success'); loadOffertes(); void id; }}
+            />
             <PageHint id="offertes" title="Offertes" description="Maak offertes met menu-selectie en live marge-berekening. Geaccepteerde offertes genereren automatisch een event en factuur." />
             <div style={{ marginBottom: 12 }}>
                 <input
