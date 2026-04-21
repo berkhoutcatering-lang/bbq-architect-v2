@@ -248,47 +248,53 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             );
         }
 
-        const systemParts: string[] = [];
+        // System prompt is gesplitst in een statisch deel (cachebaar) en een dynamisch deel (live DB data).
+        // De statische blokken samen vormen een byte-identieke prefix per (pageContext, mode, userRole)
+        // combinatie; contextData komt ACHTER het cache-breakpoint zodat wisselende DB-data de cache niet
+        // invalideert. Bij vervolgvragen op dezelfde pagina wordt de prefix uit de Anthropic cache gelezen
+        // voor ~10% van de input-kosten.
+        const staticParts: string[] = [];
 
         if (mode === 'brainstorm') {
-            systemParts.push(PAGE_SYSTEM_PROMPTS['/ai-chat']);
-            systemParts.push(BRAINSTORM_INSTRUCTIONS);
+            staticParts.push(PAGE_SYSTEM_PROMPTS['/ai-chat']);
+            staticParts.push(BRAINSTORM_INSTRUCTIONS);
         } else if (mode === 'general' || mode === 'qa') {
-            systemParts.push(
+            staticParts.push(
                 'Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites). ' +
                 'In dit venster beantwoord je vragen over catering, horeca, recepten, inkoop, planning en bedrijfsvoering.'
             );
         } else if (pageContext && PAGE_SYSTEM_PROMPTS[pageContext]) {
-            systemParts.push(PAGE_SYSTEM_PROMPTS[pageContext]);
+            staticParts.push(PAGE_SYSTEM_PROMPTS[pageContext]);
         } else if (pageContext) {
-            systemParts.push(
+            staticParts.push(
                 'Je bent BBQ Copilot op pagina: ' + pageContext + '. ' +
                 'Help de gebruiker met alles wat gerelateerd is aan deze pagina van BBQ Architect.'
             );
         } else {
-            systemParts.push(
+            staticParts.push(
                 'Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites).'
             );
-        }
-
-        if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
-            systemParts.push(formatContextForPrompt(contextData));
         }
 
         if (mode !== 'general' && mode !== 'qa') {
             const actionInstructions = getActionInstructions(pageContext || '/');
             if (actionInstructions) {
-                systemParts.push(actionInstructions);
+                staticParts.push(actionInstructions);
             }
         }
 
-        systemParts.push(OPERATOR_INSTRUCTIONS);
-        systemParts.push(BASE_INSTRUCTIONS);
+        staticParts.push(OPERATOR_INSTRUCTIONS);
+        staticParts.push(BASE_INSTRUCTIONS);
 
         const roleConstraint = buildRoleConstraint(userRole);
-        if (roleConstraint) systemParts.push(roleConstraint);
+        if (roleConstraint) staticParts.push(roleConstraint);
 
-        const systemContent = systemParts.join('\n');
+        const systemBlocks: Anthropic.Messages.TextBlockParam[] = [
+            { type: 'text', text: staticParts.join('\n'), cache_control: { type: 'ephemeral' } },
+        ];
+        if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
+            systemBlocks.push({ type: 'text', text: formatContextForPrompt(contextData) });
+        }
 
         // Map messages to Anthropic format — system is separate, only user/assistant in messages
         const anthropicMessages: Anthropic.Messages.MessageParam[] = messages
@@ -325,7 +331,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const stream = client.messages.stream({
             model: selectedModel,
             max_tokens: maxTokens,
-            system: systemContent,
+            system: systemBlocks,
             messages: merged,
         });
 
@@ -333,15 +339,21 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const readable = new ReadableStream({
             async start(controller) {
                 let fullText = '';
+                let usage: Anthropic.Messages.Usage | null = null;
                 try {
                     for await (const event of stream) {
-                        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                        if (event.type === 'message_start') {
+                            usage = event.message.usage;
+                        } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
                             const delta = event.delta.text;
                             if (delta) {
                                 fullText += delta;
                                 controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta }) + '\n\n'));
                             }
                         }
+                    }
+                    if (usage) {
+                        console.log(`[chat] ${selectedModel} tokens: input=${usage.input_tokens} cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}`);
                     }
                     controller.enqueue(encoder.encode('data: ' + JSON.stringify({
                         done: true,
