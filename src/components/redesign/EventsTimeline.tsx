@@ -8,7 +8,7 @@ import { displayEventName, titleCase } from './displayHelpers';
 import type { DbEvent, Offerte } from '@/types';
 
 /* Scoped redesign styles — wrapper class must be set on parent */
-import '@/app/redesign/redesign.css';
+import './redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
 type TlTone = 'confirmed' | 'option' | 'urgent';
@@ -226,7 +226,7 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
   /* Hero: parse date, guests, omzet, time-to-show */
   let heroData: {
     title: string; date: string; time: string; location: string; guests: number;
-    omzet: number; margin: number | null; countdown: string; countdownLabel: string;
+    omzet: number; margin: number | null; countdown: string; countdownLabel: string; eyebrow: string;
   } | null = null;
   if (hero) {
     const dt = new Date(hero.date + 'T18:00:00'); // default 18:00 if no time column
@@ -237,10 +237,16 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
     const daysLeft = Math.floor(hoursLeft / 24);
     let countdown: string;
     let countdownLabel: string;
-    if (daysLeft > 7) { countdown = `${daysLeft}`; countdownLabel = 'Dagen te gaan'; }
-    else if (daysLeft > 1) { countdown = `${daysLeft}d`; countdownLabel = 'Dagen te gaan'; }
-    else if (hoursLeft >= 1) { countdown = `${String(hoursLeft).padStart(2, '0')}:${String(minsLeft).padStart(2, '0')}`; countdownLabel = 'Tot show-time'; }
-    else { countdown = `${minsLeft}m`; countdownLabel = 'Tot show-time'; }
+    let eyebrow: string;
+    if (daysLeft > 7) { countdown = `${daysLeft}`; countdownLabel = 'Dagen te gaan'; eyebrow = `T-${daysLeft}d`; }
+    else if (daysLeft > 1) { countdown = `${daysLeft}d`; countdownLabel = 'Dagen te gaan'; eyebrow = `T-${daysLeft}d`; }
+    else if (hoursLeft >= 1) {
+      countdown = `${String(hoursLeft).padStart(2, '0')}:${String(minsLeft).padStart(2, '0')}`;
+      countdownLabel = 'Tot show-time';
+      const remHours = hoursLeft % 24;
+      eyebrow = daysLeft >= 1 ? `T-${daysLeft}d ${remHours}u` : `T-${remHours}u ${minsLeft}min`;
+    }
+    else { countdown = `${minsLeft}m`; countdownLabel = 'Tot show-time'; eyebrow = `T-${minsLeft}min`; }
     heroData = {
       title: titleCase(displayEventName(hero.name)),
       date: hero.date,
@@ -251,6 +257,7 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
       margin: marginMap[hero.id] ?? null,
       countdown,
       countdownLabel,
+      eyebrow,
     };
   }
 
@@ -276,6 +283,11 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
             <h1 className="page-title">Events</h1>
           </div>
           <div className="hstack">
+            <div className="ev-view-tabs" role="tablist" aria-label="Eventweergave">
+              <button className="on" role="tab" aria-selected="true">Tijdlijn</button>
+              <button disabled title="Binnenkort beschikbaar" role="tab" aria-selected="false">Kalender</button>
+              <button disabled title="Binnenkort beschikbaar" role="tab" aria-selected="false">Kanban</button>
+            </div>
             <button className="btn btn-ghost"><Filter size={14} />Filters</button>
             <button className="btn btn-primary" onClick={onNew}><Plus size={14} />Nieuw event</button>
           </div>
@@ -284,7 +296,7 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
         <div className="ev-hero">
           {heroData ? (
             <div className="ev-next-card" style={{ cursor: 'pointer' }} onClick={() => hero && onOpen(hero)}>
-              <div className="ev-next-eyebrow"><span className="dot"></span>Eerstvolgend · {heroData.date}</div>
+              <div className="ev-next-eyebrow"><span className="dot"></span>Eerstvolgend · {heroData.eyebrow}</div>
               <h2 className="ev-next-title">{heroData.title}</h2>
               <div className="ev-next-meta">{heroData.guests} gasten · {heroData.location}</div>
               <div className="ev-next-stats">
@@ -297,11 +309,14 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
                 <div className="ev-next-checklist">
                   <div className="ev-check-label">Prep checklist</div>
                   {heroPrep.map(p => {
-                    const pAny = p as PrepTask & { text?: string };
+                    const pAny = p as PrepTask & { text?: string; dagen?: number };
+                    const dagen = typeof pAny.dagen === 'number' ? pAny.dagen : null;
+                    const metaLabel = dagen == null ? '' : dagen === 0 ? 'Op de dag' : dagen < 0 ? `T+${Math.abs(dagen)}d` : `T-${dagen}d`;
                     return (
                       <div key={p.id} className={`ev-check-row ${p.done ? 'done' : ''}`}>
                         <div className="box">{p.done && <Check size={12} />}</div>
                         <span className="txt">{pAny.text || '—'}</span>
+                        {metaLabel && <span className="meta">{metaLabel}</span>}
                       </div>
                     );
                   })}

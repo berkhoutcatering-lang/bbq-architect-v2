@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Check, AlertOctagon, Droplets, Truck, ChevronRight,
   Download, Plus,
 } from 'lucide-react';
-import '@/app/redesign/redesign.css';
+import './redesign.css';
 import type { HaccpRecord } from '@/types';
 
 type Tone = 'ok' | 'warn' | 'bad';

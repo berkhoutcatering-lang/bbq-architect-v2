@@ -20,7 +20,7 @@ import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
 
 const AUTH_PAGES = ['/login', '/signup', '/auth/'];
-const PUBLIC_PAGES = ['/q/', '/invite', '/redesign'];
+const PUBLIC_PAGES = ['/q/', '/invite'];
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

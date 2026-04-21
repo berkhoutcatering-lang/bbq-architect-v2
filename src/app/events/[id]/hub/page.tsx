@@ -16,7 +16,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
 import { displayEventName, titleCase } from '@/components/redesign/displayHelpers';
-import '@/app/redesign/redesign.css';
+import '@/components/redesign/redesign.css';
 
 type TplKey = 'ambacht' | 'modern' | 'slate';
 
@@ -691,6 +691,8 @@ export default function EventHubPage() {
                 ) : prepTasks.map((c, i) => {
                   const done = !!prepState[c.id];
                   const dagenLabel = typeof c.dagen === 'number' ? (c.dagen === 0 ? 'Op de dag' : `T-${c.dagen}d`) : '';
+                  const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - c.dagen : null;
+                  const isKeyStep = !done && daysUntil != null && daysUntil >= 0 && daysUntil <= 1;
                   return (
                     <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 12, alignItems: 'center', padding: '11px 18px', borderTop: i === 0 ? 'none' : '1px solid rgba(130,130,130,.08)', cursor: 'pointer' } as CSSProperties} onClick={() => togglePrep(c.id)}>
                       <div style={{ width: 20, height: 20, borderRadius: 5, border: '1.5px solid ' + (done ? 'var(--green)' : 'var(--muted)'), background: done ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
@@ -700,6 +702,9 @@ export default function EventHubPage() {
                         <div style={{ fontSize: 13, fontWeight: 500, color: done ? 'var(--muted)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>{c.text || '—'}</div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{dagenLabel}</div>
                       </div>
+                      {isKeyStep && (
+                        <span style={{ fontSize: 10, color: 'var(--amber)', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Key step</span>
+                      )}
                     </div>
                   );
                 })}
@@ -757,24 +762,27 @@ export default function EventHubPage() {
               </div>
             </div>
 
-            {(event.team || []).length > 0 && (
-              <div className="metal">
-                <div className="metal-head" style={{ padding: '12px 16px' }}>
-                  <div className="hstack"><Users size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>Crew</span></div>
-                </div>
-                <div style={{ padding: 12 }}>
-                  {(event.team as string[]).map((p, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderTop: i === 0 ? 'none' : '1px solid rgba(130,130,130,.08)' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #c4a35a, #9e781c)', color: '#0a0a0c', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)' }}>{p.slice(0, 2).toUpperCase()}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 500 }}>{p}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>Crew</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="metal">
+              <div className="metal-head" style={{ padding: '12px 16px' }}>
+                <div className="hstack"><Users size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>Crew</span></div>
+                <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/events/${event.id}`)}><Plus size={12} />Toevoegen</button>
               </div>
-            )}
+              <div style={{ padding: 12 }}>
+                {(event.team || []).length === 0 ? (
+                  <div style={{ padding: '8px 4px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                    Nog geen crew ingepland. <button onClick={() => router.push(`/events/${event.id}`)} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Voeg toe in de editor</button>.
+                  </div>
+                ) : (event.team as string[]).map((p, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderTop: i === 0 ? 'none' : '1px solid rgba(130,130,130,.08)' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #c4a35a, #9e781c)', color: '#0a0a0c', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)' }}>{p.slice(0, 2).toUpperCase()}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 500 }}>{p}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>Crew</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

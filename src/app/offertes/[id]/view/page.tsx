@@ -9,7 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import '@/app/redesign/redesign.css';
+import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
 
