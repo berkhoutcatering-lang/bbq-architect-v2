@@ -238,6 +238,12 @@ export default function Instellingen() {
 const THEMES = [
     // Elke thema heeft NU veel meer contrast tussen bg ↔ card (minimaal 10-15% helderheid verschil)
     {
+        id: 'hop-bites',
+        naam: 'Hop & Bites ⭐',
+        omschrijving: 'Signature thema — olijfgroen, mat zwart, mat goud',
+        bg: '#0f110d', card: '#2a2d1f', text: '#f0ece0', primary: '#a89a5e', accent: '#6b6835', secondary: '#05060a',
+    },
+    {
         id: 'dark-bbq',
         naam: 'Dark BBQ',
         omschrijving: 'Het origineel — diep donker met warme gouden accenten',

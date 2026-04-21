@@ -253,14 +253,14 @@ export default function DashboardPage() {
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center text-white/50">
+      <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center text-[var(--text)]/50">
         <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-white selection:bg-[var(--color-accent-gold)]/30">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] selection:bg-[var(--color-accent-gold)]/30">
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--color-bg-elevated)]">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -273,7 +273,7 @@ export default function DashboardPage() {
               <div className="absolute inset-0 rounded-full bg-[var(--color-accent-gold)]/5 blur-md" />
             </div>
             <div className="sidebar-hidden-logo">
-              <h1 className="text-[14px] font-semibold tracking-[0.08em] text-white font-['Outfit']">BBQ ARCHITECT</h1>
+              <h1 className="text-[14px] font-semibold tracking-[0.08em] text-[var(--text)] font-['Outfit']">BBQ ARCHITECT</h1>
               <p className="text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">Hop & Bites • Ambacht</p>
             </div>
           </div>
@@ -300,7 +300,7 @@ export default function DashboardPage() {
         <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
         <div className="mb-6 md:mb-8 flex items-end justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extralight text-white tracking-tight mb-1">
+            <h2 className="text-2xl md:text-3xl font-extralight text-[var(--text)] tracking-tight mb-1">
               {greeting}, <span className="font-normal">Pitmaster</span>
             </h2>
             <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">
@@ -341,26 +341,26 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-[26px] md:text-[32px] font-['Outfit'] font-bold text-white leading-tight mb-1 truncate">{heroEvent.name}</h3>
+                  <h3 className="text-[26px] md:text-[32px] font-['Outfit'] font-bold text-[var(--text)] leading-tight mb-1 truncate">{heroEvent.name}</h3>
                   <p className="text-[13px] text-[var(--muted)]">{heroEvent.location || 'Locatie tbd'}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-[52px] font-bold text-white leading-none tabular-nums">{daysToHero}</div>
+                  <div className="text-[52px] font-bold text-[var(--text)] leading-none tabular-nums">{daysToHero}</div>
                   <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold mt-1">dag{daysToHero === 1 ? '' : 'en'}</div>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Datum</div>
-                  <div className="text-[14px] text-white font-bold tabular-nums">{formatDate(heroEvent.date).day} {formatDate(heroEvent.date).month}</div>
+                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{formatDate(heroEvent.date).day} {formatDate(heroEvent.date).month}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Gasten</div>
-                  <div className="text-[14px] text-white font-bold tabular-nums">{heroEvent.guests || 0}</div>
+                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{heroEvent.guests || 0}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Omzet</div>
-                  <div className="text-[14px] text-white font-bold tabular-nums">{formatCurrency(heroRevenue)}</div>
+                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{formatCurrency(heroRevenue)}</div>
                 </div>
               </div>
             </button>
@@ -368,7 +368,7 @@ export default function DashboardPage() {
             <div className="p-6 md:p-8 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)]">
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <Calendar className="w-10 h-10 text-[var(--muted-light)] opacity-40 mb-3" />
-                <h3 className="text-[18px] font-bold text-white mb-1">Nog geen events gepland</h3>
+                <h3 className="text-[18px] font-bold text-[var(--text)] mb-1">Nog geen events gepland</h3>
                 <p className="text-[12px] text-[var(--muted)] mb-4">Plan je eerste BBQ-event en zie hier de aftelling</p>
                 <button onClick={() => setWizardOpen(true)} className="px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black">+ Nieuw Event</button>
               </div>
@@ -386,7 +386,7 @@ export default function DashboardPage() {
                 <span className="text-[10px] text-[var(--muted)]">klik voor lijst</span>
               </div>
               <div className="flex items-baseline gap-3">
-                <span className="text-[36px] font-bold text-white leading-none tabular-nums">{weekEvents.length}</span>
+                <span className="text-[36px] font-bold text-[var(--text)] leading-none tabular-nums">{weekEvents.length}</span>
                 <span className="text-[12px] text-[var(--muted)] font-semibold">event{weekEvents.length === 1 ? '' : 's'}</span>
               </div>
               <div className="mt-2 text-[11px] text-[var(--muted)]">
@@ -398,14 +398,14 @@ export default function DashboardPage() {
               <Link href="/facturen" className="no-underline">
                 <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
                   <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Open facturen</div>
-                  <div className="text-[20px] font-bold text-white tabular-nums">{formatCurrency(openFacturenBedrag)}</div>
+                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(openFacturenBedrag)}</div>
                   <div className="text-[10px] text-[var(--muted)] mt-1">{openFacturen.length} stuks</div>
                 </div>
               </Link>
               <Link href="/offertes" className="no-underline">
                 <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
                   <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
-                  <div className="text-[20px] font-bold text-white tabular-nums">{formatCurrency(prognose)}</div>
+                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</div>
                   <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} offertes open</div>
                 </div>
               </Link>
@@ -496,11 +496,11 @@ export default function DashboardPage() {
                   <Calendar className="w-4 h-4 text-[var(--color-accent-gold)]" />
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-medium text-white">Aankomende events</h3>
+                  <h3 className="text-[15px] font-medium text-[var(--text)]">Aankomende events</h3>
                   <p className="text-[11px] text-[var(--muted)]">Klik voor details</p>
                 </div>
               </div>
-              <Link href="/events" className="text-[11px] font-medium text-[var(--muted)] hover:text-white flex items-center gap-1">
+              <Link href="/events" className="text-[11px] font-medium text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">
                 Alles <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -518,14 +518,14 @@ export default function DashboardPage() {
                   return (
                     <button key={event.id} onClick={() => setSelectedEvent(event)} className="w-full group flex items-center gap-4 p-3 rounded-xl bg-[var(--color-bg-deep)] hover:border-white/20 border border-transparent transition-all text-left">
                       <div className="flex-shrink-0 w-12 text-center">
-                        <div className="text-[20px] font-bold text-white leading-none">{date.day}</div>
+                        <div className="text-[20px] font-bold text-[var(--text)] leading-none">{date.day}</div>
                         <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold mt-0.5">{date.month}</div>
                       </div>
                       <div className="w-px h-10 bg-[var(--border)]" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <StatusDot status={event.status} />
-                          <span className="text-[13px] font-bold text-white truncate">{event.name}</span>
+                          <span className="text-[13px] font-bold text-[var(--text)] truncate">{event.name}</span>
                         </div>
                         <div className="flex items-center gap-3 text-[10.5px] text-[var(--muted)]">
                           <span><Users className="w-3 h-3 inline mr-1" />{event.guests}p</span>
@@ -533,10 +533,10 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-[13px] font-bold text-white tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</div>
+                        <div className="text-[13px] font-bold text-[var(--text)] tabular-nums">{formatCurrency((event.guests || 0) * (event.ppp || 0))}</div>
                         <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold">over {days} dag{days === 1 ? '' : 'en'}</div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-[var(--muted-light)] group-hover:text-white transition-colors" />
+                      <ChevronRight className="w-4 h-4 text-[var(--muted-light)] group-hover:text-[var(--text)] transition-colors" />
                     </button>
                   );
                 })}
@@ -552,11 +552,11 @@ export default function DashboardPage() {
                   <TrendingUp className="w-4 h-4 text-[var(--blue)]" />
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-medium text-white">Top offertes</h3>
+                  <h3 className="text-[15px] font-medium text-[var(--text)]">Top offertes</h3>
                   <p className="text-[11px] text-[var(--muted)]">Open in pipeline</p>
                 </div>
               </div>
-              <Link href="/offertes" className="text-[11px] font-medium text-[var(--muted)] hover:text-white flex items-center gap-1">Alles <ArrowRight className="w-3 h-3" /></Link>
+              <Link href="/offertes" className="text-[11px] font-medium text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1">Alles <ArrowRight className="w-3 h-3" /></Link>
             </div>
             {openOffertes.length > 0 ? (
               <>
@@ -572,8 +572,8 @@ export default function DashboardPage() {
                     return (
                       <Link key={off.id} href="/offertes" className="block group">
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-[11.5px] text-white truncate max-w-[140px] font-medium group-hover:text-[var(--color-accent-gold)] transition-colors">{off.client_naam || off.nummer}</span>
-                          <span className="text-[11.5px] text-white tabular-nums">{formatCurrency(eventTotal)}</span>
+                          <span className="text-[11.5px] text-[var(--text)] truncate max-w-[140px] font-medium group-hover:text-[var(--color-accent-gold)] transition-colors">{off.client_naam || off.nummer}</span>
+                          <span className="text-[11.5px] text-[var(--text)] tabular-nums">{formatCurrency(eventTotal)}</span>
                         </div>
                         <div className="h-1.5 bg-[var(--color-bg-elevated)] rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-white/70 transition-all duration-700" style={{ width: `${percentage}%` }} />
@@ -584,7 +584,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="mt-5 pt-4 border-t border-[var(--card-solid)] flex justify-between items-center">
                   <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)]">Totaal prognose</span>
-                  <span className="text-[16px] font-bold text-white tabular-nums">{formatCurrency(prognose)}</span>
+                  <span className="text-[16px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</span>
                 </div>
               </>
             ) : (
@@ -610,7 +610,7 @@ export default function DashboardPage() {
                 <Sparkles className="w-4 h-4 text-[var(--color-accent-gold)]" />
               </div>
               <div>
-                <h3 className="text-[14px] font-medium text-white">AI inzichten</h3>
+                <h3 className="text-[14px] font-medium text-[var(--text)]">AI inzichten</h3>
                 <p className="text-[11px] text-[var(--muted)]">{aiNudges.length} tip{aiNudges.length === 1 ? '' : 's'} voor jouw zaak</p>
               </div>
             </div>
@@ -627,7 +627,7 @@ export default function DashboardPage() {
               })}
             </div>
             {aiNudges.length > 4 && (
-              <button onClick={() => setShowAllNudges(!showAllNudges)} className="mt-3 text-[11px] text-[var(--muted)] hover:text-white flex items-center gap-1 mx-auto">
+              <button onClick={() => setShowAllNudges(!showAllNudges)} className="mt-3 text-[11px] text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1 mx-auto">
                 {showAllNudges ? 'Minder tonen' : `Nog ${aiNudges.length - 4} tips tonen`}
                 <ChevronDown className={`w-3 h-3 transition-transform ${showAllNudges ? 'rotate-180' : ''}`} />
               </button>
@@ -699,7 +699,7 @@ function EventDetailDrawer({ event, onClose }: { event: any; onClose: () => void
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.2em', color: 'var(--color-accent-gold)', fontWeight: 700, marginBottom: 4 }}>Nog {days} dag{days === 1 ? '' : 'en'}</div>
-            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, color: '#fff' }}>{event.name || 'Event'}</div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, color: 'var(--text)' }}>{event.name || 'Event'}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{event.location || 'Locatie nog niet ingesteld'}</div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
@@ -708,15 +708,15 @@ function EventDetailDrawer({ event, onClose }: { event: any; onClose: () => void
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Datum</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.date}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{event.date}</div>
             </div>
             <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Gasten</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.guests || 0}p</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{event.guests || 0}p</div>
             </div>
             <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Status</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', textTransform: 'capitalize' }}>{event.status || 'nieuw'}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', textTransform: 'capitalize' }}>{event.status || 'nieuw'}</div>
             </div>
           </div>
           <div style={{ padding: 16, borderRadius: 10, background: 'linear-gradient(135deg, rgba(196,163,90,.15), rgba(168,137,62,.05))', border: '1px solid rgba(196,163,90,.3)' }}>
@@ -731,12 +731,12 @@ function EventDetailDrawer({ event, onClose }: { event: any; onClose: () => void
           {event.client_naam && (
             <div style={{ padding: 14, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
               <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.15em', color: 'var(--muted)', marginBottom: 4 }}>Klant</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{event.client_naam}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{event.client_naam}</div>
             </div>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <Link href={`/agenda`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--color-accent-gold)', color: '#000', textAlign: 'center', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>Open in agenda</Link>
-            <Link href={`/events`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', color: '#fff', textAlign: 'center', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Event bewerken</Link>
+            <Link href={`/agenda`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--color-accent-gold)', color: 'var(--brand-background, #000)', textAlign: 'center', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>Open in agenda</Link>
+            <Link href={`/events`} style={{ flex: 1, padding: '10px 16px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', color: 'var(--text)', textAlign: 'center', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Event bewerken</Link>
           </div>
         </div>
       </div>
@@ -753,7 +753,7 @@ function WeekDetailDrawer({ events, onClose, onSelect }: { events: any[]; onClos
       <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--border)', overflow: 'auto' }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: '#fff' }}>Deze week</div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: 'var(--text)' }}>Deze week</div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{events.length} event{events.length === 1 ? '' : 's'} · {totalGuests} gasten · {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(totalRevenue)}</div>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
@@ -763,7 +763,7 @@ function WeekDetailDrawer({ events, onClose, onSelect }: { events: any[]; onClos
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Geen events gepland deze week.</div>
           ) : (
             events.sort((a, b) => a.date < b.date ? -1 : 1).map((ev) => (
-              <button key={ev.id} onClick={() => onSelect(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', cursor: 'pointer', color: '#fff', textAlign: 'left' }}>
+              <button key={ev.id} onClick={() => onSelect(ev)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)', cursor: 'pointer', color: 'var(--text)', textAlign: 'left' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>{ev.date} · {ev.guests || 0}p · {ev.location || 'tbd'}</div>
