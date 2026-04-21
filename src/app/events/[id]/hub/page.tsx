@@ -121,6 +121,27 @@ export default function EventHubPage() {
   const [tpl, setTpl] = useState<TplKey>('ambacht');
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [menuBuilderOpen, setMenuBuilderOpen] = useState(false);
+  const [menuIds, setMenuIds] = useState<number[]>([]);
+  const [menuBuilderQuery, setMenuBuilderQuery] = useState('');
+  const [menuSaving, setMenuSaving] = useState(false);
+
+  useEffect(() => {
+    if (event) setMenuIds(parseMenu(event.menu));
+  }, [event]);
+
+  async function saveMenu() {
+    if (!event) return;
+    setMenuSaving(true);
+    try {
+      await supabase.from('events').update({ menu: menuIds } as any).eq('id', event.id);
+      setEvent({ ...event, menu: menuIds });
+      setMenuBuilderOpen(false);
+    } finally { setMenuSaving(false); }
+  }
+  function toggleMenuItem(id: number) {
+    setMenuIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   useEffect(() => {
     if (!eventId || Number.isNaN(eventId)) return;
@@ -628,7 +649,7 @@ export default function EventHubPage() {
               <div className="metal-head">
                 <div className="hstack"><ChefHat size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Menu &amp; automatische menukaart</span></div>
                 <div className="hstack" style={{ gap: 6 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/events/${event.id}`)}><Edit3 size={14} />Menu aanpassen</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setMenuBuilderOpen(v => !v)}><Edit3 size={14} />{menuBuilderOpen ? 'Sluit builder' : 'Menu aanpassen'}</button>
                   <button className="btn btn-primary btn-sm" onClick={printMenukaart}><Printer size={14} />Print {event.guests || 0}×</button>
                 </div>
               </div>
@@ -653,6 +674,37 @@ export default function EventHubPage() {
                     <Sparkles size={14} color="var(--brand)" />
                     <div style={{ flex: 1, color: 'var(--muted)' }}>Menukaart wordt automatisch gegenereerd — template <strong style={{ color: 'var(--text)' }}>{tpl === 'ambacht' ? 'Ambacht' : tpl === 'modern' ? 'Modern' : 'Slate'}</strong>.</div>
                   </div>
+                  {menuBuilderOpen && (
+                    <div style={{ marginTop: 12, padding: 12, borderRadius: 9, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em' }}>Menu builder · {menuIds.length} gekozen</div>
+                        <button className="btn btn-primary btn-sm" onClick={saveMenu} disabled={menuSaving}><Check size={12} />{menuSaving ? 'Opslaan...' : 'Opslaan'}</button>
+                      </div>
+                      <input value={menuBuilderQuery} onChange={e => setMenuBuilderQuery(e.target.value)} placeholder="Zoek recepten en gerechten..."
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, outline: 'none', marginBottom: 10 }} />
+                      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {(() => {
+                          const q = menuBuilderQuery.toLowerCase().trim();
+                          const pool = [
+                            ...recepten.map((r: any) => ({ id: r.id, naam: r.naam, cat: r.categorie || 'Recept', src: 'recept' as const })),
+                            ...gerechten.map((g: any) => ({ id: g.id + 100000, realId: g.id, naam: g.naam, cat: g.gang_slug || 'Gerecht', src: 'gerecht' as const })),
+                          ].filter(x => !q || x.naam?.toLowerCase().includes(q));
+                          if (pool.length === 0) return <div style={{ fontSize: 11, color: 'var(--muted)', padding: 10 }}>Geen items gevonden</div>;
+                          return pool.slice(0, 40).map(x => {
+                            const isIn = menuIds.includes(x.src === 'recept' ? x.id : (x as any).realId);
+                            return (
+                              <button key={x.src + '_' + x.id} onClick={() => toggleMenuItem(x.src === 'recept' ? x.id : (x as any).realId)}
+                                style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, padding: '6px 10px', borderRadius: 5, border: '1px solid ' + (isIn ? 'var(--brand-gold)' : 'transparent'), background: isIn ? 'rgba(196,163,90,.12)' : 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 12, alignItems: 'center', textAlign: 'left' }}>
+                                <span>{isIn && <Check size={11} style={{ display: 'inline', marginRight: 4, color: 'var(--brand-gold)' }} />}{x.naam}</span>
+                                <span style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{x.cat}</span>
+                                <span style={{ fontSize: 9, color: x.src === 'recept' ? 'var(--blue)' : 'var(--purple)', fontWeight: 700, textTransform: 'uppercase' }}>{x.src}</span>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div style={{ fontSize: 11, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
