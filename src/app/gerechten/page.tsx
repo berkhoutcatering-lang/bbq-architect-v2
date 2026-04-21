@@ -27,6 +27,7 @@ export default function Gerechten() {
     const [activeGang, setActiveGang] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
+    const [aiEnriching, setAiEnriching] = useState(false);
     const [gangEditing, setGangEditing] = useState<string | number | null>(null);
     const [gangForm, setGangForm] = useState<Record<string, any>>({});
     const [tagInput, setTagInput] = useState('');
@@ -434,7 +435,36 @@ export default function Gerechten() {
             {editing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>
                     <div className="modal-box" style={{ maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <h3>{editing === 'new' ? '➕ Nieuw Gerecht' : '✏️ Gerecht Bewerken'}</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <h3 style={{ margin: 0 }}>{editing === 'new' ? '➕ Nieuw Gerecht' : '✏️ Gerecht Bewerken'}</h3>
+                            <button type="button" disabled={aiEnriching || !form.naam}
+                                onClick={async function () {
+                                    setAiEnriching(true);
+                                    try {
+                                        const existing = gerechten.map(function (g) { return { naam: g.naam, gang: g.gang_slug, tags: g.tags }; });
+                                        const res = await fetch('/api/recipe-generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'enrich', prompt: 'enrich', existing: existing, options: { currentDish: form } }) });
+                                        const body = await res.json();
+                                        if (!res.ok) { showToast('AI fout: ' + (body.error || 'onbekend'), 'error'); return; }
+                                        const d = body.data || {};
+                                        setForm(Object.assign({}, form, {
+                                            beschrijving: form.beschrijving || d.beschrijving || '',
+                                            ingredienten: (form.ingredienten && form.ingredienten.length > 0) ? form.ingredienten : (d.ingredienten || []).map(function (i: any) { return i.naam + ' ' + i.hoeveelheid + i.eenheid; }),
+                                            bereidingswijze: form.bereidingswijze || (Array.isArray(d.instructies) ? d.instructies.join('\n') : d.instructies) || '',
+                                            allergenen: (form.allergenen && form.allergenen.length > 0) ? form.allergenen : (d.allergenen || []),
+                                            tags: (form.tags && form.tags.length > 0) ? form.tags : (d.tags || []),
+                                            kostprijs_pp: form.kostprijs_pp || d.geschatte_kostprijs_pp || 0,
+                                        }));
+                                        showToast('✨ AI heeft ontbrekende velden ingevuld', 'success');
+                                    } catch (e: any) {
+                                        showToast('Fout: ' + (e.message || 'onbekend'), 'error');
+                                    } finally {
+                                        setAiEnriching(false);
+                                    }
+                                }}
+                                style={{ padding: '8px 14px', borderRadius: 8, background: form.naam && !aiEnriching ? 'rgba(196,163,90,.15)' : 'rgba(255,255,255,.05)', border: '1px solid ' + (form.naam ? 'rgba(196,163,90,.35)' : 'rgba(255,255,255,.1)'), color: form.naam ? '#c4a35a' : 'rgba(255,255,255,.3)', fontSize: 11, fontWeight: 700, cursor: form.naam && !aiEnriching ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                ✨ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
+                            </button>
+                        </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
 
                             <div className="field">
