@@ -35,6 +35,8 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
         root.style.setProperty('--color-text-muted', mix(text, bg, 0.55));
         root.style.setProperty('--color-text-ghost', mix(text, bg, 0.25));
         root.style.setProperty('--card', card);
+        root.style.setProperty('--color-bg-card', card);
+        root.style.setProperty('--color-bg-darker', shade(card, -4));
         root.style.setProperty('--card-solid', shade(card, 8));
         root.style.setProperty('--sidebar-bg-hover', shade(card, 10));
         root.style.setProperty('--border', shade(card, 12));

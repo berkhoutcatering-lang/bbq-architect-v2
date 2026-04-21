@@ -16,10 +16,13 @@ export default function MetallicCard({ children, className = '', hover = true, o
       className={`
         relative rounded-2xl overflow-hidden
         bg-gradient-to-br from-[var(--color-bg-card)] to-[var(--color-bg-darker)]
-        border border-[var(--card-solid)]
-        ${hover ? 'hover:border-[var(--color-border-hover)] hover:shadow-lg hover:shadow-black/20 transition-all duration-500 cursor-pointer' : ''}
+        ${hover ? 'hover:shadow-xl transition-all duration-300 cursor-pointer' : ''}
         ${className}
       `}
+      style={{
+        border: '1px solid color-mix(in srgb, var(--brand-primary) 22%, transparent)',
+        boxShadow: '0 2px 8px rgba(0,0,0,.25), 0 0 0 1px color-mix(in srgb, var(--brand-primary) 5%, transparent)',
+      }}
     >
       <div
         className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent"

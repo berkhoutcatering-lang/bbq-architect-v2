@@ -236,53 +236,54 @@ export default function Instellingen() {
 
 // ── Curated thema's — elk met zorgvuldig afgestemde 5 kleuren ──
 const THEMES = [
+    // Elke thema heeft NU veel meer contrast tussen bg ↔ card (minimaal 10-15% helderheid verschil)
     {
         id: 'dark-bbq',
         naam: 'Dark BBQ',
         omschrijving: 'Het origineel — diep donker met warme gouden accenten',
-        bg: '#0a0a0d', card: '#15151a', text: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#1a1a1a',
+        bg: '#070709', card: '#1c1c24', text: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#0f0f13',
     },
     {
         id: 'mat-zwart-goud',
         naam: 'Mat Zwart + Goud',
         omschrijving: 'Echt zwart met felle goud-accenten — premium uitstraling',
-        bg: '#050505', card: '#111111', text: '#f5f5f5', primary: '#d4af37', accent: '#b8942d', secondary: '#0a0a0a',
+        bg: '#030303', card: '#1a1a1c', text: '#f5f5f5', primary: '#d4af37', accent: '#b8942d', secondary: '#0d0d0d',
     },
     {
         id: 'licht-goud',
         naam: 'Licht Warm + Goud',
         omschrijving: 'Beige achtergrond, witte kaarten, zwarte tekst — rustig en professioneel',
-        bg: '#f4efe6', card: '#ffffff', text: '#1a1a1a', primary: '#a8893e', accent: '#8b7355', secondary: '#e8e0d0',
+        bg: '#ede6d4', card: '#ffffff', text: '#1a1a1a', primary: '#a8893e', accent: '#8b7355', secondary: '#dccfb2',
     },
     {
         id: 'mat-wit-zwart',
         naam: 'Mat Wit + Zwart',
         omschrijving: 'Clean wit met zwart als hoofdaccent — editoriale stijl',
-        bg: '#fafafa', card: '#ffffff', text: '#0a0a0a', primary: '#1a1a1a', accent: '#404040', secondary: '#efefef',
+        bg: '#f0f0f0', card: '#ffffff', text: '#0a0a0a', primary: '#1a1a1a', accent: '#404040', secondary: '#e0e0e0',
     },
     {
         id: 'bos-natuur',
         naam: 'Bos & Natuur',
         omschrijving: 'Donker bosgroen met gedempte sage accenten — organisch',
-        bg: '#1a2a24', card: '#253832', text: '#f0ebe0', primary: '#8ab89c', accent: '#5c8875', secondary: '#0f1a16',
+        bg: '#122019', card: '#2f4a42', text: '#f0ebe0', primary: '#8ab89c', accent: '#5c8875', secondary: '#0a1411',
     },
     {
         id: 'midnight-blauw',
         naam: 'Midnight Blauw',
         omschrijving: 'Diep marineblauw met licht staalblauwe accenten — professioneel',
-        bg: '#0a1424', card: '#152238', text: '#ffffff', primary: '#60a5fa', accent: '#3b82f6', secondary: '#050b18',
+        bg: '#061020', card: '#1e2e4a', text: '#ffffff', primary: '#60a5fa', accent: '#3b82f6', secondary: '#030811',
     },
     {
         id: 'koper-rook',
         naam: 'Koper & Rook',
         omschrijving: 'Warme bruintinten met koperen highlights — rustieke keuken',
-        bg: '#1f1813', card: '#2e241e', text: '#f0e6d8', primary: '#c17e4a', accent: '#8b5a2b', secondary: '#120c08',
+        bg: '#17110c', card: '#3a2c23', text: '#f0e6d8', primary: '#c17e4a', accent: '#8b5a2b', secondary: '#0c0805',
     },
     {
         id: 'wijnrood',
         naam: 'Bordeaux',
         omschrijving: 'Diep wijnrood met zachte crème accenten — gastronomisch',
-        bg: '#1c0a0f', card: '#2a1118', text: '#f5e6d3', primary: '#c9a961', accent: '#9f7e42', secondary: '#0e0507',
+        bg: '#14070a', card: '#3a1a24', text: '#f5e6d3', primary: '#c9a961', accent: '#9f7e42', secondary: '#0a0405',
     },
 ] as const;
 
