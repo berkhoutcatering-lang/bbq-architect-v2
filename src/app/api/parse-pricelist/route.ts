@@ -46,21 +46,29 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { pdfBase64, pdfUrl, imageBase64, model: modelChoice } = body as {
+        const { pdfBase64, pdfUrl, imageBase64, textContent, model: modelChoice } = body as {
             pdfBase64?: string;
             pdfUrl?: string;
             imageBase64?: string;
+            textContent?: string;   // Client-side extracted PDF text (beste: goedkoper, geen page-limit)
             model?: 'haiku' | 'sonnet' | 'opus';
         };
 
-        if (!pdfBase64 && !pdfUrl && !imageBase64) {
-            return NextResponse.json({ error: 'Geen PDF of image meegegeven' }, { status: 400 });
+        if (!pdfBase64 && !pdfUrl && !imageBase64 && !textContent) {
+            return NextResponse.json({ error: 'Geen PDF, image of text meegegeven' }, { status: 400 });
         }
 
         const client = new Anthropic({ apiKey });
         const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
-        if (pdfUrl) {
+        if (textContent && textContent.length > 100) {
+            /* Text-modus: client heeft tekst geextract uit PDF (pdfjs).
+               Veel goedkoper (geen vision tokens), geen 100-page limit. */
+            contentBlocks.push({
+                type: 'text',
+                text: 'Hieronder de tekst van een groothandel-prijslijst. Extraheer ALLE producten:\n\n' + textContent.slice(0, 500_000), /* safety cap 500K chars */
+            });
+        } else if (pdfUrl) {
             /* Server-side download om body-size limiet van Next.js te omzeilen */
             const r = await fetch(pdfUrl);
             if (!r.ok) {

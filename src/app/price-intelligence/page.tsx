@@ -6,6 +6,7 @@ import { RequireTier } from '@/components/PaywallPrompt';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
+import { extractPdfText, isUsableText } from '@/lib/pdfTextExtract';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import Papa from 'papaparse';
@@ -2266,29 +2267,49 @@ function FolderPricelists() {
 
     async function parseOne(bf: BulkFile): Promise<{ ok: boolean; leverancier?: string; producten: any[]; error?: string }> {
         try {
-            /* 1) Upload PDF naar Supabase Storage (omzeilt Next.js body-size limiet) */
-            const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
-            const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
-            const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bf.file, {
-                contentType: 'application/pdf',
-                upsert: false,
-            });
-            if (upErr) return { ok: false, producten: [], error: 'Upload: ' + upErr.message };
-            const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
-            const pdfUrl = urlData?.publicUrl;
-            if (!pdfUrl) return { ok: false, producten: [], error: 'Geen public URL' };
+            /* 1) Probeer client-side tekst-extractie (geen page-limit, 5x goedkoper) */
+            const extractedText = await extractPdfText(bf.file);
+            const useText = isUsableText(extractedText);
 
-            /* 2) Stuur URL naar API (server downloadt en parseert) */
-            const res = await fetch('/api/parse-pricelist', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pdfUrl, model: 'haiku' }),
-            });
             let body: any = null;
-            try { body = await res.json(); } catch { /* niet-JSON response */ }
-            if (!res.ok || !body?.success) {
-                return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
+
+            if (useText) {
+                /* TEXT-MODE: stuur alleen de tekst. Kleine body, geen vision-tokens.
+                   Werkt voor text-based PDFs ongeacht aantal pagina's. */
+                const res = await fetch('/api/parse-pricelist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ textContent: extractedText, model: 'haiku' }),
+                });
+                try { body = await res.json(); } catch { /* non-JSON */ }
+                if (!res.ok || !body?.success) {
+                    return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
+                }
+            } else {
+                /* VISION FALLBACK voor ingescande/image-based PDFs.
+                   Eerst upload naar Supabase storage (body-size omzeilen) → URL naar API. */
+                const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+                const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+                const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bf.file, {
+                    contentType: 'application/pdf',
+                    upsert: false,
+                });
+                if (upErr) return { ok: false, producten: [], error: 'Upload: ' + upErr.message };
+                const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
+                const pdfUrl = urlData?.publicUrl;
+                if (!pdfUrl) return { ok: false, producten: [], error: 'Geen public URL' };
+
+                const res = await fetch('/api/parse-pricelist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pdfUrl, model: 'haiku' }),
+                });
+                try { body = await res.json(); } catch { /* non-JSON */ }
+                if (!res.ok || !body?.success) {
+                    return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
+                }
             }
+
             const prods = body.data?.producten || [];
             return { ok: true, leverancier: body.data?.leverancier, producten: prods };
         } catch (e: any) {
