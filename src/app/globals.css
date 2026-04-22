@@ -6185,14 +6185,8 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   height: 340px;
   pointer-events: none;
   z-index: 0;         /* Achter de content */
-  opacity: .09;
+  opacity: .12;
   transition: opacity .6s ease;
-  animation: bw-reveal 1.4s cubic-bezier(.2, .8, .2, 1) both;
-}
-
-@keyframes bw-reveal {
-  from { opacity: 0; transform: translateY(-12px) scale(.96); filter: blur(8px); }
-  to { opacity: .09; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
 /* Zachte olijfgoud-aura achter logo voor integratie in het thema */
@@ -6224,19 +6218,37 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   mix-blend-mode: overlay;
 }
 
-/* Verberg op mobiel — zou te veel oppervlakte innemen */
-@media (max-width: 900px) {
-  .brand-watermark { display: none; }
-}
-
 /* Tablet: kleinere versie, nog steeds linksboven */
 @media (min-width: 900px) and (max-width: 1200px) {
   .brand-watermark {
-    width: 240px;
-    height: 240px;
+    width: 260px;
+    height: 260px;
     top: 64px;
     left: 24px;
-    opacity: .07;
+    opacity: .10;
+  }
+}
+
+/* Mobiel: compacter maar nog steeds zichtbaar linksboven */
+@media (max-width: 899px) {
+  .brand-watermark {
+    width: 220px;
+    height: 220px;
+    top: 56px;
+    left: 0;
+    opacity: .09;
+  }
+  .bw-glow { filter: blur(24px); }
+}
+
+/* Smalle telefoon: nog kleiner zodat het echt als background voelt */
+@media (max-width: 480px) {
+  .brand-watermark {
+    width: 180px;
+    height: 180px;
+    top: 48px;
+    left: -12px;
+    opacity: .08;
   }
 }
 
