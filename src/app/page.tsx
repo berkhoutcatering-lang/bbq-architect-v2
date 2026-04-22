@@ -17,6 +17,7 @@ import WeekStrip from '@/components/WeekStrip';
 import EventWizard from '@/components/EventWizard';
 import OnboardingProgress from '@/components/OnboardingProgress';
 import DrillDownKPI from '@/components/DrillDownKPI';
+import DashboardBrandHero from '@/components/DashboardBrandHero';
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -298,6 +299,7 @@ export default function DashboardPage() {
 
       <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit'] dashboard-main">
         <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
+        <DashboardBrandHero />
         <div className="mb-6 md:mb-8 flex items-end justify-between">
           <div>
             <h2 className="text-2xl md:text-3xl font-extralight text-[var(--text)] tracking-tight mb-1">

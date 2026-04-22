@@ -6171,79 +6171,133 @@ html, body { max-width: 100vw; overflow-x: hidden; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   PAGE BRAND ACCENT — bedrijfslogo GEÏNTEGREERD in de header van elke
-   pagina, naast de breadcrumbs. Niet als overlay maar als onderdeel
-   van de navigatie-bar. Transparant via mix-blend-mode: screen.
+   DASHBOARD BRAND HERO — grote prominente header met bedrijfslogo
+   centraal bovenin, alleen op de dashboard-pagina.
    ═══════════════════════════════════════════════════════════════════ */
 
-.page-brand-accent {
+.dashboard-brand-hero {
+  position: relative;
+  width: 100%;
+  padding: 48px 24px 44px;
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 85% at 50% 40%,
+      color-mix(in srgb, var(--brand-primary) 18%, transparent) 0%,
+      color-mix(in srgb, var(--brand-gold, var(--brand)) 8%, transparent) 45%,
+      transparent 75%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--card) 85%, var(--brand-primary) 5%),
+      var(--card));
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 22%, transparent);
+  box-shadow:
+    0 20px 50px -20px color-mix(in srgb, var(--brand-primary) 35%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--brand-gold, var(--brand)) 10%, transparent) inset;
+}
+
+/* Subtiele partikel-achtergrond */
+.dashboard-brand-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .3;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, color-mix(in srgb, var(--brand-gold, var(--brand)) 75%, transparent) 1px, transparent 1.6px);
+  background-size: 140px 140px;
+  animation: dbh-drift 40s linear infinite;
+  mask-image: radial-gradient(ellipse 70% 85% at 50% 40%, #000, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 85% at 50% 40%, #000, transparent 80%);
+}
+
+@keyframes dbh-drift {
+  from { background-position: 0 0; }
+  to { background-position: 140px 140px; }
+}
+
+.dbh-logo-wrap {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-right: 4px;
-  position: relative;
+  justify-content: center;
+  padding: 12px 24px;
 }
 
-/* Dun olijf-goud verticaal lijntje scheidt logo van overige header-items */
-.pba-divider {
-  width: 1px;
-  height: 22px;
-  background: linear-gradient(180deg,
-    transparent,
-    color-mix(in srgb, var(--brand-gold, var(--brand)) 45%, transparent),
-    transparent);
-}
-
-.pba-logo {
-  height: 34px;
+.dbh-logo {
+  height: 140px;
   width: auto;
-  max-width: 120px;
+  max-width: min(520px, 80vw);
   object-fit: contain;
-  /* Zwart vlak wegmaskeren: screen blend maakt zwart transparant */
+  /* Zwart vlak weg: screen-blend maakt zwart transparant */
   mix-blend-mode: screen;
-  filter: saturate(1.15) brightness(1.1)
-    drop-shadow(0 1px 4px color-mix(in srgb, var(--brand-primary) 25%, transparent));
-  opacity: .92;
-  transition: opacity .3s;
+  filter: saturate(1.2) brightness(1.1)
+    drop-shadow(0 8px 30px color-mix(in srgb, var(--brand-primary) 45%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--brand-gold, var(--brand)) 25%, transparent));
 }
 
-.page-brand-accent:hover .pba-logo {
-  opacity: 1;
-}
-
-.pba-name {
+.dbh-eyebrow {
+  position: relative;
+  z-index: 1;
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .18em;
+  font-weight: 800;
+  letter-spacing: .32em;
   text-transform: uppercase;
   color: var(--brand-gold, var(--brand));
-  white-space: nowrap;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: .85;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
-/* Tablet: iets compacter */
+.dbh-eyebrow::before,
+.dbh-eyebrow::after {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, transparent));
+}
+
+.dbh-eyebrow::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, transparent), transparent);
+}
+
+.dbh-tagline {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: .04em;
+  max-width: 520px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Tablet */
 @media (max-width: 1200px) {
-  .pba-logo { height: 30px; max-width: 100px; }
-  .pba-name { font-size: 9px; max-width: 110px; }
+  .dashboard-brand-hero { padding: 38px 20px 34px; }
+  .dbh-logo { height: 110px; }
 }
 
-/* Mobiel: verberg naam, alleen logo */
+/* Mobiel */
 @media (max-width: 899px) {
-  .page-brand-accent { gap: 8px; }
-  .pba-logo { height: 26px; max-width: 80px; }
-  .pba-name { display: none; }
-  .pba-divider { height: 18px; }
+  .dashboard-brand-hero { padding: 30px 16px 28px; margin-bottom: 18px; border-radius: 16px; gap: 14px; }
+  .dbh-logo { height: 86px; }
+  .dbh-eyebrow { font-size: 9px; letter-spacing: .28em; }
+  .dbh-eyebrow::before, .dbh-eyebrow::after { width: 18px; }
+  .dbh-tagline { font-size: 12px; }
 }
 
 @media (max-width: 480px) {
-  .pba-logo { height: 22px; max-width: 64px; }
-  .pba-divider { display: none; }
-}
-
-/* Print: altijd tonen (voor screenshot-bevestiging in docs) */
-@media print {
-  .page-brand-accent { display: flex; }
+  .dashboard-brand-hero { padding: 24px 12px 22px; }
+  .dbh-logo { height: 72px; }
 }

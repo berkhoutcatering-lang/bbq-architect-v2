@@ -15,7 +15,6 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
-import PageBrandAccent from '@/components/PageBrandAccent';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
@@ -195,8 +194,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <Breadcrumbs />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 16 }}>
-              <PageBrandAccent />
+            <div style={{ paddingRight: 16 }}>
               <Changelog />
             </div>
           </header>
