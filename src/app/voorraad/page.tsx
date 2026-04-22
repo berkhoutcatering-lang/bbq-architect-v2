@@ -812,7 +812,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                     Totaal: <span style={{ color: 'var(--text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</span>
                 </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 28, padding: 22 }}>
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 28, padding: 22 }}>
                 <div style={{ position: 'relative', width: 220, height: 220, justifySelf: 'center' }}>
                     <svg width="220" height="220" viewBox="0 0 200 200" style={{ transform: 'rotate(-90deg)' }}>
                         <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(130,130,130,.08)" strokeWidth={R - IR} />
@@ -881,7 +881,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
 function FilterBar({ search, setSearch, filter, setFilter, counts }: any) {
     return (
         <MetalCard>
-            <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'center' }}>
+            <div className="responsive-grid" style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'center' }}>
                 <div style={{ position: 'relative' }}>
                     <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
                     <input

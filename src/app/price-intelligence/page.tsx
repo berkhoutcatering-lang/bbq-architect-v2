@@ -2154,7 +2154,7 @@ function FolderBooks() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* HERO — grote taart + 3 duidelijke cijfers */}
             <MetalCard>
-                <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 24, padding: 30, alignItems: 'center' }}>
+                <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 24, padding: 30, alignItems: 'center' }}>
                     <CategoryDonut data={byCategorie} total={totaalInkoop} onSliceClick={setSelectedCategory} />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <HeroStat label={`Besteed in ${curMaandLabel}`} value={fmt2(curMaand)} delta={vorigeMaand > 0 && curMaand > 0 ? { pct: ((curMaand - vorigeMaand) / vorigeMaand) * 100, cur: curMaand, prev: vorigeMaand } : null} />
