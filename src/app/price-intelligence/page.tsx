@@ -2258,9 +2258,32 @@ type LibStat = {
     updateCount: number;
 };
 
-function PricelistLibrary({ refreshKey, orgId }: { refreshKey: number; orgId: string | null }) {
+function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number; orgId: string | null; onChange?: () => void }) {
     const [stats, setStats] = useState<LibStat[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deleting, setDeleting] = useState<string | null>(null);
+
+    async function deleteSupplier(leverancier: string, count: number) {
+        if (typeof window === 'undefined') return;
+        const ok = window.confirm(`Zeker weten? Alle ${count} producten van "${leverancier}" worden verwijderd uit de prijsbibliotheek.`);
+        if (!ok) return;
+        setDeleting(leverancier);
+        try {
+            const { error } = await supabase
+                .from('supplier_prices')
+                .delete()
+                .eq('organization_id', orgId!)
+                .eq('leverancier', leverancier);
+            if (error) {
+                alert('Fout: ' + error.message);
+            } else {
+                setStats(prev => prev.filter(s => s.leverancier !== leverancier));
+                onChange?.();
+            }
+        } finally {
+            setDeleting(null);
+        }
+    }
 
     useEffect(() => {
         if (!orgId) return;
@@ -2361,13 +2384,31 @@ function PricelistLibrary({ refreshKey, orgId }: { refreshKey: number; orgId: st
                                         {s.updateCount} {s.updateCount === 1 ? 'upload' : 'uploads'}
                                     </div>
                                 </div>
-                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: GOLD, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                                        {s.total.toLocaleString('nl-NL')}
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: GOLD, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                                            {s.total.toLocaleString('nl-NL')}
+                                        </div>
+                                        <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 2 }}>
+                                            producten
+                                        </div>
                                     </div>
-                                    <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 2 }}>
-                                        producten
-                                    </div>
+                                    <button
+                                        onClick={() => deleteSupplier(s.leverancier, s.total)}
+                                        disabled={deleting === s.leverancier}
+                                        title={`Alle ${s.total} producten van ${s.leverancier} wissen`}
+                                        style={{
+                                            width: 24, height: 24, borderRadius: 6, border: 'none',
+                                            background: 'transparent', color: 'var(--muted)',
+                                            cursor: deleting === s.leverancier ? 'wait' : 'pointer',
+                                            fontSize: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            opacity: deleting === s.leverancier ? 0.4 : 0.5, transition: 'all .15s',
+                                        }}
+                                        onMouseEnter={e => { if (deleting !== s.leverancier) { e.currentTarget.style.background = 'rgba(239,68,68,.15)'; e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.opacity = '1'; } }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.opacity = '0.5'; }}
+                                    >
+                                        {deleting === s.leverancier ? '…' : '×'}
+                                    </button>
                                 </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid rgba(130,130,130,.08)', fontSize: 11 }}>
@@ -2408,6 +2449,7 @@ function FolderPricelists() {
     const [savedCount, setSavedCount] = useState(0);
     const [libRefreshKey, setLibRefreshKey] = useState(0);
     const [batchInfo, setBatchInfo] = useState<{ current: number; total: number; batchSize: number } | null>(null);
+    const [aiModel, setAiModel] = useState<'haiku' | 'sonnet'>('haiku');
     const { orgId } = useOrg();
 
     const totalProducten = files.reduce((s, f) => s + f.producten, 0);
@@ -2436,7 +2478,7 @@ function FolderPricelists() {
                 const res = await fetch('/api/parse-pricelist', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ textContent: extractedText, model: 'haiku' }),
+                    body: JSON.stringify({ textContent: extractedText, model: aiModel }),
                 });
                 try { body = await res.json(); } catch { /* non-JSON */ }
                 if (!res.ok || !body?.success) {
@@ -2458,7 +2500,7 @@ function FolderPricelists() {
                     const res = await fetch('/api/parse-pricelist', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ textContent: extractedText, model: 'haiku' }),
+                        body: JSON.stringify({ textContent: extractedText, model: aiModel }),
                     });
                     try { body = await res.json(); } catch { /* non-JSON */ }
                     if (res.ok && body?.success && (body.data?.producten?.length || 0) > 0) {
@@ -2495,7 +2537,7 @@ function FolderPricelists() {
                     const res = await fetch('/api/parse-pricelist', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pdfUrl, model: 'haiku' }),
+                        body: JSON.stringify({ pdfUrl, model: aiModel }),
                     });
                     let chunkBody: any = null;
                     try { chunkBody = await res.json(); } catch { /* non-JSON */ }
@@ -2544,14 +2586,60 @@ function FolderPricelists() {
                     datum,
                 }));
             if (rows.length > 0) {
-                const { error: insErr } = await supabase.from('supplier_prices').insert(rows);
-                if (insErr) {
-                    setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: 'DB: ' + insErr.message, leverancier, producten: rows.length } : f));
+                /*
+                 * DEDUP-strategie: check welke rijen al bestaan (zelfde org + leverancier
+                 * + product_naam + eenheid + prijs) en skip die. Voorkomt duplicaten
+                 * als zelfde PDF 2× wordt ge-upload, terwijl nieuwe/gewijzigde items
+                 * wél binnenkomen.
+                 */
+                const normalizedRows = rows.map(r => ({
+                    ...r,
+                    lev_key: (r.leverancier || '').toLowerCase().trim(),
+                    prod_key: (r.product_naam || '').toLowerCase().trim(),
+                    een_key: (r.eenheid || '').toLowerCase().trim(),
+                }));
+
+                const { data: existingData } = await supabase
+                    .from('supplier_prices')
+                    .select('leverancier, product_naam, eenheid, prijs')
+                    .eq('organization_id', orgId)
+                    .eq('leverancier', leverancier);
+
+                const existingSet = new Set<string>();
+                for (const ex of (existingData || [])) {
+                    const key = `${(ex.leverancier || '').toLowerCase().trim()}|${(ex.product_naam || '').toLowerCase().trim()}|${(ex.eenheid || '').toLowerCase().trim()}|${ex.prijs}`;
+                    existingSet.add(key);
+                }
+
+                const newRows = normalizedRows.filter(r => {
+                    const key = `${r.lev_key}|${r.prod_key}|${r.een_key}|${r.prijs}`;
+                    return !existingSet.has(key);
+                }).map(r => {
+                    /* Strip de helper-keys voor insert */
+                    const { lev_key, prod_key, een_key, ...clean } = r;
+                    return clean;
+                });
+
+                const skippedCount = rows.length - newRows.length;
+
+                if (newRows.length > 0) {
+                    const { error: insErr } = await supabase.from('supplier_prices').insert(newRows);
+                    if (insErr) {
+                        setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: 'DB: ' + insErr.message, leverancier, producten: rows.length } : f));
+                        return;
+                    }
+                    saved += newRows.length;
+                    setSavedCount(saved);
+                    setLibRefreshKey(k => k + 1);
+                }
+
+                /* Als alles al bestond, file status op 'done' met info */
+                if (skippedCount > 0) {
+                    setFiles(prev => prev.map(f => f.id === bf.id
+                        ? { ...f, status: 'done', leverancier, producten: newRows.length, error: skippedCount === rows.length ? `alles al bekend (${skippedCount} duplicaten geskipt)` : `${newRows.length} nieuw, ${skippedCount} geskipt` }
+                        : f));
                     return;
                 }
-                saved += rows.length;
-                setSavedCount(saved);
-                setLibRefreshKey(k => k + 1); /* Trigger library refresh */
             }
             setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'done', leverancier, producten: rows.length } : f));
         }
@@ -2601,7 +2689,7 @@ function FolderPricelists() {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {/* Bibliotheek-overzicht (alleen zichtbaar als er al data is) */}
-            <PricelistLibrary refreshKey={libRefreshKey} orgId={orgId} />
+            <PricelistLibrary refreshKey={libRefreshKey} orgId={orgId} onChange={() => setLibRefreshKey(k => k + 1)} />
 
             {/* Context-banner */}
             <div style={{ padding: '12px 16px', borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}35`, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -2648,17 +2736,44 @@ function FolderPricelists() {
                         onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
                 </div>
 
-                {/* Supplier-override */}
+                {/* Supplier-override + AI model */}
                 {files.length > 0 && (
-                    <div style={{ padding: '0 16px 16px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Eyebrow>Leverancier (optioneel override)</Eyebrow>
-                        <input
-                            value={overrideSupplier}
-                            onChange={e => setOverrideSupplier(e.target.value)}
-                            placeholder="bv. Makro — leeg = AI detecteert zelf"
-                            disabled={working}
-                            style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13 }}
-                        />
+                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Eyebrow>Leverancier (optioneel override)</Eyebrow>
+                            <input
+                                value={overrideSupplier}
+                                onChange={e => setOverrideSupplier(e.target.value)}
+                                placeholder="bv. Makro — leeg = AI detecteert zelf"
+                                disabled={working}
+                                style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13 }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Eyebrow>AI-model</Eyebrow>
+                            <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden', background: 'var(--color-bg-deep)' }}>
+                                <button type="button" onClick={() => setAiModel('haiku')} disabled={working}
+                                    style={{
+                                        padding: '8px 14px', border: 'none', background: aiModel === 'haiku' ? `${GOLD}20` : 'transparent',
+                                        color: aiModel === 'haiku' ? GOLD : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                    }}>
+                                    ⚡ Haiku
+                                </button>
+                                <button type="button" onClick={() => setAiModel('sonnet')} disabled={working}
+                                    style={{
+                                        padding: '8px 14px', border: 'none', background: aiModel === 'sonnet' ? `${GOLD}20` : 'transparent',
+                                        color: aiModel === 'sonnet' ? GOLD : 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                        borderLeft: '1px solid var(--border)',
+                                    }}>
+                                    🎯 Sonnet
+                                </button>
+                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                {aiModel === 'haiku'
+                                    ? 'Snel + goedkoop · geschikt voor strakke catalogi'
+                                    : 'Grondig + vollediger · 3× duurder maar mist minder items bij rommelige tabellen'}
+                            </span>
+                        </div>
                     </div>
                 )}
             </MetalCard>
