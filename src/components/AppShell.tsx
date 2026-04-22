@@ -15,7 +15,7 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
-import BrandWatermark from '@/components/BrandWatermark';
+import PageBrandAccent from '@/components/PageBrandAccent';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
@@ -195,7 +195,8 @@ function AppShellInner({ children }: { children: ReactNode }) {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <Breadcrumbs />
-            <div style={{ paddingRight: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 16 }}>
+              <PageBrandAccent />
               <Changelog />
             </div>
           </header>
@@ -210,7 +211,6 @@ function AppShellInner({ children }: { children: ReactNode }) {
       <OnboardingWizard />
       <OfflineIndicator />
       <ContextualHelp />
-      <BrandWatermark />
     </ErrorBoundaryLogger>
   );
 }

@@ -6171,69 +6171,79 @@ html, body { max-width: 100vw; overflow-x: hidden; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   BRAND PLAQUE — bedrijfslogo zonder achtergrond (transparant via
-   mix-blend-mode: screen) vast linksboven in de content-area op
-   elke pagina. Het primaire logo staat in de sidebar; dit is extra
-   brand-accent binnen de pagina-inhoud.
+   PAGE BRAND ACCENT — bedrijfslogo GEÏNTEGREERD in de header van elke
+   pagina, naast de breadcrumbs. Niet als overlay maar als onderdeel
+   van de navigatie-bar. Transparant via mix-blend-mode: screen.
    ═══════════════════════════════════════════════════════════════════ */
 
-.brand-plaque {
-  position: fixed;
-  top: 14px;
-  left: 280px;          /* Voorbij de open sidebar (260px breed + marge) */
-  width: 120px;
-  height: 64px;
-  z-index: 40;
-  pointer-events: none;
+.page-brand-accent {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  gap: 12px;
+  padding-right: 4px;
+  position: relative;
 }
 
-.bp-logo-img {
-  max-width: 100%;
-  max-height: 100%;
+/* Dun olijf-goud verticaal lijntje scheidt logo van overige header-items */
+.pba-divider {
+  width: 1px;
+  height: 22px;
+  background: linear-gradient(180deg,
+    transparent,
+    color-mix(in srgb, var(--brand-gold, var(--brand)) 45%, transparent),
+    transparent);
+}
+
+.pba-logo {
+  height: 34px;
+  width: auto;
+  max-width: 120px;
   object-fit: contain;
-  /* Zwarte achtergrond onzichtbaar maken — "screen" blend maakt zwart transparant,
-     kleur-artwork blijft zichtbaar */
+  /* Zwart vlak wegmaskeren: screen blend maakt zwart transparant */
   mix-blend-mode: screen;
-  filter: saturate(1.15) brightness(1.1) drop-shadow(0 2px 10px color-mix(in srgb, var(--brand-primary) 35%, transparent));
+  filter: saturate(1.15) brightness(1.1)
+    drop-shadow(0 1px 4px color-mix(in srgb, var(--brand-primary) 25%, transparent));
+  opacity: .92;
+  transition: opacity .3s;
 }
 
-/* Wanneer de sidebar ingeklapt is, verschuif de plaque naar links */
-.sidebar-collapsed ~ main .brand-plaque,
-body:has(.sidebar-collapsed) .brand-plaque {
-  left: 78px;
+.page-brand-accent:hover .pba-logo {
+  opacity: 1;
 }
 
-/* Tablet: iets dichterbij */
+.pba-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--brand-gold, var(--brand));
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: .85;
+}
+
+/* Tablet: iets compacter */
 @media (max-width: 1200px) {
-  .brand-plaque {
-    top: 12px;
-    left: 240px;
-    width: 100px;
-    height: 56px;
-  }
+  .pba-logo { height: 30px; max-width: 100px; }
+  .pba-name { font-size: 9px; max-width: 110px; }
 }
 
-/* Mobiel: geen sidebar — boven de hamburger-knop uit */
+/* Mobiel: verberg naam, alleen logo */
 @media (max-width: 899px) {
-  .brand-plaque {
-    top: 10px;
-    left: 64px;         /* Voorbij de hamburger-menu knop */
-    width: 100px;
-    height: 40px;
-  }
+  .page-brand-accent { gap: 8px; }
+  .pba-logo { height: 26px; max-width: 80px; }
+  .pba-name { display: none; }
+  .pba-divider { height: 18px; }
 }
 
 @media (max-width: 480px) {
-  .brand-plaque {
-    top: 10px;
-    left: 60px;
-    width: 80px;
-    height: 36px;
-  }
+  .pba-logo { height: 22px; max-width: 64px; }
+  .pba-divider { display: none; }
 }
 
-/* Verberg bij print */
-@media print { .brand-plaque { display: none; } }
+/* Print: altijd tonen (voor screenshot-bevestiging in docs) */
+@media print {
+  .page-brand-accent { display: flex; }
+}
