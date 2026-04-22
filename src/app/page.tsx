@@ -300,18 +300,13 @@ export default function DashboardPage() {
       <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit'] dashboard-main">
         <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
         <DashboardBrandHero />
-        <div className="mb-6 md:mb-8 flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-extralight text-[var(--text)] tracking-tight mb-1">
-              {greeting}, <span className="font-normal">Pitmaster</span>
-            </h2>
-            <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">
-              {heroEvent ? `Nog ${daysToHero} dag${daysToHero === 1 ? '' : 'en'} tot ${heroEvent.name}` : 'Geen events gepland — tijd voor nieuwe boekingen.'}
-            </p>
-          </div>
+        <div className="mb-6 md:mb-8 flex items-end justify-between gap-4">
+          <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">
+            {heroEvent ? `Nog ${daysToHero} dag${daysToHero === 1 ? '' : 'en'} tot ${heroEvent.name}` : 'Geen events gepland — tijd voor nieuwe boekingen.'}
+          </p>
           <button
             onClick={() => setWizardOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90 shrink-0"
           >
             <span className="text-lg leading-none">+</span>
             <span className="hidden md:inline">Nieuw Event</span>

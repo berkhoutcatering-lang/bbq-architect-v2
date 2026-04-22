@@ -6171,133 +6171,254 @@ html, body { max-width: 100vw; overflow-x: hidden; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   DASHBOARD BRAND HERO — grote prominente header met bedrijfslogo
-   centraal bovenin, alleen op de dashboard-pagina.
+   DASHBOARD HERO — editorial-style met crest-logo rechts
+   Asymmetrisch, typografie-gedreven, klasse. Alleen op dashboard.
    ═══════════════════════════════════════════════════════════════════ */
 
-.dashboard-brand-hero {
+.dash-hero {
   position: relative;
-  width: 100%;
-  padding: 48px 24px 44px;
-  margin-bottom: 28px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  text-align: center;
-  border-radius: 22px;
+  padding: 28px 32px 26px;
+  margin-bottom: 32px;
+  border-radius: 18px;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 85% at 50% 40%,
-      color-mix(in srgb, var(--brand-primary) 18%, transparent) 0%,
-      color-mix(in srgb, var(--brand-gold, var(--brand)) 8%, transparent) 45%,
-      transparent 75%),
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--card) 85%, var(--brand-primary) 5%),
-      var(--card));
-  border: 1px solid color-mix(in srgb, var(--brand-primary) 22%, transparent);
+    linear-gradient(110deg,
+      color-mix(in srgb, var(--card) 95%, var(--brand-primary) 3%) 0%,
+      color-mix(in srgb, var(--card) 88%, var(--brand-primary) 8%) 55%,
+      color-mix(in srgb, var(--card) 75%, var(--brand-gold, var(--brand)) 12%) 100%);
+  border: 1px solid color-mix(in srgb, var(--brand-gold, var(--brand)) 18%, transparent);
   box-shadow:
-    0 20px 50px -20px color-mix(in srgb, var(--brand-primary) 35%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--brand-gold, var(--brand)) 10%, transparent) inset;
+    0 1px 0 color-mix(in srgb, var(--brand-gold, var(--brand)) 14%, transparent) inset,
+    0 16px 40px -20px color-mix(in srgb, var(--brand-primary) 28%, transparent);
 }
 
-/* Subtiele partikel-achtergrond */
-.dashboard-brand-hero::before {
+/* Subtle etched lines pattern — editorial/newspaper feel */
+.dash-hero::before {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: .3;
   pointer-events: none;
   background-image:
-    radial-gradient(circle, color-mix(in srgb, var(--brand-gold, var(--brand)) 75%, transparent) 1px, transparent 1.6px);
-  background-size: 140px 140px;
-  animation: dbh-drift 40s linear infinite;
-  mask-image: radial-gradient(ellipse 70% 85% at 50% 40%, #000, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 85% at 50% 40%, #000, transparent 80%);
+    linear-gradient(90deg,
+      transparent 0,
+      color-mix(in srgb, var(--brand-gold, var(--brand)) 7%, transparent) 50%,
+      transparent 100%);
+  background-size: 100% 100%;
+  opacity: .6;
+  mix-blend-mode: overlay;
 }
 
-@keyframes dbh-drift {
-  from { background-position: 0 0; }
-  to { background-position: 140px 140px; }
+/* Vertical accent-line aan rechterkant als editorial detail */
+.dash-hero::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  background: linear-gradient(180deg,
+    transparent,
+    color-mix(in srgb, var(--brand-gold, var(--brand)) 55%, transparent) 30%,
+    color-mix(in srgb, var(--brand-primary) 45%, transparent) 70%,
+    transparent);
+  pointer-events: none;
 }
 
-.dbh-logo-wrap {
+.dash-hero-left {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.dash-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.deh-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--brand-primary) 70%, transparent);
+  animation: deh-blink 2.4s ease-in-out infinite;
+}
+
+@keyframes deh-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+.deh-time {
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.deh-sep { opacity: .4; }
+
+.deh-day {
+  color: var(--muted);
+  letter-spacing: .14em;
+  font-weight: 600;
+}
+
+.dash-hero-title {
+  font-family: 'Outfit', 'DM Sans', sans-serif;
+  font-size: clamp(28px, 4.5vw, 44px);
+  font-weight: 200;
+  letter-spacing: -.025em;
+  line-height: 1.02;
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.dht-grey {
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+  font-weight: 200;
+}
+
+.dht-accent {
+  font-weight: 500;
+  background: linear-gradient(125deg,
+    var(--text) 0%,
+    var(--text) 40%,
+    color-mix(in srgb, var(--brand-gold, var(--brand)) 85%, var(--text)) 70%,
+    color-mix(in srgb, var(--brand-primary) 75%, var(--text)) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 100%;
+  animation: dht-shine 8s ease-in-out infinite;
+}
+
+@keyframes dht-shine {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.dash-hero-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.dhs-chip {
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: color-mix(in srgb, var(--brand-gold, var(--brand)) 14%, transparent);
+  color: var(--brand-gold, var(--brand));
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+  border: 1px solid color-mix(in srgb, var(--brand-gold, var(--brand)) 30%, transparent);
+}
+
+.dhs-text {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12.5px;
+  letter-spacing: .02em;
+}
+
+/* ── CREST (logo rechts als wapenschild/monogram) ── */
+.dash-hero-right {
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 12px 24px;
+  gap: 20px;
+  padding-right: 12px;
 }
 
-.dbh-logo {
-  height: 140px;
-  width: auto;
-  max-width: min(520px, 80vw);
-  object-fit: contain;
-  /* Zwart vlak weg: screen-blend maakt zwart transparant */
-  mix-blend-mode: screen;
-  filter: saturate(1.2) brightness(1.1)
-    drop-shadow(0 8px 30px color-mix(in srgb, var(--brand-primary) 45%, transparent))
-    drop-shadow(0 0 12px color-mix(in srgb, var(--brand-gold, var(--brand)) 25%, transparent));
+.dhc-line {
+  width: 1px;
+  height: 72px;
+  background: linear-gradient(180deg,
+    transparent,
+    color-mix(in srgb, var(--brand-gold, var(--brand)) 45%, transparent),
+    transparent);
 }
 
-.dbh-eyebrow {
+.dhc-crest {
   position: relative;
-  z-index: 1;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .32em;
-  text-transform: uppercase;
-  color: var(--brand-gold, var(--brand));
-  margin: 0;
-  display: inline-flex;
+  width: 96px;
+  height: 96px;
+  display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.dbh-eyebrow::before,
-.dbh-eyebrow::after {
-  content: "";
-  display: block;
-  width: 28px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, transparent));
+/* Dubbele ring rond het crest — elegant wapenschild-effect */
+.dhc-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center,
+      color-mix(in srgb, var(--brand-primary) 22%, transparent) 0%,
+      color-mix(in srgb, var(--brand-gold, var(--brand)) 10%, transparent) 45%,
+      transparent 70%);
+  border: 1px solid color-mix(in srgb, var(--brand-gold, var(--brand)) 35%, transparent);
+  box-shadow:
+    inset 0 0 0 4px color-mix(in srgb, var(--card) 100%, transparent),
+    inset 0 0 0 5px color-mix(in srgb, var(--brand-gold, var(--brand)) 25%, transparent),
+    0 6px 24px -6px color-mix(in srgb, var(--brand-primary) 35%, transparent);
 }
 
-.dbh-eyebrow::after {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, transparent), transparent);
-}
-
-.dbh-tagline {
+/* Logo zelf — écht transparant gemaakt met lighten + brightness */
+.dhc-logo {
   position: relative;
   z-index: 1;
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 500;
-  letter-spacing: .04em;
-  max-width: 520px;
-  margin: 0;
-  line-height: 1.5;
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+  /* lighten blend: houdt alleen pixels zichtbaar die LICHTER zijn dan bg.
+     Zwart (de PNG-achtergrond) wordt volledig onzichtbaar tegen olijf-card. */
+  mix-blend-mode: lighten;
+  filter:
+    brightness(1.3) contrast(1.15) saturate(1.25)
+    drop-shadow(0 2px 8px color-mix(in srgb, var(--brand-primary) 30%, transparent));
 }
 
-/* Tablet */
-@media (max-width: 1200px) {
-  .dashboard-brand-hero { padding: 38px 20px 34px; }
-  .dbh-logo { height: 110px; }
-}
-
-/* Mobiel */
-@media (max-width: 899px) {
-  .dashboard-brand-hero { padding: 30px 16px 28px; margin-bottom: 18px; border-radius: 16px; gap: 14px; }
-  .dbh-logo { height: 86px; }
-  .dbh-eyebrow { font-size: 9px; letter-spacing: .28em; }
-  .dbh-eyebrow::before, .dbh-eyebrow::after { width: 18px; }
-  .dbh-tagline { font-size: 12px; }
+/* Mobiel & tablet — blijft elegant */
+@media (max-width: 900px) {
+  .dash-hero {
+    grid-template-columns: 1fr;
+    padding: 22px 20px;
+    gap: 18px;
+  }
+  .dash-hero::after { display: none; }
+  .dash-hero-right {
+    gap: 14px;
+    padding-right: 0;
+    justify-content: flex-start;
+  }
+  .dhc-line { display: none; }
+  .dhc-crest { width: 72px; height: 72px; }
+  .dash-hero-title { font-size: clamp(24px, 7vw, 32px); }
 }
 
 @media (max-width: 480px) {
-  .dashboard-brand-hero { padding: 24px 12px 22px; }
-  .dbh-logo { height: 72px; }
+  .dash-hero { padding: 18px 14px; margin-bottom: 18px; border-radius: 14px; }
+  .dhc-crest { width: 60px; height: 60px; }
+  .dash-hero-eyebrow { font-size: 9px; letter-spacing: .16em; }
+  .dhs-chip { font-size: 8.5px; }
+  .dhs-text { font-size: 11.5px; }
 }
