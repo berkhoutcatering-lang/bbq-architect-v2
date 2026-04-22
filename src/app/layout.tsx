@@ -6,6 +6,7 @@ import ToastProvider from "@/components/Toast";
 import ConfirmProvider from "@/components/ConfirmDialog";
 import GlobalToast from "@/components/GlobalToast";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import InstallPrompt from "@/components/InstallPrompt";
 import AppShell from "@/components/AppShell";
 import ThemeProvider from "@/components/ThemeProvider";
 
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </ThemeProvider>
                 <GlobalToast />
                 <ServiceWorkerRegistrar />
+                <InstallPrompt />
               </ConfirmProvider>
             </ToastProvider>
           </OrgProvider>
