@@ -116,12 +116,12 @@ export default function PricingPage() {
             <Link href="/welkom" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Home</Link>
             <Link href="/pricing" className="text-[13px] text-[var(--text)] no-underline">Prijzen</Link>
             <Link href="/login" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Inloggen</Link>
-            <Link
-              href="/signup"
+            <a
+              href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
               className="px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
             >
-              Start 2 mnd gratis
-            </Link>
+              Plan een demo
+            </a>
           </nav>
         </div>
       </header>
@@ -145,7 +145,7 @@ export default function PricingPage() {
           <button
             onClick={() => setBilling('monthly')}
             className={`px-4 py-2 rounded-full text-[12px] font-bold transition-all ${
-              billing === 'monthly' ? 'bg-[var(--color-accent-gold)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'
+              billing === 'monthly' ? 'bg-[var(--color-accent-gold)] text-black' : 'bg-transparent text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
             Maandelijks
@@ -153,7 +153,7 @@ export default function PricingPage() {
           <button
             onClick={() => setBilling('yearly')}
             className={`px-4 py-2 rounded-full text-[12px] font-bold transition-all ${
-              billing === 'yearly' ? 'bg-[var(--color-accent-gold)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'
+              billing === 'yearly' ? 'bg-[var(--color-accent-gold)] text-black' : 'bg-transparent text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
             Jaarlijks <span className="text-[10px] opacity-70">(2 mnd gratis)</span>
@@ -178,7 +178,7 @@ export default function PricingPage() {
               '2 team-leden',
               'E-mail support (binnen 48u)',
             ]}
-            cta="Start 2 mnd gratis"
+            cta="Plan een demo"
           />
 
           {/* PRO — highlighted */}
@@ -196,7 +196,7 @@ export default function PricingPage() {
               '50 events, 5 team-leden',
               'Chat-support (binnen 24u)',
             ]}
-            cta="Start 2 mnd gratis"
+            cta="Plan een demo"
           />
 
           {/* ENTERPRISE */}
@@ -214,7 +214,7 @@ export default function PricingPage() {
               'Onbeperkt events + team',
               'Priority support (<4u) + 1-op-1 onboarding',
             ]}
-            cta="Neem contact op"
+            cta="Plan een demo"
           />
         </div>
 
@@ -297,14 +297,14 @@ export default function PricingPage() {
       <section className="max-w-[900px] mx-auto px-6 py-16 text-center">
         <h2 className="text-4xl font-extralight mb-3">Klaar om te beginnen?</h2>
         <p className="text-[15px] text-[var(--muted)] mb-8">
-          2 maanden gratis. Geen creditcard nodig. Binnen 60 minuten je eerste offerte verstuurd.
+          Persoonlijke demo van 20 minuten. We laten zien hoe het voor jouw bedrijf werkt en richten het samen in.
         </p>
-        <Link
-          href="/signup"
+        <a
+          href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
           className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
         >
-          Start je gratis proefperiode
-        </Link>
+          Plan een demo
+        </a>
       </section>
 
       {/* ═════════ FOOTER ═════════ */}
@@ -367,16 +367,16 @@ function TierCard({
         <div className="text-[11px] text-[var(--muted)] mt-1">{priceLabel.sub}</div>
       </div>
 
-      <Link
-        href={tier === 'enterprise' ? '/welkom#contact' : '/signup'}
+      <a
+        href={`mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect — ${p.label}`}
         className={`block w-full py-3 rounded-lg text-[13px] font-bold text-center transition-all no-underline ${
           highlighted
             ? 'bg-[var(--color-accent-gold)] text-black hover:brightness-110'
-            : 'bg-white/5 text-[var(--text)] border border-[var(--card-solid)] hover:bg-white/10'
+            : 'bg-[var(--card-solid)] text-[var(--text)] border border-white/20 hover:border-[var(--color-accent-gold)]/70'
         }`}
       >
         {cta}
-      </Link>
+      </a>
 
       <div className="mt-6 pt-6 border-t border-[var(--card-solid)]">
         <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-[var(--muted)] mb-3">Inbegrepen</div>

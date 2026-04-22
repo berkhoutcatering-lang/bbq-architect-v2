@@ -25,12 +25,12 @@ export default function WelkomPage() {
             <Link href="/welkom" className="text-[13px] text-[var(--text)] no-underline">Home</Link>
             <Link href="/pricing" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Prijzen</Link>
             <Link href="/login" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Inloggen</Link>
-            <Link
-              href="/signup"
+            <a
+              href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
               className="px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
             >
-              Start 2 mnd gratis
-            </Link>
+              Plan een demo
+            </a>
           </nav>
         </div>
       </header>
@@ -57,23 +57,23 @@ export default function WelkomPage() {
             </p>
 
             <div className="flex items-center gap-3 mb-8">
-              <Link
-                href="/signup"
+              <a
+                href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
               >
-                Start 2 maanden gratis
+                Plan een demo
                 <ArrowRight className="w-4 h-4" />
-              </Link>
+              </a>
               <Link
                 href="/pricing"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-bold bg-white/5 text-[var(--text)] border border-[var(--card-solid)] hover:bg-white/10 no-underline"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-bold bg-[var(--card-solid)] text-[var(--text)] border border-white/20 hover:border-[var(--color-accent-gold)]/70 no-underline"
               >
                 Bekijk prijzen
               </Link>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] text-[var(--muted)]">
-              <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--color-accent-gold)]" /> Geen creditcard nodig</span>
+              <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--color-accent-gold)]" /> Persoonlijke onboarding</span>
               <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--color-accent-gold)]" /> Maandelijks opzegbaar</span>
               <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--color-accent-gold)]" /> NL-native</span>
             </div>
@@ -211,19 +211,19 @@ export default function WelkomPage() {
       <section className="max-w-[900px] mx-auto px-6 py-20 text-center">
         <h2 className="text-5xl font-extralight mb-4">Klaar om te beginnen?</h2>
         <p className="text-[15px] text-[var(--muted)] mb-8 max-w-xl mx-auto">
-          2 maanden gratis. Geen creditcard nodig. Binnen 60 minuten je eerste offerte verstuurd.
+          Persoonlijke demo van 20 minuten. We laten zien hoe het voor jouw bedrijf werkt en richten het samen in.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/signup"
+          <a
+            href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
           >
-            Start je gratis proefperiode
+            Plan een demo
             <ArrowRight className="w-4 h-4" />
-          </Link>
+          </a>
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-bold bg-white/5 text-[var(--text)] border border-[var(--card-solid)] hover:bg-white/10 no-underline"
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-bold bg-[var(--card-solid)] text-[var(--text)] border border-white/20 hover:border-[var(--color-accent-gold)]/70 no-underline"
           >
             Vergelijk prijzen
           </Link>

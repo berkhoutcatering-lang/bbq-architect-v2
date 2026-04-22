@@ -1,205 +1,52 @@
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Flame } from 'lucide-react';
-import { logActivationEvent } from '@/lib/activation';
+import { Flame, Mail, ArrowRight } from 'lucide-react';
 
 export default function SignupPage() {
-  const [step, setStep] = useState(1);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [orgName, setOrgName] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    if (!supabase) return;
-    setError('');
-    setLoading(true);
-
-    if (step === 1) {
-      if (password.length < 6) {
-        setError('Wachtwoord moet minimaal 6 tekens zijn');
-        setLoading(false);
-        return;
-      }
-      setStep(2);
-      setLoading(false);
-      return;
-    }
-
-    // Step 2: Create account + organization
-    const { data: authData, error: signupErr } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name },
-      },
-    });
-
-    if (signupErr) {
-      setError(signupErr.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!authData.user) {
-      setError('Onverwachte fout bij registratie');
-      setLoading(false);
-      return;
-    }
-
-    // Create organization via API (uses service role to bypass RLS)
-    const res = await fetch('/api/org', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: orgName,
-        userId: authData.user.id,
-      }),
-    });
-
-    const orgData = await res.json();
-
-    if (!res.ok) {
-      setError(orgData?.error || 'Fout bij aanmaken organisatie');
-      setLoading(false);
-      return;
-    }
-
-    // Log activation event (fire-and-forget) via helper voor consistentie
-    const newOrgId: string | undefined = orgData?.organization?.id;
-    if (newOrgId) {
-      await logActivationEvent(newOrgId, 'signup_completed', {
-        via: 'signup_form',
-        referrer: typeof document !== 'undefined' ? document.referrer || 'direct' : 'direct',
-      });
-    }
-
-    // Nieuwe gebruikers gaan naar onboarding, daarna pas naar dashboard
-    window.location.href = '/onboarding';
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4">
       <div className="w-full max-w-md">
-        {/* Logo & Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--brand)] mb-4">
             <Flame size={24} className="text-[var(--bg)]" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--text)]">BBQ Architect</h1>
-          <p className="text-[var(--muted)] mt-1">
-            {step === 1 ? 'Maak je account aan' : 'Stel je organisatie in'}
+          <p className="text-[var(--muted)] mt-1">Aanmelden op uitnodiging</p>
+        </div>
+
+        <div
+          className="rounded-2xl p-6 space-y-5"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            backdropFilter: 'blur(20px)',
+          }}
+        >
+          <p className="text-[14px] text-[var(--text)] leading-relaxed">
+            Accounts worden momenteel persoonlijk aangemaakt. Zo kunnen we je bedrijf goed inrichten
+            en je een demo van 20 minuten geven.
           </p>
-        </div>
+          <p className="text-[13px] text-[var(--muted)] leading-relaxed">
+            Stuur een mailtje en we plannen meteen een kennismaking in.
+          </p>
 
-        {/* Progress */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-8 h-1 rounded-full" style={{ background: 'var(--brand)' }} />
-          <div className="w-8 h-1 rounded-full" style={{ background: step >= 2 ? 'var(--brand)' : 'var(--border)' }} />
-        </div>
-
-        {/* Signup Form */}
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div
-            className="rounded-2xl p-6 space-y-4"
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              backdropFilter: 'blur(20px)',
-            }}
+          <a
+            href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-semibold text-[var(--bg)]"
+            style={{ background: 'var(--brand)' }}
           >
-            {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                {error}
-              </div>
-            )}
+            <Mail size={16} />
+            Plan een demo
+            <ArrowRight size={16} />
+          </a>
 
-            {step === 1 ? (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">Naam</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={function (e) { setName(e.target.value); }}
-                    required
-                    autoFocus
-                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
-                    placeholder="Je volledige naam"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={function (e) { setEmail(e.target.value); }}
-                    required
-                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
-                    placeholder="jouw@email.nl"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">Wachtwoord</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={function (e) { setPassword(e.target.value); }}
-                    required
-                    minLength={6}
-                    className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
-                    placeholder="Minimaal 6 tekens"
-                  />
-                </div>
-              </>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">
-                  Bedrijfsnaam
-                </label>
-                <input
-                  type="text"
-                  value={orgName}
-                  onChange={function (e) { setOrgName(e.target.value); }}
-                  required
-                  autoFocus
-                  className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
-                  placeholder="Bijv. Hop & Bites BBQ"
-                />
-                <p className="text-xs text-[var(--muted)] mt-2">
-                  Dit is de naam van je catering bedrijf. Je kunt dit later wijzigen in instellingen.
-                </p>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 rounded-lg font-semibold text-[var(--bg)] transition-all"
-              style={{
-                background: loading ? 'var(--muted)' : 'var(--brand)',
-                opacity: loading ? 0.7 : 1,
-              }}
-            >
-              {loading ? 'Even geduld...' : step === 1 ? 'Volgende' : 'Account aanmaken'}
-            </button>
-
-            {step === 2 && (
-              <button
-                type="button"
-                onClick={function () { setStep(1); setError(''); }}
-                className="w-full py-2 text-sm text-[var(--muted)] hover:text-[var(--text)] transition-colors"
-              >
-                Terug
-              </button>
-            )}
-          </div>
-        </form>
+          <a
+            href="/pricing"
+            className="block text-center text-[12px] text-[var(--muted)] hover:text-[var(--text)]"
+          >
+            Bekijk eerst wat we bieden →
+          </a>
+        </div>
 
         <p className="text-center text-sm text-[var(--muted)] mt-6">
           Al een account?{' '}

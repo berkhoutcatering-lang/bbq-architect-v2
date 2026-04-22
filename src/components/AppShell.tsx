@@ -76,14 +76,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
           <h2 className="text-xl font-bold text-[var(--text)] mb-2">Geen organisatie gevonden</h2>
           <p className="text-[var(--muted)] mb-6">
-            Je account is nog niet gekoppeld aan een organisatie. Maak er een aan of vraag een uitnodiging aan je admin.
+            Je account is nog niet gekoppeld aan een organisatie. Neem contact op zodat we je organisatie inrichten, of vraag een uitnodiging aan je admin.
           </p>
           <a
-            href="/signup"
+            href="mailto:berkhout.catering@gmail.com?subject=Organisatie koppelen BBQ Architect"
             className="inline-block px-6 py-2.5 rounded-lg font-semibold text-[var(--bg)]"
             style={{ background: 'var(--brand)' }}
           >
-            Organisatie aanmaken
+            Neem contact op
           </a>
         </div>
       </div>

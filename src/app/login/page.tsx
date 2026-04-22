@@ -110,8 +110,8 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-[var(--muted)] mt-6">
           Nog geen account?{' '}
-          <a href="/signup" className="text-[var(--brand)] hover:underline font-medium">
-            Registreren
+          <a href="/pricing" className="text-[var(--brand)] hover:underline font-medium">
+            Bekijk wat we bieden →
           </a>
         </p>
 
