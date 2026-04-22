@@ -46,20 +46,33 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { pdfBase64, imageBase64, model: modelChoice } = body as {
+        const { pdfBase64, pdfUrl, imageBase64, model: modelChoice } = body as {
             pdfBase64?: string;
+            pdfUrl?: string;
             imageBase64?: string;
             model?: 'haiku' | 'sonnet' | 'opus';
         };
 
-        if (!pdfBase64 && !imageBase64) {
+        if (!pdfBase64 && !pdfUrl && !imageBase64) {
             return NextResponse.json({ error: 'Geen PDF of image meegegeven' }, { status: 400 });
         }
 
         const client = new Anthropic({ apiKey });
         const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
-        if (pdfBase64) {
+        if (pdfUrl) {
+            /* Server-side download om body-size limiet van Next.js te omzeilen */
+            const r = await fetch(pdfUrl);
+            if (!r.ok) {
+                return NextResponse.json({ error: 'Kon PDF niet downloaden van URL (' + r.status + ')' }, { status: 502 });
+            }
+            const arrayBuf = await r.arrayBuffer();
+            const base64 = Buffer.from(arrayBuf).toString('base64');
+            contentBlocks.push({
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+            } as any);
+        } else if (pdfBase64) {
             const parsed = pdfBase64.startsWith('data:') ? parseDataUrl(pdfBase64) : { mediaType: 'application/pdf', data: pdfBase64 };
             contentBlocks.push({
                 type: 'document',

@@ -2264,28 +2264,31 @@ function FolderPricelists() {
         setFiles(prev => [...prev, ...arr]);
     }
 
-    async function fileToBase64(file: File): Promise<string> {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const s = reader.result as string;
-                resolve(s.split(',')[1] || s);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
     async function parseOne(bf: BulkFile): Promise<{ ok: boolean; leverancier?: string; producten: any[]; error?: string }> {
         try {
-            const b64 = await fileToBase64(bf.file);
+            /* 1) Upload PDF naar Supabase Storage (omzeilt Next.js body-size limiet) */
+            const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+            const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+            const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bf.file, {
+                contentType: 'application/pdf',
+                upsert: false,
+            });
+            if (upErr) return { ok: false, producten: [], error: 'Upload: ' + upErr.message };
+            const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
+            const pdfUrl = urlData?.publicUrl;
+            if (!pdfUrl) return { ok: false, producten: [], error: 'Geen public URL' };
+
+            /* 2) Stuur URL naar API (server downloadt en parseert) */
             const res = await fetch('/api/parse-pricelist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pdfBase64: b64, model: 'haiku' }),
+                body: JSON.stringify({ pdfUrl, model: 'haiku' }),
             });
-            const body = await res.json();
-            if (!res.ok || !body.success) return { ok: false, producten: [], error: body.error || 'Onbekend' };
+            let body: any = null;
+            try { body = await res.json(); } catch { /* niet-JSON response */ }
+            if (!res.ok || !body?.success) {
+                return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
+            }
             const prods = body.data?.producten || [];
             return { ok: true, leverancier: body.data?.leverancier, producten: prods };
         } catch (e: any) {
