@@ -409,24 +409,37 @@ export default function ServiceMode() {
 
         return (
             <div key={key} className={'dish-dash' + (isVega ? ' vega' : ' meat') + (running ? ' running' : '') + (isDone ? ' done' : '') + (isOver ? ' overtime' : '')}>
-                {/* Header: foto + naam + count + status */}
-                <div className="dish-dash-head">
+                {/* COVER: foto full-width met gradient-overlay */}
+                <div className="dish-cover">
                     {foto ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={foto} alt={dishName} className="dish-dash-img" />
+                        <img src={foto} alt={dishName} className="dish-cover-img" />
                     ) : (
-                        <div className={'dish-dash-img ph' + (isVega ? ' vega' : '')}>{isVega ? '🌿' : '🔥'}</div>
-                    )}
-                    <div className="dish-dash-meta">
-                        <div className="dish-dash-eyebrow">
-                            {isVega ? '🌿 Vega' : '🔥 Vlees'} · {isExtra ? 'Extra' : 'Standaard'}
-                            {isDone && <span className="dish-dash-done-pill">✓ Klaar</span>}
-                            {running && <span className="dish-dash-live-pill">● Live</span>}
+                        <div className={'dish-cover-ph' + (isVega ? ' vega' : '')}>
+                            <span className="dish-cover-ph-icon">{isVega ? '🌿' : '🔥'}</span>
                         </div>
-                        <h3 className="dish-dash-name">{dishName}</h3>
-                        {desc && <p className="dish-dash-desc">{desc}</p>}
+                    )}
+                    {/* Dark gradient overlay */}
+                    <div className="dish-cover-gradient" />
+                    {/* Top-row: status-chips */}
+                    <div className="dish-cover-topbar">
+                        <span className={'dish-type-chip' + (isVega ? ' vega' : ' meat')}>{isVega ? '🌿 VEGA' : '🔥 VLEES'}</span>
+                        {isExtra && <span className="dish-extra-chip">✨ EXTRA</span>}
+                        {isDone && <span className="dish-status-chip done">✓ KLAAR</span>}
+                        {running && <span className="dish-status-chip live">● LIVE</span>}
+                        {isOver && <span className="dish-status-chip over">⚠ OVER TIJD</span>}
                     </div>
-                    <div className="dish-dash-count">{count}×</div>
+                    {/* Bottom-row: naam + XL count-badge */}
+                    <div className="dish-cover-bottom">
+                        <div className="dish-cover-title-wrap">
+                            <h3 className="dish-cover-name">{dishName}</h3>
+                            {desc && <p className="dish-cover-desc">{desc}</p>}
+                        </div>
+                        <div className="dish-cover-count-xl">
+                            <span className="dcx-num">{count}</span>
+                            <span className="dcx-mult">×</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Timer + progress */}
