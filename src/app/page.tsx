@@ -18,6 +18,7 @@ import EventWizard from '@/components/EventWizard';
 import OnboardingProgress from '@/components/OnboardingProgress';
 import DrillDownKPI from '@/components/DrillDownKPI';
 import DashboardBrandHero from '@/components/DashboardBrandHero';
+import PriceUpdateReminder from '@/components/PriceUpdateReminder';
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -409,6 +410,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* ═════════ PRIJSLIJST UPDATE REMINDER — elke 4 wkn (AGF 2 wkn) ═════════ */}
+        <PriceUpdateReminder />
 
         {/* ═════════ AANDACHT NODIG — alleen als er acties zijn ═════════ */}
         {liveActions.length > 0 && (
