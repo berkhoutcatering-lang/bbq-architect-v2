@@ -2699,7 +2699,11 @@ function FolderPricelists() {
                                     {!f.leverancier && <span />}
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                                         {f.status === 'done' && `${f.producten} items`}
-                                        {f.status === 'error' && <span style={{ color: 'var(--red)' }}>{f.error?.slice(0, 40)}</span>}
+                                        {f.status === 'error' && (
+                                            <span style={{ color: 'var(--red)', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'help' }} title={f.error || ''}>
+                                                {f.error?.slice(0, 140)}
+                                            </span>
+                                        )}
                                     </span>
                                     <span style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
                                         {f.status === 'pending' && <span style={{ width: 14, height: 14, borderRadius: '50%', border: '1px solid var(--border)' }} />}
