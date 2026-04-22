@@ -388,7 +388,11 @@ export default function ServiceMode() {
     /* Per-gerecht dashboard — eigen foto, eigen timer, eigen battle plan, eigen actie */
     function renderDishCard(opts: { key: string; dishName: string; count: number; isVega: boolean; isExtra?: boolean; extraIdx?: number; gangSlug: string; gangState: string }) {
         const { key, dishName, count, isVega, isExtra, extraIdx, gangSlug, gangState } = opts;
-        const gd: any = gerechtenDb.find((g: any) => g.naam === dishName && (isVega || g.gang_slug === gangSlug)) || gerechtenDb.find((g: any) => g.naam === dishName);
+        /* Case-insensitive lookup zodat "Miso Panna Cotta" matcht met "miso panna cotta" */
+        const normalize = (n: string) => (n || '').toLowerCase().trim();
+        const gd: any = gerechtenDb.find((g: any) => normalize(g.naam) === normalize(dishName) && (isVega || g.gang_slug === gangSlug))
+            || gerechtenDb.find((g: any) => normalize(g.naam) === normalize(dishName));
+        const inDb = !!gd;
         const foto = gd?.foto_url || gd?.service_image;
         const desc = gd?.beschrijving || '';
         const steps: string[] = gd?.battle_plan_steps || [];
@@ -459,6 +463,15 @@ export default function ServiceMode() {
                             );
                         })}
                     </ol>
+                ) : !inDb ? (
+                    <div className="dish-dash-plan-new">
+                        <div className="dpn-icon">✨</div>
+                        <div className="dpn-body">
+                            <div className="dpn-title">Nieuw gerecht</div>
+                            <div className="dpn-desc">&quot;{dishName}&quot; staat nog niet in je keuken. Voeg toe voor foto, beschrijving en battle plan.</div>
+                        </div>
+                        <a href={'/recepten?new=' + encodeURIComponent(dishName)} className="dpn-cta">+ Toevoegen</a>
+                    </div>
                 ) : (
                     <div className="dish-dash-plan-empty">
                         Geen battle-plan stappen ingesteld. Voeg toe in <a href="/recepten" className="dish-link">Recepten</a>.

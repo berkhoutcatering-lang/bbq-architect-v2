@@ -8,9 +8,18 @@
     padding: 20px 18px 100px;
     position: relative;
     background:
-        radial-gradient(ellipse 80% 55% at 50% 0%, color-mix(in srgb, var(--brand-primary) 12%, transparent), transparent 65%),
-        radial-gradient(ellipse 40% 40% at 85% 20%, color-mix(in srgb, var(--brand) 6%, transparent), transparent 70%),
+        radial-gradient(ellipse 80% 55% at 50% 0%, color-mix(in srgb, var(--brand-primary) 14%, transparent), transparent 65%),
+        radial-gradient(ellipse 40% 40% at 85% 20%, color-mix(in srgb, var(--brand) 8%, transparent), transparent 70%),
+        radial-gradient(ellipse 45% 50% at 10% 80%, color-mix(in srgb, var(--brand-gold, var(--brand)) 5%, transparent), transparent 70%),
         var(--bg);
+    animation: aurora 30s ease-in-out infinite;
+}
+
+/* Langzame gradient-drift — zoals noorderlicht */
+@keyframes aurora {
+    0%, 100% { background-position: 0% 0%, 100% 0%, 0% 100%; }
+    33% { background-position: 20% 10%, 80% 20%, 10% 90%; }
+    66% { background-position: -10% 15%, 110% 10%, -5% 85%; }
 }
 
 /* Subtiele partikels zoals op de hub */
@@ -49,12 +58,26 @@
 
 .service-hero-title {
     font-family: Outfit, DM Sans, sans-serif;
-    font-size: 42px;
-    font-weight: 300;
-    letter-spacing: -.02em;
-    color: var(--text);
-    margin: 0 0 12px;
-    line-height: 1.05;
+    font-size: 44px;
+    font-weight: 200;
+    letter-spacing: -.025em;
+    margin: 0 0 14px;
+    line-height: 1.02;
+    background: linear-gradient(135deg,
+        var(--text) 0%,
+        var(--text) 40%,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 85%, var(--text)) 60%,
+        color-mix(in srgb, var(--brand-primary) 75%, var(--text)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 100%;
+    animation: hero-shine 8s ease-in-out infinite;
+}
+
+@keyframes hero-shine {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
 }
 
 .service-hero-sub {
@@ -341,12 +364,20 @@
 
 .cockpit-title {
     font-family: Outfit, DM Sans, sans-serif;
-    font-size: 34px;
-    font-weight: 300;
-    letter-spacing: -.02em;
-    color: var(--text);
+    font-size: 38px;
+    font-weight: 200;
+    letter-spacing: -.025em;
     margin: 0 0 8px;
-    line-height: 1.1;
+    line-height: 1.05;
+    background: linear-gradient(125deg,
+        var(--text) 0%,
+        var(--text) 55%,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 90%, var(--text)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 100%;
+    animation: hero-shine 10s ease-in-out infinite;
 }
 
 .cockpit-meta {
@@ -382,14 +413,24 @@
 /* Grote service-timer rechts (zoals "dagen te gaan" in de hub) */
 .cockpit-service-timer {
     text-align: center;
-    padding: 16px 22px;
-    border-radius: 14px;
+    padding: 18px 24px;
+    border-radius: 16px;
     background:
-        radial-gradient(circle at center, color-mix(in srgb, var(--brand-primary) 18%, transparent), transparent 70%),
+        radial-gradient(circle at center, color-mix(in srgb, var(--brand-primary) 22%, transparent), transparent 70%),
         color-mix(in srgb, var(--text) 3%, transparent);
-    border: 1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent);
-    min-width: 140px;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+    min-width: 150px;
     position: relative;
+    animation: timer-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+    0%, 100% { box-shadow:
+        0 0 0 0 color-mix(in srgb, var(--brand-primary) 40%, transparent),
+        0 12px 30px -12px color-mix(in srgb, var(--brand-primary) 50%, transparent); }
+    50% { box-shadow:
+        0 0 0 6px color-mix(in srgb, var(--brand-primary) 12%, transparent),
+        0 16px 44px -12px color-mix(in srgb, var(--brand-primary) 65%, transparent); }
 }
 
 .cockpit-service-timer::before {
@@ -1509,30 +1550,56 @@
 /* ── 3. GEFOCUSTE GANG: groot dashboard ── */
 .gang-focused {
     background:
-        radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 65%),
+        radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in srgb, var(--brand-primary) 12%, transparent), transparent 65%),
+        radial-gradient(ellipse 60% 40% at 90% 90%, color-mix(in srgb, var(--brand-gold, var(--brand)) 6%, transparent), transparent 65%),
         var(--card);
-    border-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
-    box-shadow: 0 20px 60px -20px color-mix(in srgb, var(--brand-primary) 25%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 32%, transparent);
+    box-shadow:
+        0 20px 60px -20px color-mix(in srgb, var(--brand-primary) 28%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--brand-gold, var(--brand)) 8%, transparent) inset;
     overflow: visible;
+    position: relative;
 }
 
 .gang-focused.state-active {
-    border-color: color-mix(in srgb, var(--brand-primary) 50%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 25%, transparent) inset,
-                0 24px 70px -20px color-mix(in srgb, var(--brand-primary) 35%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 55%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 30%, transparent) inset,
+        0 0 0 2px color-mix(in srgb, var(--brand-primary) 10%, transparent),
+        0 28px 80px -20px color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    animation: gang-breath 4s ease-in-out infinite;
 }
 
-/* Particles op gefocuste gang */
+@keyframes gang-breath {
+    0%, 100% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 30%, transparent) inset,
+        0 0 0 2px color-mix(in srgb, var(--brand-primary) 10%, transparent),
+        0 28px 80px -20px color-mix(in srgb, var(--brand-primary) 40%, transparent); }
+    50% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 55%, transparent) inset,
+        0 0 0 4px color-mix(in srgb, var(--brand-primary) 12%, transparent),
+        0 36px 100px -22px color-mix(in srgb, var(--brand-primary) 55%, transparent); }
+}
+
+/* Particles op gefocuste gang — dubbele laag voor diepte */
 .gang-focused::before {
     content: "";
     position: absolute;
     inset: 0;
-    opacity: 0.22;
+    opacity: 0.28;
     background-image:
-        radial-gradient(circle, color-mix(in srgb, var(--brand-gold, var(--brand)) 70%, transparent) 1px, transparent 1.5px);
-    background-size: 140px 140px;
+        radial-gradient(circle, color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, transparent) 1px, transparent 1.8px),
+        radial-gradient(circle, color-mix(in srgb, var(--brand-primary) 60%, transparent) 1px, transparent 1.4px);
+    background-size: 160px 160px, 110px 110px;
+    background-position: 0 0, 60px 90px;
     pointer-events: none;
     border-radius: 16px;
+    animation: particles-drift 40s linear infinite;
+}
+
+@keyframes particles-drift {
+    0% { background-position: 0 0, 60px 90px; }
+    100% { background-position: 160px 160px, 220px 250px; }
 }
 
 .gang-focused-head {
@@ -1562,13 +1629,22 @@
 
 .gang-focused-title {
     font-family: Outfit, DM Sans, sans-serif;
-    font-size: 34px;
-    font-weight: 300;
-    letter-spacing: -.02em;
-    color: var(--text);
+    font-size: 36px;
+    font-weight: 200;
+    letter-spacing: -.025em;
     margin: 0 0 8px;
-    line-height: 1.1;
+    line-height: 1.05;
     text-transform: capitalize;
+    background: linear-gradient(115deg,
+        var(--text) 0%,
+        var(--text) 45%,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 80%, var(--text)) 70%,
+        color-mix(in srgb, var(--brand-primary) 70%, var(--text)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 250% 100%;
+    animation: hero-shine 9s ease-in-out infinite;
 }
 
 .gang-focused-meta {
@@ -1637,14 +1713,40 @@
 }
 
 .gang-focused-start {
-    background: var(--brand-primary);
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--brand-primary) 90%, var(--brand-gold, var(--brand))),
+        var(--brand-primary));
     color: var(--brand-background, #000);
-    box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--brand-primary) 55%, transparent);
+    box-shadow:
+        0 6px 20px -6px color-mix(in srgb, var(--brand-primary) 55%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--brand-gold, var(--brand)) 30%, transparent) inset;
+    position: relative;
+    overflow: hidden;
+}
+
+.gang-focused-start::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg,
+        transparent 30%,
+        rgba(255, 255, 255, .25) 50%,
+        transparent 70%);
+    background-size: 200% 100%;
+    animation: btn-shine 3s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes btn-shine {
+    0%, 100% { background-position: 100% 0; }
+    50% { background-position: -100% 0; }
 }
 
 .gang-focused-start:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 28px -8px color-mix(in srgb, var(--brand-primary) 65%, transparent);
+    transform: translateY(-2px);
+    box-shadow:
+        0 12px 30px -8px color-mix(in srgb, var(--brand-primary) 70%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--brand-gold, var(--brand)) 50%, transparent) inset;
 }
 
 .gang-focused-finish {
@@ -1672,9 +1774,23 @@
     flex-direction: column;
     border-radius: 14px;
     border: 1px solid var(--card-solid);
-    background: color-mix(in srgb, var(--text) 2%, transparent);
+    background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, color-mix(in srgb, var(--brand-primary) 4%, transparent), transparent 70%),
+        color-mix(in srgb, var(--text) 2%, transparent);
     overflow: hidden;
-    transition: all .2s;
+    transition: transform .25s cubic-bezier(.2, .8, .2, 1), box-shadow .25s ease, border-color .2s;
+    will-change: transform;
+}
+
+.dish-dash:not(.done):not(.running):hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    box-shadow: 0 20px 50px -20px color-mix(in srgb, var(--brand-primary) 30%, transparent);
+}
+
+.dish-dash.vega:not(.done):not(.running):hover {
+    border-color: color-mix(in srgb, var(--green) 40%, transparent);
+    box-shadow: 0 20px 50px -20px color-mix(in srgb, var(--green) 30%, transparent);
 }
 
 .dish-dash::before {
@@ -1698,34 +1814,129 @@
 
 .dish-dash.running {
     background:
-        linear-gradient(145deg, color-mix(in srgb, var(--brand-primary) 8%, transparent), transparent 60%),
+        linear-gradient(145deg, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 60%),
         color-mix(in srgb, var(--text) 3%, transparent);
-    border-color: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 55%, transparent);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 30%, transparent) inset,
+        0 20px 50px -20px color-mix(in srgb, var(--brand-primary) 45%, transparent);
+    animation: dish-breath 3s ease-in-out infinite;
+}
+
+/* Gloeiende border-ring die langzaam "ademt" */
+@keyframes dish-breath {
+    0%, 100% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 30%, transparent) inset,
+        0 20px 50px -20px color-mix(in srgb, var(--brand-primary) 45%, transparent); }
+    50% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-primary) 55%, transparent) inset,
+        0 24px 64px -18px color-mix(in srgb, var(--brand-primary) 65%, transparent),
+        0 0 30px -4px color-mix(in srgb, var(--brand-primary) 35%, transparent); }
 }
 
 .dish-dash.meat.running::before {
-    background: var(--brand-primary);
-    box-shadow: 0 0 14px color-mix(in srgb, var(--brand-primary) 60%, transparent);
+    background: linear-gradient(180deg, var(--brand-primary), color-mix(in srgb, var(--brand-primary) 70%, var(--brand-gold, var(--brand))));
+    box-shadow: 0 0 20px color-mix(in srgb, var(--brand-primary) 80%, transparent);
+    width: 4px;
+}
+
+/* "Marching ants" shimmer-overlay op running dish-card */
+.dish-dash.running::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+    background: linear-gradient(
+        115deg,
+        transparent 30%,
+        color-mix(in srgb, var(--brand-primary) 12%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: dish-shimmer 3s linear infinite;
+    mix-blend-mode: overlay;
+    z-index: 0;
+}
+
+.dish-dash.vega.running::after {
+    background: linear-gradient(
+        115deg,
+        transparent 30%,
+        color-mix(in srgb, var(--green) 15%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+}
+
+@keyframes dish-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* Zorg dat inhoud boven shimmer zit */
+.dish-dash > * {
+    position: relative;
+    z-index: 1;
 }
 
 .dish-dash.vega.running {
     background:
-        linear-gradient(145deg, color-mix(in srgb, var(--green) 8%, transparent), transparent 60%),
+        linear-gradient(145deg, color-mix(in srgb, var(--green) 10%, transparent), transparent 60%),
         color-mix(in srgb, var(--text) 3%, transparent);
-    border-color: color-mix(in srgb, var(--green) 40%, transparent);
+    border-color: color-mix(in srgb, var(--green) 55%, transparent);
+    animation: dish-breath-vega 3s ease-in-out infinite;
+}
+
+@keyframes dish-breath-vega {
+    0%, 100% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--green) 30%, transparent) inset,
+        0 20px 50px -20px color-mix(in srgb, var(--green) 45%, transparent); }
+    50% { box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--green) 55%, transparent) inset,
+        0 24px 64px -18px color-mix(in srgb, var(--green) 65%, transparent),
+        0 0 30px -4px color-mix(in srgb, var(--green) 35%, transparent); }
 }
 
 .dish-dash.vega.running::before {
-    background: var(--green);
-    box-shadow: 0 0 14px color-mix(in srgb, var(--green) 60%, transparent);
+    background: linear-gradient(180deg, var(--green), color-mix(in srgb, var(--green) 70%, var(--brand-gold, var(--brand))));
+    box-shadow: 0 0 20px color-mix(in srgb, var(--green) 80%, transparent);
+    width: 4px;
 }
 
 .dish-dash.done {
-    opacity: .65;
+    opacity: .72;
+    background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, color-mix(in srgb, var(--green) 8%, transparent), transparent 70%),
+        color-mix(in srgb, var(--text) 2%, transparent);
+    border-color: color-mix(in srgb, var(--green) 35%, transparent);
 }
 
 .dish-dash.done::before {
     background: var(--green);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+/* Een subtiele celebrate-strook bij dish-done */
+.dish-dash.done::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+    background: linear-gradient(135deg,
+        transparent 40%,
+        color-mix(in srgb, var(--green) 8%, transparent) 50%,
+        transparent 60%);
+    opacity: 0;
+    animation: dish-celebrate 1s ease-out 1;
+    z-index: 0;
+}
+
+@keyframes dish-celebrate {
+    0% { opacity: 0; transform: translateX(-50%); }
+    50% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(50%); }
 }
 
 .dish-dash.overtime {
@@ -1756,6 +1967,20 @@
     border-radius: 10px;
     border: 1px solid var(--card-solid);
     flex-shrink: 0;
+    transition: transform .5s cubic-bezier(.2, .8, .2, 1);
+    box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .4);
+}
+
+.dish-dash:hover .dish-dash-img { transform: scale(1.05); }
+.dish-dash.running .dish-dash-img {
+    box-shadow:
+        0 6px 18px -8px rgba(0, 0, 0, .4),
+        0 0 0 2px color-mix(in srgb, var(--brand-primary) 40%, transparent);
+}
+.dish-dash.vega.running .dish-dash-img {
+    box-shadow:
+        0 6px 18px -8px rgba(0, 0, 0, .4),
+        0 0 0 2px color-mix(in srgb, var(--green) 40%, transparent);
 }
 
 .dish-dash-img.ph {
@@ -1829,20 +2054,61 @@
 
 .dish-dash-count {
     font-family: Outfit, DM Sans, sans-serif;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 300;
     color: var(--brand-gold, var(--brand));
     font-variant-numeric: tabular-nums;
-    letter-spacing: -.02em;
-    padding: 4px 10px;
-    border-radius: 7px;
-    background: color-mix(in srgb, var(--brand-gold, var(--brand)) 10%, transparent);
+    letter-spacing: -.025em;
+    padding: 6px 12px;
+    border-radius: 9px;
     line-height: 1;
+    position: relative;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 18%, transparent),
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 8%, transparent));
+    border: 1px solid color-mix(in srgb, var(--brand-gold, var(--brand)) 28%, transparent);
+    overflow: hidden;
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--brand-gold, var(--brand)) 25%, transparent);
+}
+
+/* Shimmering goud-overlay */
+.dish-dash-count::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        115deg,
+        transparent 30%,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 40%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: count-shimmer 4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes count-shimmer {
+    0%, 100% { background-position: 100% 0; }
+    50% { background-position: -100% 0; }
 }
 
 .dish-dash.vega .dish-dash-count {
     color: var(--green);
-    background: color-mix(in srgb, var(--green) 12%, transparent);
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--green) 22%, transparent),
+        color-mix(in srgb, var(--green) 10%, transparent));
+    border-color: color-mix(in srgb, var(--green) 30%, transparent);
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--green) 25%, transparent);
+}
+
+.dish-dash.vega .dish-dash-count::before {
+    background: linear-gradient(
+        115deg,
+        transparent 30%,
+        color-mix(in srgb, var(--green) 45%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 200% 100%;
 }
 
 /* Timer + progress bar */
@@ -1995,10 +2261,91 @@
     color: var(--muted);
     text-align: center;
     font-style: italic;
-    margin: 0 16px;
+    margin: 0 16px 10px;
     border: 1px dashed var(--card-solid);
     border-radius: 8px;
-    margin-bottom: 10px;
+}
+
+/* Nieuw gerecht — niet in DB, met toevoegen-CTA */
+.dish-dash-plan-new {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    margin: 0 16px 10px;
+    border-radius: 11px;
+    border: 1px dashed color-mix(in srgb, var(--brand-gold, var(--brand)) 38%, transparent);
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--brand-gold, var(--brand)) 8%, transparent),
+            transparent 60%),
+        color-mix(in srgb, var(--text) 2%, transparent);
+    position: relative;
+    overflow: hidden;
+}
+
+.dish-dash-plan-new::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg,
+        transparent 35%,
+        color-mix(in srgb, var(--brand-gold, var(--brand)) 12%, transparent) 50%,
+        transparent 65%);
+    background-size: 200% 100%;
+    animation: count-shimmer 5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.dpn-icon {
+    font-size: 22px;
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--brand-gold, var(--brand)) 50%, transparent));
+    position: relative;
+    z-index: 1;
+    animation: sparkle 3s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+    0%, 100% { transform: scale(1) rotate(0); opacity: 1; }
+    50% { transform: scale(1.15) rotate(15deg); opacity: .8; }
+}
+
+.dpn-body { min-width: 0; position: relative; z-index: 1; }
+
+.dpn-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--brand-gold, var(--brand));
+    margin-bottom: 3px;
+}
+
+.dpn-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.dpn-cta {
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--brand-gold, var(--brand)) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-gold, var(--brand)) 45%, transparent);
+    color: var(--brand-gold, var(--brand));
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+    transition: all .15s;
+}
+
+.dpn-cta:hover {
+    background: color-mix(in srgb, var(--brand-gold, var(--brand)) 30%, transparent);
+    transform: translateY(-1px);
 }
 
 .dish-link {
