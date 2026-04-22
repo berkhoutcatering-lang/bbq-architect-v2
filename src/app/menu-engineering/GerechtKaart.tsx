@@ -90,7 +90,7 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
             border: selected ? 'none' : '1px solid rgba(255,255,255,.2)',
             background: selected ? 'var(--blue)' : 'transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 12
+            color: 'var(--text)', fontSize: 12
           }}>
             {selected && <Check size={16} />}
           </div>
@@ -106,7 +106,7 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
         )}
       </div>
 
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4, lineHeight: 1.3 }}>{gerecht.naam}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4, lineHeight: 1.3 }}>{gerecht.naam}</div>
       {gerecht.beschrijving && (
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,.45)', lineHeight: 1.45, marginBottom: 10 }}>
           {gerecht.beschrijving.slice(0, 80)}{gerecht.beschrijving.length > 80 ? '…' : ''}

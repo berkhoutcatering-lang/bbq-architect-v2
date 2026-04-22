@@ -376,7 +376,7 @@ export default function KlantGesprek() {
               <Sparkles size={16} style={{ color: '#c4a35a' }} />
             </div>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 2 }}>Claude stelt menu voor</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Claude stelt menu voor</div>
               <div style={{ fontSize: 11, color: 'var(--muted)' }}>Op basis van klant ({klant.type}), {event.gasten} gasten, {event.binnenBuiten.toLowerCase()}. Klik om matchende gerechten uit jouw pool te selecteren.</div>
             </div>
             <button onClick={async function () {
@@ -431,7 +431,7 @@ export default function KlantGesprek() {
               } finally {
                 setAiSuggesting(false);
               }
-            }} disabled={aiSuggesting} style={{ padding: '8px 14px', borderRadius: 8, background: '#c4a35a', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+            }} disabled={aiSuggesting} style={{ padding: '8px 14px', borderRadius: 8, background: '#c4a35a', color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
               <Sparkles size={13} /> {aiSuggesting ? 'Claude denkt na...' : 'Stel menu voor'}
             </button>
           </div>
@@ -712,7 +712,7 @@ export default function KlantGesprek() {
             <button onClick={saveAsConceptOfferte} disabled={saving}
               style={{
                 width: '100%', padding: '16px 24px', borderRadius: 14, fontSize: 15, fontWeight: 700,
-                background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)', color: '#000',
+                background: 'linear-gradient(135deg, var(--color-accent-gold), #a8893e)', color: 'var(--brand-background)',
                 border: 'none', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1,
               }}>
               {saving ? 'Bezig...' : 'Opslaan als Concept Offerte + Event'}

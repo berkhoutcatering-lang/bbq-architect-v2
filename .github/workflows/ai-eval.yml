@@ -1,0 +1,71 @@
+name: AI Evaluation
+
+# Draait niet op elke push — te duur (elke run ~€0,50 AI-kosten).
+# Manual trigger + wekelijks op zondag-nacht voor regressie-detectie.
+
+on:
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Minimum pass-ratio (0.0-1.0)'
+        required: false
+        default: '0.9'
+  schedule:
+    - cron: '0 3 * * 0'  # Zondag 03:00 UTC
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BBQ_EVAL_THRESHOLD: ${{ inputs.threshold || '0.9' }}
+      BBQ_EVAL_BASE: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install tsx for eval script
+        run: npm install -g tsx
+
+      - name: Build Next.js app
+        run: npm run build
+
+      - name: Start server in background
+        run: |
+          npm run start &
+          echo $! > server.pid
+
+      - name: Wait for server to be ready
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/welkom > /dev/null; then
+              echo "Server is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not start within 30s"
+          exit 1
+
+      - name: Run AI evals
+        run: npm run ai-eval
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi

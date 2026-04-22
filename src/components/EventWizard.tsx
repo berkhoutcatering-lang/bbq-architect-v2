@@ -298,7 +298,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                     return (
                       <div key={gang.slug}>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-[12px] font-semibold text-white">{gang.naam}</span>
+                          <span className="text-[12px] font-semibold text-[var(--text)]">{gang.naam}</span>
                           <span className="text-[10px] text-[var(--muted)]">{selected.length} gekozen{gang.min_keuze ? ` / min ${gang.min_keuze}` : ''}</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -441,7 +441,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
                   <Users className="w-4 h-4 text-[var(--blue)] shrink-0" />
                   <div className="flex-1">
-                    <div className="text-[13px] font-medium text-white">{klant.naam}</div>
+                    <div className="text-[13px] font-medium text-[var(--text)]">{klant.naam}</div>
                     <div className="text-[11px] text-[var(--muted)]">{klant.email || klant.tel || klant.adres || '—'}</div>
                   </div>
                 </div>
@@ -449,7 +449,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
                   <Calendar className="w-4 h-4 text-[var(--color-accent-gold)] shrink-0" />
                   <div className="flex-1">
-                    <div className="text-[13px] font-medium text-white">{details.naam || klant.naam}</div>
+                    <div className="text-[13px] font-medium text-[var(--text)]">{details.naam || klant.naam}</div>
                     <div className="text-[11px] text-[var(--muted)]">{details.datum} • {details.gasten} gasten • {details.locatie || 'Locatie TBD'}</div>
                   </div>
                 </div>
@@ -457,7 +457,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--bg)]">
                   <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div className="flex-1">
-                    <div className="text-[13px] font-medium text-white">{totalMenuDishes} gerechten</div>
+                    <div className="text-[13px] font-medium text-[var(--text)]">{totalMenuDishes} gerechten</div>
                     <div className="text-[11px] text-[var(--muted)]">
                       {menuItems.slice(0, 3).map(m => m.naam).join(', ')}
                       {menuItems.length > 3 && ` +${menuItems.length - 3} meer`}
@@ -491,7 +491,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
       <div className="flex items-center justify-between pt-4 mt-4 border-t border-[var(--border)]">
         <button
           onClick={() => step > 0 ? setStep(step - 1) : resetAndClose()}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-[var(--muted)] hover:text-white hover:bg-[var(--card-solid)] transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--card-solid)] transition-colors"
         >
           <ChevronLeft size={14} />
           {step > 0 ? 'Vorige' : 'Annuleren'}

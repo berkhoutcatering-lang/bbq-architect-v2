@@ -15,6 +15,7 @@ import FieldTooltip from '@/components/FieldTooltip';
 import VoiceInput from '@/components/VoiceInput';
 import HaccpControlCenter from '@/components/redesign/HaccpControlCenter';
 import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 import type { HaccpRecord, DbEvent, Offerte } from '@/types';
 
 interface HaccpForm {
@@ -249,6 +250,7 @@ export default function HACCP() {
     );
 
     return (
+        <RequireTier feature="haccp">
         <div className="artisan-page haccp-page">
             <PageHeader title="HACCP Monitoring" description="Log temperaturen en beheer compliance-dossiers" />
             <PageHint id="haccp" title="HACCP Monitoring" description="Log temperaturen via Quick Log (ideaal op mobiel). Alle metingen worden gekoppeld aan events voor compliance-dossiers." />
@@ -776,5 +778,6 @@ export default function HACCP() {
                 </div>
             )}
         </div>
+        </RequireTier>
     );
 }

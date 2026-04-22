@@ -8,7 +8,7 @@ import {
   Calendar, MessageCircle, Share2, CheckCheck, FileText, UtensilsCrossed,
   Eye, Download, Send, Printer, Receipt, ClipboardList, Truck, ShieldCheck,
   ChefHat, Edit3, Sparkles, Check, Users, Plus, MapPin, Mail, Phone, Navigation,
-  ArrowLeft, AlertTriangle,
+  ArrowLeft, AlertTriangle, Flame, Thermometer, Star, Flag, Pencil,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
@@ -17,9 +17,24 @@ import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
 import { displayEventName, titleCase } from '@/components/redesign/displayHelpers';
 import EventMenuKaartBuilder from '@/components/EventMenuKaartBuilder';
+import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
+import EventEditor from '@/components/events/EventEditor';
+import TemplatePreview from '@/components/template-editor/TemplatePreview';
+import type { PdfTemplate } from '@/types/template.types';
 import '@/components/redesign/redesign.css';
 
-type TplKey = 'ambacht' | 'modern' | 'slate';
+const MENUKAART_STYLE_TO_NAME: Record<MenuCardTemplate, string> = {
+  ambacht: 'Menukaart — Ambacht',
+  modern: 'Menukaart — Modern',
+  slate: 'Menukaart — Slate',
+};
+const MENUKAART_STYLE_TO_STARTER: Record<MenuCardTemplate, string> = {
+  ambacht: 'menukaart-ambacht',
+  modern: 'menukaart-modern',
+  slate: 'menukaart-slate',
+};
+
+type TplKey = MenuCardTemplate;
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -37,73 +52,6 @@ function parseMenu(m: unknown): number[] {
   return [];
 }
 
-function MenuCardAmbacht({ eventName, dateLabel, groups }: { eventName: string; dateLabel: string; groups: Array<{ title: string; items: Array<{ n: string; s?: string }> }> }) {
-  return (
-    <div style={{ background: '#f5eedf', color: '#1a1410', height: '100%', padding: '24px 22px 18px', fontFamily: 'var(--font-artisan)', position: 'relative' }}>
-      <div style={{ textAlign: 'center', borderBottom: '1px solid rgba(0,0,0,.15)', paddingBottom: 12, marginBottom: 16 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 9, letterSpacing: '.28em', fontWeight: 700, color: '#9e781c', textTransform: 'uppercase' }}>Hop &amp; Bites · Ambacht</div>
-        <div style={{ fontSize: 22, fontStyle: 'italic', fontWeight: 600, marginTop: 6, lineHeight: 1.1 }}>{eventName}</div>
-        <div style={{ fontFamily: 'var(--font-sans)', fontSize: 9.5, letterSpacing: '.18em', color: '#6b5a3e', marginTop: 7, textTransform: 'uppercase' }}>{dateLabel}</div>
-      </div>
-      {groups.map((g, gi) => (
-        <div key={gi} style={{ marginBottom: 10 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 9, letterSpacing: '.22em', color: '#9e781c', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>— {g.title} —</div>
-          {g.items.map((it, ii) => (
-            <div key={ii}>
-              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>{it.n}</div>
-              {it.s && <div style={{ fontFamily: 'var(--font-sans)', fontSize: 11, color: '#6b5a3e', marginBottom: 6 }}>{it.s}</div>}
-            </div>
-          ))}
-        </div>
-      ))}
-      <div style={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', fontFamily: 'var(--font-sans)', fontSize: 8, color: '#9e781c', letterSpacing: '.25em', textTransform: 'uppercase', fontWeight: 700 }}>— Geniet ervan —</div>
-    </div>
-  );
-}
-
-function MenuCardModern({ eventName, dateLabel, groups }: { eventName: string; dateLabel: string; groups: Array<{ title: string; items: Array<{ n: string; s?: string }> }> }) {
-  return (
-    <div style={{ background: '#ffffff', color: '#0a0a0c', height: '100%', padding: '28px 22px', fontFamily: 'var(--font-sans)', position: 'relative' }}>
-      <div style={{ width: 28, height: 3, background: '#FFBF00', marginBottom: 18 }}></div>
-      <div style={{ fontSize: 9, letterSpacing: '.25em', fontWeight: 700, color: '#9e781c', textTransform: 'uppercase', marginBottom: 4 }}>Hop &amp; Bites</div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 300, letterSpacing: '-.01em', lineHeight: 1.1, marginBottom: 6 }}>{eventName}</div>
-      <div style={{ fontSize: 10, color: '#6b6b6b', letterSpacing: '.04em', marginBottom: 22, fontVariantNumeric: 'tabular-nums' }}>{dateLabel}</div>
-      {groups.map((g, gi) => (
-        <div key={gi} style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 400, color: '#FFBF00' }}>{String(gi + 1).padStart(2, '0')}</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{g.title}</span>
-          </div>
-          <div style={{ fontSize: 10.5, color: '#707070', marginLeft: 32 }}>{g.items.map(x => x.n).join(' · ')}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MenuCardSlate({ eventName, dateLabel, groups }: { eventName: string; dateLabel: string; groups: Array<{ title: string; items: Array<{ n: string; s?: string }> }> }) {
-  return (
-    <div style={{ background: '#1a1a1c', color: '#f0e8d0', height: '100%', padding: '24px 22px 18px', fontFamily: 'var(--font-sans)', position: 'relative', backgroundImage: 'radial-gradient(ellipse at top right, rgba(196,163,90,.15), transparent 60%)' }}>
-      <div style={{ textAlign: 'center', borderBottom: '1px solid rgba(196,163,90,.2)', paddingBottom: 12, marginBottom: 16 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 8.5, letterSpacing: '.3em', fontWeight: 700, color: '#c4a35a', textTransform: 'uppercase' }}>★ Hop &amp; Bites ★</div>
-        <div style={{ fontFamily: 'var(--font-artisan)', fontSize: 20, fontStyle: 'italic', fontWeight: 600, marginTop: 8, lineHeight: 1.1, color: '#fff' }}>{eventName}</div>
-        <div style={{ fontSize: 9, letterSpacing: '.18em', color: '#8a7c60', marginTop: 8, textTransform: 'uppercase' }}>{dateLabel}</div>
-      </div>
-      {groups.map((g, gi) => (
-        <div key={gi} style={{ marginBottom: 10 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 8.5, letterSpacing: '.28em', color: '#c4a35a', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, textAlign: 'center' }}>{g.title}</div>
-          {g.items.map((it, ii) => (
-            <div key={ii} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{it.n}</div>
-              {it.s && <div style={{ fontSize: 10.5, color: '#9a8a6a', marginBottom: 4 }}>{it.s}</div>}
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function EventHubPage() {
   const params = useParams();
   const router = useRouter();
@@ -118,16 +66,52 @@ export default function EventHubPage() {
   const [gerechten, setGerechten] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [klant, setKlant] = useState<any>(null);
+  const [haccpRecords, setHaccpRecords] = useState<any[]>([]);
+  const [serviceLogs, setServiceLogs] = useState<any[]>([]);
+  const [reflectie, setReflectie] = useState<any>(null);
+  const [inkooplijst, setInkooplijst] = useState<any>(null);
+  const [gangen, setGangen] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tpl, setTpl] = useState<TplKey>('ambacht');
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
   const [menuBuilderOpen, setMenuBuilderOpen] = useState(false);
   const [menuIds, setMenuIds] = useState<number[]>([]);
+  const [menuBuilderQuery, setMenuBuilderQuery] = useState('');
+  const [menuSaving, setMenuSaving] = useState(false);
+  const [menuTemplates, setMenuTemplates] = useState<PdfTemplate[]>([]);
 
   useEffect(() => {
     if (event) setMenuIds(parseMenu(event.menu));
   }, [event]);
+
+  // Laad opgeslagen menukaart-templates voor deze org zodat de 3 stijl-tabs
+  // de aangepaste template tonen (en niet alleen de hardcoded MenuCard-variant).
+  useEffect(() => {
+    if (!orgId) return;
+    fetch('/api/templates?type=menukaart&orgId=' + orgId)
+      .then(r => r.json())
+      .then(d => { setMenuTemplates(d.templates || []); })
+      .catch(() => { /* fall back to hardcoded MenuCards */ });
+  }, [orgId]);
+
+  const activeTemplate = useMemo(() => {
+    const expectedName = MENUKAART_STYLE_TO_NAME[tpl];
+    return menuTemplates.find(t => t.name === expectedName && (t.organization_id === orgId || !t.organization_id)) || null;
+  }, [menuTemplates, tpl, orgId]);
+
+  async function saveMenu() {
+    if (!event) return;
+    setMenuSaving(true);
+    try {
+      await supabase.from('events').update({ menu: menuIds } as any).eq('id', event.id);
+      setEvent({ ...event, menu: menuIds });
+      setMenuBuilderOpen(false);
+    } finally { setMenuSaving(false); }
+  }
+  function toggleMenuItem(id: number) {
+    setMenuIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   useEffect(() => {
     if (!eventId || Number.isNaN(eventId)) return;
@@ -135,7 +119,7 @@ export default function EventHubPage() {
       const { data: ev } = await supabase.from('events').select('*').eq('id', eventId).single();
       if (!ev) { setLoading(false); return; }
       setEvent(ev);
-      const [rOff, rPrep, rFact, rRec, rGer, rKlant, rSet] = await Promise.all([
+      const [rOff, rPrep, rFact, rRec, rGer, rKlant, rSet, rHaccp, rSvc, rRefl, rInk, rGang] = await Promise.all([
         ev.offerte_id ? supabase.from('offertes').select('*').eq('id', ev.offerte_id).single() : Promise.resolve({ data: null }) as any,
         supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen', { ascending: false }),
         supabase.from('facturen').select('*').eq('client_naam', ev.client_naam || '__none__').limit(1),
@@ -143,6 +127,11 @@ export default function EventHubPage() {
         supabase.from('gerechten').select('*'),
         ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),
+        supabase.from('haccp_records').select('*').eq('event_id', eventId),
+        ev.offerte_id ? supabase.from('service_logs').select('*').eq('offerte_id', ev.offerte_id) : Promise.resolve({ data: [] }) as any,
+        supabase.from('event_reflecties').select('*').eq('event_id', eventId).limit(1),
+        supabase.from('inkooplijsten').select('*').eq('event_id', eventId).limit(1),
+        supabase.from('gangen').select('*').order('volgorde', { ascending: true }),
       ]);
       if (rOff && 'data' in rOff && rOff.data) setOfferte(rOff.data);
       setPrepTasks(rPrep.data || []);
@@ -154,6 +143,11 @@ export default function EventHubPage() {
       setGerechten(rGer.data || []);
       if (rSet && 'data' in rSet && rSet.data) setSettings(rSet.data);
       if (rKlant && 'data' in rKlant && rKlant.data && rKlant.data.length > 0) setKlant(rKlant.data[0]);
+      setHaccpRecords(rHaccp.data || []);
+      setServiceLogs(rSvc.data || []);
+      if (rRefl.data && rRefl.data.length > 0) setReflectie(rRefl.data[0]);
+      if (rInk.data && rInk.data.length > 0) setInkooplijst(rInk.data[0]);
+      setGangen(rGang.data || []);
       setLoading(false);
     })();
   }, [eventId]);
@@ -188,25 +182,78 @@ export default function EventHubPage() {
   const prepDoneCount = prepTasks.filter(p => prepState[p.id]).length;
   const prepReady = prepTasks.length === 0 ? 0 : Math.round((prepDoneCount / prepTasks.length) * 100);
 
+  /* Gang name lookup for service logs */
+  const gangNameMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const g of gangen) { if (g?.slug) m[g.slug] = g.naam || g.slug; }
+    return m;
+  }, [gangen]);
+
+  /* Workflow stages (Offerte → Acceptatie → Voorbereiding → Event dag → Afronding) */
+  const stages = useMemo(() => {
+    if (!event) return [] as Array<{ key: string; label: string; status: 'done' | 'active' | 'upcoming'; hint: string }>;
+    const isConfirmed = event.status === 'confirmed' || event.status === 'completed';
+    const isCompleted = event.status === 'completed';
+    const accepted = ['geaccepteerd', 'akkoord', 'betaald', 'definitief', 'goedgekeurd'];
+    const today = new Date().toISOString().slice(0, 10);
+    const isToday = event.date === today;
+    const allPrepDone = prepTasks.length > 0 && prepTasks.every(t => prepState[t.id]);
+
+    const out: Array<{ key: string; label: string; status: 'done' | 'active' | 'upcoming'; hint: string }> = [];
+    out.push({
+      key: 'offerte', label: 'Offerte',
+      status: offerte && accepted.includes(offerte.status) ? 'done' : offerte ? 'active' : 'upcoming',
+      hint: offerte ? `${offerte.nummer || 'Offerte'} · ${offerte.status || 'concept'}` : 'Nog geen offerte',
+    });
+    out.push({
+      key: 'acceptatie', label: 'Acceptatie',
+      status: isConfirmed && factuur && prepTasks.length > 0 ? 'done' : isConfirmed ? 'active' : 'upcoming',
+      hint: isConfirmed ? `Bevestigd · ${factuur ? 'factuur actief' : 'nog geen factuur'}` : 'Wacht op akkoord',
+    });
+    out.push({
+      key: 'voorbereiding', label: 'Voorbereiding',
+      status: allPrepDone ? 'done' : isConfirmed && prepTasks.length > 0 ? 'active' : 'upcoming',
+      hint: prepTasks.length > 0 ? `${prepDoneCount}/${prepTasks.length} prep-taken` : 'Geen prep-taken',
+    });
+    out.push({
+      key: 'eventdag', label: 'Event dag',
+      status: isCompleted ? 'done' : isToday || (isConfirmed && serviceLogs.length > 0) ? 'active' : 'upcoming',
+      hint: serviceLogs.length > 0 ? `${serviceLogs.length} gangen gelogd` : isToday ? 'Vandaag' : `${derived?.daysLeft ?? 0}d te gaan`,
+    });
+    const factBetaald = factuur && factuur.status === 'betaald';
+    out.push({
+      key: 'afronding', label: 'Afronding',
+      status: factBetaald && reflectie ? 'done' : isCompleted ? 'active' : 'upcoming',
+      hint: reflectie ? `Reflectie ${reflectie.score}/10` : factBetaald ? 'Factuur betaald · reflectie open' : 'Na het event',
+    });
+    return out;
+  }, [event, offerte, factuur, prepTasks, prepState, prepDoneCount, serviceLogs, reflectie, derived]);
+
   const menuGroups = useMemo(() => {
     if (!event) return [] as Array<{ title: string; items: Array<{ n: string; s?: string }> }>;
     const menuIds = parseMenu(event.menu);
     if (menuIds.length === 0) {
       return [{ title: 'Menu', items: [{ n: 'Nog geen menu gekoppeld', s: 'Voeg recepten toe via de event-editor' }] }];
     }
-    const items = menuIds
-      .map(id => recepten.find(r => r.id === id))
-      .filter(Boolean)
-      .map((r: any) => ({ n: r.naam || '—', s: r.categorie || r.type || undefined }));
-    const groupsByCat: Record<string, Array<{ n: string; s?: string }>> = {};
-    for (const r of menuIds.map(id => recepten.find(x => x.id === id)).filter(Boolean) as any[]) {
-      const cat = r.categorie || 'Hoofdgerechten';
-      if (!groupsByCat[cat]) groupsByCat[cat] = [];
-      groupsByCat[cat].push({ n: r.naam || '—' });
+    // Zoek elk ID zowel in recepten als in gerechten — menu-builder slaat beide soorten op.
+    function resolveMenuItem(id: number): { naam: string; cat: string; omschrijving?: string } | null {
+      const rec = recepten.find((r: any) => r.id === id);
+      if (rec) return { naam: rec.naam || '—', cat: rec.categorie || 'Hoofdgerechten', omschrijving: rec.beschrijving };
+      const ger = gerechten.find((g: any) => g.id === id);
+      if (ger) return { naam: ger.naam || '—', cat: ger.gang_slug || ger.categorie || 'Hoofdgerechten', omschrijving: ger.beschrijving };
+      return null;
     }
-    if (Object.keys(groupsByCat).length === 0) return [{ title: 'Menu', items }];
+    const resolved = menuIds.map(resolveMenuItem).filter(Boolean) as Array<{ naam: string; cat: string; omschrijving?: string }>;
+    if (resolved.length === 0) {
+      return [{ title: 'Menu', items: [{ n: 'Menu niet gevonden', s: 'Recepten of gerechten zijn mogelijk verwijderd' }] }];
+    }
+    const groupsByCat: Record<string, Array<{ n: string; s?: string }>> = {};
+    for (const r of resolved) {
+      if (!groupsByCat[r.cat]) groupsByCat[r.cat] = [];
+      groupsByCat[r.cat].push({ n: r.naam, s: r.omschrijving });
+    }
     return Object.entries(groupsByCat).map(([title, its]) => ({ title, items: its }));
-  }, [event, recepten]);
+  }, [event, recepten, gerechten]);
 
   async function togglePrep(id: number) {
     const prev = prepState[id];
@@ -406,6 +453,7 @@ export default function EventHubPage() {
                 </div>
               </div>
               <div className="eh-hero-actions">
+                <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
                 <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
                 {event.client_email && (
                   <a className="btn btn-ghost" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
@@ -593,7 +641,7 @@ export default function EventHubPage() {
                     Ic: Truck,
                     t: 'Laadlijst',
                     s: 'Ingr. + crew + tijden',
-                    onClick: () => router.push(`/events/${event.id}`),
+                    onClick: () => document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
                     download: downloadLaadlijst,
                     disabled: false,
                   },
@@ -625,6 +673,32 @@ export default function EventHubPage() {
                       >
                         <Download size={12} />
                       </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="metal">
+              <div className="metal-head">
+                <div className="hstack"><Flag size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Workflow · 5 stappen</span></div>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{stages.filter(s => s.status === 'done').length} / {stages.length} afgerond</span>
+              </div>
+              <div style={{ padding: 18, display: 'grid', gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: 8, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '8%', right: '8%', top: 30, height: 2, background: 'linear-gradient(90deg, rgba(196,163,90,.35), rgba(196,163,90,.08))', zIndex: 0 }} />
+                {stages.map(s => {
+                  const color = s.status === 'done' ? 'var(--green)' : s.status === 'active' ? 'var(--brand)' : 'var(--muted)';
+                  const bg = s.status === 'done' ? 'var(--green)' : s.status === 'active' ? 'rgba(255,191,0,.14)' : 'rgba(130,130,130,.08)';
+                  return (
+                    <div key={s.key} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: bg, border: '2px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: s.status === 'active' ? '0 0 0 4px rgba(255,191,0,.15)' : 'none' }}>
+                        {s.status === 'done' && <Check size={12} style={{ color: 'var(--brand-background)' }} />}
+                        {s.status === 'active' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />}
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: s.status === 'upcoming' ? 'var(--muted)' : 'var(--text)', letterSpacing: '-.005em' }}>{s.label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, lineHeight: 1.35 }}>{s.hint}</div>
+                      </div>
                     </div>
                   );
                 })}
@@ -665,9 +739,35 @@ export default function EventHubPage() {
                   <div style={{ fontSize: 11, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
                   <div className="mk-preview-wrap">
                     <div className="mk-preview-card mk-printable">
-                      {tpl === 'ambacht' && <MenuCardAmbacht eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />}
-                      {tpl === 'modern' && <MenuCardModern eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />}
-                      {tpl === 'slate' && <MenuCardSlate eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />}
+                      {activeTemplate ? (
+                        <TemplatePreview
+                          blocks={activeTemplate.blocks}
+                          pageSettings={activeTemplate.page_settings}
+                          documentType="menukaart"
+                          branding={{
+                            primary: settings?.brand_primary || '#9e781c',
+                            accent: settings?.brand_accent || '#8b6914',
+                            logoUrl: settings?.logo_url || null,
+                            logoDarkUrl: settings?.logo_dark_url || null,
+                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
+                          }}
+                          variables={{
+                            event_naam: titleCase(displayEventName(event.name)),
+                            event_datum: dateUpper,
+                            aantal_gasten: String(event.guests || 0),
+                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
+                            ondertitel: settings?.ondertitel || '',
+                            bedrijf_email: settings?.email || '',
+                            bedrijf_telefoon: settings?.telefoon || '',
+                            bedrijf_adres: settings?.adres || '',
+                            website: settings?.website || '',
+                          }}
+                          menuGroups={menuGroups.map(g => ({ gang: g.title, dishes: g.items }))}
+                          width={300}
+                        />
+                      ) : (
+                        <MenuCard template={tpl} eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />
+                      )}
                     </div>
                     <div className="mk-template-tabs">
                       <button className={tpl === 'ambacht' ? 'on' : ''} onClick={() => setTpl('ambacht')}>
@@ -680,6 +780,14 @@ export default function EventHubPage() {
                         <span className="swatch" style={{ background: '#1a1a1c' }}></span>Slate
                       </button>
                     </div>
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                      <a href={activeTemplate?.id
+                        ? `/template-editor?id=${activeTemplate.id}`
+                        : `/template-editor?type=menukaart&start=${MENUKAART_STYLE_TO_STARTER[tpl]}`}
+                        style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
+                        <Pencil size={11} /> {activeTemplate ? 'Template aanpassen' : 'Template maken'}
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -687,36 +795,175 @@ export default function EventHubPage() {
 
             <div className="metal">
               <div className="metal-head">
-                <div className="hstack"><ClipboardList size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Prep-schema · {derived?.daysLeft ?? 0}d tot event</span></div>
+                <div className="hstack"><ClipboardList size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Prep-agenda · {derived?.daysLeft ?? 0}d tot event</span></div>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{prepDoneCount} / {prepTasks.length} afgerond</span>
               </div>
-              <div style={{ padding: 0 }}>
+              <div style={{ padding: 18 }}>
                 {prepTasks.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                  <div style={{ padding: 8, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                     Nog geen prep-taken — voeg toe via de event-editor.
                   </div>
-                ) : prepTasks.map((c, i) => {
-                  const done = !!prepState[c.id];
-                  const dagenLabel = typeof c.dagen === 'number' ? (c.dagen === 0 ? 'Op de dag' : `T-${c.dagen}d`) : '';
-                  const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - c.dagen : null;
-                  const isKeyStep = !done && daysUntil != null && daysUntil >= 0 && daysUntil <= 1;
+                ) : (() => {
+                  /* Bucket tasks by dagen (T-Nd). Sort descending: T-5 → T-0. */
+                  const buckets = new Map<number, any[]>();
+                  for (const t of prepTasks) {
+                    const d = typeof t.dagen === 'number' ? t.dagen : 0;
+                    if (!buckets.has(d)) buckets.set(d, []);
+                    buckets.get(d)!.push(t);
+                  }
+                  const sortedDagen = Array.from(buckets.keys()).sort((a, b) => b - a);
+                  const today0 = derived?.daysLeft ?? 0;
+                  const dayLabel = (d: number) => d === 0 ? 'D-day' : d < 0 ? `D+${Math.abs(d)}` : `D-${d}`;
+                  const dayTitle: Record<number, string> = {
+                    5: 'Bestellen & voorcheck',
+                    4: 'Rubs & marinades',
+                    3: 'Bestellen & checken',
+                    2: 'Marineren & rubben',
+                    1: 'Inladen & mise-en-place',
+                    0: 'Event dag · service',
+                  };
                   return (
-                    <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 12, alignItems: 'center', padding: '11px 18px', borderTop: i === 0 ? 'none' : '1px solid rgba(130,130,130,.08)', cursor: 'pointer' } as CSSProperties} onClick={() => togglePrep(c.id)}>
-                      <div style={{ width: 20, height: 20, borderRadius: 5, border: '1.5px solid ' + (done ? 'var(--green)' : 'var(--muted)'), background: done ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000' }}>
-                        {done && <Check size={13} />}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: done ? 'var(--muted)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>{c.text || '—'}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{dagenLabel}</div>
-                      </div>
-                      {isKeyStep && (
-                        <span style={{ fontSize: 10, color: 'var(--amber)', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }}>Key step</span>
-                      )}
+                    <div style={{ position: 'relative', paddingLeft: 28 }}>
+                      <div style={{ position: 'absolute', left: 9, top: 10, bottom: 10, width: 2, background: 'linear-gradient(180deg, rgba(196,163,90,.35), rgba(196,163,90,.08))', borderRadius: 1 }} />
+                      {sortedDagen.map((d) => {
+                        const tasks = buckets.get(d)!;
+                        const doneCount = tasks.filter(t => prepState[t.id]).length;
+                        const pct = Math.round((doneCount / tasks.length) * 100);
+                        const isToday = today0 === d;
+                        const isPast = today0 > d;
+                        const isOnDeck = today0 - d >= 0 && today0 - d <= 1;
+                        const dotColor = pct === 100 ? 'var(--green)' : isToday ? 'var(--brand)' : isOnDeck ? 'var(--amber)' : 'var(--brand-gold)';
+                        return (
+                          <div key={d} style={{ position: 'relative', marginBottom: 18 }}>
+                            <div style={{ position: 'absolute', left: -28 + 2, top: 4, width: 16, height: 16, borderRadius: '50%', background: pct === 100 ? dotColor : 'var(--bg-subtle, #0e0e10)', border: '2px solid ' + dotColor, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, boxShadow: isToday ? '0 0 0 4px rgba(255,191,0,.18)' : 'none' }}>
+                              {pct === 100 && <Check size={9} style={{ color: 'var(--brand-background)' }} />}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16, color: dotColor, letterSpacing: '-.005em' }}>{dayLabel(d)}</span>
+                              <span style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{dayTitle[d] || (d === 0 ? 'Event dag' : d < 0 ? 'Na afloop' : 'Voorbereiding')}</span>
+                              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{doneCount}/{tasks.length}</span>
+                            </div>
+                            <div style={{ height: 3, background: 'rgba(130,130,130,.15)', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: pct + '%', background: pct === 100 ? 'var(--green)' : isOnDeck ? 'var(--amber)' : 'var(--brand-gold)', borderRadius: 2, transition: 'width .3s' }} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {tasks.map((c: any) => {
+                                const done = !!prepState[c.id];
+                                const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - c.dagen : null;
+                                const isKeyStep = !done && daysUntil != null && daysUntil >= 0 && daysUntil <= 1;
+                                const badge = isKeyStep ? 'Key step' : (!done && isPast ? 'Achterstand' : null);
+                                const badgeColor = isKeyStep ? 'var(--amber)' : 'var(--red)';
+                                return (
+                                  <label key={c.id} className="prep-task-row" style={{ display: 'grid', gridTemplateColumns: '20px 1fr auto', gap: 10, alignItems: 'center', padding: '7px 10px', borderRadius: 8, cursor: 'pointer', background: isKeyStep ? 'rgba(245,158,11,.06)' : 'transparent', border: isKeyStep ? '1px solid rgba(245,158,11,.22)' : '1px solid transparent', transition: 'background .15s' } as CSSProperties}>
+                                    <input
+                                      type="checkbox"
+                                      checked={done}
+                                      onChange={() => togglePrep(c.id)}
+                                      aria-label={`${c.text || 'Taak'} — ${dayLabel(d)}${badge ? ` · ${badge}` : ''}`}
+                                      style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }}
+                                    />
+                                    <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, border: '1.5px solid ' + (done ? 'var(--green)' : isPast ? 'var(--amber)' : 'var(--muted)'), background: done ? 'var(--green)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-background)' }}>
+                                      {done && <Check size={12} />}
+                                    </span>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: done ? 'var(--muted)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>{c.text || '—'}</span>
+                                    {badge && (
+                                      <span style={{ fontSize: 9.5, color: badgeColor, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>{badge}</span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
-                })}
+                })()}
               </div>
             </div>
+
+            {(serviceLogs.length > 0 || haccpRecords.length > 0 || reflectie || event.status === 'completed') && (
+              <div className="metal">
+                <div className="metal-head">
+                  <div className="hstack"><Flame size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Uitvoering &amp; nazorg</span></div>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {serviceLogs.length} service-log{serviceLogs.length === 1 ? '' : 's'} · {haccpRecords.length} HACCP · {reflectie ? 'reflectie ingevuld' : 'geen reflectie'}
+                  </span>
+                </div>
+                <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--brand-gold)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Flame size={11} />Service-logs · gangen
+                    </div>
+                    {serviceLogs.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                        Nog geen service-log. Start tijdens het event via <button onClick={() => router.push('/service')} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Service Mode</button>.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {serviceLogs.slice(0, 6).map((log: any, i: number) => {
+                          const gangName = gangNameMap[log.gang_slug] || log.gang_slug || 'Gang';
+                          const mins = log.duration_seconds ? Math.round(log.duration_seconds / 60) : null;
+                          return (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,.02)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                              <span style={{ fontSize: 13, fontWeight: 500 }}>{gangName}</span>
+                              <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{mins != null ? `${mins} min` : '—'}</span>
+                            </div>
+                          );
+                        })}
+                        {serviceLogs.length > 6 && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', paddingTop: 4 }}>+ {serviceLogs.length - 6} meer</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--brand-gold)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Thermometer size={11} />HACCP · laatste metingen
+                    </div>
+                    {haccpRecords.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                        Nog geen metingen voor dit event.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {haccpRecords.slice(0, 6).map((rec: any, i: number) => {
+                          const statusColor = rec.status === 'ok' ? 'var(--green)' : rec.status === 'warn' ? 'var(--amber)' : 'var(--red)';
+                          return (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,.02)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                              <span style={{ fontSize: 13, fontWeight: 500 }}>{rec.wat || 'Meting'}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rec.temp != null && rec.temp > 0 ? `${rec.temp}°C` : '—'}</span>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {haccpRecords.length > 6 && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', paddingTop: 4 }}>+ {haccpRecords.length - 6} meer</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {(event.status === 'completed' || reflectie) && (
+                  <div style={{ padding: '14px 18px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, background: 'rgba(255,191,0,.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Star size={16} color="var(--brand)" />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Reflectie</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          {reflectie ? `Score ${reflectie.score}/10 · ${reflectie.wat_goed ? String(reflectie.wat_goed).slice(0, 60) : 'Ingevuld'}` : 'Nog niet ingevuld — doe dit binnen een week na het event.'}
+                        </div>
+                      </div>
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/events/${event.id}/reflectie`)}>
+                      <Pencil size={13} />{reflectie ? 'Bekijk' : 'Invullen'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -772,12 +1019,12 @@ export default function EventHubPage() {
             <div className="metal">
               <div className="metal-head" style={{ padding: '12px 16px' }}>
                 <div className="hstack"><Users size={14} color="var(--brand-gold)" /><span style={{ fontSize: 13, fontWeight: 600 }}>Crew</span></div>
-                <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/events/${event.id}`)}><Plus size={12} />Toevoegen</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><Plus size={12} />Toevoegen</button>
               </div>
               <div style={{ padding: 12 }}>
                 {(event.team || []).length === 0 ? (
                   <div style={{ padding: '8px 4px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                    Nog geen crew ingepland. <button onClick={() => router.push(`/events/${event.id}`)} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Voeg toe in de editor</button>.
+                    Nog geen crew ingepland. <button onClick={() => document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Voeg toe in de editor</button>.
                   </div>
                 ) : (event.team as string[]).map((p, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', borderTop: i === 0 ? 'none' : '1px solid rgba(130,130,130,.08)' }}>
@@ -799,6 +1046,24 @@ export default function EventHubPage() {
               await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
               setEvent({ ...event, draaiboek });
             }} />
+          </div>
+        </div>
+
+        <div id="gegevens" className="metal" style={{ marginTop: 20 }}>
+          <div className="metal-head">
+            <div className="hstack"><Pencil size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Gegevens bewerken</span></div>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Velden worden opgeslagen op &quot;Opslaan&quot;</span>
+          </div>
+          <div style={{ padding: 20 }}>
+            <EventEditor
+              eventId={event.id}
+              onSaved={async () => {
+                /* Refetch the event so hub-level stats reflect the edit */
+                const { data: ev } = await supabase.from('events').select('*').eq('id', eventId).single();
+                if (ev) setEvent(ev);
+              }}
+              onDeleted={() => router.push('/events')}
+            />
           </div>
         </div>
       </div>

@@ -150,7 +150,7 @@ export default function HelpCenter() {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, var(--color-accent-gold) 0%, #8b6914 100%)', marginBottom: 12 }}>
-          <HelpCircle size={28} style={{ color: '#fff' }} />
+          <HelpCircle size={28} style={{ color: 'var(--text)' }} />
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Help Center</h1>
         <p style={{ fontSize: 14, color: 'var(--muted)' }}>Vind antwoorden of neem contact op</p>
@@ -176,7 +176,7 @@ export default function HelpCenter() {
         <button onClick={function () { setActiveView('support'); }}
           style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, background: activeView === 'support' ? 'var(--card)' : 'transparent', color: activeView === 'support' ? 'var(--text)' : 'var(--muted)', boxShadow: activeView === 'support' ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>
           <MessageCircle size={12} /> Support {tickets.filter(function (t) { return t.status === 'open'; }).length > 0 && (
-            <span style={{ fontSize: 12, fontWeight: 800, padding: '4px 8px', borderRadius: '50%', background: 'var(--blue)', color: '#fff' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, padding: '4px 8px', borderRadius: '50%', background: 'var(--blue)', color: 'var(--text)' }}>
               {tickets.filter(function (t) { return t.status === 'open'; }).length}
             </span>
           )}

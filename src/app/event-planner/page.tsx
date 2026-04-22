@@ -138,7 +138,7 @@ export default function EventPlannerDashboard() {
     const handleRefresh = () => { refetch(); };
 
     return (
-        <div className="min-h-screen bg-[var(--bg)] text-white">
+        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
             <div className="flex min-h-screen">
                 {sidebarOpen && (
                     <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -397,7 +397,7 @@ export default function EventPlannerDashboard() {
                                         { label: "Events", href: "/events" },
                                     ].map((l) => (
                                         <Link key={l.href} href={l.href} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-[var(--border)] transition-all group">
-                                            <span className="text-xs font-bold text-[var(--muted)] group-hover:text-white transition-colors">{l.label}</span>
+                                            <span className="text-xs font-bold text-[var(--muted)] group-hover:text-[var(--text)] transition-colors">{l.label}</span>
                                             <ArrowLeft className="h-3 w-3 text-[var(--muted)] rotate-180" />
                                         </Link>
                                     ))}
@@ -409,8 +409,8 @@ export default function EventPlannerDashboard() {
                     <footer className="mt-8 border-t border-[var(--border)] pt-4 text-[10px] text-[var(--muted)] flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p>© 2026 BBQ Architect • Event Planner Workspace</p>
                         <div className="flex gap-4">
-                            <Link href="/instellingen" className="hover:text-white transition-colors">Instellingen</Link>
-                            <Link href="/haccp" className="hover:text-white transition-colors">HACCP</Link>
+                            <Link href="/instellingen" className="hover:text-[var(--text)] transition-colors">Instellingen</Link>
+                            <Link href="/haccp" className="hover:text-[var(--text)] transition-colors">HACCP</Link>
                         </div>
                     </footer>
                 </main>

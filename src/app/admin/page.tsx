@@ -296,7 +296,7 @@ export default function AdminPortal() {
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #c4a35a 0%, #8b6914 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Building2 size={20} style={{ color: '#fff' }} />
+            <Building2 size={20} style={{ color: 'var(--text)' }} />
           </div>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Platform Beheer</h1>

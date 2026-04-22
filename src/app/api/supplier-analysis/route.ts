@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -81,12 +84,54 @@ Geef praktisch advies voor een kleine horeca-ondernemer. Verwerk de goedkoper-el
 
         const client = new Anthropic({ apiKey });
 
+        // Resolve org for usage logging
+        let orgId: string | null = null;
+        let userId: string | null = null;
+        try {
+            const sb = await createServerSupabase();
+            const { data: { user } } = await sb.auth.getUser();
+            if (user) {
+                userId = user.id;
+                const mem = await sb.from('organization_members')
+                    .select('organization_id')
+                    .eq('user_id', user.id)
+                    .eq('status', 'active')
+                    .limit(1)
+                    .maybeSingle();
+                orgId = mem.data?.organization_id ?? null;
+            }
+        } catch { /* logging optional */ }
+
+        const model = 'claude-opus-4-7';
         const response = await client.messages.create({
-            model: 'claude-opus-4-7',
+            model,
             max_tokens: 2000,
-            system: SYSTEM_PROMPT,
+            system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userPrompt }],
         });
+
+        // Log AI-usage (fire-and-forget)
+        if (orgId && response.usage) {
+            const u = response.usage;
+            logAiUsageServer({
+                organization_id: orgId,
+                user_id: userId,
+                action_type: 'other',
+                model,
+                tokens_input: u.input_tokens,
+                tokens_output: u.output_tokens,
+                tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+                cost_eur_cents: estimateAiCostCents({
+                    model,
+                    tokens_input: u.input_tokens,
+                    tokens_output: u.output_tokens,
+                    tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                    tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+                }),
+                metadata: { action: 'supplier-analysis', leverancier },
+            }).catch(function () { /* non-blocking */ });
+        }
 
         const textBlock = response.content.find(b => b.type === 'text');
         if (!textBlock || textBlock.type !== 'text') {

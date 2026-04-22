@@ -1,0 +1,18 @@
+{
+  "id": "case-007",
+  "description": "Premium zakelijke BBQ met wagyu",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Exclusief relatie-event — 20 directieleden, premium carnes zoals wagyu en picanha, wijnpairing",
+      "existing": [],
+      "options": { "gasten": 20, "gangen": 4 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 4 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 60 }
+  ]
+}

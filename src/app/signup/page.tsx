@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Flame } from 'lucide-react';
+import { logActivationEvent } from '@/lib/activation';
 
 export default function SignupPage() {
   const [step, setStep] = useState(1);
@@ -61,15 +62,25 @@ export default function SignupPage() {
       }),
     });
 
+    const orgData = await res.json();
+
     if (!res.ok) {
-      const err = await res.json();
-      setError(err.error || 'Fout bij aanmaken organisatie');
+      setError(orgData?.error || 'Fout bij aanmaken organisatie');
       setLoading(false);
       return;
     }
 
-    // Success — redirect to app
-    window.location.href = '/';
+    // Log activation event (fire-and-forget) via helper voor consistentie
+    const newOrgId: string | undefined = orgData?.organization?.id;
+    if (newOrgId) {
+      await logActivationEvent(newOrgId, 'signup_completed', {
+        via: 'signup_form',
+        referrer: typeof document !== 'undefined' ? document.referrer || 'direct' : 'direct',
+      });
+    }
+
+    // Nieuwe gebruikers gaan naar onboarding, daarna pas naar dashboard
+    window.location.href = '/onboarding';
   }
 
   return (

@@ -158,7 +158,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Sparkles size={16} style={{ color: GOLD }} />
-                            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: '#fff', margin: 0 }}>AI Offerte Wizard</h2>
+                            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', margin: 0 }}>AI Offerte Wizard</h2>
                         </div>
                         <p style={{ fontSize: 11, color: 'var(--muted, #999)', margin: 0, marginTop: 2 }}>Claude stelt menu + prijs samen op basis van jouw {existingGerechten.length} gerechten</p>
                     </div>
@@ -236,7 +236,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             )}
 
                             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid, #1a1a1e)', background: 'var(--card, #15151a)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+                                <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid, #1a1a1e)', background: 'var(--card, #15151a)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
                                 <button onClick={generate} disabled={!clientName.trim()}
                                     style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: clientName.trim() ? '#fff' : 'rgba(255,255,255,.3)', color: '#000', fontSize: 12, fontWeight: 700, cursor: clientName.trim() ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                     <Sparkles size={14} /> Genereer offerte
@@ -248,7 +248,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                     {step === 'generating' && (
                         <div style={{ padding: 60, textAlign: 'center' }}>
                             <Loader2 size={32} className="spin" style={{ color: GOLD, margin: '0 auto 16px' }} />
-                            <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 6 }}>Claude denkt na over jouw menu...</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Claude denkt na over jouw menu...</div>
                             <div style={{ fontSize: 12, color: 'var(--muted, #999)' }}>Meestal 30–60 seconden. AI houdt rekening met je bestaande gerechten, prijs-per-persoon en gangen-indeling.</div>
                             <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                         </div>
@@ -258,11 +258,11 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                             <div style={{ padding: 12, borderRadius: 10, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.25)', display: 'flex', gap: 10, alignItems: 'center' }}>
                                 <Check size={18} style={{ color: '#22c55e' }} />
-                                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>Menu bedacht — check en sla op als concept-offerte</span>
+                                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Menu bedacht — check en sla op als concept-offerte</span>
                             </div>
 
                             <div>
-                                <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 600, color: '#fff', margin: 0 }}>{generated.menu_naam || 'Nieuwe offerte'}</h3>
+                                <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{generated.menu_naam || 'Nieuwe offerte'}</h3>
                                 {generated.thema && <p style={{ fontSize: 12, color: 'var(--muted, #999)', marginTop: 4, marginBottom: 0 }}>{generated.thema}</p>}
                             </div>
 
@@ -292,7 +292,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                                     <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: 'var(--muted, #999)' }}>{g.gang || g.categorie || '—'}</span>
                                                 </div>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{g.naam}</div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{g.naam}</div>
                                                 {g.beschrijving && <div style={{ fontSize: 11, color: 'var(--muted, #999)', marginTop: 2 }}>{g.beschrijving}</div>}
                                             </div>
                                             {g.geschatte_kostprijs_pp && (
@@ -308,7 +308,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             )}
 
                             <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, paddingTop: 10, background: 'var(--bg, #0a0a0d)' }}>
-                                <button onClick={() => setStep('input')} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid, #1a1a1e)', background: 'var(--card, #15151a)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Opnieuw</button>
+                                <button onClick={() => setStep('input')} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid, #1a1a1e)', background: 'var(--card, #15151a)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Opnieuw</button>
                                 <button onClick={saveAsOfferte} disabled={saving}
                                     style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                     {saving ? <><Loader2 size={14} className="spin" /> Offerte opslaan...</> : <><ArrowRight size={14} /> Opslaan als concept-offerte</>}
@@ -343,7 +343,7 @@ const inputStyle: React.CSSProperties = {
     borderRadius: 8,
     border: '1px solid var(--card-solid, #1a1a1e)',
     background: 'var(--color-bg-deep, #0d0d10)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 13,
     outline: 'none',
     fontFamily: 'inherit',

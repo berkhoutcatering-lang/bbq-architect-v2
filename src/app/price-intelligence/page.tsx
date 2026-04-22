@@ -2,6 +2,7 @@
 'use client';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { RequireTier } from '@/components/PaywallPrompt';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
@@ -69,7 +70,7 @@ function BtnPrimary({ children, icon: I, right: R, onClick, style, disabled, typ
     return (
         <button type={type || 'button'} onClick={onClick} disabled={disabled} style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10,
-            background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 13,
+            background: 'var(--brand)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 13,
             border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
             boxShadow: '0 4px 20px rgba(255,191,0,.25), inset 0 1px 0 rgba(255,255,255,.2)',
             ...style,
@@ -459,6 +460,7 @@ export default function PriceIntelligence() {
     }
 
     return (
+        <RequireTier feature="price_intelligence">
         <div className="page-container-compact" style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
                 <div>
@@ -488,6 +490,7 @@ export default function PriceIntelligence() {
                 {folder === 'books' && <FolderBooks />}
             </div>
         </div>
+        </RequireTier>
     );
 }
 
@@ -944,7 +947,7 @@ function DuplicateCleanup({ invoices, onRemove }: { invoices: any[]; onRemove: (
                 <button
                     onClick={() => showConfirm(`${totalDupes} dubbele factuur${totalDupes === 1 ? '' : 'en'} verwijderen?\n\nPer groep wordt de oudste behouden.`, removeAllDupes)}
                     disabled={working}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 12, border: 'none', cursor: working ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--red)', color: 'var(--text)', fontWeight: 700, fontSize: 12, border: 'none', cursor: working ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                     <Trash2 size={13} /> {working ? 'Bezig…' : 'Ruim op'}
                 </button>

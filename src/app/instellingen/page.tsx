@@ -54,13 +54,43 @@ export default function Instellingen() {
         const { id, created_at, updated_at, ...data } = form;
         const beforePrimary = settings?.brand_primary as string | undefined;
         const beforeAccent = settings?.brand_accent as string | undefined;
-        save(data).then(function () {
+
+        // Detecteer of een thema-veld is gewijzigd — dan moeten we na opslaan harde reload doen
+        // zodat gecachede CSS/SW-assets opnieuw worden opgehaald en de app in het nieuwe thema opstart.
+        const themeFields: Array<keyof typeof data> = [
+            'brand_background', 'brand_text', 'brand_card',
+            'brand_primary', 'brand_accent', 'brand_secondary',
+        ];
+        const themeChanged = themeFields.some(function (k) {
+            return (data[k] as unknown) !== (settings?.[k] as unknown) && (data[k] as unknown) != null;
+        });
+
+        save(data).then(async function () {
             showToast('Instellingen opgeslagen', 'success');
             // Detect huisstijl change → ask the user whether to also update existing templates
             const changed: { primary?: string; accent?: string } = {};
             if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;
             if (data.brand_accent && data.brand_accent !== beforeAccent) changed.accent = data.brand_accent;
             if (changed.primary || changed.accent) setPendingCascade(changed);
+
+            if (themeChanged) {
+                // SW + browser caches flushen zodat CSS-assets vers worden opgehaald.
+                try {
+                    if ('caches' in window) {
+                        const keys = await caches.keys();
+                        await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                    }
+                    if ('serviceWorker' in navigator) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map(function (r) { return r.update(); }));
+                    }
+                } catch { /* cache flush is best-effort */ }
+                // Kleine delay zodat de toast nog even leesbaar is, dan hard reload (cache-buster in URL).
+                setTimeout(function () {
+                    const sep = window.location.href.includes('?') ? '&' : '?';
+                    window.location.href = window.location.href.split('#')[0] + sep + '_t=' + Date.now();
+                }, 600);
+            }
         });
     }
 

@@ -23,7 +23,7 @@ export default function Error({ error, reset }: ErrorProps) {
             <div style={{ background: 'rgba(0,0,0,.3)', padding: 16, borderRadius: 8, fontFamily: 'monospace', fontSize: 12, color: 'var(--red)', marginBottom: 20, wordBreak: 'break-all' }}>
                 {error.message}
             </div>
-            <button onClick={function () { reset(); }} style={{ padding: '10px 24px', background: 'var(--brand)', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={function () { reset(); }} style={{ padding: '10px 24px', background: 'var(--brand)', color: 'var(--brand-background, #000)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 <RotateCw size={14} className="mr-1.5" /> Probeer opnieuw
             </button>
         </div>

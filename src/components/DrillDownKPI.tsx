@@ -65,7 +65,7 @@ export default function DrillDownKPI({ icon, label, value, subtitle, trend, acce
                     </div>
                 </div>
                 <p className="text-[10px] md:text-[11px] font-medium uppercase tracking-[0.12em] md:tracking-[0.15em] text-[var(--muted)] mb-1">{label}</p>
-                <p className="text-xl md:text-2xl font-light text-white tracking-tight">{value}</p>
+                <p className="text-xl md:text-2xl font-light text-[var(--text)] tracking-tight">{value}</p>
                 {subtitle && <p className="text-[11px] md:text-[12px] text-[var(--muted-light)] mt-1 line-clamp-2">{subtitle}</p>}
             </div>
 
@@ -91,7 +91,7 @@ export default function DrillDownKPI({ icon, label, value, subtitle, trend, acce
                                     {item.label}
                                 </span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>{item.value}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{item.value}</span>
                                     {item.href && <ChevronRight size={12} style={{ color: 'var(--muted)' }} />}
                                 </div>
                             </div>

@@ -1,0 +1,18 @@
+{
+  "id": "case-002",
+  "description": "Kleine intieme BBQ voor 8 personen",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Kleine familie-BBQ in de tuin — 8 volwassenen, premium ingrediënten",
+      "existing": [],
+      "options": { "gasten": 8, "gangen": 2 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 2 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 25 }
+  ]
+}

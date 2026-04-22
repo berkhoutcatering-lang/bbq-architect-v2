@@ -1,0 +1,18 @@
+{
+  "id": "case-006",
+  "description": "Budget-BBQ — lage prijs per persoon",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Buurtfeest BBQ — 50 personen, budget €500 totaal, simpel en lekker",
+      "existing": [],
+      "options": { "gasten": 50, "gangen": 2 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 2 },
+    { "type": "number_lte", "path": "data.adviesprijs_pp", "max": 25 }
+  ]
+}

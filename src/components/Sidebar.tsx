@@ -12,6 +12,7 @@ import { navSections, type NavSection } from "@/lib/navigation";
 import { useApp } from "@/lib/AppContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/lib/OrgContext";
+import AiUsageMeter from "@/components/AiUsageMeter";
 
 interface SidebarFolderProps {
     section: NavSection;
@@ -82,8 +83,8 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 href={item.href}
                                 onClick={onNavigate}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden no-underline ${isActive
-                                    ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] text-white border-l-2 border-[var(--brand)] pl-2.5"
-                                    : "text-[var(--muted)] hover:text-white hover:bg-white/[0.04] border-l-2 border-transparent pl-2.5"
+                                    ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] text-[var(--text)] border-l-2 border-[var(--brand)] pl-2.5"
+                                    : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/[0.04] border-l-2 border-transparent pl-2.5"
                                     }`}
                             >
                                 <span className={`shrink-0 ${isActive ? "text-[var(--brand)]" : ""}`}>
@@ -182,7 +183,7 @@ export default function Sidebar() {
                         <Flame className="w-4 h-4 text-[var(--brand)]" />
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
-                        <p className="text-[13px] font-semibold tracking-[0.08em] text-white font-['Outfit']">
+                        <p className="text-[13px] font-semibold tracking-[0.08em] text-[var(--text)] font-['Outfit']">
                             BBQ ARCHITECT
                         </p>
                         <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase mt-0.5">
@@ -200,7 +201,7 @@ export default function Sidebar() {
                             setCollapsed(!collapsed);
                         }
                     }}
-                    className="shrink-0 p-2 rounded-lg bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] text-[var(--muted-light)] hover:text-white transition-colors"
+                    className="shrink-0 p-2 rounded-lg bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] text-[var(--muted-light)] hover:text-[var(--text)] transition-colors"
                     style={collapsed && isDesktop ? { position: 'absolute', right: 22 } : {}}
                 >
                     {!isDesktop && <X size={18} />}
@@ -213,13 +214,13 @@ export default function Sidebar() {
                     href="/"
                     onClick={closeMobile}
                     className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap no-underline ${pathname === "/"
-                        ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] border border-[color-mix(in_srgb,var(--brand)_15%,transparent)] text-white shadow-[inset_0px_1px_1px_color-mix(in_srgb,var(--brand)_6%,transparent)]"
-                        : "text-[var(--muted)] hover:text-white hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
+                        ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] border border-[color-mix(in_srgb,var(--brand)_15%,transparent)] text-[var(--text)] shadow-[inset_0px_1px_1px_color-mix(in_srgb,var(--brand)_6%,transparent)]"
+                        : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
                         }`}
                     style={collapsed && isDesktop ? { justifyContent: 'center' } : {}}
                     title={collapsed ? "Dashboard" : ""}
                 >
-                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[var(--brand)]" : "group-hover:text-white"}`} />
+                    <LayoutDashboard className={`shrink-0 w-[18px] h-[18px] ${pathname === "/" ? "text-[var(--brand)]" : "group-hover:text-[var(--text)]"}`} />
                     <span className="text-[13.5px] font-semibold transition-all duration-300" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         Dashboard
                     </span>
@@ -273,6 +274,12 @@ export default function Sidebar() {
                 )}
             </nav>
 
+            {!collapsed && (
+                <div className="px-3 pb-2 shrink-0">
+                    <AiUsageMeter variant="compact" />
+                </div>
+            )}
+
             <div className="px-4 py-3.5 border-t border-[var(--sidebar-border)] shrink-0 overflow-hidden">
                 <div className="flex items-center gap-3 transition-all duration-300" style={collapsed && isDesktop ? { justifyContent: 'center', margin: '0 4px' } : {}}>
                     <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-[var(--brand)] to-amber-700 flex items-center justify-center text-[11px] font-bold text-[var(--bg)] shadow-lg">
@@ -280,12 +287,12 @@ export default function Sidebar() {
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex-1 min-w-0 flex items-center justify-between" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         <div className="min-w-0">
-                            <p className="text-[12.5px] font-medium text-white truncate text-shadow-sm">{user?.user_metadata?.name || user?.email?.split('@')[0] || 'Gebruiker'}</p>
+                            <p className="text-[12.5px] font-medium text-[var(--text)] truncate text-shadow-sm">{user?.user_metadata?.name || user?.email?.split('@')[0] || 'Gebruiker'}</p>
                             <p className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider mt-0.5">{userRole || 'Lid'}{organization ? ' · ' + organization.name : ''}</p>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <Link href="/instellingen">
-                                <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-white cursor-pointer transition-colors" />
+                                <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors" />
                             </Link>
                             <button onClick={signOut} title="Uitloggen" className="p-1 rounded bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)] hover:text-red-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -303,7 +310,7 @@ export default function Sidebar() {
             {!mobileOpen && !isDesktop && (
                 <button
                     onClick={() => setMobileOpen(true)}
-                    className="fixed top-3 left-3 z-[60] w-[44px] h-[44px] rounded-xl bg-[var(--sidebar-bg)]/90 backdrop-blur-md border border-[var(--sidebar-border)] flex items-center justify-center text-[var(--muted)] hover:text-white active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+                    className="fixed top-3 left-3 z-[60] w-[44px] h-[44px] rounded-xl bg-[var(--sidebar-bg)]/90 backdrop-blur-md border border-[var(--sidebar-border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] active:scale-95 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
                     aria-label="Open menu"
                 >
                     <Menu size={20} />

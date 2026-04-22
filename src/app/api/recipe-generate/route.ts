@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -134,10 +137,26 @@ export async function POST(req: NextRequest) {
         const model = MODEL_MAP[modelChoice || defaultModel] || MODEL_MAP.sonnet;
         console.log(`[recipe-generate] model=${model} mode=${mode} existingCount=${existing.length}`);
 
-        // Optimalisaties:
-        // - Prompt caching op system prompt (scheelt ~50% latency + ~90% cost bij repeat binnen 5min)
-        // - Thinking uit voor structured JSON-output (geen denktokens nodig)
-        // - max_tokens scaled per mode (enrich/scale zijn kort, menu is lang)
+        // Resolve org for usage logging (fire-and-forget, no auth required)
+        let orgId: string | null = null;
+        let userId: string | null = null;
+        try {
+            const sb = await createServerSupabase();
+            const { data: { user } } = await sb.auth.getUser();
+            if (user) {
+                userId = user.id;
+                const mem = await sb.from('organization_members')
+                    .select('organization_id')
+                    .eq('user_id', user.id)
+                    .eq('status', 'active')
+                    .limit(1)
+                    .maybeSingle();
+                orgId = mem.data?.organization_id ?? null;
+            }
+        } catch {
+            /* logging is optional */
+        }
+
         const maxTokens = mode === 'menu' ? 8000 : mode === 'recipe' ? 4000 : 2500;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
         const stream = client.messages.stream({
@@ -148,6 +167,30 @@ export async function POST(req: NextRequest) {
             ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
         } as any);
         const response = await stream.finalMessage();
+
+        // Log AI-usage (fire-and-forget)
+        if (orgId && response.usage) {
+            const u = response.usage;
+            const cost = estimateAiCostCents({
+                model,
+                tokens_input: u.input_tokens,
+                tokens_output: u.output_tokens,
+                tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+            });
+            logAiUsageServer({
+                organization_id: orgId,
+                user_id: userId,
+                action_type: 'menu_suggestion',
+                model,
+                tokens_input: u.input_tokens,
+                tokens_output: u.output_tokens,
+                tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+                cost_eur_cents: cost,
+                metadata: { mode, existingCount: existing.length },
+            }).catch(function () { /* non-blocking */ });
+        }
 
         const textBlock = response.content.find(b => b.type === 'text');
         if (!textBlock || textBlock.type !== 'text') {

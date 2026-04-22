@@ -1,11 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Users, Check, CircleDot, Send, Filter, Plus, Layers } from 'lucide-react';
+import { Users, Check, CircleDot, Send, Filter, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { displayEventName, titleCase } from './displayHelpers';
 import type { DbEvent, Offerte } from '@/types';
+
+type ViewMode = 'timeline' | 'calendar' | 'kanban';
 
 /* Scoped redesign styles — wrapper class must be set on parent */
 import './redesign.css';
@@ -89,6 +91,8 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
   const router = useRouter();
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
+  const [view, setView] = useState<ViewMode>('timeline');
+  const [calCursor, setCalCursor] = useState<Date>(() => new Date(now.getFullYear(), now.getMonth(), 1));
 
   /* Upcoming events sorted ascending */
   const upcoming = useMemo(
@@ -284,9 +288,9 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
           </div>
           <div className="hstack">
             <div className="ev-view-tabs" role="tablist" aria-label="Eventweergave">
-              <button className="on" role="tab" aria-selected="true">Tijdlijn</button>
-              <button disabled title="Binnenkort beschikbaar" role="tab" aria-selected="false">Kalender</button>
-              <button disabled title="Binnenkort beschikbaar" role="tab" aria-selected="false">Kanban</button>
+              <button className={view === 'timeline' ? 'on' : ''} role="tab" aria-selected={view === 'timeline'} onClick={() => setView('timeline')}>Tijdlijn</button>
+              <button className={view === 'calendar' ? 'on' : ''} role="tab" aria-selected={view === 'calendar'} onClick={() => setView('calendar')}>Kalender</button>
+              <button className={view === 'kanban' ? 'on' : ''} role="tab" aria-selected={view === 'kanban'} onClick={() => setView('kanban')}>Kanban</button>
             </div>
             <button className="btn btn-ghost"><Filter size={14} />Filters</button>
             <button className="btn btn-primary" onClick={onNew}><Plus size={14} />Nieuw event</button>
@@ -349,7 +353,22 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
           </div>
         </div>
 
-        {weekBuckets.length === 0 ? (
+        {view === 'calendar' && (
+          <CalendarView
+            cursor={calCursor}
+            onCursor={setCalCursor}
+            events={events}
+            marginMap={marginMap}
+            onOpen={onOpen}
+            router={router}
+          />
+        )}
+
+        {view === 'kanban' && (
+          <KanbanView events={events} marginMap={marginMap} onOpen={onOpen} router={router} />
+        )}
+
+        {view === 'timeline' && (weekBuckets.length === 0 ? (
           <div className="metal" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--muted)' }}>
             Geen aankomende events. Klik &quot;Nieuw event&quot; om te beginnen.
           </div>
@@ -424,12 +443,6 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
                           <div className="tl-meta">
                             <div className="amount">{fmtEur(eventOmzet(ev))}</div>
                             {margin != null && <div className={`margin ${mTone}`}>marge {margin}%</div>}
-                            <button
-                              onClick={e => { e.stopPropagation(); router.push(`/events/${ev.id}/hub`); }}
-                              style={{ marginTop: 4, padding: '4px 10px', fontSize: 10.5, fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', background: 'rgba(255,191,0,.1)', color: 'var(--brand)', border: '1px solid rgba(255,191,0,.28)', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                            >
-                              <Layers size={11} />Hub
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -439,14 +452,195 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
               </div>
             );
           })
-        )}
+        ))}
 
-        {upcoming.length > 0 && (
+        {view === 'timeline' && upcoming.length > 0 && (
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
             Totaal aankomende omzet: <strong style={{ color: 'var(--brand-gold)' }}>{fmtEur(upcomingRevenue)}</strong>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─────────── Calendar view ─────────── */
+
+interface CalendarViewProps {
+  cursor: Date;
+  onCursor: (d: Date) => void;
+  events: DbEvent[];
+  marginMap: Record<number, number>;
+  onOpen: (ev: DbEvent) => void;
+  router: ReturnType<typeof useRouter>;
+}
+
+function CalendarView({ cursor, onCursor, events, marginMap, onOpen, router }: CalendarViewProps) {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const monthLabel = firstOfMonth.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+  /* ISO-week offset: Monday-first. getDay returns 0=Sun..6=Sat; shift to Mon=0 */
+  const leadingBlank = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<{ iso: string | null; day: number | null }> = [];
+  for (let i = 0; i < leadingBlank; i++) cells.push({ iso: null, day: null });
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cells.push({ iso, day: d });
+  }
+  while (cells.length % 7 !== 0) cells.push({ iso: null, day: null });
+
+  const eventsByDate = useMemo(() => {
+    const m: Record<string, DbEvent[]> = {};
+    for (const ev of events) {
+      if (!ev.date) continue;
+      (m[ev.date] ||= []).push(ev);
+    }
+    return m;
+  }, [events]);
+
+  const monthEvents = events.filter(e => e.date && e.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`));
+  const monthRev = monthEvents.reduce((s, e) => s + (e.guests || 0) * (e.ppp || 0), 0);
+
+  const dowLabels = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+  function shiftMonth(delta: number) {
+    onCursor(new Date(year, month + delta, 1));
+  }
+
+  return (
+    <div className="ev-cal">
+      <div className="ev-cal-head">
+        <div className="ev-cal-nav">
+          <button type="button" onClick={() => shiftMonth(-1)} aria-label="Vorige maand"><ChevronLeft size={14} /></button>
+          <h3>{monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}</h3>
+          <button type="button" onClick={() => shiftMonth(1)} aria-label="Volgende maand"><ChevronRight size={14} /></button>
+          <button type="button" className="ev-cal-today" onClick={() => onCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>Vandaag</button>
+        </div>
+        <div className="ev-cal-summary">
+          <span>{monthEvents.length} event{monthEvents.length === 1 ? '' : 's'}</span>
+          <span className="sep">·</span>
+          <span>omzet <strong>{fmtEur(monthRev)}</strong></span>
+        </div>
+      </div>
+      <div className="ev-cal-grid">
+        {dowLabels.map(d => <div key={d} className="ev-cal-dow">{d}</div>)}
+        {cells.map((c, i) => {
+          const list = c.iso ? (eventsByDate[c.iso] || []) : [];
+          const isToday = c.iso === todayIso;
+          const isPast = c.iso != null && c.iso < todayIso;
+          return (
+            <div key={i} className={`ev-cal-cell ${c.day == null ? 'empty' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}`}>
+              {c.day != null && (
+                <>
+                  <div className="ev-cal-day">{c.day}</div>
+                  <div className="ev-cal-events">
+                    {list.slice(0, 3).map(ev => {
+                      const pill = statusPill(ev.status);
+                      return (
+                        <button
+                          key={ev.id}
+                          type="button"
+                          className={`ev-cal-chip p-${pill.variant}`}
+                          title={`${ev.name || 'Event'} · ${ev.guests || 0} gasten`}
+                          onClick={() => onOpen(ev)}
+                        >
+                          <span className="t">{titleCase(displayEventName(ev.name))}</span>
+                          <span className="g">{ev.guests || 0}p</span>
+                        </button>
+                      );
+                    })}
+                    {list.length > 3 && (
+                      <button
+                        type="button"
+                        className="ev-cal-more"
+                        onClick={() => router.push(`/agenda?date=${c.iso}`)}
+                      >
+                        +{list.length - 3} meer
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* marginMap reserved for future avg-margin display per cell */}
+      <div style={{ display: 'none' }}>{Object.keys(marginMap).length}</div>
+    </div>
+  );
+}
+
+/* ─────────── Kanban view ─────────── */
+
+interface KanbanViewProps {
+  events: DbEvent[];
+  marginMap: Record<number, number>;
+  onOpen: (ev: DbEvent) => void;
+  router: ReturnType<typeof useRouter>;
+}
+
+function KanbanView({ events, marginMap, onOpen, router }: KanbanViewProps) {
+  const columns: Array<{ key: string; label: string; tone: 'warn' | 'info' | 'ok' | 'done'; match: (s: string) => boolean }> = [
+    { key: 'optie', label: 'Optie', tone: 'warn', match: s => s === 'optie' },
+    { key: 'pending', label: 'Nieuw', tone: 'info', match: s => s === 'pending' || !s },
+    { key: 'confirmed', label: 'Bevestigd', tone: 'ok', match: s => s === 'confirmed' },
+    { key: 'completed', label: 'Afgerond', tone: 'done', match: s => s === 'completed' },
+  ];
+
+  const dowNames = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+  const moNames = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+  const sorted = events.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  return (
+    <div className="ev-kanban">
+      {columns.map(col => {
+        const items = sorted.filter(e => col.match(e.status));
+        const rev = items.reduce((s, e) => s + (e.guests || 0) * (e.ppp || 0), 0);
+        return (
+          <div key={col.key} className={`ev-kanban-col tone-${col.tone}`}>
+            <div className="ev-kanban-head">
+              <span className="label">{col.label}</span>
+              <span className="count">{items.length}</span>
+              <span className="rev">{fmtEur(rev)}</span>
+            </div>
+            <div className="ev-kanban-body">
+              {items.length === 0 ? (
+                <div className="ev-kanban-empty">Geen events</div>
+              ) : items.map(ev => {
+                const d = ev.date ? new Date(ev.date) : null;
+                const margin = marginMap[ev.id];
+                const mTone: Tone = margin == null ? 'ok' : margin >= 55 ? 'ok' : margin >= 40 ? 'warn' : 'bad';
+                return (
+                  <div
+                    key={ev.id}
+                    className="ev-kanban-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpen(ev)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(ev); } }}
+                  >
+                    <div className="t">{titleCase(displayEventName(ev.name))}</div>
+                    <div className="meta">
+                      {d && <span>{dowNames[d.getDay()]} {String(d.getDate()).padStart(2, '0')} {moNames[d.getMonth()]}</span>}
+                      <span className="dot" />
+                      <span>{ev.guests || 0}p</span>
+                    </div>
+                    <div className="foot">
+                      <span className="amount">{fmtEur((ev.guests || 0) * (ev.ppp || 0))}</span>
+                      {margin != null && <span className={`margin ${mTone}`}>{margin}%</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

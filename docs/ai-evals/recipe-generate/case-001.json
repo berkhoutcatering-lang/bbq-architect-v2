@@ -1,0 +1,20 @@
+{
+  "id": "case-001",
+  "description": "Standaard BBQ voor 30 personen met 3 gangen",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Klassiek BBQ-menu voor bedrijfsfeest — 30 gasten, 3 gangen, budget €1500",
+      "existing": [],
+      "options": { "gasten": 30, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten", "description": "menu moet gerechten bevatten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "has_path", "path": "data.menu_naam" },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 20, "description": "prijs per persoon realistisch" },
+    { "type": "number_lte", "path": "data.adviesprijs_pp", "max": 120 }
+  ]
+}

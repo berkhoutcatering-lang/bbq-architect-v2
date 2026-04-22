@@ -105,7 +105,7 @@ export default function OnboardingWizard() {
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[var(--color-border)] mx-auto mb-4">
             <Flame className="w-7 h-7 text-[var(--color-accent-gold)]" />
           </div>
-          <h2 className="text-xl font-light text-white tracking-tight mb-1">
+          <h2 className="text-xl font-light text-[var(--text)] tracking-tight mb-1">
             {step === 0 && 'Welkom bij BBQ Architect'}
             {step === 1 && 'Voeg je eerste gerecht toe'}
             {step === 2 && 'Plan je eerste event'}
@@ -135,12 +135,12 @@ export default function OnboardingWizard() {
           {step === 0 && (
             <div className="space-y-3">
               <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Bedrijfsnaam</label>
-                <input value={bedrijf.naam} onChange={e => setBedrijf(p => ({ ...p, naam: e.target.value }))} placeholder="Hop & Bites" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                <input value={bedrijf.naam} onChange={e => setBedrijf(p => ({ ...p, naam: e.target.value }))} placeholder="Hop & Bites" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Plaats</label>
-                  <input value={bedrijf.plaats} onChange={e => setBedrijf(p => ({ ...p, plaats: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input value={bedrijf.plaats} onChange={e => setBedrijf(p => ({ ...p, plaats: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Telefoon</label>
-                  <input value={bedrijf.telefoon} onChange={e => setBedrijf(p => ({ ...p, telefoon: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input value={bedrijf.telefoon} onChange={e => setBedrijf(p => ({ ...p, telefoon: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               </div>
             </div>
           )}
@@ -148,17 +148,17 @@ export default function OnboardingWizard() {
           {step === 1 && (
             <div className="space-y-3">
               <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Gerechtnaam</label>
-                <input value={gerecht.naam} onChange={e => setGerecht(p => ({ ...p, naam: e.target.value }))} placeholder="bijv. Pulled Pork Brioche" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                <input value={gerecht.naam} onChange={e => setGerecht(p => ({ ...p, naam: e.target.value }))} placeholder="bijv. Pulled Pork Brioche" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Categorie</label>
-                  <select value={gerecht.categorie} onChange={e => setGerecht(p => ({ ...p, categorie: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white">
+                  <select value={gerecht.categorie} onChange={e => setGerecht(p => ({ ...p, categorie: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]">
                     <option value="voorgerecht">Voorgerecht</option>
                     <option value="hoofdgerecht">Hoofdgerecht</option>
                     <option value="bijgerecht">Bijgerecht</option>
                     <option value="dessert">Dessert</option>
                   </select></div>
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Kostprijs p.p.</label>
-                  <input type="number" step="0.50" value={gerecht.kostprijs_pp} onChange={e => setGerecht(p => ({ ...p, kostprijs_pp: parseFloat(e.target.value) || 0 }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input type="number" step="0.50" value={gerecht.kostprijs_pp} onChange={e => setGerecht(p => ({ ...p, kostprijs_pp: parseFloat(e.target.value) || 0 }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               </div>
             </div>
           )}
@@ -166,14 +166,14 @@ export default function OnboardingWizard() {
           {step === 2 && (
             <div className="space-y-3">
               <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Event / Klantnaam</label>
-                <input value={event.name} onChange={e => setEvent(p => ({ ...p, name: e.target.value }))} placeholder="bijv. Bruiloft De Vries" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                <input value={event.name} onChange={e => setEvent(p => ({ ...p, name: e.target.value }))} placeholder="bijv. Bruiloft De Vries" className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Datum</label>
-                  <input type="date" value={event.date} onChange={e => setEvent(p => ({ ...p, date: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input type="date" value={event.date} onChange={e => setEvent(p => ({ ...p, date: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Gasten</label>
-                  <input type="number" value={event.guests} onChange={e => setEvent(p => ({ ...p, guests: parseInt(e.target.value) || 0 }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input type="number" value={event.guests} onChange={e => setEvent(p => ({ ...p, guests: parseInt(e.target.value) || 0 }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
                 <div><label className="text-[11px] text-[var(--muted)] mb-1 block">Locatie</label>
-                  <input value={event.location} onChange={e => setEvent(p => ({ ...p, location: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-white" /></div>
+                  <input value={event.location} onChange={e => setEvent(p => ({ ...p, location: e.target.value }))} className="w-full p-2.5 rounded-lg text-[13px] bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]" /></div>
               </div>
             </div>
           )}

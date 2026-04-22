@@ -14,6 +14,7 @@ import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import { Camera, FileText, Flame, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 export default function Inkoop() {
     const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
@@ -224,6 +225,7 @@ export default function Inkoop() {
     }
 
     return (
+        <RequireTier feature="inkoop">
         <div className="artisan-page inkoop-page">
             <PageHeader title="Inkoop & Logistiek" description="Beheer leveranciers, boodschappen en bonnen" />
 
@@ -388,5 +390,6 @@ export default function Inkoop() {
                 </div>
             )}
         </div>
+        </RequireTier>
     );
 }

@@ -34,11 +34,11 @@ function CustomTooltip({ active, payload }: any) {
       background: 'var(--sidebar-bg-hover)', border: '1px solid var(--color-border-hover)', borderRadius: 10,
       padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,.5)', maxWidth: 240
     }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{d.naam}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>{d.naam}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Populariteit</span>
-          <span style={{ color: '#fff', fontWeight: 600 }}>{d.popularity}x ingezet</span>
+          <span style={{ color: 'var(--text)', fontWeight: 600 }}>{d.popularity}x ingezet</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Marge</span>
@@ -46,7 +46,7 @@ function CustomTooltip({ active, payload }: any) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Foodcost p.p.</span>
-          <span style={{ color: '#fff', fontWeight: 600 }}>{'\u20ac'}{d.foodcostPP.toFixed(2)}</span>
+          <span style={{ color: 'var(--text)', fontWeight: 600 }}>{'\u20ac'}{d.foodcostPP.toFixed(2)}</span>
         </div>
       </div>
       <div style={{
@@ -79,7 +79,7 @@ export function BCGMatrix({ dishes, medianPop, medianMargin }: { dishes: DishAna
   return (
     <MetallicCard className="p-4 md:p-6" hover={false}>
       <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 4 }}>Menu Engineering Matrix</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Menu Engineering Matrix</h3>
         <p style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>
           BCG-analyse: {dishes.length} gerechten op populariteit vs. winstgevendheid
         </p>
@@ -204,7 +204,7 @@ export function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
                       }}>
                         <span style={{ fontSize: 12 }}>{gang.icon}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {d.naam}
                           </div>
                           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>

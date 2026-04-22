@@ -20,7 +20,7 @@ import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Factuur } from '@/types';
-import { ArrowLeft, Bell, Code, FileSpreadsheet, FileText, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bell, Code, CreditCard, FileSpreadsheet, FileText, Link2, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
 
 export default function Facturen() {
     const { data: facturen, loading, insert, update, remove } = useSupabase<Factuur>('facturen', []);
@@ -223,6 +223,62 @@ export default function Facturen() {
                         <button className="btn btn-ghost" onClick={function () { mailFactuur(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Open email met factuur"><Mail size={14} /> Mail</button>
                         {form!.status === 'verzonden' && form!.vervaldatum && form!.vervaldatum < today() && (
                             <button className="btn btn-ghost" onClick={function () { mailBetaalherinnering(form, settings?.bedrijfsnaam || 'Hop & Bites'); }} title="Stuur betalingsherinnering" style={{ color: 'var(--red)' }}><Bell size={14} /> Herinnering</button>
+                        )}
+                        {editing !== 'new' && form!.status !== 'betaald' && form!.status !== 'geannuleerd' && (
+                            <button className="btn btn-ghost" onClick={async function () {
+                                if (!form!.id) return;
+                                try {
+                                    const res = await fetch('/api/payments/mollie', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ factuurId: form!.id, method: 'ideal' }),
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) {
+                                        if (res.status === 501) {
+                                            showToast('Mollie niet geconfigureerd — voeg MOLLIE_API_KEY toe in .env', 'error');
+                                        } else {
+                                            showToast(data.error || 'Mollie-fout', 'error');
+                                        }
+                                        return;
+                                    }
+                                    if (data.checkoutUrl) {
+                                        try { await navigator.clipboard.writeText(data.checkoutUrl); } catch { /* ignore */ }
+                                        showToast(`iDEAL-link gekopieerd: ${data.bedrag}`, 'success');
+                                        window.open(data.checkoutUrl, '_blank');
+                                    }
+                                } catch (e: any) {
+                                    showToast('Mollie-fout: ' + e.message, 'error');
+                                }
+                            }} title="Genereer iDEAL-betaallink (Mollie)" style={{ color: 'var(--blue)' }}>
+                                <CreditCard size={14} /> iDEAL-link
+                            </button>
+                        )}
+                        {editing !== 'new' && (
+                            <button className="btn btn-ghost" onClick={async function () {
+                                if (!form!.id) return;
+                                try {
+                                    const res = await fetch('/api/accounting/moneybird', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ factuurId: form!.id, action: 'created' }),
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) {
+                                        if (res.status === 501) {
+                                            showToast('Moneybird niet geconfigureerd — voeg MONEYBIRD_TOKEN toe in .env', 'error');
+                                        } else {
+                                            showToast(data.error || 'Moneybird-fout', 'error');
+                                        }
+                                        return;
+                                    }
+                                    showToast(data.message || 'Gesynct naar Moneybird', 'success');
+                                } catch (e: any) {
+                                    showToast('Moneybird-fout: ' + e.message, 'error');
+                                }
+                            }} title="Sync naar Moneybird-boekhouding" style={{ color: 'var(--emerald)' }}>
+                                <Link2 size={14} /> Moneybird
+                            </button>
                         )}
                         <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><Code size={14} /> UBL</button>
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><Trash2 size={14} /> Verwijderen</button>}

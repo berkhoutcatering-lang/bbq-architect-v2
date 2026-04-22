@@ -427,7 +427,7 @@ function OfferCreationDashboard() {
                                         return (
                                             <div key={line.lineId} className="group grid grid-cols-12 gap-4 p-4 bg-black/40 border border-[var(--border)] rounded-2xl hover:border-[var(--muted)] transition-all">
                                                 <div className="col-span-12 md:col-span-5">
-                                                    <p className="text-sm font-bold text-white mb-1">{line.name}</p>
+                                                    <p className="text-sm font-bold text-[var(--text)] mb-1">{line.name}</p>
                                                     <p className="text-[10px] text-[var(--muted)] uppercase tracking-tighter">BTW: {Math.round(line.vatRate * 100)}%</p>
                                                     {lineErr.price && <p className="text-[10px] text-red-400 mt-1 font-bold">{lineErr.price}</p>}
                                                 </div>

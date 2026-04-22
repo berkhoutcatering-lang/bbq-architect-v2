@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import type { TimeLog } from '@/types';
 import { BarChart3, CalendarDays, Circle, Clock, History, LineChart, Play, Square, Target, Trash2 } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 export default function Uren() {
     const { data: logs, insert, update, remove } = useSupabase<TimeLog>('time_logs', []);
@@ -95,6 +96,7 @@ export default function Uren() {
     });
 
     return (
+        <RequireTier feature="crew_uren">
         <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <PageHeader title="Workforce & Uren" />
 
@@ -266,5 +268,6 @@ export default function Uren() {
                 </div>
             </div>
         </div>
+        </RequireTier>
     );
 }

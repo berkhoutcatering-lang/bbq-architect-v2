@@ -12,6 +12,7 @@ import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
 import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 interface NewLogEntry {
     actie: string;
@@ -128,6 +129,7 @@ export default function Materieel() {
     const statusPills: Record<string, string> = { ok: 'pill-green', warn: 'pill-amber', danger: 'pill-red' };
 
     return (
+        <RequireTier feature="materieel">
         <>
             <PageHeader
                 title={'Materieel (' + materieel.length + ')'}
@@ -152,5 +154,6 @@ export default function Materieel() {
                 })}
             </div>
         </>
+        </RequireTier>
     );
 }

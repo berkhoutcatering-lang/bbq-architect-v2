@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, Flame, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
 const CAT_COLORS: Record<string, string> = { Food: 'var(--red)', Gear: 'var(--blue)', Sfeer: 'var(--purple)', Admin: 'var(--amber)' };
@@ -215,6 +216,7 @@ export default function FotoArchief() {
     }
 
     return (
+        <RequireTier feature="foto_archief">
         <>
             <PageHeader title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel" />
 
@@ -469,5 +471,6 @@ export default function FotoArchief() {
                 </div>
             )}
         </>
+        </RequireTier>
     );
 }

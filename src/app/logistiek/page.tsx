@@ -10,6 +10,7 @@ import PageHeader from '@/components/PageHeader';
 import MetallicCard from '@/components/MetallicCard';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
 import { Check, ChevronDown, ChevronUp, ClipboardCheck, Loader2, Package, PackageOpen, Plus, RotateCcw, Trash2, Truck } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 interface HardwareItem {
     id: number;
@@ -149,6 +150,7 @@ export default function Logistiek() {
     );
 
     return (
+        <RequireTier feature="logistiek">
         <>
             <PageHeader title="Logistiek" description="Plan transport en check je materiaallijsten voor events" />
 
@@ -311,5 +313,6 @@ export default function Logistiek() {
                 </>
             )}
         </>
+        </RequireTier>
     );
 }

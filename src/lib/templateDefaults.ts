@@ -311,6 +311,72 @@ const MENUKAART_VINTAGE_BLOCKS: TemplateBlock[] = [
   { id: bid(), type: 'text', content: '{{bedrijfsnaam}}', fontSize: 9, fontWeight: 'normal', fontStyle: 'italic', color: '#8b6914', alignment: 'center', lineHeight: 1.4 },
 ];
 
+// ── Nieuwe starters die overeenkomen met de hub MenuCard voorvertoningen ──
+
+const PAGE_AMBACHT: PageSettings = {
+  format: 'a4', orientation: 'portrait',
+  margins: { top: 20, right: 20, bottom: 20, left: 20 },
+  backgroundColor: '#f5eedf',
+};
+
+const PAGE_SLATE: PageSettings = {
+  format: 'a4', orientation: 'portrait',
+  margins: { top: 20, right: 20, bottom: 20, left: 20 },
+  backgroundColor: '#1a1a1c',
+};
+
+// Ambacht: cream papier, gouden accenten, gecentreerd, elegante horeca-stijl
+const MENUKAART_AMBACHT_BLOCKS: TemplateBlock[] = [
+  { id: bid(), type: 'spacer', height: 14 },
+  { id: bid(), type: 'logo', variant: 'light', maxWidth: 55, maxHeight: 22, alignment: 'center' },
+  { id: bid(), type: 'spacer', height: 6 },
+  { id: bid(), type: 'text', content: '{{bedrijfsnaam}} · AMBACHT', fontSize: 8, fontWeight: 'bold', fontStyle: 'normal', color: 'brand_primary', alignment: 'center', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 4 },
+  { id: bid(), type: 'text', content: '{{event_naam}}', fontSize: 22, fontWeight: 'bold', fontStyle: 'italic', color: '#1a1410', alignment: 'center', lineHeight: 1.15 },
+  { id: bid(), type: 'spacer', height: 4 },
+  { id: bid(), type: 'text', content: '{{event_datum}}', fontSize: 9, fontWeight: 'normal', fontStyle: 'normal', color: '#6b5a3e', alignment: 'center', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 6 },
+  { id: bid(), type: 'divider', style: 'solid', color: 'brand_primary', thickness: 0.6 },
+  { id: bid(), type: 'spacer', height: 10 },
+  { id: bid(), type: 'menu', layout: '1col', gangTitleStyle: { fontSize: 10, fontWeight: 'bold', color: 'brand_primary', alignment: 'center', uppercase: true }, dishNameStyle: { fontSize: 12, color: '#1a1410' }, dishDescStyle: { fontSize: 10, color: '#6b5a3e', fontStyle: 'italic' }, showDescriptions: true, gangSeparator: 'space' },
+  { id: bid(), type: 'spacer', height: 12 },
+  { id: bid(), type: 'text', content: '— GENIET ERVAN —', fontSize: 8, fontWeight: 'bold', fontStyle: 'normal', color: 'brand_primary', alignment: 'center', lineHeight: 1.4 },
+];
+
+// Modern: wit papier, gouden accent-balk links, strakke sans-serif, links uitgelijnd
+const MENUKAART_MODERN_BLOCKS: TemplateBlock[] = [
+  { id: bid(), type: 'spacer', height: 12 },
+  { id: bid(), type: 'shape', shape: 'rectangle', fillColor: 'brand_primary', strokeColor: 'none', strokeWidth: 0, cornerRadius: 0, opacity: 1 },
+  { id: bid(), type: 'spacer', height: 6 },
+  { id: bid(), type: 'logo', variant: 'light', maxWidth: 50, maxHeight: 20, alignment: 'left' },
+  { id: bid(), type: 'spacer', height: 4 },
+  { id: bid(), type: 'text', content: '{{bedrijfsnaam}}', fontSize: 9, fontWeight: 'bold', fontStyle: 'normal', color: 'brand_primary', alignment: 'left', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 2 },
+  { id: bid(), type: 'text', content: '{{event_naam}}', fontSize: 22, fontWeight: 'normal', fontStyle: 'normal', color: '#0a0a0c', alignment: 'left', lineHeight: 1.1 },
+  { id: bid(), type: 'spacer', height: 3 },
+  { id: bid(), type: 'text', content: '{{event_datum}}', fontSize: 9, fontWeight: 'normal', fontStyle: 'normal', color: '#6b6b6b', alignment: 'left', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 10 },
+  { id: bid(), type: 'menu', layout: '1col', gangTitleStyle: { fontSize: 13, fontWeight: 'bold', color: 'brand_primary', alignment: 'left', uppercase: false }, dishNameStyle: { fontSize: 11, color: '#0a0a0c' }, dishDescStyle: { fontSize: 9, color: '#707070', fontStyle: 'normal' }, showDescriptions: false, gangSeparator: 'space' },
+  { id: bid(), type: 'spacer', height: 10 },
+  { id: bid(), type: 'text', content: '{{bedrijfsnaam}}', fontSize: 8, fontWeight: 'normal', fontStyle: 'normal', color: '#9e9e9e', alignment: 'left', lineHeight: 1.4 },
+];
+
+// Slate: donkere achtergrond, crème tekst, gouden accenten, gecentreerd met sterren
+const MENUKAART_SLATE_BLOCKS: TemplateBlock[] = [
+  { id: bid(), type: 'spacer', height: 14 },
+  { id: bid(), type: 'logo', variant: 'dark', maxWidth: 55, maxHeight: 22, alignment: 'center' },
+  { id: bid(), type: 'spacer', height: 6 },
+  { id: bid(), type: 'text', content: '★ {{bedrijfsnaam}} ★', fontSize: 8, fontWeight: 'bold', fontStyle: 'normal', color: 'brand_primary', alignment: 'center', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 4 },
+  { id: bid(), type: 'text', content: '{{event_naam}}', fontSize: 20, fontWeight: 'bold', fontStyle: 'italic', color: '#f0e8d0', alignment: 'center', lineHeight: 1.15 },
+  { id: bid(), type: 'spacer', height: 4 },
+  { id: bid(), type: 'text', content: '{{event_datum}}', fontSize: 8, fontWeight: 'bold', fontStyle: 'normal', color: '#8a7c60', alignment: 'center', lineHeight: 1.4 },
+  { id: bid(), type: 'spacer', height: 6 },
+  { id: bid(), type: 'divider', style: 'solid', color: 'brand_primary', thickness: 0.6 },
+  { id: bid(), type: 'spacer', height: 10 },
+  { id: bid(), type: 'menu', layout: '1col', gangTitleStyle: { fontSize: 9, fontWeight: 'bold', color: 'brand_primary', alignment: 'center', uppercase: true }, dishNameStyle: { fontSize: 13, color: '#f0e8d0' }, dishDescStyle: { fontSize: 10, color: '#9a8a6a', fontStyle: 'italic' }, showDescriptions: true, gangSeparator: 'space' },
+];
+
 // ══ HACCP varianten ══
 
 const HACCP_COMPACT_BLOCKS: TemplateBlock[] = [
@@ -409,9 +475,12 @@ export const STARTER_TEMPLATES: Record<string, StarterTemplate[]> = {
     { id: 'offerte-compact', name: 'Compact Zakelijk', description: 'Dichte lay-out met 2-kolom menu — past op één pagina voor zakelijke klanten.', blocks: OFFERTE_COMPACT_BLOCKS, pageSettings: PAGE_WHITE },
   ],
   menukaart: [
+    { id: 'menukaart-ambacht', name: 'Ambacht', description: 'Cr\u00e8me papier met gouden accenten, elegant en horecawaardig — past bij de hub-voorvertoning.', blocks: MENUKAART_AMBACHT_BLOCKS, pageSettings: PAGE_AMBACHT },
+    { id: 'menukaart-modern', name: 'Modern', description: 'Wit papier, gouden accent-balk, strakke links-uitgelijnde typografie — past bij de hub-voorvertoning.', blocks: MENUKAART_MODERN_BLOCKS, pageSettings: PAGE_WHITE },
+    { id: 'menukaart-slate', name: 'Slate', description: 'Donker papier met cr\u00e8me tekst en gouden accenten — past bij de hub-voorvertoning.', blocks: MENUKAART_SLATE_BLOCKS, pageSettings: PAGE_SLATE },
     { id: 'menukaart-donker', name: 'Donker Elegant', description: 'Zwarte achtergrond + gouden accenten — klassiek restaurantmenu.', blocks: MENUKAART_BLOCKS, pageSettings: PAGE_DARK },
     { id: 'menukaart-licht', name: 'Licht Modern', description: 'Witte achtergrond, grote menu typografie — fris & modern.', blocks: MENUKAART_LICHT_BLOCKS, pageSettings: PAGE_WHITE },
-    { id: 'menukaart-vintage', name: 'Vintage Kader', description: 'Crème achtergrond met ornament rand — warme nostalgische sfeer.', blocks: MENUKAART_VINTAGE_BLOCKS, pageSettings: PAGE_CREAM },
+    { id: 'menukaart-vintage', name: 'Vintage Kader', description: 'Cr\u00e8me achtergrond met ornament rand — warme nostalgische sfeer.', blocks: MENUKAART_VINTAGE_BLOCKS, pageSettings: PAGE_CREAM },
   ],
   haccp: [
     { id: 'haccp-standaard', name: 'Standaard', description: 'Volledige kolommen, duidelijke statusaanduiding — standaard HACCP rapport.', blocks: HACCP_BLOCKS, pageSettings: PAGE_WHITE },

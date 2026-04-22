@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -141,10 +144,24 @@ export async function POST(req: NextRequest) {
         const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         console.log(`[parse-document] calling ${model} type=${type} elapsed=${Date.now() - t0}ms`);
 
-        // Optimalisaties:
-        // - Prompt caching op system prompt (5min TTL, ~50% sneller + ~90% goedkoper bij repeat)
-        // - Thinking uit voor structured extraction (geen denk-tokens nodig)
-        // - max_tokens scaled per type (invoices >> receipts)
+        // Resolve org for usage logging (fire-and-forget)
+        let orgId: string | null = null;
+        let userId: string | null = null;
+        try {
+            const sb = await createServerSupabase();
+            const { data: { user } } = await sb.auth.getUser();
+            if (user) {
+                userId = user.id;
+                const mem = await sb.from('organization_members')
+                    .select('organization_id')
+                    .eq('user_id', user.id)
+                    .eq('status', 'active')
+                    .limit(1)
+                    .maybeSingle();
+                orgId = mem.data?.organization_id ?? null;
+            }
+        } catch { /* logging optional */ }
+
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
         const stream = client.messages.stream({
             model,
@@ -154,6 +171,29 @@ export async function POST(req: NextRequest) {
             ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
         } as any);
         const response = await stream.finalMessage();
+
+        // Log AI-usage (fire-and-forget)
+        if (orgId && response.usage) {
+            const u = response.usage;
+            logAiUsageServer({
+                organization_id: orgId,
+                user_id: userId,
+                action_type: 'other',
+                model,
+                tokens_input: u.input_tokens,
+                tokens_output: u.output_tokens,
+                tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+                cost_eur_cents: estimateAiCostCents({
+                    model,
+                    tokens_input: u.input_tokens,
+                    tokens_output: u.output_tokens,
+                    tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                    tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+                }),
+                metadata: { action: 'parse-document', documentType: type },
+            }).catch(function () { /* non-blocking */ });
+        }
 
         // Extract text content from response
         const textBlock = response.content.find(b => b.type === 'text');

@@ -213,7 +213,7 @@ export default function IntegratiesPage() {
             <ArrowLeft size={18} className="text-[var(--muted)]" />
           </Link>
           <div>
-            <h2 className="text-lg font-semibold text-white">Integraties</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Integraties</h2>
             <p className="text-[12px] text-[var(--muted)]">
               Koppel externe diensten aan BBQ Architect
             </p>
@@ -221,7 +221,7 @@ export default function IntegratiesPage() {
         </div>
         <button
           onClick={checkStatuses}
-          className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[var(--card)] border border-[var(--border)] rounded-lg transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--card)] border border-[var(--border)] rounded-lg transition-colors"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Vernieuwen
@@ -244,7 +244,7 @@ export default function IntegratiesPage() {
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--muted)] mb-1">
               Integratie Status
             </p>
-            <p className="text-xl font-light text-white">
+            <p className="text-xl font-light text-[var(--text)]">
               {loading ? '...' : `${connectedCount} / ${totalCount}`}
             </p>
             <p className="text-[11px] text-[var(--muted-light)] mt-0.5">
@@ -303,7 +303,7 @@ export default function IntegratiesPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-[14px] font-medium text-white truncate">
+                          <h4 className="text-[14px] font-medium text-[var(--text)] truncate">
                             {integration.naam}
                           </h4>
                           <StatusIndicator connected={connected} />
@@ -390,7 +390,7 @@ export default function IntegratiesPage() {
                                 href={integration.docsUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
                               >
                                 <ExternalLink size={12} />
                                 Documentatie
@@ -398,7 +398,7 @@ export default function IntegratiesPage() {
                             )}
                             <Link
                               href="/instellingen"
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-white bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--text)] bg-[var(--color-bg-darker)] border border-[var(--border)] rounded-lg transition-colors"
                             >
                               <Settings size={12} />
                               Instellingen

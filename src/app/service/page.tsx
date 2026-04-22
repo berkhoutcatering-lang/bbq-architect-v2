@@ -453,7 +453,7 @@ export default function ServiceMode() {
 
                                         <div style={{ marginTop: 16 }}>
                                             {state === 'idle' && <button className="btn-brand" style={{ width: '100%' }} onClick={function () { startGang(gang.slug); }}>START GANG</button>}
-                                            {state === 'active' && <button className="btn-brand" style={{ width: '100%', background: '#fff', color: '#000' }} onClick={function () { setActiveModal(gang.slug); }}>OPEN ARCHITECT</button>}
+                                            {state === 'active' && <button className="btn-brand" style={{ width: '100%', background: '#fff', color: 'var(--brand-background)' }} onClick={function () { setActiveModal(gang.slug); }}>OPEN ARCHITECT</button>}
                                             {state === 'served' && <div style={{ color: 'var(--green)', fontWeight: 800, textAlign: 'center', fontSize: 12 }}>✓ UITGESERVEERD</div>}
                                         </div>
                                     </div>

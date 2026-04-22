@@ -28,7 +28,7 @@ function KPICard({ icon, label, value, subtitle, accent = 'var(--blue)' }: {
                 <span style={{ color: accent }} className="opacity-80">{icon}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">{label}</span>
             </div>
-            <p className="text-xl font-bold text-white tracking-tight">{value}</p>
+            <p className="text-xl font-bold text-[var(--text)] tracking-tight">{value}</p>
             {subtitle && <p className="text-[11px] text-[var(--muted)] mt-1">{subtitle}</p>}
         </div>
     );
@@ -172,7 +172,7 @@ export default function SectiePage() {
                     <span className="text-[var(--blue)]">
                         {React.cloneElement(section.icon as React.ReactElement<any>, { size: 28 })}
                     </span>
-                    <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                    <h1 className="text-2xl md:text-3xl font-bold text-[var(--text)] tracking-tight">
                         {section.title}
                     </h1>
                 </div>
@@ -198,7 +198,7 @@ export default function SectiePage() {
                             <div className="w-10 h-10 rounded-xl bg-[var(--blue)]/10 flex items-center justify-center text-[var(--blue)] group-hover:bg-[var(--blue)]/20 transition-colors duration-300">
                                 {React.cloneElement(child.icon as React.ReactElement<any>, { size: 20 })}
                             </div>
-                            <h2 className="text-[15px] font-semibold text-white group-hover:text-[var(--blue)] transition-colors duration-300">
+                            <h2 className="text-[15px] font-semibold text-[var(--text)] group-hover:text-[var(--blue)] transition-colors duration-300">
                                 {child.label}
                             </h2>
                         </div>

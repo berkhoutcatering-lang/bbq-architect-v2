@@ -73,7 +73,7 @@ export default function FieldTooltip({ text, position = 'top' }: FieldTooltipPro
                     position: 'absolute',
                     ...tooltipPositionStyles[position],
                     background: 'var(--card-solid)',
-                    color: '#fff',
+                    color: 'var(--text)',
                     fontSize: 12,
                     lineHeight: 1.4,
                     padding: '8px 12px',

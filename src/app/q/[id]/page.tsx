@@ -112,7 +112,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
             <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-darker)', padding: 20 }}>
                 <div style={{ textAlign: 'center', maxWidth: 400 }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
-                    <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Offerte niet gevonden</h2>
+                    <h2 style={{ color: 'var(--text)', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Offerte niet gevonden</h2>
                     <p style={{ color: 'var(--zinc)', fontSize: 14 }}>{error || 'Deze offerte bestaat niet of is verlopen.'}</p>
                 </div>
             </div>
@@ -180,7 +180,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             <span style={{ fontSize: 28 }}>🔥</span>
                         )}
                     </div>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: '0 0 4px' }}>{companyName}</h2>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', margin: '0 0 4px' }}>{companyName}</h2>
                     {settings?.ondertitel && <p style={{ fontSize: 12, color: 'var(--zinc)', margin: 0 }}>{settings.ondertitel}</p>}
                 </div>
 
@@ -192,7 +192,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                             <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.2 }}>
+                                <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: '0 0 6px', lineHeight: 1.2 }}>
                                     {offer.client_naam || 'Klant'}
                                 </h1>
                                 {offer.client_adres && <p style={{ color: 'var(--zinc)', fontSize: 13, margin: 0 }}>{offer.client_adres}</p>}
@@ -286,7 +286,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 <span>BTW {defaultBtw}%</span>
                                 <span>{formatEuro(btwBedrag)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, color: '#fff', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 4 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, color: 'var(--text)', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 4 }}>
                                 <span>Totaal</span>
                                 <span style={{ color: brandColor }}>{formatEuro(totaal)}</span>
                             </div>
@@ -356,14 +356,14 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {!accepted && !signStep && (
                         <div style={{ padding: '32px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(158,120,28,.06)', borderRadius: 16, border: '1px solid rgba(158,120,28,.12)' }}>
-                                <h3 style={{ color: '#fff', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Akkoord met deze offerte?</h3>
+                                <h3 style={{ color: 'var(--text)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Akkoord met deze offerte?</h3>
                                 <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
                                     Bevestig met een digitale handtekening om de datum vast te leggen.
                                 </p>
                                 <button
                                     onClick={function () { setSignStep(true); }}
                                     style={{
-                                        background: brandColor, color: '#000', border: 'none',
+                                        background: brandColor, color: 'var(--brand-background)', border: 'none',
                                         padding: '14px 36px', borderRadius: 99, fontSize: 15, fontWeight: 800,
                                         cursor: 'pointer', boxShadow: '0 4px 20px rgba(158,120,28,0.3)',
                                         transition: 'transform 0.15s, box-shadow 0.15s',
@@ -380,7 +380,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {/* Signature step */}
                     {!accepted && signStep && (
                         <div style={{ padding: '28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Digitale handtekening</h3>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Digitale handtekening</h3>
                             <p style={{ color: 'var(--zinc)', fontSize: 13, marginBottom: 20 }}>
                                 Vul uw naam in en plaats een handtekening om de offerte te bevestigen.
                             </p>

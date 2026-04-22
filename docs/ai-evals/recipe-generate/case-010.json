@@ -1,0 +1,18 @@
+{
+  "id": "case-010",
+  "description": "Meertalige input (NL/EN mix)",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Corporate BBQ for 45 guests, international team, easy finger food style, mix of meat en veggie",
+      "existing": [],
+      "options": { "gasten": 45, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 20 }
+  ]
+}

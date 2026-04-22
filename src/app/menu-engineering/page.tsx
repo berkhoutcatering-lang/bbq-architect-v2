@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, ChefHat, Users, Euro, Save, ShoppingCart, AlertTriangle, Check } from 'lucide-react';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 import GerechtKaart, { GANGEN, type GerechtData, type GangConfig, getGang } from './GerechtKaart';
 import GerechtDetailsModal from './GerechtDetailsModal';
@@ -348,6 +349,7 @@ export default function MenuEngineering() {
 
   const GOLD = '#c4a35a';
   return (
+    <RequireTier feature="menu_engineering">
     <div style={{ paddingBottom: 40 }}>
 
       {toast && (
@@ -365,16 +367,16 @@ export default function MenuEngineering() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 700, marginBottom: 6 }}>De keuken</div>
-          <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Menu Engineering</h1>
+          <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>Menu Engineering</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.totaal} gerechten · AI componeert menu&apos;s in jouw stijl</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href="/gerechten"
-            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
             <Plus size={14} /> Nieuw gerecht
           </a>
           <button onClick={() => setAiMenuOpen(true)}
-            style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none' }}>
+            style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: 'var(--brand-background)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none' }}>
             <Sparkles size={14} /> AI Menu Componeren
           </button>
         </div>
@@ -386,10 +388,10 @@ export default function MenuEngineering() {
           <Wand2 size={22} style={{ color: GOLD }} />
         </div>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>Compleet menu met één vraag</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Compleet menu met één vraag</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>Vul gasten + thema + dieet in — Claude maakt een volledig menu met gangen, inkooplijst, kostprijs en adviesprijs. Jouw bestaande gerechten als stijl-basis.</div>
         </div>
-        <button onClick={() => setAiMenuOpen(true)} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={() => setAiMenuOpen(true)} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Sparkles size={13} /> Componeer menu
         </button>
       </div>
@@ -407,7 +409,7 @@ export default function MenuEngineering() {
           return (
             <div key={s.label} style={{ padding: 14, borderRadius: 10, background: 'var(--card)', border: '1px solid var(--card-solid)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{s.sub}</div>
             </div>
           );
@@ -423,32 +425,32 @@ export default function MenuEngineering() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Zoek gerechten..."
-            style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 13, outline: 'none' }}
           />
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <button onClick={() => setGangFilter('alle')} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: gangFilter === 'alle' ? '1px solid #fff' : '1px solid var(--card-solid)', background: gangFilter === 'alle' ? '#fff' : 'var(--card)', color: gangFilter === 'alle' ? '#000' : '#fff' }}>
+          <button onClick={() => setGangFilter('alle')} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: gangFilter === 'alle' ? '1px solid #fff' : '1px solid var(--card-solid)', background: gangFilter === 'alle' ? '#fff' : 'var(--card)', color: gangFilter === 'alle' ? 'var(--brand-background)' : 'var(--text)' }}>
             Alle
           </button>
           {GANGEN.map(function (g) {
             const active = gangFilter === g.slug;
             return (
-              <button key={g.slug} onClick={() => setGangFilter(active ? 'alle' : g.slug)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: active ? '1px solid #fff' : '1px solid var(--card-solid)', background: active ? '#fff' : 'var(--card)', color: active ? '#000' : '#fff' }}>
+              <button key={g.slug} onClick={() => setGangFilter(active ? 'alle' : g.slug)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: active ? '1px solid #fff' : '1px solid var(--card-solid)', background: active ? '#fff' : 'var(--card)', color: active ? 'var(--brand-background)' : 'var(--text)' }}>
                 {g.icon} {g.label}
               </button>
             );
           })}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => setBcgDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setBcgDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <BarChart3 size={14} /> Winnaars & Verliezers
           </button>
-          <button onClick={() => setMapDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setMapDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <LayoutGrid size={14} /> Menukaart indelen
           </button>
           <button
             onClick={() => { setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds([]); }}
-            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: selectionMode ? '#fff' : 'var(--card)', color: selectionMode ? '#000' : '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: selectionMode ? '#fff' : 'var(--card)', color: selectionMode ? 'var(--brand-background)' : 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {selectionMode ? <CheckCheck size={14} /> : <CheckSquare size={14} />}
             Selecteer
           </button>
@@ -459,8 +461,8 @@ export default function MenuEngineering() {
       {selectionMode && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>Selectie · {selectedIds.length} geselecteerd</span>
-          <button onClick={selectVisible} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Selecteer zichtbare</button>
-          <button onClick={clearSelection} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Deselecteer</button>
+          <button onClick={selectVisible} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Selecteer zichtbare</button>
+          <button onClick={clearSelection} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Deselecteer</button>
           {selectedIds.length > 0 && (
             <button onClick={deleteSelected} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.1)', color: '#fca5a5', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Trash2 size={12} /> Verwijder ({selectedIds.length})
@@ -546,14 +548,14 @@ export default function MenuEngineering() {
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1300, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Menukaart indelen</h2>
+                <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: 'var(--text)', margin: 0 }}>Menukaart indelen</h2>
                 <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>{alleMapGerechten} gerechten ingedeeld · {gerechten.length - alleMapGerechten} in pool</p>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={aiAutoSort} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={aiAutoSort} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <Sparkles size={13} /> AI auto-sort
                 </button>
-                <button onClick={() => { const m: Record<string, GerechtData[]> = {}; GANGEN.forEach(g => { m[g.slug] = []; }); setMapData(m); }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Reset</button>
+                <button onClick={() => { const m: Record<string, GerechtData[]> = {}; GANGEN.forEach(g => { m[g.slug] = []; }); setMapData(m); }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Reset</button>
                 <button onClick={() => setMapDrawerOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
               </div>
             </div>
@@ -569,7 +571,7 @@ export default function MenuEngineering() {
                         onClick={() => openGangPicker(g)}>
                         <span style={{ fontSize: 14 }}>{gang.icon}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</div>
                           <div style={{ fontSize: 10, color: 'var(--muted)' }}>{gang.label}</div>
                         </div>
                         <ArrowRight size={12} style={{ color: 'var(--muted)' }} />
@@ -605,6 +607,7 @@ export default function MenuEngineering() {
         supabase={supabase}
       />
     </div>
+    </RequireTier>
   );
 }
 
@@ -672,7 +675,7 @@ function AiMenuComposer({ onClose, existingGerechten, onComposed }: {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Sparkles size={16} style={{ color: '#c4a35a' }} />
-              <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: '#fff', margin: 0 }}>AI Menu componeren</h2>
+              <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', margin: 0 }}>AI Menu componeren</h2>
             </div>
             <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Claude Sonnet 4.6 · gebruikt jouw {existingGerechten.length} gerechten als stijl-basis</p>
           </div>
@@ -684,7 +687,7 @@ function AiMenuComposer({ onClose, existingGerechten, onComposed }: {
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8, display: 'block' }}>Wat voor menu wil je?</label>
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
               placeholder="bijv. zomers BBQ-menu voor 30 gasten, lichtgekruid, 1 vega hoofdgang"
-              style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
+              style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {EXAMPLES.map((ex) => (
@@ -698,12 +701,12 @@ function AiMenuComposer({ onClose, existingGerechten, onComposed }: {
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6, display: 'block' }}>Aantal gasten</label>
               <input type="number" min={1} max={500} value={gasten} onChange={(e) => setGasten(parseInt(e.target.value) || 20)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6, display: 'block' }}>Aantal gangen</label>
               <select value={gangen} onChange={(e) => setGangen(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, outline: 'none' }}>
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, outline: 'none' }}>
                 <option value="2">2 (hoofd + dessert)</option>
                 <option value="3">3 (voorgerecht + hoofd + dessert)</option>
                 <option value="4">4 (voor + hoofd + bijgerecht + dessert)</option>
@@ -720,9 +723,9 @@ function AiMenuComposer({ onClose, existingGerechten, onComposed }: {
           )}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
             <button onClick={compose} disabled={!prompt.trim() || status === 'generating'}
-              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: prompt.trim() && status !== 'generating' ? '#fff' : 'rgba(255,255,255,.3)', color: '#000', fontSize: 12, fontWeight: 700, cursor: prompt.trim() && status !== 'generating' ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: prompt.trim() && status !== 'generating' ? '#fff' : 'rgba(255,255,255,.3)', color: 'var(--brand-background)', fontSize: 12, fontWeight: 700, cursor: prompt.trim() && status !== 'generating' ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {status === 'generating' ? <><Loader2 size={14} className="spin" /> Claude componeert... (kan 30-60s duren)</> : <><Sparkles size={14} /> Componeer menu</>}
             </button>
           </div>
@@ -762,7 +765,7 @@ function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Sparkles size={12} style={{ color: '#c4a35a' }} /> AI Menu
             </div>
-            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 600, color: '#fff', margin: 0 }}>{menu.menu_naam || 'Nieuw menu'}</h2>
+            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{menu.menu_naam || 'Nieuw menu'}</h2>
             {menu.thema && <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 4 }}>{menu.thema}</p>}
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
@@ -788,7 +791,7 @@ function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
                     <div key={i} style={{ padding: 14, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{g.naam}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{g.naam}</div>
                           {g.beschrijving && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{g.beschrijving}</div>}
                         </div>
                         {g.geschatte_kostprijs_pp && (
@@ -804,7 +807,7 @@ function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
                       )}
                       {g.ingredienten && g.ingredienten.length > 0 && (
                         <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>
-                          <strong style={{ color: '#fff' }}>Ingr:</strong> {g.ingredienten.slice(0, 6).map((i: any) => `${i.hoeveelheid}${i.eenheid} ${i.naam}`).join(', ')}{g.ingredienten.length > 6 ? '...' : ''}
+                          <strong style={{ color: 'var(--text)' }}>Ingr:</strong> {g.ingredienten.slice(0, 6).map((i: any) => `${i.hoeveelheid}${i.eenheid} ${i.naam}`).join(', ')}{g.ingredienten.length > 6 ? '...' : ''}
                         </div>
                       )}
                     </div>
@@ -822,10 +825,10 @@ function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
               </div>
               <div style={{ padding: 12, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
                 {inkooplijst.map((item: any, i: number) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 10, padding: '6px 0', fontSize: 12, color: '#fff', borderBottom: i < inkooplijst.length - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 10, padding: '6px 0', fontSize: 12, color: 'var(--text)', borderBottom: i < inkooplijst.length - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
                     <span>{item.product}</span>
                     <span style={{ color: 'var(--muted)', fontSize: 10, textTransform: 'uppercase' }}>{item.categorie}</span>
-                    <span style={{ color: '#fff', fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'right' }}>{item.totale_hoeveelheid}</span>
+                    <span style={{ color: 'var(--text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'right' }}>{item.totale_hoeveelheid}</span>
                     <span style={{ color: '#c4a35a', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', minWidth: 36, textAlign: 'left' }}>{item.eenheid}</span>
                   </div>
                 ))}
@@ -835,9 +838,9 @@ function MenuPreviewDrawer({ menu, onClose, onSaveAsDishes }: {
 
           {/* ACTIES */}
           <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: 'var(--bg)', paddingTop: 12 }}>
-            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Sluiten</button>
+            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Sluiten</button>
             <button onClick={async () => { setSaving(true); await onSaveAsDishes(gerechten); setSaving(false); }} disabled={saving || gerechten.length === 0}
-              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: '#c4a35a', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: '#c4a35a', color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {saving ? <><Loader2 size={14} className="spin" /> Opslaan...</> : <><Save size={14} /> Voeg alle {gerechten.length} gerechten toe</>}
             </button>
           </div>
@@ -853,7 +856,7 @@ function PreviewStat({ icon: Icon, label, value, highlight }: { icon: any; label
       <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
         <Icon size={10} /> {label}
       </div>
-      <div style={{ fontSize: 16, fontWeight: 700, color: highlight ? '#c4a35a' : '#fff', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: highlight ? '#c4a35a' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
   );
 }
@@ -868,7 +871,7 @@ function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bc
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1200, margin: '0 auto', background: 'var(--bg)', borderRadius: 16, padding: 24, border: '1px solid var(--card-solid)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: '#fff', margin: 0 }}>Winnaars & Verliezers</h2>
+            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: 'var(--text)', margin: 0 }}>Winnaars & Verliezers</h2>
             <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Gerechten geclassificeerd op populariteit en marge</p>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
@@ -877,7 +880,7 @@ function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bc
         {bcgStats && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
             {[
-              { label: 'Geanalyseerd', value: bcgStats.totaal, color: '#fff' },
+              { label: 'Geanalyseerd', value: bcgStats.totaal, color: 'var(--text)' },
               { label: '⭐ Stars', value: bcgStats.stars, color: '#4ade80' },
               { label: '🧩 Puzzles', value: bcgStats.puzzles, color: '#60a5fa' },
               { label: '🐴 Plowhorses', value: bcgStats.plowhorses, color: '#fbbf24' },

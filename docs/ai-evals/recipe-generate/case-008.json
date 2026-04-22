@@ -1,0 +1,18 @@
+{
+  "id": "case-008",
+  "description": "Kindvriendelijk familie-event",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Familie-BBQ in de buitenlucht — 20 volwassenen, 10 kinderen (4-12 jaar), gemakkelijk te serveren",
+      "existing": [],
+      "options": { "gasten": 30, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 15 }
+  ]
+}

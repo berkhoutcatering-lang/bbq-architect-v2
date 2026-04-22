@@ -1,0 +1,18 @@
+{
+  "id": "case-004",
+  "description": "Bruiloft met vegetarische opties",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Bruiloftsreceptie BBQ — 60 gasten waarvan 15 vegetarisch, elegante presentatie",
+      "existing": [],
+      "options": { "gasten": 60, "gangen": 4 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 4 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 30 }
+  ]
+}

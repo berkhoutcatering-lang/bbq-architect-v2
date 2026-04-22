@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ai-eval": "tsx scripts/ai-eval.ts",
+    "enable-leaked-password-protection": "tsx scripts/enable-leaked-password-protection.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

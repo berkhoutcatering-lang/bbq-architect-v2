@@ -1,0 +1,18 @@
+{
+  "id": "case-005",
+  "description": "Halal-vriendelijk — geen varkensvlees",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "BBQ voor verjaardag 40 personen, geen varkensvlees, wel lam en kip",
+      "existing": [],
+      "options": { "gasten": 40, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 25 }
+  ]
+}

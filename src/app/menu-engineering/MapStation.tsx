@@ -36,7 +36,7 @@ export function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 18 }}>{gang.icon}</span>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{gang.label}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{gang.label}</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)' }}>{gerechten.length} gerecht{gerechten.length !== 1 ? 'en' : ''}</div>
         </div>
         {gerechten.length > 0 && (

@@ -178,14 +178,15 @@ body {
 }
 
 .btn-brand {
-  background: #fff;
-  color: #000;
+  background: var(--text);
+  color: var(--brand-background, #000);
   border: 1px solid rgba(255, 255, 255, 0.2);
   font-weight: 700;
 }
 
 .btn-brand:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--text);
+  opacity: .9;
   filter: none;
 }
 

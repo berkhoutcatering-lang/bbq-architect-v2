@@ -5,6 +5,8 @@ import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions'
 import { createServerSupabase } from '@/lib/supabase-server';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_INSTRUCTIONS, BRAINSTORM_INSTRUCTIONS } from '@/lib/ai-prompts';
+import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -248,6 +250,33 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             );
         }
 
+        // Resolve orgId for usage logging + tier-cap enforcement.
+        // Falls silent if user has no membership — logging skipped, AI still works.
+        let orgId: string | null = null;
+        if (authUser) {
+            const memRes = await sbAuth
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', authUser.id)
+                .eq('status', 'active')
+                .limit(1)
+                .maybeSingle();
+            orgId = memRes.data?.organization_id ?? null;
+        }
+
+        // Tier-cap check: soft-throttle at 100%, hard-block at 150%.
+        if (orgId) {
+            const cap = await checkAiCapServer(orgId);
+            if (!cap.allowed) {
+                return NextResponse.json({
+                    error: 'Je AI-limiet voor deze maand is bereikt. Upgrade je abonnement voor meer capaciteit.',
+                    used: cap.used,
+                    cap: cap.cap,
+                    tier: cap.tier,
+                }, { status: 429 });
+            }
+        }
+
         // System prompt is gesplitst in een statisch deel (cachebaar) en een dynamisch deel (live DB data).
         // De statische blokken samen vormen een byte-identieke prefix per (pageContext, mode, userRole)
         // combinatie; contextData komt ACHTER het cache-breakpoint zodat wisselende DB-data de cache niet
@@ -340,6 +369,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             async start(controller) {
                 let fullText = '';
                 let usage: Anthropic.Messages.Usage | null = null;
+                let outputTokens = 0;
                 try {
                     for await (const event of stream) {
                         if (event.type === 'message_start') {
@@ -350,10 +380,35 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                 fullText += delta;
                                 controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta }) + '\n\n'));
                             }
+                        } else if (event.type === 'message_delta' && event.usage) {
+                            // final output_tokens arrives here
+                            outputTokens = event.usage.output_tokens ?? outputTokens;
                         }
                     }
                     if (usage) {
-                        console.log(`[chat] ${selectedModel} tokens: input=${usage.input_tokens} cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}`);
+                        console.log(`[chat] ${selectedModel} tokens: input=${usage.input_tokens} output=${outputTokens} cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}`);
+                    }
+                    // Log usage to ai_usage table (fire-and-forget, never blocks stream)
+                    if (orgId && usage) {
+                        const cost = estimateAiCostCents({
+                            model: selectedModel,
+                            tokens_input: usage.input_tokens,
+                            tokens_output: outputTokens,
+                            tokens_cache_read: usage.cache_read_input_tokens ?? 0,
+                            tokens_cache_creation: usage.cache_creation_input_tokens ?? 0,
+                        });
+                        logAiUsageServer({
+                            organization_id: orgId,
+                            user_id: authUser?.id ?? null,
+                            action_type: 'chat',
+                            model: selectedModel,
+                            tokens_input: usage.input_tokens,
+                            tokens_output: outputTokens,
+                            tokens_cache_read: usage.cache_read_input_tokens ?? 0,
+                            tokens_cache_creation: usage.cache_creation_input_tokens ?? 0,
+                            cost_eur_cents: cost,
+                            metadata: { mode, pageContext },
+                        }).catch(function (e) { console.warn('[chat] ai_usage log failed:', (e as Error).message); });
                     }
                     controller.enqueue(encoder.encode('data: ' + JSON.stringify({
                         done: true,

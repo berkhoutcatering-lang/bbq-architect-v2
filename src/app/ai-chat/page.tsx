@@ -588,7 +588,7 @@ export default function AiStudioPage() {
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={function () { approveAction(msgIdx, action.id); }}
-                            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: 'var(--green)', color: '#000', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                         >
                             <Check size={14} className="mr-1.5" />Goedkeuren & uitvoeren
                         </button>
@@ -658,7 +658,7 @@ export default function AiStudioPage() {
                             })}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={createFolder} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Aanmaken</button>
+                            <button onClick={createFolder} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--brand)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Aanmaken</button>
                             <button onClick={function () { setShowNewFolder(false); setNewFolderName(''); }} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}>Annuleer</button>
                         </div>
                     </div>
@@ -754,7 +754,7 @@ export default function AiStudioPage() {
                     </button>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontSize: 16 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-background)', fontSize: 16 }}>
                             <Bot size={14} />
                         </div>
                         <div>
@@ -949,7 +949,7 @@ function SaveButton({ folders, onSave, onRefresh }: { folders: Folder[]; onSave:
                         <button
                             onClick={doSave}
                             disabled={!titel.trim() || saving}
-                            style={{ flex: 1, padding: '6px 0', borderRadius: 7, border: 'none', background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+                            style={{ flex: 1, padding: '6px 0', borderRadius: 7, border: 'none', background: 'var(--brand)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
                         >
                             {saving ? 'Opslaan…' : 'Opslaan'}
                         </button>

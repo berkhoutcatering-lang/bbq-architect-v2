@@ -94,16 +94,16 @@ export default function ReceptenPage() {
             <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div>
                     <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 700, marginBottom: 6 }}>De keuken</div>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: '#fff', margin: 0, letterSpacing: '-0.01em' }}>Receptenboek</h1>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>Receptenboek</h1>
                     <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.total} recepten · AI bedenkt nieuwe in jouw stijl</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setEditing({ naam: '', categorie: 'Vlees', porties: 10, preptime: 30, ingredienten: [], instructies: '' } as Recept)}
-                        style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <Plus size={14} /> Handmatig
                     </button>
                     <button onClick={() => setAiOpen(true)}
-                        style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none' }}>
+                        style={{ padding: '10px 18px', borderRadius: 10, background: '#fff', color: 'var(--brand-background)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none' }}>
                         <Sparkles size={14} /> AI Recept genereren
                     </button>
                 </div>
@@ -115,10 +115,10 @@ export default function ReceptenPage() {
                     <Wand2 size={22} style={{ color: GOLD }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 240 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 2 }}>Claude kent jouw keuken</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>Claude kent jouw keuken</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>Bij elk AI-recept krijgt Claude jouw bestaande gerechten als stijl-referentie. Geen fusion-exces, maar recepten die passen bij wat je al doet.</div>
                 </div>
-                <button onClick={() => setAiOpen(true)} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => setAiOpen(true)} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Sparkles size={13} /> Probeer nu
                 </button>
             </div>
@@ -128,7 +128,7 @@ export default function ReceptenPage() {
                 <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 240 }}>
                     <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
                     <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Zoek recept..."
-                        style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                        style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {CATEGORIES.map(c => {
@@ -152,14 +152,14 @@ export default function ReceptenPage() {
             {filtered.length === 0 ? (
                 <div style={{ padding: 60, textAlign: 'center', borderRadius: 16, border: '1px solid var(--card-solid)', background: 'var(--card)' }}>
                     <BookOpen size={40} style={{ color: 'var(--muted-light)', opacity: 0.4, marginBottom: 10 }} />
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
                         {search || filter !== 'Alles' ? 'Geen recepten gevonden' : 'Nog geen recepten'}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
                         {search || filter !== 'Alles' ? 'Probeer een andere zoekopdracht' : 'Laat Claude je eerste recept bedenken'}
                     </div>
                     {!search && filter === 'Alles' && (
-                        <button onClick={() => setAiOpen(true)} style={{ padding: '10px 18px', borderRadius: 10, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => setAiOpen(true)} style={{ padding: '10px 18px', borderRadius: 10, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                             <Sparkles size={14} /> AI Recept genereren
                         </button>
                     )}
@@ -244,7 +244,7 @@ function RecipeCard({ recipe, onClick }: { recipe: Recept; onClick: () => void }
         <button onClick={onClick}
             style={{
                 padding: 16, borderRadius: 14, border: '1px solid var(--card-solid)', background: 'var(--card)',
-                cursor: 'pointer', textAlign: 'left', color: '#fff', display: 'flex', flexDirection: 'column', gap: 10,
+                cursor: 'pointer', textAlign: 'left', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: 10,
                 transition: 'all .15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
@@ -259,7 +259,7 @@ function RecipeCard({ recipe, onClick }: { recipe: Recept; onClick: () => void }
                     </span>
                 ))}
             </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{recipe.naam}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2 }}>{recipe.naam}</div>
             {recipe.beschrijving && (
                 <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {recipe.beschrijving}
@@ -342,7 +342,7 @@ function AiGenerateModal({ onClose, existingRecepten, existingGerechten, onAccep
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Sparkles size={16} style={{ color: GOLD }} />
-                            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: '#fff', margin: 0 }}>AI Recept genereren</h2>
+                            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', margin: 0 }}>AI Recept genereren</h2>
                         </div>
                         <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Claude Sonnet 4.6 · kijkt naar je bestaande recepten</p>
                     </div>
@@ -358,7 +358,7 @@ function AiGenerateModal({ onClose, existingRecepten, existingGerechten, onAccep
                             <textarea value={prompt} onChange={e => setPrompt(e.target.value)}
                                 placeholder="bijv. zomerse salade met aardbei en geitenkaas, licht gekruid"
                                 rows={3}
-                                style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
+                                style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {EXAMPLES.map(ex => (
@@ -369,9 +369,9 @@ function AiGenerateModal({ onClose, existingRecepten, existingGerechten, onAccep
                             ))}
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 10, alignItems: 'center' }}>
-                            <label style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>Porties</label>
+                            <label style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Porties</label>
                             <input type="number" min={1} max={200} value={porties} onChange={e => setPorties(parseInt(e.target.value) || 10)}
-                                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 13, width: 100, outline: 'none' }} />
+                                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, width: 100, outline: 'none' }} />
                         </div>
 
                         {status === 'error' && error && (
@@ -382,9 +382,9 @@ function AiGenerateModal({ onClose, existingRecepten, existingGerechten, onAccep
                         )}
 
                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+                            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
                             <button onClick={generate} disabled={!prompt.trim() || status === 'generating'}
-                                style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: prompt.trim() && status !== 'generating' ? '#fff' : 'rgba(255,255,255,.3)', color: '#000', fontSize: 12, fontWeight: 700, cursor: prompt.trim() && status !== 'generating' ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: prompt.trim() && status !== 'generating' ? '#fff' : 'rgba(255,255,255,.3)', color: 'var(--brand-background)', fontSize: 12, fontWeight: 700, cursor: prompt.trim() && status !== 'generating' ? 'pointer' : 'not-allowed', border: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                 {status === 'generating' ? <><Loader2 size={14} className="spin" /> Claude bedenkt je recept...</> : <><Sparkles size={14} /> Genereer recept</>}
                             </button>
                         </div>
@@ -407,12 +407,12 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ padding: 14, borderRadius: 10, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.25)', display: 'flex', gap: 10, alignItems: 'center' }}>
                 <Check size={18} style={{ color: 'var(--green)' }} />
-                <span style={{ fontSize: 12, color: '#fff', fontWeight: 600 }}>Recept bedacht — controleer en sla op</span>
+                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Recept bedacht — controleer en sla op</span>
             </div>
 
             <div>
                 <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4 }}>{recipe.categorie}</div>
-                <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 600, color: '#fff', margin: 0 }}>{recipe.naam}</h3>
+                <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{recipe.naam}</h3>
                 {recipe.beschrijving && <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{recipe.beschrijving}</p>}
             </div>
 
@@ -432,9 +432,9 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
             <Section title={`Ingrediënten · ${recipe.ingredienten?.length || 0}`}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {(recipe.ingredienten || []).map((i, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, padding: '8px 0', fontSize: 12, color: '#fff', borderBottom: idx < (recipe.ingredienten?.length || 0) - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, padding: '8px 0', fontSize: 12, color: 'var(--text)', borderBottom: idx < (recipe.ingredienten?.length || 0) - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
                             <span>{i.naam}</span>
-                            <span style={{ color: '#fff', fontVariantNumeric: 'tabular-nums', fontWeight: 700, minWidth: 48, textAlign: 'right' }}>{i.hoeveelheid}</span>
+                            <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums', fontWeight: 700, minWidth: 48, textAlign: 'right' }}>{i.hoeveelheid}</span>
                             <span style={{ color: GOLD, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', minWidth: 36, textAlign: 'left' }}>{i.eenheid}</span>
                         </div>
                     ))}
@@ -444,7 +444,7 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
             <Section title={`Bereiding · ${Array.isArray(recipe.instructies) ? recipe.instructies.length : 0} stappen`}>
                 <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {(Array.isArray(recipe.instructies) ? recipe.instructies : (recipe.instructies || '').split('\n').filter((l: string) => l.trim())).map((s: string, i: number) => (
-                        <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>
+                        <li key={i} style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{s}</li>
                     ))}
                 </ol>
             </Section>
@@ -453,7 +453,7 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
                 <Section title={`Werkvolgorde · wanneer doe je wat`}>
                     <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {recipe.battle_plan.map((s, i) => (
-                            <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>
+                            <li key={i} style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{s}</li>
                         ))}
                     </ol>
                 </Section>
@@ -463,16 +463,16 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--amber)' }}>Allergenen:</strong> {recipe.allergenen.join(', ')}</div>
             )}
             {recipe.wijn_suggestie && (
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: '#fff' }}>Wijn:</strong> {recipe.wijn_suggestie}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>Wijn:</strong> {recipe.wijn_suggestie}</div>
             )}
             {recipe.service_tip && (
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: '#fff' }}>Service:</strong> {recipe.service_tip}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>Service:</strong> {recipe.service_tip}</div>
             )}
 
             <div style={{ display: 'flex', gap: 8, marginTop: 8, position: 'sticky', bottom: 0, background: 'var(--bg)', paddingTop: 12 }}>
-                <button onClick={onReject} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Opnieuw proberen</button>
+                <button onClick={onReject} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Opnieuw proberen</button>
                 <button onClick={async () => { setSaving(true); await onAccept(); setSaving(false); }} disabled={saving}
-                    style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     {saving ? <><Loader2 size={14} className="spin" /> Opslaan...</> : <><Save size={14} /> Opslaan in receptenboek</>}
                 </button>
             </div>
@@ -566,7 +566,7 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2 }}>
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4 }}>{recipe.categorie}</div>
-                        <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 600, color: '#fff', margin: 0 }}>{recipe.naam}</h2>
+                        <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{recipe.naam}</h2>
                         {recipe.beschrijving && <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 4 }}>{recipe.beschrijving}</p>}
                     </div>
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
@@ -593,18 +593,18 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Schaal naar</div>
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                 <input type="number" min={1} max={500} value={scalePorties} onChange={e => setScalePorties(parseInt(e.target.value) || 10)}
-                                    style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: '#fff', fontSize: 12, outline: 'none' }} />
+                                    style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
                                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>p.</span>
                                 <button onClick={doScale} disabled={scaling || scalePorties === recipe.porties}
-                                    style={{ padding: '6px 10px', borderRadius: 6, background: scalePorties !== recipe.porties ? '#fff' : 'rgba(255,255,255,.2)', color: '#000', border: 'none', fontSize: 11, fontWeight: 700, cursor: scalePorties !== recipe.porties ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    style={{ padding: '6px 10px', borderRadius: 6, background: scalePorties !== recipe.porties ? '#fff' : 'rgba(255,255,255,.2)', color: 'var(--brand-background)', border: 'none', fontSize: 11, fontWeight: 700, cursor: scalePorties !== recipe.porties ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                     {scaling ? <Loader2 size={11} className="spin" /> : <Zap size={11} />} Schaal
                                 </button>
                             </div>
                         </div>
                         <button onClick={doEnrich} disabled={enriching}
-                            style={{ padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                            style={{ padding: 12, borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>AI verrijken</div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                 {enriching ? <Loader2 size={12} className="spin" /> : <Sparkles size={12} style={{ color: GOLD }} />}
                                 {enriching ? 'Claude schrijft...' : 'Vul ontbrekende velden'}
                             </div>
@@ -615,9 +615,9 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                     <Section title={`Ingrediënten · voor ${recipe.porties || 10} porties`}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {(recipe.ingredienten || []).map((i, idx) => (
-                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, padding: '8px 0', fontSize: 12, color: '#fff', borderBottom: idx < (recipe.ingredienten?.length || 0) - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
+                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, padding: '8px 0', fontSize: 12, color: 'var(--text)', borderBottom: idx < (recipe.ingredienten?.length || 0) - 1 ? '1px solid var(--card-solid)' : 'none', alignItems: 'center' }}>
                                     <span>{i.naam}</span>
-                                    <span style={{ color: '#fff', fontVariantNumeric: 'tabular-nums', fontWeight: 700, minWidth: 48, textAlign: 'right' }}>{i.hoeveelheid}</span>
+                                    <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums', fontWeight: 700, minWidth: 48, textAlign: 'right' }}>{i.hoeveelheid}</span>
                                     <span style={{ color: GOLD, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', minWidth: 36, textAlign: 'left' }}>{i.eenheid}</span>
                                 </div>
                             ))}
@@ -628,7 +628,7 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                     <Section title={`Bereiding · ${instructies.length} stappen`}>
                         <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {instructies.map((s: string, i: number) => (
-                                <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>
+                                <li key={i} style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{s}</li>
                             ))}
                         </ol>
                     </Section>
@@ -638,7 +638,7 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                         <Section title={`Werkvolgorde · wanneer doe je wat`}>
                             <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {recipe.battle_plan.map((s, i) => (
-                                    <li key={i} style={{ fontSize: 12, color: '#fff', lineHeight: 1.5 }}>{s}</li>
+                                    <li key={i} style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>{s}</li>
                                 ))}
                             </ol>
                         </Section>
@@ -652,17 +652,17 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                                     <strong style={{ color: 'var(--amber)' }}>⚠ Allergenen:</strong> {recipe.allergenen.join(', ')}
                                 </div>
                             )}
-                            {recipe.wijn_suggestie && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: '#fff' }}>🍷 Wijn:</strong> {recipe.wijn_suggestie}</div>}
-                            {recipe.service_tip && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: '#fff' }}>🍽 Service:</strong> {recipe.service_tip}</div>}
+                            {recipe.wijn_suggestie && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>🍷 Wijn:</strong> {recipe.wijn_suggestie}</div>}
+                            {recipe.service_tip && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>🍽 Service:</strong> {recipe.service_tip}</div>}
                         </div>
                     )}
 
                     {/* ACTIES */}
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button onClick={onKitchenMode} style={{ flex: 1, padding: '12px 16px', borderRadius: 10, background: GOLD, color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <button onClick={onKitchenMode} style={{ flex: 1, padding: '12px 16px', borderRadius: 10, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             <Flame size={14} /> Start kitchen mode
                         </button>
-                        <button onClick={onEdit} style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                        <button onClick={onEdit} style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                             Bewerken
                         </button>
                         <button onClick={onDelete} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.1)', color: '#fca5a5', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -700,7 +700,7 @@ function RecipeEditor({ recipe, onClose, onSave }: { recipe: Recept; onClose: ()
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1001, display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
             <div onClick={e => e.stopPropagation()} style={{ width: 'min(640px, 100vw)', background: 'var(--bg)', borderLeft: '1px solid var(--card-solid)', overflow: 'auto' }}>
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: '#fff', margin: 0 }}>{recipe.id ? 'Recept bewerken' : 'Nieuw recept'}</h2>
+                    <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', margin: 0 }}>{recipe.id ? 'Recept bewerken' : 'Nieuw recept'}</h2>
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
                 </div>
 
@@ -728,7 +728,7 @@ function RecipeEditor({ recipe, onClose, onSave }: { recipe: Recept; onClose: ()
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Ingrediënten</label>
-                            <button onClick={addIngredient} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <button onClick={addIngredient} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                 <Plus size={11} /> Regel
                             </button>
                         </div>
@@ -755,9 +755,9 @@ function RecipeEditor({ recipe, onClose, onSave }: { recipe: Recept; onClose: ()
                     </FormField>
 
                     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
+                        <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Annuleren</button>
                         <button onClick={async () => { setSaving(true); await onSave(form); setSaving(false); }} disabled={!form.naam || saving}
-                            style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: form.naam ? '#fff' : 'rgba(255,255,255,.3)', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: form.naam && !saving ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            style={{ flex: 1, padding: '10px 16px', borderRadius: 10, background: form.naam ? '#fff' : 'rgba(255,255,255,.3)', color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: form.naam && !saving ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             {saving ? <><Loader2 size={14} className="spin" /> Opslaan...</> : <><Save size={14} /> Opslaan</>}
                         </button>
                     </div>
@@ -840,7 +840,7 @@ function Stat({ label, value }: { label: string; value: string }) {
     return (
         <div style={{ padding: 10, borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 2 }}>{label}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
         </div>
     );
 }
@@ -879,7 +879,7 @@ const inputStyle: React.CSSProperties = {
     borderRadius: 8,
     border: '1px solid var(--card-solid)',
     background: 'var(--color-bg-deep)',
-    color: '#fff',
+    color: 'var(--text)',
     fontSize: 13,
     outline: 'none',
 };

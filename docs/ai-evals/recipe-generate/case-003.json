@@ -1,0 +1,19 @@
+{
+  "id": "case-003",
+  "description": "Grote BBQ voor 100 personen — schaalbaarheid",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Groot personeelsfeest — 100 gasten, praktische gerechten voor massa-productie",
+      "existing": [],
+      "options": { "gasten": 100, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 15 },
+    { "type": "number_lte", "path": "data.adviesprijs_pp", "max": 80 }
+  ]
+}

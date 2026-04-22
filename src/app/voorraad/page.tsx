@@ -16,6 +16,7 @@ import {
     ChefHat,
 } from 'lucide-react';
 import type { InventoryItem, Recept } from '@/types';
+import { RequireTier } from '@/components/PaywallPrompt';
 
 const GOLD = '#c4a35a';
 
@@ -126,7 +127,7 @@ function BtnPrimary({ children, icon: I, right: R, onClick, style, disabled }: {
     return (
         <button onClick={onClick} disabled={disabled} style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10,
-            background: 'var(--brand)', color: '#000', fontWeight: 700, fontSize: 13,
+            background: 'var(--brand)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 13,
             border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
             opacity: disabled ? 0.5 : 1,
             boxShadow: '0 4px 20px rgba(255,191,0,.25), inset 0 1px 0 rgba(255,255,255,.2)',
@@ -471,6 +472,7 @@ export default function Voorraad() {
     }
 
     return (
+        <RequireTier feature="voorraad">
         <div style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
 
             {/* HERO */}
@@ -572,6 +574,7 @@ export default function Voorraad() {
 
             <BarcodeScanner isOpen={scannerOpen} onScan={handleBarcodeScan} onClose={() => setScannerOpen(false)} />
         </div>
+        </RequireTier>
     );
 }
 

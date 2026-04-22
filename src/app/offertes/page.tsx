@@ -10,6 +10,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { useOrg } from '@/lib/OrgContext';
 import { mailOfferte } from '@/lib/emailHelper';
+import { logActivationEvent } from '@/lib/activation';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
@@ -483,12 +484,22 @@ export default function Offertes() {
                         <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><Save size={14} /> Opslaan</button>
                         <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><UtensilsCrossed size={14} /> Menu Wizard</button>
                         <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
-                        <button className="btn btn-ghost" onClick={async function () { const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites'); showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error'); }}><Mail size={14} /> Mail</button>
+                        <button className="btn btn-ghost" onClick={async function () {
+                            const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites');
+                            showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error');
+                            if (res.success && !res.fallback && form?.id && form?.status !== 'verzonden') {
+                                const hadEerdere = (offertes || []).some(function (o) { return o.status === 'verzonden' && o.id !== form.id; });
+                                await update(form.id, { status: 'verzonden' });
+                                if (!hadEerdere && orgId) {
+                                    logActivationEvent(orgId, 'first_quote_sent', { offerte_id: form.id });
+                                }
+                            }
+                        }}><Mail size={14} /> Mail</button>
                         <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
                         <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: 'var(--color-accent-gold)', border: '1px solid var(--color-accent-gold)' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
                         {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega Menukaart</button>}
                         {editing !== 'new' && (
-                            <button className="btn" style={{ background: 'var(--purple)', color: '#fff' }} onClick={function () {
+                            <button className="btn" style={{ background: 'var(--purple)', color: 'var(--text)' }} onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
                                 navigator.clipboard.writeText(link);
                                 showToast('Magic Link gekopieerd!', 'success');

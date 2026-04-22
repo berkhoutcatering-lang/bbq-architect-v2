@@ -3,6 +3,7 @@
 import type { TemplateBlock, PdfTemplate } from '@/types/template.types';
 import { TEMPLATE_VARIABLES } from '@/lib/templateVariables';
 import { Image, Star, Heart, Check, Plus, ArrowRight, Flame, Leaf, Sparkles, Circle, Diamond } from 'lucide-react';
+import { useTemplateBranding, useTemplateVariables, useTemplateMenuGroups } from './TemplateBrandingContext';
 
 // ── Unit conversion: match jsPDF output on the 2.5px/mm canvas ──
 const MM = 2.5;          // 1mm = 2.5px on canvas
@@ -14,23 +15,47 @@ TEMPLATE_VARIABLES.forEach(function (v) { EXAMPLE_DATA[v.key] = v.example; });
 
 // HTML preview of a block — calibrated to match jsPDF PDF output
 export default function BlockRenderer({ block, documentType }: { block: TemplateBlock; documentType: PdfTemplate['document_type'] }) {
-  const brandColor = '#c4a35a';
+  const branding = useTemplateBranding();
+  const liveVars = useTemplateVariables();
+  const liveMenuGroups = useTemplateMenuGroups();
+  const brandColor = branding.primary;
+  const accentColor = branding.accent;
   const isDark = documentType === 'menukaart';
 
   function resolveC(c: string): string {
     if (c === 'brand_primary') return brandColor;
-    if (c === 'brand_accent') return '#8b6914';
+    if (c === 'brand_accent') return accentColor;
     return c;
   }
 
   function resolveVars(text: string): string {
     return text.replace(/\{\{(\w+)\}\}/g, function (_m, key) {
+      // Live event-data wint van EXAMPLE_DATA wanneer TemplatePreview een context levert
+      if (liveVars && key in liveVars) return liveVars[key];
       return EXAMPLE_DATA[key] || key;
     });
   }
 
   switch (block.type) {
-    case 'logo':
+    case 'logo': {
+      const logoUrl = block.variant === 'dark' ? (branding.logoDarkUrl || branding.logoUrl) : branding.logoUrl;
+      if (logoUrl) {
+        return (
+          <div style={{ textAlign: block.alignment, padding: 1 * MM + 'px 0' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoUrl}
+              alt={branding.bedrijfsnaam || 'Logo'}
+              style={{
+                maxWidth: block.maxWidth * MM,
+                maxHeight: block.maxHeight * MM,
+                objectFit: 'contain',
+                display: 'inline-block',
+              }}
+            />
+          </div>
+        );
+      }
       return (
         <div style={{ textAlign: block.alignment, padding: 1 * MM + 'px 0' }}>
           <div style={{
@@ -44,6 +69,7 @@ export default function BlockRenderer({ block, documentType }: { block: Template
           </div>
         </div>
       );
+    }
 
     case 'text':
       return (
@@ -119,41 +145,51 @@ export default function BlockRenderer({ block, documentType }: { block: Template
         </div>
       );
 
-    case 'menu':
+    case 'menu': {
+      // Live data uit event-hub wint — anders placeholder voor editor-preview.
+      const menuData = liveMenuGroups && liveMenuGroups.length > 0
+        ? liveMenuGroups.map(g => ({ gang: g.gang, dishes: g.dishes }))
+        : [
+          { gang: 'Voorgerechten', dishes: [{ n: 'Pulled Pork Slider', s: 'Pulled pork in briochebroodje' }, { n: 'Coleslaw', s: 'Frisse kool-salade' }] },
+          { gang: 'Hoofdgerechten', dishes: [{ n: 'Smoked Brisket' }, { n: 'BBQ Ribs' }, { n: 'Grilled Corn' }] },
+        ];
+      const showDesc = block.showDescriptions;
+      const descStyle = block.dishDescStyle;
+      const nameStyle = block.dishNameStyle;
+      function renderDish(d: { n: string; s?: string }, align: 'left' | 'center' | 'right') {
+        return (
+          <div key={d.n} style={{ marginBottom: 0.8 * MM }}>
+            <div style={{ fontSize: nameStyle.fontSize * PT, color: resolveC(nameStyle.color), textAlign: align }}>{d.n}</div>
+            {showDesc && d.s && descStyle && (
+              <div style={{ fontSize: descStyle.fontSize * PT, color: resolveC(descStyle.color), textAlign: align, fontStyle: descStyle.fontStyle === 'italic' ? 'italic' : 'normal', marginTop: 0.3 * MM }}>{d.s}</div>
+            )}
+          </div>
+        );
+      }
       return (
         <div style={{ padding: 2 * MM + 'px 0' }}>
           {block.layout === '2col' ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 * MM }}>
-              {[
-                { gang: 'Voorgerechten', dishes: ['Pulled Pork Slider', 'Coleslaw'] },
-                { gang: 'Hoofdgerechten', dishes: ['Smoked Brisket', 'BBQ Ribs'] },
-              ].map(function (g) {
+              {menuData.map(function (g) {
                 return (
                   <div key={g.gang}>
                     <div style={{ fontSize: block.gangTitleStyle.fontSize * PT, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 1.5 * MM }}>
                       {g.gang}
                     </div>
-                    {g.dishes.map(function (d) {
-                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * PT, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 0.5 * MM }}>{d}</div>;
-                    })}
+                    {g.dishes.map(d => renderDish(d, block.gangTitleStyle.alignment))}
                   </div>
                 );
               })}
             </div>
           ) : (
             <div>
-              {[
-                { gang: 'Voorgerechten', dishes: ['Pulled Pork Slider', 'Coleslaw'] },
-                { gang: 'Hoofdgerechten', dishes: ['Smoked Brisket', 'BBQ Ribs', 'Grilled Corn'] },
-              ].map(function (g) {
+              {menuData.map(function (g) {
                 return (
                   <div key={g.gang} style={{ marginBottom: 3 * MM }}>
                     <div style={{ fontSize: block.gangTitleStyle.fontSize * PT, fontWeight: block.gangTitleStyle.fontWeight === 'bold' ? 700 : 400, color: resolveC(block.gangTitleStyle.color), textAlign: block.gangTitleStyle.alignment, textTransform: block.gangTitleStyle.uppercase ? 'uppercase' : 'none', letterSpacing: block.gangTitleStyle.uppercase ? '0.06em' : 'normal', marginBottom: 1 * MM }}>
                       {g.gang}
                     </div>
-                    {g.dishes.map(function (d) {
-                      return <div key={d} style={{ fontSize: block.dishNameStyle.fontSize * PT, color: resolveC(block.dishNameStyle.color), textAlign: block.gangTitleStyle.alignment, marginBottom: 0.5 * MM }}>{d}</div>;
-                    })}
+                    {g.dishes.map(d => renderDish(d, block.gangTitleStyle.alignment))}
                   </div>
                 );
               })}
@@ -161,6 +197,7 @@ export default function BlockRenderer({ block, documentType }: { block: Template
           )}
         </div>
       );
+    }
 
     case 'totals':
       return (

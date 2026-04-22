@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
 import { Flame } from 'lucide-react';
@@ -10,8 +10,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
+
+  // Mount-gated: voorkomt hydration-mismatch op de dev-only quick-login knop
+  // (server rendert hem niet, client wel — pas tonen na hydration).
+  useEffect(function () { setMounted(true); }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -110,8 +115,8 @@ export default function LoginPage() {
           </a>
         </p>
 
-        {/* Dev quick login buttons — only in development */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* Dev quick login buttons — only in development, mount-gated tegen hydration-mismatch */}
+        {mounted && process.env.NODE_ENV === 'development' && (
           <div style={{ marginTop: 24, padding: 16, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
               Dev Quick Login

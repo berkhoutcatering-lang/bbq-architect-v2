@@ -1,0 +1,18 @@
+{
+  "id": "case-009",
+  "description": "Vage input — minimaal detail",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "BBQ",
+      "existing": [],
+      "options": { "gasten": 25, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten", "description": "moet zelfstandig een menu kunnen voorstellen" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 15 }
+  ]
+}
