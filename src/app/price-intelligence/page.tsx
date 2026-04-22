@@ -2244,6 +2244,8 @@ interface BulkFile {
 }
 
 const MAX_CONCURRENT = 3;
+const BATCH_SIZE = 30;          /* PDFs per batch — voorkom RAM-issues bij 60+ uploads */
+const BATCH_PAUSE_MS = 1000;    /* Korte pauze tussen batches voor rate-limit safety */
 
 /* Bibliotheek-samenvatting per leverancier */
 type LibStat = {
@@ -2404,6 +2406,7 @@ function FolderPricelists() {
     const [dragOver, setDragOver] = useState(false);
     const [savedCount, setSavedCount] = useState(0);
     const [libRefreshKey, setLibRefreshKey] = useState(0);
+    const [batchInfo, setBatchInfo] = useState<{ current: number; total: number; batchSize: number } | null>(null);
     const { orgId } = useOrg();
 
     const totalProducten = files.reduce((s, f) => s + f.producten, 0);
@@ -2509,18 +2512,36 @@ function FolderPricelists() {
             setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'done', leverancier, producten: rows.length } : f));
         }
 
-        /* Concurrency limit: MAX_CONCURRENT parallel */
-        const runners: Promise<void>[] = [];
-        let idx = 0;
-        async function worker() {
-            while (idx < queue.length) {
-                const i = idx++;
-                await runOne(queue[i]);
+        /*
+         * BATCH-VERWERKING: splits queue in chunks van BATCH_SIZE.
+         * Binnen een batch: MAX_CONCURRENT parallel.
+         * Tussen batches: korte pauze zodat browser RAM vrijkomt en
+         * eventuele rate-limits niet opstapelen.
+         */
+        const totalBatches = Math.ceil(queue.length / BATCH_SIZE);
+        for (let b = 0; b < totalBatches; b++) {
+            const batch = queue.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+            setBatchInfo({ current: b + 1, total: totalBatches, batchSize: batch.length });
+
+            /* Concurrency pool binnen de batch */
+            const runners: Promise<void>[] = [];
+            let idx = 0;
+            async function worker() {
+                while (idx < batch.length) {
+                    const i = idx++;
+                    await runOne(batch[i]);
+                }
+            }
+            for (let i = 0; i < Math.min(MAX_CONCURRENT, batch.length); i++) runners.push(worker());
+            await Promise.all(runners);
+
+            /* Korte pauze tussen batches (niet na de laatste) */
+            if (b < totalBatches - 1) {
+                await new Promise(r => setTimeout(r, BATCH_PAUSE_MS));
             }
         }
-        for (let i = 0; i < Math.min(MAX_CONCURRENT, queue.length); i++) runners.push(worker());
-        await Promise.all(runners);
 
+        setBatchInfo(null);
         setWorking(false);
     }
 
@@ -2543,7 +2564,8 @@ function FolderPricelists() {
                 <Info size={14} style={{ color: GOLD, marginTop: 2, flexShrink: 0 }} />
                 <div>
                     <strong style={{ color: 'var(--text)' }}>Prijslijst bulk-upload:</strong> sleep 60+ PDF&apos;s in één keer.
-                    Claude Haiku leest elke pagina parallel (max 3 tegelijk) en vult <code>supplier_prices</code> met alle regels.
+                    Verwerkt in batches van 30 (3 parallel per batch) om geheugen + rate-limits te respecteren.
+                    Claude Haiku leest elke PDF en vult <code>supplier_prices</code> met alle regels.
                     <br />
                     <span style={{ color: 'var(--muted-light)' }}>Dit wordt <strong>geen voorraad</strong> — alleen een prijsbibliotheek voor Price Intelligence.</span>
                 </div>
@@ -2637,7 +2659,13 @@ function FolderPricelists() {
                                 )}
                                 {working && (
                                     <div style={{ padding: '10px 18px', borderRadius: 9, background: `${GOLD}20`, color: GOLD, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                                        <Loader2 size={14} className="animate-spin" /> Verwerken {doneCount + errorCount}/{files.length}
+                                        <Loader2 size={14} className="animate-spin" />
+                                        <span>Verwerken {doneCount + errorCount}/{files.length}</span>
+                                        {batchInfo && batchInfo.total > 1 && (
+                                            <span style={{ padding: '2px 8px', borderRadius: 100, background: `${GOLD}30`, fontSize: 11, letterSpacing: '.04em' }}>
+                                                Batch {batchInfo.current}/{batchInfo.total}
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                                 <button onClick={resetAll} disabled={working}
