@@ -6,25 +6,21 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
-import { Flame } from 'lucide-react';
 
 /*
- * BrandWatermark — subtiel maar groot bedrijfslogo (~320px, 7% opacity)
- * rechtsonder vast gepositioneerd + "Powered by BBQ Architect" micro-footer.
- * Negeert pagina's waar het zou storen (service mode, editors, modals).
+ * BrandPlaque — bedrijfslogo vast linksboven op elke pagina.
+ * Groot en goed zichtbaar (geen watermark), als een badge met
+ * olijfgoud-ring. Altijd op dezelfde positie, elke pagina.
  */
 
 const SUPPRESSED_PATHS = [
-    '/service',           // kitchen display — geen watermark
-    '/offerte-editor',    // editor heeft eigen preview
-    '/template-editor',   // template editor
-    '/q/',                // publieke offerte-view
     '/login',
     '/signup',
     '/invite',
+    '/q/',            // publieke offerte-view — eigen branding
 ];
 
-const STORE_KEY = 'bbq_brand_watermark_settings_v1';
+const STORE_KEY = 'bbq_brand_plaque_v1';
 
 type BrandSettings = {
     logoUrl: string | null;
@@ -50,7 +46,6 @@ export default function BrandWatermark() {
     const { orgId } = useOrg();
     const [brand, setBrand] = useState<BrandSettings | null>(() => readCache());
 
-    /* Suppress op pagina's waar het stoort */
     const suppressed = SUPPRESSED_PATHS.some(p => pathname.startsWith(p));
 
     useEffect(() => {
@@ -77,26 +72,14 @@ export default function BrandWatermark() {
     if (suppressed) return null;
 
     const logo = brand?.logoDarkUrl || brand?.logoUrl;
-    const companyName = brand?.bedrijfsnaam || 'Jouw bedrijf';
+    if (!logo) return null;
 
     return (
-        <>
-            {/* RECHTS-ONDER: subtiel bedrijfslogo watermark */}
-            {logo && (
-                <div className="brand-watermark" aria-hidden="true">
-                    <div className="bw-glow" />
-                    <img src={logo} alt="" className="bw-logo" />
-                </div>
-            )}
-
-            {/* LINKS-ONDER: Powered-by chip met BBQ Architect flame */}
-            <div className="brand-poweredby" aria-hidden="true">
-                <Flame size={11} strokeWidth={2.5} className="bw-flame" />
-                <span className="bw-powered-lbl">Powered by</span>
-                <span className="bw-powered-brand">BBQ Architect</span>
-                {companyName && <span className="bw-powered-sep">·</span>}
-                {companyName && <span className="bw-powered-org">{companyName}</span>}
+        <div className="brand-plaque" aria-hidden="true">
+            <div className="bp-ring" />
+            <div className="bp-inner">
+                <img src={logo} alt="" className="bp-logo" />
             </div>
-        </>
+        </div>
     );
 }
