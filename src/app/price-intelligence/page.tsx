@@ -2423,7 +2423,7 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: freshnessColor(s.laatsteDatum) }} />
                                     <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatDateShort(s.laatsteDatum)}</span>
                                 </div>
-                                <span style={{ color: 'var(--muted-light)', fontSize: 10 }}>laatst bijgewerkt</span>
+                                <span style={{ color: GOLD, fontSize: 10, fontWeight: 700, letterSpacing: '.04em' }}>Klik voor alle info →</span>
                             </div>
                             {s.categorieen.length > 0 && (
                                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
@@ -2467,24 +2467,36 @@ function SupplierDrillDown({ leverancier, orgId, drillCategorie, setDrillCategor
     onClose: () => void;
 }) {
     const [products, setProducts] = useState<any[]>([]);
+    const [uitAssortiment, setUitAssortiment] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [adviceFor, setAdviceFor] = useState<{ masterId: number; productName: string } | null>(null);
 
     useEffect(() => {
         if (!orgId) return;
         let cancelled = false;
         (async () => {
             setLoading(true);
-            const { data } = await supabase
-                .from('supplier_prices')
-                .select('id, product_naam, prijs, eenheid, categorie, datum, actief, master_product_id')
-                .eq('organization_id', orgId)
-                .eq('leverancier', leverancier)
-                .eq('actief', true)
-                .order('categorie', { ascending: true })
-                .order('product_naam', { ascending: true });
+            const [activeRes, uitRes] = await Promise.all([
+                supabase
+                    .from('supplier_prices')
+                    .select('id, product_naam, prijs, eenheid, categorie, datum, actief, master_product_id')
+                    .eq('organization_id', orgId)
+                    .eq('leverancier', leverancier)
+                    .eq('actief', true)
+                    .order('categorie', { ascending: true })
+                    .order('product_naam', { ascending: true }),
+                supabase
+                    .from('master_products')
+                    .select('id, naam, categorie, uit_assortiment_sinds, standaard_leverancier')
+                    .eq('organization_id', orgId)
+                    .eq('uit_assortiment', true)
+                    .eq('standaard_leverancier', leverancier)
+                    .order('uit_assortiment_sinds', { ascending: false }),
+            ]);
             if (cancelled) return;
-            setProducts(data || []);
+            setProducts(activeRes.data || []);
+            setUitAssortiment(uitRes.data || []);
             setLoading(false);
         })();
         return () => { cancelled = true; };
@@ -2550,24 +2562,67 @@ function SupplierDrillDown({ leverancier, orgId, drillCategorie, setDrillCategor
                             <Loader2 size={20} className="animate-spin" /> Laden...
                         </div>
                     ) : !drillCategorie ? (
-                        /* Categorieën grid */
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                            {categories.map(([cat, count]) => (
-                                <button key={cat}
-                                    onClick={() => setDrillCategorie(cat)}
-                                    style={{
-                                        padding: 14, borderRadius: 10, border: '1px solid var(--card-solid)',
-                                        background: 'var(--card)', cursor: 'pointer', textAlign: 'left',
-                                        transition: 'all .15s',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-solid)'; }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{cat}</div>
-                                    <div style={{ fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 300, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>producten</div>
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            {/* Uit-assortiment waarschuwing */}
+                            {uitAssortiment.length > 0 && (
+                                <div style={{
+                                    padding: '12px 14px', borderRadius: 10, marginBottom: 14,
+                                    background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)',
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <AlertTriangle size={14} /> {uitAssortiment.length} producten uit assortiment
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        {uitAssortiment.slice(0, 10).map(u => (
+                                            <div key={u.id} style={{
+                                                display: 'grid', gridTemplateColumns: '1fr auto',
+                                                gap: 10, alignItems: 'center', padding: '6px 10px',
+                                                borderRadius: 6, background: 'rgba(0,0,0,.2)', fontSize: 12,
+                                            }}>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.naam}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                                                        {u.categorie || 'Overig'} · sinds {u.uit_assortiment_sinds || '?'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setAdviceFor({ masterId: u.id, productName: u.naam })}
+                                                    style={{
+                                                        padding: '5px 10px', borderRadius: 6,
+                                                        background: `${GOLD}20`, border: `1px solid ${GOLD}50`,
+                                                        color: GOLD, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                    }}>
+                                                    <Sparkles size={11} /> Maak advies
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {uitAssortiment.length > 10 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>+ {uitAssortiment.length - 10} meer</div>}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Categorieën grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                                {categories.map(([cat, count]) => (
+                                    <button key={cat}
+                                        onClick={() => setDrillCategorie(cat)}
+                                        style={{
+                                            padding: 14, borderRadius: 10, border: '1px solid var(--card-solid)',
+                                            background: 'var(--card)', cursor: 'pointer', textAlign: 'left',
+                                            transition: 'all .15s',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; }}
+                                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-solid)'; }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{cat}</div>
+                                        <div style={{ fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 300, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>producten</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     ) : (
                         /* Product-tabel */
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -2589,6 +2644,140 @@ function SupplierDrillDown({ leverancier, orgId, drillCategorie, setDrillCategor
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+            {adviceFor && (
+                <SubstitutionAdviceModal
+                    masterId={adviceFor.masterId}
+                    productName={adviceFor.productName}
+                    onClose={() => setAdviceFor(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+/* Modal met AI-vervangings-advies (on-demand, gecached in DB) */
+function SubstitutionAdviceModal({ masterId, productName, onClose }: { masterId: number; productName: string; onClose: () => void }) {
+    const [loading, setLoading] = useState(true);
+    const [advice, setAdvice] = useState<any>(null);
+    const [fromCache, setFromCache] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+
+    async function fetchAdvice(forceRefresh = false) {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch('/api/substitution-advice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ masterProductId: masterId, forceRefresh }),
+            });
+            const body = await res.json();
+            if (!res.ok || !body.success) {
+                setError(body.error || 'Onbekende fout');
+            } else {
+                setAdvice(body.advice?.advice_json || body.advice);
+                setFromCache(!!body.fromCache);
+            }
+        } catch (e: any) {
+            setError(e?.message || 'Netwerkfout');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }
+
+    useEffect(() => { fetchAdvice(false); }, [masterId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return (
+        <div onClick={onClose} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 1100,
+            backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+            <div onClick={e => e.stopPropagation()} style={{
+                width: 'min(680px, 100%)', maxHeight: '90vh', background: 'var(--bg)',
+                border: '1px solid var(--card-solid)', borderRadius: 14, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+            }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div>
+                        <div style={{ fontSize: 10, color: GOLD, letterSpacing: '.18em', textTransform: 'uppercase', fontWeight: 700 }}>AI-vervangingsadvies</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginTop: 4 }}>{productName}</div>
+                        {fromCache && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>⚡ uit cache · <button onClick={() => { setRefreshing(true); fetchAdvice(true); }} style={{ background: 'none', border: 'none', color: GOLD, cursor: 'pointer', textDecoration: 'underline', fontSize: 10 }}>opnieuw genereren</button></div>}
+                    </div>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 18 }}>×</button>
+                </div>
+                <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+                    {loading || refreshing ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                            <Loader2 size={22} className="animate-spin" style={{ marginBottom: 10 }} />
+                            <div style={{ fontSize: 13 }}>Claude denkt na over de beste vervangingen...</div>
+                            <div style={{ fontSize: 10, marginTop: 4 }}>~10-20 seconden, daarna gecached</div>
+                        </div>
+                    ) : error ? (
+                        <div style={{ padding: 20, color: 'var(--red)', fontSize: 13 }}>Fout: {error}</div>
+                    ) : advice ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            {advice.headline && (
+                                <div style={{ padding: '10px 14px', borderRadius: 8, background: `${GOLD}15`, border: `1px solid ${GOLD}40`, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                                    💡 {advice.headline}
+                                </div>
+                            )}
+                            {(advice.suggestions || []).map((sug: any, i: number) => (
+                                <div key={i} style={{
+                                    padding: 14, borderRadius: 10, background: 'var(--card)', border: '1px solid var(--card-solid)',
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 10 }}>
+                                        <div>
+                                            <div style={{ fontSize: 10, color: GOLD, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 800 }}>
+                                                {sug.type === 'combo' ? `OPTIE ${i + 1} · COMBINATIE` : `OPTIE ${i + 1} · VERVANGER`}
+                                            </div>
+                                            <div style={{ fontSize: 13, color: 'var(--text)', marginTop: 4 }}>{sug.reasoning}</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                            <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Match</div>
+                                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>
+                                                {sug.functie_match_pct || 0}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+                                        {(sug.products || []).map((p: any, pi: number) => (
+                                            <div key={pi} style={{
+                                                display: 'grid', gridTemplateColumns: '1fr auto',
+                                                gap: 10, padding: '6px 10px', background: 'var(--color-bg-deep)',
+                                                borderRadius: 6, fontSize: 12,
+                                            }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 600, color: 'var(--text)' }}>{p.naam}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                                                        {p.leverancier} · {p.eenheid}
+                                                        {p.aandeel_in_combo && ` · ${p.aandeel_in_combo}`}
+                                                    </div>
+                                                </div>
+                                                <div style={{ color: GOLD, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                                    € {Number(p.prijs).toFixed(2).replace('.', ',')}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 10, fontSize: 11, color: 'var(--muted)', flexWrap: 'wrap' }}>
+                                        {typeof sug.price_diff_pp === 'number' && (
+                                            <span>💰 {sug.price_diff_pp < 0 ? `€${Math.abs(sug.price_diff_pp).toFixed(2)} goedkoper` : sug.price_diff_pp > 0 ? `€${sug.price_diff_pp.toFixed(2)} duurder` : 'zelfde prijs'}</span>
+                                        )}
+                                        {sug.houdbaarheid_note && <span>⏱️ {sug.houdbaarheid_note}</span>}
+                                    </div>
+                                </div>
+                            ))}
+                            {advice.advies_tekst && (
+                                <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--color-bg-deep)', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                                    {advice.advies_tekst}
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
