@@ -15,6 +15,7 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
+import BrandWatermark from '@/components/BrandWatermark';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
@@ -209,6 +210,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
       <OnboardingWizard />
       <OfflineIndicator />
       <ContextualHelp />
+      <BrandWatermark />
     </ErrorBoundaryLogger>
   );
 }
