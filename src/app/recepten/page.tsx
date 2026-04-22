@@ -50,7 +50,22 @@ export default function ReceptenPage() {
         const q = search.toLowerCase().trim();
         return list
             .filter(r => filter === 'Alles' || r.categorie === filter)
-            .filter(r => !q || r.naam?.toLowerCase().includes(q) || r.beschrijving?.toLowerCase().includes(q));
+            .filter(r => {
+                if (!q) return true;
+                if (r.naam?.toLowerCase().includes(q)) return true;
+                if (r.beschrijving?.toLowerCase().includes(q)) return true;
+                /* Zoek ook in ingrediënten (array van {naam, ...} of string) */
+                const ing = (r as any).ingredienten;
+                if (Array.isArray(ing) && ing.some((i: any) => String(i?.naam || i || '').toLowerCase().includes(q))) return true;
+                /* Zoek in tags */
+                const tags = (r as any).tags;
+                if (Array.isArray(tags) && tags.some((t: any) => String(t).toLowerCase().includes(q))) return true;
+                /* Zoek in instructies (als string of array) */
+                const instr = (r as any).instructies;
+                if (typeof instr === 'string' && instr.toLowerCase().includes(q)) return true;
+                if (Array.isArray(instr) && instr.some((s: any) => String(s).toLowerCase().includes(q))) return true;
+                return false;
+            });
     }, [recepten, filter, search]);
 
     const stats = useMemo(() => {
@@ -125,10 +140,26 @@ export default function ReceptenPage() {
 
             {/* SEARCH + FILTERS */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: '1 1 280px', minWidth: 240 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Zoek recept..."
-                        style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
+                <div style={{ position: 'relative', flex: '1 1 100%', minWidth: 0 }}>
+                    <Search size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+                    <input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Zoek in naam, ingrediënten, tags... (bv. pork, varkenshaas, BBQ)"
+                        style={{ width: '100%', padding: '14px 44px 14px 46px', borderRadius: 12, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 15, outline: 'none' }}
+                    />
+                    {search && (
+                        <button onClick={() => setSearch('')}
+                            aria-label="Zoekopdracht wissen"
+                            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 28, height: 28, borderRadius: 8, background: 'var(--color-bg-deep)', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700 }}>
+                            ×
+                        </button>
+                    )}
+                    {search && (
+                        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 4, fontSize: 11, color: 'var(--muted)' }}>
+                            {filtered.length === 0 ? 'Geen resultaten' : filtered.length + ' resultaat' + (filtered.length !== 1 ? 'en' : '') + ' gevonden'}
+                        </div>
+                    )}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {CATEGORIES.map(c => {
