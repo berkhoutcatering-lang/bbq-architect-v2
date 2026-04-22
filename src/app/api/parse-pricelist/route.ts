@@ -97,9 +97,10 @@ export async function POST(req: NextRequest) {
         const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
 
+        /* 64K tokens output — genoeg voor zelfs zeer grote Makro-prijslijsten (1000+ items) */
         const stream = client.messages.stream({
             model,
-            max_tokens: 16000,
+            max_tokens: 64000,
             system: [{ type: 'text', text: PRICELIST_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: contentBlocks }],
             ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Claude gaf geen tekst' }, { status: 502 });
         }
         const content = textBlock.text;
+        const truncated = response.stop_reason === 'max_tokens';
 
         function cleanJson(s: string): string {
             let t = s.trim();
@@ -118,6 +120,68 @@ export async function POST(req: NextRequest) {
             if (fence) t = fence[1].trim();
             return t;
         }
+
+        /*
+         * JSON-recovery: als output truncated is (output_tokens cap raakt),
+         * eindigt JSON vaak halverwege een object. We zoeken de LAATSTE
+         * complete producten-entry en reconstrueren een valide response.
+         */
+        function recoverPartialJson(s: string): any | null {
+            try {
+                let t = cleanJson(s);
+                /* Zoek "producten" array start */
+                const prodStart = t.indexOf('"producten"');
+                if (prodStart < 0) return null;
+                const bracketStart = t.indexOf('[', prodStart);
+                if (bracketStart < 0) return null;
+                /* Parse de array items totdat we kapot gaan, behoud laatste valid */
+                const items: any[] = [];
+                let i = bracketStart + 1;
+                while (i < t.length) {
+                    /* Skip whitespace */
+                    while (i < t.length && /[\s,]/.test(t[i])) i++;
+                    if (i >= t.length || t[i] === ']') break;
+                    if (t[i] !== '{') { i++; continue; }
+                    /* Vind matching } voor dit object */
+                    let depth = 0;
+                    let objStart = i;
+                    let inStr = false;
+                    let escape = false;
+                    while (i < t.length) {
+                        const ch = t[i];
+                        if (escape) { escape = false; i++; continue; }
+                        if (ch === '\\' && inStr) { escape = true; i++; continue; }
+                        if (ch === '"') { inStr = !inStr; i++; continue; }
+                        if (inStr) { i++; continue; }
+                        if (ch === '{') depth++;
+                        else if (ch === '}') {
+                            depth--;
+                            if (depth === 0) {
+                                i++;
+                                try {
+                                    const obj = JSON.parse(t.slice(objStart, i));
+                                    items.push(obj);
+                                } catch { /* skip */ }
+                                break;
+                            }
+                        }
+                        i++;
+                    }
+                    if (depth !== 0) break; /* Onafgemaakte object = stop */
+                }
+                /* Probeer leverancier uit begin JSON */
+                let leverancier: string | null = null;
+                const levMatch = t.match(/"leverancier"\s*:\s*"([^"]+)"/);
+                if (levMatch) leverancier = levMatch[1];
+                let datum: string | null = null;
+                const datMatch = t.match(/"datum"\s*:\s*"([^"]+)"/);
+                if (datMatch) datum = datMatch[1];
+                return { leverancier, datum, producten: items };
+            } catch {
+                return null;
+            }
+        }
+
         let parsed: any = null;
         const tries = [content, cleanJson(content)];
         const biggest = content.match(/\{[\s\S]*\}/);
@@ -127,11 +191,19 @@ export async function POST(req: NextRequest) {
             try { parsed = JSON.parse(candidate); break; } catch { /* next */ }
         }
 
+        /* Fallback: partial recovery uit afgekapte JSON */
         if (!parsed) {
-            return NextResponse.json({ error: 'AI gaf geen geldige JSON', raw: content.slice(0, 500) }, { status: 502 });
+            parsed = recoverPartialJson(content);
         }
 
-        console.log(`[parse-pricelist] ${parsed.producten?.length || 0} producten · total=${Date.now() - t0}ms · tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
+        if (!parsed) {
+            const msg = truncated
+                ? 'PDF te groot: output afgekapt bij ' + response.usage.output_tokens + ' tokens. Splits in kleinere PDFs.'
+                : 'AI gaf geen geldige JSON';
+            return NextResponse.json({ error: msg, raw: content.slice(0, 500), stopReason: response.stop_reason }, { status: 502 });
+        }
+
+        console.log(`[parse-pricelist] ${parsed.producten?.length || 0} producten · total=${Date.now() - t0}ms · tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out · stop=${response.stop_reason}${truncated ? ' (RECOVERED PARTIAL)' : ''}`);
 
         return NextResponse.json({
             success: true,
