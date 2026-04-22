@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import Papa from 'papaparse';
 import {
     FileScan, Receipt, PieChart, Sparkles, Upload, Camera, X, Check,
@@ -14,12 +15,13 @@ import {
     Info, HelpCircle, Plus, FileText, TrendingUp, TrendingDown,
     Store, Euro, CloudUpload, ArrowLeft, Save, FolderOpen, Zap, Lightbulb,
     ExternalLink, Download, Archive, BarChart3, Calendar, Filter, Wallet,
+    ListOrdered, FileUp,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
 const FOLDER_KEY = 'pi_folder_v2';
 
-type Folder = 'invoices' | 'receipts' | 'books';
+type Folder = 'invoices' | 'receipts' | 'books' | 'pricelists';
 
 /* ═══════════════════════════════════════════════════════════════════
    ATOMS
@@ -401,6 +403,7 @@ function ErrorBanner({ error, onRetry, onDismiss }: { error: string; onRetry?: (
 const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
     { id: 'invoices', label: 'AI Factuur Lezen', hint: 'Scan & extract', Icon: FileScan },
     { id: 'receipts', label: 'Bonnen', hint: 'Kassabonnen · foto', Icon: Receipt },
+    { id: 'pricelists', label: 'Prijslijst Bulk', hint: '60+ PDFs → DB', Icon: ListOrdered },
     { id: 'books', label: 'Boekhouding', hint: 'Inzichten & AI', Icon: PieChart },
 ];
 
@@ -451,7 +454,7 @@ export default function PriceIntelligence() {
     const [folder, setFolder] = useState<Folder>(() => {
         if (typeof window === 'undefined') return 'books';
         const stored = localStorage.getItem(FOLDER_KEY);
-        return stored === 'invoices' || stored === 'receipts' || stored === 'books' ? stored : 'books';
+        return stored === 'invoices' || stored === 'receipts' || stored === 'books' || stored === 'pricelists' ? stored : 'books';
     });
 
     function changeFolder(f: Folder) {
@@ -487,6 +490,7 @@ export default function PriceIntelligence() {
             }}>
                 {folder === 'invoices' && <FolderInvoices />}
                 {folder === 'receipts' && <FolderReceipts />}
+                {folder === 'pricelists' && <FolderPricelists />}
                 {folder === 'books' && <FolderBooks />}
             </div>
         </div>
@@ -1941,6 +1945,579 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
 
 const SUPPLIER_COLORS = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#3b82f6', '#f97316', '#ef4444', '#10b981', '#8b8bf0'];
 
+/** KPI-tegel in design-stijl: eyebrow-label, groot cijfer, sub */
+function BoekKPI({ label, value, sub, tone, icon: I }: { label: string; value: string | number; sub?: string; tone?: 'ok' | 'warn' | 'bad'; icon?: any }) {
+    const toneColor = tone === 'ok' ? 'var(--green)' : tone === 'bad' ? 'var(--red)' : tone === 'warn' ? 'var(--amber)' : 'var(--text)';
+    return (
+        <MetalCard>
+            <div style={{ padding: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <Eyebrow>{label}</Eyebrow>
+                    {I && <I size={14} style={{ color: 'var(--muted-light)' }} />}
+                </div>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 500, fontSize: 28, fontVariantNumeric: 'tabular-nums', color: toneColor, lineHeight: 1.1 }}>{value}</div>
+                {sub && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>}
+            </div>
+        </MetalCard>
+    );
+}
+
+/** Context-banner: "Zo lees je dit overzicht" */
+function BoekContextBanner() {
+    return (
+        <div style={{
+            display: 'flex', gap: 10, padding: '10px 14px', borderRadius: 10,
+            background: `${GOLD}08`, border: `1px solid ${GOLD}24`,
+            fontSize: 12, color: 'var(--muted)', lineHeight: 1.55,
+        }}>
+            <Info size={13} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
+            <span>
+                <strong style={{ color: 'var(--text)' }}>Zo lees je dit overzicht:</strong>{' '}
+                hover over de donut om een leverancier uit te lichten, klik voor een volledige AI-analyse met top-10 producten, koopmomenten en prijsstijgingen. De AI Tip Bouwer eronder stelt concrete acties voor op basis van je feitelijke inkoop — elke tip heeft een geschatte maandelijkse besparing en een vertrouwensscore.
+            </span>
+        </div>
+    );
+}
+
+/** AI Tip Bouwer — 3 data-driven tips uit echte bySupplier-data */
+type BookSupplier = { name: string; color: string; spend: number; count: number; products: number; lastDate: string | null; lines: { product: string; prijs: number; eenheid: string }[] };
+type AiTip = {
+    id: string; supplierName: string; supplierColor: string; action: 'Blijf' | 'Consolideer' | 'Verminder' | 'Benut' | 'Verschuif';
+    headline: string; body: string; saving: number; confidence: number;
+};
+
+function buildAiTips(bySupplier: BookSupplier[], invoices: any[]): AiTip[] {
+    const tips: AiTip[] = [];
+    const active = bySupplier.filter(s => s.spend > 0).sort((a, b) => b.spend - a.spend);
+    if (active.length === 0) return tips;
+
+    // Tip 1: Consolideer bij de grootste leverancier (mits ≥ 30% aandeel)
+    const top = active[0];
+    const totalSpend = active.reduce((s, x) => s + x.spend, 0);
+    const topShare = totalSpend > 0 ? (top.spend / totalSpend) : 0;
+    if (topShare >= 0.25 && top.count >= 3) {
+        tips.push({
+            id: 't1', supplierName: top.name, supplierColor: top.color,
+            action: topShare >= 0.4 ? 'Blijf' : 'Consolideer',
+            headline: `${topShare >= 0.4 ? 'Houd' : 'Versterk'} ${top.name} als ruggengraat`,
+            body: `${top.name} is je grootste leverancier met ${(topShare * 100).toFixed(0)}% aandeel (${top.count} facturen). Bundel losse orders hier voor leveringsvoordeel en betere marge-impact.`,
+            saving: Math.round(top.spend * 0.035),
+            confidence: Math.min(95, 70 + Math.round(top.count * 2)),
+        });
+    }
+
+    // Tip 2: Verminder losse bonnen/runs bij leverancier met veel kleine facturen
+    const smallRunner = active.find(s => s.count >= 10 && (s.spend / s.count) < 120 && s.name !== top.name);
+    if (smallRunner) {
+        const avg = smallRunner.spend / smallRunner.count;
+        tips.push({
+            id: 't2', supplierName: smallRunner.name, supplierColor: '#ef4444',
+            action: 'Verminder',
+            headline: `Je doet te veel ${smallRunner.name}-runs`,
+            body: `${smallRunner.count} facturen met gemiddeld €${avg.toFixed(0)} per ritje. Consolideer wekelijks en gebruik ${smallRunner.name} alléén voor last-minute of unieke items.`,
+            saving: Math.round(smallRunner.count * 4),
+            confidence: Math.min(92, 65 + Math.round(smallRunner.count * 1.5)),
+        });
+    }
+
+    // Tip 3: Prijsverschil tussen leveranciers — zelfde product, goedkoper elders
+    const productMap: Record<string, { naam: string; perSup: Record<string, number[]> }> = {};
+    (invoices || []).forEach((inv: any) => {
+        const regels = inv.raw_ai_response?.regels || [];
+        regels.forEach((r: any) => {
+            const k = (r.product_naam || '').toLowerCase().trim();
+            if (!k) return;
+            if (!productMap[k]) productMap[k] = { naam: r.product_naam, perSup: {} };
+            const p = r.prijs_normaal != null && r.prijs_normaal > 0 ? parseFloat(r.prijs_normaal) : parseFloat(r.prijs_per_eenheid) || 0;
+            const sup = inv.leverancier || 'Onbekend';
+            if (p > 0) {
+                if (!productMap[k].perSup[sup]) productMap[k].perSup[sup] = [];
+                productMap[k].perSup[sup].push(p);
+            }
+        });
+    });
+    const savings: { product: string; cheap: string; cheapPrice: number; expensive: string; expPrice: number; diff: number }[] = [];
+    Object.values(productMap).forEach(p => {
+        const sups = Object.entries(p.perSup).filter(([, arr]) => arr.length > 0);
+        if (sups.length < 2) return;
+        const avg = sups.map(([n, arr]) => ({ n, v: arr.reduce((a, b) => a + b, 0) / arr.length }));
+        avg.sort((a, b) => a.v - b.v);
+        const diff = avg[avg.length - 1].v - avg[0].v;
+        if (diff / avg[avg.length - 1].v > 0.08) {
+            savings.push({ product: p.naam, cheap: avg[0].n, cheapPrice: avg[0].v, expensive: avg[avg.length - 1].n, expPrice: avg[avg.length - 1].v, diff });
+        }
+    });
+    savings.sort((a, b) => (b.diff / b.expPrice) - (a.diff / a.expPrice));
+    if (savings.length > 0) {
+        const s = savings[0];
+        const cheapSup = bySupplier.find(x => x.name === s.cheap);
+        tips.push({
+            id: 't3', supplierName: s.cheap, supplierColor: cheapSup?.color || GOLD,
+            action: 'Verschuif',
+            headline: `${s.product.length > 36 ? s.product.slice(0, 36) + '…' : s.product} bij ${s.cheap}`,
+            body: `Zelfde product is bij ${s.cheap} €${s.cheapPrice.toFixed(2)} vs €${s.expPrice.toFixed(2)} bij ${s.expensive} — ${((s.diff / s.expPrice) * 100).toFixed(0)}% goedkoper.`,
+            saving: Math.round(s.diff * 10),
+            confidence: 78 + Math.min(15, savings.length * 2),
+        });
+    }
+
+    return tips.slice(0, 3);
+}
+
+function AiTipBuilder({ tips, onOpenSupplier }: { tips: AiTip[]; onOpenSupplier: (name: string) => void }) {
+    const total = tips.reduce((s, t) => s + t.saving, 0);
+    return (
+        <MetalCard>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: `${GOLD}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Sparkles size={17} style={{ color: GOLD }} />
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>AI Tip Bouwer</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>Waar koop je wat · op basis van je eigen factuur-data</div>
+                    </div>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{tips.length} actie{tips.length === 1 ? '' : 's'}</span>
+            </div>
+            {tips.length === 0 ? (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                    Nog te weinig data voor tips. Scan een paar facturen van verschillende leveranciers.
+                </div>
+            ) : (
+                <div className="responsive-grid" style={{ padding: 16, display: 'grid', gridTemplateColumns: `repeat(${Math.min(tips.length, 3)}, 1fr)`, gap: 12 }}>
+                    {tips.map((t, idx) => (
+                        <div key={t.id} style={{
+                            padding: 16, borderRadius: 12, border: '1px solid var(--border)',
+                            background: 'linear-gradient(180deg, rgba(30,30,34,.6), rgba(20,20,22,.4))',
+                            position: 'relative', overflow: 'hidden', animation: `fadeInUp .4s ease both ${idx * 80}ms`,
+                        }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: t.supplierColor, opacity: 0.75 }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                <div style={{
+                                    padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                                    background: `${t.supplierColor}22`, color: t.supplierColor, letterSpacing: '.05em',
+                                }}>{t.action.toUpperCase()} · {t.supplierName}</div>
+                                <span style={{ fontSize: 10, color: 'var(--muted-light)', fontFamily: 'var(--font-mono)' }}>
+                                    <Hint tip="Hoe zeker is de AI dat deze tip klopt, op basis van hoeveel factuur-data er beschikbaar is. Boven 85% = sterk onderbouwd; onder 70% = hypothese, verifieer eerst.">{t.confidence}%</Hint>
+                                </span>
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 8 }}>{t.headline}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 12 }}>{t.body}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 600, fontSize: 15, color: t.action === 'Verminder' ? 'var(--green)' : GOLD }} className="tabular">
+                                    +€ {t.saving.toLocaleString('nl-NL')}/mnd
+                                </div>
+                                <button onClick={() => onOpenSupplier(t.supplierName)} style={{
+                                    background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer',
+                                    fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontFamily: 'inherit',
+                                }}>Bekijk <ArrowUpRight size={11} /></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {tips.length > 0 && (
+                <div style={{ padding: '10px 18px', borderTop: '1px solid var(--border)', background: 'var(--color-bg-deep)', fontSize: 11, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>
+                        <Info size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                        Totale potentiële marge-winst:{' '}
+                        <Hint tip="Som van alle acties hierboven. Dit is een schatting van het maandelijkse effect als je alle tips opvolgt. We herberekenen automatisch zodra er nieuwe facturen binnenkomen.">
+                            <strong style={{ color: GOLD }}>€ {total.toLocaleString('nl-NL')}/maand</strong>
+                        </Hint>
+                    </span>
+                    <span>Gebaseerd op {invoiceCountLabel(tips)}</span>
+                </div>
+            )}
+        </MetalCard>
+    );
+}
+
+function invoiceCountLabel(tips: AiTip[]): string {
+    return `${tips.length} leverancier${tips.length === 1 ? '' : 's'}`;
+}
+
+/** Prijsontwikkeling per categorie — 3 maand vs daarvoor, uit echte factuur-regels */
+function CategoryPriceGrid({ invoices }: { invoices: any[] }) {
+    const rows = useMemo(() => {
+        const cats: Record<string, { recent: number[]; older: number[]; spend: number }> = {};
+        const now = Date.now();
+        const THREE_MONTHS = 90 * 24 * 3600 * 1000;
+        (invoices || []).forEach((inv: any) => {
+            const regels = inv.raw_ai_response?.regels || [];
+            const datumStr = inv.datum;
+            const dt = datumStr ? new Date(datumStr).getTime() : NaN;
+            regels.forEach((r: any) => {
+                const cat = r.categorie || 'Overig';
+                const p = r.prijs_normaal != null && r.prijs_normaal > 0 ? parseFloat(r.prijs_normaal) : parseFloat(r.prijs_per_eenheid) || 0;
+                const sub = parseFloat(r.subtotaal) || 0;
+                if (!cats[cat]) cats[cat] = { recent: [], older: [], spend: 0 };
+                cats[cat].spend += sub;
+                if (p > 0 && !isNaN(dt)) {
+                    if (now - dt <= THREE_MONTHS) cats[cat].recent.push(p);
+                    else cats[cat].older.push(p);
+                }
+            });
+        });
+        const out: { cat: string; delta: number; spend: number }[] = [];
+        Object.entries(cats).forEach(([cat, d]) => {
+            if (d.recent.length === 0 || d.older.length === 0) {
+                out.push({ cat, delta: 0, spend: d.spend });
+                return;
+            }
+            const avgR = d.recent.reduce((s, v) => s + v, 0) / d.recent.length;
+            const avgO = d.older.reduce((s, v) => s + v, 0) / d.older.length;
+            const delta = avgO > 0 ? ((avgR - avgO) / avgO) * 100 : 0;
+            out.push({ cat, delta, spend: d.spend });
+        });
+        return out.sort((a, b) => b.spend - a.spend).slice(0, 10);
+    }, [invoices]);
+
+    if (rows.length === 0) {
+        return (
+            <MetalCard>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <BarChart3 size={14} style={{ color: GOLD }} />
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>Prijsontwikkeling per categorie</span>
+                </div>
+                <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                    Nog geen categorie-data. Scan een paar facturen met regels.
+                </div>
+            </MetalCard>
+        );
+    }
+
+    const max = Math.max(...rows.map(r => Math.abs(r.delta)), 1);
+    return (
+        <MetalCard>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <BarChart3 size={14} style={{ color: GOLD }} />
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>Prijsontwikkeling per categorie</span>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>laatste 3 mnd vs daarvoor</span>
+            </div>
+            <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                {rows.map((r, i) => {
+                    const up = r.delta > 0, flat = Math.abs(r.delta) < 0.5;
+                    const color = flat ? 'var(--muted)' : up ? 'var(--red)' : 'var(--green)';
+                    const intensity = Math.min(1, Math.abs(r.delta) / max);
+                    return (
+                        <div key={i} style={{
+                            padding: 12, borderRadius: 10,
+                            background: `linear-gradient(180deg, ${up ? 'rgba(239,68,68,' : 'rgba(34,197,94,'}${0.02 + intensity * 0.08}) 0%, transparent 100%)`,
+                            border: '1px solid var(--border)', transition: 'transform .15s',
+                        }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.cat}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                <div>
+                                    <div className="tabular" style={{ fontSize: 15, fontWeight: 600, color, fontFamily: 'Outfit, sans-serif' }}>
+                                        {flat ? '±0.0%' : `${r.delta > 0 ? '+' : ''}${r.delta.toFixed(1)}%`}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>€{Math.round(r.spend).toLocaleString('nl-NL')}</div>
+                                </div>
+                                <div style={{ width: 3, height: `${14 + intensity * 30}px`, background: color, borderRadius: 2, opacity: 0.6 }} />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </MetalCard>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOLDER: PRIJSLIJST BULK-UPLOAD
+   60+ PDF's slepen → parallel parsen → supplier_prices vullen
+   GEEN voorraad, alleen product+prijs+eenheid+categorie
+   ═══════════════════════════════════════════════════════════════════ */
+
+type BulkFileStatus = 'pending' | 'processing' | 'done' | 'error';
+interface BulkFile {
+    id: string;
+    file: File;
+    status: BulkFileStatus;
+    producten: number;
+    leverancier?: string;
+    error?: string;
+}
+
+const MAX_CONCURRENT = 3;
+
+function FolderPricelists() {
+    const [files, setFiles] = useState<BulkFile[]>([]);
+    const [working, setWorking] = useState(false);
+    const [overrideSupplier, setOverrideSupplier] = useState('');
+    const [dragOver, setDragOver] = useState(false);
+    const [savedCount, setSavedCount] = useState(0);
+    const { orgId } = useOrg();
+
+    const totalProducten = files.reduce((s, f) => s + f.producten, 0);
+    const doneCount = files.filter(f => f.status === 'done').length;
+    const errorCount = files.filter(f => f.status === 'error').length;
+    const allFinished = files.length > 0 && files.every(f => f.status === 'done' || f.status === 'error');
+
+    function addFiles(newFiles: FileList | File[]) {
+        const arr: BulkFile[] = Array.from(newFiles)
+            .filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+            .map(f => ({ id: `${f.name}_${f.size}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, file: f, status: 'pending', producten: 0 }));
+        setFiles(prev => [...prev, ...arr]);
+    }
+
+    async function fileToBase64(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const s = reader.result as string;
+                resolve(s.split(',')[1] || s);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function parseOne(bf: BulkFile): Promise<{ ok: boolean; leverancier?: string; producten: any[]; error?: string }> {
+        try {
+            const b64 = await fileToBase64(bf.file);
+            const res = await fetch('/api/parse-pricelist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pdfBase64: b64, model: 'haiku' }),
+            });
+            const body = await res.json();
+            if (!res.ok || !body.success) return { ok: false, producten: [], error: body.error || 'Onbekend' };
+            const prods = body.data?.producten || [];
+            return { ok: true, leverancier: body.data?.leverancier, producten: prods };
+        } catch (e: any) {
+            return { ok: false, producten: [], error: e?.message || 'Fout' };
+        }
+    }
+
+    async function processQueue() {
+        setWorking(true);
+        setSavedCount(0);
+        const queue = [...files.filter(f => f.status === 'pending')];
+        let saved = 0;
+
+        async function runOne(bf: BulkFile) {
+            setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'processing' } : f));
+            const res = await parseOne(bf);
+            if (!res.ok) {
+                setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: res.error } : f));
+                return;
+            }
+            const leverancier = (overrideSupplier || res.leverancier || 'Onbekend').trim();
+            const datum = new Date().toISOString().slice(0, 10);
+            const rows = res.producten
+                .filter(p => p && p.product_naam && typeof p.prijs === 'number')
+                .map((p: any) => ({
+                    organization_id: orgId,
+                    leverancier,
+                    product_naam: String(p.product_naam).trim(),
+                    prijs: Number(p.prijs),
+                    eenheid: String(p.eenheid || 'stuks').trim(),
+                    datum,
+                }));
+            if (rows.length > 0) {
+                const { error: insErr } = await supabase.from('supplier_prices').insert(rows);
+                if (insErr) {
+                    setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: 'DB: ' + insErr.message, leverancier, producten: rows.length } : f));
+                    return;
+                }
+                saved += rows.length;
+                setSavedCount(saved);
+            }
+            setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'done', leverancier, producten: rows.length } : f));
+        }
+
+        /* Concurrency limit: MAX_CONCURRENT parallel */
+        const runners: Promise<void>[] = [];
+        let idx = 0;
+        async function worker() {
+            while (idx < queue.length) {
+                const i = idx++;
+                await runOne(queue[i]);
+            }
+        }
+        for (let i = 0; i < Math.min(MAX_CONCURRENT, queue.length); i++) runners.push(worker());
+        await Promise.all(runners);
+
+        setWorking(false);
+    }
+
+    function resetAll() {
+        setFiles([]);
+        setSavedCount(0);
+    }
+
+    function removeFile(id: string) {
+        setFiles(prev => prev.filter(f => f.id !== id));
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Context-banner */}
+            <div style={{ padding: '12px 16px', borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}35`, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <Info size={14} style={{ color: GOLD, marginTop: 2, flexShrink: 0 }} />
+                <div>
+                    <strong style={{ color: 'var(--text)' }}>Prijslijst bulk-upload:</strong> sleep 60+ PDF&apos;s in één keer.
+                    Claude Haiku leest elke pagina parallel (max 3 tegelijk) en vult <code>supplier_prices</code> met alle regels.
+                    <br />
+                    <span style={{ color: 'var(--muted-light)' }}>Dit wordt <strong>geen voorraad</strong> — alleen een prijsbibliotheek voor Price Intelligence.</span>
+                </div>
+            </div>
+
+            {/* Drop zone */}
+            <MetalCard>
+                <div
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => {
+                        e.preventDefault();
+                        setDragOver(false);
+                        if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+                    }}
+                    style={{
+                        padding: 40,
+                        borderRadius: 12,
+                        margin: 16,
+                        border: `2px dashed ${dragOver ? GOLD : 'var(--border)'}`,
+                        background: dragOver ? `${GOLD}10` : 'var(--color-bg-deep)',
+                        textAlign: 'center',
+                        transition: 'all .2s',
+                        cursor: 'pointer',
+                    }}
+                    onClick={() => document.getElementById('bulk-pricelist-input')?.click()}
+                >
+                    <FileUp size={44} style={{ color: dragOver ? GOLD : 'var(--muted-light)', marginBottom: 12 }} />
+                    <div style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', marginBottom: 6 }}>
+                        Sleep PDF&apos;s hierheen
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                        of <span style={{ color: GOLD, textDecoration: 'underline' }}>klik om te selecteren</span> — accepteert meerdere PDF&apos;s tegelijk
+                    </div>
+                    <input id="bulk-pricelist-input" type="file" accept="application/pdf" multiple style={{ display: 'none' }}
+                        onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
+                </div>
+
+                {/* Supplier-override */}
+                {files.length > 0 && (
+                    <div style={{ padding: '0 16px 16px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Eyebrow>Leverancier (optioneel override)</Eyebrow>
+                        <input
+                            value={overrideSupplier}
+                            onChange={e => setOverrideSupplier(e.target.value)}
+                            placeholder="bv. Makro — leeg = AI detecteert zelf"
+                            disabled={working}
+                            style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13 }}
+                        />
+                    </div>
+                )}
+            </MetalCard>
+
+            {/* File-list + progress */}
+            {files.length > 0 && (
+                <MetalCard>
+                    <div style={{ padding: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                            <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div>
+                                    <Eyebrow>Totaal</Eyebrow>
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{files.length}</div>
+                                </div>
+                                <div>
+                                    <Eyebrow>Verwerkt</Eyebrow>
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, fontVariantNumeric: 'tabular-nums', color: 'var(--green)' }}>{doneCount}</div>
+                                </div>
+                                {errorCount > 0 && (
+                                    <div>
+                                        <Eyebrow>Fout</Eyebrow>
+                                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, fontVariantNumeric: 'tabular-nums', color: 'var(--red)' }}>{errorCount}</div>
+                                    </div>
+                                )}
+                                <div>
+                                    <Eyebrow>Producten</Eyebrow>
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, fontVariantNumeric: 'tabular-nums', color: GOLD }}>{totalProducten}</div>
+                                </div>
+                                {savedCount > 0 && (
+                                    <div>
+                                        <Eyebrow>Opgeslagen</Eyebrow>
+                                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, fontVariantNumeric: 'tabular-nums', color: 'var(--green)' }}>{savedCount}</div>
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                {!working && !allFinished && (
+                                    <button onClick={processQueue} disabled={files.length === 0}
+                                        style={{ padding: '10px 18px', borderRadius: 9, background: GOLD, color: 'var(--brand-background, #000)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <Sparkles size={14} /> Start verwerking ({files.length})
+                                    </button>
+                                )}
+                                {working && (
+                                    <div style={{ padding: '10px 18px', borderRadius: 9, background: `${GOLD}20`, color: GOLD, fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                        <Loader2 size={14} className="animate-spin" /> Verwerken {doneCount + errorCount}/{files.length}
+                                    </div>
+                                )}
+                                <button onClick={resetAll} disabled={working}
+                                    style={{ padding: '10px 14px', borderRadius: 9, background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)', fontSize: 12, fontWeight: 600, cursor: working ? 'not-allowed' : 'pointer' }}>
+                                    Wissen
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div style={{ height: 4, borderRadius: 2, background: 'var(--color-bg-deep)', overflow: 'hidden', marginBottom: 14 }}>
+                            <div style={{ height: '100%', width: `${files.length ? ((doneCount + errorCount) / files.length) * 100 : 0}%`, background: `linear-gradient(90deg, ${GOLD}, var(--green))`, transition: 'width .3s' }} />
+                        </div>
+
+                        {/* File rows */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 500, overflow: 'auto' }}>
+                            {files.map((f, i) => (
+                                <div key={f.id} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '28px 1fr auto auto auto',
+                                    gap: 10,
+                                    padding: '8px 10px',
+                                    borderRadius: 7,
+                                    background: f.status === 'processing' ? `${GOLD}10` : f.status === 'done' ? 'rgba(34,197,94,.05)' : f.status === 'error' ? 'rgba(239,68,68,.05)' : 'transparent',
+                                    alignItems: 'center',
+                                    fontSize: 12,
+                                }}>
+                                    <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--muted)', fontSize: 11 }}>{i + 1}</span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file.name}</span>
+                                    {f.leverancier && <span style={{ fontSize: 10, color: GOLD, fontWeight: 600 }}>{f.leverancier}</span>}
+                                    {!f.leverancier && <span />}
+                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                        {f.status === 'done' && `${f.producten} items`}
+                                        {f.status === 'error' && <span style={{ color: 'var(--red)' }}>{f.error?.slice(0, 40)}</span>}
+                                    </span>
+                                    <span style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
+                                        {f.status === 'pending' && <span style={{ width: 14, height: 14, borderRadius: '50%', border: '1px solid var(--border)' }} />}
+                                        {f.status === 'processing' && <Loader2 size={14} className="animate-spin" style={{ color: GOLD }} />}
+                                        {f.status === 'done' && <Check size={14} style={{ color: 'var(--green)' }} />}
+                                        {f.status === 'error' && <X size={14} style={{ color: 'var(--red)' }} />}
+                                        {f.status === 'pending' && !working && (
+                                            <button onClick={() => removeFile(f.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 0, marginLeft: 4 }}>
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {allFinished && savedCount > 0 && (
+                            <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 9, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.3)', color: 'var(--green)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Check size={14} /> {savedCount} productprijzen opgeslagen in de database. Bekijk ze in de Prijsanalyse of zoek via product-naam.
+                            </div>
+                        )}
+                    </div>
+                </MetalCard>
+            )}
+        </div>
+    );
+}
+
 function FolderBooks() {
     const { data: invoices } = useSupabase<any>('supplier_invoices', []);
     const { data: bonnen } = useSupabase<any>('bonnen', []);
@@ -2153,8 +2730,22 @@ function FolderBooks() {
     const vorigeMaandLabel = lastMonthIdx > 0 ? new Date(monthlyTrend[lastMonthIdx - 1].key + '-01').toLocaleDateString('nl-NL', { month: 'long' }) : '';
     const topCategorie = byCategorie[0];
 
+    const aiTips = useMemo(() => buildAiTips(bySupplier as BookSupplier[], invoices || []), [bySupplier, invoices]);
+    const aiSaving = aiTips.reduce((s, t) => s + t.saving, 0);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* KPI STRIP — design-stijl */}
+            <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                <BoekKPI label={`Inkoop ${curMaandLabel}`} value={`€ ${(curMaand / 1000).toFixed(1)}k`} sub={`${bySupplier.filter(s => s.spend > 0).length} leveranciers actief`} icon={Euro} />
+                <BoekKPI label="Facturen" value={(invoices || []).length} sub={`+ ${(bonnen || []).length} bonnen`} icon={FileText} />
+                <BoekKPI label="BTW-saldo" value={fmt2(btwThisQuarter.btw)} sub={btwThisQuarter.label} icon={Wallet} />
+                <BoekKPI label="AI besparing" value={aiSaving > 0 ? `€ ${aiSaving.toLocaleString('nl-NL')}` : '—'} sub={aiSaving > 0 ? '/maand potentieel' : 'scan meer data'} tone={aiSaving > 0 ? 'ok' : undefined} icon={Sparkles} />
+            </div>
+
+            {/* CONTEXT BANNER — uitleg hoe het werkt */}
+            <BoekContextBanner />
+
             {/* HERO — grote taart + 3 duidelijke cijfers */}
             <MetalCard>
                 <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 24, padding: 30, alignItems: 'center' }}>
@@ -2232,6 +2823,12 @@ function FolderBooks() {
 
             {/* LEVERANCIERS DONUT — al bestond */}
             <SupplierDonut bySupplier={bySupplier} total={totalSpend} onSelect={setSelectedSupplier} />
+
+            {/* AI TIP BOUWER — 3 data-driven acties uit echte facturen */}
+            <AiTipBuilder tips={aiTips} onOpenSupplier={setSelectedSupplier} />
+
+            {/* PRIJSONTWIKKELING PER CATEGORIE */}
+            <CategoryPriceGrid invoices={invoices || []} />
 
             {/* Drawers */}
             {selectedMonth && <MonthDetailDrawer monthKey={selectedMonth} invoices={invoices || []} bonnen={bonnen || []} onClose={() => setSelectedMonth(null)} />}
