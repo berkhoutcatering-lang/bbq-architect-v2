@@ -129,6 +129,34 @@ export default function ServiceMode() {
         stopDishTimer(dishKey);
         setCompletedDishes(prev => Object.assign({}, prev, { [dishKey]: true }));
         showToast('✓ ' + dishName + ' meegegeven (' + count + '×)');
+        /* Confetti-celebration particles spawnen */
+        spawnConfetti(dishKey);
+    }
+
+    function spawnConfetti(dishKey: string) {
+        if (typeof window === 'undefined') return;
+        const anchor = document.querySelector('[data-dish-key="' + dishKey + '"]');
+        if (!anchor) return;
+        const rect = (anchor as HTMLElement).getBoundingClientRect();
+        const emojis = ['🔥', '✨', '⭐', '💥', '🎉', '👏'];
+        for (let i = 0; i < 14; i++) {
+            const p = document.createElement('div');
+            p.className = 'dish-confetti';
+            p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            const xStart = rect.left + rect.width / 2;
+            const yStart = rect.top + 40;
+            const dx = (Math.random() - 0.5) * 280;
+            const dy = -(Math.random() * 180 + 60);
+            const rot = (Math.random() - 0.5) * 720;
+            p.style.left = xStart + 'px';
+            p.style.top = yStart + 'px';
+            p.style.setProperty('--dx', dx + 'px');
+            p.style.setProperty('--dy', dy + 'px');
+            p.style.setProperty('--rot', rot + 'deg');
+            p.style.setProperty('--dly', (Math.random() * 120) + 'ms');
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 1600);
+        }
     }
 
     function addExtraVegaDish(gangSlug: string) {
@@ -408,19 +436,38 @@ export default function ServiceMode() {
         const dishLocked = gangState === 'idle'; /* Kan pas starten als gang actief is */
 
         return (
-            <div key={key} className={'dish-dash' + (isVega ? ' vega' : ' meat') + (running ? ' running' : '') + (isDone ? ' done' : '') + (isOver ? ' overtime' : '')}>
-                {/* COVER: foto full-width met gradient-overlay */}
-                <div className="dish-cover">
+            <div key={key} data-dish-key={key} className={'dish-dash' + (isVega ? ' vega' : ' meat') + (running ? ' running' : '') + (isDone ? ' done' : '') + (isOver ? ' overtime' : '')}>
+                {/* COVER: foto full-width met gradient-overlay (of elegante empty-state) */}
+                <div className={'dish-cover' + (foto ? '' : ' no-photo')}>
                     {foto ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={foto} alt={dishName} className="dish-cover-img" />
+                        <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={foto} alt={dishName} className="dish-cover-img" />
+                            <div className="dish-cover-gradient" />
+                        </>
                     ) : (
-                        <div className={'dish-cover-ph' + (isVega ? ' vega' : '')}>
-                            <span className="dish-cover-ph-icon">{isVega ? '🌿' : '🔥'}</span>
+                        <div className={'dish-cover-empty' + (isVega ? ' vega' : ' meat')}>
+                            {/* Sierlijk BBQ-grain patroon achtergrond */}
+                            <div className="dish-cover-empty-ornament" aria-hidden="true">
+                                <svg width="100%" height="100%" viewBox="0 0 400 240" preserveAspectRatio="none">
+                                    <defs>
+                                        <pattern id={'grain-' + key} x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+                                            <circle cx="2" cy="2" r=".8" fill="currentColor" opacity=".35" />
+                                            <circle cx="14" cy="10" r=".5" fill="currentColor" opacity=".2" />
+                                            <circle cx="6" cy="18" r=".6" fill="currentColor" opacity=".25" />
+                                        </pattern>
+                                    </defs>
+                                    <rect width="100%" height="100%" fill={'url(#grain-' + key + ')'} />
+                                </svg>
+                            </div>
+                            {/* Grote naam-typografie als hero */}
+                            <div className="dish-cover-empty-inner">
+                                <div className="dish-cover-empty-icon">{isVega ? '🌿' : '🔥'}</div>
+                                <div className="dish-cover-empty-name">{dishName}</div>
+                                <div className="dish-cover-empty-line" />
+                            </div>
                         </div>
                     )}
-                    {/* Dark gradient overlay */}
-                    <div className="dish-cover-gradient" />
                     {/* Top-row: status-chips */}
                     <div className="dish-cover-topbar">
                         <span className={'dish-type-chip' + (isVega ? ' vega' : ' meat')}>{isVega ? '🌿 VEGA' : '🔥 VLEES'}</span>
@@ -429,12 +476,15 @@ export default function ServiceMode() {
                         {running && <span className="dish-status-chip live">● LIVE</span>}
                         {isOver && <span className="dish-status-chip over">⚠ OVER TIJD</span>}
                     </div>
-                    {/* Bottom-row: naam + XL count-badge */}
+                    {/* Bottom-row: naam + XL count-badge (alleen bij foto, anders is naam al groot in center) */}
                     <div className="dish-cover-bottom">
-                        <div className="dish-cover-title-wrap">
-                            <h3 className="dish-cover-name">{dishName}</h3>
-                            {desc && <p className="dish-cover-desc">{desc}</p>}
-                        </div>
+                        {foto && (
+                            <div className="dish-cover-title-wrap">
+                                <h3 className="dish-cover-name">{dishName}</h3>
+                                {desc && <p className="dish-cover-desc">{desc}</p>}
+                            </div>
+                        )}
+                        {!foto && <div className="dish-cover-title-wrap" />}
                         <div className="dish-cover-count-xl">
                             <span className="dcx-num">{count}</span>
                             <span className="dcx-mult">×</span>
@@ -543,36 +593,74 @@ export default function ServiceMode() {
 
                     {offertes.length === 0 ? (
                         <div className="service-empty"><EmptyState page="/service" /></div>
-                    ) : (
-                        <div className="service-event-grid">
-                            {offertes.map((o: any) => {
-                                const gangenCount = o.menu_selectie ? Object.keys(typeof o.menu_selectie === 'string' ? JSON.parse(o.menu_selectie) : o.menu_selectie).filter(k => !k.endsWith('_vega')).length : 0;
-                                const evDate = o.datum ? new Date(o.datum + 'T17:00:00') : null;
-                                const daysLeft = evDate ? Math.ceil((evDate.getTime() - nowTs) / 86400000) : null;
-                                const isToday = daysLeft === 0;
-                                const isPast = daysLeft !== null && daysLeft < 0;
-                                return (
-                                    <button key={o.id} onClick={() => selectEvent(o)} className={'service-event-card' + (isToday ? ' today' : '')}>
-                                        <div className="service-event-top">
-                                            <div className="service-event-date">
-                                                {evDate ? evDate.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : '—'}
-                                            </div>
-                                            <span className={'service-pill ' + (isToday ? 'live' : o.status === 'definitief' ? 'ok' : 'pending')}>
-                                                {isToday ? '● VANDAAG' : isPast ? 'AFGELOPEN' : o.status?.toUpperCase() || 'CONCEPT'}
-                                            </span>
+                    ) : (() => {
+                        /* Splits in aankomende + voltooide events */
+                        const ev = offertes.map((o: any) => {
+                            const evDate = o.datum ? new Date(o.datum + 'T17:00:00') : null;
+                            const daysLeft = evDate ? Math.ceil((evDate.getTime() - nowTs) / 86400000) : null;
+                            return { o, evDate, daysLeft };
+                        });
+                        const upcoming = ev.filter(x => x.daysLeft === null || x.daysLeft >= 0).sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999));
+                        const past = ev.filter(x => x.daysLeft !== null && x.daysLeft < 0).sort((a, b) => (b.daysLeft ?? 0) - (a.daysLeft ?? 0));
+
+                        const renderCard = (x: { o: any; evDate: Date | null; daysLeft: number | null }) => {
+                            const o = x.o;
+                            const evDate = x.evDate;
+                            const daysLeft = x.daysLeft;
+                            const gangenCount = o.menu_selectie ? Object.keys(typeof o.menu_selectie === 'string' ? JSON.parse(o.menu_selectie) : o.menu_selectie).filter(k => !k.endsWith('_vega')).length : 0;
+                            const isToday = daysLeft === 0;
+                            const isTomorrow = daysLeft === 1;
+                            const isPast = daysLeft !== null && daysLeft < 0;
+                            /* Smart label */
+                            let timeLabel: string;
+                            let timePill: string;
+                            if (isToday) { timeLabel = 'Vandaag'; timePill = '● VANDAAG'; }
+                            else if (isTomorrow) { timeLabel = 'Morgen'; timePill = '● MORGEN'; }
+                            else if (daysLeft !== null && daysLeft >= 0 && daysLeft <= 7) { timeLabel = 'Over ' + daysLeft + ' dagen'; timePill = 'OVER ' + daysLeft + ' DAGEN'; }
+                            else if (daysLeft !== null && daysLeft > 7) { timeLabel = 'Over ' + daysLeft + ' dagen'; timePill = o.status?.toUpperCase() || 'GEPLAND'; }
+                            else if (isPast) { timeLabel = Math.abs(daysLeft as number) + 'd geleden'; timePill = 'AFGELOPEN'; }
+                            else { timeLabel = '—'; timePill = o.status?.toUpperCase() || 'CONCEPT'; }
+                            const pillClass = isToday ? 'live' : isTomorrow ? 'soon' : isPast ? 'past' : (daysLeft !== null && daysLeft <= 7) ? 'near' : (o.status === 'definitief' ? 'ok' : 'pending');
+                            return (
+                                <button key={o.id} onClick={() => selectEvent(o)} className={'service-event-card' + (isToday ? ' today' : '') + (isTomorrow ? ' tomorrow' : '') + (isPast ? ' past' : '')}>
+                                    <div className="service-event-top">
+                                        <div className="service-event-date">
+                                            {evDate ? evDate.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : '—'}
                                         </div>
-                                        <div className="service-event-name">{o.client_naam || 'Naamloos event'}</div>
-                                        <div className="service-event-meta">
-                                            <div><span className="mlabel">Gasten</span><span className="mval">{o.aantal_gasten || 0}{o.aantal_vega > 0 && <span className="vega"> · {o.aantal_vega}🌿</span>}</span></div>
-                                            <div><span className="mlabel">Gangen</span><span className="mval">{gangenCount || '—'}</span></div>
-                                            <div><span className="mlabel">Tijd</span><span className="mval">{daysLeft !== null && daysLeft >= 0 ? (isToday ? 'Nu' : `T-${daysLeft}d`) : '—'}</span></div>
+                                        <span className={'service-pill ' + pillClass}>{timePill}</span>
+                                    </div>
+                                    <div className="service-event-name">{o.client_naam || 'Naamloos event'}</div>
+                                    <div className="service-event-meta">
+                                        <div><span className="mlabel">Gasten</span><span className="mval">{o.aantal_gasten || 0}{o.aantal_vega > 0 && <span className="vega"> · {o.aantal_vega}🌿</span>}</span></div>
+                                        <div><span className="mlabel">Gangen</span><span className="mval">{gangenCount || '—'}</span></div>
+                                        <div><span className="mlabel">Wanneer</span><span className="mval">{timeLabel}</span></div>
+                                    </div>
+                                    <div className="service-event-start">{isPast ? 'Bekijk service-log →' : 'Start service →'}</div>
+                                </button>
+                            );
+                        };
+
+                        return (
+                            <>
+                                {upcoming.length > 0 && (
+                                    <div className="service-event-grid">
+                                        {upcoming.map(renderCard)}
+                                    </div>
+                                )}
+                                {past.length > 0 && (
+                                    <div className="service-past-wrap">
+                                        <div className="service-past-divider">
+                                            <span className="service-past-label">Afgelopen events</span>
+                                            <span className="service-past-count">{past.length}</span>
                                         </div>
-                                        <div className="service-event-start">Start service →</div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
+                                        <div className="service-event-grid past-grid">
+                                            {past.slice(0, 6).map(renderCard)}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
 
                     {historie.length > 0 && (
                         <div className="service-stats-wrap">
@@ -615,12 +703,13 @@ export default function ServiceMode() {
                                 </div>
                             </div>
                             <div className="cockpit-right">
-                                {serviceStart && (
-                                    <div className="cockpit-service-timer">
-                                        <div className="cst-eyebrow">SERVICE LIVE</div>
-                                        <div className="cst-val">{formatTime(serviceElapsed)}</div>
-                                    </div>
-                                )}
+                                <div className={'cockpit-service-timer' + (serviceStart ? ' live' : ' idle')}>
+                                    <div className="cst-eyebrow">{serviceStart ? '● SERVICE LIVE' : '○ WACHT OP START'}</div>
+                                    <div className="cst-val">{serviceStart ? formatTime(serviceElapsed) : '--:--'}</div>
+                                    {serviceStart && (
+                                        <div className="cst-sub">sinds service-start</div>
+                                    )}
+                                </div>
                                 <div className="cockpit-kpis-stack">
                                     <div className="cockpit-kpi">
                                         <div className="kpi-val">{servedCount}<span className="kpi-sep">/</span>{totalGangen}</div>
@@ -640,13 +729,24 @@ export default function ServiceMode() {
                             </div>
                         </div>
 
-                        {/* Progress track — gangen als stippen */}
+                        {/* Progress track — gangen als stippen met emoji per type */}
                         <div className="service-progress-track">
                             {gangen.map((g: any, i: number) => {
                                 const state = bonStates[g.slug] || 'idle';
+                                /* Emoji per gang-type raden o.b.v. naam */
+                                const n = (g.naam || '').toLowerCase();
+                                const emoji = state === 'served' ? '✓' :
+                                    n.includes('amuse') || n.includes('bite') ? '🥂' :
+                                    n.includes('voor') ? '🥗' :
+                                    n.includes('soep') ? '🍲' :
+                                    n.includes('hoofd') || n.includes('bbq') || n.includes('vlees') ? '🔥' :
+                                    n.includes('bij') ? '🥔' :
+                                    n.includes('dessert') || n.includes('nagerecht') ? '🍰' :
+                                    n.includes('koffie') || n.includes('thee') ? '☕' :
+                                    String(i + 1);
                                 return (
                                     <div key={g.slug} className={'track-step state-' + state}>
-                                        <div className="track-dot">{state === 'served' ? '✓' : i + 1}</div>
+                                        <div className="track-dot">{emoji}</div>
                                         <div className="track-lbl">{g.naam}</div>
                                     </div>
                                 );
@@ -720,12 +820,13 @@ export default function ServiceMode() {
                                 {/* Gang-header */}
                                 <div className="gang-focused-head">
                                     <div className="gang-focused-left">
-                                        <div className="gang-focused-eyebrow">Gang {idx + 1} · {state === 'served' ? 'VOLTOOID' : state === 'active' ? '● IN ACTIE' : '○ KLAAR VOOR START'}</div>
+                                        <div className="gang-focused-eyebrow">Gang {idx + 1} · {state === 'served' ? '✓ VOLTOOID' : state === 'active' ? '● IN ACTIE' : '○ KLAAR VOOR START'}</div>
                                         <h2 className="gang-focused-title">{gang.naam}</h2>
                                         <div className="gang-focused-meta">
-                                            <span>🔥 {meatNames.length} vlees</span>
-                                            {(vegaNames.length + extraVega.length) > 0 && <><span className="dot">·</span><span className="vega-text">🌿 {vegaNames.length + extraVega.length} vega</span></>}
-                                            {avgTime && <><span className="dot">·</span><span>gem. {formatTime(avgTime)}</span></>}
+                                            {meatNames.length > 0 && <span>🔥 {meatNames.length} vlees-gerecht{meatNames.length > 1 ? 'en' : ''} · {aantalNormaal}×</span>}
+                                            {(vegaNames.length + extraVega.length) > 0 && <><span className="dot">·</span><span className="vega-text">🌿 {vegaNames.length + extraVega.length} vega · {aantalVega || extraVega.length}×</span></>}
+                                            {avgTime && <><span className="dot">·</span><span>geschat ~{formatTime(avgTime)}</span></>}
+                                            {state === 'active' && gangElapsed > 0 && avgTime && gangElapsed < avgTime && <><span className="dot">·</span><span className="eta-text">~{formatTime(Math.max(0, avgTime - gangElapsed))} resterend</span></>}
                                         </div>
                                     </div>
                                     <div className="gang-focused-right">
