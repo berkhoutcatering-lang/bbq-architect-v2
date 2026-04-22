@@ -1,22 +1,16 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useBrandLogo } from '@/lib/useBrandLogo';
 
 /*
- * DashboardBrandHero — elegante editorial-style dashboard-header.
- * Logo als stijlvol crest/monogram rechts, asymmetrische layout,
- * typografie-gedreven. Niet een groot blok maar een refined accent.
- *
- * Logo transparant via mix-blend-mode: lighten + brightness filter —
- * werkt beter dan screen tegen olijf-groene achtergrond, want
- * lighten houdt ALLEEN pixels lichter dan de achtergrond zichtbaar.
+ * DashboardBrandHero — editorial-style header met bedrijfsnaam.
+ * Geen logo — alleen typografie-gedreven met live tijd, greeting,
+ * en bedrijfsnaam met gradient-shine.
  */
 
 export default function DashboardBrandHero() {
     const brand = useBrandLogo();
-    const logo = brand.logoDarkUrl || brand.logoUrl;
     const [now, setNow] = useState<Date | null>(null);
 
     useEffect(() => {
@@ -50,16 +44,6 @@ export default function DashboardBrandHero() {
                     <span className="dhs-text">Catering · BBQ · Events — alles in één plek.</span>
                 </p>
             </div>
-
-            {logo && (
-                <div className="dash-hero-right">
-                    <div className="dhc-crest">
-                        <div className="dhc-ring" />
-                        <img src={logo} alt="" className="dhc-logo" />
-                    </div>
-                    <div className="dhc-line" />
-                </div>
-            )}
         </header>
     );
 }
