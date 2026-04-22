@@ -2245,12 +2245,165 @@ interface BulkFile {
 
 const MAX_CONCURRENT = 3;
 
+/* Bibliotheek-samenvatting per leverancier */
+type LibStat = {
+    leverancier: string;
+    total: number;
+    laatsteDatum: string;
+    eersteDatum: string;
+    categorieen: string[];
+    updateCount: number;
+};
+
+function PricelistLibrary({ refreshKey, orgId }: { refreshKey: number; orgId: string | null }) {
+    const [stats, setStats] = useState<LibStat[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!orgId) return;
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            /* Aggregatie per leverancier */
+            const { data } = await supabase
+                .from('supplier_prices')
+                .select('leverancier, datum, categorie')
+                .eq('organization_id', orgId);
+            if (cancelled) return;
+            if (!data) { setStats([]); setLoading(false); return; }
+            const byLev: Record<string, { total: number; datums: Set<string>; cats: Set<string> }> = {};
+            for (const row of data as any[]) {
+                const lev = row.leverancier || 'Onbekend';
+                if (!byLev[lev]) byLev[lev] = { total: 0, datums: new Set(), cats: new Set() };
+                byLev[lev].total++;
+                if (row.datum) byLev[lev].datums.add(row.datum);
+                if (row.categorie) byLev[lev].cats.add(row.categorie);
+            }
+            const arr: LibStat[] = Object.entries(byLev).map(([lev, s]) => {
+                const sorted = Array.from(s.datums).sort();
+                return {
+                    leverancier: lev,
+                    total: s.total,
+                    laatsteDatum: sorted[sorted.length - 1] || '',
+                    eersteDatum: sorted[0] || '',
+                    categorieen: Array.from(s.cats).slice(0, 6),
+                    updateCount: sorted.length,
+                };
+            }).sort((a, b) => (b.laatsteDatum || '').localeCompare(a.laatsteDatum || ''));
+            setStats(arr);
+            setLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [orgId, refreshKey]);
+
+    function formatDateShort(iso: string): string {
+        if (!iso) return '—';
+        const d = new Date(iso + 'T12:00:00');
+        if (isNaN(d.getTime())) return iso;
+        const now = Date.now();
+        const days = Math.floor((now - d.getTime()) / 86400000);
+        if (days === 0) return 'Vandaag';
+        if (days === 1) return 'Gisteren';
+        if (days < 7) return days + ' dagen geleden';
+        if (days < 30) return Math.floor(days / 7) + ' wk geleden';
+        return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function freshnessColor(iso: string): string {
+        if (!iso) return 'var(--muted)';
+        const days = Math.floor((Date.now() - new Date(iso + 'T12:00:00').getTime()) / 86400000);
+        if (days <= 7) return 'var(--green)';
+        if (days <= 30) return GOLD;
+        return 'var(--amber)';
+    }
+
+    if (loading) return null;
+    if (stats.length === 0) return null;
+
+    const totalProducts = stats.reduce((s, x) => s + x.total, 0);
+
+    return (
+        <MetalCard>
+            <div style={{ padding: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                        <Eyebrow>📚 Prijsbibliotheek</Eyebrow>
+                        <div style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontSize: 24, fontWeight: 300, marginTop: 4, color: 'var(--text)' }}>
+                            <span style={{ color: GOLD, fontWeight: 500 }}>{totalProducts.toLocaleString('nl-NL')}</span> productprijzen
+                            <span style={{ color: 'var(--muted)', fontSize: 14, fontWeight: 400, marginLeft: 10 }}>
+                                van {stats.length} leverancier{stats.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+                    {stats.map(s => (
+                        <div key={s.leverancier}
+                            style={{
+                                padding: 14,
+                                borderRadius: 10,
+                                background: 'var(--color-bg-deep)',
+                                border: `1px solid ${freshnessColor(s.laatsteDatum)}20`,
+                                position: 'relative',
+                                overflow: 'hidden',
+                            }}>
+                            {/* Freshness dot + indicator strip links */}
+                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: freshnessColor(s.laatsteDatum) }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {s.leverancier}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                        {s.updateCount} {s.updateCount === 1 ? 'upload' : 'uploads'}
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: GOLD, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                                        {s.total.toLocaleString('nl-NL')}
+                                    </div>
+                                    <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 2 }}>
+                                        producten
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid rgba(130,130,130,.08)', fontSize: 11 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: freshnessColor(s.laatsteDatum) }} />
+                                    <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatDateShort(s.laatsteDatum)}</span>
+                                </div>
+                                <span style={{ color: 'var(--muted-light)', fontSize: 10 }}>laatst bijgewerkt</span>
+                            </div>
+                            {s.categorieen.length > 0 && (
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
+                                    {s.categorieen.slice(0, 4).map(c => (
+                                        <span key={c} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'rgba(130,130,130,.08)', color: 'var(--muted-light)', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600 }}>
+                                            {c}
+                                        </span>
+                                    ))}
+                                    {s.categorieen.length > 4 && <span style={{ fontSize: 9, color: 'var(--muted)' }}>+{s.categorieen.length - 4}</span>}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} /> vers (&lt;7d)</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: GOLD }} /> redelijk (&lt;30d)</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)' }} /> verouderd (&gt;30d)</span>
+                </div>
+            </div>
+        </MetalCard>
+    );
+}
+
 function FolderPricelists() {
     const [files, setFiles] = useState<BulkFile[]>([]);
     const [working, setWorking] = useState(false);
     const [overrideSupplier, setOverrideSupplier] = useState('');
     const [dragOver, setDragOver] = useState(false);
     const [savedCount, setSavedCount] = useState(0);
+    const [libRefreshKey, setLibRefreshKey] = useState(0);
     const { orgId } = useOrg();
 
     const totalProducten = files.reduce((s, f) => s + f.producten, 0);
@@ -2340,6 +2493,7 @@ function FolderPricelists() {
                     product_naam: String(p.product_naam).trim(),
                     prijs: Number(p.prijs),
                     eenheid: String(p.eenheid || 'stuks').trim(),
+                    categorie: p.categorie ? String(p.categorie).trim() : null,
                     datum,
                 }));
             if (rows.length > 0) {
@@ -2350,6 +2504,7 @@ function FolderPricelists() {
                 }
                 saved += rows.length;
                 setSavedCount(saved);
+                setLibRefreshKey(k => k + 1); /* Trigger library refresh */
             }
             setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'done', leverancier, producten: rows.length } : f));
         }
@@ -2380,6 +2535,9 @@ function FolderPricelists() {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Bibliotheek-overzicht (alleen zichtbaar als er al data is) */}
+            <PricelistLibrary refreshKey={libRefreshKey} orgId={orgId} />
+
             {/* Context-banner */}
             <div style={{ padding: '12px 16px', borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}35`, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <Info size={14} style={{ color: GOLD, marginTop: 2, flexShrink: 0 }} />
