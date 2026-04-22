@@ -5,31 +5,34 @@ import Anthropic from '@anthropic-ai/sdk';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
-const PRICELIST_SYSTEM_PROMPT = `Je leest een Nederlandse groothandel prijslijst (Makro, Sligro, Hanos, Bidfood e.d.) en extraheert ALLE productregels.
-Dit is GEEN voorraad — alleen product + prijs + eenheid + categorie.
+const PRICELIST_SYSTEM_PROMPT = `Je bent een extractie-engine voor Nederlandse groothandel-prijslijsten (Makro, Sligro, Hanos, Bidfood).
+Je doel: LETTERLIJK ELKE productregel in de input extracten. Niet samenvatten, niet categoriseren-en-filteren, niet "top producten" kiezen. ALLES.
 
 Retourneer ALLEEN geldige JSON, geen markdown, geen uitleg:
 
 {
-  "leverancier": "string (naam uit de header, bv. 'Makro')",
-  "datum": "YYYY-MM-DD of null (als zichtbaar)",
+  "leverancier": "string",
+  "datum": "YYYY-MM-DD of null",
   "producten": [
-    {
-      "product_naam": "string (volledige productnaam, zonder artikelnummer)",
-      "prijs": number (contractprijs per eenheid, EXCL BTW),
-      "eenheid": "string (kg, L, stuks, doos, pak, fles, krat, enz)",
-      "categorie": "Vlees/Vis/Groenten/Zuivel/Kruiden/Sauzen/Dranken/Brood/Hout/Verpakking/Kaas/Vegan/Overig"
-    }
+    { "product_naam": "string", "prijs": number, "eenheid": "string", "categorie": "string" }
   ]
 }
 
-Regels:
-- Geef ELKE regel terug die een product + prijs heeft, ook als ze op één pagina staan
-- Gebruik contractprijs / staffelprijs (laagste) indien zichtbaar
-- Alle prijzen EXCL BTW
-- Bij onduidelijke eenheid: gebruik 'stuks'
-- Categoriseer zo logisch mogelijk voor BBQ/catering context
-- Skip: artikelnummers, barcodes, BTW-percentages — alleen product + prijs + eenheid + categorie`;
+KRITIEKE REGELS (faal hierop niet):
+- ALLE regels → als je 500 producten ziet, geef 500 terug. Niet 50.
+- Ook producten die op elkaar lijken (bv. "Gouda 48+ 5kg" en "Gouda 48+ 3kg") zijn aparte items.
+- Elke variant (smaak, gewicht, verpakking, merk) = aparte regel.
+- Inclusief seizoens-/actie-producten.
+- Sla NIETS over omdat het "standaard" of "niet-interessant" lijkt.
+
+Details per veld:
+- product_naam: volledige naam, zonder artikelnummer
+- prijs: contractprijs of staffelprijs (laagste), EXCL BTW, als number
+- eenheid: kg / L / stuks / doos / pak / fles / krat / bakje / kist
+- categorie: Vlees / Vis / Groenten / Fruit / Zuivel / Kaas / Kruiden / Sauzen /
+  Dranken / Brood / Hout / Verpakking / Vegan / AGF / Overig (kies meest passend)
+
+Skip alleen: artikelnummers, barcodes, BTW-percentages, lege witregels, paginanummers.`;
 
 function parseDataUrl(dataUrl: string): { mediaType: string; data: string } {
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -146,7 +149,7 @@ async function runChunkedTextCalls(
     client: Anthropic, model: string, isHaikuOrSonnet: boolean,
     fullText: string, t0: number,
 ): Promise<NextResponse> {
-    const CHUNK_SIZE = 100_000; /* Veilige grootte: ~25K tokens input per chunk */
+    const CHUNK_SIZE = 50_000; /* Kleinere chunks = meer output-ruimte + minder kans op missers */
     const chunks: string[] = [];
     /* Split op regel-grenzen om halverwege een product af te snijden te voorkomen */
     let pos = 0;
@@ -228,9 +231,11 @@ export async function POST(req: NextRequest) {
         const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
 
-        /* TEXT-MODE met auto-chunking voor grote PDFs */
+        /* TEXT-MODE met auto-chunking voor grote PDFs.
+           Kleinere chunks (60K) geven meer output-ruimte per call en minder
+           kans dat Claude een subset pakt i.p.v. alles. */
         if (textContent && textContent.length > 100) {
-            const MAX_SINGLE_CALL = 120_000;
+            const MAX_SINGLE_CALL = 60_000;
             if (textContent.length <= MAX_SINGLE_CALL) {
                 const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [
                     { type: 'text', text: 'Hieronder de tekst van een groothandel-prijslijst. Extraheer ALLE producten:\n\n' + textContent },

@@ -2442,6 +2442,10 @@ function FolderPricelists() {
                 if (!res.ok || !body?.success) {
                     return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
                 }
+                /* Log chunks-count voor transparantie (staat in body.chunks bij chunked calls) */
+                if (body.chunks && body.chunks > 1) {
+                    console.log(`[parse-pricelist] ${bf.file.name} → ${body.chunks} text-chunks → ${body.data?.producten?.length || 0} producten`);
+                }
             } else {
                 /* VISION FALLBACK voor ingescande/image-based PDFs.
                    Anthropic limieten: 32MB base64, 100 pagina's per request. */
