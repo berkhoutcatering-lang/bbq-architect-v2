@@ -37,10 +37,24 @@ export async function extractPdfText(file: File): Promise<string> {
     }
 }
 
-/** Ruwe schatting of de tekst bruikbaar is (niet leeg, niet onleesbare bytes) */
+/** Losser: prijslijsten hebben veel cijfers + € — we zoeken naar
+ *  prijs-patronen en productnamen. Als we die vinden is het text-based. */
 export function isUsableText(text: string): boolean {
-    if (!text || text.length < 100) return false;
-    /* Percentage alfabetische chars — ingescande PDFs geven vaak alleen rommel */
-    const alpha = text.replace(/[^a-zA-Z]/g, '').length;
-    return alpha / text.length > 0.2;
+    if (!text || text.length < 50) return false;
+
+    /* Count character classes */
+    const alpha = text.replace(/[^a-zA-ZéëïöüàèìòùáíóúÉËÏÖÜÀÈÌÒÙÁÍÓÚ]/g, '').length;
+    const digits = text.replace(/[^0-9]/g, '').length;
+
+    /* Ingescande PDF met rommel: <5% alphabetic én <5% digits */
+    if (alpha / text.length < 0.05 && digits / text.length < 0.05) return false;
+
+    /* Als text min. 30 chars alphabetic heeft én enige structuur, goed genoeg */
+    if (alpha >= 30) return true;
+
+    /* Extra check: prijs-achtige patronen (€ N,NN of N.NN) */
+    const priceMatches = text.match(/[€$]\s*\d+[,.]?\d*|\d+[,.]\d{2}/g);
+    if (priceMatches && priceMatches.length > 3) return true;
+
+    return false;
 }

@@ -2443,7 +2443,27 @@ function FolderPricelists() {
                 }
             } else {
                 /* VISION FALLBACK voor ingescande/image-based PDFs.
-                   Eerst upload naar Supabase storage (body-size omzeilen) → URL naar API. */
+                   Anthropic vision heeft limieten: max 32MB PDF én max 100 pagina's. */
+                const fileSizeMB = bf.file.size / 1024 / 1024;
+                if (fileSizeMB > 30) {
+                    return { ok: false, producten: [], error: `PDF te groot (${fileSizeMB.toFixed(1)} MB). Limiet is 30 MB voor vision-modus. Splits de PDF in kleinere delen.` };
+                }
+                if (extractedText && extractedText.length > 30) {
+                    /* Er is wat text maar isUsableText vond het niet goed genoeg — probeer toch text-mode
+                       met wat we hebben, dat werkt vaak beter dan vision op dikke PDFs */
+                    const res = await fetch('/api/parse-pricelist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ textContent: extractedText, model: 'haiku' }),
+                    });
+                    try { body = await res.json(); } catch { /* non-JSON */ }
+                    if (res.ok && body?.success && (body.data?.producten?.length || 0) > 0) {
+                        const prods = body.data.producten;
+                        return { ok: true, leverancier: body.data?.leverancier, producten: prods };
+                    }
+                    /* Als dat niks oplevert, val door naar vision */
+                }
+                /* Eerst upload naar Supabase storage (body-size omzeilen) → URL naar API. */
                 const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
                 const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
                 const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bf.file, {
