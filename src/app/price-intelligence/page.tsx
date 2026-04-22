@@ -405,7 +405,7 @@ const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
 
 function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder) => void }) {
     return (
-        <div style={{
+        <div className="responsive-grid-2" style={{
             display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0,
             background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
             borderRadius: '14px 14px 0 0', padding: 4, position: 'relative',
@@ -459,7 +459,7 @@ export default function PriceIntelligence() {
     }
 
     return (
-        <div style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
+        <div className="page-container-compact" style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -479,7 +479,7 @@ export default function PriceIntelligence() {
 
             <FolderTabs active={folder} onChange={changeFolder} />
 
-            <div key={folder} style={{
+            <div key={folder} className="folder-inner" style={{
                 background: 'var(--bg)', border: '1px solid var(--border)', borderTop: 'none',
                 borderRadius: '0 0 14px 14px', padding: 22, animation: 'fadeInUp .3s ease both',
             }}>
@@ -799,7 +799,7 @@ function FolderInvoices() {
                 <strong style={{ color: 'var(--text)' }}>Zo werkt AI factuur lezen:</strong> upload een PDF of foto van een leverancier-factuur → Claude/Groq AI leest alle regels, totalen en BTW → je controleert → je boekt in. Werkt met Sligro, Hanos, Bidfood, of welke leverancier dan ook.
             </SectionExplain>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 <MiniStat label="Facturen totaal" value={stats.count} icon={FileText} />
                 <MiniStat label="Te reviewen" value={stats.review} tone={stats.review > 0 ? 'warn' : undefined} icon={Edit3} />
                 <MiniStat label="Geboekt" value={stats.booked} tone="ok" icon={Check} />
@@ -1313,7 +1313,7 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                 </div>
             </MetalCard>
 
-            <div style={{ display: 'grid', gridTemplateColumns: preview ? '1fr 1.4fr' : '1fr', gap: 16 }}>
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: preview ? '1fr 1.4fr' : '1fr', gap: 16 }}>
                 {preview && (
                     <MetalCard>
                         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1339,7 +1339,7 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
                             <span style={{ fontSize: 13, fontWeight: 600 }}>Header</span>
                         </div>
-                        <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="responsive-grid" style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <Field label="Leverancier" value={invoice.leverancier || ''} onChange={v => updateHeader('leverancier', v)} />
                             <Field label="Factuurnummer" value={invoice.factuurnummer || ''} onChange={v => updateHeader('factuurnummer', v)} />
                             <Field label="Datum" value={invoice.datum || ''} onChange={v => updateHeader('datum', v)} type="date" />
@@ -1680,7 +1680,7 @@ function FolderReceipts() {
                 <strong style={{ color: 'var(--text)' }}>Jouw bonnenarchief:</strong> elke factuur of kassabon die je uploadt krijgt automatisch een <strong style={{ color: GOLD }}>eigen map per leverancier</strong>. Het originele bestand wordt bewaard, zodat je altijd terug kunt klikken. Scan hier een nieuwe bon, of blader hieronder door je mappen.
             </SectionExplain>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 <MiniStat label="Bonnen" value={bonnen.length} icon={Receipt} />
                 <MiniStat label="Facturen" value={(invoices || []).length} icon={FileText} />
                 <MiniStat label="Gearchiveerd" value={`${archivedCount}/${totalFiles}`} sub="met origineel bestand" icon={Archive} tone={archivedCount > 0 ? 'ok' : undefined} />
@@ -1891,7 +1891,7 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
                 <BtnPrimary icon={Save} onClick={async () => { setSaving(true); await onSave(); setSaving(false); }} disabled={saving}>{saving ? 'Opslaan…' : 'Bewaren'}</BtnPrimary>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: preview ? '1fr 1.4fr' : '1fr', gap: 14 }}>
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: preview ? '1fr 1.4fr' : '1fr', gap: 14 }}>
                 {preview && (
                     <MetalCard>
                         <div style={{ padding: 14, maxHeight: 600, overflow: 'auto' }}>
@@ -1901,7 +1901,7 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
                     </MetalCard>
                 )}
                 <MetalCard>
-                    <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="responsive-grid" style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <Field label="Winkel" value={parsed.winkel || ''} onChange={v => upd('winkel', v)} />
                         <Field label="Datum" value={parsed.datum || ''} onChange={v => upd('datum', v)} type="date" />
                         <CurrencyField label="Totaal bedrag (incl BTW)" value={String(parsed.totaal_bedrag ?? 0)} onChange={v => upd('totaal_bedrag', parseFloat(v) || 0)} />
@@ -2158,7 +2158,7 @@ function FolderBooks() {
                     <CategoryDonut data={byCategorie} total={totaalInkoop} onSliceClick={setSelectedCategory} />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <HeroStat label={`Besteed in ${curMaandLabel}`} value={fmt2(curMaand)} delta={vorigeMaand > 0 && curMaand > 0 ? { pct: ((curMaand - vorigeMaand) / vorigeMaand) * 100, cur: curMaand, prev: vorigeMaand } : null} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <MiniTile label={vorigeMaandLabel ? `In ${vorigeMaandLabel}` : 'Vorige maand'} value={fmt2(vorigeMaand)} />
                             <MiniTile label="Top categorie" value={topCategorie ? topCategorie[0] : '—'} sub={topCategorie ? fmt2(topCategorie[1]) : ''} color={topCategorie ? SUPPLIER_COLORS[0] : undefined} />
                         </div>
@@ -2184,7 +2184,7 @@ function FolderBooks() {
             </MetalCard>
 
             {/* GROTE ACTIE KNOPPEN */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 <ActionCard icon={Store} title="Leveranciers vergelijken" desc="Zie wie goedkoper is" onClick={() => setComparisonOpen(true)} />
                 <ActionCard icon={Archive} title="Archief bekijken" desc="Alle originele bestanden" onClick={() => setArchiveOpen(true)} />
                 <ActionCard icon={Download} title="Export CSV" desc="Voor accountant" onClick={exportToCSV} />
@@ -2244,7 +2244,7 @@ function FolderBooks() {
             )}
 
             {/* BTW TILE onderaan — subtiel, voor later */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <MetalCard>
                     <div style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{ width: 44, height: 44, borderRadius: 10, background: `${GOLD}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2867,7 +2867,7 @@ function CSVImport({ onClose }: { onClose: () => void }) {
                 <MetalCard>
                     <div style={{ padding: 18 }}>
                         <Eyebrow>Koppel de kolommen · {csv.rows.length} regels</Eyebrow>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
+                        <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
                             <div>
                                 <Eyebrow>Product *</Eyebrow>
                                 <select value={mapping.product_naam} onChange={e => setMap({ ...mapping, product_naam: e.target.value })} style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}>
@@ -2954,7 +2954,7 @@ function SupplierDonut({ bySupplier, total, onSelect }: { bySupplier: SupplierRo
                     Nog geen leverancier-data. Scan een factuur of importeer een CSV.
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: spendSuppliers.length > 0 ? '280px 1fr' : '1fr', gap: 28, padding: 22 }}>
+                <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: spendSuppliers.length > 0 ? '280px 1fr' : '1fr', gap: 28, padding: 22 }}>
                     {spendSuppliers.length > 0 && (
                         <div style={{ position: 'relative', width: 240, height: 240, justifySelf: 'center' }}>
                             <svg width="240" height="240" viewBox="0 0 220 220" style={{ transform: 'rotate(-90deg)' }}>
@@ -3203,7 +3203,7 @@ function SupplierAnalysisDrawer({ supplierName, bySupplier, totalSpend, onClose 
                                 </div>
                             )}
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                 {analysis.categories_strong?.length > 0 && (
                                     <div style={{ padding: 14, borderRadius: 10, border: '1px solid rgba(34,197,94,.25)', background: 'rgba(34,197,94,.04)' }}>
                                         <Eyebrow><span style={{ color: 'var(--green)' }}>Sterk in</span></Eyebrow>
