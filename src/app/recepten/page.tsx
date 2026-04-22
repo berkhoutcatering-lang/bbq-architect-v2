@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import AllergenBadges from '@/components/AllergenBadges';
 import {
     Sparkles, Plus, Search, X, Clock, Users, ChefHat, Trash2, Save,
     AlertTriangle, Loader2, Wand2, ArrowLeft, ChevronLeft, ChevronRight,
@@ -490,9 +491,15 @@ function RecipePreview({ recipe, onAccept, onReject }: { recipe: Recept; onAccep
                 </Section>
             )}
 
-            {recipe.allergenen && recipe.allergenen.length > 0 && (
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--amber)' }}>Allergenen:</strong> {recipe.allergenen.join(', ')}</div>
-            )}
+            <div style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>Allergenen</div>
+                <AllergenBadges
+                    ingredients={Array.isArray(recipe.ingredienten) ? recipe.ingredienten : []}
+                    manualAllergens={recipe.allergenen}
+                    compact
+                    showEmpty
+                />
+            </div>
             {recipe.wijn_suggestie && (
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>Wijn:</strong> {recipe.wijn_suggestie}</div>
             )}
@@ -675,14 +682,21 @@ function RecipeDrawer({ recipe, onClose, onEdit, onDelete, onKitchenMode, existi
                         </Section>
                     )}
 
+                    {/* ALLERGENEN (auto-detected + manual) */}
+                    <div style={{ padding: 12, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                            ⚠ Allergenen <span style={{ fontSize: 9, color: 'var(--muted-light)', marginLeft: 4, letterSpacing: 0, textTransform: 'none' }}>— auto-gedetecteerd uit ingrediënten</span>
+                        </div>
+                        <AllergenBadges
+                            ingredients={Array.isArray(recipe.ingredienten) ? recipe.ingredienten : []}
+                            manualAllergens={recipe.allergenen}
+                            showEmpty
+                        />
+                    </div>
+
                     {/* EXTRA INFO */}
-                    {(recipe.allergenen?.length || recipe.wijn_suggestie || recipe.service_tip) && (
+                    {(recipe.wijn_suggestie || recipe.service_tip) && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, borderRadius: 10, background: 'var(--color-bg-deep)', border: '1px solid var(--card-solid)' }}>
-                            {recipe.allergenen && recipe.allergenen.length > 0 && (
-                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                    <strong style={{ color: 'var(--amber)' }}>⚠ Allergenen:</strong> {recipe.allergenen.join(', ')}
-                                </div>
-                            )}
                             {recipe.wijn_suggestie && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>🍷 Wijn:</strong> {recipe.wijn_suggestie}</div>}
                             {recipe.service_tip && <div style={{ fontSize: 11, color: 'var(--muted)' }}><strong style={{ color: 'var(--text)' }}>🍽 Service:</strong> {recipe.service_tip}</div>}
                         </div>
