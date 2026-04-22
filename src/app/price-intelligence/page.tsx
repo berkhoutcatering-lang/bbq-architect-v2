@@ -2262,6 +2262,8 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
     const [stats, setStats] = useState<LibStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [drillLeverancier, setDrillLeverancier] = useState<string | null>(null);
+    const [drillCategorie, setDrillCategorie] = useState<string | null>(null);
 
     async function deleteSupplier(leverancier: string, count: number) {
         if (typeof window === 'undefined') return;
@@ -2365,6 +2367,7 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
                     {stats.map(s => (
                         <div key={s.leverancier}
+                            onClick={() => setDrillLeverancier(s.leverancier)}
                             style={{
                                 padding: 14,
                                 borderRadius: 10,
@@ -2372,7 +2375,11 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                                 border: `1px solid ${freshnessColor(s.laatsteDatum)}20`,
                                 position: 'relative',
                                 overflow: 'hidden',
-                            }}>
+                                cursor: 'pointer',
+                                transition: 'all .15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-bg-deep) 80%, var(--text) 8%)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-bg-deep)'; }}>
                             {/* Freshness dot + indicator strip links */}
                             <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: freshnessColor(s.laatsteDatum) }} />
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
@@ -2394,7 +2401,7 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => deleteSupplier(s.leverancier, s.total)}
+                                        onClick={(e) => { e.stopPropagation(); deleteSupplier(s.leverancier, s.total); }}
                                         disabled={deleting === s.leverancier}
                                         title={`Alle ${s.total} producten van ${s.leverancier} wissen`}
                                         style={{
@@ -2435,9 +2442,156 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} /> vers (&lt;7d)</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: GOLD }} /> redelijk (&lt;30d)</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)' }} /> verouderd (&gt;30d)</span>
+                    <span style={{ marginLeft: 'auto', color: 'var(--muted-light)', fontStyle: 'italic' }}>Klik kaart om producten te bekijken</span>
                 </div>
             </div>
+            {drillLeverancier && (
+                <SupplierDrillDown
+                    leverancier={drillLeverancier}
+                    orgId={orgId}
+                    drillCategorie={drillCategorie}
+                    setDrillCategorie={setDrillCategorie}
+                    onClose={() => { setDrillLeverancier(null); setDrillCategorie(null); }}
+                />
+            )}
         </MetalCard>
+    );
+}
+
+/* Drill-down drawer: leverancier → categorieën → producten */
+function SupplierDrillDown({ leverancier, orgId, drillCategorie, setDrillCategorie, onClose }: {
+    leverancier: string;
+    orgId: string | null;
+    drillCategorie: string | null;
+    setDrillCategorie: (c: string | null) => void;
+    onClose: () => void;
+}) {
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        if (!orgId) return;
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            const { data } = await supabase
+                .from('supplier_prices')
+                .select('id, product_naam, prijs, eenheid, categorie, datum, actief, master_product_id')
+                .eq('organization_id', orgId)
+                .eq('leverancier', leverancier)
+                .eq('actief', true)
+                .order('categorie', { ascending: true })
+                .order('product_naam', { ascending: true });
+            if (cancelled) return;
+            setProducts(data || []);
+            setLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [leverancier, orgId]);
+
+    /* Categorie-telling */
+    const categoriesMap: Record<string, number> = {};
+    for (const p of products) {
+        const c = p.categorie || 'Overig';
+        categoriesMap[c] = (categoriesMap[c] || 0) + 1;
+    }
+    const categories = Object.entries(categoriesMap).sort((a, b) => b[1] - a[1]);
+
+    /* Filter producten op categorie + search */
+    const q = search.toLowerCase().trim();
+    const filtered = products.filter(p => {
+        if (drillCategorie && (p.categorie || 'Overig') !== drillCategorie) return false;
+        if (q && !p.product_naam?.toLowerCase().includes(q)) return false;
+        return true;
+    });
+
+    return (
+        <div onClick={onClose} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000,
+            backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end',
+        }}>
+            <div onClick={e => e.stopPropagation()} style={{
+                width: 'min(820px, 95vw)', height: '100vh', background: 'var(--bg)',
+                borderLeft: '1px solid var(--card-solid)', display: 'flex', flexDirection: 'column',
+                boxShadow: '-20px 0 60px -20px rgba(0,0,0,.5)',
+            }}>
+                {/* Header */}
+                <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--card-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <button onClick={() => drillCategorie ? setDrillCategorie(null) : onClose()}
+                            style={{ padding: '6px 10px', borderRadius: 7, background: 'transparent', border: '1px solid var(--card-solid)', color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
+                            ← {drillCategorie ? 'Categorieën' : 'Sluit'}
+                        </button>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 10, color: GOLD, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase' }}>Prijsbibliotheek</div>
+                            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
+                                {leverancier}{drillCategorie && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {drillCategorie}</span>}
+                            </div>
+                        </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{products.length} actieve producten</div>
+                </div>
+
+                {/* Search */}
+                <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--card-solid)' }}>
+                    <input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Zoek product..."
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 7, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 13, outline: 'none' }}
+                    />
+                </div>
+
+                {/* Body: categorieën grid OF product-lijst */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                            <Loader2 size={20} className="animate-spin" /> Laden...
+                        </div>
+                    ) : !drillCategorie ? (
+                        /* Categorieën grid */
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                            {categories.map(([cat, count]) => (
+                                <button key={cat}
+                                    onClick={() => setDrillCategorie(cat)}
+                                    style={{
+                                        padding: 14, borderRadius: 10, border: '1px solid var(--card-solid)',
+                                        background: 'var(--card)', cursor: 'pointer', textAlign: 'left',
+                                        transition: 'all .15s',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--card-solid)'; }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{cat}</div>
+                                    <div style={{ fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 300, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em' }}>producten</div>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        /* Product-tabel */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Geen producten in deze selectie</div>}
+                            {filtered.map(p => (
+                                <div key={p.id} style={{
+                                    display: 'grid', gridTemplateColumns: '1fr auto auto',
+                                    gap: 12, alignItems: 'center', padding: '10px 14px',
+                                    borderRadius: 8, background: 'var(--card)', border: '1px solid var(--card-solid)',
+                                }}>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.product_naam}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.eenheid} · {p.datum?.slice(0, 10)}</div>
+                                    </div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: GOLD, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                        € {Number(p.prijs).toFixed(2).replace('.', ',')}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -2587,59 +2741,48 @@ function FolderPricelists() {
                 }));
             if (rows.length > 0) {
                 /*
-                 * DEDUP-strategie: check welke rijen al bestaan (zelfde org + leverancier
-                 * + product_naam + eenheid + prijs) en skip die. Voorkomt duplicaten
-                 * als zelfde PDF 2× wordt ge-upload, terwijl nieuwe/gewijzigde items
-                 * wél binnenkomen.
+                 * Via /api/pricelist-sync: fuzzy match naar master_products,
+                 * oude actieve prijzen → actief:false (historie bewaard),
+                 * nieuwe producten krijgen nieuw master_product,
+                 * missende producten van deze leverancier → uit_assortiment flag.
                  */
-                const normalizedRows = rows.map(r => ({
-                    ...r,
-                    lev_key: (r.leverancier || '').toLowerCase().trim(),
-                    prod_key: (r.product_naam || '').toLowerCase().trim(),
-                    een_key: (r.eenheid || '').toLowerCase().trim(),
-                }));
-
-                const { data: existingData } = await supabase
-                    .from('supplier_prices')
-                    .select('leverancier, product_naam, eenheid, prijs')
-                    .eq('organization_id', orgId)
-                    .eq('leverancier', leverancier);
-
-                const existingSet = new Set<string>();
-                for (const ex of (existingData || [])) {
-                    const key = `${(ex.leverancier || '').toLowerCase().trim()}|${(ex.product_naam || '').toLowerCase().trim()}|${(ex.eenheid || '').toLowerCase().trim()}|${ex.prijs}`;
-                    existingSet.add(key);
-                }
-
-                const newRows = normalizedRows.filter(r => {
-                    const key = `${r.lev_key}|${r.prod_key}|${r.een_key}|${r.prijs}`;
-                    return !existingSet.has(key);
-                }).map(r => {
-                    /* Strip de helper-keys voor insert */
-                    const { lev_key, prod_key, een_key, ...clean } = r;
-                    return clean;
+                const syncRes = await fetch('/api/pricelist-sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        leverancier,
+                        producten: rows.map(r => ({
+                            product_naam: r.product_naam,
+                            prijs: r.prijs,
+                            eenheid: r.eenheid,
+                            categorie: r.categorie,
+                        })),
+                    }),
                 });
-
-                const skippedCount = rows.length - newRows.length;
-
-                if (newRows.length > 0) {
-                    const { error: insErr } = await supabase.from('supplier_prices').insert(newRows);
-                    if (insErr) {
-                        setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: 'DB: ' + insErr.message, leverancier, producten: rows.length } : f));
-                        return;
-                    }
-                    saved += newRows.length;
-                    setSavedCount(saved);
-                    setLibRefreshKey(k => k + 1);
-                }
-
-                /* Als alles al bestond, file status op 'done' met info */
-                if (skippedCount > 0) {
-                    setFiles(prev => prev.map(f => f.id === bf.id
-                        ? { ...f, status: 'done', leverancier, producten: newRows.length, error: skippedCount === rows.length ? `alles al bekend (${skippedCount} duplicaten geskipt)` : `${newRows.length} nieuw, ${skippedCount} geskipt` }
-                        : f));
+                let syncBody: any = null;
+                try { syncBody = await syncRes.json(); } catch { /* non-JSON */ }
+                if (!syncRes.ok || !syncBody?.success) {
+                    setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'error', error: 'Sync: ' + (syncBody?.error || 'onbekend'), leverancier, producten: rows.length } : f));
                     return;
                 }
+
+                const s = syncBody.stats || {};
+                const netto = (s.nieuw || 0) + (s.geupdate || 0);
+                saved += netto;
+                setSavedCount(saved);
+                setLibRefreshKey(k => k + 1);
+
+                const info = [
+                    s.nieuw > 0 ? `${s.nieuw} nieuw` : '',
+                    s.geupdate > 0 ? `${s.geupdate} geüpdatet` : '',
+                    s.duplicaten > 0 ? `${s.duplicaten} ongewijzigd` : '',
+                    s.uit_assortiment > 0 ? `⚠️ ${s.uit_assortiment} uit assortiment` : '',
+                ].filter(Boolean).join(' · ');
+
+                setFiles(prev => prev.map(f => f.id === bf.id
+                    ? { ...f, status: 'done', leverancier, producten: netto, error: info || undefined }
+                    : f));
+                return;
             }
             setFiles(prev => prev.map(f => f.id === bf.id ? { ...f, status: 'done', leverancier, producten: rows.length } : f));
         }
