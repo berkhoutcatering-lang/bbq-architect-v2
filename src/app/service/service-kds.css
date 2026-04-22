@@ -379,6 +379,54 @@
     flex-wrap: wrap;
 }
 
+/* Grote service-timer rechts (zoals "dagen te gaan" in de hub) */
+.cockpit-service-timer {
+    text-align: center;
+    padding: 16px 22px;
+    border-radius: 14px;
+    background:
+        radial-gradient(circle at center, color-mix(in srgb, var(--brand-primary) 18%, transparent), transparent 70%),
+        color-mix(in srgb, var(--text) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent);
+    min-width: 140px;
+    position: relative;
+}
+
+.cockpit-service-timer::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 12px;
+    border: 1px dashed color-mix(in srgb, var(--brand-gold, var(--brand)) 25%, transparent);
+    pointer-events: none;
+}
+
+.cst-eyebrow {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--brand-gold, var(--brand));
+    margin-bottom: 6px;
+    animation: pulse-live 2.2s ease-in-out infinite;
+}
+
+.cst-val {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 34px;
+    font-weight: 200;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.cockpit-kpis-stack {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .cockpit-kpi {
     text-align: center;
     padding: 10px 18px;
@@ -1296,6 +1344,841 @@
     border-color: var(--brand-primary);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   GANG SECTIONS — elk met eigen stijl per status
+   ═══════════════════════════════════════════════════════════════════ */
+
+.gang-section {
+    position: relative;
+    margin-bottom: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--card-solid);
+    overflow: hidden;
+}
+
+/* ── 1. VOLTOOIDE GANG: dunne strook ── */
+.gang-done {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--green) 10%, transparent), transparent 40%),
+        color-mix(in srgb, var(--text) 2%, transparent);
+    border-color: color-mix(in srgb, var(--green) 18%, transparent);
+    cursor: pointer;
+    transition: all .15s;
+}
+
+.gang-done:hover {
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--green) 18%, transparent), transparent 45%),
+        color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.gang-done-no {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+    width: 40px;
+}
+
+.gang-done-info { flex: 1; min-width: 0; }
+
+.gang-done-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: capitalize;
+}
+
+.gang-done-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.gang-done-time {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── 2. PREVIEW GANG (volgende/wachtend): medium kaart ── */
+.gang-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--card);
+    cursor: pointer;
+    transition: all .2s;
+}
+
+.gang-preview:hover {
+    border-color: color-mix(in srgb, var(--brand-primary) 45%, transparent);
+    transform: translateY(-1px);
+}
+
+.gang-preview.state-active {
+    border-color: color-mix(in srgb, var(--brand-primary) 55%, transparent);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 55%),
+        var(--card);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 20%, transparent) inset;
+}
+
+.gang-preview-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1;
+}
+
+.gang-preview-no {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 30px;
+    font-weight: 200;
+    color: var(--brand-gold, var(--brand));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    line-height: 1;
+    min-width: 40px;
+}
+
+.gang-preview-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: capitalize;
+}
+
+.gang-preview-dishes {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 480px;
+}
+
+.gang-preview-vega { color: var(--green); }
+
+.gang-preview-action {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gang-preview-status {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.gang-preview.state-active .gang-preview-status {
+    color: var(--brand-primary);
+    animation: pulse-live 1.6s ease-in-out infinite;
+}
+
+.gang-preview-btn {
+    padding: 8px 16px;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+    border: 1px solid var(--card-solid);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gang-preview-btn:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+}
+
+/* ── 3. GEFOCUSTE GANG: groot dashboard ── */
+.gang-focused {
+    background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 65%),
+        var(--card);
+    border-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
+    box-shadow: 0 20px 60px -20px color-mix(in srgb, var(--brand-primary) 25%, transparent);
+    overflow: visible;
+}
+
+.gang-focused.state-active {
+    border-color: color-mix(in srgb, var(--brand-primary) 50%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 25%, transparent) inset,
+                0 24px 70px -20px color-mix(in srgb, var(--brand-primary) 35%, transparent);
+}
+
+/* Particles op gefocuste gang */
+.gang-focused::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.22;
+    background-image:
+        radial-gradient(circle, color-mix(in srgb, var(--brand-gold, var(--brand)) 70%, transparent) 1px, transparent 1.5px);
+    background-size: 140px 140px;
+    pointer-events: none;
+    border-radius: 16px;
+}
+
+.gang-focused-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+    position: relative;
+    z-index: 1;
+}
+
+.gang-focused-left { min-width: 0; }
+
+.gang-focused-eyebrow {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--brand-gold, var(--brand));
+    margin-bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gang-focused-title {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: -.02em;
+    color: var(--text);
+    margin: 0 0 8px;
+    line-height: 1.1;
+    text-transform: capitalize;
+}
+
+.gang-focused-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.gang-focused-meta .dot { opacity: .4; }
+.gang-focused-meta .vega-text { color: var(--green); font-weight: 600; }
+
+.gang-focused-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.gang-focused-timer {
+    text-align: center;
+    padding: 10px 18px;
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+    border: 1px solid var(--card-solid);
+    min-width: 110px;
+}
+
+.gang-focused-timer.live {
+    border-color: color-mix(in srgb, var(--brand-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+}
+
+.gfl-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.gfl-val {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+.gang-focused-timer.live .gfl-val { color: var(--brand-primary); }
+
+.gang-focused-start,
+.gang-focused-finish {
+    padding: 13px 22px;
+    border-radius: 11px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .02em;
+    transition: all .2s;
+}
+
+.gang-focused-start {
+    background: var(--brand-primary);
+    color: var(--brand-background, #000);
+    box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--brand-primary) 55%, transparent);
+}
+
+.gang-focused-start:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px -8px color-mix(in srgb, var(--brand-primary) 65%, transparent);
+}
+
+.gang-focused-finish {
+    background: var(--green);
+    color: var(--brand-background, #000);
+    box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--green) 55%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DISH DASHBOARD GRID — per gerecht een eigen mini-dashboard
+   ═══════════════════════════════════════════════════════════════════ */
+
+.dish-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 14px;
+    padding: 18px;
+    position: relative;
+    z-index: 1;
+}
+
+.dish-dash {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid var(--card-solid);
+    background: color-mix(in srgb, var(--text) 2%, transparent);
+    overflow: hidden;
+    transition: all .2s;
+}
+
+.dish-dash::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--card-solid);
+    transition: all .3s;
+}
+
+.dish-dash.meat::before {
+    background: color-mix(in srgb, var(--brand-primary) 60%, transparent);
+}
+
+.dish-dash.vega::before {
+    background: color-mix(in srgb, var(--green) 55%, transparent);
+}
+
+.dish-dash.running {
+    background:
+        linear-gradient(145deg, color-mix(in srgb, var(--brand-primary) 8%, transparent), transparent 60%),
+        color-mix(in srgb, var(--text) 3%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+}
+
+.dish-dash.meat.running::before {
+    background: var(--brand-primary);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--brand-primary) 60%, transparent);
+}
+
+.dish-dash.vega.running {
+    background:
+        linear-gradient(145deg, color-mix(in srgb, var(--green) 8%, transparent), transparent 60%),
+        color-mix(in srgb, var(--text) 3%, transparent);
+    border-color: color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+.dish-dash.vega.running::before {
+    background: var(--green);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--green) 60%, transparent);
+}
+
+.dish-dash.done {
+    opacity: .65;
+}
+
+.dish-dash.done::before {
+    background: var(--green);
+}
+
+.dish-dash.overtime {
+    border-color: color-mix(in srgb, var(--red) 50%, transparent);
+    background:
+        linear-gradient(145deg, color-mix(in srgb, var(--red) 8%, transparent), transparent 55%),
+        var(--card);
+}
+
+.dish-dash.overtime::before {
+    background: var(--red);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--red) 70%, transparent);
+}
+
+/* Dish head: foto + meta + count */
+.dish-dash-head {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 16px 10px;
+}
+
+.dish-dash-img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid var(--card-solid);
+    flex-shrink: 0;
+}
+
+.dish-dash-img.ph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+}
+
+.dish-dash-img.ph.vega {
+    background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
+.dish-dash-meta { min-width: 0; }
+
+.dish-dash-eyebrow {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.dish-dash-live-pill {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--brand-primary) 18%, transparent);
+    color: var(--brand-primary);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    animation: pulse-live 1.4s ease-in-out infinite;
+}
+
+.dish-dash-done-pill {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--green) 16%, transparent);
+    color: var(--green);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.dish-dash-name {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text);
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -.005em;
+}
+
+.dish-dash-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 4px 0 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dish-dash-count {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--brand-gold, var(--brand));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    padding: 4px 10px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--brand-gold, var(--brand)) 10%, transparent);
+    line-height: 1;
+}
+
+.dish-dash.vega .dish-dash-count {
+    color: var(--green);
+    background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+/* Timer + progress bar */
+.dish-dash-timeline {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 8px 16px 12px;
+    border-top: 1px dashed color-mix(in srgb, var(--text) 8%, transparent);
+    align-items: center;
+}
+
+.dish-dash-timer-wrap {
+    min-width: 90px;
+}
+
+.dish-dash-timer-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 3px;
+}
+
+.dish-dash-timer {
+    font-family: Outfit, DM Sans, sans-serif;
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.dish-dash-timer.running {
+    color: var(--brand-primary);
+    font-weight: 500;
+}
+
+.dish-dash.vega .dish-dash-timer.running {
+    color: var(--green);
+}
+
+.dish-dash-timer.overtime {
+    color: var(--red) !important;
+    animation: pulse-live 1s ease-in-out infinite;
+}
+
+.dish-dash-target {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.dish-dash-progress-wrap {
+    flex: 1;
+}
+
+.dish-dash-progress-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: .04em;
+}
+
+.dish-dash-progress-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    overflow: hidden;
+}
+
+.dish-dash-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-primary), var(--brand-gold, var(--brand)));
+    transition: width .4s ease;
+}
+
+.dish-dash.vega .dish-dash-progress-fill {
+    background: linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 50%, var(--brand-gold, var(--brand))));
+}
+
+/* Battle plan checklist in de dish-card */
+.dish-dash-plan {
+    list-style: none;
+    padding: 4px 16px 12px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dish-plan-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid transparent;
+}
+
+.dish-plan-step:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.dish-plan-step.checked {
+    opacity: .45;
+    background: color-mix(in srgb, var(--green) 6%, transparent);
+    border-color: color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.dish-plan-no {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid var(--brand-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brand-primary);
+    flex-shrink: 0;
+}
+
+.dish-dash.vega .dish-plan-no {
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.dish-plan-step.checked .dish-plan-no {
+    background: var(--green);
+    border-color: var(--green);
+    color: var(--brand-background, #000);
+}
+
+.dish-plan-txt {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.35;
+}
+
+.dish-dash-plan-empty {
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    font-style: italic;
+    margin: 0 16px;
+    border: 1px dashed var(--card-solid);
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.dish-link {
+    color: var(--brand-primary);
+    text-decoration: underline;
+}
+
+/* Dish actions */
+.dish-dash-actions {
+    padding: 10px 14px 14px;
+    border-top: 1px solid var(--card-solid);
+    background: color-mix(in srgb, var(--text) 3%, transparent);
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.dish-btn {
+    flex: 1;
+    padding: 11px 14px;
+    border: none;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: .02em;
+    transition: all .2s;
+}
+
+.dish-btn-start {
+    background: color-mix(in srgb, var(--brand-primary) 85%, var(--text));
+    color: var(--brand-background, #000);
+    box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--brand-primary) 55%, transparent);
+}
+
+.dish-dash.vega .dish-btn-start {
+    background: color-mix(in srgb, var(--green) 85%, var(--text));
+}
+
+.dish-btn-start:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px -6px color-mix(in srgb, var(--brand-primary) 65%, transparent);
+}
+
+.dish-btn-done {
+    background: var(--green);
+    color: var(--brand-background, #000);
+    box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--green) 50%, transparent);
+}
+
+.dish-done-row {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.dish-done-txt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dish-locked-hint {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    font-style: italic;
+}
+
+.dish-btn-remove {
+    width: 36px;
+    border: 1px solid var(--card-solid);
+    background: color-mix(in srgb, var(--red) 8%, transparent);
+    color: var(--red);
+    border-radius: 9px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.dish-btn-remove:hover {
+    background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   + EXTRA VEGA TOEVOEGEN
+   ═══════════════════════════════════════════════════════════════════ */
+
+.dish-addvega-wrap {
+    padding: 0 18px 18px;
+    position: relative;
+    z-index: 1;
+}
+
+.dish-addvega-btn {
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 1.5px dashed color-mix(in srgb, var(--green) 35%, transparent);
+    background: color-mix(in srgb, var(--green) 5%, transparent);
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all .15s;
+}
+
+.dish-addvega-btn:hover {
+    background: color-mix(in srgb, var(--green) 12%, transparent);
+    border-color: color-mix(in srgb, var(--green) 55%, transparent);
+}
+
+.dish-addvega-icon {
+    font-size: 16px;
+}
+
+.dish-addvega-hint {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: .04em;
+    margin-left: auto;
+}
+
+.dish-addvega-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid color-mix(in srgb, var(--green) 45%, transparent);
+    background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+
+.dish-addvega-input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+    background: var(--card);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+}
+
+.dish-addvega-input:focus {
+    border-color: var(--green);
+}
+
+.dish-addvega-ok {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    background: var(--green);
+    color: var(--brand-background, #000);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.dish-addvega-cancel {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--card-solid);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
 /* ═══════════ MOBILE ═══════════ */
 @media (max-width: 767px) {
     .service-kds-wrap { padding: 12px 10px 90px; }
@@ -1326,4 +2209,33 @@
 
     .track-step { min-width: 64px; }
     .track-dot { width: 24px; height: 24px; font-size: 10px; }
+
+    /* Gang sections mobiel */
+    .gang-focused-head { grid-template-columns: 1fr; padding: 16px; }
+    .gang-focused-title { font-size: 26px; }
+    .gang-focused-right { width: 100%; justify-content: space-between; }
+    .gang-focused-start, .gang-focused-finish { flex: 1; padding: 12px; font-size: 13px; }
+
+    .dish-dashboard-grid { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
+    .dish-dash-head { grid-template-columns: 56px 1fr auto; gap: 10px; padding: 12px; }
+    .dish-dash-img { width: 56px; height: 56px; }
+    .dish-dash-name { font-size: 15px; }
+    .dish-dash-timer { font-size: 22px; }
+    .dish-dash-count { font-size: 18px; padding: 3px 8px; }
+    .dish-dash-timeline { grid-template-columns: 1fr; gap: 10px; padding: 8px 12px 10px; }
+
+    .gang-preview { flex-direction: column; align-items: stretch; padding: 14px; }
+    .gang-preview-left { width: 100%; }
+    .gang-preview-action { width: 100%; justify-content: space-between; }
+    .gang-preview-dishes { max-width: 100%; white-space: normal; }
+    .gang-preview-no { font-size: 22px; min-width: 32px; }
+
+    .gang-done { padding: 10px 14px; }
+    .gang-done-no { font-size: 18px; width: 32px; }
+
+    .cockpit-service-timer { min-width: 120px; padding: 12px 16px; }
+    .cst-val { font-size: 28px; }
+
+    .dish-addvega-btn { flex-direction: column; text-align: center; padding: 14px; }
+    .dish-addvega-hint { margin-left: 0; }
 }

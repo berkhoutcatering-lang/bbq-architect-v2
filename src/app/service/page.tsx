@@ -47,6 +47,19 @@ export default function ServiceMode() {
     const [completedDishes, setCompletedDishes] = useState<Record<string, boolean>>({});
     const [nowTs, setNowTs] = useState<number>(0);
 
+    /* Per-gerecht state: eigen timer, eigen battle-plan progress, extra vega-gerechten */
+    const [dishTimers, setDishTimers] = useState<Record<string, { start: Date | null; elapsed: number }>>({});
+    const [dishChecked, setDishChecked] = useState<Record<string, Record<number, boolean>>>({});
+    const [extraVegaDishes, setExtraVegaDishes] = useState<Record<string, string[]>>({});
+    const [newVegaInputs, setNewVegaInputs] = useState<Record<string, string>>({});
+    const [focusedGang, setFocusedGang] = useState<string | null>(null);
+    const dishIntervalsRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+    /* Service-brede timer die loopt zodra er een dish actief is */
+    const [serviceStart, setServiceStart] = useState<Date | null>(null);
+    const [serviceElapsed, setServiceElapsed] = useState<number>(0);
+    const serviceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     useEffect(function () {
         setNowTs(Date.now());
         const interval = setInterval(() => setNowTs(Date.now()), 60_000);
@@ -66,10 +79,77 @@ export default function ServiceMode() {
         loadData();
         return function () {
             Object.values(intervalRef.current).forEach(clearInterval);
+            Object.values(dishIntervalsRef.current).forEach(clearInterval);
             if (modalTimerRef.current) clearInterval(modalTimerRef.current);
+            if (serviceIntervalRef.current) clearInterval(serviceIntervalRef.current);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    /* Start/stop service-brede timer zodra er iets loopt */
+    function ensureServiceTimerRunning() {
+        if (serviceIntervalRef.current) return;
+        const start = serviceStart || new Date();
+        if (!serviceStart) setServiceStart(start);
+        serviceIntervalRef.current = setInterval(() => {
+            setServiceElapsed(Math.floor((Date.now() - start.getTime()) / 1000));
+        }, 1000);
+    }
+
+    /* Per-gerecht timer starten */
+    function startDishTimer(dishKey: string) {
+        ensureServiceTimerRunning();
+        if (dishIntervalsRef.current[dishKey]) return;
+        const start = new Date();
+        setDishTimers(prev => Object.assign({}, prev, { [dishKey]: { start, elapsed: 0 } }));
+        dishIntervalsRef.current[dishKey] = setInterval(() => {
+            setDishTimers(prev => {
+                const t = prev[dishKey];
+                if (!t || !t.start) return prev;
+                return Object.assign({}, prev, { [dishKey]: { start: t.start, elapsed: Math.floor((Date.now() - t.start.getTime()) / 1000) } });
+            });
+        }, 1000);
+    }
+
+    function stopDishTimer(dishKey: string) {
+        if (dishIntervalsRef.current[dishKey]) {
+            clearInterval(dishIntervalsRef.current[dishKey]);
+            delete dishIntervalsRef.current[dishKey];
+        }
+    }
+
+    function toggleDishStep(dishKey: string, stepIdx: number) {
+        setDishChecked(prev => {
+            const existing = prev[dishKey] || {};
+            return Object.assign({}, prev, { [dishKey]: Object.assign({}, existing, { [stepIdx]: !existing[stepIdx] }) });
+        });
+    }
+
+    function markDishDone(dishKey: string, dishName: string, count: number) {
+        stopDishTimer(dishKey);
+        setCompletedDishes(prev => Object.assign({}, prev, { [dishKey]: true }));
+        showToast('✓ ' + dishName + ' meegegeven (' + count + '×)');
+    }
+
+    function addExtraVegaDish(gangSlug: string) {
+        const naam = (newVegaInputs[gangSlug] || '').trim();
+        if (!naam) return;
+        setExtraVegaDishes(prev => Object.assign({}, prev, { [gangSlug]: [...(prev[gangSlug] || []), naam] }));
+        setNewVegaInputs(prev => { const n = Object.assign({}, prev); delete n[gangSlug]; return n; });
+        showToast('🌿 Extra vega-gerecht toegevoegd');
+    }
+
+    function removeExtraVegaDish(gangSlug: string, idx: number) {
+        setExtraVegaDishes(prev => {
+            const list = [...(prev[gangSlug] || [])];
+            list.splice(idx, 1);
+            return Object.assign({}, prev, { [gangSlug]: list });
+        });
+    }
+
+    function dishKey(gangSlug: string, isVega: boolean, index: number, extra: boolean = false) {
+        return gangSlug + '_' + (extra ? 'x' : (isVega ? 'v' : 'n')) + '_' + index;
+    }
 
     // Get vega dishes per gang from DB (gerechten with "Vega" tag or "Dieet" in name)
     function getVegaDishesForGang(gangSlug: string): string[] {
@@ -294,6 +374,122 @@ export default function ServiceMode() {
         });
     }
 
+    /* Zijn alle gerechten in deze gang al meegegeven? */
+    function allDishesDone(gangSlug: string, meatNames: string[], vegaNames: string[], extraVega: string[]): boolean {
+        const allKeys: string[] = [
+            ...meatNames.map((_, i) => dishKey(gangSlug, false, i)),
+            ...vegaNames.map((_, i) => dishKey(gangSlug, true, i)),
+            ...extraVega.map((_, i) => dishKey(gangSlug, true, i, true)),
+        ];
+        if (allKeys.length === 0) return false;
+        return allKeys.every(k => completedDishes[k]);
+    }
+
+    /* Per-gerecht dashboard — eigen foto, eigen timer, eigen battle plan, eigen actie */
+    function renderDishCard(opts: { key: string; dishName: string; count: number; isVega: boolean; isExtra?: boolean; extraIdx?: number; gangSlug: string; gangState: string }) {
+        const { key, dishName, count, isVega, isExtra, extraIdx, gangSlug, gangState } = opts;
+        const gd: any = gerechtenDb.find((g: any) => g.naam === dishName && (isVega || g.gang_slug === gangSlug)) || gerechtenDb.find((g: any) => g.naam === dishName);
+        const foto = gd?.foto_url || gd?.service_image;
+        const desc = gd?.beschrijving || '';
+        const steps: string[] = gd?.battle_plan_steps || [];
+        const target = gd?.target_prep_time || 0;
+        const isDone = !!completedDishes[key];
+        const timer = dishTimers[key];
+        const running = !!timer?.start && !isDone;
+        const elapsed = timer?.elapsed || 0;
+        const isOver = target > 0 && elapsed > target;
+        const checks = dishChecked[key] || {};
+        const doneSteps = Object.values(checks).filter(Boolean).length;
+        const stepProgress = steps.length > 0 ? Math.round((doneSteps / steps.length) * 100) : 0;
+        const dishLocked = gangState === 'idle'; /* Kan pas starten als gang actief is */
+
+        return (
+            <div key={key} className={'dish-dash' + (isVega ? ' vega' : ' meat') + (running ? ' running' : '') + (isDone ? ' done' : '') + (isOver ? ' overtime' : '')}>
+                {/* Header: foto + naam + count + status */}
+                <div className="dish-dash-head">
+                    {foto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={foto} alt={dishName} className="dish-dash-img" />
+                    ) : (
+                        <div className={'dish-dash-img ph' + (isVega ? ' vega' : '')}>{isVega ? '🌿' : '🔥'}</div>
+                    )}
+                    <div className="dish-dash-meta">
+                        <div className="dish-dash-eyebrow">
+                            {isVega ? '🌿 Vega' : '🔥 Vlees'} · {isExtra ? 'Extra' : 'Standaard'}
+                            {isDone && <span className="dish-dash-done-pill">✓ Klaar</span>}
+                            {running && <span className="dish-dash-live-pill">● Live</span>}
+                        </div>
+                        <h3 className="dish-dash-name">{dishName}</h3>
+                        {desc && <p className="dish-dash-desc">{desc}</p>}
+                    </div>
+                    <div className="dish-dash-count">{count}×</div>
+                </div>
+
+                {/* Timer + progress */}
+                <div className="dish-dash-timeline">
+                    <div className="dish-dash-timer-wrap">
+                        <div className="dish-dash-timer-label">{isDone ? 'Eindtijd' : running ? 'Bereiding' : target > 0 ? 'Richttijd' : 'Nog niet gestart'}</div>
+                        <div className={'dish-dash-timer' + (running ? ' running' : '') + (isOver ? ' overtime' : '')}>
+                            {running ? formatTime(elapsed) : target > 0 ? formatTime(target) : '00:00'}
+                        </div>
+                        {target > 0 && running && (
+                            <div className="dish-dash-target">target {formatTime(target)}</div>
+                        )}
+                    </div>
+                    {steps.length > 0 && (
+                        <div className="dish-dash-progress-wrap">
+                            <div className="dish-dash-progress-label">{doneSteps}/{steps.length} stappen · {stepProgress}%</div>
+                            <div className="dish-dash-progress-bar">
+                                <div className="dish-dash-progress-fill" style={{ width: stepProgress + '%' }} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Battle plan checklist */}
+                {steps.length > 0 ? (
+                    <ol className="dish-dash-plan">
+                        {steps.map((step: string, i: number) => {
+                            const checked = !!checks[i];
+                            return (
+                                <li key={i} onClick={() => toggleDishStep(key, i)} className={'dish-plan-step' + (checked ? ' checked' : '')}>
+                                    <span className="dish-plan-no">{checked ? '✓' : i + 1}</span>
+                                    <span className="dish-plan-txt">{step}</span>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                ) : (
+                    <div className="dish-dash-plan-empty">
+                        Geen battle-plan stappen ingesteld. Voeg toe in <a href="/recepten" className="dish-link">Recepten</a>.
+                    </div>
+                )}
+
+                {/* Actie-row */}
+                <div className="dish-dash-actions">
+                    {dishLocked ? (
+                        <div className="dish-locked-hint">Start eerst de gang hierboven</div>
+                    ) : !running && !isDone ? (
+                        <button className="dish-btn dish-btn-start" onClick={() => startDishTimer(key)}>
+                            ▶ Start bereiding
+                        </button>
+                    ) : running && !isDone ? (
+                        <button className="dish-btn dish-btn-done" onClick={() => markDishDone(key, dishName, count)}>
+                            ✓ Meegegeven · {count}×
+                        </button>
+                    ) : (
+                        <div className="dish-done-row">
+                            <span className="dish-done-txt">✓ Meegegeven {timer ? '· ' + formatTime(elapsed) : ''}</span>
+                        </div>
+                    )}
+                    {isExtra && typeof extraIdx === 'number' && !isDone && (
+                        <button className="dish-btn-remove" onClick={() => removeExtraVegaDish(gangSlug, extraIdx)} title="Verwijder extra gerecht">×</button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     /* ──────────────────────────────────────────────────────────────
        SERVICE MODE — KDS (Kitchen Display System) Hop & Bites stijl
        ────────────────────────────────────────────────────────────── */
@@ -393,20 +589,28 @@ export default function ServiceMode() {
                                 </div>
                             </div>
                             <div className="cockpit-right">
-                                <div className="cockpit-kpi">
-                                    <div className="kpi-val">{servedCount}<span className="kpi-sep">/</span>{totalGangen}</div>
-                                    <div className="kpi-lbl">Gangen klaar</div>
-                                </div>
-                                <div className="cockpit-kpi">
-                                    <div className={'kpi-val' + (activeCount ? ' pulse' : '')}>{activeCount > 0 ? '●' : '○'}</div>
-                                    <div className="kpi-lbl">{activeCount > 0 ? 'In actie' : 'Idle'}</div>
-                                </div>
-                                {avgAllTimes && (
-                                    <div className="cockpit-kpi">
-                                        <div className="kpi-val small">{formatTime(avgAllTimes)}</div>
-                                        <div className="kpi-lbl">Gem. tijd</div>
+                                {serviceStart && (
+                                    <div className="cockpit-service-timer">
+                                        <div className="cst-eyebrow">SERVICE LIVE</div>
+                                        <div className="cst-val">{formatTime(serviceElapsed)}</div>
                                     </div>
                                 )}
+                                <div className="cockpit-kpis-stack">
+                                    <div className="cockpit-kpi">
+                                        <div className="kpi-val">{servedCount}<span className="kpi-sep">/</span>{totalGangen}</div>
+                                        <div className="kpi-lbl">Gangen klaar</div>
+                                    </div>
+                                    <div className="cockpit-kpi">
+                                        <div className={'kpi-val' + (activeCount ? ' pulse' : '')}>{Object.keys(dishTimers).filter(k => dishTimers[k]?.start && !completedDishes[k]).length || (activeCount > 0 ? '●' : '○')}</div>
+                                        <div className="kpi-lbl">{Object.keys(dishTimers).filter(k => dishTimers[k]?.start && !completedDishes[k]).length > 0 ? 'Gerechten live' : activeCount > 0 ? 'In actie' : 'Idle'}</div>
+                                    </div>
+                                    {avgAllTimes && (
+                                        <div className="cockpit-kpi">
+                                            <div className="kpi-val small">{formatTime(avgAllTimes)}</div>
+                                            <div className="kpi-lbl">Gem. tijd</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -430,101 +634,158 @@ export default function ServiceMode() {
                         </div>
                     )}
 
-                    {/* KDS TICKET GRID */}
-                    <div className="service-ticket-grid">
-                        {gangen.map((gang: any, idx: number) => {
-                            const state = bonStates[gang.slug] || 'idle';
-                            const dishNames = menuSelectie[gang.slug] || [];
-                            const elapsed = state === 'served' ? (finalTimes[gang.slug] || 0) : (timers[gang.slug] ? timers[gang.slug].elapsed : 0);
-                            const hasOverride = Array.isArray(menuSelectie[gang.slug + '_vega']) && menuSelectie[gang.slug + '_vega'].length > 0;
-                            const dbVega = aantalVega > 0 ? getVegaDishesForGang(gang.slug) : [];
-                            const vegaDishes: string[] = hasOverride ? menuSelectie[gang.slug + '_vega'] : dbVega;
-                            const isEditing = vegaInputs['_editing_' + gang.slug] === '1';
-                            const avgTime = getAvgTime(gang.slug);
+                    {/* ═══════════ GANGEN — elk met eigen dish-dashboards ═══════════ */}
+                    {gangen.map((gang: any, idx: number) => {
+                        const state = bonStates[gang.slug] || 'idle';
+                        const gangElapsed = state === 'served' ? (finalTimes[gang.slug] || 0) : (timers[gang.slug] ? timers[gang.slug].elapsed : 0);
+                        const avgTime = getAvgTime(gang.slug);
+
+                        /* Alle gerechten voor deze gang — vlees + vega + extra ad-hoc */
+                        const meatNames: string[] = menuSelectie[gang.slug] || [];
+                        const hasOverride = Array.isArray(menuSelectie[gang.slug + '_vega']) && menuSelectie[gang.slug + '_vega'].length > 0;
+                        const dbVega = aantalVega > 0 ? getVegaDishesForGang(gang.slug) : [];
+                        const vegaNames: string[] = hasOverride ? menuSelectie[gang.slug + '_vega'] : dbVega;
+                        const extraVega: string[] = extraVegaDishes[gang.slug] || [];
+
+                        const focused = focusedGang === gang.slug || (focusedGang === null && state === 'active') || (focusedGang === null && state === 'idle' && idx === 0);
+                        const compact = !focused;
+
+                        if (compact && state === 'served') {
+                            /* Compacte strook voor voltooide gangen */
                             return (
-                                <div key={gang.slug} className={'service-ticket state-' + state}>
-                                    <div className="ticket-head">
-                                        <div className="ticket-gang-no">{String(idx + 1).padStart(2, '0')}</div>
-                                        <div className="ticket-gang-info">
-                                            <div className="ticket-gang-name">{gang.naam}</div>
-                                            <div className="ticket-gang-sub">
-                                                {state === 'active' && <span className="status-active">● In actie</span>}
-                                                {state === 'served' && <span className="status-done">✓ Uitgeserveerd</span>}
-                                                {state === 'idle' && <span className="status-wait">○ Wacht</span>}
-                                                {avgTime && <span className="avg-time">· gem. {formatTime(avgTime)}</span>}
+                                <div key={gang.slug} className="gang-section gang-done" onClick={() => setFocusedGang(gang.slug)}>
+                                    <div className="gang-done-no">{String(idx + 1).padStart(2, '0')}</div>
+                                    <div className="gang-done-info">
+                                        <div className="gang-done-name">{gang.naam}</div>
+                                        <div className="gang-done-sub">✓ Uitgeserveerd · {formatTime(gangElapsed)}{avgTime && ' · gem. ' + formatTime(avgTime)}</div>
+                                    </div>
+                                    <div className="gang-done-time">{formatTime(gangElapsed)}</div>
+                                </div>
+                            );
+                        }
+
+                        if (compact) {
+                            /* Preview-card voor wachtende / volgende gangen */
+                            const previewDishes = meatNames.slice(0, 2);
+                            return (
+                                <div key={gang.slug} className={'gang-section gang-preview state-' + state} onClick={() => setFocusedGang(gang.slug)}>
+                                    <div className="gang-preview-left">
+                                        <div className="gang-preview-no">{String(idx + 1).padStart(2, '0')}</div>
+                                        <div>
+                                            <div className="gang-preview-name">{gang.naam}</div>
+                                            <div className="gang-preview-dishes">
+                                                {previewDishes.map(d => d).join(' · ')}
+                                                {meatNames.length > 2 && ' + ' + (meatNames.length - 2)}
+                                                {vegaNames.length > 0 && <span className="gang-preview-vega"> · 🌿 {vegaNames.length} vega</span>}
                                             </div>
                                         </div>
-                                        <div className="ticket-timer">{formatTime(elapsed)}</div>
                                     </div>
-
-                                    <div className="ticket-dishes">
-                                        {/* Normaal */}
-                                        {dishNames.map((dish: string, i: number) => {
-                                            const gd = gerechtenDb.find((g: any) => g.naam === dish && g.gang_slug === gang.slug);
-                                            return (
-                                                <div key={'n_' + i} className="ticket-dish">
-                                                    {gd?.foto_url ? (
-                                                        // eslint-disable-next-line @next/next/no-img-element
-                                                        <img src={gd.foto_url} alt="" className="ticket-dish-img" />
-                                                    ) : (
-                                                        <div className="ticket-dish-img ph">🔥</div>
-                                                    )}
-                                                    <div className="ticket-dish-name">{dish}</div>
-                                                    <div className="ticket-dish-count">{aantalNormaal}×</div>
-                                                </div>
-                                            );
-                                        })}
-                                        {/* Vega */}
-                                        {aantalVega > 0 && !isEditing && vegaDishes.length > 0 && vegaDishes.map((v: string, i: number) => {
-                                            const gd = gerechtenDb.find((g: any) => g.naam === v);
-                                            return (
-                                                <div key={'v_' + i} className="ticket-dish vega-row">
-                                                    {gd?.foto_url ? (
-                                                        // eslint-disable-next-line @next/next/no-img-element
-                                                        <img src={gd.foto_url} alt="" className="ticket-dish-img" />
-                                                    ) : (
-                                                        <div className="ticket-dish-img ph vega">🌿</div>
-                                                    )}
-                                                    <div className="ticket-dish-name vega-name">{v}</div>
-                                                    <div className="ticket-dish-count vega-count">{aantalVega}×</div>
-                                                </div>
-                                            );
-                                        })}
-                                        {aantalVega > 0 && vegaDishes.length === 0 && !isEditing && (
-                                            <button className="ticket-add-vega" onClick={(e) => { e.stopPropagation(); setVegaInputs(prev => Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' })); }}>
-                                                🌿 Vega-variant toevoegen
-                                            </button>
-                                        )}
-                                        {aantalVega > 0 && isEditing && (
-                                            <div className="ticket-vega-edit">
-                                                <input value={vegaInputs[gang.slug] || ''}
-                                                    onChange={(e) => setVegaInputs(prev => Object.assign({}, prev, { [gang.slug]: e.target.value }))}
-                                                    placeholder="Vega gerecht..."
-                                                    onClick={(e) => e.stopPropagation()} />
-                                                {vegaInputs[gang.slug] && (
-                                                    <button onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        saveVegaDish(gang.slug);
-                                                        setVegaInputs(prev => { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
-                                                    }} className="ticket-vega-ok">✓</button>
-                                                )}
-                                                <button onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setVegaInputs(prev => { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; delete n[gang.slug]; return n; });
-                                                }} className="ticket-vega-cancel">×</button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="ticket-action">
-                                        {state === 'idle' && <button className="ticket-btn btn-start" onClick={() => startGang(gang.slug)}>▶ Start gang</button>}
-                                        {state === 'active' && <button className="ticket-btn btn-architect" onClick={() => setActiveModal(gang.slug)}>→ Open Architect</button>}
-                                        {state === 'served' && <div className="ticket-btn-done">✓ Uitgeserveerd · {formatTime(elapsed)}</div>}
+                                    <div className="gang-preview-action">
+                                        <span className="gang-preview-status">{state === 'active' ? '● Actief' : '○ Wacht'}</span>
+                                        <button className="gang-preview-btn" onClick={(e) => { e.stopPropagation(); setFocusedGang(gang.slug); }}>Open →</button>
                                     </div>
                                 </div>
                             );
-                        })}
-                    </div>
+                        }
+
+                        /* GEFOCUSTE GANG — volledig dashboard met dish-cards per gerecht */
+                        return (
+                            <div key={gang.slug} className={'gang-section gang-focused state-' + state}>
+                                {/* Gang-header */}
+                                <div className="gang-focused-head">
+                                    <div className="gang-focused-left">
+                                        <div className="gang-focused-eyebrow">Gang {idx + 1} · {state === 'served' ? 'VOLTOOID' : state === 'active' ? '● IN ACTIE' : '○ KLAAR VOOR START'}</div>
+                                        <h2 className="gang-focused-title">{gang.naam}</h2>
+                                        <div className="gang-focused-meta">
+                                            <span>🔥 {meatNames.length} vlees</span>
+                                            {(vegaNames.length + extraVega.length) > 0 && <><span className="dot">·</span><span className="vega-text">🌿 {vegaNames.length + extraVega.length} vega</span></>}
+                                            {avgTime && <><span className="dot">·</span><span>gem. {formatTime(avgTime)}</span></>}
+                                        </div>
+                                    </div>
+                                    <div className="gang-focused-right">
+                                        <div className={'gang-focused-timer' + (state === 'active' ? ' live' : '')}>
+                                            <div className="gfl-label">{state === 'served' ? 'Eindtijd' : state === 'active' ? 'Live service' : 'Gang-timer'}</div>
+                                            <div className="gfl-val">{formatTime(gangElapsed)}</div>
+                                        </div>
+                                        {state === 'idle' && (
+                                            <button className="gang-focused-start" onClick={() => startGang(gang.slug)}>▶ Start gang</button>
+                                        )}
+                                        {state === 'active' && allDishesDone(gang.slug, meatNames, vegaNames, extraVega) && (
+                                            <button className="gang-focused-finish" onClick={() => requestFinishGang(gang.slug)}>✓ Gang uitserveren</button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Dish-grid: per gerecht eigen dashboard (vlees + vega parallel) */}
+                                <div className="dish-dashboard-grid">
+                                    {/* VLEES gerechten */}
+                                    {meatNames.map((dish: string, i: number) => {
+                                        const key = dishKey(gang.slug, false, i);
+                                        return renderDishCard({
+                                            key,
+                                            dishName: dish,
+                                            count: aantalNormaal,
+                                            isVega: false,
+                                            gangSlug: gang.slug,
+                                            gangState: state,
+                                        });
+                                    })}
+
+                                    {/* VEGA gerechten — parallel twin */}
+                                    {vegaNames.map((dish: string, i: number) => {
+                                        const key = dishKey(gang.slug, true, i);
+                                        return renderDishCard({
+                                            key,
+                                            dishName: dish,
+                                            count: aantalVega,
+                                            isVega: true,
+                                            gangSlug: gang.slug,
+                                            gangState: state,
+                                        });
+                                    })}
+
+                                    {/* Ad-hoc extra vega */}
+                                    {extraVega.map((dish: string, i: number) => {
+                                        const key = dishKey(gang.slug, true, i, true);
+                                        return renderDishCard({
+                                            key,
+                                            dishName: dish,
+                                            count: 1,
+                                            isVega: true,
+                                            isExtra: true,
+                                            extraIdx: i,
+                                            gangSlug: gang.slug,
+                                            gangState: state,
+                                        });
+                                    })}
+                                </div>
+
+                                {/* + Nog een vega toevoegen */}
+                                <div className="dish-addvega-wrap">
+                                    {newVegaInputs[gang.slug] !== undefined ? (
+                                        <div className="dish-addvega-form">
+                                            <input
+                                                autoFocus
+                                                value={newVegaInputs[gang.slug] || ''}
+                                                onChange={(e) => setNewVegaInputs(prev => Object.assign({}, prev, { [gang.slug]: e.target.value }))}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') addExtraVegaDish(gang.slug); if (e.key === 'Escape') setNewVegaInputs(prev => { const n = Object.assign({}, prev); delete n[gang.slug]; return n; }); }}
+                                                placeholder="Naam van vega-gerecht..."
+                                                className="dish-addvega-input"
+                                            />
+                                            <button className="dish-addvega-ok" onClick={() => addExtraVegaDish(gang.slug)}>✓ Toevoegen</button>
+                                            <button className="dish-addvega-cancel" onClick={() => setNewVegaInputs(prev => { const n = Object.assign({}, prev); delete n[gang.slug]; return n; })}>Annuleer</button>
+                                        </div>
+                                    ) : (
+                                        <button className="dish-addvega-btn" onClick={() => setNewVegaInputs(prev => Object.assign({}, prev, { [gang.slug]: '' }))}>
+                                            <span className="dish-addvega-icon">🌿</span>
+                                            <span>+ Extra vega-gerecht voor deze gang</span>
+                                            <span className="dish-addvega-hint">parallel prep mogelijk</span>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
