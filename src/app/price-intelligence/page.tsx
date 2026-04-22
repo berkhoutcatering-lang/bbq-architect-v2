@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { prepareDocument, type PreparedDocument } from '@/lib/documentToImage';
 import { extractPdfText, isUsableText } from '@/lib/pdfTextExtract';
+import { splitPdfIntoChunks, getPdfPageCount } from '@/lib/pdfSplit';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import Papa from 'papaparse';
@@ -2443,14 +2444,13 @@ function FolderPricelists() {
                 }
             } else {
                 /* VISION FALLBACK voor ingescande/image-based PDFs.
-                   Anthropic vision heeft limieten: max 32MB PDF én max 100 pagina's. */
+                   Anthropic limieten: 32MB base64, 100 pagina's per request. */
                 const fileSizeMB = bf.file.size / 1024 / 1024;
                 if (fileSizeMB > 30) {
-                    return { ok: false, producten: [], error: `PDF te groot (${fileSizeMB.toFixed(1)} MB). Limiet is 30 MB voor vision-modus. Splits de PDF in kleinere delen.` };
+                    return { ok: false, producten: [], error: `PDF te groot (${fileSizeMB.toFixed(1)} MB). Max 30 MB. Splits PDF handmatig.` };
                 }
                 if (extractedText && extractedText.length > 30) {
-                    /* Er is wat text maar isUsableText vond het niet goed genoeg — probeer toch text-mode
-                       met wat we hebben, dat werkt vaak beter dan vision op dikke PDFs */
+                    /* Eerst text-retry — werkt vaak als er wel wat extractable is */
                     const res = await fetch('/api/parse-pricelist', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2458,32 +2458,52 @@ function FolderPricelists() {
                     });
                     try { body = await res.json(); } catch { /* non-JSON */ }
                     if (res.ok && body?.success && (body.data?.producten?.length || 0) > 0) {
-                        const prods = body.data.producten;
-                        return { ok: true, leverancier: body.data?.leverancier, producten: prods };
+                        return { ok: true, leverancier: body.data?.leverancier, producten: body.data.producten };
                     }
-                    /* Als dat niks oplevert, val door naar vision */
                 }
-                /* Eerst upload naar Supabase storage (body-size omzeilen) → URL naar API. */
-                const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
-                const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
-                const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bf.file, {
-                    contentType: 'application/pdf',
-                    upsert: false,
-                });
-                if (upErr) return { ok: false, producten: [], error: 'Upload: ' + upErr.message };
-                const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
-                const pdfUrl = urlData?.publicUrl;
-                if (!pdfUrl) return { ok: false, producten: [], error: 'Geen public URL' };
 
-                const res = await fetch('/api/parse-pricelist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pdfUrl, model: 'haiku' }),
-                });
-                try { body = await res.json(); } catch { /* non-JSON */ }
-                if (!res.ok || !body?.success) {
-                    return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
+                /* Auto-split bij >100 pagina's (Anthropic limiet) */
+                const pageCount = await getPdfPageCount(bf.file);
+                let chunks: { blob: Blob; index: number; totalChunks: number }[];
+                if (pageCount > 100) {
+                    const splitChunks = await splitPdfIntoChunks(bf.file, 90);
+                    chunks = splitChunks.map(c => ({ blob: c.blob, index: c.index, totalChunks: c.totalChunks }));
+                } else {
+                    chunks = [{ blob: bf.file, index: 0, totalChunks: 1 }];
                 }
+
+                /* Upload elke chunk naar storage en verwerk via API */
+                const allProducten: any[] = [];
+                let leverancier: string | undefined;
+                let chunkErrors = 0;
+                for (const chunk of chunks) {
+                    const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 70);
+                    const suffix = chunk.totalChunks > 1 ? `_part${chunk.index + 1}of${chunk.totalChunks}` : '';
+                    const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}${suffix}.pdf`;
+                    const { error: upErr } = await supabase.storage.from('pricelists').upload(path, chunk.blob, {
+                        contentType: 'application/pdf', upsert: false,
+                    });
+                    if (upErr) { chunkErrors++; continue; }
+                    const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
+                    const pdfUrl = urlData?.publicUrl;
+                    if (!pdfUrl) { chunkErrors++; continue; }
+
+                    const res = await fetch('/api/parse-pricelist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pdfUrl, model: 'haiku' }),
+                    });
+                    let chunkBody: any = null;
+                    try { chunkBody = await res.json(); } catch { /* non-JSON */ }
+                    if (!res.ok || !chunkBody?.success) { chunkErrors++; continue; }
+                    if (chunkBody.data?.producten) allProducten.push(...chunkBody.data.producten);
+                    if (!leverancier && chunkBody.data?.leverancier) leverancier = chunkBody.data.leverancier;
+                }
+
+                if (allProducten.length === 0) {
+                    return { ok: false, producten: [], error: `Alle ${chunks.length} PDF-chunks faalden. Probeer PDF handmatig te splitsen.` };
+                }
+                return { ok: true, leverancier, producten: allProducten };
             }
 
             const prods = body.data?.producten || [];
