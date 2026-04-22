@@ -244,6 +244,8 @@ export interface Materieel {
   status: 'ok' | 'onderhoud' | 'defect';
   aanschaf_datum: string;
   notitie: string;
+  locatie?: string | null;
+  fotos?: string[] | null;
   logboek: LogboekEntry[];
   created_at: string;
 }

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
@@ -11,8 +12,11 @@ import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
-import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
+
+const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
+const BUCKET = 'materieel';
 
 interface NewLogEntry {
     actie: string;
@@ -20,38 +24,93 @@ interface NewLogEntry {
 }
 
 export default function Materieel() {
-    const { data: materieel, loading, insert, update, remove } = useSupabase<MatType>('materieel', []);
+    const { data: materieel, loading, insert, update, remove, refetch } = useSupabase<MatType>('materieel', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<number | string | null>(null);
     const [form, setForm] = useState<any>(null);
     const [newLog, setNewLog] = useState<NewLogEntry>({ actie: '', notitie: '' });
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [filter, setFilter] = useState<string>('Alles');
+    const [search, setSearch] = useState('');
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
 
+    const filtered = useMemo(() => {
+        const list = (materieel || []) as any[];
+        const q = search.toLowerCase().trim();
+        return list
+            .filter(m => filter === 'Alles' || m.type === filter)
+            .filter(m => !q || m.naam?.toLowerCase().includes(q) || m.locatie?.toLowerCase().includes(q) || m.notitie?.toLowerCase().includes(q));
+    }, [materieel, filter, search]);
+
+    const counts = useMemo(() => {
+        const list = (materieel || []) as any[];
+        const byType: Record<string, number> = {};
+        list.forEach(m => { byType[m.type] = (byType[m.type] || 0) + 1; });
+        return { total: list.length, byType };
+    }, [materieel]);
+
     function newItem() {
         setEditing('new');
-        setForm({ naam: '', type: 'Overig', status: 'ok', aanschaf_datum: '', notitie: '', logboek: [] });
+        setForm({ naam: '', type: 'BBQ', status: 'ok', aanschaf_datum: '', notitie: '', locatie: '', fotos: [], logboek: [] });
     }
 
-    function editItem(m: any) { setEditing(m.id); setForm(JSON.parse(JSON.stringify(m))); }
+    function editItem(m: any) { setEditing(m.id); setForm(JSON.parse(JSON.stringify({ ...m, fotos: m.fotos || [] }))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     function saveItem() {
         if (!validateAll({ naam: form.naam })) return;
+        const payload = { ...form };
         if (editing === 'new') {
-            insert(form).then(function () { showToast('Materieel toegevoegd', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+            insert(payload).then(() => { showToast('Materieel toegevoegd', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
         } else {
-            const { id, created_at, ...rest } = form;
-            update(editing as number, rest).then(function () { showToast('Materieel bijgewerkt', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+            const { id, created_at, ...rest } = payload;
+            update(editing as number, rest).then(() => { showToast('Materieel bijgewerkt', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
         }
     }
 
     function deleteItem() {
-        showConfirm('Materieel verwijderen?', function () {
-            remove(editing as number).then(function () { showToast('Verwijderd', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+        showConfirm('Materieel verwijderen?', () => {
+            /* Verwijder ook de foto's uit storage */
+            const paths = (form.fotos || []).map((url: string) => extractStoragePath(url)).filter(Boolean) as string[];
+            if (paths.length > 0) supabase.storage.from(BUCKET).remove(paths).catch(() => { /* ignore */ });
+            remove(editing as number).then(() => { showToast('Verwijderd', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
         });
+    }
+
+    function extractStoragePath(url: string): string | null {
+        const match = url.match(/\/storage\/v1\/object\/public\/materieel\/(.+)$/);
+        return match ? match[1] : null;
+    }
+
+    async function uploadFotos(files: FileList) {
+        if (!files.length) return;
+        setUploading(true);
+        const newUrls: string[] = [];
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const ext = file.name.split('.').pop() || 'jpg';
+                const path = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+                const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+                if (upErr) { showToast('Upload fout: ' + upErr.message, 'error'); continue; }
+                const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+                if (data?.publicUrl) newUrls.push(data.publicUrl);
+            }
+            if (newUrls.length) {
+                setField('fotos', [...(form.fotos || []), ...newUrls]);
+                showToast(newUrls.length + ' foto' + (newUrls.length !== 1 ? '\'s' : '') + ' toegevoegd', 'success');
+            }
+        } finally { setUploading(false); }
+    }
+
+    async function removeFoto(url: string) {
+        const path = extractStoragePath(url);
+        if (path) await supabase.storage.from(BUCKET).remove([path]).catch(() => { /* ignore */ });
+        setField('fotos', (form.fotos || []).filter((u: string) => u !== url));
     }
 
     function addLogEntry() {
@@ -76,42 +135,67 @@ export default function Materieel() {
             <MetallicCard hover={false}>
                 <div className="panel-head">
                     <h3>{editing === 'new' ? 'Nieuw Materieel' : 'Materieel Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
+                    {/* FOTO UPLOAD SECTIE */}
+                    <div style={{ marginBottom: 20 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.12em', display: 'block', marginBottom: 8 }}>Foto's ({(form.fotos || []).length})</label>
+                        <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+                            {(form.fotos || []).map((url: string, i: number) => (
+                                <div key={i} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--card-solid)', background: 'var(--card)' }}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={url} alt={`Foto ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    <button onClick={() => removeFoto(url)} aria-label="Foto verwijderen"
+                                        style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 6, background: 'rgba(0,0,0,.7)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <X size={13} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                                style={{ aspectRatio: '1/1', borderRadius: 10, border: '1px dashed var(--card-solid)', background: 'var(--card)', color: 'var(--muted)', cursor: uploading ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11 }}>
+                                {uploading ? <Loader2 size={20} className="animate-spin" /> : <Camera size={22} />}
+                                {uploading ? 'Uploaden...' : 'Foto toevoegen'}
+                            </button>
+                        </div>
+                        <input ref={fileInputRef} type="file" accept="image/*" multiple capture="environment" style={{ display: 'none' }}
+                            onChange={e => { if (e.target.files) uploadFotos(e.target.files); if (fileInputRef.current) fileInputRef.current.value = ''; }} />
+                    </div>
+
                     <div className="form-grid">
-                        <div className="field"><label>Naam</label><input name="naam" value={form.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearError('naam'); setField('naam', e.target.value); }} {...fieldProps('naam', form.naam)} style={errors.naam ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.naam} fieldName="naam" /></div>
-                        <div className="field"><label>Type</label>
-                            <select value={form.type} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('type', e.target.value); }}>
-                                {['Smoker', 'BBQ', 'Koeling', 'Transport', 'Overig'].map(function (t) { return <option key={t}>{t}</option>; })}
+                        <div className="field"><label>Naam</label><input name="naam" value={form.naam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { clearError('naam'); setField('naam', e.target.value); }} {...fieldProps('naam', form.naam)} style={errors.naam ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.naam} fieldName="naam" /></div>
+                        <div className="field"><label>Categorie</label>
+                            <select value={form.type} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('type', e.target.value)}>
+                                {CATEGORIES.filter(c => c !== 'Alles').map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
                         </div>
                         <div className="field"><label>Status</label>
-                            <select value={form.status} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('status', e.target.value); }}>
+                            <select value={form.status} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setField('status', e.target.value)}>
                                 <option value="ok">OK</option>
                                 <option value="warn">Aandacht nodig</option>
                                 <option value="danger">Defect</option>
                             </select>
                         </div>
-                        <div className="field"><label>Aanschafdatum</label><input type="date" value={form.aanschaf_datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('aanschaf_datum', e.target.value); }} /></div>
-                        <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
+                        <div className="field"><label>Locatie</label>
+                            <input value={form.locatie || ''} placeholder="bv. Loods, Bus 1, Koelkamer" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('locatie', e.target.value)} />
+                        </div>
+                        <div className="field"><label>Aanschafdatum</label><input type="date" value={form.aanschaf_datum || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('aanschaf_datum', e.target.value)} /></div>
+                        <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setField('notitie', e.target.value)} /></div>
                     </div>
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>Onderhoudslogboek</h4>
-                    {(form.logboek || []).map(function (entry: any, idx: number) {
-                        return (
-                            <div key={idx} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                                <span style={{ color: 'var(--muted)', marginRight: 12 }}>{fmtNl(entry.datum)}</span>
-                                <span style={{ fontWeight: 600 }}>{entry.actie}</span>
-                                {entry.notitie && <span style={{ color: 'var(--muted)', marginLeft: 8 }}>— {entry.notitie}</span>}
-                            </div>
-                        );
-                    })}
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    {(form.logboek || []).map((entry: any, idx: number) => (
+                        <div key={idx} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                            <span style={{ color: 'var(--muted)', marginRight: 12 }}>{fmtNl(entry.datum)}</span>
+                            <span style={{ fontWeight: 600 }}>{entry.actie}</span>
+                            {entry.notitie && <span style={{ color: 'var(--muted)', marginLeft: 8 }}>— {entry.notitie}</span>}
+                        </div>
+                    ))}
+                    <div className="responsive-row" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
-                            placeholder="Actie (bijv. Reiniging)" value={newLog.actie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewLog(Object.assign({}, newLog, { actie: e.target.value })); }} />
+                            placeholder="Actie (bijv. Reiniging)" value={newLog.actie} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLog(Object.assign({}, newLog, { actie: e.target.value }))} />
                         <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
-                            placeholder="Notitie" value={newLog.notitie} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setNewLog(Object.assign({}, newLog, { notitie: e.target.value })); }} />
+                            placeholder="Notitie" value={newLog.notitie} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLog(Object.assign({}, newLog, { notitie: e.target.value }))} />
                         <button className="btn btn-brand btn-sm" onClick={addLogEntry} aria-label="Logboek item toevoegen"><Plus size={14} /></button>
                     </div>
 
@@ -124,9 +208,9 @@ export default function Materieel() {
         );
     }
 
-    const statusColors: Record<string, string> = { ok: 'var(--green)', warn: 'var(--amber)', danger: 'var(--red)' };
-    const statusLabels: Record<string, string> = { ok: 'OK', warn: 'Aandacht', danger: 'Defect' };
-    const statusPills: Record<string, string> = { ok: 'pill-green', warn: 'pill-amber', danger: 'pill-red' };
+    const statusColors: Record<string, string> = { ok: 'var(--green)', warn: 'var(--amber)', danger: 'var(--red)', onderhoud: 'var(--amber)', defect: 'var(--red)' };
+    const statusLabels: Record<string, string> = { ok: 'OK', warn: 'Aandacht', danger: 'Defect', onderhoud: 'Aandacht', defect: 'Defect' };
+    const statusPills: Record<string, string> = { ok: 'pill-green', warn: 'pill-amber', danger: 'pill-red', onderhoud: 'pill-amber', defect: 'pill-red' };
 
     return (
         <RequireTier feature="materieel">
@@ -135,19 +219,76 @@ export default function Materieel() {
                 title={'Materieel (' + materieel.length + ')'}
                 actions={<button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>}
             />
-            {materieel.length === 0 && <EmptyState page="/materieel" onAction={newItem} />}
-            <div className="grid-3">
-                {materieel.map(function (m: any) {
+
+            {/* ZOEKBALK */}
+            <div style={{ position: 'relative', marginBottom: 14 }}>
+                <Search size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Zoek op naam of locatie..."
+                    style={{ width: '100%', padding: '12px 40px 12px 42px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 14, outline: 'none' }} />
+                {search && (
+                    <button onClick={() => setSearch('')} aria-label="Wissen"
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 26, height: 26, borderRadius: 6, background: 'var(--color-bg-deep)', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>×</button>
+                )}
+            </div>
+
+            {/* FILTER TABS */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+                {CATEGORIES.map(c => {
+                    const active = filter === c;
+                    const count = c === 'Alles' ? counts.total : (counts.byType[c] || 0);
                     return (
-                        <div key={m.id} className="rec-card" onClick={function () { editItem(m); }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <div className="rec-cat" style={{ color: statusColors[m.status] || 'var(--muted)' }}>{m.type}</div>
-                                <span className={'pill ' + (statusPills[m.status] || 'pill-green')}>{statusLabels[m.status] || 'OK'}</span>
-                            </div>
-                            <div className="rec-name">{m.naam}</div>
-                            <div className="rec-meta">
-                                {m.aanschaf_datum && <span><Calendar size={14} /> {fmtNl(m.aanschaf_datum)}</span>}
-                                <span><ClipboardList size={14} /> {(m.logboek || []).length} logs</span>
+                        <button key={c} onClick={() => setFilter(c)}
+                            style={{
+                                padding: '8px 14px', borderRadius: 8,
+                                border: active ? '1px solid var(--brand-primary)' : '1px solid var(--card-solid)',
+                                background: active ? 'var(--brand-primary)' : 'var(--card)',
+                                color: active ? 'var(--brand-background, #000)' : 'var(--text)',
+                                fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                            }}>
+                            {c}{count > 0 && <span style={{ opacity: 0.5, fontWeight: 500, marginLeft: 4 }}>· {count}</span>}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {materieel.length === 0 && <EmptyState page="/materieel" onAction={newItem} />}
+            {materieel.length > 0 && filtered.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)', fontSize: 13 }}>
+                    Geen items gevonden in deze categorie{search ? ' met "' + search + '"' : ''}.
+                </div>
+            )}
+            <div className="grid-3">
+                {filtered.map((m: any) => {
+                    const firstFoto = (m.fotos || [])[0];
+                    const fotoCount = (m.fotos || []).length;
+                    return (
+                        <div key={m.id} className="rec-card" onClick={() => editItem(m)} style={{ padding: 0, overflow: 'hidden' }}>
+                            {firstFoto ? (
+                                <div style={{ position: 'relative', aspectRatio: '16/10', background: 'var(--color-bg-deep)' }}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={firstFoto} alt={m.naam} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    {fotoCount > 1 && (
+                                        <span style={{ position: 'absolute', bottom: 8, right: 8, padding: '3px 8px', borderRadius: 6, background: 'rgba(0,0,0,.7)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                            <Camera size={10} /> {fotoCount}
+                                        </span>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ aspectRatio: '16/10', background: 'var(--color-bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', opacity: 0.4 }}>
+                                    <Camera size={26} />
+                                </div>
+                            )}
+                            <div style={{ padding: 14 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <div className="rec-cat" style={{ color: statusColors[m.status] || 'var(--muted)' }}>{m.type}</div>
+                                    <span className={'pill ' + (statusPills[m.status] || 'pill-green')}>{statusLabels[m.status] || 'OK'}</span>
+                                </div>
+                                <div className="rec-name">{m.naam}</div>
+                                <div className="rec-meta">
+                                    {m.locatie && <span><MapPin size={14} /> {m.locatie}</span>}
+                                    {m.aanschaf_datum && <span><Calendar size={14} /> {fmtNl(m.aanschaf_datum)}</span>}
+                                    <span><ClipboardList size={14} /> {(m.logboek || []).length}</span>
+                                </div>
                             </div>
                         </div>
                     );
