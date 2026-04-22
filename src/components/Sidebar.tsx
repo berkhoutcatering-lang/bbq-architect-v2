@@ -12,6 +12,7 @@ import { navSections, type NavSection } from "@/lib/navigation";
 import { useApp } from "@/lib/AppContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/lib/OrgContext";
+import { useBrandLogo } from "@/lib/useBrandLogo";
 import AiUsageMeter from "@/components/AiUsageMeter";
 
 interface SidebarFolderProps {
@@ -110,6 +111,8 @@ export default function Sidebar() {
     const { badges } = useApp();
     const { user, signOut } = useAuth();
     const { organization, userRole } = useOrg();
+    const brandLogo = useBrandLogo();
+    const displayLogo = brandLogo.logoDarkUrl || brandLogo.logoUrl;
     const [collapsed, setCollapsed] = useState(false);
     const [userToggledCollapse, setUserToggledCollapse] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -179,12 +182,24 @@ export default function Sidebar() {
         <>
             <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--sidebar-border)] shrink-0">
                 <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[var(--sidebar-border)] shadow-[0_0_12px_color-mix(in_srgb,var(--brand)_6%,transparent)]">
-                        <Flame className="w-4 h-4 text-[var(--brand)]" />
-                    </div>
+                    {displayLogo ? (
+                        <div className="shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[color-mix(in_srgb,var(--brand-gold,var(--brand))_35%,transparent)] shadow-[0_0_16px_color-mix(in_srgb,var(--brand-primary)_22%,transparent)] overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={displayLogo}
+                                alt={brandLogo.bedrijfsnaam || 'Bedrijfslogo'}
+                                className="w-full h-full object-cover"
+                                style={{ mixBlendMode: 'screen' }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[var(--sidebar-bg-hover)] to-[var(--color-bg-deep)] flex items-center justify-center border border-[var(--sidebar-border)] shadow-[0_0_12px_color-mix(in_srgb,var(--brand)_6%,transparent)]">
+                            <Flame className="w-4 h-4 text-[var(--brand)]" />
+                        </div>
+                    )}
                     <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
                         <p className="text-[13px] font-semibold tracking-[0.08em] text-[var(--text)] font-['Outfit']">
-                            BBQ ARCHITECT
+                            {brandLogo.bedrijfsnaam || 'BBQ ARCHITECT'}
                         </p>
                         <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase mt-0.5">
                             {organization?.name || 'Catering'}
