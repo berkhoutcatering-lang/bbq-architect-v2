@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import PageHint from '@/components/PageHint';
 import EmptyState from '@/components/EmptyState';
+import './service-kds.css';
 
 interface TempPopup {
     slug: string;
@@ -44,6 +45,22 @@ export default function ServiceMode() {
     const [busLog, setBusLog] = useState<BusLog>({ koelTemp: 4, schoonmaak: false, saved: false });
     const [vegaInputs, setVegaInputs] = useState<Record<string, string>>({});
     const [completedDishes, setCompletedDishes] = useState<Record<string, boolean>>({});
+    const [nowTs, setNowTs] = useState<number>(0);
+
+    useEffect(function () {
+        setNowTs(Date.now());
+        const interval = setInterval(() => setNowTs(Date.now()), 60_000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const loadData = async () => {
+        const o = await supabase.from('offertes').select('*').not('menu_selectie', 'is', null).order('datum', { ascending: false });
+        if (o.data) setOffertes(o.data);
+        const g = await supabase.from('gangen').select('*').order('volgorde');
+        if (g.data) setGangen(g.data);
+        const d = await supabase.from('gerechten').select('*').order('volgorde');
+        if (d.data) setGerechtenDb(d.data);
+    };
 
     useEffect(function () {
         loadData();
@@ -51,16 +68,8 @@ export default function ServiceMode() {
             Object.values(intervalRef.current).forEach(clearInterval);
             if (modalTimerRef.current) clearInterval(modalTimerRef.current);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    async function loadData() {
-        const o = await supabase.from('offertes').select('*').not('menu_selectie', 'is', null).order('datum', { ascending: false });
-        if (o.data) setOffertes(o.data);
-        const g = await supabase.from('gangen').select('*').order('volgorde');
-        if (g.data) setGangen(g.data);
-        const d = await supabase.from('gerechten').select('*').order('volgorde');
-        if (d.data) setGerechtenDb(d.data);
-    }
 
     // Get vega dishes per gang from DB (gerechten with "Vega" tag or "Dieet" in name)
     function getVegaDishesForGang(gangSlug: string): string[] {
@@ -285,177 +294,232 @@ export default function ServiceMode() {
         });
     }
 
-    return (
-        <div className="artisan-page service-page">
-            <h1 className="hero-title mb-16" style={{ fontSize: 24 }}>SERVICE MODE — THE ARCHITECT</h1>
+    /* ──────────────────────────────────────────────────────────────
+       SERVICE MODE — KDS (Kitchen Display System) Hop & Bites stijl
+       ────────────────────────────────────────────────────────────── */
+    const servedCount = gangen.filter((g: any) => bonStates[g.slug] === 'served').length;
+    const activeCount = gangen.filter((g: any) => bonStates[g.slug] === 'active').length;
+    const totalGangen = gangen.length;
+    const avgAllTimes = (() => {
+        const times = gangen.map((g: any) => getAvgTime(g.slug)).filter(Boolean) as number[];
+        if (!times.length) return null;
+        return Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+    })();
 
-            <PageHint id="service" title="Service Mode" description="Beheer je serviceteam en taken tijdens events. Gebruik de keukenmodus voor real-time overzicht." />
+    return (
+        <div className="service-kds-wrap">
+            <PageHint id="service" title="Kitchen Display" description="Live service-flow. Bonnen per gang, timers lopen realtime, bump bij uitserveren." />
 
             {!selectedId ? (
-                <div className="panel">
-                    <div className="panel-head"><h3>SELECTEER EVENT</h3></div>
-                    <div className="panel-body">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {offertes.map(function (o: any) {
+                /* ═══════════ EVENT-SELECTIE ═══════════ */
+                <>
+                    <div className="service-hero">
+                        <div className="service-hero-eyebrow">● KITCHEN DISPLAY · SERVICE MODE</div>
+                        <h1 className="service-hero-title">Selecteer event</h1>
+                        <p className="service-hero-sub">Start de service voor één van de aankomende caterings. Timers lopen vanaf &quot;start gang&quot; en worden geregistreerd in HACCP.</p>
+                    </div>
+
+                    {offertes.length === 0 ? (
+                        <div className="service-empty"><EmptyState page="/service" /></div>
+                    ) : (
+                        <div className="service-event-grid">
+                            {offertes.map((o: any) => {
+                                const gangenCount = o.menu_selectie ? Object.keys(typeof o.menu_selectie === 'string' ? JSON.parse(o.menu_selectie) : o.menu_selectie).filter(k => !k.endsWith('_vega')).length : 0;
+                                const evDate = o.datum ? new Date(o.datum + 'T17:00:00') : null;
+                                const daysLeft = evDate ? Math.ceil((evDate.getTime() - nowTs) / 86400000) : null;
+                                const isToday = daysLeft === 0;
+                                const isPast = daysLeft !== null && daysLeft < 0;
                                 return (
-                                    <div key={o.id} className="side-row" onClick={function () { selectEvent(o); }} style={{ padding: 16 }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_naam || 'Onbekend'}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                                                {o.datum} • {o.aantal_gasten || '?'} gasten
-                                                {o.aantal_vega > 0 && ' (' + o.aantal_vega + ' vega)'}
+                                    <button key={o.id} onClick={() => selectEvent(o)} className={'service-event-card' + (isToday ? ' today' : '')}>
+                                        <div className="service-event-top">
+                                            <div className="service-event-date">
+                                                {evDate ? evDate.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : '—'}
                                             </div>
+                                            <span className={'service-pill ' + (isToday ? 'live' : o.status === 'definitief' ? 'ok' : 'pending')}>
+                                                {isToday ? '● VANDAAG' : isPast ? 'AFGELOPEN' : o.status?.toUpperCase() || 'CONCEPT'}
+                                            </span>
                                         </div>
-                                        <span className={'pill ' + (o.status === 'definitief' ? 'pill-green' : 'pill-amber')}>{o.status.toUpperCase()}</span>
-                                    </div>
+                                        <div className="service-event-name">{o.client_naam || 'Naamloos event'}</div>
+                                        <div className="service-event-meta">
+                                            <div><span className="mlabel">Gasten</span><span className="mval">{o.aantal_gasten || 0}{o.aantal_vega > 0 && <span className="vega"> · {o.aantal_vega}🌿</span>}</span></div>
+                                            <div><span className="mlabel">Gangen</span><span className="mval">{gangenCount || '—'}</span></div>
+                                            <div><span className="mlabel">Tijd</span><span className="mval">{daysLeft !== null && daysLeft >= 0 ? (isToday ? 'Nu' : `T-${daysLeft}d`) : '—'}</span></div>
+                                        </div>
+                                        <div className="service-event-start">Start service →</div>
+                                    </button>
                                 );
                             })}
-                            {offertes.length === 0 && <EmptyState page="/service" />}
                         </div>
+                    )}
 
-                        {historie.length > 0 && (
-                            <div style={{ marginTop: 32 }}>
-                                <button className="tab-btn" onClick={function () { setShowHistorie(!showHistorie); }}>
-                                    {showHistorie ? 'HISTORIE VERBERGEN' : 'TIJDEN & HISTORIE TONEN'}
-                                </button>
-                                {showHistorie && (
-                                    <div className="mt-20">
-                                        <h4 style={{ color: 'var(--brand)', marginBottom: 12 }}>⏱️ GEMIDDELDE TIJDEN</h4>
-                                        <div className="artisan-panel" style={{ padding: 16 }}>
-                                            {gangen.map(function (gang: any) {
-                                                const avg = getAvgTime(gang.slug);
-                                                return (
-                                                    <div key={gang.slug} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>
-                                                        <span style={{ fontSize: 12 }}>{gang.naam}</span>
-                                                        <span style={{ fontWeight: 700, color: avg ? 'var(--brand)' : 'var(--muted)' }}>{avg ? formatTime(avg) : '\u2014'}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                    {historie.length > 0 && (
+                        <div className="service-stats-wrap">
+                            <button className="service-stats-toggle" onClick={() => setShowHistorie(!showHistorie)}>
+                                {showHistorie ? 'Verberg statistieken' : `Gemiddelde servicetijden (${historie.length} bonnen)`}
+                                <span style={{ marginLeft: 8, opacity: 0.5 }}>{showHistorie ? '▾' : '▸'}</span>
+                            </button>
+                            {showHistorie && (
+                                <div className="service-stats-grid">
+                                    {gangen.map((gang: any) => {
+                                        const avg = getAvgTime(gang.slug);
+                                        return (
+                                            <div key={gang.slug} className="service-stat-tile">
+                                                <div className="stat-label">{gang.naam}</div>
+                                                <div className="stat-val">{avg ? formatTime(avg) : '—'}</div>
+                                                <div className="stat-sub">{avg ? 'gem. servicetijd' : 'nog geen data'}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </>
+            ) : (
+                /* ═══════════ ACTIEVE SERVICE — KDS VIEW ═══════════ */
+                <div className="service-active-wrap">
+                    {/* HERO: event info + overall timer + progress */}
+                    <div className="service-cockpit">
+                        <button className="service-back-btn" onClick={() => setSelectedId(null)}>← Andere event</button>
+                        <div className="service-cockpit-grid">
+                            <div className="cockpit-left">
+                                <div className="cockpit-eyebrow">● LIVE SERVICE · {selected.datum}</div>
+                                <h1 className="cockpit-title">{selected.client_naam || 'Event'}</h1>
+                                <div className="cockpit-meta">
+                                    <span><strong>{selected.aantal_gasten}</strong> gasten</span>
+                                    <span className="dot">·</span>
+                                    <span>🔥 {aantalNormaal}× vlees</span>
+                                    {aantalVega > 0 && <><span className="dot">·</span><span className="vega-text">🌿 {aantalVega}× vega</span></>}
+                                </div>
+                            </div>
+                            <div className="cockpit-right">
+                                <div className="cockpit-kpi">
+                                    <div className="kpi-val">{servedCount}<span className="kpi-sep">/</span>{totalGangen}</div>
+                                    <div className="kpi-lbl">Gangen klaar</div>
+                                </div>
+                                <div className="cockpit-kpi">
+                                    <div className={'kpi-val' + (activeCount ? ' pulse' : '')}>{activeCount > 0 ? '●' : '○'}</div>
+                                    <div className="kpi-lbl">{activeCount > 0 ? 'In actie' : 'Idle'}</div>
+                                </div>
+                                {avgAllTimes && (
+                                    <div className="cockpit-kpi">
+                                        <div className="kpi-val small">{formatTime(avgAllTimes)}</div>
+                                        <div className="kpi-lbl">Gem. tijd</div>
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <div className="service-active">
-                    <div className="artisan-panel mb-16" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--brand)' }}>{selected.client_naam}</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                                {selected.datum} • {selected.aantal_gasten} gasten •
-                                <span style={{ color: 'var(--brand)', marginLeft: 8 }}>🍖 {aantalNormaal}</span>
-                                {aantalVega > 0 && <span style={{ color: 'var(--service-vega, #6B7A2F)', marginLeft: 8 }}>🌿 {aantalVega}</span>}
-                            </div>
                         </div>
-                        <button className="tab-btn" onClick={function () { setSelectedId(null); }}>← EVENT SELECTIE</button>
+
+                        {/* Progress track — gangen als stippen */}
+                        <div className="service-progress-track">
+                            {gangen.map((g: any, i: number) => {
+                                const state = bonStates[g.slug] || 'idle';
+                                return (
+                                    <div key={g.slug} className={'track-step state-' + state}>
+                                        <div className="track-dot">{state === 'served' ? '✓' : i + 1}</div>
+                                        <div className="track-lbl">{g.naam}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
 
-                    <div className="bon-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20 }}>
-                        {gangen.map(function (gang: any, idx: number) {
+                    {allServed && (
+                        <div className="service-all-done">
+                            🏁 <span>Alle gangen uitgeserveerd. Service compleet.</span>
+                        </div>
+                    )}
+
+                    {/* KDS TICKET GRID */}
+                    <div className="service-ticket-grid">
+                        {gangen.map((gang: any, idx: number) => {
                             const state = bonStates[gang.slug] || 'idle';
                             const dishNames = menuSelectie[gang.slug] || [];
                             const elapsed = state === 'served' ? (finalTimes[gang.slug] || 0) : (timers[gang.slug] ? timers[gang.slug].elapsed : 0);
-                            const isExpanded = expandedBon === gang.slug;
+                            const hasOverride = Array.isArray(menuSelectie[gang.slug + '_vega']) && menuSelectie[gang.slug + '_vega'].length > 0;
+                            const dbVega = aantalVega > 0 ? getVegaDishesForGang(gang.slug) : [];
+                            const vegaDishes: string[] = hasOverride ? menuSelectie[gang.slug + '_vega'] : dbVega;
+                            const isEditing = vegaInputs['_editing_' + gang.slug] === '1';
+                            const avgTime = getAvgTime(gang.slug);
                             return (
-                                <div key={gang.slug} className={'bon-card artisan-panel bon-' + state} style={{ padding: 0, overflow: 'hidden', borderLeft: '4px solid ' + (state === 'active' ? 'var(--brand)' : state === 'served' ? 'var(--green)' : 'transparent') }}>
-                                    <div style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={function () { setExpandedBon(isExpanded ? null : gang.slug); }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ fontWeight: 800, fontSize: 15 }}>GANG {idx + 1} • {gang.naam.toUpperCase()}</div>
-                                            <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: state === 'active' ? 'var(--brand)' : 'var(--muted)' }}>{formatTime(elapsed)}</div>
+                                <div key={gang.slug} className={'service-ticket state-' + state}>
+                                    <div className="ticket-head">
+                                        <div className="ticket-gang-no">{String(idx + 1).padStart(2, '0')}</div>
+                                        <div className="ticket-gang-info">
+                                            <div className="ticket-gang-name">{gang.naam}</div>
+                                            <div className="ticket-gang-sub">
+                                                {state === 'active' && <span className="status-active">● In actie</span>}
+                                                {state === 'served' && <span className="status-done">✓ Uitgeserveerd</span>}
+                                                {state === 'idle' && <span className="status-wait">○ Wacht</span>}
+                                                {avgTime && <span className="avg-time">· gem. {formatTime(avgTime)}</span>}
+                                            </div>
                                         </div>
+                                        <div className="ticket-timer">{formatTime(elapsed)}</div>
                                     </div>
-                                    <div style={{ padding: '0 20px 20px 20px' }}>
-                                        {/* Normaal gerechten */}
-                                        {dishNames.map(function (dish: string, i: number) {
-                                            const gerechtData = gerechtenDb.find(function (g: any) { return g.naam === dish && g.gang_slug === gang.slug; });
+
+                                    <div className="ticket-dishes">
+                                        {/* Normaal */}
+                                        {dishNames.map((dish: string, i: number) => {
+                                            const gd = gerechtenDb.find((g: any) => g.naam === dish && g.gang_slug === gang.slug);
                                             return (
-                                                <div key={i} style={{ fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    <span style={{ fontSize: 10 }}>🍖</span>
-                                                    <span style={{ color: 'var(--brand)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalNormaal}×</span>
-                                                    <span style={{ flex: 1 }}>{dish}</span>
-                                                    {gerechtData && gerechtData.foto_url && (
-                                                        <img src={gerechtData.foto_url} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                                                <div key={'n_' + i} className="ticket-dish">
+                                                    {gd?.foto_url ? (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img src={gd.foto_url} alt="" className="ticket-dish-img" />
+                                                    ) : (
+                                                        <div className="ticket-dish-img ph">🔥</div>
                                                     )}
+                                                    <div className="ticket-dish-name">{dish}</div>
+                                                    <div className="ticket-dish-count">{aantalNormaal}×</div>
                                                 </div>
                                             );
                                         })}
-
-                                        {/* Vega gerechten */}
-                                        {aantalVega > 0 && (function () {
-                                            const hasOverride = Array.isArray(menuSelectie[gang.slug + '_vega']) && menuSelectie[gang.slug + '_vega'].length > 0;
-                                            const dbVega = getVegaDishesForGang(gang.slug);
-                                            const vegaDishes: string[] = hasOverride ? menuSelectie[gang.slug + '_vega'] : dbVega;
-                                            const isEditing = vegaInputs['_editing_' + gang.slug] === '1';
-                                            const sourceLabel = hasOverride ? 'Offerte' : (dbVega.length > 0 ? 'Standaard dieet' : '');
+                                        {/* Vega */}
+                                        {aantalVega > 0 && !isEditing && vegaDishes.length > 0 && vegaDishes.map((v: string, i: number) => {
+                                            const gd = gerechtenDb.find((g: any) => g.naam === v);
                                             return (
-                                                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border)' }}>
-                                                    {/* Source label */}
-                                                    {sourceLabel && !isEditing && (
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--service-vega, #6B7A2F)', opacity: 0.6 }}>{sourceLabel}</span>
-                                                            <button onClick={function (e: React.MouseEvent) { e.stopPropagation(); setVegaInputs(function (prev) { return Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' }); }); }}
-                                                                style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                                                                wijzig
-                                                            </button>
-                                                        </div>
+                                                <div key={'v_' + i} className="ticket-dish vega-row">
+                                                    {gd?.foto_url ? (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img src={gd.foto_url} alt="" className="ticket-dish-img" />
+                                                    ) : (
+                                                        <div className="ticket-dish-img ph vega">🌿</div>
                                                     )}
-
-                                                    {/* Show vega dishes or edit mode */}
-                                                    {!isEditing && vegaDishes.length > 0 ? vegaDishes.map(function (vDish: string, vi: number) {
-                                                        const vGerechtData = gerechtenDb.find(function (g: any) { return g.naam === vDish; });
-                                                        return (
-                                                            <div key={vi} style={{ fontSize: 13, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                                <span style={{ fontSize: 10 }}>🌿</span>
-                                                                <span style={{ color: 'var(--service-vega, #6B7A2F)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
-                                                                <span style={{ flex: 1, color: 'var(--service-vega, #6B7A2F)' }}>{vDish}</span>
-                                                                {vGerechtData && vGerechtData.foto_url && (
-                                                                    <img src={vGerechtData.foto_url} style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    }) : (
-                                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                            <span style={{ fontSize: 10 }}>🌿</span>
-                                                            <span style={{ color: 'var(--service-vega, #6B7A2F)', fontWeight: 700, fontSize: 11, minWidth: 28 }}>{aantalVega}×</span>
-                                                            <input
-                                                                value={vegaInputs[gang.slug] || ''}
-                                                                onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVegaInputs(function (prev) { return Object.assign({}, prev, { [gang.slug]: e.target.value }); }); }}
-                                                                placeholder="Vega gerecht naam..."
-                                                                onClick={function (e: React.MouseEvent) { e.stopPropagation(); }}
-                                                                style={{ flex: 1, padding: '4px 8px', fontSize: 12, background: 'var(--bg)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: 'var(--service-vega, #6B7A2F)' }}
-                                                            />
-                                                            {vegaInputs[gang.slug] && (
-                                                                <button onClick={function (e: React.MouseEvent) {
-                                                                    e.stopPropagation();
-                                                                    saveVegaDish(gang.slug);
-                                                                    setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
-                                                                }}
-                                                                    style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700, background: 'rgba(107,122,47,.15)', border: '1px solid rgba(107,122,47,.3)', borderRadius: 6, color: 'var(--service-vega, #6B7A2F)', cursor: 'pointer' }}>
-                                                                    ✓
-                                                                </button>
-                                                            )}
-                                                            {isEditing && (
-                                                                <button onClick={function (e: React.MouseEvent) {
-                                                                    e.stopPropagation();
-                                                                    setVegaInputs(function (prev) { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; delete n[gang.slug]; return n; });
-                                                                }}
-                                                                    style={{ padding: '4px 8px', fontSize: 12, background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--muted)', cursor: 'pointer' }}>
-                                                                    ✕
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    <div className="ticket-dish-name vega-name">{v}</div>
+                                                    <div className="ticket-dish-count vega-count">{aantalVega}×</div>
                                                 </div>
                                             );
-                                        })()}
+                                        })}
+                                        {aantalVega > 0 && vegaDishes.length === 0 && !isEditing && (
+                                            <button className="ticket-add-vega" onClick={(e) => { e.stopPropagation(); setVegaInputs(prev => Object.assign({}, prev, { ['_editing_' + gang.slug]: '1', [gang.slug]: '' })); }}>
+                                                🌿 Vega-variant toevoegen
+                                            </button>
+                                        )}
+                                        {aantalVega > 0 && isEditing && (
+                                            <div className="ticket-vega-edit">
+                                                <input value={vegaInputs[gang.slug] || ''}
+                                                    onChange={(e) => setVegaInputs(prev => Object.assign({}, prev, { [gang.slug]: e.target.value }))}
+                                                    placeholder="Vega gerecht..."
+                                                    onClick={(e) => e.stopPropagation()} />
+                                                {vegaInputs[gang.slug] && (
+                                                    <button onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        saveVegaDish(gang.slug);
+                                                        setVegaInputs(prev => { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; return n; });
+                                                    }} className="ticket-vega-ok">✓</button>
+                                                )}
+                                                <button onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setVegaInputs(prev => { const n = Object.assign({}, prev); delete n['_editing_' + gang.slug]; delete n[gang.slug]; return n; });
+                                                }} className="ticket-vega-cancel">×</button>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                        <div style={{ marginTop: 16 }}>
-                                            {state === 'idle' && <button className="btn-brand" style={{ width: '100%' }} onClick={function () { startGang(gang.slug); }}>START GANG</button>}
-                                            {state === 'active' && <button className="btn-brand" style={{ width: '100%', background: '#fff', color: 'var(--brand-background)' }} onClick={function () { setActiveModal(gang.slug); }}>OPEN ARCHITECT</button>}
-                                            {state === 'served' && <div style={{ color: 'var(--green)', fontWeight: 800, textAlign: 'center', fontSize: 12 }}>✓ UITGESERVEERD</div>}
-                                        </div>
+                                    <div className="ticket-action">
+                                        {state === 'idle' && <button className="ticket-btn btn-start" onClick={() => startGang(gang.slug)}>▶ Start gang</button>}
+                                        {state === 'active' && <button className="ticket-btn btn-architect" onClick={() => setActiveModal(gang.slug)}>→ Open Architect</button>}
+                                        {state === 'served' && <div className="ticket-btn-done">✓ Uitgeserveerd · {formatTime(elapsed)}</div>}
                                     </div>
                                 </div>
                             );
@@ -464,143 +528,135 @@ export default function ServiceMode() {
                 </div>
             )}
 
+            {/* ═══════════ ARCHITECT MODAL — schoner ═══════════ */}
             {activeModal && modalGang && (
-                <div className="architect-overlay" style={{ position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 999, display: 'flex', flexDirection: 'column' }}>
-                    <div className="architect-header" style={{ height: 'auto', padding: '16px 24px md:padding-0-40px', borderBottom: '1px solid var(--border-steel)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                        <div>
-                            <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 800 }}>GANG {gangen.indexOf(modalGang) + 1} • {modalGang.naam.toUpperCase()}</div>
-                            <div style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span>{currentDishEntry.isVega ? '🌿' : '🍖'}</span>
-                                <span style={{ color: currentDishEntry.isVega ? 'var(--service-vega, #6B7A2F)' : 'var(--text)' }}>{currentDish.naam || 'Gerecht'}</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: currentDishEntry.isVega ? 'var(--service-vega, #6B7A2F)' : 'var(--brand)', background: currentDishEntry.isVega ? 'rgba(107,122,47,.1)' : 'rgba(196,163,90,.1)', padding: '2px 8px', borderRadius: 6 }}>{currentDishEntry.count}×</span>
+                <div className="architect-modal">
+                    <header className="architect-top">
+                        <div className="architect-breadcrumb">
+                            <button className="architect-close" onClick={() => setActiveModal(null)}>← Terug naar service</button>
+                            <div className="architect-gang-pill">Gang {gangen.indexOf(modalGang) + 1} · {modalGang.naam}</div>
+                        </div>
+                        <div className={'architect-timer' + (isOvertime ? ' overtime' : '')}>
+                            <div className="architect-timer-val">{formatTime(modalElapsed)}</div>
+                            {targetTime > 0 && <div className="architect-timer-target">target {formatTime(targetTime)}</div>}
+                        </div>
+                    </header>
+
+                    {/* Dish tabs */}
+                    {modalDishesAll.length > 1 && (
+                        <div className="architect-dishtabs">
+                            {modalDishesAll.map((d, i) => {
+                                const isDone = completedDishes[d.key];
+                                const isCurrent = i === modalDishIndex;
+                                return (
+                                    <button key={i} onClick={() => { setModalDishIndex(i); setCheckedSteps({}); }}
+                                        className={'arch-tab' + (isCurrent ? ' current' : '') + (isDone ? ' done' : '') + (d.isVega ? ' vega' : '')}>
+                                        <span className="arch-tab-icon">{isDone ? '✓' : (d.isVega ? '🌿' : '🔥')}</span>
+                                        <span className="arch-tab-name">{d.naam}</span>
+                                        <span className="arch-tab-count">{d.count}×</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <div className="architect-main">
+                        <div className="architect-dish">
+                            {currentImage && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={currentImage} alt={currentDish.naam} className="architect-dish-img" />
+                            )}
+                            <div className="architect-dish-hdr">
+                                <div className="architect-dish-eyebrow">
+                                    {currentDishEntry.isVega ? '🌿 Vega-variant' : '🔥 Vlees-gerecht'} · {currentDishEntry.count}×
+                                </div>
+                                <h2 className="architect-dish-name">{currentDish.naam || 'Gerecht'}</h2>
+                                {currentDish.beschrijving && <p className="architect-dish-desc">{currentDish.beschrijving}</p>}
                             </div>
-                            {/* Dish navigation tabs */}
-                            {modalDishesAll.length > 1 && (
-                                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                                    {modalDishesAll.map(function (d, i) {
-                                        const isDone = completedDishes[d.key];
-                                        const isCurrent = i === modalDishIndex;
+                        </div>
+
+                        <div className="architect-plan">
+                            <div className="architect-plan-head">Battle plan</div>
+                            {currentSteps.length === 0 ? (
+                                <div className="architect-plan-empty">Geen stappen ingesteld voor dit gerecht.</div>
+                            ) : (
+                                <ol className="architect-plan-steps">
+                                    {currentSteps.map((step: string, i: number) => {
+                                        const isChecked = checkedSteps[modalDishIndex + '_' + i];
                                         return (
-                                            <button key={i} onClick={function () { setModalDishIndex(i); setCheckedSteps({}); }}
-                                                style={{
-                                                    padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: 'pointer',
-                                                    border: isDone ? '2px solid var(--emerald)' : (isCurrent ? '2px solid var(--brand)' : '1px solid var(--border)'),
-                                                    background: isDone ? 'rgba(16,185,129,.1)' : (isCurrent ? 'rgba(196,163,90,.15)' : 'transparent'),
-                                                    color: isDone ? 'var(--emerald)' : (d.isVega ? 'var(--service-vega, #6B7A2F)' : (isCurrent ? 'var(--brand)' : 'var(--muted)')),
-                                                    display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s'
-                                                }}>
-                                                {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
-                                                {d.naam}
-                                                <span style={{ fontSize: 10, opacity: 0.6 }}>{d.count}×</span>
-                                            </button>
+                                            <li key={i} onClick={() => toggleStep(i)} className={'arch-step' + (isChecked ? ' checked' : '')}>
+                                                <div className="arch-step-no">{isChecked ? '✓' : i + 1}</div>
+                                                <div className="arch-step-txt">{step}</div>
+                                            </li>
                                         );
                                     })}
-                                </div>
+                                </ol>
                             )}
                         </div>
-                        <div style={{ textAlign: 'center' }}>
-                            <div className={isOvertime ? 'text-red' : ''} style={{ fontSize: 32, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{formatTime(modalElapsed)}</div>
-                            {targetTime > 0 && <div style={{ fontSize: 10, color: 'var(--muted)' }}>TARGET: {formatTime(targetTime)}</div>}
-                        </div>
-                        <button className="tab-btn" onClick={function () { setActiveModal(null); }}>SLUITEN</button>
                     </div>
 
-                    <div className="architect-body grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 p-4 md:p-10 flex-1 overflow-y-auto">
-                        <div className="arch-left">
-                            {currentImage && <img src={currentImage} style={{ width: '100%', height: 400, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-steel)' }} />}
-                            <div style={{ marginTop: 24 }}>
-                                <h2 style={{ fontSize: 28, fontWeight: 800, color: 'var(--brand)' }}>{currentDish.naam}</h2>
-                                <p style={{ color: 'var(--muted)', marginTop: 12, fontSize: 16 }}>{currentDish.beschrijving}</p>
-                            </div>
-                        </div>
-                        <div className="arch-right">
-                            <h3 style={{ borderBottom: '1px solid var(--border-steel)', paddingBottom: 12, marginBottom: 20 }}>BATTLE PLAN</h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                {currentSteps.map(function (step: string, i: number) {
-                                    const isChecked = checkedSteps[modalDishIndex + '_' + i];
-                                    return (
-                                        <div key={i} className="side-row" onClick={function () { toggleStep(i); }} style={{ padding: 20, cursor: 'pointer', opacity: isChecked ? 0.4 : 1 }}>
-                                            <div style={{ width: 30, height: 30, border: '2px solid var(--brand)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{i + 1}</div>
-                                            <div style={{ flex: 1, marginLeft: 16, fontSize: 18, fontWeight: 500 }}>{step}</div>
-                                            {isChecked && <div style={{ color: 'var(--brand)' }}>✅</div>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="architect-footer" style={{ borderTop: '1px solid var(--border-steel)', padding: '16px 24px' }}>
-                        {/* Per-dish status bar */}
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-                            {modalDishesAll.map(function (d, i) {
+                    <footer className="architect-bottom">
+                        <div className="architect-mini-bar">
+                            {modalDishesAll.map((d, i) => {
                                 const isDone = completedDishes[d.key];
                                 return (
-                                    <div key={d.key} style={{
-                                        display: 'flex', alignItems: 'center', gap: 6,
-                                        padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                                        background: isDone ? 'rgba(16,185,129,.12)' : (i === modalDishIndex ? 'rgba(196,163,90,.12)' : 'rgba(255,255,255,.04)'),
-                                        border: isDone ? '1px solid color-mix(in srgb, var(--emerald) 30%, transparent)' : (i === modalDishIndex ? '1px solid color-mix(in srgb, var(--color-accent-gold) 30%, transparent)' : '1px solid var(--border)'),
-                                        color: isDone ? 'var(--emerald)' : (i === modalDishIndex ? 'var(--brand)' : 'var(--muted)')
-                                    }}>
-                                        {isDone ? '✓' : (d.isVega ? '🌿' : '🍖')}
+                                    <div key={d.key} className={'arch-mini' + (isDone ? ' done' : '') + (i === modalDishIndex ? ' current' : '')}>
+                                        <span>{isDone ? '✓' : (d.isVega ? '🌿' : '🔥')}</span>
                                         <span>{d.naam}</span>
-                                        <span style={{ fontSize: 10, opacity: 0.6 }}>{d.count}×</span>
+                                        <span className="arch-mini-count">{d.count}×</span>
                                     </div>
                                 );
                             })}
                         </div>
 
-                        {/* Action buttons */}
-                        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                        <div className="architect-actions">
                             {!completedDishes[currentDishEntry.key] ? (
-                                <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800 }}
-                                    onClick={function () {
-                                        setCompletedDishes(function (prev) { return Object.assign({}, prev, { [currentDishEntry.key]: true }); });
-                                        // Auto-advance to next unfinished dish
-                                        const nextIdx = modalDishesAll.findIndex(function (d, i) { return i > modalDishIndex && !completedDishes[d.key]; });
-                                        if (nextIdx >= 0) {
-                                            setModalDishIndex(nextIdx);
-                                            setCheckedSteps({});
-                                        }
-                                        showToast('✓ ' + currentDishEntry.naam + ' meegegeven (' + currentDishEntry.count + '×)');
-                                    }}>
-                                    {currentDishEntry.isVega ? '🌿' : '🍖'} GERECHT MEEGEVEN
+                                <button className="architect-cta" onClick={() => {
+                                    setCompletedDishes(prev => Object.assign({}, prev, { [currentDishEntry.key]: true }));
+                                    const nextIdx = modalDishesAll.findIndex((d, i) => i > modalDishIndex && !completedDishes[d.key]);
+                                    if (nextIdx >= 0) { setModalDishIndex(nextIdx); setCheckedSteps({}); }
+                                    showToast('✓ ' + currentDishEntry.naam + ' meegegeven (' + currentDishEntry.count + '×)');
+                                }}>
+                                    {currentDishEntry.isVega ? '🌿' : '🔥'} Gerecht meegeven
+                                </button>
+                            ) : modalDishesAll.every(d => completedDishes[d.key]) ? (
+                                <button className="architect-cta finish" onClick={() => requestFinishGang(activeModal!)}>
+                                    ✓ Gang uitserveren — alle gerechten mee
                                 </button>
                             ) : (
-                                /* All dishes done? Show finish gang button */
-                                modalDishesAll.every(function (d) { return completedDishes[d.key]; }) ? (
-                                    <button className="btn-brand" style={{ padding: '16px 48px', fontSize: 16, fontWeight: 800, background: 'var(--emerald)' }}
-                                        onClick={function () { requestFinishGang(activeModal!); }}>
-                                        ✓ GANG UITGESERVEERD — ALLES MEE
-                                    </button>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ color: 'var(--emerald)', fontSize: 14, fontWeight: 700 }}>✓ {currentDishEntry.naam} is meegegeven</span>
-                                        <button className="tab-btn" style={{ padding: '12px 32px' }}
-                                            onClick={function () {
-                                                const nextIdx = modalDishesAll.findIndex(function (d) { return !completedDishes[d.key]; });
-                                                if (nextIdx >= 0) { setModalDishIndex(nextIdx); setCheckedSteps({}); }
-                                            }}>
-                                            VOLGENDE GERECHT →
-                                        </button>
-                                    </div>
-                                )
+                                <div className="architect-next">
+                                    <span className="architect-next-done">✓ {currentDishEntry.naam} meegegeven</span>
+                                    <button className="architect-next-btn" onClick={() => {
+                                        const nextIdx = modalDishesAll.findIndex(d => !completedDishes[d.key]);
+                                        if (nextIdx >= 0) { setModalDishIndex(nextIdx); setCheckedSteps({}); }
+                                    }}>Volgende gerecht →</button>
+                                </div>
                             )}
                         </div>
-                    </div>
+                    </footer>
                 </div>
             )}
 
+            {/* ═══════════ TEMP POPUP — HACCP ═══════════ */}
             {tempPopup && (
-                <div className="architect-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="artisan-panel" style={{ width: 400, padding: 32, textAlign: 'center' }}>
-                        <h2 style={{ color: 'var(--brand)' }}>KERNTEMPERATUUR?</h2>
-                        <p style={{ margin: '16px 0', opacity: 0.7 }}>{tempPopup.dishName}</p>
-                        <div style={{ fontSize: 48, fontWeight: 900, color: 'var(--brand)', margin: '24px 0' }}>{tempPopup.temp}°C</div>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                            <button className="btn-brand" style={{ flex: 1 }} onClick={confirmTempAndFinish}>OPSLAAN</button>
-                            <button className="tab-btn" style={{ flex: 1 }} onClick={skipTempAndFinish}>SKIP</button>
+                <div className="temp-popup-overlay" onClick={skipTempAndFinish}>
+                    <div className="temp-popup" onClick={(e) => e.stopPropagation()}>
+                        <div className="temp-eyebrow">● HACCP · Kerntemperatuur registreren</div>
+                        <h2 className="temp-title">{tempPopup.dishName}</h2>
+                        <div className="temp-slider-wrap">
+                            <div className="temp-val">{tempPopup.temp}<span className="temp-unit">°C</span></div>
+                            <input type="range" min={0} max={120} step={1} value={tempPopup.temp}
+                                onChange={(e) => setTempPopup(p => p ? { ...p, temp: parseInt(e.target.value) } : null)}
+                                className="temp-slider" />
+                            <div className="temp-hint">
+                                {tempPopup.temp >= 75 ? '✓ Veilig · ≥75°C' :
+                                    tempPopup.temp <= 7 ? '✓ Koeling · ≤7°C' :
+                                        tempPopup.temp >= 65 ? '⚠ Zorgwekkend · 65–74°C' : '✗ Onveilig'}
+                            </div>
+                        </div>
+                        <div className="temp-actions">
+                            <button className="temp-btn cancel" onClick={skipTempAndFinish}>Overslaan</button>
+                            <button className="temp-btn save" onClick={confirmTempAndFinish}>Opslaan & uitserveren</button>
                         </div>
                     </div>
                 </div>
