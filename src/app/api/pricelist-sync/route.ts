@@ -6,24 +6,43 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 /*
- * Synchroniseer een nieuwe parsed prijslijst met master_products.
+ * ═══════════════════════════════════════════════════════════════════════
+ *  PRIJSLIJST-SYNC — robuuste versie
+ * ═══════════════════════════════════════════════════════════════════════
  *
- * PERFORMANCE: geen N+1 queries. Alle existing data wordt 1× upfront geladen
- * in Maps, daarna doet de hoofdloop alleen in-memory werk. Alle writes gaan
- * als bulk-insert/bulk-update in het einde. Geschikt voor 500-1000 producten
- * per call zonder Vercel timeout.
+ * Doel: een geparste prijslijst (N producten) van één leverancier
+ * synchroniseren met `master_products` + `supplier_prices`.
+ *
+ * Garanties (in volgorde van belangrijkheid):
+ *  1. Idempotent — 2× dezelfde call mag dezelfde output geven.
+ *  2. Geen duplicate-key errors, ook niet als Claude dezelfde productnaam
+ *     2× teruggeeft (case-verschil of whitespace).
+ *  3. Schaalt naar 1000+ producten/call zonder Vercel-timeout (geen N+1).
+ *  4. Historie bewaren (oude prijzen blijven, alleen `actief` wisselt).
+ *
+ * DB-constraints die we moeten respecteren:
+ *  - master_products UNIQUE (organization_id, naam_normalized)
+ *    waar naam_normalized = lower(trim(naam))   ← DB-generated
+ *  - supplier_prices UNIQUE INDEX op
+ *    (org, lower(trim(leverancier)), lower(trim(product_naam)),
+ *     lower(trim(eenheid)), prijs)
  */
 
-function normalize(s: string): string {
+/** Moet EXACT hetzelfde zijn als DB `naam_normalized` generated column. */
+function dbNormalize(s: string): string {
+    return (s || '').toLowerCase().trim();
+}
+
+/** Strikte key voor fuzzy matching (ook interpunctie weggooien) */
+function strictNorm(s: string): string {
     return (s || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 }
 
-/** Simpele fuzzy similarity — Jaccard over char-bigrams */
+/** Jaccard over char-bigrams — in-memory fuzzy similarity */
 function similarity(a: string, b: string): number {
-    const aN = normalize(a), bN = normalize(b);
+    const aN = strictNorm(a), bN = strictNorm(b);
     if (aN === bN) return 1;
     if (aN.length < 3 || bN.length < 3) return 0;
-
     const bigrams = (s: string): Set<string> => {
         const set = new Set<string>();
         for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
@@ -42,11 +61,14 @@ interface ProductInput {
     categorie?: string;
 }
 
-/** Chunk helper voor bulk-insert (Supabase heeft ~1000 row limiet) */
 function chunk<T>(arr: T[], size: number): T[][] {
     const out: T[][] = [];
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
     return out;
+}
+
+function priceKey(p: { product_naam: string; eenheid?: string; prijs: number }): string {
+    return `${dbNormalize(p.product_naam)}|${dbNormalize(p.eenheid || 'stuks')}|${Number(p.prijs)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -74,196 +96,247 @@ export async function POST(req: NextRequest) {
 
         const datum = new Date().toISOString().slice(0, 10);
 
-        /* ═══ STAP 1: Preload alles 1× ═══ */
+        /* ─── STAP 1: Filter + dedup input ─── */
 
-        /* Alle master_products in deze org (voor fuzzy match) */
+        /* Filter onbruikbare rijen weg */
+        const cleanInput: ProductInput[] = [];
+        for (const p of producten) {
+            if (!p || typeof p.product_naam !== 'string') continue;
+            const naam = p.product_naam.trim();
+            if (naam.length === 0) continue;
+            const prijs = Number(p.prijs);
+            if (!Number.isFinite(prijs) || prijs <= 0) continue;
+            cleanInput.push({
+                product_naam: naam,
+                prijs,
+                eenheid: p.eenheid?.trim() || 'stuks',
+                categorie: p.categorie?.trim() || undefined,
+            });
+        }
+
+        /* Dedup op DB-normalized naam (1 product = 1 master_product) */
+        const byNormName = new Map<string, ProductInput>();
+        for (const p of cleanInput) {
+            const key = dbNormalize(p.product_naam);
+            if (!key) continue;
+            /* Laatste voorkomen wint — later bakje > eerder bakje */
+            byNormName.set(key, p);
+        }
+        const dedupedInput = Array.from(byNormName.values());
+
+        /* ─── STAP 2: Preload bestaande data in Maps ─── */
+
         const { data: existingMasters, error: mErr } = await supabase
             .from('master_products')
-            .select('id, naam, naam_normalized, categorie, standaard_leverancier')
+            .select('id, naam, naam_normalized, categorie')
             .eq('organization_id', orgId);
         if (mErr) return NextResponse.json({ error: 'Master-query: ' + mErr.message }, { status: 500 });
 
-        const mastersByNorm = new Map<string, any>();
-        const mastersArray: any[] = existingMasters || [];
-        for (const m of mastersArray) mastersByNorm.set(m.naam_normalized, m);
+        const masterByNorm = new Map<string, { id: number; naam: string }>();
+        const mastersArray = (existingMasters || []) as { id: number; naam: string; naam_normalized: string }[];
+        for (const m of mastersArray) masterByNorm.set(m.naam_normalized, { id: m.id, naam: m.naam });
 
-        /* Alle actieve supplier_prices voor deze leverancier — voor dedup + update */
-        const { data: existingActivePrices, error: pErr } = await supabase
+        /* Alle supplier_prices (actief + inactief) voor deze leverancier — gebruikt voor
+           reactivate-or-insert strategie, voorkomt duplicate-key op unique index */
+        const { data: existingPrices, error: pErr } = await supabase
             .from('supplier_prices')
-            .select('id, master_product_id, prijs')
+            .select('id, master_product_id, product_naam, eenheid, prijs, actief')
             .eq('organization_id', orgId)
-            .eq('leverancier', leverancier)
-            .eq('actief', true);
+            .eq('leverancier', leverancier);
         if (pErr) return NextResponse.json({ error: 'Prices-query: ' + pErr.message }, { status: 500 });
 
-        /* Map: master_product_id → { id, prijs } voor O(1) dedup-check */
-        const activePriceByMasterId = new Map<number, { id: number; prijs: number }>();
-        const existingMasterIds = new Set<number>();
-        for (const p of (existingActivePrices || [])) {
-            if (p.master_product_id) {
-                activePriceByMasterId.set(p.master_product_id, { id: p.id, prijs: Number(p.prijs) });
-                existingMasterIds.add(p.master_product_id);
-            }
+        /* Key: dbNormalize(product_naam)|dbNormalize(eenheid)|prijs → entry */
+        const priceByKey = new Map<number, { id: number; actief: boolean; masterId: number | null }>();
+        const priceByKeyStr = new Map<string, { id: number; actief: boolean; masterId: number | null }>();
+        /* Ook: welke master_ids hebben op dit moment een actieve prijs bij deze leverancier */
+        const previouslyActiveMasterIds = new Set<number>();
+        for (const ep of (existingPrices || [])) {
+            const k = priceKey({ product_naam: ep.product_naam, eenheid: ep.eenheid, prijs: Number(ep.prijs) });
+            priceByKeyStr.set(k, { id: ep.id, actief: !!ep.actief, masterId: ep.master_product_id });
+            priceByKey.set(ep.id, { id: ep.id, actief: !!ep.actief, masterId: ep.master_product_id });
+            if (ep.actief && ep.master_product_id) previouslyActiveMasterIds.add(ep.master_product_id);
         }
 
-        /* ═══ STAP 2: In-memory verwerking ═══ */
+        /* ─── STAP 3: Match input tegen masters (in-memory) ─── */
 
         const stats = { nieuw: 0, geupdate: 0, uit_assortiment: 0, duplicaten: 0 };
-        const touchedMasterIds = new Set<number>();
-        const deactivatePriceIds: number[] = [];
 
-        /* Producten die een NIEUW master_product nodig hebben → bulk-insert later */
-        type PendingNew = { input: ProductInput; masterId?: number };
-        const pendingNewMasters: PendingNew[] = [];
-        const pendingExistingMatches: { input: ProductInput; masterId: number }[] = [];
+        type Matched = { input: ProductInput; masterId: number };
+        type Unmatched = { input: ProductInput };
+        const matched: Matched[] = [];
+        const unmatched: Unmatched[] = [];
 
-        for (const p of producten) {
-            if (!p.product_naam || typeof p.prijs !== 'number') continue;
-
-            const norm = normalize(p.product_naam);
-            let masterId: number | null = null;
-
-            const exact = mastersByNorm.get(norm);
+        for (const p of dedupedInput) {
+            const norm = dbNormalize(p.product_naam);
+            const exact = masterByNorm.get(norm);
             if (exact) {
-                masterId = exact.id;
-            } else {
-                /* Fuzzy scan — O(n) per product, maar puur in-memory */
-                let bestScore = 0.85;
-                let bestMatch: any = null;
-                for (const m of mastersArray) {
-                    const score = similarity(p.product_naam, m.naam);
-                    if (score > bestScore) { bestScore = score; bestMatch = m; }
-                }
-                if (bestMatch) masterId = bestMatch.id;
+                matched.push({ input: p, masterId: exact.id });
+                continue;
             }
-
-            if (masterId) {
-                pendingExistingMatches.push({ input: p, masterId });
+            /* Fuzzy fallback (>0.88) om bijna-duplicaten met kleine typo's te koppelen */
+            let bestScore = 0.88;
+            let bestMatch: { id: number; naam: string } | null = null;
+            for (const m of mastersArray) {
+                const score = similarity(p.product_naam, m.naam);
+                if (score > bestScore) { bestScore = score; bestMatch = { id: m.id, naam: m.naam }; }
+            }
+            if (bestMatch) {
+                matched.push({ input: p, masterId: bestMatch.id });
             } else {
-                pendingNewMasters.push({ input: p });
+                unmatched.push({ input: p });
             }
         }
 
-        /* ═══ STAP 3: Bulk-insert nieuwe master_products ═══ */
+        /* ─── STAP 4: Upsert nieuwe masters (race-safe) ─── */
 
-        if (pendingNewMasters.length > 0) {
-            const newMasterRows = pendingNewMasters.map(pm => ({
+        if (unmatched.length > 0) {
+            const rows = unmatched.map(u => ({
                 organization_id: orgId,
-                naam: pm.input.product_naam.trim(),
-                categorie: pm.input.categorie || null,
-                standaard_eenheid: pm.input.eenheid || 'stuks',
+                naam: u.input.product_naam,
+                categorie: u.input.categorie || null,
+                standaard_eenheid: u.input.eenheid || 'stuks',
                 standaard_leverancier: leverancier,
                 uit_assortiment: false,
             }));
 
-            /* Chunk van 500 om Supabase-limieten te respecteren */
-            const insertedAll: any[] = [];
-            for (const batch of chunk(newMasterRows, 500)) {
-                const { data: inserted, error: insErr } = await supabase
+            for (const batch of chunk(rows, 500)) {
+                /*
+                 * upsert met onConflict op de unique constraint — als een andere
+                 * parallel-request al een master met deze normalized naam heeft
+                 * ingevoegd, krijgen we die rij terug zonder crash.
+                 */
+                const { data: upserted, error: upErr } = await supabase
                     .from('master_products')
-                    .insert(batch)
+                    .upsert(batch, {
+                        onConflict: 'organization_id,naam_normalized',
+                        ignoreDuplicates: false,
+                    })
                     .select('id, naam, naam_normalized');
-                if (insErr) return NextResponse.json({ error: 'Master-insert: ' + insErr.message }, { status: 500 });
-                if (inserted) insertedAll.push(...inserted);
+                if (upErr) {
+                    return NextResponse.json({ error: 'Master-upsert: ' + upErr.message }, { status: 500 });
+                }
+                for (const m of (upserted || [])) {
+                    masterByNorm.set(m.naam_normalized, { id: m.id, naam: m.naam });
+                }
             }
 
-            /* Link masterId terug aan elke pendingNewMaster via naam_normalized */
-            const newByNorm = new Map<string, any>();
-            for (const m of insertedAll) newByNorm.set(m.naam_normalized, m);
-            for (const pm of pendingNewMasters) {
-                const match = newByNorm.get(normalize(pm.input.product_naam));
-                if (match) {
-                    pm.masterId = match.id;
+            /* Link unmatched → masterId via refreshed map, en telling bijwerken */
+            for (const u of unmatched) {
+                const norm = dbNormalize(u.input.product_naam);
+                const m = masterByNorm.get(norm);
+                if (m) {
+                    matched.push({ input: u.input, masterId: m.id });
                     stats.nieuw++;
                 }
             }
         }
 
-        /* ═══ STAP 4: Bouw supplier_prices rows ═══ */
+        /* ─── STAP 5: Supplier_prices via reactivate-or-insert ─── */
 
-        const newSupplierPrices: any[] = [];
+        /* Per master-id: welke prijs komt nu binnen (voor uit-assortiment detectie) */
+        const touchedMasterIds = new Set<number>();
+        /* IDs die we willen (re)activeren — zowel nieuwe inserts als reactivates */
+        const reactivateIds: number[] = [];
+        /* IDs die we willen deactiveren (oude active rows voor zelfde master) */
+        const deactivateIds: number[] = [];
+        /* Nieuwe rijen die nog niet in DB staan */
+        const newRows: any[] = [];
 
-        const addPriceRow = (input: ProductInput, masterId: number) => {
+        /* Per master kunnen er meerdere keys matchen (verschillende eenheid),
+           dus we groeperen niet per master maar gaan per input-row */
+        for (const { input, masterId } of matched) {
             touchedMasterIds.add(masterId);
-            const existing = activePriceByMasterId.get(masterId);
+            const k = priceKey({ product_naam: input.product_naam, eenheid: input.eenheid, prijs: input.prijs });
+            const existing = priceByKeyStr.get(k);
 
-            if (existing && existing.prijs === Number(input.prijs)) {
-                stats.duplicaten++;
-                return;
-            }
             if (existing) {
-                deactivatePriceIds.push(existing.id);
-            }
-            stats.geupdate++;
-
-            const eenh = (input.eenheid || '').toLowerCase();
-            let prijsPerKg: number | null = null;
-            let prijsPerStuk: number | null = null;
-            if (eenh.includes('kg') || eenh === 'kilo') prijsPerKg = input.prijs;
-            else if (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) prijsPerStuk = input.prijs;
-
-            newSupplierPrices.push({
-                organization_id: orgId,
-                master_product_id: masterId,
-                leverancier,
-                product_naam: input.product_naam.trim(),
-                prijs: Number(input.prijs),
-                eenheid: input.eenheid || 'stuks',
-                categorie: input.categorie || null,
-                datum,
-                actief: true,
-                prijs_per_kg: prijsPerKg,
-                prijs_per_stuk: prijsPerStuk,
-            });
-        };
-
-        for (const pe of pendingExistingMatches) addPriceRow(pe.input, pe.masterId);
-        for (const pn of pendingNewMasters) {
-            if (pn.masterId) {
-                /* Nieuwe master heeft per definitie geen actieve prijs, dus gewoon toevoegen */
-                touchedMasterIds.add(pn.masterId);
-                const eenh = (pn.input.eenheid || '').toLowerCase();
-                let prijsPerKg: number | null = null;
-                let prijsPerStuk: number | null = null;
-                if (eenh.includes('kg') || eenh === 'kilo') prijsPerKg = pn.input.prijs;
-                else if (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) prijsPerStuk = pn.input.prijs;
-
-                newSupplierPrices.push({
+                /* Exacte combinatie bestaat al in DB */
+                if (existing.actief) {
+                    stats.duplicaten++;
+                } else {
+                    reactivateIds.push(existing.id);
+                    stats.geupdate++;
+                }
+            } else {
+                /* Nieuwe rij — insert */
+                const eenh = (input.eenheid || '').toLowerCase();
+                const prijsPerKg = (eenh.includes('kg') || eenh === 'kilo') ? input.prijs : null;
+                const prijsPerStuk = (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) ? input.prijs : null;
+                newRows.push({
                     organization_id: orgId,
-                    master_product_id: pn.masterId,
+                    master_product_id: masterId,
                     leverancier,
-                    product_naam: pn.input.product_naam.trim(),
-                    prijs: Number(pn.input.prijs),
-                    eenheid: pn.input.eenheid || 'stuks',
-                    categorie: pn.input.categorie || null,
+                    product_naam: input.product_naam,
+                    prijs: Number(input.prijs),
+                    eenheid: input.eenheid || 'stuks',
+                    categorie: input.categorie || null,
                     datum,
                     actief: true,
                     prijs_per_kg: prijsPerKg,
                     prijs_per_stuk: prijsPerStuk,
                 });
+                stats.geupdate++;
             }
         }
 
-        /* ═══ STAP 5: Bulk writes ═══ */
+        /*
+         * Voor elke master die we hebben aangeraakt: deactiveer ALLE andere actieve
+         * rijen van deze leverancier die niet in onze "keep-active" set zitten.
+         * Die set = de reactivate-IDs + de IDs die we net gaan inserten (deduced via key-match).
+         */
+        const keepActiveIdSet = new Set<number>(reactivateIds);
+        for (const ep of (existingPrices || [])) {
+            if (!ep.actief) continue;
+            if (!ep.master_product_id) continue;
+            if (!touchedMasterIds.has(ep.master_product_id)) continue;
+            /* Master komt terug — check of deze specifieke rij "keep-active" is */
+            if (keepActiveIdSet.has(ep.id)) continue;
+            /* Check of deze rij exact dezelfde key heeft als een nieuwe insert (dan mag hij blijven) */
+            const k = priceKey({ product_naam: ep.product_naam, eenheid: ep.eenheid, prijs: Number(ep.prijs) });
+            const stillInInput = newRows.some(n => priceKey(n) === k);
+            if (stillInInput) continue;
+            /* Anders: deactiveer */
+            deactivateIds.push(ep.id);
+        }
 
-        /* Deactiveer oude actieve prijzen in chunks */
-        for (const idChunk of chunk(deactivatePriceIds, 500)) {
+        /* ─── STAP 6: DB-writes in chunks ─── */
+
+        /* 6a. Deactiveer oude rijen */
+        for (const idChunk of chunk(deactivateIds, 500)) {
             if (idChunk.length === 0) continue;
             const { error } = await supabase.from('supplier_prices').update({ actief: false }).in('id', idChunk);
             if (error) return NextResponse.json({ error: 'Deactivate: ' + error.message }, { status: 500 });
         }
 
-        /* Bulk-insert nieuwe supplier_prices in chunks */
-        for (const rowChunk of chunk(newSupplierPrices, 500)) {
-            if (rowChunk.length === 0) continue;
-            const { error } = await supabase.from('supplier_prices').insert(rowChunk);
-            if (error) return NextResponse.json({ error: 'Prices-insert: ' + error.message }, { status: 500 });
+        /* 6b. Reactiveer bestaande rijen */
+        for (const idChunk of chunk(reactivateIds, 500)) {
+            if (idChunk.length === 0) continue;
+            const { error } = await supabase.from('supplier_prices')
+                .update({ actief: true, datum })
+                .in('id', idChunk);
+            if (error) return NextResponse.json({ error: 'Reactivate: ' + error.message }, { status: 500 });
         }
 
-        /* ═══ STAP 6: Uit-assortiment detectie ═══ */
+        /* 6c. Bulk-insert nieuwe rijen (zonder upsert — we hebben al gecheckt op bestaan) */
+        for (const rowChunk of chunk(newRows, 500)) {
+            if (rowChunk.length === 0) continue;
+            const { error } = await supabase.from('supplier_prices').insert(rowChunk);
+            if (error) {
+                /* Fallback: als toch duplicate (race condition), probeer upsert met ignoreDuplicates */
+                if (error.code === '23505') {
+                    const { error: upErr } = await supabase.from('supplier_prices')
+                        .upsert(rowChunk, { ignoreDuplicates: true });
+                    if (upErr) return NextResponse.json({ error: 'Prices-upsert: ' + upErr.message }, { status: 500 });
+                } else {
+                    return NextResponse.json({ error: 'Prices-insert: ' + error.message }, { status: 500 });
+                }
+            }
+        }
+
+        /* ─── STAP 7: Uit-assortiment detectie ─── */
 
         const missingIds: number[] = [];
-        for (const oldId of existingMasterIds) {
+        for (const oldId of previouslyActiveMasterIds) {
             if (!touchedMasterIds.has(oldId)) missingIds.push(oldId);
         }
 
@@ -295,6 +368,12 @@ export async function POST(req: NextRequest) {
             success: true,
             stats,
             uit_assortiment_master_ids: uitAssortimentMasterIds,
+            debug: {
+                input_received: producten.length,
+                input_deduped: dedupedInput.length,
+                matched: matched.length,
+                new_masters: unmatched.length,
+            },
         });
     } catch (e: any) {
         console.error('[pricelist-sync]', e);
