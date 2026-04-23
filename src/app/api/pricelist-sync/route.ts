@@ -38,6 +38,26 @@ function strictNorm(s: string): string {
     return (s || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * "Base-name" zonder trailing size-suffix en zonder decoratieve tekens.
+ * "Bebo Omega Light 250 g" → "bebo omega light"
+ * "aro Mozzarella 125 g *" → "aro mozzarella"
+ *
+ * Uitsluitend gebruikt om een bestaande master te vinden wanneer Claude in
+ * het ene bakje de eenheid-info mee-noemt en in het andere niet. Nooit
+ * gebruikt om twee producten te MERGEN — alleen om een enkele match te
+ * vinden (bij >1 kandidaat → nieuw master, veilig).
+ */
+function cleanBase(s: string): string {
+    return (s || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[\*\u2605\u2606]+\s*$/g, '')
+        .replace(/\s+(ca\.?\s+)?\d+([.,]\d+)?\s*(x\s*\d+\s*)?(kg|g|l|ml|stuks?|pak|stks?|krat|fles|doos|bakje|kist|cl|liter)\s*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 /** Jaccard over char-bigrams — in-memory fuzzy similarity */
 function similarity(a: string, b: string): number {
     const aN = strictNorm(a), bN = strictNorm(b);
@@ -133,8 +153,22 @@ export async function POST(req: NextRequest) {
         if (mErr) return NextResponse.json({ error: 'Master-query: ' + mErr.message }, { status: 500 });
 
         const masterByNorm = new Map<string, { id: number; naam: string }>();
+        /*
+         * byCleanBase: clean-base (zonder size-suffix) → list van masters.
+         * Gebruikt als fallback wanneer exact-match faalt. We gebruiken
+         * alleen als er precies 1 kandidaat is — bij >1 is het te riskant
+         * om te raden en maken we liever een nieuwe master.
+         */
+        const byCleanBase = new Map<string, { id: number; naam: string }[]>();
         const mastersArray = (existingMasters || []) as { id: number; naam: string; naam_normalized: string }[];
-        for (const m of mastersArray) masterByNorm.set(m.naam_normalized, { id: m.id, naam: m.naam });
+        for (const m of mastersArray) {
+            masterByNorm.set(m.naam_normalized, { id: m.id, naam: m.naam });
+            const base = cleanBase(m.naam);
+            if (!base) continue;
+            const list = byCleanBase.get(base);
+            if (list) list.push({ id: m.id, naam: m.naam });
+            else byCleanBase.set(base, [{ id: m.id, naam: m.naam }]);
+        }
 
         /* Alle supplier_prices (actief + inactief) voor deze leverancier — gebruikt voor
            reactivate-or-insert strategie, voorkomt duplicate-key op unique index */
@@ -168,12 +202,26 @@ export async function POST(req: NextRequest) {
 
         for (const p of dedupedInput) {
             const norm = dbNormalize(p.product_naam);
+
+            /* 1. Exact-match (case-insensitive trimmed) */
             const exact = masterByNorm.get(norm);
             if (exact) {
                 matched.push({ input: p, masterId: exact.id });
                 continue;
             }
-            /* Fuzzy fallback (>0.88) om bijna-duplicaten met kleine typo's te koppelen */
+
+            /* 2. Clean-base match — zelfde product zonder size-suffix.
+               Alleen gebruikt als er PRECIES 1 kandidaat is (anders te risky). */
+            const base = cleanBase(p.product_naam);
+            if (base) {
+                const candidates = byCleanBase.get(base);
+                if (candidates && candidates.length === 1) {
+                    matched.push({ input: p, masterId: candidates[0].id });
+                    continue;
+                }
+            }
+
+            /* 3. Fuzzy fallback (>0.88) voor kleine typo's */
             let bestScore = 0.88;
             let bestMatch: { id: number; naam: string } | null = null;
             for (const m of mastersArray) {
@@ -188,6 +236,42 @@ export async function POST(req: NextRequest) {
         }
 
         /* ─── STAP 4: Upsert nieuwe masters (race-safe) ─── */
+
+        /*
+         * Dedup unmatched op cleanBase: als 2 unmatched rijen dezelfde base-naam
+         * hebben, één met size-suffix en één zonder, zijn het vrijwel zeker
+         * hetzelfde product (Claude rapporteerde inconsistent tussen bakjes).
+         * In dat geval: hou de variant met size-suffix aan (meest informatief).
+         * Als ALLE varianten size hebben → verschillende maten → allemaal
+         * behouden.
+         */
+        const hasSize = (s: string) =>
+            /\d+([.,]\d+)?\s*(kg|g|l|ml|stuks?|pak|stks?|krat|fles|doos|bakje|kist|cl|liter)\s*$/i.test(s.trim());
+
+        const unmatchedByBase = new Map<string, Unmatched[]>();
+        for (const u of unmatched) {
+            const base = cleanBase(u.input.product_naam);
+            if (!base) continue;
+            const list = unmatchedByBase.get(base);
+            if (list) list.push(u);
+            else unmatchedByBase.set(base, [u]);
+        }
+        const dedupedUnmatched: Unmatched[] = [];
+        for (const [, list] of unmatchedByBase) {
+            if (list.length === 1) { dedupedUnmatched.push(list[0]); continue; }
+            const withSize = list.filter(u => hasSize(u.input.product_naam));
+            const noSize = list.filter(u => !hasSize(u.input.product_naam));
+            if (withSize.length > 0 && noSize.length > 0) {
+                /* No-size zijn waarschijnlijk dupes van de size-variants → drop */
+                dedupedUnmatched.push(...withSize);
+            } else {
+                dedupedUnmatched.push(...list);
+            }
+        }
+        /* Vervang unmatched door de gededupeerde lijst — stats.nieuw wordt
+           later geteld na upsert zodat duplicate-key-via-race ook goed gaat */
+        unmatched.length = 0;
+        unmatched.push(...dedupedUnmatched);
 
         if (unmatched.length > 0) {
             const rows = unmatched.map(u => ({
