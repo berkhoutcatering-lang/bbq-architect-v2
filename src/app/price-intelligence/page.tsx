@@ -2242,11 +2242,16 @@ interface BulkFile {
     producten: number;
     leverancier?: string;
     error?: string;
+    /* Chunk-progress (het 'bakjes'-systeem voor grote PDFs) */
+    chunkProgress?: { current: number; total: number; productsOnline: number };
 }
 
 const MAX_CONCURRENT = 3;
 const BATCH_SIZE = 30;          /* PDFs per batch — voorkom RAM-issues bij 60+ uploads */
 const BATCH_PAUSE_MS = 1000;    /* Korte pauze tussen batches voor rate-limit safety */
+const PAGES_PER_BAKJE = 10;     /* Elk bakje = 10 pagina's → Haiku kan niet samenvatten */
+const BAKJE_CONCURRENT = 3;     /* Hoeveel bakjes parallel verwerken binnen 1 PDF */
+const BAKJE_MAX_RETRIES = 2;    /* Bij chunk-failure maximaal 2× opnieuw proberen */
 
 /* Bibliotheek-samenvatting per leverancier */
 type LibStat = {
@@ -2807,76 +2812,54 @@ function FolderPricelists() {
         setFiles(prev => [...prev, ...arr]);
     }
 
+    /**
+     * BAKJES-STRATEGIE: splits PDF in vakjes van 10 pagina's, verwerk 3 parallel.
+     * Elke bakje is klein genoeg zodat Haiku niet kan samenvatten — hij moet
+     * ELKE productregel teruggeven. Expected volledigheid: 95-99%.
+     *
+     * Voor 100-page PDF: 10 bakjes × ~€0,02 = ~€0,20 totaal, ~1 min.
+     * Voor 300-page PDF: 30 bakjes × ~€0,02 = ~€0,60 totaal, ~3 min.
+     */
     async function parseOne(bf: BulkFile): Promise<{ ok: boolean; leverancier?: string; producten: any[]; error?: string }> {
         try {
-            /* 1) Probeer client-side tekst-extractie (geen page-limit, 5x goedkoper) */
-            const extractedText = await extractPdfText(bf.file);
-            const useText = isUsableText(extractedText);
+            /* Safety: file-size check (Anthropic vision max 32MB per call, wij houden 30MB aan) */
+            const fileSizeMB = bf.file.size / 1024 / 1024;
+            if (fileSizeMB > 30) {
+                return { ok: false, producten: [], error: `PDF te groot (${fileSizeMB.toFixed(1)} MB > 30 MB). Splits handmatig in delen.` };
+            }
 
-            let body: any = null;
+            /* Tel pagina's — bepaalt hoeveel bakjes we nodig hebben */
+            const pageCount = await getPdfPageCount(bf.file);
+            if (pageCount === 0) {
+                return { ok: false, producten: [], error: 'PDF kon niet worden gelezen (mogelijk corrupt of beveiligd).' };
+            }
 
-            if (useText) {
-                /* TEXT-MODE: stuur alleen de tekst. Kleine body, geen vision-tokens.
-                   Werkt voor text-based PDFs ongeacht aantal pagina's. */
-                const res = await fetch('/api/parse-pricelist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ textContent: extractedText, model: aiModel }),
-                });
-                try { body = await res.json(); } catch { /* non-JSON */ }
-                if (!res.ok || !body?.success) {
-                    return { ok: false, producten: [], error: body?.error || `HTTP ${res.status}` };
-                }
-                /* Log chunks-count voor transparantie (staat in body.chunks bij chunked calls) */
-                if (body.chunks && body.chunks > 1) {
-                    console.log(`[parse-pricelist] ${bf.file.name} → ${body.chunks} text-chunks → ${body.data?.producten?.length || 0} producten`);
-                }
-            } else {
-                /* VISION FALLBACK voor ingescande/image-based PDFs.
-                   Anthropic limieten: 32MB base64, 100 pagina's per request. */
-                const fileSizeMB = bf.file.size / 1024 / 1024;
-                if (fileSizeMB > 30) {
-                    return { ok: false, producten: [], error: `PDF te groot (${fileSizeMB.toFixed(1)} MB). Max 30 MB. Splits PDF handmatig.` };
-                }
-                if (extractedText && extractedText.length > 30) {
-                    /* Eerst text-retry — werkt vaak als er wel wat extractable is */
-                    const res = await fetch('/api/parse-pricelist', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ textContent: extractedText, model: aiModel }),
-                    });
-                    try { body = await res.json(); } catch { /* non-JSON */ }
-                    if (res.ok && body?.success && (body.data?.producten?.length || 0) > 0) {
-                        return { ok: true, leverancier: body.data?.leverancier, producten: body.data.producten };
-                    }
-                }
+            /* Splits PDF in bakjes van PAGES_PER_BAKJE pagina's (client-side met pdf-lib) */
+            const bakjes = await splitPdfIntoChunks(bf.file, PAGES_PER_BAKJE);
+            const totalBakjes = bakjes.length;
 
-                /* Auto-split bij >100 pagina's (Anthropic limiet) */
-                const pageCount = await getPdfPageCount(bf.file);
-                let chunks: { blob: Blob; index: number; totalChunks: number }[];
-                if (pageCount > 100) {
-                    const splitChunks = await splitPdfIntoChunks(bf.file, 90);
-                    chunks = splitChunks.map(c => ({ blob: c.blob, index: c.index, totalChunks: c.totalChunks }));
-                } else {
-                    chunks = [{ blob: bf.file, index: 0, totalChunks: 1 }];
-                }
+            /* Init chunkProgress in de UI */
+            setFiles(prev => prev.map(f => f.id === bf.id ? {
+                ...f,
+                chunkProgress: { current: 0, total: totalBakjes, productsOnline: 0 },
+            } : f));
 
-                /* Upload elke chunk naar storage en verwerk via API */
-                const allProducten: any[] = [];
-                let leverancier: string | undefined;
-                let chunkErrors = 0;
-                for (const chunk of chunks) {
-                    const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 70);
-                    const suffix = chunk.totalChunks > 1 ? `_part${chunk.index + 1}of${chunk.totalChunks}` : '';
+            /* Verwerkt één bakje: upload → API call → retourneer producten */
+            async function processBakje(bakje: { blob: Blob; index: number; totalChunks: number; pageStart: number; pageEnd: number }, retryNum = 0): Promise<{ ok: boolean; producten: any[]; leverancier?: string; error?: string }> {
+                try {
+                    /* Upload bakje-PDF naar Supabase storage (body-size omzeilen) */
+                    const safeName = bf.file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+                    const suffix = `_bakje${bakje.index + 1}of${bakje.totalChunks}_p${bakje.pageStart}-${bakje.pageEnd}`;
                     const path = `${orgId || 'public'}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}${suffix}.pdf`;
-                    const { error: upErr } = await supabase.storage.from('pricelists').upload(path, chunk.blob, {
+                    const { error: upErr } = await supabase.storage.from('pricelists').upload(path, bakje.blob, {
                         contentType: 'application/pdf', upsert: false,
                     });
-                    if (upErr) { chunkErrors++; continue; }
+                    if (upErr) return { ok: false, producten: [], error: 'Upload: ' + upErr.message };
                     const { data: urlData } = supabase.storage.from('pricelists').getPublicUrl(path);
                     const pdfUrl = urlData?.publicUrl;
-                    if (!pdfUrl) { chunkErrors++; continue; }
+                    if (!pdfUrl) return { ok: false, producten: [], error: 'Geen public URL' };
 
+                    /* Haiku call voor dit ene bakje — klein & gefocust */
                     const res = await fetch('/api/parse-pricelist', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2884,19 +2867,77 @@ function FolderPricelists() {
                     });
                     let chunkBody: any = null;
                     try { chunkBody = await res.json(); } catch { /* non-JSON */ }
-                    if (!res.ok || !chunkBody?.success) { chunkErrors++; continue; }
-                    if (chunkBody.data?.producten) allProducten.push(...chunkBody.data.producten);
-                    if (!leverancier && chunkBody.data?.leverancier) leverancier = chunkBody.data.leverancier;
+                    if (!res.ok || !chunkBody?.success) {
+                        /* Retry-logic: bij fout 1× (of max 2×) opnieuw */
+                        if (retryNum < BAKJE_MAX_RETRIES) {
+                            await new Promise(r => setTimeout(r, 1500 * (retryNum + 1)));
+                            return processBakje(bakje, retryNum + 1);
+                        }
+                        return { ok: false, producten: [], error: chunkBody?.error || `HTTP ${res.status}` };
+                    }
+                    return {
+                        ok: true,
+                        producten: chunkBody.data?.producten || [],
+                        leverancier: chunkBody.data?.leverancier,
+                    };
+                } catch (e: any) {
+                    if (retryNum < BAKJE_MAX_RETRIES) {
+                        await new Promise(r => setTimeout(r, 1500 * (retryNum + 1)));
+                        return processBakje(bakje, retryNum + 1);
+                    }
+                    return { ok: false, producten: [], error: e?.message || 'Fout' };
                 }
-
-                if (allProducten.length === 0) {
-                    return { ok: false, producten: [], error: `Alle ${chunks.length} PDF-chunks faalden. Probeer PDF handmatig te splitsen.` };
-                }
-                return { ok: true, leverancier, producten: allProducten };
             }
 
-            const prods = body.data?.producten || [];
-            return { ok: true, leverancier: body.data?.leverancier, producten: prods };
+            /* Concurrency-pool: BAKJE_CONCURRENT bakjes tegelijk verwerken */
+            const allProducten: any[] = [];
+            let leverancier: string | undefined;
+            let completedBakjes = 0;
+            let failedBakjes = 0;
+            let idx = 0;
+
+            async function worker() {
+                while (idx < bakjes.length) {
+                    const myIdx = idx++;
+                    const bakje = bakjes[myIdx];
+                    const result = await processBakje(bakje);
+                    completedBakjes++;
+                    if (result.ok) {
+                        allProducten.push(...result.producten);
+                        if (!leverancier && result.leverancier) leverancier = result.leverancier;
+                    } else {
+                        failedBakjes++;
+                    }
+                    /* Live progress update per bakje */
+                    setFiles(prev => prev.map(f => f.id === bf.id ? {
+                        ...f,
+                        chunkProgress: {
+                            current: completedBakjes,
+                            total: totalBakjes,
+                            productsOnline: allProducten.length,
+                        },
+                    } : f));
+                }
+            }
+
+            const workers: Promise<void>[] = [];
+            for (let i = 0; i < Math.min(BAKJE_CONCURRENT, bakjes.length); i++) {
+                workers.push(worker());
+            }
+            await Promise.all(workers);
+
+            if (allProducten.length === 0) {
+                return { ok: false, producten: [], error: `Alle ${totalBakjes} bakjes faalden. Mogelijk is PDF versleuteld of onleesbaar.` };
+            }
+
+            /* Ook als een paar bakjes faalden, lever partial result terug */
+            const errorNote = failedBakjes > 0 ? ` (${failedBakjes}/${totalBakjes} bakjes gefaald)` : '';
+            return {
+                ok: true,
+                leverancier,
+                producten: allProducten,
+                error: errorNote || undefined,
+            };
         } catch (e: any) {
             return { ok: false, producten: [], error: e?.message || 'Fout' };
         }
@@ -3190,6 +3231,11 @@ function FolderPricelists() {
                                     {!f.leverancier && <span />}
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>
                                         {f.status === 'done' && `${f.producten} items`}
+                                        {f.status === 'processing' && f.chunkProgress && (
+                                            <span style={{ color: GOLD, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                                Bakje {f.chunkProgress.current}/{f.chunkProgress.total} · {f.chunkProgress.productsOnline} producten
+                                            </span>
+                                        )}
                                         {f.status === 'error' && (
                                             <span style={{ color: 'var(--red)', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'help' }} title={f.error || ''}>
                                                 {f.error?.slice(0, 140)}
