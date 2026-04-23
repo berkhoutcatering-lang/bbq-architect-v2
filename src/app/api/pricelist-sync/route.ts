@@ -3,24 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /*
- * Synchroniseer een nieuwe parsed prijslijst met master_products:
- * - Fuzzy match tegen bestaande master_products van deze leverancier
- * - Hoge match → supplier_prices entry toevoegen, oude actief→false
- * - Nieuwe master_products aanmaken voor items die niet matchen
- * - Uit-assortiment detectie: master-products van deze leverancier+categorie
- *   die NIET in de nieuwe upload voorkomen → flag uit_assortiment=true
+ * Synchroniseer een nieuwe parsed prijslijst met master_products.
  *
- * Retourneert samenvatting: { nieuw, geupdate, uit_assortiment, duplicaten }
+ * PERFORMANCE: geen N+1 queries. Alle existing data wordt 1× upfront geladen
+ * in Maps, daarna doet de hoofdloop alleen in-memory werk. Alle writes gaan
+ * als bulk-insert/bulk-update in het einde. Geschikt voor 500-1000 producten
+ * per call zonder Vercel timeout.
  */
 
 function normalize(s: string): string {
     return (s || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
 }
 
-/** Simpele fuzzy similarity — Jaccard over woord-bigrams */
+/** Simpele fuzzy similarity — Jaccard over char-bigrams */
 function similarity(a: string, b: string): number {
     const aN = normalize(a), bN = normalize(b);
     if (aN === bN) return 1;
@@ -44,6 +42,13 @@ interface ProductInput {
     categorie?: string;
 }
 
+/** Chunk helper voor bulk-insert (Supabase heeft ~1000 row limiet) */
+function chunk<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const supabase = await createServerSupabase();
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
         const { leverancier, producten, categorieFilter } = body as {
             leverancier: string;
             producten: ProductInput[];
-            categorieFilter?: string; /* Als gevuld, doe uit-assortiment check alleen binnen deze categorie */
+            categorieFilter?: string;
         };
 
         if (!leverancier || !Array.isArray(producten)) {
@@ -69,33 +74,48 @@ export async function POST(req: NextRequest) {
 
         const datum = new Date().toISOString().slice(0, 10);
 
-        /* Haal bestaande master_products op voor deze org (niet alleen deze leverancier —
-           zelfde product kan bij meerdere leveranciers zitten) */
-        const { data: existingMasters } = await supabase
+        /* ═══ STAP 1: Preload alles 1× ═══ */
+
+        /* Alle master_products in deze org (voor fuzzy match) */
+        const { data: existingMasters, error: mErr } = await supabase
             .from('master_products')
             .select('id, naam, naam_normalized, categorie, standaard_leverancier')
             .eq('organization_id', orgId);
+        if (mErr) return NextResponse.json({ error: 'Master-query: ' + mErr.message }, { status: 500 });
 
         const mastersByNorm = new Map<string, any>();
-        for (const m of (existingMasters || [])) mastersByNorm.set(m.naam_normalized, m);
+        const mastersArray: any[] = existingMasters || [];
+        for (const m of mastersArray) mastersByNorm.set(m.naam_normalized, m);
 
-        /* Voor uit-assortiment detectie: welke masters hebben actieve prijs van deze leverancier? */
-        const { data: existingActivePrices } = await supabase
+        /* Alle actieve supplier_prices voor deze leverancier — voor dedup + update */
+        const { data: existingActivePrices, error: pErr } = await supabase
             .from('supplier_prices')
-            .select('master_product_id, product_naam, categorie')
+            .select('id, master_product_id, prijs')
             .eq('organization_id', orgId)
             .eq('leverancier', leverancier)
             .eq('actief', true);
+        if (pErr) return NextResponse.json({ error: 'Prices-query: ' + pErr.message }, { status: 500 });
 
+        /* Map: master_product_id → { id, prijs } voor O(1) dedup-check */
+        const activePriceByMasterId = new Map<number, { id: number; prijs: number }>();
         const existingMasterIds = new Set<number>();
         for (const p of (existingActivePrices || [])) {
-            if (p.master_product_id) existingMasterIds.add(p.master_product_id);
+            if (p.master_product_id) {
+                activePriceByMasterId.set(p.master_product_id, { id: p.id, prijs: Number(p.prijs) });
+                existingMasterIds.add(p.master_product_id);
+            }
         }
+
+        /* ═══ STAP 2: In-memory verwerking ═══ */
 
         const stats = { nieuw: 0, geupdate: 0, uit_assortiment: 0, duplicaten: 0 };
         const touchedMasterIds = new Set<number>();
-        const newSupplierPrices: any[] = [];
         const deactivatePriceIds: number[] = [];
+
+        /* Producten die een NIEUW master_product nodig hebben → bulk-insert later */
+        type PendingNew = { input: ProductInput; masterId?: number };
+        const pendingNewMasters: PendingNew[] = [];
+        const pendingExistingMatches: { input: ProductInput; masterId: number }[] = [];
 
         for (const p of producten) {
             if (!p.product_naam || typeof p.prijs !== 'number') continue;
@@ -103,109 +123,150 @@ export async function POST(req: NextRequest) {
             const norm = normalize(p.product_naam);
             let masterId: number | null = null;
 
-            /* Exact match eerst */
             const exact = mastersByNorm.get(norm);
             if (exact) {
                 masterId = exact.id;
             } else {
-                /* Fuzzy match: scan alle existing masters op >0.85 similarity */
+                /* Fuzzy scan — O(n) per product, maar puur in-memory */
                 let bestScore = 0.85;
                 let bestMatch: any = null;
-                for (const [, m] of mastersByNorm) {
+                for (const m of mastersArray) {
                     const score = similarity(p.product_naam, m.naam);
                     if (score > bestScore) { bestScore = score; bestMatch = m; }
                 }
-                if (bestMatch) {
-                    masterId = bestMatch.id;
-                } else {
-                    /* Nieuw master_product */
-                    const { data: newMaster, error: insErr } = await supabase
-                        .from('master_products')
-                        .insert({
-                            organization_id: orgId,
-                            naam: p.product_naam.trim(),
-                            categorie: p.categorie || null,
-                            standaard_eenheid: p.eenheid || 'stuks',
-                            standaard_leverancier: leverancier,
-                            uit_assortiment: false,
-                        })
-                        .select('id, naam, naam_normalized')
-                        .single();
-                    if (insErr || !newMaster) continue;
-                    masterId = newMaster.id;
-                    mastersByNorm.set(newMaster.naam_normalized, newMaster);
+                if (bestMatch) masterId = bestMatch.id;
+            }
+
+            if (masterId) {
+                pendingExistingMatches.push({ input: p, masterId });
+            } else {
+                pendingNewMasters.push({ input: p });
+            }
+        }
+
+        /* ═══ STAP 3: Bulk-insert nieuwe master_products ═══ */
+
+        if (pendingNewMasters.length > 0) {
+            const newMasterRows = pendingNewMasters.map(pm => ({
+                organization_id: orgId,
+                naam: pm.input.product_naam.trim(),
+                categorie: pm.input.categorie || null,
+                standaard_eenheid: pm.input.eenheid || 'stuks',
+                standaard_leverancier: leverancier,
+                uit_assortiment: false,
+            }));
+
+            /* Chunk van 500 om Supabase-limieten te respecteren */
+            const insertedAll: any[] = [];
+            for (const batch of chunk(newMasterRows, 500)) {
+                const { data: inserted, error: insErr } = await supabase
+                    .from('master_products')
+                    .insert(batch)
+                    .select('id, naam, naam_normalized');
+                if (insErr) return NextResponse.json({ error: 'Master-insert: ' + insErr.message }, { status: 500 });
+                if (inserted) insertedAll.push(...inserted);
+            }
+
+            /* Link masterId terug aan elke pendingNewMaster via naam_normalized */
+            const newByNorm = new Map<string, any>();
+            for (const m of insertedAll) newByNorm.set(m.naam_normalized, m);
+            for (const pm of pendingNewMasters) {
+                const match = newByNorm.get(normalize(pm.input.product_naam));
+                if (match) {
+                    pm.masterId = match.id;
                     stats.nieuw++;
                 }
             }
+        }
 
-            if (!masterId) continue;
+        /* ═══ STAP 4: Bouw supplier_prices rows ═══ */
+
+        const newSupplierPrices: any[] = [];
+
+        const addPriceRow = (input: ProductInput, masterId: number) => {
             touchedMasterIds.add(masterId);
+            const existing = activePriceByMasterId.get(masterId);
 
-            /* Nieuw supplier_prices entry toevoegen + oude active entries deactiveren */
-            /* Eerst check of er al een actieve entry is met EXACT dezelfde prijs (dedup) */
-            const { data: existing } = await supabase
-                .from('supplier_prices')
-                .select('id, prijs')
-                .eq('organization_id', orgId)
-                .eq('leverancier', leverancier)
-                .eq('master_product_id', masterId)
-                .eq('actief', true)
-                .limit(1);
-
-            if (existing && existing.length > 0 && Number(existing[0].prijs) === Number(p.prijs)) {
-                /* Zelfde prijs als vorige actieve → geen update nodig */
+            if (existing && existing.prijs === Number(input.prijs)) {
                 stats.duplicaten++;
-                continue;
+                return;
             }
-
-            /* Deactiveer oude actieve entries voor deze master+leverancier combi */
-            if (existing && existing.length > 0) {
-                deactivatePriceIds.push(existing[0].id);
-                stats.geupdate++;
-            } else {
-                stats.geupdate++;
+            if (existing) {
+                deactivatePriceIds.push(existing.id);
             }
+            stats.geupdate++;
 
-            /* Bereken prijs_per_kg / prijs_per_stuk (simpele heuristic) */
-            const eenh = (p.eenheid || '').toLowerCase();
+            const eenh = (input.eenheid || '').toLowerCase();
             let prijsPerKg: number | null = null;
             let prijsPerStuk: number | null = null;
-            if (eenh.includes('kg') || eenh === 'kilo') prijsPerKg = p.prijs;
-            else if (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) prijsPerStuk = p.prijs;
-            /* Voor L/ml: geen kg-prijs */
+            if (eenh.includes('kg') || eenh === 'kilo') prijsPerKg = input.prijs;
+            else if (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) prijsPerStuk = input.prijs;
 
             newSupplierPrices.push({
                 organization_id: orgId,
                 master_product_id: masterId,
                 leverancier,
-                product_naam: p.product_naam.trim(),
-                prijs: Number(p.prijs),
-                eenheid: p.eenheid || 'stuks',
-                categorie: p.categorie || null,
+                product_naam: input.product_naam.trim(),
+                prijs: Number(input.prijs),
+                eenheid: input.eenheid || 'stuks',
+                categorie: input.categorie || null,
                 datum,
                 actief: true,
                 prijs_per_kg: prijsPerKg,
                 prijs_per_stuk: prijsPerStuk,
             });
+        };
+
+        for (const pe of pendingExistingMatches) addPriceRow(pe.input, pe.masterId);
+        for (const pn of pendingNewMasters) {
+            if (pn.masterId) {
+                /* Nieuwe master heeft per definitie geen actieve prijs, dus gewoon toevoegen */
+                touchedMasterIds.add(pn.masterId);
+                const eenh = (pn.input.eenheid || '').toLowerCase();
+                let prijsPerKg: number | null = null;
+                let prijsPerStuk: number | null = null;
+                if (eenh.includes('kg') || eenh === 'kilo') prijsPerKg = pn.input.prijs;
+                else if (eenh === 'stuks' || eenh === 'stuk' || eenh.includes('pak')) prijsPerStuk = pn.input.prijs;
+
+                newSupplierPrices.push({
+                    organization_id: orgId,
+                    master_product_id: pn.masterId,
+                    leverancier,
+                    product_naam: pn.input.product_naam.trim(),
+                    prijs: Number(pn.input.prijs),
+                    eenheid: pn.input.eenheid || 'stuks',
+                    categorie: pn.input.categorie || null,
+                    datum,
+                    actief: true,
+                    prijs_per_kg: prijsPerKg,
+                    prijs_per_stuk: prijsPerStuk,
+                });
+            }
         }
 
-        /* Bulk deactivate oude entries */
-        if (deactivatePriceIds.length > 0) {
-            await supabase.from('supplier_prices').update({ actief: false }).in('id', deactivatePriceIds);
+        /* ═══ STAP 5: Bulk writes ═══ */
+
+        /* Deactiveer oude actieve prijzen in chunks */
+        for (const idChunk of chunk(deactivatePriceIds, 500)) {
+            if (idChunk.length === 0) continue;
+            const { error } = await supabase.from('supplier_prices').update({ actief: false }).in('id', idChunk);
+            if (error) return NextResponse.json({ error: 'Deactivate: ' + error.message }, { status: 500 });
         }
 
-        /* Bulk insert nieuwe entries */
-        if (newSupplierPrices.length > 0) {
-            await supabase.from('supplier_prices').insert(newSupplierPrices);
+        /* Bulk-insert nieuwe supplier_prices in chunks */
+        for (const rowChunk of chunk(newSupplierPrices, 500)) {
+            if (rowChunk.length === 0) continue;
+            const { error } = await supabase.from('supplier_prices').insert(rowChunk);
+            if (error) return NextResponse.json({ error: 'Prices-insert: ' + error.message }, { status: 500 });
         }
 
-        /* Uit-assortiment detectie: welke master_ids HAD deze leverancier actief, maar zijn NIET in deze upload? */
+        /* ═══ STAP 6: Uit-assortiment detectie ═══ */
+
         const missingIds: number[] = [];
         for (const oldId of existingMasterIds) {
             if (!touchedMasterIds.has(oldId)) missingIds.push(oldId);
         }
 
-        /* Als categorieFilter gezet: beperk uit-assortiment tot die categorie */
         let uitAssortimentMasterIds = missingIds;
         if (categorieFilter && missingIds.length > 0) {
             const { data: catFiltered } = await supabase
@@ -217,15 +278,16 @@ export async function POST(req: NextRequest) {
             uitAssortimentMasterIds = (catFiltered || []).map((m: any) => m.id);
         }
 
-        /* Markeer als uit_assortiment + deactiveer hun supplier_prices bij deze leverancier */
         if (uitAssortimentMasterIds.length > 0) {
-            await supabase.from('master_products')
-                .update({ uit_assortiment: true, uit_assortiment_sinds: datum })
-                .in('id', uitAssortimentMasterIds);
-            await supabase.from('supplier_prices')
-                .update({ actief: false })
-                .eq('leverancier', leverancier)
-                .in('master_product_id', uitAssortimentMasterIds);
+            for (const idChunk of chunk(uitAssortimentMasterIds, 500)) {
+                await supabase.from('master_products')
+                    .update({ uit_assortiment: true, uit_assortiment_sinds: datum })
+                    .in('id', idChunk);
+                await supabase.from('supplier_prices')
+                    .update({ actief: false })
+                    .eq('leverancier', leverancier)
+                    .in('master_product_id', idChunk);
+            }
             stats.uit_assortiment = uitAssortimentMasterIds.length;
         }
 
