@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -31,6 +33,11 @@ export async function POST(req: NextRequest) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
 
+        const { data: memberData } = await supabase
+            .from('organization_members').select('organization_id')
+            .eq('user_id', user.id).eq('status', 'active').limit(1);
+        const orgId = memberData?.[0]?.organization_id;
+
         const body = await req.json();
         const { question, snapshot } = body as { question: string; snapshot: string };
 
@@ -53,6 +60,27 @@ Vraag: ${question}`;
 
         const textBlock = response.content.find(b => b.type === 'text');
         const text = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+
+        if (orgId) {
+            void logAiUsageServer({
+                organization_id: orgId,
+                user_id: user.id,
+                action_type: 'chat',
+                model: 'claude-haiku-4-5',
+                tokens_input: response.usage.input_tokens || 0,
+                tokens_output: response.usage.output_tokens || 0,
+                tokens_cache_read: response.usage.cache_read_input_tokens || 0,
+                tokens_cache_creation: response.usage.cache_creation_input_tokens || 0,
+                cost_eur_cents: estimateAiCostCents({
+                    model: 'claude-haiku-4-5',
+                    tokens_input: response.usage.input_tokens || 0,
+                    tokens_output: response.usage.output_tokens || 0,
+                    tokens_cache_read: response.usage.cache_read_input_tokens || 0,
+                    tokens_cache_creation: response.usage.cache_creation_input_tokens || 0,
+                }),
+                metadata: { source: 'voorraad_ai_chat', question_length: question.length },
+            });
+        }
 
         return NextResponse.json({
             success: true,

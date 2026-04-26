@@ -92,6 +92,56 @@ function usePrepState(): [StepStatus, React.Dispatch<React.SetStateAction<StepSt
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   INVENTORY DEDUCTION — bij prep "done" trekken we de ingrediënten af
+   van inventory.current_stock via /api/_supa/stock-movement.
+   ═══════════════════════════════════════════════════════════════════ */
+async function deductIngredientsFromInventory(step: PrepStep): Promise<void> {
+    try {
+        const ingredients = step.recipe?.ingredients || [];
+        if (ingredients.length === 0) return;
+
+        const { supabase } = await import('@/lib/supabase');
+        const { data: inv } = await supabase
+            .from('inventory')
+            .select('id, naam, current_stock, unit, organization_id');
+
+        if (!inv) return;
+        const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+
+        for (const ingLine of ingredients) {
+            /* Parse "1.5 kg pulled pork" → qty:1.5, unit:kg, name:pulled pork */
+            const m = ingLine.match(/^([\d.,]+)\s*(kg|g|l|ml|stuks?|pak|krat|fles|bos)?\s*(.+)$/i);
+            if (!m) continue;
+            const qty = parseFloat(m[1].replace(',', '.'));
+            const ingName = norm(m[3]);
+            if (isNaN(qty) || ingName.length < 3) continue;
+
+            const match = inv.find((i: any) => {
+                const iname = norm(i.naam);
+                return iname && (iname.includes(ingName) || ingName.includes(iname));
+            });
+            if (!match) continue;
+
+            const newStock = Math.max(0, Number(match.current_stock || 0) - qty);
+            void fetch('/api/_supa/stock-movement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inventory_id: match.id,
+                    type: 'usage',
+                    qty: -qty,
+                    resulting_stock: newStock,
+                    note: `Prep #${step.order}: ${step.title}`,
+                    update_inventory: true,
+                }),
+            });
+        }
+    } catch {
+        /* silent — prep-flow blokkeren we niet voor inventory-fail */
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    MAIN PAGE
    ═══════════════════════════════════════════════════════════════════ */
 export default function PrepCounter() {
@@ -121,6 +171,10 @@ export default function PrepCounter() {
     function handleComplete() {
         if (!openStep) return;
         setStepStatus(prev => ({ ...prev, [openStep.id]: 'done' }));
+        /* Best-effort: trek inventory af voor ingrediënten in dit recept.
+           Match op substring-naam (case-insensitive). Faalt stilletjes als
+           inventory item niet bestaat — geen UI-blok. */
+        void deductIngredientsFromInventory(openStep);
     }
 
     return (

@@ -1,9 +1,36 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiUsage';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
+
+/* Per-request context dat helpers gebruiken voor AI-usage logging */
+interface LogCtx { orgId: string | null; userId: string | null; model: string }
+function logUsage(ctx: LogCtx, usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } | undefined) {
+    if (!ctx.orgId || !usage) return;
+    void logAiUsageServer({
+        organization_id: ctx.orgId,
+        user_id: ctx.userId,
+        action_type: 'other',
+        model: ctx.model,
+        tokens_input: usage.input_tokens || 0,
+        tokens_output: usage.output_tokens || 0,
+        tokens_cache_read: usage.cache_read_input_tokens || 0,
+        tokens_cache_creation: usage.cache_creation_input_tokens || 0,
+        cost_eur_cents: estimateAiCostCents({
+            model: ctx.model,
+            tokens_input: usage.input_tokens || 0,
+            tokens_output: usage.output_tokens || 0,
+            tokens_cache_read: usage.cache_read_input_tokens || 0,
+            tokens_cache_creation: usage.cache_creation_input_tokens || 0,
+        }),
+    });
+}
 
 const PRICELIST_SYSTEM_PROMPT = `Je bent een extractie-engine voor Nederlandse groothandel-prijslijsten (Makro, Sligro, Hanos, Bidfood).
 Je doel: LETTERLIJK ELKE productregel in de input extracten. Niet samenvatten, niet categoriseren-en-filteren, niet "top producten" kiezen. ALLES.
@@ -127,9 +154,11 @@ async function callAnthropic(
 async function runSingleCall(
     client: Anthropic, model: string, isHaikuOrSonnet: boolean,
     contentBlocks: Anthropic.Messages.ContentBlockParam[], t0: number,
+    logCtx?: LogCtx,
 ): Promise<NextResponse> {
     try {
         const r = await callAnthropic(client, model, isHaikuOrSonnet, contentBlocks);
+        if (logCtx) logUsage(logCtx, r.usage as any);
         if (!r.parsed) {
             const msg = r.truncated
                 ? 'Output afgekapt bij ' + r.usage.output_tokens + ' tokens. Splits PDF in delen.'
@@ -147,7 +176,7 @@ async function runSingleCall(
 
 async function runChunkedTextCalls(
     client: Anthropic, model: string, isHaikuOrSonnet: boolean,
-    fullText: string, t0: number,
+    fullText: string, t0: number, logCtx?: LogCtx,
 ): Promise<NextResponse> {
     const CHUNK_SIZE = 50_000; /* Kleinere chunks = meer output-ruimte + minder kans op missers */
     const chunks: string[] = [];
@@ -177,6 +206,7 @@ async function runChunkedTextCalls(
                 { type: 'text', text: 'Extraheer alle producten als JSON.' },
             ];
             const r = await callAnthropic(client, model, isHaikuOrSonnet, blocks);
+            if (logCtx) logUsage(logCtx, r.usage as any);
             totalIn += r.usage?.input_tokens || 0;
             totalOut += r.usage?.output_tokens || 0;
             if (r.parsed?.producten) allProducten.push(...r.parsed.producten);
@@ -209,6 +239,26 @@ export async function POST(req: NextRequest) {
         const apiKey = process.env.ANTHROPIC_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY ontbreekt' }, { status: 500 });
 
+        /* Auth + rate-limit (max 20 parses/min per user — beschermt tegen runaway bakje-loops) */
+        const supabase = await createServerSupabase();
+        const { data: { user } } = await supabase.auth.getUser();
+        let orgId: string | null = null;
+        let userId: string | null = null;
+        if (user) {
+            userId = user.id;
+            const { data: memberData } = await supabase
+                .from('organization_members').select('organization_id')
+                .eq('user_id', user.id).eq('status', 'active').limit(1);
+            orgId = memberData?.[0]?.organization_id || null;
+
+            const rl = checkRateLimit(`parse-pricelist:${user.id}`, 20);
+            if (!rl.allowed) {
+                return NextResponse.json({
+                    error: `Rate limit: max 20 parses per minuut. Probeer over ${rl.resetInSeconds}s opnieuw.`,
+                }, { status: 429 });
+            }
+        }
+
         const body = await req.json();
         const { pdfBase64, pdfUrl, imageBase64, textContent, model: modelChoice } = body as {
             pdfBase64?: string;
@@ -230,6 +280,7 @@ export async function POST(req: NextRequest) {
         } as const;
         const model = MODEL_MAP[modelChoice || 'haiku'] || MODEL_MAP.haiku;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
+        const logCtx: LogCtx = { orgId, userId, model };
 
         /* TEXT-MODE met auto-chunking voor grote PDFs.
            Kleinere chunks (60K) geven meer output-ruimte per call en minder
@@ -241,9 +292,9 @@ export async function POST(req: NextRequest) {
                     { type: 'text', text: 'Hieronder de tekst van een groothandel-prijslijst. Extraheer ALLE producten:\n\n' + textContent },
                     { type: 'text', text: 'Extraheer alle producten als JSON.' },
                 ];
-                return await runSingleCall(client, model, isHaikuOrSonnet, contentBlocks, t0);
+                return await runSingleCall(client, model, isHaikuOrSonnet, contentBlocks, t0, logCtx);
             }
-            return await runChunkedTextCalls(client, model, isHaikuOrSonnet, textContent, t0);
+            return await runChunkedTextCalls(client, model, isHaikuOrSonnet, textContent, t0, logCtx);
         }
 
         /* VISION-MODE (via URL of base64) */
@@ -274,7 +325,7 @@ export async function POST(req: NextRequest) {
         }
 
         contentBlocks.push({ type: 'text', text: 'Extraheer alle producten als JSON.' });
-        return await runSingleCall(client, model, isHaikuOrSonnet, contentBlocks, t0);
+        return await runSingleCall(client, model, isHaikuOrSonnet, contentBlocks, t0, logCtx);
     } catch (e: any) {
         console.error('[parse-pricelist:outer]', e?.status, e?.message, e);
         if (e instanceof Anthropic.RateLimitError) {

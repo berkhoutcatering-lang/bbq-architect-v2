@@ -128,12 +128,15 @@ ${validCandidates.slice(0, 80).map((c: any) =>
 
 Geef 1-3 suggesties in het JSON-formaat. Prioriteit: 1 enkele vervanger + evt. 1-2 combinatie-opties.`;
 
+        /* Haiku werkt prima voor product-substitution suggesties met gestructureerde input.
+           Sonnet was 5× duurder zonder merkbaar betere output. Body kan optioneel `model: 'sonnet'`
+           sturen voor expliciete opt-in. */
+        const reqModel = body.model === 'sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
         const stream = client.messages.stream({
-            model: 'claude-sonnet-4-6',
+            model: reqModel,
             max_tokens: 4000,
             system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userMessage }],
-            thinking: { type: 'disabled' as const },
         } as any);
         const response = await stream.finalMessage();
 
@@ -163,7 +166,7 @@ Geef 1-3 suggesties in het JSON-formaat. Prioriteit: 1 enkele vervanger + evt. 1
             organization_id: orgId,
             master_product_id: masterProductId,
             advice_json: parsed,
-            model_used: 'claude-sonnet-4-6',
+            model_used: reqModel,
             status: 'pending',
         }).select('*').single();
 

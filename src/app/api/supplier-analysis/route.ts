@@ -102,7 +102,9 @@ Geef praktisch advies voor een kleine horeca-ondernemer. Verwerk de goedkoper-el
             }
         } catch { /* logging optional */ }
 
-        const model = 'claude-opus-4-7';
+        /* Sonnet 4.6 is ruim voldoende voor leveranciers-vergelijking met
+           gestructureerde input — Opus was overkill. ~5x goedkoper. */
+        const model = 'claude-sonnet-4-6';
         const response = await client.messages.create({
             model,
             max_tokens: 2000,
