@@ -2,13 +2,34 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import {
-    Sparkles, LayoutGrid, Film, Clock, AlertTriangle, AlertCircle, Check,
-    X, Pause, Flame, ArrowRight,
+    Sparkles, Clock, AlertTriangle, AlertCircle, Check,
+    X, Pause, Flame, ArrowRight, ChevronRight,
 } from 'lucide-react';
+import AIChefAssistant from '@/components/service/AIChefAssistant';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
-const NOW_SIM = '17:42';
+
+/* Live tijd — vervangt hardcoded NOW_SIM. Voor demo blijft "17:42" als fallback
+   anchor zodat alle countdowns logisch werken; in productie wordt dit
+   `new Date().toTimeString().slice(0,5)`. */
+function useLiveNow(simAnchor = '17:42') {
+    const [now, setNow] = useState(simAnchor);
+    useEffect(() => {
+        /* In productie: echte tijd. Voor mockup gebruiken we sim-anchor + offset. */
+        const t0 = Date.now();
+        const interval = setInterval(() => {
+            const elapsed = (Date.now() - t0) / 1000;
+            const [ah, am] = simAnchor.split(':').map(Number);
+            const total = ah * 3600 + am * 60 + Math.floor(elapsed);
+            const h = Math.floor(total / 3600) % 24;
+            const m = Math.floor((total % 3600) / 60);
+            setNow(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [simAnchor]);
+    return now;
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    SERVICE DATA — mock event "Bedrijfsfeest TechCorp"
@@ -198,8 +219,11 @@ function minsBetween(a: string, b: string): number {
     return (bh * 60 + bm) - (ah * 60 + am);
 }
 
-function useLiveCountdown(target: string) {
-    const [secs, setSecs] = useState(() => minsBetween(NOW_SIM, target) * 60);
+function useLiveCountdown(target: string, now: string) {
+    const [secs, setSecs] = useState(() => minsBetween(now, target) * 60);
+    useEffect(() => {
+        setSecs(minsBetween(now, target) * 60);
+    }, [target, now]);
     useEffect(() => {
         const i = setInterval(() => setSecs(s => s - 1), 1000);
         return () => clearInterval(i);
@@ -279,8 +303,8 @@ function FoodHero({ course, height = 220 }: { course: Course; height?: number })
     );
 }
 
-function BigCountdown({ target, label }: { target: string; label: string }) {
-    const { h, m, s, past, total } = useLiveCountdown(target);
+function BigCountdown({ target, label, now }: { target: string; label: string; now: string }) {
+    const { h, m, s, past, total } = useLiveCountdown(target, now);
     const isLive = past && Math.abs(total) < 3600;
     return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 220 }}>
@@ -460,116 +484,6 @@ function CourseTimelineList({ timeline }: { timeline: TimelineItem[] }) {
     );
 }
 
-function AllergyBanner() {
-    return (
-        <MetalCard>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div>
-                    <Eyebrow>Allergieën deze service</Eyebrow>
-                    <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 2 }}>{SERVICE_EVENT.allergies.length} aandachtspunten</div>
-                </div>
-                <AlertTriangle size={22} style={{ color: 'var(--red)' }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                {SERVICE_EVENT.allergies.map((a, i) => (
-                    <div key={i} style={{
-                        padding: 12, borderRadius: 10,
-                        background: a.severity === 'critical' ? 'rgba(239,68,68,.06)' : `${BRAND}0d`,
-                        border: `1px solid ${a.severity === 'critical' ? 'rgba(239,68,68,.2)' : `${BRAND}33`}`,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>T{a.table}</span>
-                            <span style={{ fontWeight: 600, fontSize: 13 }}>{a.person}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: a.severity === 'critical' ? 'var(--red)' : GOLD, fontWeight: 600 }}>{a.issue}</div>
-                    </div>
-                ))}
-            </div>
-        </MetalCard>
-    );
-}
-
-function GangCard({ course, isFocus, onClick, position }: { course: Course; isFocus: boolean; onClick: () => void; position: 'focus' | 'near' | 'far' }) {
-    const w = isFocus ? 380 : 240;
-    const h = isFocus ? 480 : 340;
-    return (
-        <div onClick={onClick} style={{
-            flexShrink: 0, width: w, height: h, cursor: 'pointer',
-            transition: 'all .4s cubic-bezier(.2,.9,.3,1)',
-            transform: isFocus ? 'translateY(-12px) scale(1)' : 'scale(.92)',
-            opacity: position === 'far' ? 0.5 : 1, position: 'relative',
-        }}>
-            <div style={{
-                height: '100%', borderRadius: 18, overflow: 'hidden',
-                background: course.foodHue !== null
-                    ? `linear-gradient(180deg, hsl(${course.foodHue} 60% 32%) 0%, hsl(${course.foodHue} 50% 18%) 60%, rgba(14,14,16,.95) 100%)`
-                    : 'linear-gradient(180deg, #2a2440, #0f0a1a)',
-                border: `1px solid ${isFocus ? `${BRAND}66` : 'rgba(255,255,255,.08)'}`,
-                boxShadow: isFocus ? `0 24px 60px rgba(0,0,0,.5), 0 0 40px ${BRAND}26` : '0 8px 24px rgba(0,0,0,.3)',
-                position: 'relative', display: 'flex', flexDirection: 'column',
-            }}>
-                <div style={{ height: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isFocus ? 130 : 80, filter: 'drop-shadow(0 6px 18px rgba(0,0,0,.5))' }}>
-                    {course.heroEmoji}
-                </div>
-                <div style={{ position: 'absolute', top: 14, left: 14, right: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: 'rgba(255,255,255,.7)', padding: '3px 8px', borderRadius: 4, background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(4px)' }}>{course.serveAt}</span>
-                    {course.status === 'active' && <span style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: '#000', padding: '3px 8px', borderRadius: 4, background: 'var(--green)' }}>● LIVE</span>}
-                    {course.status === 'prep' && <span style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: '#000', padding: '3px 8px', borderRadius: 4, background: GOLD }}>MISE</span>}
-                    {course.isPause && <span style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: '#fff', padding: '3px 8px', borderRadius: 4, background: 'rgba(167,139,250,.8)' }}>PAUZE</span>}
-                </div>
-                <div style={{ padding: 18, paddingTop: 10, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                        {course.number && <div style={{ fontSize: 9, letterSpacing: '.25em', fontWeight: 700, color: 'rgba(255,255,255,.5)', marginBottom: 4 }}>GANG {course.number}</div>}
-                        <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: isFocus ? 24 : 18, color: '#fff', lineHeight: 1.1 }}>{course.title}</h3>
-                        {isFocus && course.heroDescription && (
-                            <p style={{ margin: '8px 0 0', fontSize: 12, color: 'rgba(255,255,255,.7)', lineHeight: 1.5 }}>{course.heroDescription}</p>
-                        )}
-                    </div>
-                    {isFocus && course.dishes && (
-                        <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {course.dishes.map((d, i) => (
-                                <div key={i} style={{ padding: '4px 8px', borderRadius: 6, background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'rgba(255,255,255,.85)' }}>
-                                    <span>{d.emoji}</span><span>{d.name}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function GangCarousel({ courses, focusId, onFocus }: { courses: Course[]; focusId: string; onFocus: (id: string) => void }) {
-    const focusIdx = courses.findIndex(c => c.id === focusId);
-    return (
-        <div style={{
-            position: 'relative', borderRadius: 20,
-            background: `radial-gradient(ellipse at center, ${GOLD}0a 0%, rgba(14,14,16,.8) 70%)`,
-            border: `1px solid ${GOLD}26`, padding: '50px 30px 30px', overflow: 'hidden',
-        }}>
-            <div style={{
-                position: 'absolute', top: 30, left: '50%', transform: 'translateX(-50%)',
-                padding: '4px 12px', borderRadius: 999,
-                background: `linear-gradient(135deg, ${BRAND}, ${GOLD})`,
-                color: '#000', fontSize: 9, letterSpacing: '.25em', fontWeight: 700,
-                boxShadow: `0 4px 16px ${BRAND}66`,
-            }}>● NU · {NOW_SIM}</div>
-            <div style={{ position: 'absolute', top: 56, bottom: 30, left: '50%', width: 1, background: `linear-gradient(180deg, ${GOLD}, transparent)`, opacity: 0.4, pointerEvents: 'none' }} />
-            <div style={{ display: 'flex', gap: 18, alignItems: 'center', justifyContent: 'center', overflowX: 'auto', padding: '20px 100px' }}>
-                {courses.map((c, i) => {
-                    const dist = Math.abs(i - focusIdx);
-                    const pos: 'focus' | 'near' | 'far' = dist === 0 ? 'focus' : dist === 1 ? 'near' : 'far';
-                    return <GangCard key={c.id} course={c} isFocus={pos === 'focus'} position={pos} onClick={() => onFocus(c.id)} />;
-                })}
-            </div>
-            <div style={{ marginTop: 14, padding: '0 30px' }}>
-                <AICoach tip={courses[focusIdx]?.aiCoach?.tip || 'Selecteer een gang'} severity={courses[focusIdx]?.aiCoach?.severity || 'normal'} />
-            </div>
-        </div>
-    );
-}
-
 const WIZARD_STEPS = [
     { q: 'Wat voor type event is het?', placeholder: 'Bedrijfsfeest / bruiloft / verjaardag…', key: 'type' },
     { q: 'Hoeveel gasten en welk service-type?', placeholder: 'Bv. 80 gasten, walking dinner met buffet', key: 'guests' },
@@ -681,45 +595,210 @@ function AIWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
     );
 }
 
-function ServiceHero({ onWizard }: { onWizard: () => void }) {
+/* ═══════════════════════════════════════════════════════════════════
+   STICKY ALLERGIE-BAR — bovenaan altijd zichtbaar als allergieën zijn
+   ═══════════════════════════════════════════════════════════════════ */
+function StickyAllergieBar() {
+    const critical = SERVICE_EVENT.allergies.filter(a => a.severity === 'critical');
+    if (critical.length === 0) return null;
     return (
         <div style={{
-            position: 'relative', borderRadius: 20, padding: 24,
-            background: `linear-gradient(135deg, ${BRAND}0d 0%, ${GOLD}05 50%, rgba(28,28,32,.7) 100%)`,
-            border: `1px solid ${GOLD}33`,
-            display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 28, alignItems: 'center',
-            overflow: 'hidden',
+            position: 'sticky', top: 0, zIndex: 50,
+            background: 'rgba(239,68,68,.18)', borderBottom: '2px solid var(--red)',
+            backdropFilter: 'blur(12px)',
+            padding: '10px 32px', display: 'flex', alignItems: 'center', gap: 14,
+            fontSize: 13, color: 'var(--text)',
         }}>
-            <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <Eyebrow>Service KDS · Live</Eyebrow>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.2em', padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,.12)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} /> ONLINE
+            <AlertTriangle size={18} style={{ color: 'var(--red)', flexShrink: 0 }} />
+            <strong style={{ color: 'var(--red)', letterSpacing: '.05em' }}>ALLERGIE-ALERT</strong>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', flex: 1 }}>
+                {critical.map((a, i) => (
+                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: 'rgba(0,0,0,.4)' }}>T{a.table}</span>
+                        <strong>{a.person}</strong>
+                        <span style={{ color: 'var(--red)', fontWeight: 600 }}>· {a.issue}</span>
                     </span>
-                </div>
-                <h1 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 38, letterSpacing: '-.02em', lineHeight: 1.05 }}>{SERVICE_EVENT.title}</h1>
-                <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13 }}>
-                    {SERVICE_EVENT.date} · {SERVICE_EVENT.guests} gasten ({SERVICE_EVENT.vegetarian} veggie) · {SERVICE_EVENT.service} · {SERVICE_EVENT.venue}
-                </div>
-                <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted)', flexWrap: 'wrap' }}>
-                    <span><Clock size={11} style={{ marginRight: 4, verticalAlign: '-2px' }} />{SERVICE_EVENT.startTime}–{SERVICE_EVENT.endTime}</span>
-                    <span><Pause size={11} style={{ marginRight: 4, verticalAlign: '-2px' }} />Pauze {SERVICE_EVENT.pauseStart}–{SERVICE_EVENT.pauseEnd}</span>
-                    <span style={{ color: 'var(--red)' }}><AlertCircle size={11} style={{ marginRight: 4, verticalAlign: '-2px' }} />{SERVICE_EVENT.allergies.length} allergieën</span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STICKY NOW-BAR — live tijd + active gang + countdown next
+   ═══════════════════════════════════════════════════════════════════ */
+function StickyNowBar({ now, activeCourse, nextCourse }: { now: string; activeCourse: Course; nextCourse: Course | null }) {
+    return (
+        <div style={{
+            position: 'sticky', top: SERVICE_EVENT.allergies.some(a => a.severity === 'critical') ? 44 : 0,
+            zIndex: 49,
+            background: 'rgba(14,14,16,.95)', borderBottom: `1px solid ${GOLD}33`,
+            backdropFilter: 'blur(12px)',
+            padding: '10px 32px', display: 'flex', alignItems: 'center', gap: 18,
+        }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <Eyebrow>NU</Eyebrow>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{now}</div>
+            </div>
+            <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 22 }}>{activeCourse.heroEmoji}</span>
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: activeCourse.status === 'active' ? 'var(--green)' : GOLD }}>
+                        {activeCourse.status === 'active' ? '● LIVE' : activeCourse.status === 'prep' ? '◐ MISE' : '○ ' + activeCourse.subtitle.toUpperCase().split('·')[0].trim()}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeCourse.title}</div>
                 </div>
             </div>
-            <BigCountdown target="18:00" label="GANG 2 · BUFFET" />
+            {nextCourse && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <ChevronRight size={14} style={{ color: 'var(--muted-light)' }} />
+                    <CountdownToCourse target={nextCourse.serveAt} now={now} label={nextCourse.title} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+function CountdownToCourse({ target, now, label }: { target: string; now: string; label: string }) {
+    const { m, s, past } = useLiveCountdown(target, now);
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+                <Eyebrow style={{ color: 'var(--muted-light)' }}>STRAKS</Eyebrow>
+                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{label}</div>
+            </div>
+            <div style={{
+                fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 24,
+                color: past ? 'var(--green)' : 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 60, textAlign: 'right',
+            }}>
+                {past ? 'NU' : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`}
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOE NU PANEL — top-3 acties uit alle courses (NIET-done mise + komende timeline)
+   ═══════════════════════════════════════════════════════════════════ */
+function DoeNuPanel({ activeCourse, miseState, now }: { activeCourse: Course; miseState: Record<string, boolean>; now: string }) {
+    /* Top 3: kritische niet-done mise van actieve gang */
+    const open = (activeCourse.miseChecklist || [])
+        .map(m => ({ ...m, done: miseState[m.id] !== undefined ? miseState[m.id] : m.done }))
+        .filter(m => !m.done)
+        .sort((a, b) => (a.critical ? 0 : 1) - (b.critical ? 0 : 1))
+        .slice(0, 3);
+
+    /* Eerstvolgende 3 timeline-events nog niet done */
+    const nowMin = (() => { const [h, m] = now.split(':').map(Number); return h * 60 + m; })();
+    const hhmmToMin = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+    const upcomingTl = (activeCourse.timeline || [])
+        .filter(t => !t.done && hhmmToMin(t.time) >= nowMin)
+        .slice(0, 3);
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {/* Open mise-acties */}
+            <div style={{
+                padding: 16, borderRadius: 14,
+                background: open.some(o => o.critical) ? 'rgba(239,68,68,.06)' : `${BRAND}0d`,
+                border: `1px solid ${open.some(o => o.critical) ? 'rgba(239,68,68,.3)' : `${BRAND}40`}`,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Sparkles size={14} style={{ color: open.some(o => o.critical) ? 'var(--red)' : BRAND }} />
+                    <Eyebrow style={{ color: open.some(o => o.critical) ? 'var(--red)' : BRAND }}>DOE NU · MISE</Eyebrow>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>{open.length} open</span>
+                </div>
+                {open.length === 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, color: 'var(--green)' }}>
+                        <Check size={16} /> Alle mise klaar
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {open.map(o => (
+                            <div key={o.id} style={{
+                                padding: '10px 12px', borderRadius: 10,
+                                background: o.critical ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.03)',
+                                border: `1px solid ${o.critical ? 'rgba(239,68,68,.25)' : 'var(--border)'}`,
+                                display: 'flex', alignItems: 'center', gap: 10,
+                            }}>
+                                {o.critical && <AlertTriangle size={14} style={{ color: 'var(--red)' }} />}
+                                {o.smokerLink && <Flame size={14} style={{ color: GOLD }} />}
+                                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4, flex: 1 }}>{o.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Eerstvolgende timeline-events */}
+            <div style={{ padding: 16, borderRadius: 14, background: `${GOLD}0a`, border: `1px solid ${GOLD}33` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Clock size={14} style={{ color: GOLD }} />
+                    <Eyebrow style={{ color: GOLD }}>STRAKS · TIJDLIJN</Eyebrow>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>{upcomingTl.length} stappen</span>
+                </div>
+                {upcomingTl.length === 0 ? (
+                    <div style={{ padding: 8, color: 'var(--muted)', fontSize: 13 }}>Geen geplande events meer in deze gang.</div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {upcomingTl.map((t, i) => {
+                            const minsAway = hhmmToMin(t.time) - nowMin;
+                            return (
+                                <div key={i} style={{
+                                    padding: '10px 12px', borderRadius: 10,
+                                    background: t.critical ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.03)',
+                                    border: `1px solid ${t.critical ? 'rgba(239,68,68,.25)' : 'var(--border)'}`,
+                                    display: 'grid', gridTemplateColumns: '50px 1fr auto', gap: 10, alignItems: 'center',
+                                }}>
+                                    <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, fontWeight: 500, color: t.critical ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{t.time}</span>
+                                    <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{t.label}</span>
+                                    <span style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                        {minsAway < 0 ? 'nu' : minsAway < 60 ? `${minsAway}m` : `${Math.floor(minsAway / 60)}u${minsAway % 60}m`}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COMPACT HERO — kleine titel-strip + Wizard knop, geen grote foodporn
+   ═══════════════════════════════════════════════════════════════════ */
+function CompactHeader({ onWizard }: { onWizard: () => void }) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, letterSpacing: '-.015em', margin: 0 }}>{SERVICE_EVENT.title}</h1>
+                    <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', fontSize: 10, letterSpacing: '.2em', color: 'var(--green)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
+                        SERVICE LIVE
+                    </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    {SERVICE_EVENT.guests} gasten · {SERVICE_EVENT.startTime}–{SERVICE_EVENT.endTime} · pauze {SERVICE_EVENT.pauseStart}–{SERVICE_EVENT.pauseEnd} · {SERVICE_EVENT.venue}
+                </div>
+            </div>
             <BtnPrimary icon={Sparkles} onClick={onWizard}>AI Draaiboek Wizard</BtnPrimary>
         </div>
     );
 }
 
 export default function ServiceKDS() {
-    const [variant, setVariant] = useState<'A' | 'B'>('A');
     const [focusId, setFocusId] = useState<string>('g1');
     const [wizardOpen, setWizardOpen] = useState(false);
     const [miseState, setMiseState] = useState<Record<string, boolean>>({});
+    const now = useLiveNow('17:42');
 
     const focusCourse = COURSES.find(c => c.id === focusId) || COURSES[0];
+    const focusIdx = COURSES.findIndex(c => c.id === focusId);
+    const nextCourse = focusIdx >= 0 && focusIdx < COURSES.length - 1 ? COURSES[focusIdx + 1] : null;
+
     const decoratedItems = (items: MiseItem[]) => items.map(i => ({
         ...i, done: miseState[i.id] !== undefined ? miseState[i.id] : i.done,
     }));
@@ -729,96 +808,100 @@ export default function ServiceKDS() {
         return { ...s, [id]: !cur };
     });
 
+    /* ── AI Chef context (regenereert bij iedere change van actieve gang of mise-progress) ── */
+    const decoratedMise = focusCourse.miseChecklist ? decoratedItems(focusCourse.miseChecklist) : [];
+    const miseDone = decoratedMise.filter(m => m.done).length;
+    const misePct = decoratedMise.length ? Math.round((miseDone / decoratedMise.length) * 100) : 0;
+    const miseRemaining = decoratedMise.filter(m => !m.done).map(m => ({ label: m.label, critical: m.critical }));
+
+    const minsToNext = nextCourse ? (() => {
+        const [nh, nm] = now.split(':').map(Number);
+        const [th, tm] = nextCourse.serveAt.split(':').map(Number);
+        return (th * 60 + tm) - (nh * 60 + nm);
+    })() : undefined;
+
+    const chefContext = useMemo(() => ({
+        now,
+        activeCourseId: focusCourse.id,
+        activeCourseTitle: focusCourse.title,
+        activeCourseStart: focusCourse.serveAt,
+        activeCourseStatus: focusCourse.status,
+        minsUntilNextCourse: minsToNext !== undefined && minsToNext > 0 ? minsToNext : undefined,
+        nextCourseTitle: nextCourse?.title,
+        misePctDone: misePct,
+        miseRemaining,
+        smoker: focusCourse.smokerStatus ? {
+            item: focusCourse.smokerStatus.item,
+            temp: focusCourse.smokerStatus.temp,
+            target: focusCourse.smokerStatus.target,
+            etaMinutes: focusCourse.smokerStatus.etaMinutes,
+        } : undefined,
+        allergies: SERVICE_EVENT.allergies.map(a => ({ person: a.person, issue: a.issue, severity: a.severity })),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [focusCourse.id, misePct, now.slice(0, 5)]);
+
     return (
-        <div style={{ padding: '24px 32px 100px', maxWidth: 1500, margin: '0 auto' }}>
-            <ServiceHero onWizard={() => setWizardOpen(true)} />
-            <div style={{ height: 18 }} />
+        <>
+            <StickyAllergieBar />
+            <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} />
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'inline-flex', padding: 4, borderRadius: 12, background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)' }}>
-                    <button onClick={() => setVariant('A')} style={tabBtnStyle(variant === 'A')}>
-                        <LayoutGrid size={13} /> Pit Console
-                    </button>
-                    <button onClick={() => setVariant('B')} style={tabBtnStyle(variant === 'B')}>
-                        <Film size={13} /> Gang Carousel
-                    </button>
+            <div style={{ padding: '20px 32px 120px', maxWidth: 1500, margin: '0 auto' }}>
+                <CompactHeader onWizard={() => setWizardOpen(true)} />
+                <div style={{ height: 16 }} />
+
+                <DoeNuPanel activeCourse={focusCourse} miseState={miseState} now={now} />
+                <div style={{ height: 16 }} />
+
+                <CourseStrip courses={COURSES} activeId={focusId} onSelect={setFocusId} />
+                <div style={{ height: 16 }} />
+
+                <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 320px' : '1fr', gap: 16 }}>
+                    {focusCourse.aiCoach && <AICoach tip={focusCourse.aiCoach.tip} severity={focusCourse.aiCoach.severity} />}
+                    {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                    <Clock size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} /> NU · {NOW_SIM} · simulated
-                </div>
-            </div>
 
-            <div style={{ height: 18 }} />
+                {focusCourse.miseChecklist && (
+                    <>
+                        <div style={{ height: 16 }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
+                            <MiseChecklist items={decoratedMise} onToggle={toggleMise} />
+                            <CourseTimelineList timeline={focusCourse.timeline || []} />
+                        </div>
+                    </>
+                )}
 
-            {variant === 'A' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                    <CourseStrip courses={COURSES} activeId={focusId} onSelect={setFocusId} />
-                    <FoodHero course={focusCourse} height={260} />
-                    <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 360px' : '1fr', gap: 18 }}>
-                        {focusCourse.aiCoach && <AICoach tip={focusCourse.aiCoach.tip} severity={focusCourse.aiCoach.severity} />}
-                        {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
-                    </div>
-                    {focusCourse.dishes && (
+                {focusCourse.dishes && (
+                    <>
+                        <div style={{ height: 16 }} />
                         <div>
-                            <Eyebrow style={{ marginBottom: 10 }}>Plating · {focusCourse.dishes.length} gerechten</Eyebrow>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                                {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} />)}
+                            <Eyebrow style={{ marginBottom: 8 }}>Plating · {focusCourse.dishes.length} gerechten</Eyebrow>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
+                                {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} compact />)}
                             </div>
                         </div>
-                    )}
-                    {focusCourse.miseChecklist && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 18 }}>
-                            <MiseChecklist items={decoratedItems(focusCourse.miseChecklist)} onToggle={toggleMise} />
-                            <CourseTimelineList timeline={focusCourse.timeline || []} />
-                        </div>
-                    )}
-                    {focusCourse.isPause && focusCourse.timeline && <CourseTimelineList timeline={focusCourse.timeline} />}
-                    {SERVICE_EVENT.allergies.length > 0 && <AllergyBanner />}
-                </div>
-            )}
+                    </>
+                )}
 
-            {variant === 'B' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                    <GangCarousel courses={COURSES} focusId={focusId} onFocus={setFocusId} />
-                    <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 360px' : '1fr', gap: 18 }}>
-                        {focusCourse.dishes && (
-                            <MetalCard>
-                                <Eyebrow style={{ marginBottom: 10 }}>{focusCourse.title} · plating</Eyebrow>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                                    {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} compact />)}
-                                </div>
-                            </MetalCard>
-                        )}
-                        {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
-                    </div>
-                    {focusCourse.miseChecklist && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 18 }}>
-                            <MiseChecklist items={decoratedItems(focusCourse.miseChecklist)} onToggle={toggleMise} />
-                            <CourseTimelineList timeline={focusCourse.timeline || []} />
-                        </div>
-                    )}
-                    {focusCourse.isPause && focusCourse.timeline && <CourseTimelineList timeline={focusCourse.timeline} />}
-                </div>
-            )}
+                {focusCourse.isPause && focusCourse.timeline && (
+                    <>
+                        <div style={{ height: 16 }} />
+                        <CourseTimelineList timeline={focusCourse.timeline} />
+                    </>
+                )}
 
-            <div style={{ marginTop: 32, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
-                <Sparkles size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-                <span>
-                    <strong style={{ color: 'var(--text)' }}>Service KDS · hoe het werkt:</strong>{' '}
-                    AI Wizard bouwt het draaiboek vanuit jouw event-info. Tijdens service zie je per gang: foodporn-hero, mise-checklist (afvinken), live timeline met countdown, smoker-status, dishes met allergenen, en de AI-coach met realtime tips. Koppelt naar <a href="/prep-counter" style={{ color: GOLD }}>Prep Counter</a> en <a href="/voorraad" style={{ color: GOLD }}>Voorraad</a>.
-                </span>
+                <div style={{ marginTop: 24, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
+                    <Sparkles size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
+                    <span>
+                        <strong style={{ color: 'var(--text)' }}>Service KDS · met Pitmaster Coach Rook:</strong>{' '}
+                        Live tijd + countdown bovenaan. DOE NU toont je top-3 acties. Rook (rechtsonder) kijkt mee, geeft directives elke minuut, accepteert vragen, en kan stem aanzetten voor handsfree. Allergie-alert blijft sticky bovenaan zolang er kritieke gevallen zijn.
+                    </span>
+                </div>
+
+                <AIWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
             </div>
 
-            <AIWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
-        </div>
+            {/* Persistent AI Chef — altijd in beeld */}
+            <AIChefAssistant context={chefContext} />
+        </>
     );
 }
-
-const tabBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: '8px 16px', borderRadius: 8,
-    background: active ? `linear-gradient(180deg, ${BRAND}1f, ${GOLD}0a)` : 'transparent',
-    border: 'none', color: active ? 'var(--text)' : 'var(--muted)',
-    fontSize: 12, fontWeight: 600, cursor: 'pointer',
-    display: 'inline-flex', alignItems: 'center', gap: 8,
-    boxShadow: active ? `inset 0 0 0 1px ${GOLD}4D` : 'none',
-});
