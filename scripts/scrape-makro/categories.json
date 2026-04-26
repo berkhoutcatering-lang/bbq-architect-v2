@@ -1,0 +1,17 @@
+[
+  { "id": "vers/kaas-zuivel-eieren",     "label": "Kaas, Zuivel & Eieren" },
+  { "id": "vers/vlees-wild-gevogelte",   "label": "Vlees, Wild & Gevogelte" },
+  { "id": "vers/vis-schaal-schelpdieren","label": "Vis, Schaal- & Schelpdieren" },
+  { "id": "vers/groente-fruit",          "label": "Groente & Fruit" },
+  { "id": "vers/brood-banket",           "label": "Brood & Banket" },
+  { "id": "food/olie-azijn",             "label": "Olie & Azijn" },
+  { "id": "food/kruiden-specerijen",     "label": "Kruiden & Specerijen" },
+  { "id": "food/sauzen-dressings",       "label": "Sauzen & Dressings" },
+  { "id": "food/pasta-rijst-peulvruchten", "label": "Pasta, Rijst & Peulvruchten" },
+  { "id": "food/conserven",              "label": "Conserven" },
+  { "id": "food/soepen-bouillons",       "label": "Soepen & Bouillons" },
+  { "id": "food/drogerij",               "label": "Drogerij (suiker, bloem, baking)" },
+  { "id": "dranken",                     "label": "Dranken" },
+  { "id": "diepvries",                   "label": "Diepvries" },
+  { "id": "non-food/verpakkingen-servies-bestek", "label": "Verpakkingen, Servies & Bestek" }
+]

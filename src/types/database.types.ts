@@ -257,14 +257,34 @@ export interface LogboekEntry {
 
 export interface InventoryItem {
   id: number;
+  organization_id?: string;
   naam: string;
   categorie: string;
   current_stock: number;
   min_stock: number;
+  par_level: number;
   unit: string;
   purchase_price: number;
   supplier: string;
   yield_factor?: number;
+  tht?: string | null;            // ISO date — Tenminste Houdbaar Tot
+  avg_daily?: number;              // gemiddeld dagelijks verbruik
+  allergenen?: string[];
+  used_in?: string[];              // recept/event-namen waarin gebruikt
+  last_count_at?: string | null;
+  created_at: string;
+}
+
+export interface StockMovement {
+  id: number;
+  organization_id: string;
+  inventory_id: number;
+  type: 'count' | 'usage' | 'receive' | 'adjust' | 'waste';
+  qty: number;                    // signed (- voor verbruik, + voor ontvangst)
+  resulting_stock?: number | null;
+  by_user?: string | null;
+  by_user_id?: string | null;
+  note?: string | null;
   created_at: string;
 }
 

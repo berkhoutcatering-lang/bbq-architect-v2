@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import {
     ChefHat, BookOpen, UtensilsCrossed, Calendar,
     PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
-    ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette,
+    ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette, ClipboardList,
     DollarSign, Camera, Settings, Building2,
     Users, Mail, Inbox, Globe,
     FilePlus, HelpCircle, MessageCircle, PieChart
@@ -47,6 +47,7 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Agenda", icon: <Calendar size={16} />, href: "/agenda", description: "Bekijk je planning en agenda" },
             { label: "Events", icon: <PartyPopper size={16} />, href: "/events", description: "Beheer al je events en boekingen" },
+            { label: "Prep Counter", icon: <ClipboardList size={16} />, href: "/prep-counter", description: "Mise en place planner — AI volgorde-plan + sticker generator" },
             { label: "Klantgesprek", icon: <HeartHandshake size={16} />, href: "/klantgesprek", description: "Intake bij potentiële klant" },
             { label: "Service", icon: <HeartHandshake size={16} />, href: "/service", description: "Beheer je serviceteam en taken" },
         ],

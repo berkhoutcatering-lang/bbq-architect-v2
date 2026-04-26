@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -10,43 +10,76 @@ import EmptyState from '@/components/EmptyState';
 import {
     AlertTriangle, Barcode, Plus, Package, Sparkles,
     X, Search, ShoppingCart, Euro, ArrowUpRight, ArrowLeft, Save, Trash2,
-    FileText, Printer, PieChart, Clock, CheckCircle, HelpCircle,
-    BookOpen, ChevronRight, Link as LinkIcon, History, Info,
-    ClipboardCheck, Minus, Leaf, Fish, Beef, Milk, Flame, CupSoda,
-    ChefHat,
+    Printer, PieChart, Clock, CheckCircle, HelpCircle,
+    ChevronRight, Link as LinkIcon, History, Info,
+    ClipboardCheck, Leaf, Fish, Beef, Milk, Flame, CupSoda,
+    ChefHat, CalendarClock, Activity, Store, LineChart, Mail, Copy,
+    Download, Zap, Edit3, ScanLine, Carrot, Croissant, ListChecks,
 } from 'lucide-react';
-import type { InventoryItem, Recept } from '@/types';
+import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 const GOLD = '#c4a35a';
 
-const CATEGORIEEN = ['Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Overig'] as const;
-const EENHEDEN = ['kg', 'g', 'L', 'ml', 'stuks', 'bos', 'pot', 'fles', 'zak'] as const;
+const CATEGORIEEN = ['Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 'Dranken', 'Brood', 'Hout', 'Overig'] as const;
+const EENHEDEN = ['kg', 'g', 'L', 'ml', 'stuks', 'bos', 'pot', 'fles', 'zak', 'doos', 'krat', 'bakje'] as const;
 
 const CAT_META: Record<string, { color: string; icon: any }> = {
     Vlees: { color: '#ef4444', icon: Beef },
     Vis: { color: '#4ECDC4', icon: Fish },
-    Groenten: { color: '#22c55e', icon: Leaf },
+    Groenten: { color: '#22c55e', icon: Carrot },
     Zuivel: { color: '#FFBF00', icon: Milk },
     Kruiden: { color: '#a78bfa', icon: Leaf },
     Sauzen: { color: '#f97316', icon: Flame },
     Dranken: { color: '#3b82f6', icon: CupSoda },
+    Brood: { color: '#c4a35a', icon: Croissant },
+    Hout: { color: '#9e781c', icon: Flame },
     Overig: { color: '#949494', icon: Package },
 };
 
-/* ───────── helpers ───────── */
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
 function stockStatus(item: InventoryItem) {
-    const cur = item.current_stock || 0;
-    const min = item.min_stock || 0;
+    const cur = Number(item.current_stock || 0);
+    const reorder = Number(item.min_stock || 0);
+    const par = Number(item.par_level || 0);
     if (cur === 0) return { key: 'out', label: 'OP', color: 'var(--red)', bg: 'rgba(239,68,68,.12)', br: 'rgba(239,68,68,.35)', pct: 0 };
-    if (cur < min) return { key: 'low', label: 'LAAG', color: 'var(--amber)', bg: 'rgba(245,158,11,.12)', br: 'rgba(245,158,11,.3)', pct: min > 0 ? (cur / min) * 100 : 0 };
-    if (min > 0 && cur >= min * 1.5) return { key: 'ok', label: 'VOLDOENDE', color: 'var(--green)', bg: 'rgba(34,197,94,.1)', br: 'rgba(34,197,94,.25)', pct: Math.min(100, (cur / (min * 1.5)) * 100) };
-    return { key: 'mid', label: 'OP PEIL', color: 'var(--muted)', bg: 'transparent', br: 'var(--border)', pct: min > 0 ? Math.min(100, (cur / (min * 1.5)) * 100) : 100 };
+    if (cur <= reorder) return { key: 'low', label: 'LAAG', color: 'var(--amber)', bg: 'rgba(245,158,11,.12)', br: 'rgba(245,158,11,.3)', pct: par > 0 ? (cur / par) * 100 : 50 };
+    if (par > 0 && cur >= par * 0.85) return { key: 'ok', label: 'VOLDOENDE', color: 'var(--green)', bg: 'rgba(34,197,94,.1)', br: 'rgba(34,197,94,.25)', pct: Math.min(100, (cur / par) * 100) };
+    return { key: 'mid', label: 'OP PEIL', color: 'var(--muted)', bg: 'transparent', br: 'var(--border)', pct: par > 0 ? Math.min(100, (cur / par) * 100) : 100 };
 }
 
-function stockValue(item: InventoryItem) { return (item.current_stock || 0) * (item.purchase_price || 0); }
+function stockValue(item: InventoryItem) {
+    return Number(item.current_stock || 0) * Number(item.purchase_price || 0);
+}
 
-/* ───────── atoms ───────── */
+function daysUntilTHT(thtStr?: string | null): number | null {
+    if (!thtStr) return null;
+    const tht = new Date(thtStr);
+    if (isNaN(tht.getTime())) return null;
+    const now = new Date();
+    return Math.round((tht.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function coverageDays(item: InventoryItem): number {
+    const avg = Number(item.avg_daily || 0);
+    if (avg <= 0) return Infinity;
+    return Number(item.current_stock || 0) / avg;
+}
+
+/* Stable kleur-hash voor leverancier-strings (geen hardcoded SUPPLIER lijst) */
+function supplierColor(name: string): string {
+    if (!name) return '#949494';
+    const palette = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#ef4444', '#f97316', '#3b82f6'];
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+    return palette[Math.abs(h) % palette.length];
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ATOMS
+   ═══════════════════════════════════════════════════════════════════ */
 function Hint({ tip, children }: { tip: string; children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
     return (
@@ -59,7 +92,7 @@ function Hint({ tip, children }: { tip: string; children: React.ReactNode }) {
             {open && (
                 <div style={{
                     position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)',
-                    background: '#0a0a0c', border: `1px solid ${GOLD}55`, borderRadius: 8,
+                    background: '#0a0a0c', border: `1px solid ${GOLD}4D`, borderRadius: 8,
                     padding: '8px 12px', fontSize: 11, color: 'var(--text)', width: 260, zIndex: 50,
                     lineHeight: 1.5, boxShadow: '0 8px 24px rgba(0,0,0,.5)', textAlign: 'left',
                     whiteSpace: 'normal', fontWeight: 400, letterSpacing: 'normal', textTransform: 'none',
@@ -75,30 +108,30 @@ function Hint({ tip, children }: { tip: string; children: React.ReactNode }) {
 function MetalCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
     return (
         <div style={{
-            position: 'relative', background: 'var(--card)', backdropFilter: 'blur(18px)',
-            border: '1px solid rgba(130,130,130,.12)', borderRadius: 14, overflow: 'hidden',
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 14,
             ...style,
-        }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, transparent, ${GOLD}80, transparent)`, pointerEvents: 'none' }} />
-            {children}
-        </div>
+        }}>{children}</div>
     );
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-    return <div style={{ fontSize: 10, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{children}</div>;
+function Eyebrow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+    return (
+        <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase', ...style }}>{children}</div>
+    );
 }
 
 function StatTile({ label, value, sub, tone, icon: I }: { label: React.ReactNode; value: React.ReactNode; sub?: string; tone?: 'ok' | 'warn' | 'bad'; icon?: any }) {
     const color = tone === 'ok' ? 'var(--green)' : tone === 'warn' ? 'var(--amber)' : tone === 'bad' ? 'var(--red)' : 'var(--text)';
     return (
         <MetalCard>
-            <div style={{ padding: 18 }}>
+            <div style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <Eyebrow>{label}</Eyebrow>
                     {I && <I size={14} style={{ color: 'var(--muted-light)' }} />}
                 </div>
-                <div style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 500, fontSize: 28, fontVariantNumeric: 'tabular-nums', color }}>{value}</div>
+                <div style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontSize: 28, fontWeight: 200, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
                 {sub && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>}
             </div>
         </MetalCard>
@@ -106,19 +139,18 @@ function StatTile({ label, value, sub, tone, icon: I }: { label: React.ReactNode
 }
 
 function Pill({ variant = 'draft', children, onClick, style }: { variant?: 'brand' | 'draft' | 'danger' | 'warn' | 'ok'; children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties }) {
-    const styles: Record<string, React.CSSProperties> = {
-        brand: { background: 'rgba(255,191,0,.12)', color: 'var(--brand)', borderColor: 'rgba(255,191,0,.3)' },
-        draft: { background: 'rgba(130,130,130,.14)', color: 'var(--muted)', borderColor: 'var(--border)' },
-        danger: { background: 'rgba(239,68,68,.12)', color: 'var(--red)', borderColor: 'rgba(239,68,68,.25)' },
-        warn: { background: 'rgba(245,158,11,.12)', color: 'var(--amber)', borderColor: 'rgba(245,158,11,.3)' },
-        ok: { background: 'rgba(34,197,94,.12)', color: 'var(--green)', borderColor: 'rgba(34,197,94,.25)' },
+    const variants: Record<string, React.CSSProperties> = {
+        brand: { background: `${GOLD}26`, color: GOLD, border: `1px solid ${GOLD}66` },
+        draft: { background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)' },
+        danger: { background: 'rgba(239,68,68,.12)', color: 'var(--red)', border: '1px solid rgba(239,68,68,.35)' },
+        warn: { background: 'rgba(245,158,11,.12)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,.35)' },
+        ok: { background: 'rgba(34,197,94,.1)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)' },
     };
     return (
         <span onClick={onClick} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999,
-            fontSize: 11, fontWeight: 600, border: '1px solid transparent',
-            cursor: onClick ? 'pointer' : 'default',
-            ...styles[variant], ...style,
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 100,
+            fontSize: 11, fontWeight: 600, cursor: onClick ? 'pointer' : 'default', transition: '.15s',
+            ...variants[variant], ...style,
         }}>{children}</span>
     );
 }
@@ -126,14 +158,14 @@ function Pill({ variant = 'draft', children, onClick, style }: { variant?: 'bran
 function BtnPrimary({ children, icon: I, right: R, onClick, style, disabled }: { children: React.ReactNode; icon?: any; right?: any; onClick?: () => void; style?: React.CSSProperties; disabled?: boolean }) {
     return (
         <button onClick={onClick} disabled={disabled} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10,
-            background: 'var(--brand)', color: 'var(--brand-background)', fontWeight: 700, fontSize: 13,
-            border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-            opacity: disabled ? 0.5 : 1,
-            boxShadow: '0 4px 20px rgba(255,191,0,.25), inset 0 1px 0 rgba(255,255,255,.2)',
-            ...style,
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8,
+            background: disabled ? 'var(--muted-light)' : `linear-gradient(180deg, ${GOLD}, #9e781c)`,
+            color: '#0a0a0c', fontWeight: 600, fontSize: 12, border: 'none',
+            cursor: disabled ? 'not-allowed' : 'pointer', transition: '.15s', opacity: disabled ? 0.5 : 1, ...style,
         }}>
-            {I && <I size={14} />} {children} {R && <R size={14} />}
+            {I && <I size={14} />}
+            {children}
+            {R && <R size={14} />}
         </button>
     );
 }
@@ -141,12 +173,13 @@ function BtnPrimary({ children, icon: I, right: R, onClick, style, disabled }: {
 function BtnGhost({ children, icon: I, right: R, onClick, style }: { children: React.ReactNode; icon?: any; right?: any; onClick?: () => void; style?: React.CSSProperties }) {
     return (
         <button onClick={onClick} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10,
-            background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13,
-            border: '1px solid var(--border)', cursor: 'pointer',
-            ...style,
+            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8,
+            background: 'transparent', color: 'var(--text)', fontWeight: 500, fontSize: 12,
+            border: '1px solid var(--border)', cursor: 'pointer', transition: '.15s', ...style,
         }}>
-            {I && <I size={14} />} {children} {R && <R size={14} />}
+            {I && <I size={14} />}
+            {children}
+            {R && <R size={14} />}
         </button>
     );
 }
@@ -154,9 +187,8 @@ function BtnGhost({ children, icon: I, right: R, onClick, style }: { children: R
 function SectionExplain({ children }: { children: React.ReactNode }) {
     return (
         <div style={{
-            display: 'flex', gap: 8, alignItems: 'flex-start',
-            padding: '10px 14px', marginBottom: 10,
-            background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)',
+            display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 14px', marginBottom: 14,
+            background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.18)',
             borderLeft: '2px solid rgba(59,130,246,.5)', borderRadius: 10,
             fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
         }}>
@@ -166,12 +198,29 @@ function SectionExplain({ children }: { children: React.ReactNode }) {
     );
 }
 
-/* ═══════════════════════════════════════════════════════════════════ */
+function StockBar({ item }: { item: InventoryItem }) {
+    const s = stockStatus(item);
+    const par = Number(item.par_level || 0);
+    const reorder = Number(item.min_stock || 0);
+    const reorderPos = par > 0 ? Math.min(100, (reorder / par) * 100) : 0;
+    return (
+        <div style={{ position: 'relative', height: 6, background: 'rgba(130,130,130,.12)', borderRadius: 3, overflow: 'visible', width: '100%', minWidth: 80 }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, s.pct)}%`, background: s.color, borderRadius: 3, transition: 'width .3s' }} />
+            {par > 0 && reorder > 0 && (
+                <div style={{ position: 'absolute', left: `${reorderPos}%`, top: -2, bottom: -2, width: 1, background: 'rgba(245,158,11,.55)' }} title="Bestelpunt" />
+            )}
+        </div>
+    );
+}
 
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN PAGE COMPONENT
+   ═══════════════════════════════════════════════════════════════════ */
 export default function Voorraad() {
     const { data: inventory, insert, update, remove } = useSupabase<InventoryItem>('inventory', []);
     const { data: recepten } = useSupabase<Recept>('recepten', []);
     const { data: supplierPrices } = useSupabase<any>('supplier_prices', []);
+    const { data: movements } = useSupabase<StockMovement>('stock_movements', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
 
@@ -183,13 +232,36 @@ export default function Voorraad() {
     const [editing, setEditing] = useState<number | 'new' | null>(null);
     const [editForm, setEditForm] = useState<any>(null);
     const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+    const [addOpen, setAddOpen] = useState(false);
 
     /* ───── derived ───── */
     const totalItems = inventory.length;
-    const lowStock = useMemo(() => inventory.filter(i => (i.current_stock || 0) < (i.min_stock || 0)), [inventory]);
+    const lowStock = useMemo(
+        () => inventory.filter(i => ['out', 'low'].includes(stockStatus(i).key)),
+        [inventory]
+    );
     const outOfStock = useMemo(() => inventory.filter(i => (i.current_stock || 0) === 0), [inventory]);
     const totalValue = useMemo(() => inventory.reduce((s, i) => s + stockValue(i), 0), [inventory]);
-    const tekortCost = useMemo(() => lowStock.reduce((s, i) => s + ((i.min_stock - i.current_stock) * (i.purchase_price || 0)), 0), [lowStock]);
+
+    const expiringSoon = useMemo(() => inventory.filter(i => {
+        const d = daysUntilTHT(i.tht);
+        return d !== null && d >= 0 && d <= 3;
+    }), [inventory]);
+
+    const avgCoverage = useMemo(() => {
+        const withUse = inventory.filter(i => Number(i.avg_daily || 0) > 0);
+        if (withUse.length === 0) return null;
+        const total = withUse.reduce((s, i) => s + coverageDays(i), 0);
+        return total / withUse.length;
+    }, [inventory]);
+
+    const tekortCost = useMemo(
+        () => lowStock.reduce((s, i) => {
+            const need = Math.max(0, Number(i.par_level || i.min_stock || 0) - Number(i.current_stock || 0));
+            return s + need * Number(i.purchase_price || 0);
+        }, 0),
+        [lowStock]
+    );
 
     const byCategory = useMemo(() => {
         return CATEGORIEEN.map(c => {
@@ -202,27 +274,39 @@ export default function Voorraad() {
     const filtered = useMemo(() => inventory.filter(i => {
         if (search && !(i.naam || '').toLowerCase().includes(search.toLowerCase())) return false;
         if (filter === 'Alles') return true;
-        if (filter === 'Kritiek') return (i.current_stock || 0) < (i.min_stock || 0);
-        if (filter === 'Op peil') return (i.current_stock || 0) >= (i.min_stock || 0);
+        if (filter === 'Kritiek') return ['out', 'low'].includes(stockStatus(i).key);
+        if (filter === 'THT') { const d = daysUntilTHT(i.tht); return d !== null && d >= 0 && d <= 3; }
+        if (filter === 'Op peil') return !['out', 'low'].includes(stockStatus(i).key);
         return i.categorie === filter;
     }), [inventory, filter, search]);
 
-    /* ───── actions ───── */
+    /* ───── stock actions ───── */
+    async function logMovement(item: InventoryItem, type: StockMovement['type'], qty: number, note?: string) {
+        try {
+            const newStock = Math.max(0, Number(item.current_stock || 0) + qty);
+            await fetch('/api/_supa/stock-movement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inventory_id: item.id, type, qty, resulting_stock: newStock, note }),
+            }).catch(() => null);  /* logging is best-effort, blokkeert update niet */
+        } catch { /* idem */ }
+    }
+
     function quickAdjust(item: InventoryItem, amount: number) {
         const newStock = Math.max(0, (item.current_stock || 0) + amount);
         update(item.id, { current_stock: newStock } as any).then(() => {
             showToast(item.naam + ': ' + newStock + ' ' + item.unit, 'success');
+            void logMovement(item, amount > 0 ? 'receive' : 'usage', amount);
         });
     }
 
     function setStock(item: InventoryItem, newStock: number) {
+        const delta = newStock - Number(item.current_stock || 0);
         update(item.id, { current_stock: Math.max(0, newStock) } as any);
+        if (delta !== 0) void logMovement(item, 'count', delta, 'Telling-modus');
     }
 
-    function openNewItem() {
-        setEditForm({ naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, unit: 'kg', purchase_price: 0, supplier: '', yield_factor: 1.0 });
-        setEditing('new');
-    }
+    function openNewItem() { setAddOpen(true); }
 
     function openEditItem(item: InventoryItem) {
         setEditForm(JSON.parse(JSON.stringify(item)));
@@ -272,12 +356,11 @@ export default function Voorraad() {
         const { default: jsPDF } = await import('jspdf');
         const autoTable = (await import('jspdf-autotable')).default;
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
         doc.setFillColor(18, 18, 20); doc.rect(0, 0, 210, 30, 'F');
         doc.setTextColor(196, 163, 90);
         doc.setFontSize(20); doc.text('Voorraadlijst', 14, 14);
         doc.setTextColor(148, 148, 148);
-        doc.setFontSize(9); doc.text('Hop & Bites · BBQ Architect', 14, 20);
+        doc.setFontSize(9); doc.text('Hop & Bites · Smart Inventory', 14, 20);
         const today = new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: 'long', year: 'numeric' });
         doc.text(today, 196, 20, { align: 'right' });
 
@@ -285,23 +368,22 @@ export default function Voorraad() {
         doc.setFontSize(10);
         let y = 40;
         doc.text(`Totaal producten: ${totalItems}`, 14, y);
-        doc.text(`Onder minimum: ${lowStock.length}`, 75, y);
+        doc.text(`Onder par-level: ${lowStock.length}`, 75, y);
         doc.text(`Waarde: ${fmt(totalValue)}`, 140, y);
         y += 10;
 
         byCategory.forEach(cat => {
             const items = inventory.filter(i => i.categorie === cat.name);
             if (items.length === 0) return;
-
             autoTable(doc, {
                 startY: y,
-                head: [[cat.name.toUpperCase(), 'VOORRAAD', 'MIN', 'PRIJS', 'WAARDE', 'LEVERANCIER', 'STATUS']],
+                head: [[cat.name.toUpperCase(), 'VOORRAAD', 'PAR', 'PRIJS', 'WAARDE', 'LEVERANCIER', 'STATUS']],
                 body: items.map(i => {
                     const s = stockStatus(i);
                     return [
                         i.naam,
                         `${i.current_stock} ${i.unit}`,
-                        `${i.min_stock} ${i.unit}`,
+                        `${i.par_level || i.min_stock} ${i.unit}`,
                         fmt(i.purchase_price || 0),
                         fmt(stockValue(i)),
                         i.supplier || '—',
@@ -318,12 +400,11 @@ export default function Voorraad() {
 
         doc.setFontSize(8); doc.setTextColor(148, 148, 148);
         doc.text(`Gegenereerd door BBQ Architect · ${new Date().toLocaleString('nl-NL')}`, 14, 287);
-
         doc.save(`voorraadlijst-${new Date().toISOString().split('T')[0]}.pdf`);
         showToast('PDF gedownload', 'success');
     }
 
-    /* ───── AI advies ───── */
+    /* ───── AI advies-rapport (uitgebreid, voor drawer) ───── */
     const [aiReport, setAiReport] = useState<string | null>(null);
     const [aiLoading, setAiLoading] = useState(false);
 
@@ -331,141 +412,75 @@ export default function Voorraad() {
         setAiDrawerOpen(true);
         setAiLoading(true);
         setAiReport(null);
-        await new Promise(r => setTimeout(r, 900));
-
+        await new Promise(r => setTimeout(r, 600));
         const lines: string[] = [];
         lines.push(`**Voorraad-analyse · ${new Date().toLocaleDateString('nl-NL')}**\n`);
-        lines.push(`Je hebt **${totalItems} producten** met een totale waarde van **${fmt(totalValue)}**.\n`);
-
+        lines.push(`Je hebt **${totalItems} producten** met een totale waarde van **${fmt(totalValue)}**.`);
         if (lowStock.length > 0) {
-            lines.push(`\n## Urgente actie nodig`);
-            lines.push(`**${lowStock.length} items** staan onder minimum-voorraad. Geschatte inkoop om bij te vullen: **${fmt(tekortCost)}**.`);
-            lines.push('\nTop 5 meest kritiek:');
-            lowStock.slice(0, 5).forEach(i => {
-                const tekort = i.min_stock - i.current_stock;
-                lines.push(`- **${i.naam}** — ${i.current_stock}/${i.min_stock} ${i.unit} (tekort ${tekort.toFixed(1)} ${i.unit}) · ${i.supplier || 'geen leverancier'}`);
+            lines.push(`\n## Urgent — onder par-level`);
+            lines.push(`**${lowStock.length} items** moeten worden bijbesteld. Geschatte inkoop: **${fmt(tekortCost)}**.\n`);
+            lowStock.slice(0, 8).forEach(i => {
+                const par = i.par_level || i.min_stock || 0;
+                lines.push(`- **${i.naam}** — ${i.current_stock}/${par} ${i.unit} · ${i.supplier || 'geen lev.'}`);
             });
         } else {
-            lines.push(`\nAlle voorraden zijn op peil. Geen urgente acties.`);
+            lines.push(`\nAlle voorraden zijn op peil.`);
         }
-
-        if (outOfStock.length > 0) {
-            lines.push(`\n## Volledig op`);
-            outOfStock.forEach(i => lines.push(`- **${i.naam}** (${i.categorie}) — nu 0 ${i.unit}, bestel bij ${i.supplier || 'onbekend'}`));
+        if (expiringSoon.length > 0) {
+            lines.push(`\n## THT-alert (≤3 dagen)`);
+            expiringSoon.forEach(i => {
+                const d = daysUntilTHT(i.tht);
+                lines.push(`- **${i.naam}** — nog ${d} dag(en) · ${i.current_stock} ${i.unit} verwerken`);
+            });
         }
-
         const bySupplier: Record<string, InventoryItem[]> = {};
         lowStock.forEach(i => {
             const sup = i.supplier || 'Onbekend';
-            if (!bySupplier[sup]) bySupplier[sup] = [];
-            bySupplier[sup].push(i);
+            (bySupplier[sup] ||= []).push(i);
         });
         if (Object.keys(bySupplier).length > 0) {
-            lines.push(`\n## Bestel-voorstel (gebundeld per leverancier)`);
-            lines.push(`Bundel bestellingen om transportkosten en leveringen te beperken.`);
+            lines.push(`\n## Bestel-voorstel (gebundeld)`);
             Object.entries(bySupplier).forEach(([sup, items]) => {
-                const totalSup = items.reduce((s, i) => s + ((i.min_stock - i.current_stock) * (i.purchase_price || 0)), 0);
-                lines.push(`- **${sup}** — ${items.length} item(s) · ± ${fmt(totalSup)}`);
+                const t = items.reduce((s, i) => s + ((Number(i.par_level || i.min_stock) - Number(i.current_stock)) * Number(i.purchase_price || 0)), 0);
+                lines.push(`- **${sup}** · ${items.length} item(s) · ± ${fmt(t)}`);
             });
         }
-
         const topValue = [...inventory].sort((a, b) => stockValue(b) - stockValue(a)).slice(0, 3);
         if (topValue.length > 0) {
             lines.push(`\n## Grootste voorraadwaarde`);
-            lines.push(`Deze producten vertegenwoordigen de meeste waarde — houd ze goed bij.`);
-            topValue.forEach(i => {
-                lines.push(`- **${i.naam}** — ${fmt(stockValue(i))} (${i.current_stock} ${i.unit})`);
-            });
+            topValue.forEach(i => lines.push(`- **${i.naam}** — ${fmt(stockValue(i))} (${i.current_stock} ${i.unit})`));
         }
-
         lines.push(`\n## Aanbevelingen`);
-        if (lowStock.length > 3) lines.push(`- Plan een wekelijks telling-moment om te voorkomen dat items onverwacht op zijn.`);
-        lines.push(`- Koppel recepten aan ingrediënten zodat verbruik automatisch wordt bijgewerkt.`);
-        lines.push(`- Gebruik de Telling-modus op je telefoon in de koeling — sneller dan met pen en papier.`);
+        if (lowStock.length > 3) lines.push(`- Plan een wekelijks telling-moment.`);
+        lines.push(`- Koppel recepten aan ingrediënten zodat verbruik automatisch update.`);
         if (supplierPrices && supplierPrices.length > 0) lines.push(`- Open Price Intelligence om de goedkoopste leverancier per product te zien.`);
-        else lines.push(`- Importeer CSV-prijslijsten in Price Intelligence om marges beter te bewaken.`);
-
         setAiReport(lines.join('\n'));
         setAiLoading(false);
     }
 
-    async function downloadAIReport() {
-        if (!aiReport) return;
-        const { default: jsPDF } = await import('jspdf');
-        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-        doc.setFillColor(18, 18, 20); doc.rect(0, 0, 210, 30, 'F');
-        doc.setTextColor(196, 163, 90);
-        doc.setFontSize(20); doc.text('AI Voorraad-advies', 14, 14);
-        doc.setTextColor(148, 148, 148);
-        doc.setFontSize(9); doc.text('Hop & Bites · BBQ Architect', 14, 20);
-        const today = new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: 'long', year: 'numeric' });
-        doc.text(today, 196, 20, { align: 'right' });
-
-        doc.setTextColor(40, 40, 40);
-        doc.setFontSize(10);
-        let y = 42;
-        const lines = aiReport.split('\n');
-        lines.forEach(line => {
-            if (y > 275) { doc.addPage(); y = 20; }
-            if (line.startsWith('## ')) {
-                y += 4;
-                doc.setTextColor(196, 163, 90); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-                doc.text(line.replace('## ', ''), 14, y); y += 7;
-                doc.setTextColor(40, 40, 40); doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-            } else if (line.startsWith('**') && line.endsWith('**')) {
-                doc.setFont('helvetica', 'bold');
-                doc.text(line.replace(/\*\*/g, ''), 14, y); y += 6;
-                doc.setFont('helvetica', 'normal');
-            } else if (line.startsWith('- ')) {
-                const text = line.replace(/\*\*/g, '').substring(2);
-                const wrapped = doc.splitTextToSize('• ' + text, 180);
-                doc.text(wrapped, 18, y); y += 5 * wrapped.length;
-            } else if (line.trim()) {
-                const text = line.replace(/\*\*/g, '');
-                const wrapped = doc.splitTextToSize(text, 180);
-                doc.text(wrapped, 14, y); y += 5 * wrapped.length;
-            } else {
-                y += 3;
-            }
-        });
-
-        doc.setFontSize(8); doc.setTextColor(148, 148, 148);
-        doc.text(`Gegenereerd door BBQ Architect AI · ${new Date().toLocaleString('nl-NL')}`, 14, 287);
-
-        doc.save(`ai-voorraad-advies-${new Date().toISOString().split('T')[0]}.pdf`);
-        showToast('Advies-PDF gedownload', 'success');
-    }
-
     /* ═══════════════════════════════════════════════════════════════════
-       RENDER
+       RENDER — sub-views first
        ═══════════════════════════════════════════════════════════════════ */
-
-    // Edit modal takes over
     if (editing !== null && editForm) {
         return <EditItemView
             editForm={editForm} setEditForm={setEditForm}
-            editing={editing}
-            recepten={recepten}
+            editing={editing} recepten={recepten}
             onSave={saveItem} onDelete={deleteItem}
             onClose={() => { setEditing(null); setEditForm(null); }}
         />;
     }
 
-    // Count mode
     if (view === 'tellen') {
         return <CountMode
-            inventory={inventory}
-            byCategory={byCategory}
+            inventory={inventory} byCategory={byCategory}
             onSetStock={setStock}
             onClose={() => setView('overzicht')}
         />;
     }
 
-    // Inkooplijst
     if (view === 'inkooplijst') {
         return <InkooplijstView
-            lowStock={lowStock}
+            inventory={inventory}
             onClose={() => setView('overzicht')}
             onExport={exportPDF}
         />;
@@ -473,115 +488,118 @@ export default function Voorraad() {
 
     return (
         <RequireTier feature="voorraad">
-        <div style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
+            <div style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
 
-            {/* HERO */}
-            <HeroHeader
-                totalItems={totalItems}
-                lowStockCount={lowStock.length}
-                totalValue={totalValue}
-                tekortCost={tekortCost}
-                categoryCount={byCategory.length}
-                onTell={() => setView('tellen')}
-                onInkooplijst={() => setView('inkooplijst')}
-                onPDF={exportPDF}
-                onAI={generateAIReport}
-                onAdd={openNewItem}
-                onScan={() => setScannerOpen(true)}
-            />
+                <HeroHeader
+                    totalItems={totalItems}
+                    lowStockCount={lowStock.length}
+                    expiringCount={expiringSoon.length}
+                    avgCoverage={avgCoverage}
+                    totalValue={totalValue}
+                    onTell={() => setView('tellen')}
+                    onScan={() => setScannerOpen(true)}
+                    onPDF={exportPDF}
+                    onAI={generateAIReport}
+                    onAdd={openNewItem}
+                />
 
-            {totalItems === 0 ? (
-                <>
-                    <div style={{ height: 20 }} />
-                    <EmptyState page="/voorraad" onAction={openNewItem} />
-                </>
-            ) : (
-                <>
-                    <div style={{ height: 16 }} />
-                    <SectionExplain>
-                        <strong style={{ color: 'var(--text)' }}>Welkom bij je voorraad.</strong> Hieronder zie je in één oogopslag wat er is, wat je te weinig hebt en wat het waard is. Klik een product aan voor meer details. Rechtsboven staan de belangrijkste knoppen.
-                    </SectionExplain>
+                {totalItems === 0 ? (
+                    <>
+                        <div style={{ height: 20 }} />
+                        <EmptyState page="/voorraad" onAction={openNewItem} />
+                    </>
+                ) : (
+                    <>
+                        <div style={{ height: 20 }} />
+                        <AIAssistantBar inventory={inventory} />
 
-                    <ActionPanel
-                        lowStock={lowStock}
-                        outOfStock={outOfStock}
-                        tekortCost={tekortCost}
-                        topByValue={[...inventory].sort((a, b) => stockValue(b) - stockValue(a)).slice(0, 5)}
-                        onOpenItem={setSelectedId}
-                        onOpenBuyList={() => setView('inkooplijst')}
-                        onAIReport={generateAIReport}
-                    />
+                        <div style={{ height: 20 }} />
+                        <SectionExplain>
+                            <strong style={{ color: 'var(--text)' }}>Welkom bij Smart Inventory.</strong> Hieronder zie je in 3 kaarten direct wat actie vereist: items onder par-level, producten waarvan THT bijna verloopt, en een gebundeld bestelvoorstel per leverancier.
+                        </SectionExplain>
 
-                    {byCategory.length > 1 && (
-                        <>
-                            <div style={{ height: 20 }} />
-                            <SectionExplain>
-                                <strong style={{ color: 'var(--text)' }}>Verdeling per categorie.</strong> De donut laat zien waar je meeste voorraadwaarde zit. Zo weet je of je bijvoorbeeld veel vlees en weinig groenten hebt.
-                            </SectionExplain>
-                            <CategoryChart categories={byCategory} />
-                        </>
-                    )}
+                        <ActionPanel
+                            lowStock={lowStock}
+                            expiring={expiringSoon}
+                            inventory={inventory}
+                            onOpenItem={setSelectedId}
+                            onOpenBuyList={() => setView('inkooplijst')}
+                        />
 
-                    <div style={{ height: 20 }} />
-                    <SectionExplain>
-                        <strong style={{ color: 'var(--text)' }}>Alle producten.</strong> Zoek bovenin, of filter op categorie. Klik een rij aan om de details te zien. Gebruik <strong style={{ color: 'var(--text)' }}>−</strong> en <strong style={{ color: 'var(--text)' }}>+</strong> rechts om snel bij te werken zonder te openen.
-                    </SectionExplain>
-                    <FilterBar
-                        search={search} setSearch={setSearch}
-                        filter={filter} setFilter={setFilter}
-                        counts={{
-                            all: totalItems,
-                            kritiek: lowStock.length,
-                            peil: totalItems - lowStock.length,
+                        {byCategory.length > 1 && (
+                            <>
+                                <div style={{ height: 20 }} />
+                                <CategoryChart categories={byCategory} />
+                            </>
+                        )}
+
+                        <div style={{ height: 20 }} />
+                        <FilterBar
+                            search={search} setSearch={setSearch}
+                            filter={filter} setFilter={setFilter}
+                            counts={{
+                                all: totalItems,
+                                kritiek: lowStock.length,
+                                tht: expiringSoon.length,
+                                peil: totalItems - lowStock.length,
+                            }}
+                        />
+
+                        <div style={{ height: 14 }} />
+                        <ProductTable
+                            items={filtered}
+                            onOpenItem={setSelectedId}
+                            onAdjust={quickAdjust}
+                        />
+                    </>
+                )}
+
+                {selectedId !== null && (
+                    <ItemDetailDrawer
+                        item={inventory.find(i => i.id === selectedId)!}
+                        supplierPrices={supplierPrices || []}
+                        recepten={recepten || []}
+                        movements={(movements || []).filter((m: any) => m.inventory_id === selectedId)}
+                        onClose={() => setSelectedId(null)}
+                        onAdjust={quickAdjust}
+                        onEdit={() => {
+                            const it = inventory.find(i => i.id === selectedId);
+                            if (it) { setSelectedId(null); openEditItem(it); }
                         }}
                     />
+                )}
 
-                    <div style={{ height: 14 }} />
-                    <ProductTable
-                        items={filtered}
-                        onOpenItem={setSelectedId}
-                        onAdjust={quickAdjust}
+                {addOpen && (
+                    <AddItemModal
+                        onClose={() => setAddOpen(false)}
+                        onSave={(data: any) => {
+                            insert(data).then(() => {
+                                showToast('Item toegevoegd', 'success');
+                                setAddOpen(false);
+                            });
+                        }}
                     />
+                )}
 
-                    <div style={{ height: 20 }} />
-                    <ZoWerktDit />
-                </>
-            )}
+                {aiDrawerOpen && (
+                    <AIReportDrawer
+                        loading={aiLoading}
+                        report={aiReport}
+                        onClose={() => setAiDrawerOpen(false)}
+                        onRegenerate={generateAIReport}
+                    />
+                )}
 
-            {selectedId !== null && (
-                <ItemDetailDrawer
-                    item={inventory.find(i => i.id === selectedId)!}
-                    supplierPrices={supplierPrices || []}
-                    recepten={recepten || []}
-                    onClose={() => setSelectedId(null)}
-                    onAdjust={quickAdjust}
-                    onEdit={() => {
-                        const it = inventory.find(i => i.id === selectedId);
-                        if (it) { setSelectedId(null); openEditItem(it); }
-                    }}
-                />
-            )}
-
-            {aiDrawerOpen && (
-                <AIReportDrawer
-                    loading={aiLoading}
-                    report={aiReport}
-                    onClose={() => setAiDrawerOpen(false)}
-                    onDownload={downloadAIReport}
-                    onRegenerate={generateAIReport}
-                />
-            )}
-
-            <BarcodeScanner isOpen={scannerOpen} onScan={handleBarcodeScan} onClose={() => setScannerOpen(false)} />
-        </div>
+                <BarcodeScanner isOpen={scannerOpen} onScan={handleBarcodeScan} onClose={() => setScannerOpen(false)} />
+            </div>
         </RequireTier>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   HERO
+   HERO HEADER — 5 KPI tiles (mockup-style)
    ═══════════════════════════════════════════════════════════════════ */
-function HeroHeader({ totalItems, lowStockCount, totalValue, tekortCost, categoryCount, onTell, onInkooplijst, onPDF, onAI, onAdd, onScan }: any) {
+function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, totalValue, onTell, onScan, onPDF, onAI, onAdd }: any) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
@@ -591,61 +609,51 @@ function HeroHeader({ totalItems, lowStockCount, totalValue, tekortCost, categor
                         <span style={{ padding: '2px 8px', borderRadius: 6, background: `${GOLD}20`, border: `1px solid ${GOLD}4D`, fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>SMART INVENTORY</span>
                     </div>
                     <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        {totalItems} producten · {categoryCount} categorieën · altijd zicht op wat je nodig hebt
+                        {totalItems} producten · live gesynct · altijd zicht op wat je nodig hebt
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <div title="Open de telling-modus — makkelijk op je telefoon of tablet tijdens het tellen">
-                        <BtnGhost icon={ClipboardCheck} onClick={onTell}>Tellen</BtnGhost>
-                    </div>
-                    <div title="Scan een barcode om snel een product te vinden">
-                        <BtnGhost icon={Barcode} onClick={onScan}>Scan</BtnGhost>
-                    </div>
-                    <div title="Download een voorraadlijst als PDF — handig om op te hangen of mee te nemen">
-                        <BtnGhost icon={Printer} onClick={onPDF}>Voorraadlijst PDF</BtnGhost>
-                    </div>
-                    <div title="Laat de AI een compleet advies-rapport maken over je voorraad">
-                        <BtnGhost icon={Sparkles} right={ArrowUpRight} onClick={onAI} style={{ borderColor: `${GOLD}66`, color: GOLD }}>AI Advies</BtnGhost>
-                    </div>
-                    <div title="Voeg een nieuw product toe aan je voorraad">
-                        <BtnPrimary icon={Plus} onClick={onAdd}>Item toevoegen</BtnPrimary>
-                    </div>
+                    <BtnGhost icon={ScanLine} onClick={onTell}>Tellen</BtnGhost>
+                    <BtnGhost icon={Barcode} onClick={onScan}>Scan</BtnGhost>
+                    <BtnGhost icon={Printer} onClick={onPDF}>Voorraadlijst PDF</BtnGhost>
+                    <BtnGhost icon={Sparkles} right={ArrowUpRight} onClick={onAI} style={{ borderColor: `${GOLD}66`, color: GOLD }}>AI Advies</BtnGhost>
+                    <BtnPrimary icon={Plus} onClick={onAdd}>Item toevoegen</BtnPrimary>
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }} className="vorraad-kpi-grid">
                 <StatTile
                     label="Voorraadwaarde"
                     value={fmt(totalValue)}
-                    sub={`${totalItems} producten`}
+                    sub={`${totalItems} SKU's actief`}
                     icon={Euro}
                 />
                 <StatTile
-                    label={<Hint tip="Producten waar je minder van hebt dan je 'minimum'-instelling. Onder dit getal is het tijd om bij te bestellen.">Onder minimum</Hint>}
+                    label={<Hint tip="Producten waar de huidige voorraad onder of op het bestelpunt staat. Tijd om bij te bestellen.">Onder par-level</Hint>}
                     value={lowStockCount}
-                    sub={lowStockCount > 0 ? 'bestellen' : 'alles op peil'}
+                    sub={lowStockCount > 0 ? 'actie vereist' : 'alles op peil'}
                     tone={lowStockCount > 3 ? 'bad' : lowStockCount > 0 ? 'warn' : 'ok'}
                     icon={AlertTriangle}
                 />
                 <StatTile
-                    label={<Hint tip="Geschat bedrag om alle items weer op minimum te krijgen. Excl. BTW, excl. bezorgkosten.">Nog te bestellen</Hint>}
-                    value={fmt(tekortCost)}
-                    sub="om bij te vullen"
-                    tone={tekortCost > 0 ? 'warn' : undefined}
-                    icon={ShoppingCart}
-                />
-                <StatTile
-                    label="Categorieën"
-                    value={categoryCount}
-                    sub="in gebruik"
-                    icon={PieChart}
-                />
-                <StatTile
-                    label="Laatste update"
-                    value={<span style={{ fontSize: 18 }}>live</span>}
-                    sub="gesynct met Supabase"
-                    tone="ok"
+                    label={<Hint tip="Tenminste Houdbaar Tot. Producten waarvan THT binnen 3 dagen verloopt — eerst gebruiken.">THT ≤ 3 dagen</Hint>}
+                    value={expiringCount}
+                    sub={expiringCount > 0 ? 'direct gebruiken' : 'niets bederft'}
+                    tone={expiringCount > 0 ? 'warn' : 'ok'}
                     icon={Clock}
+                />
+                <StatTile
+                    label={<Hint tip="Hoeveel dagen je gemiddeld nog uithoud bij huidig dagelijks verbruik. Wordt berekend zodra je verbruik logt.">Gem. dekking</Hint>}
+                    value={avgCoverage === null ? '—' : avgCoverage === Infinity ? '∞' : `${avgCoverage.toFixed(1)}d`}
+                    sub={avgCoverage === null ? 'log verbruik' : 'bij huidig tempo'}
+                    icon={CalendarClock}
+                />
+                <StatTile
+                    label="AI-tip"
+                    value={lowStockCount > 0 ? 'Bestel nu' : 'Alles ok'}
+                    sub={lowStockCount > 0 ? 'klik AI Advies' : 'geen actie'}
+                    tone={lowStockCount > 0 ? 'warn' : 'ok'}
+                    icon={Sparkles}
                 />
             </div>
         </div>
@@ -653,133 +661,244 @@ function HeroHeader({ totalItems, lowStockCount, totalValue, tekortCost, categor
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   ACTION PANEL
+   AI ASSISTANT BAR — quick-action pills + Q&A
    ═══════════════════════════════════════════════════════════════════ */
-function ActionPanel({ lowStock, outOfStock, tekortCost, topByValue, onOpenItem, onOpenBuyList, onAIReport }: any) {
+function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
+    const [q, setQ] = useState('');
+    const [answering, setAnswering] = useState(false);
+    const [response, setResponse] = useState<string | null>(null);
+
+    const quickActions = [
+        { label: 'Wat is bijna op?', q: 'Welke producten zijn deze week bijna op?' },
+        { label: 'Maak bestellijst', q: 'Genereer een bestellijst per leverancier voor alles onder par-level.' },
+        { label: 'Wat bederft eerst?', q: 'Welke producten moet ik als eerste gebruiken op basis van THT?' },
+        { label: 'Dure langzaamlopers?', q: 'Welke dure items hebben lage omloopsnelheid?' },
+    ];
+
+    async function ask(question: string) {
+        if (!question.trim()) return;
+        setQ(question);
+        setAnswering(true);
+        setResponse(null);
+        try {
+            const ctx = inventory.slice(0, 80).map(i => {
+                const s = stockStatus(i);
+                const tht = daysUntilTHT(i.tht);
+                return `- ${i.naam} (${i.categorie}): ${i.current_stock}/${i.par_level || i.min_stock} ${i.unit}, status=${s.label}, lev=${i.supplier || '—'}${tht !== null ? `, THT=${tht}d` : ''}`;
+            }).join('\n');
+            const res = await fetch('/api/voorraad-ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, snapshot: ctx }),
+            });
+            const body = await res.json();
+            if (body.success && body.text) setResponse(body.text);
+            else setResponse(body.error || 'Geen antwoord ontvangen.');
+        } catch (e: any) {
+            setResponse('Kon AI niet bereiken: ' + (e?.message || 'fout'));
+        }
+        setAnswering(false);
+    }
+
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {/* Card 1 — onder minimum */}
+        <MetalCard style={{ position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, #FFBF00, ${GOLD}, transparent)` }} />
+            <div style={{ padding: '16px 20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: response || answering ? 14 : 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `${GOLD}26`, border: `1px solid ${GOLD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Sparkles size={17} style={{ color: GOLD }} />
+                    </div>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <input
+                            value={q}
+                            onChange={e => setQ(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') ask(q); }}
+                            placeholder="Vraag de AI: wat moet ik nu bestellen, wat bederft, hoeveel marge laat ik liggen…"
+                            style={{ width: '100%', paddingLeft: 14, paddingRight: 100, fontSize: 13, height: 40, borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }}
+                        />
+                        <button onClick={() => ask(q)} disabled={!q.trim() || answering} style={{
+                            position: 'absolute', right: 6, top: 6, height: 28, padding: '0 12px',
+                            borderRadius: 6, background: q.trim() && !answering ? `linear-gradient(180deg, ${GOLD}, #9e781c)` : 'var(--muted-light)',
+                            color: '#0a0a0c', fontWeight: 600, fontSize: 11, border: 'none',
+                            cursor: q.trim() && !answering ? 'pointer' : 'not-allowed',
+                        }}>
+                            {answering ? 'AI denkt…' : 'Vraag AI'}
+                        </button>
+                    </div>
+                </div>
+
+                {!response && !answering && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {quickActions.map(a => (
+                            <Pill key={a.label} variant="draft" onClick={() => ask(a.q)} style={{ cursor: 'pointer' }}>
+                                <Zap size={10} /> {a.label}
+                            </Pill>
+                        ))}
+                    </div>
+                )}
+
+                {(answering || response) && (
+                    <div style={{ marginTop: 4, padding: 14, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}33`, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                        {answering ? (
+                            <div style={{ color: 'var(--muted)', fontStyle: 'italic' }}>De AI analyseert je voorraad…</div>
+                        ) : response}
+                        {response && (
+                            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Eyebrow style={{ color: GOLD }}>AI antwoord · op basis van live voorraad</Eyebrow>
+                                <button onClick={() => { setResponse(null); setQ(''); }} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>Wissen</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </MetalCard>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ACTION PANEL — 3 cards (under-par, THT, AI bestelvoorstel)
+   ═══════════════════════════════════════════════════════════════════ */
+function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList }: { lowStock: InventoryItem[]; expiring: InventoryItem[]; inventory: InventoryItem[]; onOpenItem: (id: number) => void; onOpenBuyList: () => void }) {
+    /* AI bundel-voorstel: groepeer onder-par per leverancier */
+    const bySupplier: Record<string, { id: string; name: string; color: string; items: InventoryItem[]; total: number }> = {};
+    lowStock.forEach(p => {
+        const sup = p.supplier || 'Onbekend';
+        if (!bySupplier[sup]) bySupplier[sup] = { id: sup, name: sup, color: supplierColor(sup), items: [], total: 0 };
+        const need = Math.max(0, Number(p.par_level || p.min_stock || 0) - Number(p.current_stock || 0));
+        bySupplier[sup].items.push(p);
+        bySupplier[sup].total += need * Number(p.purchase_price || 0);
+    });
+    const supplierList = Object.values(bySupplier).sort((a, b) => b.items.length - a.items.length);
+    const topSupplier = supplierList[0];
+
+    void inventory;  /* placeholder voor future use */
+
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }} className="voorraad-action-grid">
+            {/* Card 1 — Onder par-level */}
             <MetalCard style={{ borderColor: lowStock.length > 0 ? 'rgba(239,68,68,.3)' : undefined }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: lowStock.length > 0 ? 'rgba(239,68,68,.04)' : 'transparent' }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: lowStock.length > 0 ? 'rgba(239,68,68,.15)' : 'rgba(34,197,94,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${lowStock.length > 0 ? 'rgba(239,68,68,.3)' : 'rgba(34,197,94,.25)'}` }}>
                         {lowStock.length > 0 ? <AlertTriangle size={15} style={{ color: 'var(--red)' }} /> : <CheckCircle size={15} style={{ color: 'var(--green)' }} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>
-                            <Hint tip="Producten waar de huidige voorraad onder het 'minimum' staat dat jij hebt ingesteld. Tijd om bij te bestellen.">Onder minimum</Hint>
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{lowStock.length} items · ± {fmt(tekortCost)} nodig</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Onder par-level</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{lowStock.length} item(s) moeten worden bijbesteld</div>
                     </div>
                     <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: lowStock.length > 0 ? 'var(--red)' : 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{lowStock.length}</div>
                 </div>
-                <div style={{ padding: 10, maxHeight: 240, overflow: 'auto' }}>
+                <div style={{ padding: 10, maxHeight: 220, overflow: 'auto' }}>
                     {lowStock.length === 0 ? (
                         <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
                             <CheckCircle size={24} style={{ color: 'var(--green)', marginBottom: 8 }} />
-                            <div>Alles op peil. Goed bezig! 👍</div>
+                            <div>Alles op peil. Goed bezig.</div>
                         </div>
-                    ) : lowStock.slice(0, 5).map((i: InventoryItem) => {
-                        const s = stockStatus(i);
-                        const meta = CAT_META[i.categorie] || CAT_META.Overig;
+                    ) : lowStock.slice(0, 5).map(p => {
+                        const s = stockStatus(p);
+                        const meta = CAT_META[p.categorie] || CAT_META.Overig;
+                        const par = p.par_level || p.min_stock || 0;
                         return (
-                            <div key={i.id} onClick={() => onOpenItem(i.id)} style={{
+                            <div key={p.id} onClick={() => onOpenItem(p.id)} style={{
                                 display: 'grid', gridTemplateColumns: '3px 1fr auto', gap: 10, alignItems: 'center',
-                                padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                                padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'background .12s',
                             }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div style={{ width: 3, height: 24, background: meta.color, borderRadius: 2 }} />
                                 <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.naam}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{i.current_stock} / {i.min_stock} {i.unit}</div>
+                                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.naam}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{p.current_stock} / {par} {p.unit}</div>
                                 </div>
                                 <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: s.bg, color: s.color, border: `1px solid ${s.br}` }}>{s.label}</span>
                             </div>
                         );
                     })}
                     {lowStock.length > 5 && (
-                        <div style={{ textAlign: 'center', padding: 8, fontSize: 11, color: 'var(--muted)' }}>
-                            + {lowStock.length - 5} meer
-                        </div>
+                        <div style={{ textAlign: 'center', padding: 8, fontSize: 11, color: 'var(--muted)' }}>+ {lowStock.length - 5} meer in tabel hieronder</div>
                     )}
                 </div>
-                {lowStock.length > 0 && (
-                    <div style={{ padding: 10, borderTop: '1px solid var(--border)' }}>
-                        <BtnPrimary icon={ShoppingCart} onClick={onOpenBuyList} style={{ width: '100%', justifyContent: 'center' }}>Open inkooplijst</BtnPrimary>
-                    </div>
-                )}
             </MetalCard>
 
-            {/* Card 2 — top waarde */}
-            <MetalCard>
-                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `${GOLD}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${GOLD}4D` }}>
-                        <Euro size={15} style={{ color: GOLD }} />
+            {/* Card 2 — THT alert */}
+            <MetalCard style={{ borderColor: expiring.length > 0 ? 'rgba(245,158,11,.3)' : undefined }}>
+                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: expiring.length > 0 ? 'rgba(245,158,11,.04)' : 'transparent' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: expiring.length > 0 ? 'rgba(245,158,11,.15)' : 'rgba(34,197,94,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${expiring.length > 0 ? 'rgba(245,158,11,.3)' : 'rgba(34,197,94,.25)'}` }}>
+                        <Clock size={15} style={{ color: expiring.length > 0 ? 'var(--amber)' : 'var(--green)' }} />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>Grootste waarde</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Top 5 dure items in voorraad</div>
-                    </div>
-                </div>
-                <div style={{ padding: 10, maxHeight: 290, overflow: 'auto' }}>
-                    {topByValue.length === 0 ? (
-                        <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-                            Nog geen producten in voorraad
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                            <Hint tip="Tenminste Houdbaar Tot. We tonen producten waarvan de datum binnen 3 dagen verloopt. Gebruik eerst op (FIFO) of verwerk in iets.">THT alert</Hint>
                         </div>
-                    ) : topByValue.map((i: InventoryItem) => {
-                        const meta = CAT_META[i.categorie] || CAT_META.Overig;
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{expiring.length} producten ≤ 3 dagen houdbaar</div>
+                    </div>
+                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: expiring.length > 0 ? 'var(--amber)' : 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{expiring.length}</div>
+                </div>
+                <div style={{ padding: 10, maxHeight: 220, overflow: 'auto' }}>
+                    {expiring.length === 0 ? (
+                        <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                            <CheckCircle size={24} style={{ color: 'var(--green)', marginBottom: 8 }} />
+                            <div>Geen producten die bijna verlopen.</div>
+                        </div>
+                    ) : expiring.slice(0, 5).map(p => {
+                        const d = daysUntilTHT(p.tht);
+                        const meta = CAT_META[p.categorie] || CAT_META.Overig;
+                        const urgency = d === 0 ? { c: 'var(--red)', l: 'VANDAAG' } : d === 1 ? { c: 'var(--red)', l: 'MORGEN' } : { c: 'var(--amber)', l: `${d} DGN` };
                         return (
-                            <div key={i.id} onClick={() => onOpenItem(i.id)} style={{
+                            <div key={p.id} onClick={() => onOpenItem(p.id)} style={{
                                 display: 'grid', gridTemplateColumns: '3px 1fr auto', gap: 10, alignItems: 'center',
-                                padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                                padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'background .12s',
                             }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div style={{ width: 3, height: 24, background: meta.color, borderRadius: 2 }} />
                                 <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{i.naam}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{i.current_stock} {i.unit} · {i.categorie}</div>
+                                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.naam}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>voorraad: {p.current_stock} {p.unit}</div>
                                 </div>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(stockValue(i))}</span>
+                                <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: `${urgency.c}22`, color: urgency.c, border: `1px solid ${urgency.c}55` }}>{urgency.l}</span>
                             </div>
                         );
                     })}
                 </div>
             </MetalCard>
 
-            {/* Card 3 — AI */}
-            <MetalCard style={{ borderColor: `${GOLD}4D`, position: 'relative' }}>
+            {/* Card 3 — AI bestelvoorstel */}
+            <MetalCard style={{ position: 'relative', overflow: 'hidden', borderColor: `${GOLD}4D` }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: `${GOLD}10` }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: `${GOLD}26`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${GOLD}4D` }}>
                         <Sparkles size={15} style={{ color: GOLD }} />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>AI advies-rapport</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Volledig rapport in 1 klik</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>AI bestelvoorstel</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Gebundeld per leverancier — bespaar leveringen</div>
                     </div>
-                    <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', background: `${GOLD}26`, color: GOLD, border: `1px solid ${GOLD}4D` }}>NIEUW</span>
+                    <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', background: `${GOLD}26`, color: GOLD, border: `1px solid ${GOLD}4D` }}>KLAAR</span>
                 </div>
                 <div style={{ padding: 14 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 14 }}>
-                        Laat de AI je voorraad analyseren. Je krijgt een leesbaar rapport met:
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                        {[
-                            { icon: AlertTriangle, text: 'Wat urgent bijbesteld moet' },
-                            { icon: ShoppingCart, text: 'Bestel-voorstel per leverancier' },
-                            { icon: Euro, text: 'Grootste voorraadwaarde' },
-                            { icon: Sparkles, text: 'Concrete aanbevelingen' },
-                        ].map((it, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)' }}>
-                                <it.icon size={12} style={{ color: GOLD }} />
-                                {it.text}
+                    {topSupplier ? (
+                        <>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 12 }}>
+                                <strong style={{ color: 'var(--text)' }}>{topSupplier.items.length} item(s) bij {topSupplier.name}</strong>. Samen bestellen = één levering i.p.v. meerdere runs.
                             </div>
-                        ))}
-                    </div>
-                    <BtnPrimary icon={Sparkles} right={ArrowUpRight} onClick={onAIReport} style={{ width: '100%', justifyContent: 'center' }}>
-                        Genereer advies
-                    </BtnPrimary>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                                {supplierList.slice(0, 4).map(s => (
+                                    <div key={s.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 10, alignItems: 'center', padding: '6px 0' }}>
+                                        <div style={{ width: 6, height: 6, borderRadius: 1, background: s.color }} />
+                                        <div style={{ fontSize: 12, fontWeight: 500 }}>{s.name}</div>
+                                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.items.length} items</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(s.total)}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <BtnPrimary icon={ShoppingCart} right={ArrowUpRight} onClick={onOpenBuyList} style={{ width: '100%', justifyContent: 'center' }}>Open inkooplijst</BtnPrimary>
+                        </>
+                    ) : (
+                        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                            <CheckCircle size={24} style={{ color: 'var(--green)', marginBottom: 8 }} />
+                            <div>Geen bestelling nodig.</div>
+                        </div>
+                    )}
                 </div>
             </MetalCard>
         </div>
@@ -787,7 +906,7 @@ function ActionPanel({ lowStock, outOfStock, tekortCost, topByValue, onOpenItem,
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   CATEGORY CHART
+   CATEGORY CHART — donut + horizontal bar legend
    ═══════════════════════════════════════════════════════════════════ */
 function CategoryChart({ categories }: { categories: { name: string; count: number; value: number; color: string }[] }) {
     const [hovered, setHovered] = useState<string | null>(null);
@@ -809,7 +928,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
             <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <PieChart size={14} style={{ color: GOLD }} />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Waarde per categorie</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Voorraad per categorie</span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                     Totaal: <span style={{ color: 'var(--text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</span>
@@ -820,9 +939,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                     <svg width="220" height="220" viewBox="0 0 200 200" style={{ transform: 'rotate(-90deg)' }}>
                         <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(130,130,130,.08)" strokeWidth={R - IR} />
                         {segs.map(s => (
-                            <circle key={s.name}
-                                cx={CX} cy={CY} r={R}
-                                fill="none" stroke={s.color}
+                            <circle key={s.name} cx={CX} cy={CY} r={R} fill="none" stroke={s.color}
                                 strokeWidth={R - IR}
                                 strokeDasharray={`${s.dash} ${s.gap}`}
                                 strokeDashoffset={-s.offset}
@@ -898,7 +1015,10 @@ function FilterBar({ search, setSearch, filter, setFilter, counts }: any) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Pill variant={filter === 'Alles' ? 'brand' : 'draft'} onClick={() => setFilter('Alles')}>Alles · {counts.all}</Pill>
                     <Pill variant={filter === 'Kritiek' ? 'brand' : 'draft'} onClick={() => setFilter('Kritiek')}>
-                        <AlertTriangle size={10} /> Onder minimum · {counts.kritiek}
+                        <AlertTriangle size={10} /> Onder par · {counts.kritiek}
+                    </Pill>
+                    <Pill variant={filter === 'THT' ? 'brand' : 'draft'} onClick={() => setFilter('THT')}>
+                        <Clock size={10} /> THT ≤ 3d · {counts.tht}
                     </Pill>
                     <Pill variant={filter === 'Op peil' ? 'brand' : 'draft'} onClick={() => setFilter('Op peil')}>
                         <CheckCircle size={10} /> Op peil · {counts.peil}
@@ -916,7 +1036,7 @@ function FilterBar({ search, setSearch, filter, setFilter, counts }: any) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   PRODUCT TABLE
+   PRODUCT TABLE — stockbar, dekking, par, prijs, waarde, leverancier, THT, status
    ═══════════════════════════════════════════════════════════════════ */
 function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[]; onOpenItem: (id: number) => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
     return (
@@ -928,14 +1048,14 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>· {items.length} getoond</span>
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--muted-light)', letterSpacing: '.15em', textTransform: 'uppercase', fontWeight: 700 }}>
-                    <Hint tip="De balk laat zien hoeveel je hebt t.o.v. je minimum-instelling. Rood = onder minimum, groen = voldoende.">Voorraad t.o.v. minimum</Hint>
+                    <Hint tip="Par-level = wat je altijd op voorraad wilt hebben. Bestelpunt (gele streep in balk) = drempel waaronder we waarschuwen.">Par & bestelpunt</Hint>
                 </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                         <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
-                            {['Item', 'Voorraad', 'Minimum', 'Prijs', 'Waarde', 'Leverancier', 'Status', ''].map(h => (
+                            {['Item', 'Voorraad', 'Dekking', 'Par', 'Prijs', 'Waarde', 'Leverancier', 'THT', 'Status', ''].map(h => (
                                 <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Waarde' || h === 'Prijs' ? 'right' : 'left', fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
                             ))}
                         </tr>
@@ -944,6 +1064,9 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                         {items.map(i => {
                             const s = stockStatus(i);
                             const meta = CAT_META[i.categorie] || CAT_META.Overig;
+                            const cov = coverageDays(i);
+                            const thtDays = daysUntilTHT(i.tht);
+                            const par = i.par_level || i.min_stock || 0;
                             return (
                                 <tr key={i.id}
                                     onClick={() => onOpenItem(i.id)}
@@ -952,7 +1075,7 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                     <td style={{ padding: '10px 12px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 3, height: 28, background: meta.color, borderRadius: 2 }} />
+                                            <div style={{ width: 3, height: 28, background: meta.color, borderRadius: 2, flexShrink: 0 }} />
                                             <div>
                                                 <div style={{ fontWeight: 500, fontSize: 12.5 }}>{i.naam}</div>
                                                 <div style={{ fontSize: 10, color: 'var(--muted)' }}>{i.categorie}</div>
@@ -961,25 +1084,44 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                                     </td>
                                     <td style={{ padding: '10px 12px', minWidth: 140 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ flex: 1, minWidth: 70, position: 'relative', height: 6, background: 'rgba(130,130,130,.12)', borderRadius: 3, overflow: 'visible' }}>
-                                                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, s.pct)}%`, background: s.color, borderRadius: 3, transition: 'width .3s' }} />
-                                            </div>
+                                            <div style={{ flex: 1, minWidth: 70 }}><StockBar item={i} /></div>
                                             <div style={{ fontSize: 12, fontWeight: 600, color: s.color, minWidth: 50, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                                                 {i.current_stock} {i.unit}
                                             </div>
                                         </div>
                                     </td>
-                                    <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{i.min_stock} {i.unit}</td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                        <span style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums', color: cov === Infinity ? 'var(--muted-light)' : cov < 3 ? 'var(--red)' : cov < 7 ? 'var(--amber)' : 'var(--muted)' }}>
+                                            {cov === Infinity ? '—' : `~${cov.toFixed(1)}d`}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{par} {i.unit}</td>
                                     <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(i.purchase_price || 0)}</td>
                                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(stockValue(i))}</td>
-                                    <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--muted)' }}>{i.supplier || '—'}</td>
+                                    <td style={{ padding: '10px 12px', fontSize: 11, color: 'var(--muted)' }}>
+                                        {i.supplier ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <div style={{ width: 6, height: 6, borderRadius: 1, background: supplierColor(i.supplier) }} />
+                                                <span>{i.supplier}</span>
+                                            </div>
+                                        ) : '—'}
+                                    </td>
+                                    <td style={{ padding: '10px 12px' }}>
+                                        {thtDays === null ? (
+                                            <span style={{ fontSize: 11, color: 'var(--muted-light)' }}>n.v.t.</span>
+                                        ) : thtDays <= 3 ? (
+                                            <span style={{ fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: thtDays <= 1 ? 'var(--red)' : 'var(--amber)' }}>{thtDays}d</span>
+                                        ) : (
+                                            <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{thtDays}d</span>
+                                        )}
+                                    </td>
                                     <td style={{ padding: '10px 12px' }}>
                                         <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: s.bg, color: s.color, border: `1px solid ${s.br}` }}>{s.label}</span>
                                     </td>
                                     <td style={{ padding: '10px 12px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                                         <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                                            <button onClick={() => onAdjust(i, -1)} title="Eén eraf halen" style={{ width: 26, height: 26, borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>−</button>
-                                            <button onClick={() => onAdjust(i, +1)} title="Eén erbij doen" style={{ width: 26, height: 26, borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>+</button>
+                                            <button onClick={() => onAdjust(i, -1)} title="Eén eraf" style={{ width: 26, height: 26, borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>−</button>
+                                            <button onClick={() => onAdjust(i, +1)} title="Eén erbij" style={{ width: 26, height: 26, borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>+</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -999,19 +1141,22 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   ITEM DETAIL DRAWER
+   ITEM DETAIL DRAWER — tabs (Prijs, Leveranciers, Verbruik, Audit log)
    ═══════════════════════════════════════════════════════════════════ */
-function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, onEdit }: {
-    item: InventoryItem; supplierPrices: any[]; recepten: Recept[]; onClose: () => void; onAdjust: (i: InventoryItem, a: number) => void; onEdit: () => void;
+function ItemDetailDrawer({ item, supplierPrices, recepten, movements, onClose, onAdjust, onEdit }: {
+    item: InventoryItem; supplierPrices: any[]; recepten: Recept[]; movements: StockMovement[]; onClose: () => void; onAdjust: (i: InventoryItem, a: number) => void; onEdit: () => void;
 }) {
-    const [tab, setTab] = useState<'overzicht' | 'prijs' | 'recepten'>('overzicht');
+    const [tab, setTab] = useState<'prijs' | 'leveranciers' | 'verbruik' | 'log'>('prijs');
     const s = stockStatus(item);
     const meta = CAT_META[item.categorie] || CAT_META.Overig;
+    const cov = coverageDays(item);
+    const thtDays = daysUntilTHT(item.tht);
+    const par = item.par_level || item.min_stock || 0;
 
     const priceHistory = useMemo(() => {
         return (supplierPrices || [])
             .filter((p: any) => p.product_naam && p.product_naam.toLowerCase().includes(item.naam.toLowerCase()))
-            .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            .sort((a: any, b: any) => new Date(a.created_at || a.datum).getTime() - new Date(b.created_at || b.datum).getTime());
     }, [supplierPrices, item.naam]);
 
     const recipesUsing = useMemo(() => {
@@ -1020,18 +1165,45 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
         );
     }, [recepten, item.naam]);
 
+    /* Sparkline-points uit prijshistorie (max 12 punten) */
+    const sparkPoints = useMemo(() => {
+        if (priceHistory.length < 2) return null;
+        const slice = priceHistory.slice(-12).map((p: any) => Number(p.prijs) || 0);
+        const min = Math.min(...slice), max = Math.max(...slice);
+        const range = max - min || 1;
+        return slice.map((v: number, i: number) => `${(i / (slice.length - 1)) * 100},${40 - ((v - min) / range) * 36}`).join(' ');
+    }, [priceHistory]);
+
+    /* Alternatieve leveranciers met deze (of vergelijkbare) productnaam */
+    const altSuppliers = useMemo(() => {
+        const groups: Record<string, { name: string; prijs: number; eenheid: string; datum: string }> = {};
+        (supplierPrices || [])
+            .filter((p: any) => p.product_naam && p.product_naam.toLowerCase().includes(item.naam.toLowerCase()))
+            .forEach((p: any) => {
+                if (!groups[p.leverancier] || new Date(p.datum) > new Date(groups[p.leverancier].datum)) {
+                    groups[p.leverancier] = { name: p.leverancier, prijs: Number(p.prijs), eenheid: p.eenheid, datum: p.datum };
+                }
+            });
+        return Object.values(groups).sort((a, b) => a.prijs - b.prijs);
+    }, [supplierPrices, item.naam]);
+    const cheapest = altSuppliers[0]?.prijs;
+
     return (
         <>
             <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', zIndex: 9998 }} />
-            <aside style={{ position: 'fixed', right: 0, top: 0, height: '100vh', width: 620, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column' }}>
+            <aside style={{ position: 'fixed', right: 0, top: 0, height: '100vh', width: 640, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column' }}>
 
+                {/* Header */}
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: `linear-gradient(180deg, ${meta.color}15, transparent)`, position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${meta.color}, transparent)` }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                                 <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', background: `${meta.color}22`, color: meta.color, border: `1px solid ${meta.color}40` }}>{item.categorie.toUpperCase()}</span>
                                 <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: s.bg, color: s.color, border: `1px solid ${s.br}` }}>{s.label}</span>
+                                {thtDays !== null && thtDays <= 3 && (
+                                    <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: 'rgba(245,158,11,.15)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,.3)' }}>THT {thtDays}D</span>
+                                )}
                             </div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, letterSpacing: '-.01em' }}>{item.naam}</div>
                             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>per {item.unit} · leverancier: {item.supplier || '—'}</div>
@@ -1043,10 +1215,10 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginTop: 20 }}>
                         <div>
-                            <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase' }}>Huidige voorraad</div>
+                            <Eyebrow>Huidige voorraad</Eyebrow>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 30, fontWeight: 300, color: s.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{item.current_stock}</div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>/ {item.min_stock} {item.unit}</div>
+                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: s.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{item.current_stock}</div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>/ {par} {item.unit}</div>
                             </div>
                             <div style={{ marginTop: 8, display: 'flex', gap: 4 }}>
                                 <button onClick={() => onAdjust(item, -1)} style={{ padding: '4px 10px', minWidth: 32, borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer' }}>−1</button>
@@ -1054,25 +1226,34 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
                             </div>
                         </div>
                         <div>
-                            <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase' }}>Inkoopprijs</div>
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, marginTop: 4, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                                {fmt(item.purchase_price || 0)}
+                            <Eyebrow><Hint tip="Hoeveel dagen je nog vooruit komt bij huidig dagelijks verbruik. Vereist `avg_daily` op het item.">Dekking</Hint></Eyebrow>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, marginTop: 4, color: cov === Infinity ? 'var(--muted-light)' : cov < 3 ? 'var(--red)' : cov < 7 ? 'var(--amber)' : 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                                {cov === Infinity ? '∞' : `${cov.toFixed(1)}d`}
                             </div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>per {item.unit}</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>~{Number(item.avg_daily || 0)}/dag verbruik</div>
                         </div>
                         <div>
-                            <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase' }}>Voorraadwaarde</div>
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, color: GOLD, marginTop: 4, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmt(stockValue(item))}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>totaal in voorraad</div>
+                            <Eyebrow>Voorraadwaarde</Eyebrow>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: GOLD, marginTop: 4, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmt(stockValue(item))}</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>à {fmt(item.purchase_price || 0)} / {item.unit}</div>
                         </div>
                     </div>
+
+                    {item.used_in && item.used_in.length > 0 && (
+                        <div style={{ marginTop: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,191,0,.05)', border: '1px solid rgba(255,191,0,.18)', fontSize: 11, color: GOLD, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <LinkIcon size={11} />
+                            <span>Gebruikt in: <strong style={{ color: 'var(--text)' }}>{item.used_in.join(' · ')}</strong></span>
+                        </div>
+                    )}
                 </div>
 
+                {/* Tabs */}
                 <div style={{ display: 'flex', gap: 4, padding: '10px 18px 0', borderBottom: '1px solid var(--border)' }}>
                     {([
-                        { id: 'overzicht' as const, label: 'Overzicht', Icon: Info },
-                        { id: 'prijs' as const, label: 'Prijshistorie', Icon: History },
-                        { id: 'recepten' as const, label: `Recepten (${recipesUsing.length})`, Icon: ChefHat },
+                        { id: 'prijs' as const, label: 'Prijshistorie', Icon: LineChart },
+                        { id: 'leveranciers' as const, label: `Leveranciers (${altSuppliers.length})`, Icon: Store },
+                        { id: 'verbruik' as const, label: `Verbruik (${recipesUsing.length})`, Icon: Activity },
+                        { id: 'log' as const, label: `Audit log (${movements.length})`, Icon: History },
                     ]).map(t => (
                         <button key={t.id} onClick={() => setTab(t.id)}
                             style={{
@@ -1088,30 +1269,8 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
                     ))}
                 </div>
 
+                {/* Tab content */}
                 <div style={{ flex: 1, overflow: 'auto', padding: 22 }}>
-                    {tab === 'overzicht' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div>
-                                <Eyebrow>Details</Eyebrow>
-                                <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                    <DetailRow label="Categorie" value={item.categorie} />
-                                    <DetailRow label="Eenheid" value={item.unit} />
-                                    <DetailRow label="Minimum-voorraad" value={`${item.min_stock} ${item.unit}`} />
-                                    <DetailRow label="Huidige voorraad" value={`${item.current_stock} ${item.unit}`} />
-                                    <DetailRow label="Inkoopprijs" value={fmt(item.purchase_price || 0)} />
-                                    <DetailRow label="Leverancier" value={item.supplier || '—'} />
-                                    <DetailRow label={<Hint tip="Yield factor = hoeveel er overblijft na bereiden. Bijv. 0.85 betekent dat je 15% kwijtraakt door schoonmaken/koken.">Yield factor</Hint>} value={`${item.yield_factor ?? 1.0}`} />
-                                </div>
-                            </div>
-                            <div style={{ padding: 12, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}33`, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                <Sparkles size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-                                <div style={{ fontSize: 12, lineHeight: 1.55 }}>
-                                    <strong>Tip:</strong> Klik <em>Bewerken</em> onderaan om de prijs, minimum-voorraad of leverancier aan te passen. De +/- knoppen boven zijn voor het snel bijwerken van hoeveel je hebt liggen.
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {tab === 'prijs' && (
                         <div>
                             <Eyebrow>Prijshistorie uit Price Intelligence</Eyebrow>
@@ -1119,26 +1278,73 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
                                 <div style={{ marginTop: 16, padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
                                     <Info size={20} style={{ color: 'var(--muted-light)', marginBottom: 6 }} />
                                     <div>Nog geen prijsdata voor dit product.</div>
-                                    <div style={{ fontSize: 11, marginTop: 6 }}>Importeer CSV&apos;s in <a href="/price-intelligence" style={{ color: GOLD, textDecoration: 'underline' }}>Price Intelligence</a> om trends te zien.</div>
+                                    <div style={{ fontSize: 11, marginTop: 6 }}>Importeer prijslijsten in <a href="/price-intelligence" style={{ color: GOLD, textDecoration: 'underline' }}>Price Intelligence</a> om trends te zien.</div>
+                                </div>
+                            ) : (
+                                <>
+                                    {sparkPoints && (
+                                        <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--color-bg-deep)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 11, color: 'var(--muted)' }}>
+                                                <span>Trend laatste {Math.min(12, priceHistory.length)} prijs-noteringen</span>
+                                                <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmt(Number(priceHistory[priceHistory.length - 1].prijs))}</span>
+                                            </div>
+                                            <svg width="100%" height="40" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                                <polyline points={sparkPoints} fill="none" stroke={GOLD} strokeWidth="1.5" />
+                                            </svg>
+                                        </div>
+                                    )}
+                                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        {priceHistory.slice().reverse().map((p: any, i: number) => (
+                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                                                <div style={{ width: 6, height: 6, borderRadius: 1, background: supplierColor(p.leverancier) }} />
+                                                <div>
+                                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{p.leverancier}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.datum}</div>
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(p.prijs))} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/ {p.eenheid}</span></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'leveranciers' && (
+                        <div>
+                            <Eyebrow>Leverancier-vergelijking</Eyebrow>
+                            {altSuppliers.length === 0 ? (
+                                <div style={{ marginTop: 16, padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
+                                    Nog geen vergelijkingsdata. Upload prijslijsten van meerdere leveranciers in Price Intelligence.
                                 </div>
                             ) : (
                                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {priceHistory.map((p: any, i: number) => (
-                                        <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 12, alignItems: 'center', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                                            <div style={{ width: 6, height: 6, borderRadius: 1, background: GOLD }} />
-                                            <div>
-                                                <div style={{ fontSize: 12, fontWeight: 500 }}>{p.leverancier}</div>
-                                                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.datum}</div>
+                                    {altSuppliers.map((a, i) => {
+                                        const diffPct = cheapest ? ((a.prijs - cheapest) / cheapest) * 100 : 0;
+                                        return (
+                                            <div key={a.name} style={{
+                                                display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 12, alignItems: 'center',
+                                                padding: '10px 12px', border: `1px solid ${i === 0 ? `${GOLD}66` : 'var(--border)'}`, borderRadius: 8,
+                                                background: i === 0 ? `${GOLD}10` : 'transparent',
+                                            }}>
+                                                <div style={{ width: 8, height: 8, borderRadius: 2, background: supplierColor(a.name) }} />
+                                                <div>
+                                                    <div style={{ fontSize: 12, fontWeight: 600 }}>{a.name} {i === 0 && <span style={{ marginLeft: 6, fontSize: 9, color: GOLD, letterSpacing: '.1em' }}>GOEDKOOPST</span>}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{a.datum}</div>
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(a.prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/ {a.eenheid}</span></div>
+                                                <div style={{ fontSize: 11, color: diffPct === 0 ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums', minWidth: 50, textAlign: 'right' }}>
+                                                    {diffPct === 0 ? '—' : `+${diffPct.toFixed(1)}%`}
+                                                </div>
                                             </div>
-                                            <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(p.prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/ {p.eenheid}</span></div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {tab === 'recepten' && (
+                    {tab === 'verbruik' && (
                         <div>
                             <Eyebrow>Gebruikt in recepten</Eyebrow>
                             {recipesUsing.length === 0 ? (
@@ -1164,14 +1370,42 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
                             )}
                         </div>
                     )}
+
+                    {tab === 'log' && (
+                        <div>
+                            <Eyebrow>Audit log — alle voorraad-mutaties</Eyebrow>
+                            {movements.length === 0 ? (
+                                <div style={{ marginTop: 16, padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
+                                    Nog geen mutaties geregistreerd. Tellingen, verbruik en ontvangsten verschijnen hier automatisch.
+                                </div>
+                            ) : (
+                                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {movements.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 50).map(m => {
+                                        const tone = m.type === 'usage' ? 'var(--red)' : m.type === 'receive' ? 'var(--green)' : m.type === 'count' ? GOLD : 'var(--muted)';
+                                        return (
+                                            <div key={m.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                                                <div style={{ width: 6, height: 6, borderRadius: 1, background: tone }} />
+                                                <div>
+                                                    <div style={{ fontSize: 12, fontWeight: 500, textTransform: 'capitalize' }}>{m.type}{m.note ? ` · ${m.note}` : ''}</div>
+                                                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>{new Date(m.created_at).toLocaleString('nl-NL')}{m.by_user ? ` · ${m.by_user}` : ''}</div>
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: tone, fontVariantNumeric: 'tabular-nums' }}>
+                                                    {m.qty > 0 ? '+' : ''}{m.qty} {item.unit}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
+                {/* Footer */}
                 <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', background: 'var(--color-bg-deep)' }}>
-                    <BtnGhost icon={LinkIcon} onClick={onEdit}>Bewerken</BtnGhost>
+                    <BtnGhost icon={Edit3} onClick={onEdit}>Bewerken</BtnGhost>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        {item.current_stock < item.min_stock && (
-                            <Pill variant="danger">Onder minimum · bestel bij</Pill>
-                        )}
+                        {s.key === 'low' || s.key === 'out' ? <Pill variant="danger">Onder par · bestel bij</Pill> : null}
                     </div>
                 </div>
             </aside>
@@ -1179,22 +1413,203 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, onClose, onAdjust, o
     );
 }
 
-function DetailRow({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
+/* ═══════════════════════════════════════════════════════════════════
+   ADD ITEM MODAL — met AI-assistent tab
+   ═══════════════════════════════════════════════════════════════════ */
+function AddItemModal({ onClose, onSave }: { onClose: () => void; onSave: (data: any) => void }) {
+    const [tab, setTab] = useState<'ai' | 'manual'>('ai');
+    const [aiInput, setAiInput] = useState('');
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiResult, setAiResult] = useState<any>(null);
+    const [form, setForm] = useState<any>({
+        naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, par_level: 0,
+        unit: 'kg', purchase_price: 0, supplier: '', tht: '', avg_daily: 0,
+    });
+
+    async function aiAssist() {
+        if (!aiInput.trim()) return;
+        setAiBusy(true);
+        try {
+            const prompt = `Een gebruiker tikt: "${aiInput}". Stel voor (alleen JSON, geen uitleg):
+{
+  "naam": "korte productnaam (2-5 woorden)",
+  "categorie": "een van: Vlees, Vis, Groenten, Zuivel, Kruiden, Sauzen, Dranken, Brood, Hout, Overig",
+  "unit": "logische eenheid (kg, stuks, fles, doos, krat, etc.)",
+  "par_level": 10,
+  "min_stock": 5,
+  "supplier": "veldwaarde of leeg",
+  "purchase_price": 0
+}`;
+            const res = await fetch('/api/voorraad-ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: prompt, snapshot: '' }),
+            });
+            const body = await res.json();
+            const text = body.text || '';
+            const cleaned = text.replace(/```json|```/g, '').trim();
+            const parsed = JSON.parse(cleaned);
+            setAiResult(parsed);
+            setForm((f: any) => ({ ...f, ...parsed }));
+        } catch {
+            setAiResult({ error: 'Kon AI-suggestie niet verwerken' });
+        }
+        setAiBusy(false);
+    }
+
+    function submit() {
+        if (!form.naam?.trim()) return;
+        onSave(form);
+    }
+
     return (
-        <div style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>{value}</div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+            <div onClick={e => e.stopPropagation()} style={{
+                width: 600, maxHeight: '90vh', overflow: 'auto', background: 'var(--color-bg-elevated)',
+                border: '1px solid var(--border)', borderRadius: 16, position: 'relative',
+            }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
+
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <Eyebrow>Nieuw product toevoegen</Eyebrow>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 4 }}>Voeg item aan voorraad toe</div>
+                        </div>
+                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 16 }}>
+                        {[{ id: 'ai' as const, label: 'AI-assistent', Icon: Sparkles }, { id: 'manual' as const, label: 'Handmatig', Icon: Edit3 }].map(t => (
+                            <button key={t.id} onClick={() => setTab(t.id)}
+                                style={{
+                                    padding: '6px 12px', borderRadius: 6, border: 'none',
+                                    background: tab === t.id ? `linear-gradient(180deg, ${GOLD}, #9e781c)` : 'transparent',
+                                    color: tab === t.id ? '#0a0a0c' : 'var(--muted)',
+                                    fontWeight: 600, fontSize: 11, cursor: 'pointer',
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                }}>
+                                <t.Icon size={12} /> {t.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div style={{ padding: 24 }}>
+                    {tab === 'ai' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ padding: 12, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}33`, fontSize: 12, lineHeight: 1.5, color: 'var(--muted)' }}>
+                                <Sparkles size={12} style={{ color: GOLD, marginRight: 4 }} />
+                                Beschrijf het product kort. AI vult <strong style={{ color: 'var(--text)' }}>categorie, eenheid, par-level en leverancier</strong> automatisch in.
+                            </div>
+                            <div>
+                                <Eyebrow style={{ marginBottom: 6 }}>Wat wil je toevoegen?</Eyebrow>
+                                <textarea value={aiInput} onChange={e => setAiInput(e.target.value)} rows={3}
+                                    placeholder='Bv. "5kg gerookte zalmfilet voor sushi-bar"'
+                                    style={{ width: '100%', padding: 12, borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, resize: 'none', lineHeight: 1.5, outline: 'none', fontFamily: 'inherit' }} />
+                            </div>
+                            <BtnPrimary icon={Sparkles} right={ArrowUpRight} onClick={aiAssist} disabled={aiBusy} style={{ width: '100%', justifyContent: 'center' }}>
+                                {aiBusy ? 'AI denkt…' : 'AI vult voor mij in'}
+                            </BtnPrimary>
+                            {aiResult && !aiResult.error && (
+                                <div style={{ padding: 14, borderRadius: 10, background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.25)' }}>
+                                    <Eyebrow style={{ color: 'var(--green)', marginBottom: 8 }}>AI-suggestie · gevuld in formulier</Eyebrow>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                                        <div><span style={{ color: 'var(--muted)' }}>Naam:</span> <strong>{aiResult.naam}</strong></div>
+                                        <div><span style={{ color: 'var(--muted)' }}>Categorie:</span> {aiResult.categorie}</div>
+                                        <div><span style={{ color: 'var(--muted)' }}>Eenheid:</span> {aiResult.unit}</div>
+                                        <div><span style={{ color: 'var(--muted)' }}>Par-level:</span> {aiResult.par_level} {aiResult.unit}</div>
+                                        <div><span style={{ color: 'var(--muted)' }}>Leverancier:</span> {aiResult.supplier || '—'}</div>
+                                    </div>
+                                    <div style={{ marginTop: 10 }}>
+                                        <BtnGhost icon={Edit3} onClick={() => setTab('manual')}>Bekijk & pas aan</BtnGhost>
+                                    </div>
+                                </div>
+                            )}
+                            {aiResult?.error && (
+                                <div style={{ padding: 12, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--red)', fontSize: 12 }}>{aiResult.error}</div>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'manual' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <Field label="Productnaam">
+                                <input value={form.naam} onChange={e => setForm({ ...form, naam: e.target.value })} placeholder="Bv. Brisket Angus" style={inputStyle} />
+                            </Field>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <Field label="Categorie">
+                                    <select value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })} style={inputStyle}>
+                                        {CATEGORIEEN.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Eenheid">
+                                    <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} style={inputStyle}>
+                                        {EENHEDEN.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </Field>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                                <Field label="Huidig">
+                                    <input type="number" step="0.1" value={form.current_stock} onChange={e => setForm({ ...form, current_stock: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+                                </Field>
+                                <Field label="Bestelpunt">
+                                    <input type="number" step="0.1" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+                                </Field>
+                                <Field label="Par-level">
+                                    <input type="number" step="0.1" value={form.par_level} onChange={e => setForm({ ...form, par_level: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+                                </Field>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <Field label="Inkoopprijs (€)">
+                                    <input type="number" step="0.01" value={form.purchase_price} onChange={e => setForm({ ...form, purchase_price: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+                                </Field>
+                                <Field label="Leverancier">
+                                    <input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} placeholder="Bv. Sligro" style={inputStyle} />
+                                </Field>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <Field label="THT (optioneel)">
+                                    <input type="date" value={form.tht || ''} onChange={e => setForm({ ...form, tht: e.target.value })} style={inputStyle} />
+                                </Field>
+                                <Field label="Gem. dagverbruik">
+                                    <input type="number" step="0.1" value={form.avg_daily} onChange={e => setForm({ ...form, avg_daily: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+                                </Field>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <BtnGhost onClick={onClose}>Annuleren</BtnGhost>
+                    <BtnPrimary icon={Save} onClick={submit}>Toevoegen</BtnPrimary>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', height: 36, borderRadius: 8,
+    background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
+    color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+};
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div>
+            <Eyebrow style={{ marginBottom: 6 }}>{label}</Eyebrow>
+            {children}
         </div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   EDIT ITEM VIEW
+   EDIT ITEM VIEW — full-page form (uitgebreid met nieuwe velden)
    ═══════════════════════════════════════════════════════════════════ */
 function EditItemView({ editForm, setEditForm, editing, recepten, onSave, onDelete, onClose }: any) {
     function setField(k: string, v: any) { setEditForm({ ...editForm, [k]: v }); }
     const stockVal = (editForm.current_stock || 0) * (editForm.purchase_price || 0);
-    const isLow = editForm.current_stock < editForm.min_stock;
+    const isLow = (editForm.current_stock || 0) <= (editForm.min_stock || 0);
     const usedIn = editing !== 'new' ? (recepten || []).filter((r: any) =>
         (r.ingredienten || []).some((ing: any) => ing.naam && ing.naam.toLowerCase().includes((editForm.naam || '').toLowerCase()))
     ) : [];
@@ -1216,222 +1631,175 @@ function EditItemView({ editForm, setEditForm, editing, recepten, onSave, onDele
             </div>
 
             <SectionExplain>
-                <strong style={{ color: 'var(--text)' }}>Hoe werkt dit?</strong> Geef je product een duidelijke naam, kies een categorie, en vul je <em>minimum-voorraad</em> in. Dat is het aantal waaronder we je gaan waarschuwen om bij te bestellen.
+                <strong style={{ color: 'var(--text)' }}>Hoe werkt dit?</strong> Geef je product een naam, kies categorie, vul je <em>par-level</em> en <em>bestelpunt</em>. Par-level = wat je altijd op voorraad wilt; bestelpunt = drempel waaronder we waarschuwen.
             </SectionExplain>
 
-            <MetalCard>
-                <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <Eyebrow>Naam *</Eyebrow>
-                        <input value={editForm.naam} onChange={e => setField('naam', e.target.value)} placeholder="bijv. Pulled Pork, BBQ Saus..."
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
+            <MetalCard style={{ padding: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <Field label="Productnaam">
+                        <input value={editForm.naam || ''} onChange={e => setField('naam', e.target.value)} style={inputStyle} />
+                    </Field>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <Field label="Categorie">
+                            <select value={editForm.categorie || 'Overig'} onChange={e => setField('categorie', e.target.value)} style={inputStyle}>
+                                {CATEGORIEEN.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Eenheid">
+                            <select value={editForm.unit || 'kg'} onChange={e => setField('unit', e.target.value)} style={inputStyle}>
+                                {EENHEDEN.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                        </Field>
                     </div>
-                    <div>
-                        <Eyebrow>Categorie</Eyebrow>
-                        <select value={editForm.categorie} onChange={e => setField('categorie', e.target.value)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }}>
-                            {CATEGORIEEN.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                        <Field label="Huidige voorraad">
+                            <input type="number" step="0.1" value={editForm.current_stock || 0} onChange={e => setField('current_stock', parseFloat(e.target.value) || 0)} style={inputStyle} />
+                        </Field>
+                        <Field label="Bestelpunt">
+                            <input type="number" step="0.1" value={editForm.min_stock || 0} onChange={e => setField('min_stock', parseFloat(e.target.value) || 0)} style={inputStyle} />
+                        </Field>
+                        <Field label="Par-level">
+                            <input type="number" step="0.1" value={editForm.par_level || 0} onChange={e => setField('par_level', parseFloat(e.target.value) || 0)} style={inputStyle} />
+                        </Field>
                     </div>
-                    <div>
-                        <Eyebrow>Eenheid</Eyebrow>
-                        <select value={editForm.unit} onChange={e => setField('unit', e.target.value)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }}>
-                            {EENHEDEN.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <Field label="Inkoopprijs (€)">
+                            <input type="number" step="0.01" value={editForm.purchase_price || 0} onChange={e => setField('purchase_price', parseFloat(e.target.value) || 0)} style={inputStyle} />
+                        </Field>
+                        <Field label="Leverancier">
+                            <input value={editForm.supplier || ''} onChange={e => setField('supplier', e.target.value)} style={inputStyle} />
+                        </Field>
                     </div>
-                    <div>
-                        <Eyebrow>Huidige voorraad</Eyebrow>
-                        <input type="number" step="0.1" value={editForm.current_stock} onChange={e => setField('current_stock', parseFloat(e.target.value) || 0)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
-                    </div>
-                    <div>
-                        <Eyebrow><Hint tip="Minimum = het aantal waaronder je wil worden gewaarschuwd dat je moet bestellen. Bijv. als je minimaal altijd 5 kg ribs wil hebben, zet 5 in.">Minimum-voorraad</Hint></Eyebrow>
-                        <input type="number" step="0.1" value={editForm.min_stock} onChange={e => setField('min_stock', parseFloat(e.target.value) || 0)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
-                    </div>
-                    <div>
-                        <Eyebrow>Inkoopprijs per {editForm.unit}</Eyebrow>
-                        <input type="number" step="0.01" value={editForm.purchase_price} onChange={e => setField('purchase_price', parseFloat(e.target.value) || 0)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
-                    </div>
-                    <div>
-                        <Eyebrow><Hint tip="Hoeveel % blijft over na bereiden. 1.0 = niets kwijt. 0.85 = je raakt 15% kwijt bij schoonmaken/koken. Helpt bij kostprijs-berekening.">Yield factor</Hint></Eyebrow>
-                        <input type="number" step="0.05" min="0.1" max="1" value={editForm.yield_factor ?? 1.0} onChange={e => setField('yield_factor', parseFloat(e.target.value) || 1.0)}
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <Eyebrow>Leverancier</Eyebrow>
-                        <input value={editForm.supplier || ''} onChange={e => setField('supplier', e.target.value)} placeholder="bijv. Sligro, Hanos, Makro..."
-                            style={{ width: '100%', marginTop: 6, padding: '9px 12px', background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }} />
-                    </div>
-                </div>
-
-                <div style={{ padding: '0 24px 20px' }}>
-                    <div style={{ padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: isLow ? 'rgba(239,68,68,.06)' : 'rgba(196,163,90,.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '.15em', textTransform: 'uppercase', fontWeight: 700 }}>Voorraadwaarde</div>
-                            <div style={{ fontSize: 24, fontWeight: 500, color: GOLD, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{fmt(stockVal)}</div>
-                        </div>
-                        {isLow && <Pill variant="danger">⚠ Onder minimum</Pill>}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <Field label="THT (optioneel)">
+                            <input type="date" value={editForm.tht || ''} onChange={e => setField('tht', e.target.value || null)} style={inputStyle} />
+                        </Field>
+                        <Field label="Gem. dagverbruik">
+                            <input type="number" step="0.1" value={editForm.avg_daily || 0} onChange={e => setField('avg_daily', parseFloat(e.target.value) || 0)} style={inputStyle} />
+                        </Field>
                     </div>
                 </div>
 
                 {usedIn.length > 0 && (
-                    <div style={{ padding: '0 24px 20px' }}>
+                    <div style={{ marginTop: 18, padding: 12, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}33` }}>
                         <Eyebrow>Gebruikt in {usedIn.length} recept(en)</Eyebrow>
-                        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {usedIn.map((r: any) => (
-                                <Pill key={r.id} variant="brand"><ChefHat size={10} /> {r.naam}</Pill>
-                            ))}
+                        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text)' }}>
+                            {usedIn.map((r: any) => r.naam).join(' · ')}
                         </div>
                     </div>
                 )}
 
-                <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', background: 'var(--color-bg-deep)' }}>
+                <div style={{ marginTop: 18, padding: 12, borderRadius: 10, background: isLow ? 'rgba(239,68,68,.1)' : 'var(--color-bg-deep)', border: `1px solid ${isLow ? 'rgba(239,68,68,.3)' : 'var(--border)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        {editing !== 'new' && (
-                            <button onClick={onDelete} style={{ padding: '9px 14px', borderRadius: 10, background: 'transparent', color: 'var(--red)', fontWeight: 600, fontSize: 13, border: '1px solid rgba(239,68,68,.4)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <Trash2 size={14} /> Verwijderen
-                            </button>
-                        )}
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>Voorraadwaarde nu</div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(stockVal)}</div>
                     </div>
-                    <BtnPrimary icon={Save} onClick={onSave}>Opslaan</BtnPrimary>
+                    {isLow && <Pill variant="danger">Onder bestelpunt</Pill>}
                 </div>
             </MetalCard>
+
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
+                {editing !== 'new' ? (
+                    <BtnGhost icon={Trash2} onClick={onDelete} style={{ borderColor: 'rgba(239,68,68,.3)', color: 'var(--red)' }}>Verwijderen</BtnGhost>
+                ) : <span />}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <BtnGhost onClick={onClose}>Annuleren</BtnGhost>
+                    <BtnPrimary icon={Save} onClick={onSave}>Opslaan</BtnPrimary>
+                </div>
+            </div>
         </div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   COUNT MODE (mobile-first)
+   COUNT MODE — telling-modus voor mobiel
    ═══════════════════════════════════════════════════════════════════ */
 function CountMode({ inventory, byCategory, onSetStock, onClose }: { inventory: InventoryItem[]; byCategory: any[]; onSetStock: (i: InventoryItem, n: number) => void; onClose: () => void }) {
-    const [catIdx, setCatIdx] = useState(0);
-    const [itemIdx, setItemIdx] = useState(0);
-    const [tmpValue, setTmpValue] = useState<string>('');
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [activeCat, setActiveCat] = useState<string>(byCategory[0]?.name || 'Vlees');
+    const [counted, setCounted] = useState<Set<number>>(new Set());
 
-    const cats = byCategory.map(c => c.name);
-    if (cats.length === 0) {
-        return (
-            <div style={{ padding: 40, textAlign: 'center' }}>
-                <BtnGhost icon={ArrowLeft} onClick={onClose}>Terug</BtnGhost>
-                <div style={{ marginTop: 20, color: 'var(--muted)' }}>Geen producten om te tellen.</div>
-            </div>
-        );
-    }
-
-    const currentCat = cats[catIdx];
-    const itemsInCat = inventory.filter(i => i.categorie === currentCat);
-    const currentItem = itemsInCat[itemIdx];
-    const totalDone = catIdx * 100 + itemIdx;
-    const totalItems = inventory.length;
-
-    function next() {
-        if (tmpValue !== '' && currentItem) {
-            onSetStock(currentItem, parseFloat(tmpValue) || 0);
-        }
-        setTmpValue('');
-        if (itemIdx < itemsInCat.length - 1) {
-            setItemIdx(itemIdx + 1);
-        } else if (catIdx < cats.length - 1) {
-            setCatIdx(catIdx + 1);
-            setItemIdx(0);
-        } else {
-            onClose();
-        }
-    }
-
-    function skip() { setTmpValue(''); next(); }
+    const items = inventory.filter(i => i.categorie === activeCat);
 
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <BtnGhost icon={X} onClick={onClose}>Sluiten</BtnGhost>
-                <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>
-                    <ClipboardCheck size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                    Telling-modus
+        <div style={{ padding: '24px 32px 100px', maxWidth: 900, margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <ArrowLeft size={14} /> Terug
+                </button>
+                <div>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>Telling-modus</h1>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{counted.size} geteld · {inventory.length - counted.size} nog te doen</div>
                 </div>
             </div>
 
-            <div style={{ padding: 16 }}>
-                <div style={{ height: 6, borderRadius: 3, background: 'rgba(130,130,130,.15)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${(totalDone / totalItems) * 100}%`, background: GOLD, transition: 'width .3s' }} />
-                </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-                    Categorie {catIdx + 1} van {cats.length} · <strong style={{ color: 'var(--text)' }}>{currentCat}</strong> · item {itemIdx + 1} van {itemsInCat.length}
-                </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+                {byCategory.map(c => (
+                    <Pill key={c.name} variant={activeCat === c.name ? 'brand' : 'draft'} onClick={() => setActiveCat(c.name)}>
+                        {c.name} · {c.count}
+                    </Pill>
+                ))}
             </div>
 
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-                {currentItem && (
-                    <MetalCard style={{ maxWidth: 500, width: '100%' }}>
-                        <div style={{ padding: 32, textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.2em', textTransform: 'uppercase', fontWeight: 700 }}>
-                                {currentItem.categorie}
+            <MetalCard>
+                <div style={{ padding: 12 }}>
+                    {items.map(i => (
+                        <div key={i.id} style={{
+                            display: 'grid', gridTemplateColumns: '3px 1fr 200px', gap: 12, alignItems: 'center',
+                            padding: '12px 10px', borderBottom: '1px solid var(--border)',
+                            background: counted.has(i.id) ? `${GOLD}10` : 'transparent',
+                        }}>
+                            <div style={{ width: 3, height: 32, background: CAT_META[i.categorie]?.color || '#949494', borderRadius: 2 }} />
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 500 }}>{i.naam}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{i.current_stock} {i.unit} · par {i.par_level || i.min_stock}</div>
                             </div>
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, marginTop: 12 }}>{currentItem.naam}</div>
-                            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-                                nu bekend: <strong style={{ color: 'var(--text)' }}>{currentItem.current_stock} {currentItem.unit}</strong>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input type="number" step="0.1" defaultValue={i.current_stock} onBlur={(e) => {
+                                    const v = parseFloat(e.target.value);
+                                    if (!isNaN(v)) {
+                                        onSetStock(i, v);
+                                        setCounted(prev => new Set(prev).add(i.id));
+                                    }
+                                }} style={{ ...inputStyle, height: 36, textAlign: 'right' }} />
+                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{i.unit}</span>
                             </div>
-
-                            <div style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-                                <button onClick={() => setTmpValue(String(Math.max(0, (parseFloat(tmpValue) || currentItem.current_stock || 0) - 1)))}
-                                    style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 28, cursor: 'pointer' }}>
-                                    <Minus size={24} />
-                                </button>
-                                <input
-                                    ref={inputRef}
-                                    type="number"
-                                    step="0.1"
-                                    value={tmpValue}
-                                    onChange={e => setTmpValue(e.target.value)}
-                                    placeholder={String(currentItem.current_stock)}
-                                    style={{
-                                        width: 140, height: 80, textAlign: 'center',
-                                        fontSize: 36, fontWeight: 300, fontFamily: 'Outfit, sans-serif',
-                                        background: 'var(--color-bg-deep)', border: `2px solid ${GOLD}`, borderRadius: 14,
-                                        color: 'var(--text)', outline: 'none', fontVariantNumeric: 'tabular-nums',
-                                    }}
-                                    autoFocus
-                                />
-                                <button onClick={() => setTmpValue(String((parseFloat(tmpValue) || currentItem.current_stock || 0) + 1))}
-                                    style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 28, cursor: 'pointer' }}>
-                                    <Plus size={24} />
-                                </button>
-                            </div>
-                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>in {currentItem.unit}</div>
                         </div>
+                    ))}
+                </div>
+            </MetalCard>
 
-                        <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
-                            <BtnGhost onClick={skip} style={{ flex: 1, justifyContent: 'center' }}>Overslaan</BtnGhost>
-                            <BtnPrimary right={ChevronRight} onClick={next} style={{ flex: 2, justifyContent: 'center' }}>Volgende</BtnPrimary>
-                        </div>
-                    </MetalCard>
-                )}
+            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                <BtnPrimary icon={CheckCircle} onClick={onClose}>Telling afsluiten ({counted.size})</BtnPrimary>
             </div>
         </div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   INKOOPLIJST VIEW
+   INKOOPLIJST VIEW — gebundeld per leverancier
    ═══════════════════════════════════════════════════════════════════ */
-function InkooplijstView({ lowStock, onClose, onExport }: { lowStock: InventoryItem[]; onClose: () => void; onExport: () => void }) {
-    const bySupplier = useMemo(() => {
-        const m: Record<string, { items: InventoryItem[]; total: number }> = {};
-        lowStock.forEach(i => {
-            const sup = i.supplier || 'Geen leverancier';
-            if (!m[sup]) m[sup] = { items: [], total: 0 };
-            const tekort = Math.max(0, (i.min_stock || 0) - (i.current_stock || 0));
-            m[sup].items.push(i);
-            m[sup].total += tekort * (i.purchase_price || 0);
-        });
-        return Object.entries(m).sort((a, b) => b[1].total - a[1].total);
-    }, [lowStock]);
+function InkooplijstView({ inventory, onClose, onExport }: { inventory: InventoryItem[]; onClose: () => void; onExport: () => void }) {
+    const lowStock = inventory.filter(i => ['out', 'low'].includes(stockStatus(i).key));
+    const bySupplier: Record<string, { name: string; color: string; items: { item: InventoryItem; qty: number; lineTotal: number }[]; total: number }> = {};
+    lowStock.forEach(i => {
+        const sup = i.supplier || 'Onbekend';
+        if (!bySupplier[sup]) bySupplier[sup] = { name: sup, color: supplierColor(sup), items: [], total: 0 };
+        const need = Math.max(0, Number(i.par_level || i.min_stock || 0) - Number(i.current_stock || 0));
+        const lineTotal = need * Number(i.purchase_price || 0);
+        bySupplier[sup].items.push({ item: i, qty: need, lineTotal });
+        bySupplier[sup].total += lineTotal;
+    });
+    const supplierList = Object.values(bySupplier);
+    const [active, setActive] = useState<string>(supplierList[0]?.name || '');
+    const grandTotal = supplierList.reduce((s, sup) => s + sup.total, 0);
 
-    const grandTotal = bySupplier.reduce((s, [, v]) => s + v.total, 0);
+    const activeSup = supplierList.find(s => s.name === active);
+
+    function copyAsText() {
+        if (!activeSup) return;
+        const text = `Inkooplijst voor ${activeSup.name}\n\n` + activeSup.items.map(it => `- ${it.item.naam}: ${it.qty} ${it.item.unit} (${fmt(it.lineTotal)})`).join('\n') + `\n\nTotaal: ${fmt(activeSup.total)}`;
+        navigator.clipboard.writeText(text);
+    }
 
     return (
         <div style={{ padding: '24px 32px 100px', maxWidth: 1200, margin: '0 auto' }}>
@@ -1439,70 +1807,89 @@ function InkooplijstView({ lowStock, onClose, onExport }: { lowStock: InventoryI
                 <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     <ArrowLeft size={14} /> Terug
                 </button>
-                <div style={{ flex: 1 }}>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>Inkooplijst</h1>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{lowStock.length} items bestellen · totaal {fmt(grandTotal)}</div>
+                <div>
+                    <Eyebrow style={{ color: GOLD }}>Inkooplijst · AI gebundeld</Eyebrow>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>
+                        {lowStock.length} items bij {supplierList.length} leveranciers
+                    </h1>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Totaal: <strong style={{ color: GOLD }}>{fmt(grandTotal)}</strong></div>
                 </div>
-                <BtnGhost icon={Printer} onClick={onExport}>Download PDF</BtnGhost>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <BtnGhost icon={Printer} onClick={onExport}>PDF</BtnGhost>
+                </div>
             </div>
 
-            <SectionExplain>
-                <strong style={{ color: 'var(--text)' }}>Wat zie je hier?</strong> Alle items die onder je minimum staan, automatisch gegroepeerd per leverancier. Zo kan je alles bij één partij bestellen. De prijs is gebaseerd op wat je in de kaart van het product hebt ingevuld.
-            </SectionExplain>
-
-            {bySupplier.length === 0 ? (
-                <MetalCard>
-                    <div style={{ padding: 60, textAlign: 'center' }}>
-                        <CheckCircle size={40} style={{ color: 'var(--green)' }} />
-                        <div style={{ fontSize: 18, fontWeight: 600, marginTop: 12 }}>Alles op peil!</div>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Je hoeft nu niks te bestellen. 🎉</div>
-                    </div>
+            {supplierList.length === 0 ? (
+                <MetalCard style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
+                    <CheckCircle size={32} style={{ color: 'var(--green)', marginBottom: 10 }} />
+                    <div>Geen items om bij te bestellen — alles is op peil.</div>
                 </MetalCard>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {bySupplier.map(([sup, { items, total }]) => (
-                        <MetalCard key={sup}>
-                            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${GOLD}22`, border: `1px solid ${GOLD}4D`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <ShoppingCart size={16} style={{ color: GOLD }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
+                    <MetalCard>
+                        <div style={{ padding: 8 }}>
+                            {supplierList.map(s => (
+                                <div key={s.name} onClick={() => setActive(s.name)} style={{
+                                    padding: 12, borderRadius: 10, cursor: 'pointer', marginBottom: 4,
+                                    background: active === s.name ? `${s.color}15` : 'transparent',
+                                    border: `1px solid ${active === s.name ? `${s.color}50` : 'transparent'}`,
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
+                                        <div style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{s.name}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)' }}>
+                                        <span>{s.items.length} item{s.items.length === 1 ? '' : 's'}</span>
+                                        <span style={{ color: GOLD, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(s.total)}</span>
+                                    </div>
                                 </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 14, fontWeight: 600 }}>{sup}</div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{items.length} item(s)</div>
+                            ))}
+                        </div>
+                    </MetalCard>
+
+                    <MetalCard>
+                        {activeSup && (
+                            <>
+                                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <div style={{ width: 12, height: 12, borderRadius: 3, background: activeSup.color }} />
+                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400 }}>{activeSup.name}</div>
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                                        <BtnGhost icon={Mail}>Mail bestelling</BtnGhost>
+                                        <BtnGhost icon={Copy} onClick={copyAsText}>Kopieer</BtnGhost>
+                                        <BtnGhost icon={Download} onClick={onExport}>PDF</BtnGhost>
+                                    </div>
                                 </div>
-                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</div>
-                            </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                                <thead>
-                                    <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
-                                        {['Item', 'Voorraad', 'Min', 'Tekort', 'Prijs', 'Subtotaal'].map(h => (
-                                            <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Prijs' || h === 'Subtotaal' ? 'right' : 'left', fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {items.map(i => {
-                                        const tekort = Math.max(0, (i.min_stock || 0) - (i.current_stock || 0));
-                                        const subtotal = tekort * (i.purchase_price || 0);
-                                        return (
-                                            <tr key={i.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                <td style={{ padding: '10px 12px', fontWeight: 500 }}>{i.naam}</td>
-                                                <td style={{ padding: '10px 12px', color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>{i.current_stock} {i.unit}</td>
-                                                <td style={{ padding: '10px 12px', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{i.min_stock} {i.unit}</td>
-                                                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--amber)', fontVariantNumeric: 'tabular-nums' }}>+{tekort.toFixed(1)} {i.unit}</td>
-                                                <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(i.purchase_price || 0)}</td>
-                                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotal)}</td>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                        <thead>
+                                            <tr style={{ background: 'rgba(130,130,130,.04)' }}>
+                                                {['Product', 'Aantal', 'Prijs', 'Subtotaal'].map(h => (
+                                                    <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Prijs' || h === 'Subtotaal' ? 'right' : 'left', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted-light)', fontWeight: 700 }}>{h}</th>
+                                                ))}
                                             </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </MetalCard>
-                    ))}
-                    <div style={{ padding: 16, borderRadius: 10, background: `${GOLD}10`, border: `1px solid ${GOLD}40`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>Totaal inkoopbedrag</div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(grandTotal)}</div>
-                    </div>
+                                        </thead>
+                                        <tbody>
+                                            {activeSup.items.map(({ item, qty, lineTotal }) => (
+                                                <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                    <td style={{ padding: '10px 14px' }}>
+                                                        <div style={{ fontWeight: 500 }}>{item.naam}</div>
+                                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>nu: {item.current_stock} / par: {item.par_level || item.min_stock} {item.unit}</div>
+                                                    </td>
+                                                    <td style={{ padding: '10px 14px', fontVariantNumeric: 'tabular-nums' }}>{qty} {item.unit}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.purchase_price || 0)}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(lineTotal)}</td>
+                                                </tr>
+                                            ))}
+                                            <tr>
+                                                <td colSpan={3} style={{ padding: '14px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--muted)' }}>TOTAAL</td>
+                                                <td style={{ padding: '14px 14px', textAlign: 'right', fontWeight: 700, color: GOLD, fontVariantNumeric: 'tabular-nums', fontSize: 14 }}>{fmt(activeSup.total)}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+                    </MetalCard>
                 </div>
             )}
         </div>
@@ -1512,93 +1899,43 @@ function InkooplijstView({ lowStock, onClose, onExport }: { lowStock: InventoryI
 /* ═══════════════════════════════════════════════════════════════════
    AI REPORT DRAWER
    ═══════════════════════════════════════════════════════════════════ */
-function AIReportDrawer({ loading, report, onClose, onDownload, onRegenerate }: { loading: boolean; report: string | null; onClose: () => void; onDownload: () => void; onRegenerate: () => void }) {
-    function renderReport(md: string) {
-        return md.split('\n').map((line, i) => {
-            if (line.startsWith('## ')) return <h3 key={i} style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, fontWeight: 400, color: GOLD, margin: '20px 0 8px' }}>{line.replace('## ', '')}</h3>;
-            if (line.startsWith('**') && line.endsWith('**')) return <div key={i} style={{ fontWeight: 600, marginTop: 10, marginBottom: 6 }}>{line.replace(/\*\*/g, '')}</div>;
-            if (line.startsWith('- ')) {
-                const text = line.substring(2).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-                return <div key={i} style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 13 }}>
-                    <span style={{ color: GOLD, flexShrink: 0 }}>•</span>
-                    <span dangerouslySetInnerHTML={{ __html: text }} />
-                </div>;
-            }
-            if (line.trim()) {
-                const text = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-                return <p key={i} style={{ fontSize: 13, lineHeight: 1.6, margin: '6px 0' }} dangerouslySetInnerHTML={{ __html: text }} />;
-            }
-            return <div key={i} style={{ height: 4 }} />;
-        });
-    }
-
+function AIReportDrawer({ loading, report, onClose, onRegenerate }: { loading: boolean; report: string | null; onClose: () => void; onRegenerate: () => void }) {
     return (
         <>
             <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', zIndex: 9998 }} />
-            <aside style={{ position: 'fixed', right: 0, top: 0, height: '100vh', width: 680, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column' }}>
+            <aside style={{ position: 'fixed', right: 0, top: 0, height: '100vh', width: 580, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: `linear-gradient(180deg, ${GOLD}15, transparent)`, position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                <Sparkles size={14} style={{ color: GOLD }} />
-                                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: '.15em', textTransform: 'uppercase' }}>AI Voorraad-advies</span>
-                            </div>
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300 }}>Jouw rapport</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Automatisch gegenereerd op basis van je live voorraad</div>
+                            <Eyebrow style={{ color: GOLD }}>AI Voorraad-advies</Eyebrow>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 4 }}>Gegenereerd advies-rapport</div>
                         </div>
-                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <X size={16} />
-                        </button>
+                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
                     </div>
                 </div>
-
                 <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
                     {loading ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                            <Sparkles size={36} style={{ color: GOLD, animation: 'pulse 1.5s ease-in-out infinite' }} />
-                            <div style={{ fontSize: 14, color: 'var(--muted)' }}>AI analyseert je voorraad…</div>
+                        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
+                            <Sparkles size={24} style={{ color: GOLD, marginBottom: 10 }} />
+                            <div>De AI analyseert je voorraad…</div>
                         </div>
-                    ) : report ? (
-                        <div>{renderReport(report)}</div>
                     ) : (
-                        <div style={{ textAlign: 'center', color: 'var(--muted)' }}>Geen rapport beschikbaar.</div>
+                        <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                            {report?.split('\n').map((line, i) => {
+                                if (line.startsWith('## ')) return <h3 key={i} style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 16, color: GOLD, marginTop: 18, marginBottom: 6 }}>{line.replace('## ', '')}</h3>;
+                                if (line.startsWith('**') && line.endsWith('**')) return <strong key={i}>{line.replace(/\*\*/g, '')}</strong>;
+                                if (line.startsWith('- ')) return <div key={i} style={{ marginLeft: 16 }}>• {line.replace(/\*\*/g, '').substring(2)}</div>;
+                                return <div key={i}>{line.replace(/\*\*(.+?)\*\*/g, '$1')}</div>;
+                            })}
+                        </div>
                     )}
                 </div>
-
-                {report && !loading && (
-                    <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'space-between', background: 'var(--color-bg-deep)' }}>
-                        <BtnGhost icon={Sparkles} onClick={onRegenerate}>Opnieuw genereren</BtnGhost>
-                        <BtnPrimary icon={FileText} onClick={onDownload}>Download als PDF</BtnPrimary>
-                    </div>
-                )}
+                <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <BtnGhost icon={Sparkles} onClick={onRegenerate}>Opnieuw genereren</BtnGhost>
+                    <BtnPrimary icon={CheckCircle} onClick={onClose}>Sluiten</BtnPrimary>
+                </div>
             </aside>
         </>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   ZO WERKT DIT (footer)
-   ═══════════════════════════════════════════════════════════════════ */
-function ZoWerktDit() {
-    return (
-        <div style={{ padding: 16, borderRadius: 10, background: `${GOLD}0A`, border: `1px solid ${GOLD}26`, display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-            <BookOpen size={16} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-            <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: '.15em', textTransform: 'uppercase', marginBottom: 6 }}>Zo werkt voorraad</div>
-                <div style={{ marginBottom: 6 }}>
-                    <strong style={{ color: 'var(--text)' }}>1. Items toevoegen</strong> — klik <em>Item toevoegen</em> en vul naam, categorie, eenheid en <Hint tip="Minimum = onder dit aantal krijg je een waarschuwing om bij te bestellen. Stel dit zorgvuldig in per product.">minimum-voorraad</Hint> in.
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                    <strong style={{ color: 'var(--text)' }}>2. Voorraad bijhouden</strong> — gebruik <strong>−</strong> en <strong>+</strong> in de tabel, of open een product voor meer opties. Voor een volledige telling: klik <em>Tellen</em> — werkt prima op je telefoon in de koeling.
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                    <strong style={{ color: 'var(--text)' }}>3. Bestellen</strong> — als iets onder minimum komt, verschijnt het bovenaan. Klik <em>Open inkooplijst</em> voor een overzicht per leverancier. Exporteer als PDF om mee te nemen.
-                </div>
-                <div>
-                    <strong style={{ color: 'var(--text)' }}>4. AI advies</strong> — klik <em>AI Advies</em> rechtsboven voor een compleet rapport met urgenties, bestel-voorstel en aanbevelingen. Download als PDF voor je team.
-                </div>
-            </div>
-        </div>
     );
 }
