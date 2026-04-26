@@ -412,7 +412,7 @@ const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
 function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder) => void }) {
     return (
         <div className="responsive-grid-2" style={{
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0,
+            display: 'grid', gridTemplateColumns: `repeat(${TABS.length}, 1fr)`, gap: 0,
             background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
             borderRadius: '14px 14px 0 0', padding: 4, position: 'relative',
         }}>
