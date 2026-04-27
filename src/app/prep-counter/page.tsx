@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useSupabase } from '@/lib/useSupabase';
+import type { Event as DbEvent } from '@/types';
 import {
     Sparkles, Layers, Map, RefreshCw, X, Play, Pause, CheckCircle, Check,
     Flame, Clock, Package, MapPin, Printer, ChevronRight, Info, Snowflake,
-    Beef, FlaskConical, Salad, UtensilsCrossed, Utensils,
+    Beef, FlaskConical, Salad, UtensilsCrossed, Utensils, AlertTriangle,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -163,6 +165,8 @@ export default function PrepCounter() {
 
     return (
         <div style={{ padding: '24px 32px 100px', maxWidth: 1500, margin: '0 auto' }}>
+            <DemoModeBanner />
+
             <PrepHero doneCount={doneCount} totalCount={PREP_STEPS.length} activeStep={activeStep}
                 onAIPlan={() => alert('AI heeft 18 stappen geoptimaliseerd:\n• Marinades & rubs eerst (T-2 do)\n• Smoker-cycli ingepland (vr 04:00 pulled / za 01:00 brisket)\n• Sides & dressings T-1 vrijdag\n• Same-day finals zaterdag')}
             />
@@ -265,6 +269,37 @@ export default function PrepCounter() {
                     onComplete={handleComplete}
                 />
             )}
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DEMO MODE BANNER — laat user weten dat de prep-stappen mock zijn
+   en wijst naar echte upcoming events met prep-tasks (acceptance-workflow).
+   ═══════════════════════════════════════════════════════════════════ */
+function DemoModeBanner() {
+    const { data: dbEvents } = useSupabase<DbEvent>('events', []);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const upcoming = useMemo(
+        () => dbEvents
+            .filter(e => (e.date || '') >= todayIso && e.status !== 'cancelled')
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 1),
+        [dbEvents, todayIso]
+    );
+    return (
+        <div style={{
+            marginBottom: 18, padding: '12px 16px', borderRadius: 10,
+            background: 'rgba(245,158,11,.05)', border: '1px solid rgba(245,158,11,.25)',
+            display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+            <AlertTriangle size={16} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
+                <strong style={{ color: 'var(--text)' }}>Demo-modus:</strong> deze prep-stappen zijn voorbeeld-data voor &quot;Bruiloft Van Dijk&quot;.
+                Echte prep-taken voor je events worden automatisch gemaakt bij offerte-acceptatie en zijn zichtbaar op de{' '}
+                <a href="/agenda" style={{ color: GOLD, textDecoration: 'underline' }}>Agenda</a>
+                {upcoming.length > 0 && <> — eerstvolgend event: <strong>{upcoming[0].name}</strong> ({upcoming[0].date}, {upcoming[0].guests} gasten)</>}.
+            </div>
         </div>
     );
 }

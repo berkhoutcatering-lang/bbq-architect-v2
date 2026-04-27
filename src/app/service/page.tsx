@@ -163,6 +163,18 @@ function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPic
                 </p>
             </div>
 
+            <div style={{
+                marginBottom: 24, padding: '12px 16px', borderRadius: 10,
+                background: 'rgba(245,158,11,.05)', border: '1px solid rgba(245,158,11,.25)',
+                display: 'flex', gap: 12, alignItems: 'flex-start',
+            }}>
+                <AlertTriangle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1, fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
+                    <strong style={{ color: 'var(--text)' }}>Demo events:</strong> deze 3 events zijn voorbeeld-data om Service Mode te demonstreren met volledige courses, mise en allergie-info.
+                    Je echte events vind je op de <a href="/agenda" style={{ color: BRAND, textDecoration: 'underline' }}>Agenda</a> — de full KDS-functionaliteit (courses-detail per gang) komt zodra het courses-datamodel uitrolt.
+                </div>
+            </div>
+
             <HelpNote title="Hoe werkt Service Mode?" tone="amber">
                 <strong style={{ color: BRAND }}>Stap 1:</strong> tap een event om te starten — menu en allergieën laden automatisch.<br />
                 <strong style={{ color: BRAND }}>Stap 2:</strong> op het bord zie je de gangen verdeeld over 4 kolommen (Wachtend / Bezig / Klaar / Geserveerd).<br />
