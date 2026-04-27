@@ -244,6 +244,7 @@ export default function Offertes() {
         try {
             const result = await runAcceptanceWorkflow({
                 eventId: eventId,
+                offerteId: typeof formData.id === 'number' ? formData.id : undefined,
                 offerteData: formData,
                 settings: settings,
                 facturenCount: facturen.data.length,

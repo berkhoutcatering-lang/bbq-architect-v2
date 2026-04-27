@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Users, Check, CircleDot, Send, Filter, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Check, CircleDot, Send, Filter, Plus, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { displayEventName, titleCase } from './displayHelpers';
+import { detectAllConflicts, highestSeverity, type Conflict } from '@/lib/conflictDetection';
 import type { DbEvent, Offerte } from '@/types';
 
 type ViewMode = 'timeline' | 'calendar' | 'kanban';
@@ -175,6 +176,12 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
     }
     return map;
   }, [events, offertes]);
+
+  /* Conflict-detectie: smoker-overlap, venue-dubbeling, capacity-grens.
+     Logica zit in lib/conflictDetection.ts zodat dezelfde detector ook elders
+     herbruikt kan worden (Agenda, AI-suggesties, prep counter). */
+  const conflictMaps = useMemo(() => detectAllConflicts(events as any), [events]);
+  const criticalConflicts: Conflict[] = useMemo(() => conflictMaps.conflicts.filter(c => c.severity === 'critical'), [conflictMaps]);
 
   /* Booking pulse — 12 weeks of confirmed event count */
   const pulseWeeks = useMemo(() => {
@@ -368,6 +375,21 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
           <KanbanView events={events} marginMap={marginMap} onOpen={onOpen} router={router} />
         )}
 
+        {/* Conflict-banner: top-of-list waarschuwing voor planning-conflicten */}
+        {view === 'timeline' && criticalConflicts.length > 0 && (
+            <div className="metal" style={{ padding: '12px 16px', marginBottom: 16, borderLeft: '3px solid var(--red)', background: 'rgba(239,68,68,.06)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <AlertTriangle size={18} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: 'var(--red)', marginBottom: 4 }}>
+                        {criticalConflicts.length} {criticalConflicts.length === 1 ? 'planning-conflict' : 'planning-conflicten'} gedetecteerd
+                    </div>
+                    {criticalConflicts.slice(0, 3).map((c, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--muted)' }}>{c.note}</div>
+                    ))}
+                </div>
+            </div>
+        )}
+
         {view === 'timeline' && (weekBuckets.length === 0 ? (
           <div className="metal" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--muted)' }}>
             Geen aankomende events. Klik &quot;Nieuw event&quot; om te beginnen.
@@ -405,6 +427,8 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
                     const mTone: Tone = margin == null ? 'ok' : margin >= 55 ? 'ok' : margin >= 40 ? 'warn' : 'bad';
                     const ready = prepReadyMap[ev.id] ?? 0;
                     const rTone: Tone = ready >= 70 ? 'ok' : ready >= 30 ? 'warn' : 'bad';
+                    const evConflicts = conflictMaps.byEventId.get(ev.id) || [];
+                    const conflictSev = highestSeverity(evConflicts);
                     return (
                       <div key={ev.id} className={`tl-row ${tone}`} data-event-id={ev.id}>
                         <div
@@ -424,6 +448,19 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
                             <div className="title-row">
                               <h4>{titleCase(displayEventName(ev.name))}</h4>
                               <span className={`pill p-${pill.variant}`}>{pill.icon}{pill.label}</span>
+                              {conflictSev && (
+                                <span
+                                    className="pill"
+                                    title={evConflicts.map(c => c.note).join(' · ')}
+                                    style={{
+                                        background: conflictSev === 'critical' ? 'rgba(239,68,68,.18)' : 'rgba(245,158,11,.18)',
+                                        color: conflictSev === 'critical' ? 'var(--red)' : 'var(--amber)',
+                                        border: '1px solid ' + (conflictSev === 'critical' ? 'rgba(239,68,68,.4)' : 'rgba(245,158,11,.4)'),
+                                    }}
+                                >
+                                    <AlertTriangle size={10} />{conflictSev === 'critical' ? 'Conflict' : 'Let op'}
+                                </span>
+                              )}
                             </div>
                             <div className="meta-row">
                               <span><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{ev.guests || 0} gasten</span>

@@ -41,9 +41,8 @@ function loadState(): PersistedState {
 
 /* ═══════════════════════════════════════════════════════════════════
    VOORRAAD AFTREK — bij course/item "served" trekken we het verbruik
-   van inventory.current_stock af via /api/_supa/stock-movement.
-   Best-effort substring-match op mise.item ↔ inventory.naam.
-   Fail silently zodat service-flow nooit blokkeert op stock-fail.
+   af via de gedeelde inventoryDeduction helper. Best-effort: faalt
+   stil zodat service-flow nooit blokkeert op stock-fail.
    ═══════════════════════════════════════════════════════════════════ */
 async function deductCourseFromInventory(course: Course, portionsServed: number, eventTitle: string): Promise<void> {
     try {
@@ -52,43 +51,25 @@ async function deductCourseFromInventory(course: Course, portionsServed: number,
         const fraction = portionsServed / totalPortions;
 
         const { supabase } = await import('@/lib/supabase');
+        const { parseQty, deductFromInventory } = await import('@/lib/inventoryDeduction');
         const { data: inv } = await supabase
             .from('inventory')
             .select('id, naam, current_stock, unit, organization_id');
         if (!inv) return;
 
-        const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-
-        for (const m of course.mise) {
-            /* Parse "1.5 kg pulled pork" / "300g" / "8 stuks" / "2.4kg (30g/p)" */
-            const qtyMatch = m.qty.match(/^([\d.,]+)\s*(kg|g|l|ml|stuks?|pak|krat|fles|bos)?/i);
-            if (!qtyMatch) continue;
-            const totalQty = parseFloat(qtyMatch[1].replace(',', '.'));
-            if (isNaN(totalQty) || totalQty <= 0) continue;
-            const usedQty = totalQty * fraction;
-
-            const itemName = norm(m.item);
-            if (itemName.length < 3) continue;
-            const match = (inv as any[]).find(i => {
-                const iname = norm(i.naam);
-                return iname && (iname.includes(itemName) || itemName.includes(iname));
-            });
-            if (!match) continue;
-
-            const newStock = Math.max(0, Number(match.current_stock || 0) - usedQty);
-            void fetch('/api/_supa/stock-movement', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    inventory_id: match.id,
-                    type: 'usage',
-                    qty: -usedQty,
-                    resulting_stock: newStock,
+        const lines = course.mise
+            .map(m => {
+                const parsed = parseQty(m.qty);
+                if (!parsed) return null;
+                return {
+                    name: m.item,
+                    qty: parsed.qty * fraction,
                     note: `Service ${eventTitle} · gang #${course.num}: ${course.title}`,
-                    update_inventory: true,
-                }),
-            });
-        }
+                };
+            })
+            .filter((x): x is { name: string; qty: number; note: string } => x !== null);
+
+        await deductFromInventory(lines, inv as any);
     } catch { /* silent */ }
 }
 

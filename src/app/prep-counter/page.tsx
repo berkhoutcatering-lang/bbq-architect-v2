@@ -93,7 +93,7 @@ function usePrepState(): [StepStatus, React.Dispatch<React.SetStateAction<StepSt
 
 /* ═══════════════════════════════════════════════════════════════════
    INVENTORY DEDUCTION — bij prep "done" trekken we de ingrediënten af
-   van inventory.current_stock via /api/_supa/stock-movement.
+   via de gedeelde inventoryDeduction helper. Silent fail.
    ═══════════════════════════════════════════════════════════════════ */
 async function deductIngredientsFromInventory(step: PrepStep): Promise<void> {
     try {
@@ -101,41 +101,25 @@ async function deductIngredientsFromInventory(step: PrepStep): Promise<void> {
         if (ingredients.length === 0) return;
 
         const { supabase } = await import('@/lib/supabase');
+        const { parseQty, deductFromInventory } = await import('@/lib/inventoryDeduction');
         const { data: inv } = await supabase
             .from('inventory')
             .select('id, naam, current_stock, unit, organization_id');
-
         if (!inv) return;
-        const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
 
-        for (const ingLine of ingredients) {
-            /* Parse "1.5 kg pulled pork" → qty:1.5, unit:kg, name:pulled pork */
-            const m = ingLine.match(/^([\d.,]+)\s*(kg|g|l|ml|stuks?|pak|krat|fles|bos)?\s*(.+)$/i);
-            if (!m) continue;
-            const qty = parseFloat(m[1].replace(',', '.'));
-            const ingName = norm(m[3]);
-            if (isNaN(qty) || ingName.length < 3) continue;
-
-            const match = inv.find((i: any) => {
-                const iname = norm(i.naam);
-                return iname && (iname.includes(ingName) || ingName.includes(iname));
-            });
-            if (!match) continue;
-
-            const newStock = Math.max(0, Number(match.current_stock || 0) - qty);
-            void fetch('/api/_supa/stock-movement', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    inventory_id: match.id,
-                    type: 'usage',
-                    qty: -qty,
-                    resulting_stock: newStock,
+        const lines = ingredients
+            .map(ingLine => {
+                const parsed = parseQty(ingLine);
+                if (!parsed || !parsed.rest) return null;
+                return {
+                    name: parsed.rest,
+                    qty: parsed.qty,
                     note: `Prep #${step.order}: ${step.title}`,
-                    update_inventory: true,
-                }),
-            });
-        }
+                };
+            })
+            .filter((x): x is { name: string; qty: number; note: string } => x !== null);
+
+        await deductFromInventory(lines, inv as any);
     } catch {
         /* silent — prep-flow blokkeren we niet voor inventory-fail */
     }

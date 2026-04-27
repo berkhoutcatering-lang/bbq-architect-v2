@@ -112,6 +112,11 @@ export interface Factuur {
   datum: string;
   vervaldatum: string;
   items: FactuurItem[];
+  /* FK naar bron-offerte; gevuld door auto-create bij acceptatie. UNIQUE per
+     offerte — voorkomt dubbele facturen. Vereist migratie 007. */
+  offerte_id?: number | null;
+  /* FK naar gekoppeld event — handig voor "openstaande facturen per event". */
+  event_id?: number | null;
   created_at: string;
 }
 

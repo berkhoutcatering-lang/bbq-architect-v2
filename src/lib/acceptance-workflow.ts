@@ -13,6 +13,9 @@ import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
 
 export interface WorkflowParams {
     eventId: number;
+    /* offerteId is optioneel om backwards-compat met oudere callers; nieuwe
+       code geeft 'm wel mee zodat de factuur via FK gekoppeld wordt. */
+    offerteId?: number;
     offerteData: Record<string, any>;
     settings: Record<string, any> | null;
     facturenCount: number;
@@ -31,15 +34,29 @@ async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boo
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding' };
 
-        // Check if factuur already exists for this offerte
-        const { data: existing } = await supabase
-            .from('facturen')
-            .select('id')
-            .eq('client_naam', params.offerteData.client_naam)
-            .eq('items', JSON.stringify(params.offerteData.items))
-            .limit(1);
-
-        if (existing && existing.length > 0) {
+        /* Dedupe primair op offerte_id (FK + UNIQUE-index, migratie 007).
+           Fallback op (client_naam + JSON-items) voor legacy facturen die
+           zonder FK werden aangemaakt. Doel: nooit dubbele factuur per
+           offerte, ook als migratie nog niet draait. */
+        let alreadyExists = false;
+        if (params.offerteId) {
+            const { data } = await supabase
+                .from('facturen')
+                .select('id')
+                .eq('offerte_id', params.offerteId)
+                .limit(1);
+            if (data && data.length > 0) alreadyExists = true;
+        }
+        if (!alreadyExists) {
+            const { data: existing } = await supabase
+                .from('facturen')
+                .select('id')
+                .eq('client_naam', params.offerteData.client_naam)
+                .eq('items', JSON.stringify(params.offerteData.items))
+                .limit(1);
+            if (existing && existing.length > 0) alreadyExists = true;
+        }
+        if (alreadyExists) {
             return { success: true, message: 'Factuur bestond al' };
         }
 
@@ -47,15 +64,31 @@ async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boo
         const prefix = (params.settings && params.settings.factuur_prefix) || 'F2026-';
         const nummer = nextNummer(prefix, params.facturenNummers);
 
-        const { error } = await supabase.from('facturen').insert({
-            nummer: nummer,
+        /* offerte_id + event_id zijn nullable in DB — werkt zowel pre- als
+           post-migratie. Pre-migratie gooit Postgres een column-not-found
+           als de kolom nog niet bestaat; we vangen dat door zonder FK te
+           retry-en zodat user-flow nooit blokkeert. */
+        const insertWithFk = {
+            nummer,
             status: 'concept',
             client_naam: params.offerteData.client_naam || '',
             client_adres: params.offerteData.client_adres || '',
             datum: today(),
             vervaldatum: addDays(today(), betaaltermijn),
-            items: params.offerteData.items || []
-        });
+            items: params.offerteData.items || [],
+            offerte_id: params.offerteId || null,
+            event_id: params.eventId || null,
+        };
+        let { error } = await supabase.from('facturen').insert(insertWithFk);
+
+        if (error && /column .* does not exist/i.test(error.message)) {
+            /* Migratie 007 nog niet gedraaid — retry zonder FKs zodat oudere
+               omgevingen blijven werken. */
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { offerte_id, event_id, ...withoutFk } = insertWithFk;
+            const retry = await supabase.from('facturen').insert(withoutFk);
+            error = retry.error;
+        }
 
         if (error) return { success: false, message: 'Factuur fout: ' + error.message };
         return { success: true, message: 'Factuur ' + nummer + ' aangemaakt' };
