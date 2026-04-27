@@ -173,11 +173,47 @@ export default function Gerechten() {
         });
     }
 
+    /* AI allergeen-detectie obv ingredient_costs (of fallback ingredienten). User
+       hoeft niets te doen — als hij geen allergenen had ingevuld, vullen we 'm
+       automatisch aan met door AI gedetecteerde codes. Bestaande user-codes
+       blijven behouden (we mergen, geen overschrijving). */
+    async function detectAllergensViaAi(saveData: Record<string, any>): Promise<string[]> {
+        try {
+            const fromCosts = Array.isArray(saveData.ingredient_costs)
+                ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
+                : [];
+            const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
+            const ingredients = (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
+            if (ingredients.length === 0) return [];
+
+            const res = await fetch('/api/detect-allergens', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ingredients, dish_name: saveData.naam }),
+            });
+            if (!res.ok) return [];
+            const body = await res.json();
+            return Array.isArray(body.allergens) ? body.allergens : [];
+        } catch (e) {
+            console.warn('[gerecht] allergen detection failed:', e);
+            return [];
+        }
+    }
+
     async function saveGerecht() {
         if (!validateAll({ naam: form.naam })) return;
         const saveData = Object.assign({}, form);
         if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
         else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
+
+        /* AI allergeen-detectie — merge zodat manuele codes blijven. */
+        const aiAllergens = await detectAllergensViaAi(saveData);
+        if (aiAllergens.length > 0) {
+            const existing = Array.isArray(saveData.allergenen) ? saveData.allergenen : [];
+            const merged = [...new Set([...existing, ...aiAllergens])];
+            saveData.allergenen = merged;
+            const added = aiAllergens.filter(a => !existing.includes(a));
+            if (added.length > 0) showToast('AI gedetecteerd: ' + added.join(', '), 'info');
+        }
 
         const dbData: Record<string, any> = Object.assign({}, saveData);
 

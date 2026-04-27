@@ -16,6 +16,12 @@ import type {
     ServiceEvent, Course, AllergyEntry, AllergenCode,
 } from '@/app/service/_data/serviceMockData';
 
+/* Lichte gerecht-shape — alleen wat we nodig hebben voor allergie-cross-ref. */
+export interface GerechtAllergenLookup {
+    naam: string;
+    allergenen?: string[] | null;
+}
+
 /** Default banner-gradient per type. */
 function bannerForType(type: string | undefined | null): string {
     const t = (type || '').toLowerCase();
@@ -81,13 +87,73 @@ function dbAllergyToEntry(a: DbEventAllergy): AllergyEntry {
 }
 
 /**
+ * Cross-reference allergenen-codes per gang.
+ *
+ * Voor elke gang: parse de description (comma-separated dish-namen) en
+ * lees gerechten.allergenen[] voor elk gerecht. De vereniging is wat de
+ * gang aan allergenen "raakt".
+ *
+ * Vervolgens kruisen we dat met de event_allergies van gasten — als een
+ * gast op tafel T allergeen X heeft EN de gang bevat X, dan flaggen we
+ * `items[T].special = "T3 Marie pinda risico"` zodat de KDS-card automatisch
+ * een rode rand om die tafel-cel zet zonder dat de pitmaster handmatig
+ * iets hoeft in te vullen.
+ */
+function buildSpecialFlagsForCourse(
+    course: DbCourse,
+    eventAllergies: DbEventAllergy[],
+    gerechten: GerechtAllergenLookup[],
+): Map<number, string> {
+    /* Welke dish-namen zitten in deze gang? Bron-volgorde:
+       1) course.description ("Bavette, Chimichurri, Roosti")
+       2) eerste woord van mise-items (fallback) */
+    const dishNames: string[] = [];
+    if (course.description) {
+        course.description.split(',').forEach(s => {
+            const t = s.trim();
+            if (t) dishNames.push(t);
+        });
+    }
+
+    /* Verzamel allergenen-codes uit alle gerechten in deze gang. */
+    const courseAllergens = new Set<string>();
+    for (const dishName of dishNames) {
+        const g = gerechten.find(x => x.naam && x.naam.toLowerCase().trim() === dishName.toLowerCase().trim());
+        if (!g || !g.allergenen) continue;
+        for (const code of g.allergenen) courseAllergens.add(code.toUpperCase());
+    }
+
+    /* Voor elke event_allergy: als overlap → flag op tafel-nummer. */
+    const flags = new Map<number, string>();
+    if (courseAllergens.size === 0) return flags;
+
+    for (const a of eventAllergies) {
+        if (!a.table_num || !a.allergens) continue;
+        const overlap = a.allergens.filter(code => courseAllergens.has(code.toUpperCase()));
+        if (overlap.length === 0) continue;
+        const naam = a.name || `Tafel ${a.table_num}`;
+        const codes = overlap.join('+');
+        const sev = a.severity === 'critical' ? '⚠️ KRITIEK ' : '';
+        const msg = `${sev}T${a.table_num} ${naam} — ${codes}`;
+        const existing = flags.get(a.table_num);
+        flags.set(a.table_num, existing ? existing + ' · ' + msg : msg);
+    }
+    return flags;
+}
+
+/**
  * Bouw een ServiceEvent uit DB rows. Returns null als er geen courses zijn —
  * caller moet dan terugvallen op mock-data of een lege state tonen.
+ *
+ * `gerechten` is optioneel: zonder krijg je de oude gedrag (geen automatische
+ * allergie-cross-ref). Met gerechten[] krijgt elke course-item.special een
+ * automatische flag bij allergie-overlap.
  */
 export function dbEventToServiceEvent(
     event: DbEvent,
     courses: DbCourse[],
     allergies: DbEventAllergy[],
+    gerechten: GerechtAllergenLookup[] = [],
 ): ServiceEvent | null {
     const eventCourses = courses.filter(c => c.event_id === event.id);
     if (eventCourses.length === 0) return null;
@@ -129,6 +195,17 @@ export function dbEventToServiceEvent(
             .map(dbAllergyToEntry),
         courses: eventCourses
             .sort((a, b) => a.num - b.num)
-            .map(dbCourseToCourse),
+            .map(c => {
+                const course = dbCourseToCourse(c);
+                /* Auto-allergie-flagging per tafel obv gerechten.allergenen. */
+                const flags = buildSpecialFlagsForCourse(c, eventAllergies, gerechten);
+                if (flags.size > 0) {
+                    course.items = course.items.map(it => ({
+                        ...it,
+                        special: it.special || flags.get(it.table) || undefined,
+                    }));
+                }
+                return course;
+            }),
     };
 }

@@ -1313,19 +1313,21 @@ export default function ServiceMode() {
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
     const [rookDocked, setRookDocked] = useState(true);
 
-    /* DB-bronnen: events met bijbehorende courses + allergies. Service Mode
-       toont DB-events naast de mock-events; bij selectie checkt pickEvent
-       welke bron het event heeft. */
+    /* DB-bronnen: events met bijbehorende courses + allergies + gerechten.
+       Gerechten zijn nodig voor de auto-allergie-flagging op course-cards:
+       als T3 Marie pinda-allergie heeft EN Pulled Pork Sandwich bevat pinda,
+       dan kleurt T3 in de "Per tafel"-grid automatisch rood met tooltip. */
     const { data: dbEvents } = useSupabase<DbEvent>('events', []);
     const { data: dbCourses } = useSupabase<DbCourse>('courses', []);
     const { data: dbAllergies } = useSupabase<DbEventAllergy>('event_allergies', []);
+    const { data: dbGerechten } = useSupabase<{ id: number; naam: string; allergenen?: string[] }>('gerechten', []);
 
     /* Bouw DB-events alleen als ze courses hebben (anders is KDS leeg). */
     const dbServiceEvents = useMemo(() => {
         return dbEvents
-            .map(e => dbEventToServiceEvent(e, dbCourses, dbAllergies))
+            .map(e => dbEventToServiceEvent(e, dbCourses, dbAllergies, dbGerechten))
             .filter((e): e is ServiceEvent => e !== null);
-    }, [dbEvents, dbCourses, dbAllergies]);
+    }, [dbEvents, dbCourses, dbAllergies, dbGerechten]);
 
     /* Combineer DB-events + mock-fallback. DB komt eerst zodat een echt
        live event boven de demo's staat. */

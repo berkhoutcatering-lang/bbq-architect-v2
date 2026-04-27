@@ -9,9 +9,15 @@
 // 5. Service-mode courses (vanuit menu_selectie)
 // =============================================
 
-import { supabase } from '@/lib/supabase';
+/* supabase wordt nu als parameter doorgegeven (was globale import).
+   Reden: dezelfde workflow draait nu zowel client-side (offertes/page.tsx
+   met user-supabase) als server-side (api/accept-offerte met service-role
+   supabase). Eén bron van waarheid voor de cascade-logica. */
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { aggregateMiseFromDishes } from '@/lib/miseAggregation';
+
+type Supa = SupabaseClient<any, any, any>;
 
 export interface WorkflowParams {
     eventId: number;
@@ -33,7 +39,7 @@ export interface WorkflowResult {
 }
 
 // ── 1. Auto-create factuur ──
-async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boolean; message: string }> {
+async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding' };
 
@@ -115,7 +121,7 @@ async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boo
 }
 
 // ── 2. Auto-generate prep tasks ──
-async function autoGeneratePrepTasks(params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
+async function autoGeneratePrepTasks(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
@@ -178,7 +184,7 @@ async function autoGeneratePrepTasks(params: WorkflowParams): Promise<{ success:
 }
 
 // ── 3. Auto-generate inkooplijst ──
-async function autoGenerateInkooplijst(params: WorkflowParams): Promise<{ success: boolean; message: string }> {
+async function autoGenerateInkooplijst(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding' };
 
@@ -245,7 +251,7 @@ async function autoGenerateInkooplijst(params: WorkflowParams): Promise<{ succes
 }
 
 // ── 4. Auto-create HACCP templates ──
-async function autoCreateHaccpTemplates(params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
+async function autoCreateHaccpTemplates(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
@@ -378,7 +384,7 @@ function distributePortionsForCourses(total: number, tableCount: number): { tabl
    (pure helpers; geïmporteerd bovenaan). Reden: tests konden ze niet pakken
    zonder de Supabase-import in dit bestand mee te slepen. */
 
-async function autoCreateCourses(params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
+async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
@@ -473,13 +479,34 @@ async function autoCreateCourses(params: WorkflowParams): Promise<{ success: boo
 }
 
 // ── Main Workflow Runner ──
-export async function runAcceptanceWorkflow(params: WorkflowParams): Promise<WorkflowResult> {
+//
+// Twee export-vormen voor backwards-compat:
+//  - runAcceptanceWorkflow(supabase, params) — nieuwe canonieke vorm
+//  - runAcceptanceWorkflow(params) — oude single-arg vorm; valt terug op
+//    de globale browser-supabase. Beide werken zodat bestaande callers
+//    in offertes/page.tsx geen aanpassing nodig hebben.
+export async function runAcceptanceWorkflow(
+    arg1: Supa | WorkflowParams,
+    arg2?: WorkflowParams,
+): Promise<WorkflowResult> {
+    let supabase: Supa;
+    let params: WorkflowParams;
+    if (arg2) {
+        supabase = arg1 as Supa;
+        params = arg2;
+    } else {
+        /* Single-arg variant — gebruik browser-supabase fallback. */
+        const mod = await import('@/lib/supabase');
+        supabase = mod.supabase as Supa;
+        params = arg1 as WorkflowParams;
+    }
+
     const results = await Promise.allSettled([
-        autoCreateFactuur(params),
-        autoGeneratePrepTasks(params),
-        autoGenerateInkooplijst(params),
-        autoCreateHaccpTemplates(params),
-        autoCreateCourses(params),
+        autoCreateFactuur(supabase, params),
+        autoGeneratePrepTasks(supabase, params),
+        autoGenerateInkooplijst(supabase, params),
+        autoCreateHaccpTemplates(supabase, params),
+        autoCreateCourses(supabase, params),
     ]);
 
     const factuurResult = results[0].status === 'fulfilled' ? results[0].value : { success: false, message: 'Factuur onverwachte fout' };

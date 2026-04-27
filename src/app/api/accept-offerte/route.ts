@@ -1,16 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
+import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 
 let sb: ReturnType<typeof createServiceSupabase> | null = null;
 try { sb = createServiceSupabase(); } catch { sb = null; }
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
-function addDaysStr(d: string, n: number) {
-    const dt = new Date(d);
-    dt.setDate(dt.getDate() + n);
-    return dt.toISOString().slice(0, 10);
-}
 
 export async function POST(req: NextRequest) {
     try {
@@ -96,113 +92,29 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, message: 'Offerte geaccepteerd, maar event kon niet aangemaakt worden', workflow: null });
         }
 
-        // 4. Run acceptance workflow (parallel)
-        const results: Record<string, any> = {};
+        /* 4. Run acceptance workflow — gebruikt nu de gedeelde
+           runAcceptanceWorkflow zodat hier exact dezelfde 5 stappen lopen
+           als wanneer de pitmaster zelf op "Opslaan" klikt: factuur (FK),
+           prep-tasks, inkooplijst, HACCP-sjablonen, courses + mise. */
+        const { data: settingsRows } = await sb.from('settings').select('*').limit(1);
+        const settings = settingsRows && settingsRows[0] ? settingsRows[0] : null;
+        const { data: facturenAll } = await sb.from('facturen').select('nummer');
+        const facturenNummers = (facturenAll || []).map(f => f.nummer);
 
-        // 4a. Auto-create factuur
-        try {
-            const { data: existingF } = await sb.from('facturen').select('id')
-                .eq('client_naam', offerte.client_naam).limit(1);
-
-            // Get settings for betaaltermijn
-            const { data: settingsRows } = await sb.from('settings').select('*').limit(1);
-            const settings = settingsRows && settingsRows[0] ? settingsRows[0] : {};
-            const betaaltermijn = settings.betaaltermijn || 14;
-
-            // Get facturen count for nummer
-            const { count } = await sb.from('facturen').select('id', { count: 'exact', head: true });
-            const prefix = settings.factuur_prefix || 'F2026-';
-            const nummer = prefix + String((count || 0) + 1).padStart(3, '0');
-
-            if (!existingF || existingF.length === 0) {
-                await sb.from('facturen').insert({
-                    nummer: nummer,
-                    status: 'concept',
-                    client_naam: offerte.client_naam || '',
-                    client_adres: offerte.client_adres || '',
-                    datum: todayStr(),
-                    vervaldatum: addDaysStr(todayStr(), betaaltermijn),
-                    items: items,
-                    organization_id: offerte.organization_id,
-                });
-                results.factuur = { success: true, message: 'Factuur ' + nummer + ' aangemaakt' };
-            } else {
-                results.factuur = { success: true, message: 'Factuur bestond al' };
-            }
-        } catch (e: any) {
-            results.factuur = { success: false, message: 'Factuur fout: ' + e.message };
-        }
-
-        // 4b. Auto-generate prep tasks
-        try {
-            const orgId = offerte.organization_id;
-            const tasks = [
-                { event_id: eventId, text: 'Voorraad check en ingredienten bestellen', dagen: -3, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Materieel controleren en inladen', dagen: -3, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Rubs en sauzen aanmaken', dagen: -2, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Rookhout weken', dagen: -2, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Smoker/BBQ testen', dagen: -1, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Bus inladen', dagen: -1, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Service materiaal checken', dagen: -1, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Smoke/BBQ aansteken 4-6u voor service', dagen: 0, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Sauzen opwarmen', dagen: 0, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Garnituren snijden', dagen: 0, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'Service-station opzetten', dagen: 0, done: false, organization_id: orgId },
-                { event_id: eventId, text: 'HACCP temperaturen registreren', dagen: 0, done: false, organization_id: orgId }
-            ];
-            await sb.from('prep_tasks').insert(tasks);
-            results.prep = { success: true, message: tasks.length + ' prep-taken aangemaakt' };
-        } catch (e: any) {
-            results.prep = { success: false, message: 'Prep fout: ' + e.message };
-        }
-
-        // 4c. HACCP templates
-        try {
-            const menuItems: string[] = [];
-            const menuSel = offerte.menu_selectie;
-            if (Array.isArray(menuSel)) {
-                menuSel.forEach(function (sel: any) {
-                    const naam = sel.gerecht_naam || sel.naam || '';
-                    if (naam) menuItems.push(naam);
-                });
-            } else if (menuSel && typeof menuSel === 'object') {
-                Object.values(menuSel).forEach(function (arr: any) {
-                    if (Array.isArray(arr)) {
-                        // Even indices are dish names, odd are descriptions
-                        arr.forEach(function (sel: any, idx: number) {
-                            if (idx % 2 === 0) {
-                                const naam = typeof sel === 'string' ? sel : (sel.gerecht_naam || sel.naam || '');
-                                if (naam) menuItems.push(naam);
-                            }
-                        });
-                    }
-                });
-            }
-
-            if (menuItems.length > 0) {
-                const { data: event } = await sb.from('events').select('date').eq('id', eventId).single();
-                const eventDatum = event?.date || todayStr();
-                const records: any[] = [];
-                const hOrgId = offerte.organization_id;
-                menuItems.forEach(function (naam: string) {
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Ontvangst grondstoffen', temp: 0, type: 'ontvangst', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Kerntemperatuur bereiding', temp: 0, type: 'bereiding', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
-                    records.push({ event_id: eventId, datum: eventDatum, tijd: '', wat: naam + ' \u2014 Uitgifte temperatuur', temp: 0, type: 'uitgifte', status: 'ok', notitie: 'Automatisch aangemaakt bij offerte-acceptatie', organization_id: hOrgId });
-                });
-                await sb.from('haccp_records').insert(records);
-                results.haccp = { success: true, message: records.length + ' HACCP-sjablonen voor ' + menuItems.length + ' gerechten' };
-            } else {
-                results.haccp = { success: true, message: 'Geen menu-items voor HACCP' };
-            }
-        } catch (e: any) {
-            results.haccp = { success: false, message: 'HACCP fout: ' + e.message };
-        }
+        const workflow = await runAcceptanceWorkflow(sb as any, {
+            eventId,
+            offerteId,
+            offerteData: { ...offerte, items },
+            settings,
+            facturenCount: facturenNummers.length,
+            facturenNummers,
+        });
 
         return NextResponse.json({
             success: true,
             message: 'Offerte geaccepteerd en workflow uitgevoerd',
-            eventId: eventId,
-            workflow: results
+            eventId,
+            workflow,
         });
 
     } catch (e: any) {
