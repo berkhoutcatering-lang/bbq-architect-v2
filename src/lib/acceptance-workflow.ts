@@ -11,6 +11,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
+import { aggregateMiseFromDishes } from '@/lib/miseAggregation';
 
 export interface WorkflowParams {
     eventId: number;
@@ -359,89 +360,9 @@ function distributePortionsForCourses(total: number, tableCount: number): { tabl
     }));
 }
 
-/** Format kg/g/L/ml naar meest leesbare eenheid.
- *   - >= 1 kg → "1.5 kg"
- *   - < 1 kg → "750 g"
- *   - >= 1 L → "1.2 L"
- *   - < 1 L → "300 ml"
- *   - andere units (stuks/pak/...) → onveranderd doorgeven met afronding op 1 decimaal. */
-function formatMiseQty(amount: number, unit: string): string {
-    const u = (unit || '').toLowerCase();
-    if (amount <= 0) return '';
-    if (u === 'kg') {
-        if (amount < 1) return Math.round(amount * 1000) + ' g';
-        return Number(amount.toFixed(2)).toString().replace('.', ',') + ' kg';
-    }
-    if (u === 'g') {
-        if (amount >= 1000) return Number((amount / 1000).toFixed(2)).toString().replace('.', ',') + ' kg';
-        return Math.round(amount) + ' g';
-    }
-    if (u === 'l') {
-        if (amount < 1) return Math.round(amount * 1000) + ' ml';
-        return Number(amount.toFixed(2)).toString().replace('.', ',') + ' L';
-    }
-    if (u === 'ml') {
-        if (amount >= 1000) return Number((amount / 1000).toFixed(2)).toString().replace('.', ',') + ' L';
-        return Math.round(amount) + ' ml';
-    }
-    /* stuks / pak / krat / fles / bos — afgerond. */
-    return Math.ceil(amount) + ' ' + (unit || 'stuks');
-}
-
-/**
- * Aggregeer ingredient_costs uit alle dishes van een course → mise array.
- *
- * Per ingredient: totaal = sum over alle dishes van (qty_pp ÷ yield × guests).
- * yield-correctie verdisconteerd zodat we ruim genoeg inkopen (lager yield =
- * meer aankopen).
- *
- * Dish-namen zijn case-sensitief lookup tegen `gerechten.naam`. Onbekende
- * dishes worden silent overgeslagen (caller heeft al validatie).
- */
-function aggregateMiseFromDishes(
-    dishes: string[],
-    gerechten: Array<{ naam?: string; ingredient_costs?: any }>,
-    guests: number,
-): { item: string; qty: string }[] {
-    if (guests <= 0 || dishes.length === 0) return [];
-    /* Map: ingredient-naam → { total qty, unit }.  Mengen van eenheden per
-       ingredient laten we niet samenvallen (bv. iemand schreef "kg" voor
-       hetzelfde ingredient als "g") — dan blijven het 2 entries. */
-    const totals = new Map<string, { qty: number; unit: string }>();
-
-    for (const dishName of dishes) {
-        const g = gerechten.find(x => x.naam && x.naam.toLowerCase().trim() === dishName.toLowerCase().trim());
-        if (!g) continue;
-        let costs: any = g.ingredient_costs;
-        if (typeof costs === 'string') { try { costs = JSON.parse(costs); } catch { costs = []; } }
-        if (!Array.isArray(costs)) continue;
-
-        for (const c of costs) {
-            if (!c || !c.naam) continue;
-            const qtyPp = Number(c.qty_pp) || 0;
-            const yld = Number(c.yield) || 1;
-            const unit = (c.unit || 'stuks').toLowerCase();
-            const total = (qtyPp / Math.max(yld, 0.01)) * guests;
-            if (total <= 0) continue;
-
-            const key = c.naam.toLowerCase().trim() + '|' + unit;
-            const cur = totals.get(key);
-            if (cur) cur.qty += total;
-            else totals.set(key, { qty: total, unit });
-            /* Bewaar de origin-naam-casing van de eerste binnenkomende variant. */
-            if (!cur) totals.set('__name|' + key, { qty: 0, unit: c.naam });
-        }
-    }
-
-    const out: { item: string; qty: string }[] = [];
-    for (const [key, v] of totals) {
-        if (key.startsWith('__name|')) continue;
-        const nameEntry = totals.get('__name|' + key);
-        const item = (nameEntry?.unit) || key.split('|')[0];
-        out.push({ item, qty: formatMiseQty(v.qty, v.unit) });
-    }
-    return out.sort((a, b) => a.item.localeCompare(b.item));
-}
+/* formatMiseQty + aggregateMiseFromDishes wonen nu in lib/miseAggregation.ts
+   (pure helpers; geïmporteerd bovenaan). Reden: tests konden ze niet pakken
+   zonder de Supabase-import in dit bestand mee te slepen. */
 
 async function autoCreateCourses(params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
