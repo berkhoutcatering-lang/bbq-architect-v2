@@ -53,11 +53,25 @@ async function autoCreateFactuur(params: WorkflowParams): Promise<{ success: boo
         if (!alreadyExists) {
             const { data: existing } = await supabase
                 .from('facturen')
-                .select('id')
+                .select('id, offerte_id, event_id')
                 .eq('client_naam', params.offerteData.client_naam)
                 .eq('items', JSON.stringify(params.offerteData.items))
                 .limit(1);
-            if (existing && existing.length > 0) alreadyExists = true;
+            if (existing && existing.length > 0) {
+                alreadyExists = true;
+                /* Upgrade-pad: bestaande factuur heeft nog geen FK → vul aan
+                   zodat downstream queries (event-overzicht, factuur-status
+                   per offerte) werken. Voorkomt dat backfill nodig blijft. */
+                const ex = existing[0];
+                if (params.offerteId && !ex.offerte_id) {
+                    await supabase.from('facturen').update({
+                        offerte_id: params.offerteId,
+                        event_id: ex.event_id || params.eventId || null,
+                    }).eq('id', ex.id);
+                } else if (!ex.event_id && params.eventId) {
+                    await supabase.from('facturen').update({ event_id: params.eventId }).eq('id', ex.id);
+                }
+            }
         }
         if (alreadyExists) {
             return { success: true, message: 'Factuur bestond al' };
