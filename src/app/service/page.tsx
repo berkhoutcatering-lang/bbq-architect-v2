@@ -599,7 +599,7 @@ function AIWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
 /* ═══════════════════════════════════════════════════════════════════
    STICKY ALLERGIE-BAR — bovenaan altijd zichtbaar als allergieën zijn
    ═══════════════════════════════════════════════════════════════════ */
-function StickyAllergieBar() {
+function StickyAllergieBar({ rightOffset = 0 }: { rightOffset?: number }) {
     const critical = SERVICE_EVENT.allergies.filter(a => a.severity === 'critical');
     if (critical.length === 0) return null;
     return (
@@ -607,7 +607,8 @@ function StickyAllergieBar() {
             position: 'sticky', top: 0, zIndex: 50,
             background: 'rgba(239,68,68,.18)', borderBottom: '2px solid var(--red)',
             backdropFilter: 'blur(12px)',
-            padding: '10px 32px', display: 'flex', alignItems: 'center', gap: 14,
+            padding: `10px 32px 10px ${32}px`, marginRight: rightOffset, transition: 'margin-right .25s',
+            display: 'flex', alignItems: 'center', gap: 14,
             fontSize: 13, color: 'var(--text)',
         }}>
             <AlertTriangle size={18} style={{ color: 'var(--red)', flexShrink: 0 }} />
@@ -628,14 +629,15 @@ function StickyAllergieBar() {
 /* ═══════════════════════════════════════════════════════════════════
    STICKY NOW-BAR — live tijd + active gang + countdown next
    ═══════════════════════════════════════════════════════════════════ */
-function StickyNowBar({ now, activeCourse, nextCourse }: { now: string; activeCourse: Course; nextCourse: Course | null }) {
+function StickyNowBar({ now, activeCourse, nextCourse, rightOffset = 0 }: { now: string; activeCourse: Course; nextCourse: Course | null; rightOffset?: number }) {
     return (
         <div style={{
             position: 'sticky', top: SERVICE_EVENT.allergies.some(a => a.severity === 'critical') ? 44 : 0,
             zIndex: 49,
             background: 'rgba(14,14,16,.95)', borderBottom: `1px solid ${GOLD}33`,
             backdropFilter: 'blur(12px)',
-            padding: '10px 32px', display: 'flex', alignItems: 'center', gap: 18,
+            padding: '10px 32px', marginRight: rightOffset, transition: 'margin-right .25s',
+            display: 'flex', alignItems: 'center', gap: 18,
         }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <Eyebrow>NU</Eyebrow>
@@ -1292,6 +1294,7 @@ export default function ServiceKDS() {
     const [focusId, setFocusId] = useState<string>('g1');
     const [wizardOpen, setWizardOpen] = useState(false);
     const [miseState, setMiseState] = useState<Record<string, boolean>>({});
+    const [rookDocked, setRookDocked] = useState(true);   /* Rook open by default */
     const [mepState, setMepState] = useState<Record<string, boolean>>({});
     const [cleanupState, setCleanupState] = useState<Record<string, boolean>>({});
     const now = useLiveNow('17:42');
@@ -1359,12 +1362,16 @@ export default function ServiceKDS() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }), [section, focusCourse.id, misePct, now.slice(0, 5)]);
 
+    /* Wanneer Rook gedockt is: schuif content 380px naar links zodat het paneel
+       niet over content valt. Sticky bars (allergie, NU) ook smaller. */
+    const rookOffset = rookDocked ? 380 : 0;
+
     return (
         <>
-            {section === 'service' && <StickyAllergieBar />}
-            {section === 'service' && <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} />}
+            {section === 'service' && <StickyAllergieBar rightOffset={rookOffset} />}
+            {section === 'service' && <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} rightOffset={rookOffset} />}
 
-            <div style={{ padding: '20px 32px 120px', maxWidth: 1500, margin: '0 auto' }}>
+            <div style={{ padding: '20px 32px 120px', maxWidth: 1500, margin: '0 auto', paddingRight: 32 + rookOffset, transition: 'padding-right .25s' }}>
                 {/* TAB SWITCHER */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
                     <div>
@@ -1447,7 +1454,7 @@ export default function ServiceKDS() {
             </div>
 
             {/* Persistent AI Chef — altijd in beeld over alle 3 secties */}
-            <AIChefAssistant context={chefContext} />
+            <AIChefAssistant context={chefContext} onDockChange={setRookDocked} />
         </>
     );
 }

@@ -1,18 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, ChefHat, X, Send, Volume2, VolumeX, Mic } from 'lucide-react';
+import { Sparkles, ChefHat, Send, Volume2, VolumeX, Minimize2, Maximize2, Loader2, X } from 'lucide-react';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
 
 /*
- * AI Chef Assistant — persistent floating coach voor Service KDS
- * ─────────────────────────────────────────────────────────────
- * Altijd zichtbaar onderin rechts. Geeft directives op basis van event-state.
- * Periodieke auto-refresh: elke 60s een nieuwe directive op basis van context.
- * Click-to-expand: chat-interface om vragen te stellen aan de chef.
- * Optioneel: voice-output via Web Speech API (browser-native, gratis).
+ * AI Chef Assistant — open AI-platform side-dock
+ * ──────────────────────────────────────────────
+ * Default: docked rechter zijbalk over volledige hoogte (380px breed).
+ * Persistent chat-historie, grote tekstinput, voice optie, quick-prompts.
+ * Minimize → kleine bubble rechtsonder die je weer kan openen.
+ *
+ * Auto-refresh: elke 60s nieuwe directive op basis van event-context.
+ * Chat: vrije vragen aan Rook met server roundtrip naar /api/chef-coach.
  */
 
 export interface ChefContext {
@@ -37,6 +39,14 @@ interface ChefDirective {
     generatedAt: string;
 }
 
+interface ChatMsg {
+    role: 'rook' | 'pitmaster';
+    text: string;
+    severity?: ChefDirective['severity'];
+    actionLabel?: string | null;
+    ts: string;
+}
+
 const SEVERITY_COLORS = {
     praise: { bg: 'rgba(34,197,94,.12)', border: 'rgba(34,197,94,.4)', accent: '#22c55e', label: 'STRAK' },
     normal: { bg: `${GOLD}1a`, border: `${GOLD}40`, accent: GOLD, label: 'COACH' },
@@ -44,30 +54,60 @@ const SEVERITY_COLORS = {
     critical: { bg: 'rgba(239,68,68,.12)', border: 'rgba(239,68,68,.5)', accent: 'var(--red)', label: 'KRITISCH' },
 };
 
+const QUICK_PROMPTS = [
+    'Wat moet er nu?',
+    'Loop ik op tijd?',
+    'Wat komt na deze gang?',
+    'Geef me een kort moraal-boost',
+    'Hoe staan we ervoor?',
+];
+
 export default function AIChefAssistant({
     context,
     refreshIntervalMs = 60_000,
     enabled = true,
+    onDockChange,
 }: {
     context: ChefContext;
     refreshIntervalMs?: number;
     enabled?: boolean;
+    onDockChange?: (docked: boolean) => void;
 }) {
+    const [docked, setDocked] = useState(true);   /* default: open */
     const [directive, setDirective] = useState<ChefDirective | null>(null);
     const [loading, setLoading] = useState(false);
-    const [expanded, setExpanded] = useState(false);
+    const [chatLog, setChatLog] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
-    const [chatLog, setChatLog] = useState<{ role: 'chef' | 'user'; text: string; ts: string }[]>([]);
     const [voiceOn, setVoiceOn] = useState(false);
     const [voiceSupported, setVoiceSupported] = useState(false);
     const lastSpokenRef = useRef<string | null>(null);
+    const scrollRef = useRef<HTMLDivElement | null>(null);
 
-    /* Detect voice support (client-side only) */
+    /* Persist mode + chat-log in localStorage */
     useEffect(() => {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            setVoiceSupported(true);
-        }
+        try {
+            const s = typeof window !== 'undefined' ? localStorage.getItem('rook_assistant_v1') : null;
+            if (s) {
+                const p = JSON.parse(s);
+                if (typeof p.docked === 'boolean') setDocked(p.docked);
+                if (Array.isArray(p.chatLog)) setChatLog(p.chatLog.slice(-30));   /* houd laatste 30 berichten */
+            }
+        } catch { /* */ }
     }, []);
+    useEffect(() => {
+        try { localStorage.setItem('rook_assistant_v1', JSON.stringify({ docked, chatLog })); } catch { /* */ }
+        onDockChange?.(docked);
+    }, [docked, chatLog, onDockChange]);
+
+    /* Voice support detect */
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) setVoiceSupported(true);
+    }, []);
+
+    /* Auto-scroll chat */
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [chatLog, directive]);
 
     const fetchDirective = useCallback(async (userQuestion?: string) => {
         if (!enabled) return;
@@ -91,21 +131,28 @@ export default function AIChefAssistant({
                 if (userQuestion) {
                     setChatLog(prev => [
                         ...prev,
-                        { role: 'user', text: userQuestion, ts: new Date().toISOString() },
-                        { role: 'chef', text: body.directive, ts: body.generatedAt },
+                        { role: 'pitmaster', text: userQuestion, ts: new Date().toISOString() },
+                        { role: 'rook', text: body.directive, severity: d.severity, actionLabel: d.actionLabel, ts: body.generatedAt },
                     ]);
+                } else {
+                    /* Auto-refresh: log alleen als directive nieuw is */
+                    if (body.directive !== lastSpokenRef.current) {
+                        setChatLog(prev => [
+                            ...prev,
+                            { role: 'rook', text: body.directive, severity: d.severity, actionLabel: d.actionLabel, ts: body.generatedAt },
+                        ]);
+                    }
                 }
-                /* Voice */
                 if (voiceOn && voiceSupported && body.directive !== lastSpokenRef.current) {
                     speakDutch(body.directive);
                     lastSpokenRef.current = body.directive;
                 }
             }
-        } catch { /* silent — chef offline maar UI overleeft */ }
+        } catch { /* */ }
         setLoading(false);
     }, [context, enabled, voiceOn, voiceSupported]);
 
-    /* Initial + interval refresh */
+    /* Initial + interval */
     useEffect(() => {
         if (!enabled) return;
         fetchDirective();
@@ -115,186 +162,194 @@ export default function AIChefAssistant({
     }, [enabled, refreshIntervalMs, context.activeCourseId, context.misePctDone]);
 
     if (!enabled) return null;
-
     const c = directive ? SEVERITY_COLORS[directive.severity] : SEVERITY_COLORS.normal;
-    const isUrgent = directive && (directive.severity === 'urgent' || directive.severity === 'critical');
 
-    /* ── Compact mode: floating bubble ── */
-    if (!expanded) {
+    /* ── MINIMIZED: floating bubble ── */
+    if (!docked) {
         return (
-            <div style={{
+            <button onClick={() => setDocked(true)} title="Open Rook" style={{
                 position: 'fixed', bottom: 24, right: 24, zIndex: 9000,
-                maxWidth: 380, animation: 'fadeUp .3s ease',
+                width: 64, height: 64, borderRadius: 18, border: 'none',
+                background: `linear-gradient(135deg, ${c.accent}, ${c.accent}80)`,
+                cursor: 'pointer', boxShadow: `0 12px 30px rgba(0,0,0,.5), 0 0 24px ${c.accent}66`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-                <div onClick={() => setExpanded(true)} style={{
-                    display: 'grid', gridTemplateColumns: '52px 1fr', gap: 12, alignItems: 'center',
-                    padding: '12px 14px', borderRadius: 16, cursor: 'pointer',
-                    background: `linear-gradient(135deg, ${c.bg}, rgba(20,20,24,.95))`,
-                    border: `1px solid ${c.border}`,
-                    boxShadow: `0 16px 40px rgba(0,0,0,.5), 0 0 ${isUrgent ? 30 : 16}px ${c.accent}33`,
-                    backdropFilter: 'blur(12px)',
-                    transition: 'transform .2s',
-                }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-
-                    {/* Chef avatar */}
+                <ChefHat size={28} style={{ color: '#000' }} />
+                {loading && (
                     <div style={{
-                        width: 52, height: 52, borderRadius: 14, position: 'relative',
-                        background: `linear-gradient(135deg, ${c.accent}, ${c.accent}80)`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: `0 0 20px ${c.accent}66`,
-                    }}>
-                        <ChefHat size={26} style={{ color: '#000' }} />
-                        {loading && (
-                            <div style={{
-                                position: 'absolute', inset: -2, borderRadius: 16,
-                                border: `2px solid ${c.accent}`, borderTopColor: 'transparent',
-                                animation: 'spin 1s linear infinite',
-                            }} />
-                        )}
-                        {isUrgent && (
-                            <div style={{
-                                position: 'absolute', top: -3, right: -3, width: 14, height: 14, borderRadius: '50%',
-                                background: c.accent, boxShadow: `0 0 12px ${c.accent}`,
-                                animation: 'pulse-prep 1.2s infinite',
-                            }} />
-                        )}
-                    </div>
-
-                    {/* Speech bubble */}
-                    <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: c.accent, marginBottom: 3 }}>
-                            ROOK · {c.label}
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', lineHeight: 1.35, marginBottom: 4 }}>
-                            {directive?.directive || 'Pitmaster aan het lezen…'}
-                        </div>
-                        {directive?.actionLabel && (
-                            <div style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 4,
-                                background: `${c.accent}22`, color: c.accent, fontSize: 10, fontWeight: 700, letterSpacing: '.1em',
-                            }}>
-                                {directive.actionLabel.toUpperCase()}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Tagline + actions onder bubble */}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                    {voiceSupported && (
-                        <button onClick={() => setVoiceOn(v => !v)} title={voiceOn ? 'Stem uit' : 'Stem aan'} style={iconBtnStyle()}>
-                            {voiceOn ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                        </button>
-                    )}
-                    <button onClick={() => fetchDirective()} title="Vraag opnieuw" style={iconBtnStyle()} disabled={loading}>
-                        <Sparkles size={12} />
-                    </button>
-                    <button onClick={() => setExpanded(true)} title="Open chat" style={iconBtnStyle()}>
-                        <Mic size={12} />
-                    </button>
-                </div>
-            </div>
+                        position: 'absolute', inset: -3, borderRadius: 21,
+                        border: `2px solid ${c.accent}`, borderTopColor: 'transparent',
+                        animation: 'spin 1s linear infinite',
+                    }} />
+                )}
+                {(directive?.severity === 'urgent' || directive?.severity === 'critical') && (
+                    <span style={{
+                        position: 'absolute', top: -2, right: -2, width: 16, height: 16, borderRadius: '50%',
+                        background: c.accent, boxShadow: `0 0 12px ${c.accent}`, animation: 'pulse-prep 1.2s infinite',
+                    }} />
+                )}
+            </button>
         );
     }
 
-    /* ── Expanded mode: full chat panel ── */
+    /* ── DOCKED: open AI-platform side panel ── */
     return (
-        <div style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 9000,
-            width: 420, maxHeight: '70vh',
+        <aside style={{
+            position: 'fixed', top: 0, right: 0, height: '100vh', width: 380, zIndex: 8500,
             display: 'flex', flexDirection: 'column',
-            borderRadius: 18, overflow: 'hidden',
-            background: 'linear-gradient(180deg, #1a1a1e, #0e0e10)',
-            border: `1px solid ${c.border}`,
-            boxShadow: '0 30px 80px rgba(0,0,0,.5)',
+            background: 'linear-gradient(180deg, #15151a, #0d0d10)',
+            borderLeft: `1px solid ${c.border}`,
+            boxShadow: '-8px 0 40px rgba(0,0,0,.4)',
         }}>
             {/* Header */}
             <div style={{
-                padding: 16, display: 'grid', gridTemplateColumns: '40px 1fr auto', gap: 12, alignItems: 'center',
-                borderBottom: `1px solid ${c.border}`,
+                padding: '14px 16px', borderBottom: `1px solid ${c.border}`,
                 background: `linear-gradient(135deg, ${c.bg}, transparent)`,
+                display: 'grid', gridTemplateColumns: '40px 1fr auto', gap: 12, alignItems: 'center',
+                flexShrink: 0,
             }}>
                 <div style={{
-                    width: 40, height: 40, borderRadius: 12,
+                    width: 40, height: 40, borderRadius: 11, position: 'relative',
                     background: `linear-gradient(135deg, ${c.accent}, ${c.accent}80)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `0 0 14px ${c.accent}66`,
                 }}>
                     <ChefHat size={20} style={{ color: '#000' }} />
+                    {loading && (
+                        <div style={{
+                            position: 'absolute', inset: -3, borderRadius: 14,
+                            border: `2px solid ${c.accent}`, borderTopColor: 'transparent',
+                            animation: 'spin 1s linear infinite',
+                        }} />
+                    )}
                 </div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 9, letterSpacing: '.25em', fontWeight: 700, color: c.accent }}>ROOK · PITMASTER COACH</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                        {loading ? 'Ik kijk wat er nu gebeurt…' : 'Klaar voor je vraag'}
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: loading ? BRAND : '#22c55e', animation: loading ? 'pulse-prep 1s infinite' : undefined }} />
+                        {loading ? 'Aan het kijken…' : 'Online · klaar voor je vraag'}
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                     {voiceSupported && (
-                        <button onClick={() => setVoiceOn(v => !v)} style={iconBtnStyle()}>
+                        <button onClick={() => setVoiceOn(v => !v)} title={voiceOn ? 'Stem uit' : 'Stem aan'} style={iconBtnStyle(voiceOn ? c.accent : 'var(--muted)')}>
                             {voiceOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
                         </button>
                     )}
-                    <button onClick={() => setExpanded(false)} style={iconBtnStyle()}>
-                        <X size={14} />
+                    <button onClick={() => setDocked(false)} title="Verberg" style={iconBtnStyle()}>
+                        <Minimize2 size={14} />
                     </button>
                 </div>
             </div>
 
-            {/* Current directive permanent zichtbaar bovenin chat-area */}
+            {/* Actuele directive (always pinned) */}
             {directive && (
-                <div style={{ padding: '12px 16px', background: c.bg, borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: c.accent, marginBottom: 4 }}>
-                        ACTUELE DIRECTIVE
+                <div style={{
+                    padding: '14px 16px', background: c.bg, borderBottom: '1px solid var(--border)',
+                    flexShrink: 0,
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Sparkles size={11} style={{ color: c.accent }} />
+                        <span style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: c.accent }}>{c.label}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--muted-light)' }}>nu</span>
                     </div>
-                    <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.45 }}>{directive.directive}</div>
+                    <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.45, fontWeight: 500 }}>
+                        {directive.directive}
+                    </div>
                     {directive.context && (
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, fontStyle: 'italic' }}>
+                        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
                             {directive.context}
+                        </div>
+                    )}
+                    {directive.actionLabel && (
+                        <div style={{
+                            marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 4,
+                            background: `${c.accent}22`, color: c.accent, fontSize: 10, fontWeight: 700, letterSpacing: '.1em',
+                        }}>
+                            {directive.actionLabel.toUpperCase()}
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Chat scroll-area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 200 }}>
-                {chatLog.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)', fontSize: 12 }}>
-                        Stel een vraag — Rook denkt mee. <br />
-                        <span style={{ fontSize: 10 }}>Bijvoorbeeld: "Brisket loopt achter, wat nu?"</span>
+            {/* Chat scroll */}
+            <div ref={scrollRef} style={{
+                flex: 1, overflowY: 'auto', padding: '14px 16px',
+                display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+                {chatLog.length === 0 && !directive && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontSize: 12, lineHeight: 1.6 }}>
+                        <ChefHat size={32} style={{ color: 'var(--muted-light)', marginBottom: 12 }} />
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, fontWeight: 300, color: 'var(--text)', marginBottom: 6 }}>Rook luistert mee</div>
+                        <div>Stel een vraag, of laat me elke minuut zelf met een tip komen op basis van wat er gebeurt.</div>
                     </div>
                 )}
-                {chatLog.map((m, i) => (
-                    <div key={i} style={{
-                        alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                        maxWidth: '85%',
-                        padding: '8px 12px',
-                        borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                        background: m.role === 'user' ? 'rgba(255,255,255,.05)' : `${c.accent}14`,
-                        border: m.role === 'user' ? '1px solid var(--border)' : `1px solid ${c.accent}33`,
-                        fontSize: 13, color: 'var(--text)', lineHeight: 1.45,
-                    }}>
-                        {m.role === 'chef' && <div style={{ fontSize: 9, letterSpacing: '.18em', fontWeight: 700, color: c.accent, marginBottom: 3 }}>ROOK</div>}
-                        {m.text}
+                {chatLog.length > 0 && (
+                    <div style={{ fontSize: 9, letterSpacing: '.18em', fontWeight: 700, color: 'var(--muted-light)', marginBottom: 4 }}>
+                        EERDERE BERICHTEN · {chatLog.length}
                     </div>
-                ))}
+                )}
+                {chatLog.map((m, i) => {
+                    const sc = m.severity ? SEVERITY_COLORS[m.severity] : SEVERITY_COLORS.normal;
+                    return (
+                        <div key={i} style={{
+                            alignSelf: m.role === 'pitmaster' ? 'flex-end' : 'flex-start',
+                            maxWidth: '90%',
+                            padding: '10px 12px',
+                            borderRadius: m.role === 'pitmaster' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                            background: m.role === 'pitmaster' ? 'rgba(255,255,255,.05)' : sc.bg,
+                            border: m.role === 'pitmaster' ? '1px solid var(--border)' : `1px solid ${sc.border}`,
+                            fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5,
+                        }}>
+                            {m.role === 'rook' && (
+                                <div style={{ fontSize: 8, letterSpacing: '.2em', fontWeight: 700, color: sc.accent, marginBottom: 4 }}>
+                                    ROOK · {sc.label}
+                                </div>
+                            )}
+                            <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                            {m.actionLabel && (
+                                <div style={{
+                                    marginTop: 6, display: 'inline-flex', padding: '2px 7px', borderRadius: 4,
+                                    background: `${sc.accent}22`, color: sc.accent, fontSize: 9, fontWeight: 700, letterSpacing: '.1em',
+                                }}>{m.actionLabel.toUpperCase()}</div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Quick prompts */}
-            <div style={{ padding: '6px 16px', display: 'flex', flexWrap: 'wrap', gap: 4, borderTop: '1px solid var(--border)' }}>
-                {['Wat moet er nu?', 'Loop ik op tijd?', 'Wat komt na deze gang?'].map(q => (
-                    <button key={q} onClick={() => fetchDirective(q)} disabled={loading} style={{
-                        padding: '4px 10px', borderRadius: 999, fontSize: 10, color: 'var(--muted)',
-                        background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', cursor: 'pointer',
-                    }}>
-                        {q}
-                    </button>
-                ))}
+            <div style={{ padding: '8px 14px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+                <div style={{ fontSize: 9, letterSpacing: '.18em', fontWeight: 700, color: 'var(--muted-light)', marginBottom: 6 }}>SNELLE VRAGEN</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {QUICK_PROMPTS.map(q => (
+                        <button key={q} onClick={() => fetchDirective(q)} disabled={loading} style={{
+                            padding: '5px 10px', borderRadius: 999, fontSize: 10.5, color: 'var(--text)',
+                            background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', cursor: 'pointer',
+                            transition: '.12s',
+                        }}
+                            onMouseEnter={e => e.currentTarget.style.background = `${c.accent}1f`}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,.04)'}>
+                            {q}
+                        </button>
+                    ))}
+                    {chatLog.length > 0 && (
+                        <button onClick={() => setChatLog([])} title="Chat wissen" style={{
+                            padding: '5px 10px', borderRadius: 999, fontSize: 10.5,
+                            color: 'var(--muted)', background: 'transparent', border: '1px solid var(--border)', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                            <X size={10} /> Wis chat
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Input */}
-            <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 6 }}>
+            <div style={{
+                padding: '12px 14px', borderTop: '1px solid var(--border)',
+                background: 'rgba(0,0,0,.3)', display: 'flex', gap: 6, flexShrink: 0,
+            }}>
                 <input
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
@@ -306,36 +361,36 @@ export default function AIChefAssistant({
                     }}
                     placeholder="Vraag aan Rook…"
                     style={{
-                        flex: 1, padding: '8px 12px', borderRadius: 8,
+                        flex: 1, padding: '10px 12px', borderRadius: 8,
                         background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
-                        color: 'var(--text)', fontSize: 12, outline: 'none',
+                        color: 'var(--text)', fontSize: 13, outline: 'none',
                     }}
                 />
                 <button
                     onClick={() => { if (chatInput.trim()) { fetchDirective(chatInput); setChatInput(''); } }}
                     disabled={!chatInput.trim() || loading}
                     style={{
-                        padding: '8px 14px', borderRadius: 8,
+                        padding: '10px 14px', borderRadius: 8,
                         background: chatInput.trim() && !loading ? `linear-gradient(180deg, ${c.accent}, ${c.accent}99)` : 'var(--muted-light)',
-                        color: '#000', border: 'none', cursor: chatInput.trim() && !loading ? 'pointer' : 'not-allowed',
+                        color: '#000', border: 'none',
+                        cursor: chatInput.trim() && !loading ? 'pointer' : 'not-allowed',
                         display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600,
                     }}
                 >
-                    <Send size={12} />
+                    {loading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                 </button>
             </div>
-        </div>
+        </aside>
     );
 }
 
-const iconBtnStyle = (): React.CSSProperties => ({
-    width: 28, height: 28, borderRadius: 7,
-    background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)',
-    color: 'var(--muted)', cursor: 'pointer',
+const iconBtnStyle = (color = 'var(--muted)'): React.CSSProperties => ({
+    width: 30, height: 30, borderRadius: 7,
+    background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)',
+    color, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
 });
 
-/* Web Speech API — Dutch female voice (closest to "Rook" persoon) */
 function speakDutch(text: string) {
     try {
         if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -346,7 +401,16 @@ function speakDutch(text: string) {
         const voices = window.speechSynthesis.getVoices();
         const nl = voices.find(v => v.lang.startsWith('nl'));
         if (nl) u.voice = nl;
-        window.speechSynthesis.cancel();  /* stop voorgaande */
+        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(u);
-    } catch { /* fail silent */ }
+    } catch { /* */ }
+}
+
+/* Maximize-knop voor andere pagina's wanneer Rook minimized is */
+export function ChefMaximizeButton({ onMaximize }: { onMaximize: () => void }) {
+    return (
+        <button onClick={onMaximize} title="Open Rook" style={iconBtnStyle()}>
+            <Maximize2 size={14} />
+        </button>
+    );
 }
