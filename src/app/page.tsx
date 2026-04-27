@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
+import { detectAllConflicts } from '@/lib/conflictDetection';
 import MetallicCard from '@/components/MetallicCard';
 import { StatusDot } from '@/components/StatusBadge';
 import WeekStrip from '@/components/WeekStrip';
@@ -32,6 +33,11 @@ export default function DashboardPage() {
   const pt = useSupabase('prep_tasks', []);
   const kl = useSupabase('klanten', []);
   const hc = useSupabase('haccp_records', []);
+  /* Voor command-center insights: bonnen + courses + allergies — voedt
+     bonnen-loop status, completion-checklist op hero-event, en BTW-saldo. */
+  const bnn = useSupabase('bonnen', []);
+  const crs = useSupabase('courses', []);
+  const ealg = useSupabase('event_allergies', []);
 
   const events: any[] = ev.data || [];
   const facturen: any[] = fac.data || [];
@@ -43,6 +49,9 @@ export default function DashboardPage() {
   const prepTasks: any[] = pt.data || [];
   const klanten: any[] = kl.data || [];
   const haccpRecords: any[] = hc.data || [];
+  const bonnen: any[] = bnn.data || [];
+  const courses: any[] = crs.data || [];
+  const eventAllergies: any[] = ealg.data || [];
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("Welkom");
@@ -254,6 +263,88 @@ export default function DashboardPage() {
   const monthEvents = events.filter((e: any) => e.date?.startsWith(curMonthPrefix));
   const monthRevenue = monthEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
 
+  /* ─────────────── Command-Center signalen ─────────────── */
+
+  /* 1. Live conflict-detectie op alle aankomende events (smoker / venue / capacity).
+        Critical conflicten worden bovenaan getoond als rode banner. */
+  const upcomingForConflict = events.filter((e: any) => e.date >= today && e.status !== 'cancelled' && e.status !== 'geannuleerd');
+  const conflictResult = detectAllConflicts(upcomingForConflict);
+  const criticalConflicts = conflictResult.conflicts.filter(c => c.severity === 'critical');
+
+  /* 2. Verlopen + binnenkort-vervallen facturen — concrete actie i.p.v. €totaal. */
+  const today7 = new Date(); today7.setDate(today7.getDate() + 7);
+  const today7Iso = today7.toISOString().slice(0, 10);
+  const verlopenFacturen = facturen.filter((f: any) =>
+    f.status !== 'betaald' && f.status !== 'geannuleerd' && f.vervaldatum && f.vervaldatum < today
+  );
+  const binnenkortVervallen = facturen.filter((f: any) =>
+    f.status !== 'betaald' && f.status !== 'geannuleerd'
+    && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso
+  );
+  function calcFactuurBedrag(f: any): number {
+    let s = 0;
+    (f.items || []).forEach((it: any) => { s += (it.qty || 0) * (it.prijs || 0); });
+    return s;
+  }
+  const verlopenTotaal = verlopenFacturen.reduce((s: number, f: any) => s + calcFactuurBedrag(f), 0);
+
+  /* 3. Hero-event completion checklist: courses ingevuld? allergieën? prep-tasks?
+        Action-driven: één klik in de juiste sectie repareert het ontbrekende. */
+  const heroCompletion = heroEvent ? {
+    coursesIngevuld: courses.some((c: any) => c.event_id === heroEvent.id),
+    allergiesIngevuld: eventAllergies.some((a: any) => a.event_id === heroEvent.id),
+    prepIngeplannd: prepTasks.some((p: any) => p.event_id === heroEvent.id),
+    margePct: (() => {
+      const offerte = offertes.find((o: any) => o.id === heroEvent.offerte_id);
+      if (!offerte) return null;
+      const m = _calcMarge(offerte);
+      return m.margePct > 0 ? m.margePct : null;
+    })(),
+  } : null;
+
+  /* 4. BTW-aangifte deadline: 1e van de maand na elk kwartaal
+        (apr/jul/okt/jan). Als binnen 7 dagen → countdown banner. */
+  function nextBtwDeadline(): { daysUntil: number; dateLabel: string } | null {
+    const now = new Date();
+    const m = now.getMonth();
+    /* Aangifte-maand 1e dag: maart=apr-aangifte, juni=jul, sept=okt, dec=jan-volgend-jaar */
+    const deadlineMonths = [3, 6, 9, 0]; /* apr, jul, okt, jan(nextyr) */
+    let dd: Date | null = null;
+    for (const dm of deadlineMonths) {
+      const yr = (dm === 0 && m >= 9) ? now.getFullYear() + 1 : now.getFullYear();
+      const candidate = new Date(yr, dm, 1);
+      if (candidate > now) { dd = candidate; break; }
+    }
+    if (!dd) return null;
+    const diff = Math.ceil((dd.getTime() - now.getTime()) / 86400000);
+    return {
+      daysUntil: diff,
+      dateLabel: dd.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' }),
+    };
+  }
+  const btwDeadline = nextBtwDeadline();
+  const btwTeDragen = facturen.filter((f: any) => f.status === 'betaald').reduce((s: number, f: any) => {
+    let bedrag = 0;
+    (f.items || []).forEach((it: any) => { bedrag += (it.qty || 0) * (it.prijs || 0) * ((it.btw || 0) / 100); });
+    return s + bedrag;
+  }, 0);
+  const btwVoorbelasting = bonnen.reduce((s: number, b: any) => s + (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0), 0);
+  const btwSaldo = btwTeDragen - btwVoorbelasting;
+
+  /* 5. Bonnen-loop status: deze maand verwerkt + uitgaven per top-leverancier. */
+  const bonnenDezeMaand = bonnen.filter((b: any) => b.datum && b.datum.startsWith(curMonthPrefix));
+  const uitgavenDezeMaand = bonnenDezeMaand.reduce((s: number, b: any) => s + (Number(b.totaal_bedrag) || 0), 0);
+
+  /* 6. Klanten zonder recent event — leadgen-suggestie. */
+  const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const sixMonthsAgoIso = sixMonthsAgo.toISOString().slice(0, 10);
+  const klantenZonderRecentEvent = klanten.filter((k: any) => {
+    const lastEvent = events
+      .filter((e: any) => e.client_naam === k.naam && e.date)
+      .sort((a: any, b: any) => b.date.localeCompare(a.date))[0];
+    return !lastEvent || lastEvent.date < sixMonthsAgoIso;
+  }).slice(0, 5);
+
   if (!isMounted) {
     return <LoadingState label="Dashboard laden" />;
   }
@@ -297,21 +388,108 @@ export default function DashboardPage() {
 
       <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit'] dashboard-main">
         <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
-        <DashboardBrandHero />
-        <div className="mb-6 md:mb-8 flex items-end justify-between gap-4">
-          <p className="text-[13px] md:text-[14px] text-[var(--muted)] font-light">
-            {heroEvent ? `Nog ${daysToHero} dag${daysToHero === 1 ? '' : 'en'} tot ${heroEvent.name}` : 'Geen events gepland — tijd voor nieuwe boekingen.'}
-          </p>
+        {/* ═════════ COMMAND CENTER · ACTIE-BAR ═════════ */}
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[22px] md:text-[26px] font-bold text-[var(--text)] font-['Outfit'] leading-tight">Command center</h2>
+            <p className="text-[12px] text-[var(--muted)] mt-0.5">
+              {(criticalConflicts.length + verlopenFacturen.length) > 0
+                ? `${criticalConflicts.length + verlopenFacturen.length} ${(criticalConflicts.length + verlopenFacturen.length) === 1 ? 'item' : 'items'} vragen aandacht`
+                : 'Alles loopt — geen open kritieke items'}
+            </p>
+          </div>
           <button
             onClick={() => setWizardOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90 shrink-0"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90 shrink-0"
           >
-            <span className="text-lg leading-none">+</span>
+            <Plus size={14} />
             <span className="hidden md:inline">Nieuw Event</span>
           </button>
         </div>
 
-        {/* Onboarding Progress (alleen voor nieuwe users) */}
+        {/* ═════════ KRITIEKE BANNER · smoker-conflicten ═════════ */}
+        {criticalConflicts.length > 0 && (
+          <div className="mb-4 p-4 rounded-xl border" style={{
+            background: 'rgba(239,68,68,.06)',
+            borderColor: 'rgba(239,68,68,.3)',
+          }}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--red)' }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold mb-1" style={{ color: 'var(--red)' }}>
+                  {criticalConflicts.length} {criticalConflicts.length === 1 ? 'kritiek planning-conflict' : 'kritieke planning-conflicten'}
+                </div>
+                {criticalConflicts.slice(0, 3).map((c, i) => (
+                  <div key={i} className="text-[12px] text-[var(--muted)] mb-0.5">{c.note}</div>
+                ))}
+                <Link href="/agenda" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold" style={{ color: 'var(--red)' }}>
+                  Open Agenda <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═════════ FACTUUR-ACTIES · verlopen of binnenkort vervallen ═════════ */}
+        {(verlopenFacturen.length > 0 || binnenkortVervallen.length > 0) && (
+          <div className="mb-4 p-4 rounded-xl border" style={{
+            background: verlopenFacturen.length > 0 ? 'rgba(245,158,11,.06)' : 'rgba(96,165,250,.06)',
+            borderColor: verlopenFacturen.length > 0 ? 'rgba(245,158,11,.3)' : 'rgba(96,165,250,.3)',
+          }}>
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 shrink-0 mt-0.5" style={{ color: verlopenFacturen.length > 0 ? 'var(--amber)' : 'var(--blue)' }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold mb-1" style={{ color: verlopenFacturen.length > 0 ? 'var(--amber)' : 'var(--blue)' }}>
+                  {verlopenFacturen.length > 0
+                    ? `${verlopenFacturen.length} verlopen facturen · ${formatCurrency(verlopenTotaal)}`
+                    : `${binnenkortVervallen.length} facturen vervallen binnen 7 dagen`}
+                </div>
+                {[...verlopenFacturen, ...binnenkortVervallen].slice(0, 3).map((f: any) => {
+                  const daysOverdue = Math.floor((new Date(today).getTime() - new Date(f.vervaldatum).getTime()) / 86400000);
+                  return (
+                    <div key={f.id} className="text-[12px] text-[var(--muted)] mb-0.5">
+                      <span className="font-medium" style={{ color: 'var(--text)' }}>{f.nummer}</span>
+                      {' · '}{f.client_naam || '—'}
+                      {' · '}<span style={{ color: daysOverdue > 0 ? 'var(--red)' : 'var(--amber)' }}>
+                        {daysOverdue > 0 ? `${daysOverdue}d te laat` : `vervalt ${f.vervaldatum}`}
+                      </span>
+                      {' · '}{formatCurrency(calcFactuurBedrag(f))}
+                    </div>
+                  );
+                })}
+                <Link href="/facturen" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold" style={{ color: verlopenFacturen.length > 0 ? 'var(--amber)' : 'var(--blue)' }}>
+                  Stuur herinneringen <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═════════ BTW-AANGIFTE COUNTDOWN — alleen binnen 14 dagen ═════════ */}
+        {btwDeadline && btwDeadline.daysUntil <= 14 && (
+          <div className="mb-4 p-4 rounded-xl border" style={{
+            background: 'rgba(167,139,250,.06)',
+            borderColor: 'rgba(167,139,250,.3)',
+          }}>
+            <div className="flex items-start gap-3">
+              <Calendar className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--purple)' }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold mb-1" style={{ color: 'var(--purple)' }}>
+                  BTW-aangifte over {btwDeadline.daysUntil} dag{btwDeadline.daysUntil === 1 ? '' : 'en'} ({btwDeadline.dateLabel})
+                </div>
+                <div className="text-[12px] text-[var(--muted)]">
+                  Te dragen: {formatCurrency(btwTeDragen)} · Voorbelasting: {formatCurrency(btwVoorbelasting)} ·
+                  <span style={{ color: btwSaldo >= 0 ? 'var(--text)' : 'var(--green)', fontWeight: 600 }}> Saldo: {btwSaldo >= 0 ? formatCurrency(btwSaldo) : '+' + formatCurrency(Math.abs(btwSaldo)) + ' terug'}</span>
+                </div>
+                <Link href="/boekhouding" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold" style={{ color: 'var(--purple)' }}>
+                  Open BTW-overzicht <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Onboarding Progress (alleen voor nieuwe users) — automatisch verborgen wanneer voltooid */}
         <OnboardingProgress
           klanten={klanten}
           offertes={offertes}
@@ -324,15 +502,16 @@ export default function DashboardPage() {
 
         {/* ═════════ HERO ─ eerstkomend event + week overzicht ═════════ */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4 mb-6">
-          {/* Links: Focus op eerstkomend event — clean dark card, geen kleuraccenten */}
+          {/* Links: Focus op eerstkomend event — verrijkt met marge + completion-checklist */}
           {heroEvent ? (
             <button
-              onClick={() => setSelectedEvent(heroEvent)}
+              onClick={() => window.location.href = `/events/${heroEvent.id}/hub`}
               className="text-left p-6 md:p-8 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer"
               style={{ background: 'var(--card)' }}
             >
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center justify-between gap-2 mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[var(--muted)]">Eerstkomende event</span>
+                <span className="text-[10px] text-[var(--muted)]">→ Open event-hub</span>
               </div>
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div className="min-w-0 flex-1">
@@ -344,20 +523,48 @@ export default function DashboardPage() {
                   <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] font-semibold mt-1">dag{daysToHero === 1 ? '' : 'en'}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2 mb-3">
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Datum</div>
-                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{formatDate(heroEvent.date).day} {formatDate(heroEvent.date).month}</div>
+                  <div className="text-[13px] text-[var(--text)] font-bold tabular-nums">{formatDate(heroEvent.date).day} {formatDate(heroEvent.date).month}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Gasten</div>
-                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{heroEvent.guests || 0}</div>
+                  <div className="text-[13px] text-[var(--text)] font-bold tabular-nums">{heroEvent.guests || 0}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
                   <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Omzet</div>
-                  <div className="text-[14px] text-[var(--text)] font-bold tabular-nums">{formatCurrency(heroRevenue)}</div>
+                  <div className="text-[13px] text-[var(--text)] font-bold tabular-nums">{formatCurrency(heroRevenue)}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
+                  <div className="text-[9px] uppercase tracking-[0.15em] text-[var(--muted)] font-bold mb-1">Marge</div>
+                  <div className="text-[13px] font-bold tabular-nums" style={{
+                    color: heroCompletion?.margePct == null ? 'var(--muted)'
+                      : heroCompletion.margePct >= 65 ? 'var(--green)'
+                      : heroCompletion.margePct >= 50 ? 'var(--amber)'
+                      : 'var(--red)',
+                  }}>
+                    {heroCompletion?.margePct != null ? heroCompletion.margePct.toFixed(0) + '%' : '—'}
+                  </div>
                 </div>
               </div>
+              {/* Completion-checklist: één blik laat zien wat nog moet */}
+              {heroCompletion && (
+                <div className="flex items-center gap-3 text-[11px]" style={{ color: 'var(--muted)' }}>
+                  <span className="flex items-center gap-1" style={{ color: heroCompletion.coursesIngevuld ? 'var(--green)' : 'var(--amber)' }}>
+                    {heroCompletion.coursesIngevuld ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                    Gangen
+                  </span>
+                  <span className="flex items-center gap-1" style={{ color: heroCompletion.allergiesIngevuld ? 'var(--green)' : 'var(--muted-light)' }}>
+                    {heroCompletion.allergiesIngevuld ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                    Allergieën
+                  </span>
+                  <span className="flex items-center gap-1" style={{ color: heroCompletion.prepIngeplannd ? 'var(--green)' : 'var(--amber)' }}>
+                    {heroCompletion.prepIngeplannd ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                    Prep
+                  </span>
+                </div>
+              )}
             </button>
           ) : (
             <div className="p-6 md:p-8 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)]">
@@ -394,60 +601,155 @@ export default function DashboardPage() {
                 <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
                   <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Open facturen</div>
                   <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(openFacturenBedrag)}</div>
-                  <div className="text-[10px] text-[var(--muted)] mt-1">{openFacturen.length} stuks</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-1">
+                    {openFacturen.length} stuks
+                    {verlopenFacturen.length > 0 && <span style={{ color: 'var(--red)' }}> · {verlopenFacturen.length} te laat</span>}
+                  </div>
                 </div>
               </Link>
-              <Link href="/offertes" className="no-underline">
-                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
-                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
-                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</div>
-                  <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} offertes open</div>
-                </div>
-              </Link>
+              {/* Toont pipeline OF bonnen-loop activiteit; pipeline=€0 is uninformatief
+                  als alle offertes al geaccepteerd zijn. */}
+              {prognose > 0 ? (
+                <Link href="/offertes" className="no-underline">
+                  <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
+                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
+                    <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</div>
+                    <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} offertes open</div>
+                  </div>
+                </Link>
+              ) : (
+                <Link href="/inkoop" className="no-underline">
+                  <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
+                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Bonnen deze maand</div>
+                    <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{bonnenDezeMaand.length}</div>
+                    <div className="text-[10px] text-[var(--muted)] mt-1">{formatCurrency(uitgavenDezeMaand)} uitgaven</div>
+                  </div>
+                </Link>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ═════════ PRIJSLIJST UPDATE REMINDER — elke 4 wkn (AGF 2 wkn) ═════════ */}
-        <PriceUpdateReminder />
-
-        {/* ═════════ AANDACHT NODIG — alleen als er acties zijn ═════════ */}
-        {liveActions.length > 0 && (
-          <div className="mb-6 md:mb-8">
-            <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--muted)' }}>
-              <Bell className="w-3.5 h-3.5 inline-block mr-2 text-red-400" />
-              Aandacht nodig
-            </h3>
+        {/* ═════════ AI-ADVIES · top inzichten met concrete actie ═════════ */}
+        {(klantenZonderRecentEvent.length > 0 || lowMargeOffertes.length > 0 || lowStockItems.length > 0 || verlopenOffertes.length > 0) && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)] flex items-center gap-2">
+                <Sparkles className="w-3 h-3" style={{ color: 'var(--color-accent-gold)' }} />
+                AI-advies
+              </h3>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {liveActions.map((action) => {
-                const isHigh = action.urgency === 'high';
-                return (
-                  <Link key={action.id} href={action.link} className="no-underline">
-                    <MetallicCard
-                      className="p-4 group"
-                      accent={isHigh ? 'var(--red)' : 'var(--amber)'}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isHigh ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
-                          {isHigh
-                            ? <AlertTriangle className="w-4 h-4 text-red-400" />
-                            : <Clock className="w-4 h-4 text-amber-400" />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-[13px] font-bold truncate no-underline ${isHigh ? 'text-red-400' : 'text-amber-300'}`} style={{ textDecoration: 'none' }}>
-                            {action.message}
-                          </p>
-                        </div>
-                        <ArrowRight className="w-4 h-4 text-[var(--muted)] group-hover:translate-x-1 transition-transform shrink-0" />
+              {/* Lead-suggestie: klanten zonder recent event */}
+              {klantenZonderRecentEvent.length > 0 && (
+                <Link href="/klanten" className="no-underline">
+                  <div className="p-4 rounded-xl border h-full hover:border-white/20 transition-colors cursor-pointer"
+                    style={{ background: 'var(--card)', borderColor: 'var(--card-solid)' }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: 'rgba(196,163,90,.12)' }}>
+                        <Star className="w-4 h-4" style={{ color: 'var(--color-accent-gold)' }} />
                       </div>
-                    </MetallicCard>
-                  </Link>
-                );
-              })}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
+                          {klantenZonderRecentEvent.length} klanten 6+ maand zonder event
+                        </div>
+                        <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
+                          Stuur een seizoens-aanbod om relatie warm te houden
+                        </div>
+                        <div className="text-[10px] truncate" style={{ color: 'var(--muted-light)' }}>
+                          {klantenZonderRecentEvent.slice(0, 3).map((k: any) => k.naam).join(' · ')}
+                          {klantenZonderRecentEvent.length > 3 && ' · …'}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 shrink-0" style={{ color: 'var(--muted-light)' }} />
+                    </div>
+                  </div>
+                </Link>
+              )}
+
+              {/* Lage marge waarschuwing */}
+              {lowMargeOffertes.length > 0 && (
+                <Link href="/offertes" className="no-underline">
+                  <div className="p-4 rounded-xl border h-full hover:border-white/20 transition-colors cursor-pointer"
+                    style={{ background: 'var(--card)', borderColor: 'rgba(239,68,68,.25)' }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: 'rgba(239,68,68,.12)' }}>
+                        <TrendingDown className="w-4 h-4" style={{ color: 'var(--red)' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
+                          {lowMargeOffertes.length} offertes onder 40% marge
+                        </div>
+                        <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
+                          Verhoog prijs of versmal menu vóór verzenden
+                        </div>
+                        <div className="text-[10px] truncate" style={{ color: 'var(--muted-light)' }}>
+                          {lowMargeOffertes.slice(0, 2).map((o: any) => {
+                            const m = _calcMarge(o);
+                            return `${o.client_naam || o.nummer} (${m.margePct.toFixed(0)}%)`;
+                          }).join(' · ')}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 shrink-0" style={{ color: 'var(--muted-light)' }} />
+                    </div>
+                  </div>
+                </Link>
+              )}
+
+              {/* Verlopen offertes follow-up */}
+              {verlopenOffertes.length > 0 && (
+                <Link href="/offertes" className="no-underline">
+                  <div className="p-4 rounded-xl border h-full hover:border-white/20 transition-colors cursor-pointer"
+                    style={{ background: 'var(--card)', borderColor: 'rgba(245,158,11,.25)' }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: 'rgba(245,158,11,.12)' }}>
+                        <Clock className="w-4 h-4" style={{ color: 'var(--amber)' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
+                          {verlopenOffertes.length} offertes verlopen
+                        </div>
+                        <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                          Geldig-tot datum gepasseerd zonder klant-beslissing — bel of mail follow-up
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 shrink-0" style={{ color: 'var(--muted-light)' }} />
+                    </div>
+                  </div>
+                </Link>
+              )}
+
+              {/* Voorraad onder minimum */}
+              {lowStockItems.length > 0 && (
+                <Link href="/voorraad" className="no-underline">
+                  <div className="p-4 rounded-xl border h-full hover:border-white/20 transition-colors cursor-pointer"
+                    style={{ background: 'var(--card)', borderColor: 'rgba(96,165,250,.25)' }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center" style={{ background: 'rgba(96,165,250,.12)' }}>
+                        <Package className="w-4 h-4" style={{ color: 'var(--blue)' }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
+                          {lowStockItems.length} {lowStockItems.length === 1 ? 'item' : 'items'} onder minimum voorraad
+                        </div>
+                        <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
+                          Bestel bij voor het volgende event
+                        </div>
+                        <div className="text-[10px] truncate" style={{ color: 'var(--muted-light)' }}>
+                          {lowStockItems.slice(0, 3).map((i: any) => `${i.naam}: ${i.current_stock || 0}/${i.min_stock}${i.unit || ''}`).join(' · ')}
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 shrink-0" style={{ color: 'var(--muted-light)' }} />
+                    </div>
+                  </div>
+                </Link>
+              )}
             </div>
           </div>
         )}
+
+        {/* ═════════ PRIJSLIJST UPDATE REMINDER — elke 4 wkn (AGF 2 wkn) ═════════ */}
+        <PriceUpdateReminder />
 
         {/* ═════════ GROTE ACTIE KAARTEN ═════════ */}
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)] mb-3">Snel aan de slag</h3>
