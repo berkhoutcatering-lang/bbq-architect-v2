@@ -1,0 +1,39 @@
+name: Tests + Typecheck
+
+# Snelle checks op elke push + PR. Pure unit tests — geen DB / geen AI / geen
+# secrets nodig. Ontworpen om binnen 1 minuut te draaien zodat de feedback-loop
+# strak blijft.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Concurrency: nieuwe push op zelfde branch annuleert de vorige run.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Unit tests (vitest)
+        run: npm test
