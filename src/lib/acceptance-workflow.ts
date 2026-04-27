@@ -2,10 +2,11 @@
 // =============================================
 // BBQ Architect — Acceptance Workflow
 // Automatische taken bij offerte-acceptatie:
-// 1. Factuur aanmaken
+// 1. Factuur aanmaken (met FK naar offerte)
 // 2. Prep-taken genereren
 // 3. Inkooplijst + voorraadcheck
 // 4. HACCP-sjablonen per gerecht
+// 5. Service-mode courses (vanuit menu_selectie)
 // =============================================
 
 import { supabase } from '@/lib/supabase';
@@ -27,6 +28,7 @@ export interface WorkflowResult {
     prep: { success: boolean; message: string; count: number };
     inkoop: { success: boolean; message: string };
     haccp: { success: boolean; message: string; count: number };
+    courses: { success: boolean; message: string; count: number };
 }
 
 // ── 1. Auto-create factuur ──
@@ -310,25 +312,160 @@ async function autoCreateHaccpTemplates(params: WorkflowParams): Promise<{ succe
     }
 }
 
+// ── 5. Auto-create Service Mode courses ──
+//
+// menu_selectie is een object { categorie: string[] } met dish-namen.
+// Categorieën worden gemapt op een gang in de service-volgorde:
+//    bites/aperitief → voorgerecht → tussengerecht → hoofdgerecht → bijgerecht → dessert
+// Per categorie genereren we 1 course-rij; dish-namen komen in description.
+//
+// Idempotent: als er al courses zijn voor dit event slaan we over zodat we
+// nooit handmatige edits overschrijven. Bij volledige re-run kan de user
+// gewoon courses leeggooien via de editor.
+//
+// Wel intentioneel niét gedaan:
+//  - mise auto-fill uit gerechten.ingredient_costs — eerste sprint richt op
+//    gangen-structuur; mise blijft handmatig of komt in v2 met inventory match.
+//  - Veg-options auto — wordt pas relevant als het catalogus die markering heeft.
+
+interface CategorySpec {
+    /* canonieke key + alias-keys die we ook accepteren (singulier/pluraal). */
+    key: string;
+    aliases: string[];
+    label: string;
+    emoji: string;
+    serveOffsetMinutes: number;  // tijd na event-start
+    prepTimeMinutes: number;
+}
+
+const COURSE_CATEGORIES: CategorySpec[] = [
+    { key: 'bites', aliases: ['bite', 'aperitief', 'amuse'], label: 'Bites & amuse', emoji: '🥨', serveOffsetMinutes: 0, prepTimeMinutes: 10 },
+    { key: 'voorgerechten', aliases: ['voorgerecht'], label: 'Voorgerecht', emoji: '🥗', serveOffsetMinutes: 30, prepTimeMinutes: 15 },
+    { key: 'tussengerechten', aliases: ['tussengerecht', 'soep'], label: 'Tussengerecht', emoji: '🍲', serveOffsetMinutes: 60, prepTimeMinutes: 12 },
+    { key: 'hoofdgerechten', aliases: ['hoofdgerecht'], label: 'Hoofdgerecht', emoji: '🍖', serveOffsetMinutes: 90, prepTimeMinutes: 30 },
+    { key: 'bijgerechten', aliases: ['bijgerecht', 'side', 'sides'], label: 'Bijgerechten', emoji: '🥗', serveOffsetMinutes: 90, prepTimeMinutes: 15 },
+    { key: 'dessert', aliases: ['desserts', 'nagerecht'], label: 'Dessert', emoji: '🍰', serveOffsetMinutes: 150, prepTimeMinutes: 10 },
+];
+
+/** Verdeel `total` portions zo gelijk mogelijk over `tableCount` tafels. */
+function distributePortionsForCourses(total: number, tableCount: number): { table: number; count: number; served: boolean; ready: boolean; inProgress: boolean }[] {
+    if (tableCount <= 0) return [];
+    const base = Math.floor(total / tableCount);
+    const rest = total - base * tableCount;
+    return Array.from({ length: tableCount }, (_, i) => ({
+        table: i + 1,
+        count: base + (i < rest ? 1 : 0),
+        served: false, ready: false, inProgress: false,
+    }));
+}
+
+async function autoCreateCourses(params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
+    try {
+        if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
+
+        /* Idempotent guard: courses bestaat al → niets doen. */
+        const { data: existing } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('event_id', params.eventId)
+            .limit(1);
+        if (existing && existing.length > 0) {
+            return { success: true, message: 'Courses bestonden al — niet overschreven', count: 0 };
+        }
+
+        /* menu_selectie kan string-JSON of object zijn (legacy migratie); normaliseer. */
+        let menuSel: any = params.offerteData.menu_selectie;
+        if (typeof menuSel === 'string') {
+            try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; }
+        }
+        if (!menuSel || typeof menuSel !== 'object') {
+            return { success: true, message: 'Geen menu — courses overgeslagen', count: 0 };
+        }
+
+        /* Haal event op voor guests-count (voor portion-distribution). */
+        const { data: event } = await supabase.from('events').select('guests').eq('id', params.eventId).single();
+        const guests = event?.guests || 0;
+        const tableCount = 6; /* default; user kan later aanpassen via editor */
+
+        /* Voor elke categorie-spec: pak de eerste matching key (canoniek of alias). */
+        const courseRows: any[] = [];
+        let courseNum = 1;
+        const seenDishLists = new Set<string>(); /* voorkom dubbele courses bij singular+plural keys */
+
+        for (const cat of COURSE_CATEGORIES) {
+            const allKeys = [cat.key, ...cat.aliases];
+            let dishes: string[] = [];
+            for (const k of allKeys) {
+                if (Array.isArray(menuSel[k]) && menuSel[k].length > 0) {
+                    dishes = menuSel[k] as string[];
+                    break;
+                }
+            }
+            if (dishes.length === 0) continue;
+
+            /* Dedupe: als deze exacte dish-list al in een eerdere course staat, sla over. */
+            const sig = dishes.slice().sort().join('|');
+            if (seenDishLists.has(sig)) continue;
+            seenDishLists.add(sig);
+
+            courseRows.push({
+                event_id: params.eventId,
+                num: courseNum++,
+                title: cat.label,
+                description: dishes.join(', '),
+                status: 'queued',
+                emoji: cat.emoji,
+                prep_time_minutes: cat.prepTimeMinutes,
+                serve_offset_minutes: cat.serveOffsetMinutes,
+                steps: [],
+                mise: [],
+                plating: [],
+                quality_checks: [],
+                items: distributePortionsForCourses(guests, tableCount),
+            });
+        }
+
+        if (courseRows.length === 0) {
+            return { success: true, message: 'Menu leeg — courses overgeslagen', count: 0 };
+        }
+
+        const { error } = await supabase.from('courses').insert(courseRows);
+        if (error) {
+            /* Pre-migratie 009 — courses-tabel bestaat niet. Niet-fataal: workflow gaat door. */
+            if (/relation .* does not exist/i.test(error.message)) {
+                return { success: false, message: 'Courses-tabel ontbreekt (migratie 009 nog niet gedraaid)', count: 0 };
+            }
+            return { success: false, message: 'Courses fout: ' + error.message, count: 0 };
+        }
+
+        return { success: true, message: courseRows.length + ' gangen aangemaakt vanuit menu', count: courseRows.length };
+    } catch (e: any) {
+        return { success: false, message: 'Courses fout: ' + (e.message || ''), count: 0 };
+    }
+}
+
 // ── Main Workflow Runner ──
 export async function runAcceptanceWorkflow(params: WorkflowParams): Promise<WorkflowResult> {
     const results = await Promise.allSettled([
         autoCreateFactuur(params),
         autoGeneratePrepTasks(params),
         autoGenerateInkooplijst(params),
-        autoCreateHaccpTemplates(params)
+        autoCreateHaccpTemplates(params),
+        autoCreateCourses(params),
     ]);
 
     const factuurResult = results[0].status === 'fulfilled' ? results[0].value : { success: false, message: 'Factuur onverwachte fout' };
     const prepResult = results[1].status === 'fulfilled' ? results[1].value : { success: false, message: 'Prep onverwachte fout', count: 0 };
     const inkoopResult = results[2].status === 'fulfilled' ? results[2].value : { success: false, message: 'Inkoop onverwachte fout' };
     const haccpResult = results[3].status === 'fulfilled' ? results[3].value : { success: false, message: 'HACCP onverwachte fout', count: 0 };
+    const coursesResult = results[4].status === 'fulfilled' ? results[4].value : { success: false, message: 'Courses onverwachte fout', count: 0 };
 
     const result: WorkflowResult = {
         factuur: factuurResult,
         prep: prepResult,
         inkoop: inkoopResult,
-        haccp: haccpResult
+        haccp: haccpResult,
+        courses: coursesResult,
     };
 
     return result;
