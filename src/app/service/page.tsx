@@ -11,6 +11,9 @@ import {
     type ServiceEvent, type Course, type CourseStatus, type CourseItem,
 } from './_data/serviceMockData';
 import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
+import { useSupabase } from '@/lib/useSupabase';
+import { dbEventToServiceEvent } from '@/lib/serviceData';
+import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -115,6 +118,9 @@ function HelpNote({ title, children, tone = 'amber' }: { title: string; children
    HUB — event picker
    ═══════════════════════════════════════════════════════════════════ */
 function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPickEvent: (id: string) => void }) {
+    /* DB-events hebben een 'evt_db_' prefix (gegenereerd in serviceData.ts);
+       als er minstens één is, hoeven we de demo-banner niet te tonen. */
+    const hasDbEvents = events.some(e => e.id.startsWith('evt_db_'));
     const liveEvent = events.find(e => e.status === 'live');
     const upcoming = events.filter(e => e.status !== 'live');
 
@@ -163,17 +169,19 @@ function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPic
                 </p>
             </div>
 
-            <div style={{
-                marginBottom: 24, padding: '12px 16px', borderRadius: 10,
-                background: 'rgba(245,158,11,.05)', border: '1px solid rgba(245,158,11,.25)',
-                display: 'flex', gap: 12, alignItems: 'flex-start',
-            }}>
-                <AlertTriangle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
-                <div style={{ flex: 1, fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-                    <strong style={{ color: 'var(--text)' }}>Demo events:</strong> deze 3 events zijn voorbeeld-data om Service Mode te demonstreren met volledige courses, mise en allergie-info.
-                    Je echte events vind je op de <a href="/agenda" style={{ color: BRAND, textDecoration: 'underline' }}>Agenda</a> — de full KDS-functionaliteit (courses-detail per gang) komt zodra het courses-datamodel uitrolt.
+            {!hasDbEvents && (
+                <div style={{
+                    marginBottom: 24, padding: '12px 16px', borderRadius: 10,
+                    background: 'rgba(245,158,11,.05)', border: '1px solid rgba(245,158,11,.25)',
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
+                }}>
+                    <AlertTriangle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ flex: 1, fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
+                        <strong style={{ color: 'var(--text)' }}>Demo events:</strong> de 3 events hieronder zijn voorbeeld-data.
+                        Voeg <a href="/events" style={{ color: BRAND, textDecoration: 'underline' }}>echte events</a> toe en koppel courses (gangen) zodat Service Mode op live data draait. Tot die tijd zien je collega&apos;s wat de KDS kan zonder dat je hoeft in te vullen.
+                    </div>
                 </div>
-            </div>
+            )}
 
             <HelpNote title="Hoe werkt Service Mode?" tone="amber">
                 <strong style={{ color: BRAND }}>Stap 1:</strong> tap een event om te starten — menu en allergieën laden automatisch.<br />
@@ -1305,6 +1313,30 @@ export default function ServiceMode() {
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
     const [rookDocked, setRookDocked] = useState(true);
 
+    /* DB-bronnen: events met bijbehorende courses + allergies. Service Mode
+       toont DB-events naast de mock-events; bij selectie checkt pickEvent
+       welke bron het event heeft. */
+    const { data: dbEvents } = useSupabase<DbEvent>('events', []);
+    const { data: dbCourses } = useSupabase<DbCourse>('courses', []);
+    const { data: dbAllergies } = useSupabase<DbEventAllergy>('event_allergies', []);
+
+    /* Bouw DB-events alleen als ze courses hebben (anders is KDS leeg). */
+    const dbServiceEvents = useMemo(() => {
+        return dbEvents
+            .map(e => dbEventToServiceEvent(e, dbCourses, dbAllergies))
+            .filter((e): e is ServiceEvent => e !== null);
+    }, [dbEvents, dbCourses, dbAllergies]);
+
+    /* Combineer DB-events + mock-fallback. DB komt eerst zodat een echt
+       live event boven de demo's staat. */
+    const allServiceEvents = useMemo(() => {
+        return [...dbServiceEvents, ...SERVICE_EVENTS];
+    }, [dbServiceEvents]);
+
+    function findEventById(id: string): ServiceEvent | null {
+        return allServiceEvents.find(e => e.id === id) || null;
+    }
+
     /* Restore from localStorage + check ?eventId= deeplink.
        Deeplink wint van localStorage. URL wordt NIET gestript (StrictMode-safe). */
     useEffect(() => {
@@ -1312,7 +1344,7 @@ export default function ServiceMode() {
             const params = new URLSearchParams(window.location.search);
             const deeplinkEventId = params.get('eventId');
             if (deeplinkEventId) {
-                const evt = SERVICE_EVENTS.find(e => e.id === deeplinkEventId);
+                const evt = findEventById(deeplinkEventId);
                 if (evt) {
                     setEventId(evt.id);
                     setEventState(JSON.parse(JSON.stringify(evt)));
@@ -1323,7 +1355,8 @@ export default function ServiceMode() {
         }
         const s = loadState();
         setView(s.view); setEventId(s.eventId); setCourseId(s.courseId); setEventState(s.eventState);
-    }, []);
+        /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [allServiceEvents.length]);
     /* Persist on change */
     useEffect(() => {
         try {
@@ -1332,7 +1365,7 @@ export default function ServiceMode() {
     }, [view, eventId, courseId, eventState]);
 
     function pickEvent(id: string) {
-        const evt = SERVICE_EVENTS.find(e => e.id === id);
+        const evt = findEventById(id);
         if (!evt) return;
         setEventId(id);
         setEventState(JSON.parse(JSON.stringify(evt)));
@@ -1454,7 +1487,7 @@ export default function ServiceMode() {
         <>
             {view === 'hub' && (
                 <div style={{ marginRight: rookOffset }}>
-                    <ServiceModeHub events={SERVICE_EVENTS} onPickEvent={pickEvent} />
+                    <ServiceModeHub events={allServiceEvents} onPickEvent={pickEvent} />
                 </div>
             )}
 

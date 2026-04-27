@@ -167,6 +167,10 @@ export interface DbEvent {
   /* Lokale eindtijd HH:MM. NULL = open einde. */
   end_time?: string | null;
   guests: number;
+  /* Diet-counts; NULL = niet ingevuld (Service Mode gebruikt dan 0). */
+  veg_guests?: number | null;
+  vegan_guests?: number | null;
+  gluten_free_guests?: number | null;
   location: string;
   ppp: number;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'optie';
@@ -525,6 +529,57 @@ export interface SupportTicket {
   replied_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CourseStep { n: number; action: string; detail: string }
+export interface CourseMise { item: string; qty: string; source?: string; inventory_id?: number | string | null }
+export interface CourseItem {
+  id?: string;
+  table: number;
+  count: number;
+  served?: boolean;
+  ready?: boolean;
+  inProgress?: boolean;
+  started?: string;
+  special?: string;
+}
+
+/* DB-side rep van een course-rij. JSONB-velden gerefereerd zoals ze
+   gestored zijn (geen runtime parsing nodig — Postgres geeft al objects). */
+export interface DbCourse {
+  id: number;
+  event_id: number;
+  num: number;
+  title: string;
+  description?: string | null;
+  status: 'queued' | 'active' | 'ready' | 'served' | 'recalled';
+  emoji?: string | null;
+  image_gradient?: string | null;
+  prep_time_minutes?: number | null;
+  serve_offset_minutes?: number | null;
+  veg_option?: string | null;
+  ai_note?: string | null;
+  steps: CourseStep[];
+  mise: CourseMise[];
+  plating: string[];
+  quality_checks: string[];
+  items: CourseItem[];
+  organization_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbEventAllergy {
+  id: number;
+  event_id: number;
+  table_num?: number | null;
+  seat_num?: number | null;
+  name?: string | null;
+  allergens: string[];
+  note?: string | null;
+  severity: 'normal' | 'high' | 'critical';
+  organization_id?: string | null;
+  created_at: string;
 }
 
 export interface HealthScore {
