@@ -2,1478 +2,977 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import {
-    Sparkles, Clock, AlertTriangle, AlertCircle, Check,
-    X, Pause, Flame, ArrowRight, ChevronRight, ClipboardList, Tv, Brush,
-    FileText, Trash2, Edit3, Loader2, Download,
+    ArrowLeft, Play, Check, Clock, Flame, CheckCircle, Award, ChevronRight, AlertTriangle,
+    Sparkles, BookOpen, Users, Leaf, ListChecks, Package, Grid3x3, ShieldCheck, Camera,
+    UtensilsCrossed, Palette, HandPlatter, Undo2, X,
 } from 'lucide-react';
-import AIChefAssistant from '@/components/service/AIChefAssistant';
+import {
+    SERVICE_EVENTS, SERVICE_AI_DIRECTIVES, ALLERGENS,
+    type ServiceEvent, type Course, type CourseStatus, type CourseItem,
+} from './_data/serviceMockData';
+import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
 
-/* Live tijd — vervangt hardcoded NOW_SIM. Voor demo blijft "17:42" als fallback
-   anchor zodat alle countdowns logisch werken; in productie wordt dit
-   `new Date().toTimeString().slice(0,5)`. */
-function useLiveNow(simAnchor = '17:42') {
-    const [now, setNow] = useState(simAnchor);
-    useEffect(() => {
-        /* In productie: echte tijd. Voor mockup gebruiken we sim-anchor + offset. */
-        const t0 = Date.now();
-        const interval = setInterval(() => {
-            const elapsed = (Date.now() - t0) / 1000;
-            const [ah, am] = simAnchor.split(':').map(Number);
-            const total = ah * 3600 + am * 60 + Math.floor(elapsed);
-            const h = Math.floor(total / 3600) % 24;
-            const m = Math.floor((total % 3600) / 60);
-            setNow(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [simAnchor]);
-    return now;
-}
-
 /* ═══════════════════════════════════════════════════════════════════
-   SERVICE DATA — mock event "Bedrijfsfeest TechCorp"
+   STATE: deep-clone event op selectie + persist mutaties in localStorage
    ═══════════════════════════════════════════════════════════════════ */
 
-const SERVICE_EVENT = {
-    id: 'techcorp-vrijdag',
-    client: 'TechCorp',
-    title: 'Bedrijfsfeest · TechCorp',
-    date: 'Vrijdag 30 mei',
-    guests: 80,
-    vegetarian: 12,
-    allergies: [
-        { table: 3, person: 'Maaike', issue: 'Pinda-allergie', severity: 'critical' as const },
-        { table: 5, person: 'Tom', issue: 'Glutenvrij', severity: 'must' as const },
-        { table: 7, person: 'Sara', issue: 'Lactose-intolerant', severity: 'must' as const },
-    ],
-    startTime: '17:00',
-    endTime: '22:00',
-    pauseStart: '19:00',
-    pauseEnd: '20:15',
-    venue: 'Eventlocatie De Loods · Utrecht',
-    service: 'Walking dinner / buffet hybride',
-};
+type View = 'hub' | 'board' | 'detail';
 
-interface Dish {
-    name: string; portions: number; emoji: string; hue: number;
-    plating: string; allergens: string[]; warning?: string;
+const STATE_KEY = 'service_mode_v4';
+
+interface PersistedState {
+    view: View;
+    eventId: string | null;
+    courseId: string | null;
+    eventState: ServiceEvent | null;
 }
 
-interface MiseItem { id: string; label: string; critical?: boolean; done: boolean; smokerLink?: boolean }
-interface TimelineItem { time: string; label: string; done: boolean; isStart?: boolean; isEnd?: boolean; critical?: boolean }
-interface Course {
-    id: string; number: number | null; title: string; subtitle: string; serveAt: string;
-    duration: number; status: 'upcoming' | 'prep' | 'active' | 'done' | 'pause'; isPause?: boolean;
-    foodHue: number | null; heroEmoji: string; heroDescription?: string;
-    countdown: { label: string; target: string; state: string };
-    dishes?: Dish[];
-    miseChecklist?: MiseItem[];
-    timeline?: TimelineItem[];
-    aiCoach?: { tip: string; severity: 'critical' | 'high' | 'normal' | 'low' };
-    smokerStatus?: { active: boolean; item: string; temp: number; target: number; domeTemp: number; etaMinutes: number; wood: string } | null;
-}
-
-const COURSES: Course[] = [
-    {
-        id: 'g1', number: 1, title: 'Welkomst-bites', subtitle: 'Walking · 17:00–18:00',
-        serveAt: '17:00', duration: 60, status: 'active', foodHue: 22, heroEmoji: '🌮',
-        heroDescription: 'Mini pulled pork sliders met hoisin-mayo + coleslaw shooters in shotglas',
-        countdown: { label: 'GANG 1 SERVICE', target: '17:00', state: 'live' },
-        dishes: [
-            { name: 'Pulled pork slider', portions: 160, emoji: '🥪', hue: 22, plating: 'Mini brioche bun · pulled pork 60g · hoisin-mayo · coleslaw · pickled onion · op leisteen', allergens: ['gluten', 'ei', 'mosterd'] },
-            { name: 'Coleslaw shooter', portions: 80, emoji: '🥗', hue: 80, plating: 'Shotglas · coleslaw 30g · drizzle hot sauce · zwarte sesam · munt', allergens: ['ei', 'mosterd'] },
-        ],
-        miseChecklist: [
-            { id: 'm1-1', label: 'Pulled pork in cambro warm (>65°C)', critical: true, done: true },
-            { id: 'm1-2', label: '160 brioche bun aangesneden', done: true },
-            { id: 'm1-3', label: 'Hoisin-mayo in 4 squeeze flessen', done: true },
-            { id: 'm1-4', label: '80 shotglazen op planken', done: true },
-            { id: 'm1-5', label: 'Coleslaw uit koeling 15 min vooraf', done: true },
-            { id: 'm1-6', label: 'Pickled onion in inox bakje', done: true },
-            { id: 'm1-7', label: 'Hot sauce squeeze flessen × 4', done: false },
-            { id: 'm1-8', label: 'Leisteen planken × 8 op service-line', done: false },
-        ],
-        timeline: [
-            { time: '16:30', label: 'Pulled pork uit smoker → cambro', done: true },
-            { time: '16:45', label: 'Pulled vlees plukken (warm houden)', done: true },
-            { time: '17:00', label: '🎬 SERVICE START · runners hand-out', done: false, isStart: true },
-            { time: '17:15', label: 'Eerste round bijvullen check', done: false },
-            { time: '17:45', label: 'Last call welcome bites', done: false },
-            { time: '18:00', label: 'Service-line wisselen naar gang 2', done: false, isEnd: true },
-        ],
-        aiCoach: { tip: 'Over 18 min komt aankomst-piek (75% gasten 17:18-17:35). Zet nu 4 extra slider-planken klaar.', severity: 'high' },
-        smokerStatus: null,
-    },
-    {
-        id: 'g2', number: 2, title: 'Hoofdgang BBQ buffet', subtitle: 'Buffet · 18:00–19:00',
-        serveAt: '18:00', duration: 60, status: 'prep', foodHue: 14, heroEmoji: '🥩',
-        heroDescription: 'Smoked brisket gesneden · short ribs glazed · 3 sides · sauzenbar',
-        countdown: { label: 'GANG 2 SERVICE', target: '18:00', state: 'upcoming' },
-        dishes: [
-            { name: 'Smoked brisket', portions: 80, emoji: '🥩', hue: 12, plating: 'Slices van 1.5cm · point + flat mix · grof zout · BBQ saus apart', allergens: [] },
-            { name: 'Short ribs glazed', portions: 80, emoji: '🍖', hue: 8, plating: '1 rib per gast · BBQ glaze · sesamzaad · lente-ui', allergens: ['sesam'] },
-            { name: 'Mac & cheese', portions: 80, emoji: '🧀', hue: 45, plating: 'GN-tray heet uit oven · breadcrumb topping · bieslook', allergens: ['gluten', 'lactose'] },
-            { name: 'Cornbread', portions: 80, emoji: '🍞', hue: 50, plating: 'In vierkanten · honingboter pot ernaast', allergens: ['gluten', 'ei', 'lactose'] },
-            { name: 'Coleslaw', portions: 80, emoji: '🥗', hue: 80, plating: 'Inox bak · 2 tongs · munt en koriander gehakt', allergens: ['ei', 'mosterd'] },
-        ],
-        miseChecklist: [
-            { id: 'm2-1', label: 'Brisket in smoker (96°C internal — wachten)', critical: true, done: false, smokerLink: true },
-            { id: 'm2-2', label: 'Short ribs glaze opwarmen', done: false },
-            { id: 'm2-3', label: 'Mac & cheese in oven 180°C 15 min vóór 18:00', done: false },
-            { id: 'm2-4', label: 'Cornbread snijden + honingboter', done: false },
-            { id: 'm2-5', label: 'Bain-maries op temperatuur (>65°C)', critical: true, done: true },
-            { id: 'm2-6', label: 'BBQ saus warm in dipper × 3', done: true },
-            { id: 'm2-7', label: 'Snijplanken brisket × 2 + slicer scherp', done: true },
-            { id: 'm2-8', label: 'Borden 80st voorverwarmd', done: false },
-        ],
-        timeline: [
-            { time: '01:00', label: 'Brisket op smoker (start nacht-cyclus)', done: true },
-            { time: '17:30', label: 'Brisket verwacht klaar (96°C internal)', done: false, critical: true },
-            { time: '17:35', label: 'Brisket rust in cambro', done: false },
-            { time: '17:45', label: 'Mac & cheese in oven', done: false },
-            { time: '17:55', label: 'Brisket snijden start', done: false },
-            { time: '18:00', label: '🎬 BUFFET OPEN', done: false, isStart: true },
-            { time: '18:30', label: 'Bijvul-check brisket + sides', done: false },
-            { time: '18:55', label: 'Last call hoofdgang', done: false },
-            { time: '19:00', label: 'Buffet sluiten · pauze speeches', done: false, isEnd: true },
-        ],
-        aiCoach: { tip: 'Brisket internal nu 91°C, moet naar 96°C. Verwacht klaar 17:35 — perfect voor service 18:00. Begin mac & cheese om 17:45.', severity: 'normal' },
-        smokerStatus: { active: true, item: 'Brisket 25kg', temp: 91, target: 96, domeTemp: 110, etaMinutes: 12, wood: 'Pecan + post oak' },
-    },
-    {
-        id: 'pause', number: null, title: 'PAUZE · Speeches & live band', subtitle: '19:00–20:15 · Geen service',
-        serveAt: '19:00', duration: 75, status: 'pause', isPause: true, foodHue: null, heroEmoji: '🎤',
-        countdown: { label: 'TUSSEN PAUZE', target: '20:15', state: 'upcoming' },
-        aiCoach: { tip: 'Tijdens pauze: smoker satay-sticks opzetten 19:30 (45 min cycle voor avondhap). Buffet schoonmaken, glazen wisselen.', severity: 'low' },
-        timeline: [
-            { time: '19:00', label: 'Buffet weg · stilte voor speech', done: false, isStart: true },
-            { time: '19:15', label: 'CEO speech', done: false },
-            { time: '19:30', label: 'SATAY OP DE SMOKER (avondhap prep)', done: false, critical: true },
-            { time: '19:45', label: 'Live band start', done: false },
-            { time: '20:15', label: 'Avondhap GAAT LIVE', done: false, isEnd: true },
-        ],
-    },
-    {
-        id: 'g3', number: 3, title: 'Avondhap', subtitle: 'Walking · 20:15–21:30',
-        serveAt: '20:15', duration: 75, status: 'upcoming', foodHue: 28, heroEmoji: '🍢',
-        heroDescription: 'Smoked chicken satay · steamed bao buns met pulled pork · loaded nachos',
-        countdown: { label: 'GANG 3 START', target: '20:15', state: 'upcoming' },
-        dishes: [
-            { name: 'Chicken satay', portions: 160, emoji: '🍢', hue: 28, plating: '2 sticks per gast · pindasaus warm · zwarte sesam · lente-ui', allergens: ['pinda', 'soja', 'sesam'], warning: 'BEVAT PINDA — Tafel 3 (Maaike) ALLERGISCH' },
-            { name: 'Bao bun pulled pork', portions: 80, emoji: '🥟', hue: 30, plating: 'Gestoomde bao · pulled pork 50g · hoisin · komkommer · koriander', allergens: ['gluten', 'soja'] },
-            { name: 'Loaded nachos', portions: 80, emoji: '🌽', hue: 35, plating: 'Tortillas · cheddar gesmolten · jalapeño · mango-habanero · zure room', allergens: ['lactose'] },
-        ],
-        miseChecklist: [
-            { id: 'm3-1', label: 'Satay sticks op smoker 19:30 (45 min)', critical: true, done: false, smokerLink: true },
-            { id: 'm3-2', label: 'Pindasaus opwarmen au-bain-marie', done: false },
-            { id: 'm3-3', label: 'Bao buns stomen 5 min vóór service', done: false },
-            { id: 'm3-4', label: 'Pulled pork warm houden', done: false },
-            { id: 'm3-5', label: 'Tortillas frituren + warm', done: false },
-            { id: 'm3-6', label: 'Komkommer julienne snijden', done: false },
-            { id: 'm3-7', label: 'GLUTENVRIJE OPTIE Tom (T5)', critical: true, done: false },
-        ],
-        timeline: [
-            { time: '19:30', label: 'Satay op smoker', done: false, critical: true },
-            { time: '20:00', label: 'Bao buns stoom-set start', done: false },
-            { time: '20:10', label: 'Pindasaus check', done: false },
-            { time: '20:15', label: '🎬 AVONDHAP LIVE', done: false, isStart: true },
-            { time: '20:45', label: 'Bijvul-check satay', done: false },
-            { time: '21:25', label: 'Last call avondhap', done: false },
-            { time: '21:30', label: 'Wissel naar dessert', done: false, isEnd: true },
-        ],
-        aiCoach: { tip: '⚠ Maaike (T3) heeft pinda-allergie. Maak satay-portie zonder pindasaus apart op aparte plank. Tom (T5) glutenvrij — bao bun is GEEN optie, maak rijst-bowl variant.', severity: 'critical' },
-    },
-    {
-        id: 'g4', number: 4, title: 'Dessert', subtitle: 'Plated · 21:30–22:00',
-        serveAt: '21:30', duration: 30, status: 'upcoming', foodHue: 320, heroEmoji: '🍰',
-        heroDescription: 'Smoked cheesecake met bourbon-karamel · gepocheerde peer · espresso',
-        countdown: { label: 'DESSERT', target: '21:30', state: 'upcoming' },
-        dishes: [
-            { name: 'Smoked cheesecake', portions: 80, emoji: '🍰', hue: 45, plating: 'Plak · bourbon-karamel · gekonfijte peer · sea salt · mascarpone quenelle', allergens: ['gluten', 'ei', 'lactose'] },
-            { name: 'Espresso (vrij)', portions: 80, emoji: '☕', hue: 20, plating: 'Demitasse + suiker + melk · te bestellen aan tafel', allergens: [] },
-        ],
-        miseChecklist: [
-            { id: 'm4-1', label: 'Cheesecake uit koeling 30 min vooraf', done: false },
-            { id: 'm4-2', label: 'Bourbon-karamel warm in dipper', done: false },
-            { id: 'm4-3', label: 'Peren confijten 21:00', done: false },
-            { id: 'm4-4', label: 'Mascarpone quenelles vooruit', done: false },
-            { id: 'm4-5', label: 'Espresso machine op temp', done: false },
-        ],
-        timeline: [
-            { time: '21:00', label: 'Dessert mise start', done: false },
-            { time: '21:15', label: 'Quenelles + plating prep', done: false },
-            { time: '21:30', label: '🎬 DESSERT SERVICE', done: false, isStart: true },
-            { time: '22:00', label: 'Service einde · debrief', done: false, isEnd: true },
-        ],
-        aiCoach: { tip: 'Sara (T7) lactose-intolerant — desserts zijn allemaal lactose. Reserve sorbet-bol als alternatief.', severity: 'critical' },
-    },
-];
-
-/* ═══════════════════════════════════════════════════════════════════
-   HELPERS
-   ═══════════════════════════════════════════════════════════════════ */
-function minsBetween(a: string, b: string): number {
-    const [ah, am] = a.split(':').map(Number);
-    const [bh, bm] = b.split(':').map(Number);
-    return (bh * 60 + bm) - (ah * 60 + am);
-}
-
-function useLiveCountdown(target: string, now: string) {
-    const [secs, setSecs] = useState(() => minsBetween(now, target) * 60);
-    useEffect(() => {
-        setSecs(minsBetween(now, target) * 60);
-    }, [target, now]);
-    useEffect(() => {
-        const i = setInterval(() => setSecs(s => s - 1), 1000);
-        return () => clearInterval(i);
-    }, []);
-    const abs = Math.abs(secs);
-    return {
-        h: Math.floor(abs / 3600), m: Math.floor((abs % 3600) / 60), s: abs % 60,
-        past: secs < 0, total: secs,
-    };
+function loadState(): PersistedState {
+    if (typeof window === 'undefined') return { view: 'hub', eventId: null, courseId: null, eventState: null };
+    try {
+        const raw = localStorage.getItem(STATE_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch { /* */ }
+    return { view: 'hub', eventId: null, courseId: null, eventState: null };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    ATOMS
    ═══════════════════════════════════════════════════════════════════ */
-function Eyebrow({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-    return <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase', ...style }}>{children}</div>;
-}
-
-function MetalCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-    return <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 18, ...style }}>{children}</div>;
-}
-
-function BtnPrimary({ children, icon: I, onClick, style }: { children: React.ReactNode; icon?: any; onClick?: () => void; style?: React.CSSProperties }) {
+function Pill({ tone = 'gray', children }: { tone?: 'amber' | 'gray' | 'red' | 'green' | 'blue'; children: React.ReactNode }) {
+    const tones = {
+        amber: { bg: `${BRAND}1f`, color: BRAND, border: `${BRAND}40` },
+        gray: { bg: 'rgba(255,255,255,.05)', color: 'var(--muted)', border: 'var(--border)' },
+        red: { bg: 'rgba(239,68,68,.12)', color: '#f87171', border: 'rgba(239,68,68,.3)' },
+        green: { bg: 'rgba(34,197,94,.12)', color: '#34d399', border: 'rgba(34,197,94,.3)' },
+        blue: { bg: 'rgba(96,165,250,.12)', color: '#60a5fa', border: 'rgba(96,165,250,.3)' },
+    } as const;
+    const t = tones[tone];
     return (
-        <button onClick={onClick} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 8,
-            background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#0a0a0c',
-            fontWeight: 600, fontSize: 13, border: 'none', cursor: 'pointer', ...style,
-        }}>
-            {I && <I size={14} />}
+        <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999,
+            background: t.bg, color: t.color, border: `1px solid ${t.border}`,
+            fontSize: 11, fontWeight: 600, letterSpacing: '.04em',
+        }}>{children}</span>
+    );
+}
+
+function HelpNote({ title, children, tone = 'amber' }: { title: string; children: React.ReactNode; tone?: 'amber' | 'blue' | 'green' }) {
+    const tones = {
+        amber: { bg: `${BRAND}0d`, border: `${BRAND}40`, color: BRAND },
+        blue: { bg: 'rgba(96,165,250,.08)', border: 'rgba(96,165,250,.3)', color: '#60a5fa' },
+        green: { bg: 'rgba(34,197,94,.08)', border: 'rgba(34,197,94,.3)', color: '#34d399' },
+    } as const;
+    const t = tones[tone];
+    return (
+        <div style={{ padding: 14, marginBottom: 16, background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: t.color, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BookOpen size={13} /> {title}
+            </div>
             {children}
-        </button>
+        </div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   FOOD HERO
+   HUB — event picker
    ═══════════════════════════════════════════════════════════════════ */
-function FoodHero({ course, height = 220 }: { course: Course; height?: number }) {
-    const grain = useMemo(() => {
-        const lines = [];
-        for (let i = 0; i < 18; i++) lines.push({ y: 4 + i * 5.5 + (i * 13 % 5), x1: 4 + (i * 7 % 6), x2: 96 - (i * 11 % 7), opacity: 0.04 + (i % 3) * 0.025 });
-        return lines;
-    }, []);
+function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPickEvent: (id: string) => void }) {
+    const liveEvent = events.find(e => e.status === 'live');
+    const upcoming = events.filter(e => e.status !== 'live');
+
     return (
-        <div style={{
-            position: 'relative', height, borderRadius: 16, overflow: 'hidden',
-            background: course.foodHue !== null
-                ? `linear-gradient(135deg, hsl(${course.foodHue} 60% 32%), hsl(${course.foodHue} 50% 20%) 60%, hsl(${course.foodHue + 18} 40% 16%))`
-                : 'linear-gradient(135deg, #2a2440, #1a1226)',
-            boxShadow: 'inset 0 0 60px rgba(0,0,0,.5), 0 6px 24px rgba(0,0,0,.4)',
-        }}>
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                {grain.map((g, i) => (
-                    <path key={i} d={`M ${g.x1} ${g.y} Q 50 ${g.y + (i % 2 ? 3 : -3)}, ${g.x2} ${g.y}`} fill="none" stroke="rgba(0,0,0,.5)" strokeWidth="0.4" opacity={g.opacity} />
-                ))}
-            </svg>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: height * 0.5, filter: 'drop-shadow(0 6px 18px rgba(0,0,0,.5))' }}>{course.heroEmoji}</div>
-            <div style={{ position: 'absolute', top: 14, left: 16, right: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    {course.number && (
-                        <div style={{ fontSize: 9, letterSpacing: '.25em', fontWeight: 700, color: 'rgba(255,255,255,.6)', marginBottom: 4 }}>GANG {course.number} · {course.subtitle}</div>
-                    )}
-                    <h2 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 28, color: '#fff', letterSpacing: '-.01em', textShadow: '0 2px 8px rgba(0,0,0,.4)' }}>{course.title}</h2>
+        <div style={{ padding: '32px 40px', minHeight: '100vh' }}>
+            <div style={{ marginBottom: 28 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Pill tone="amber">Service Mode</Pill>
+                    <Pill tone="gray">Live KDS</Pill>
                 </div>
-                {course.status === 'active' && (
-                    <span style={{ padding: '4px 10px', borderRadius: 6, background: 'rgba(34,197,94,.95)', color: '#000', fontSize: 9, letterSpacing: '.25em', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#000' }} /> LIVE
-                    </span>
-                )}
-                {course.status === 'prep' && <span style={{ padding: '4px 10px', borderRadius: 6, background: `${BRAND}f2`, color: '#000', fontSize: 9, letterSpacing: '.25em', fontWeight: 700 }}>MISE</span>}
+                <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 36, margin: 0, fontWeight: 200, letterSpacing: '-.02em' }}>Welk event ga je draaien?</h1>
+                <p style={{ color: 'var(--muted)', marginTop: 6, fontSize: 15, lineHeight: 1.5 }}>
+                    Selecteer een event om de Live KDS te starten. Menu, allergieën en gastinformatie laden automatisch in.
+                </p>
             </div>
-            {course.heroDescription && (
-                <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16, fontSize: 12, color: 'rgba(255,255,255,.85)', textShadow: '0 1px 4px rgba(0,0,0,.6)', lineHeight: 1.4 }}>{course.heroDescription}</div>
-            )}
-        </div>
-    );
-}
 
-function BigCountdown({ target, label, now }: { target: string; label: string; now: string }) {
-    const { h, m, s, past, total } = useLiveCountdown(target, now);
-    const isLive = past && Math.abs(total) < 3600;
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 220 }}>
-            <Eyebrow>{isLive ? 'LIVE · GESTART' : past ? 'AFGEROND' : label}</Eyebrow>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontFamily: 'Outfit, sans-serif', fontWeight: 200, color: isLive ? 'var(--green)' : past ? 'var(--muted)' : 'var(--text)', marginTop: 4 }}>
-                {h > 0 && <><span style={{ fontSize: 56, lineHeight: 1 }}>{String(h).padStart(2, '0')}</span><span style={{ fontSize: 28, color: 'var(--muted)' }}>u</span></>}
-                <span style={{ fontSize: 56, lineHeight: 1 }}>{String(m).padStart(2, '0')}</span>
-                <span style={{ fontSize: 28, color: 'var(--muted)' }}>m</span>
-                <span style={{ fontSize: 32, lineHeight: 1, color: 'var(--muted)' }}>{String(s).padStart(2, '0')}</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{past ? 'gestart om' : 'tot'} {target}</div>
-        </div>
-    );
-}
+            <HelpNote title="Hoe werkt Service Mode?" tone="amber">
+                <strong style={{ color: BRAND }}>Stap 1:</strong> tap een event om te starten — menu en allergieën laden automatisch.<br />
+                <strong style={{ color: BRAND }}>Stap 2:</strong> op het bord zie je de gangen verdeeld over 4 kolommen (Wachtend / Bezig / Klaar / Geserveerd).<br />
+                <strong style={{ color: BRAND }}>Stap 3:</strong> tap een gang voor de fullscreen bereidingswijze met stappen, mise, kwaliteits-check.<br />
+                <span style={{ color: BRAND, fontWeight: 600 }}>💡 Tip:</span> houd de tablet bij de smoker — alles werkt met grote tap-targets.
+            </HelpNote>
 
-function AICoach({ tip, severity = 'normal' }: { tip: string; severity?: 'critical' | 'high' | 'normal' | 'low' }) {
-    const colors = {
-        critical: { bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.3)', icon: 'var(--red)', label: 'KRITISCH' },
-        high: { bg: `${BRAND}14`, border: `${BRAND}4D`, icon: GOLD, label: 'NU DOEN' },
-        normal: { bg: `${GOLD}0d`, border: `${GOLD}33`, icon: GOLD, label: 'AI COACH' },
-        low: { bg: 'rgba(78,205,196,.05)', border: 'rgba(78,205,196,.2)', icon: '#4ECDC4', label: 'TIP' },
-    };
-    const c = colors[severity];
-    return (
-        <div style={{ padding: 14, borderRadius: 12, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `linear-gradient(135deg, ${c.icon}, ${c.icon}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 18px ${c.icon}40` }}>
-                {severity === 'critical' ? <AlertTriangle size={16} style={{ color: '#000' }} /> : <Sparkles size={16} style={{ color: '#000' }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: c.icon, marginBottom: 4 }}>{c.label}</div>
-                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.55 }}>{tip}</div>
-            </div>
-        </div>
-    );
-}
-
-function SmokerWidget({ status }: { status: NonNullable<Course['smokerStatus']> }) {
-    const pct = (status.temp / status.target) * 100;
-    return (
-        <div style={{ padding: 14, borderRadius: 12, background: `linear-gradient(135deg, ${BRAND}14, ${GOLD}08)`, border: `1px solid ${BRAND}40`, display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 12, alignItems: 'center' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${BRAND}, ${GOLD})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 14px ${BRAND}66` }}>
-                <Flame size={18} style={{ color: '#000' }} />
-            </div>
-            <div>
-                <div style={{ fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>SMOKER · {status.wood}</div>
-                <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 600, marginTop: 2 }}>{status.item}</div>
-                <div style={{ marginTop: 6, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${GOLD}, ${BRAND})`, transition: 'width .5s' }} />
-                </div>
-            </div>
-            <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 22, lineHeight: 1, color: 'var(--text)' }}>{status.temp}°</div>
-                <div style={{ fontSize: 9, color: 'var(--muted)', letterSpacing: '.15em' }}>→ {status.target}° · {status.etaMinutes}m</div>
-            </div>
-        </div>
-    );
-}
-
-function DishCard({ dish, compact = false }: { dish: Dish; compact?: boolean }) {
-    return (
-        <div style={{ borderRadius: 12, overflow: 'hidden', background: 'rgba(28,28,32,.6)', border: '1px solid rgba(255,255,255,.06)', cursor: 'pointer' }}>
-            <div style={{
-                height: compact ? 80 : 110, background: `linear-gradient(135deg, hsl(${dish.hue} 55% 32%), hsl(${dish.hue} 45% 20%))`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 36 : 50,
-                filter: 'drop-shadow(0 3px 8px rgba(0,0,0,.4))', position: 'relative',
-            }}>
-                {dish.emoji}
-                {dish.warning && <div style={{ position: 'absolute', top: 6, right: 6, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.9)', color: '#fff', fontSize: 8, fontWeight: 700, letterSpacing: '.1em' }}>⚠ ALLERGIE</div>}
-            </div>
-            <div style={{ padding: compact ? 8 : 12 }}>
-                <div style={{ fontSize: compact ? 12 : 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{dish.name}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{dish.portions} porties</div>
-                {!compact && dish.allergens.length > 0 && (
-                    <div style={{ marginTop: 6, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        {dish.allergens.map(a => (
-                            <span key={a} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'rgba(239,68,68,.08)', color: 'var(--red)', border: '1px solid rgba(239,68,68,.15)' }}>{a}</span>
-                        ))}
+            {liveEvent && (
+                <div onClick={() => onPickEvent(liveEvent.id)} style={{
+                    position: 'relative', background: liveEvent.banner, borderRadius: 18,
+                    border: '2px solid rgba(217,119,6,.5)', padding: 32, marginBottom: 24, cursor: 'pointer',
+                    overflow: 'hidden', boxShadow: '0 12px 40px rgba(217,119,6,.18)',
+                    transition: 'transform .2s, box-shadow .2s',
+                }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 16px 50px rgba(217,119,6,.28)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(217,119,6,.18)'; }}
+                >
+                    <div style={{ position: 'absolute', top: 24, right: 24, display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(220,38,38,.9)', padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#fff' }}>
+                        <span style={{ width: 8, height: 8, background: '#fff', borderRadius: '50%', animation: 'pulse-prep 1.4s infinite' }} />
+                        LIVE — NU BEZIG
                     </div>
-                )}
-            </div>
-        </div>
-    );
-}
 
-function CourseStrip({ courses, activeId, onSelect }: { courses: Course[]; activeId: string; onSelect: (id: string) => void }) {
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${courses.length}, 1fr)`, gap: 8, padding: 8, borderRadius: 12, background: 'rgba(28,28,32,.4)', border: '1px solid var(--border)' }}>
-            {courses.map(c => {
-                const isActive = c.id === activeId;
-                const isPause = c.isPause;
-                const statusColor = c.status === 'active' ? 'var(--green)' : c.status === 'prep' ? GOLD : isPause ? '#a78bfa' : 'var(--muted)';
-                const statusLabel = c.status === 'active' ? '● LIVE' : c.status === 'prep' ? '◐ MISE' : isPause ? '◷ PAUZE' : '○ STRAKS';
-                return (
-                    <button key={c.id} onClick={() => onSelect(c.id)} style={{
-                        padding: 10, borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                        background: isActive ? (isPause ? 'rgba(167,139,250,.1)' : `linear-gradient(180deg, ${BRAND}1f, ${GOLD}0a)`) : 'transparent',
-                        border: `1px solid ${isActive ? (isPause ? 'rgba(167,139,250,.3)' : `${GOLD}4D`) : 'transparent'}`,
-                        color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: 4,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 18 }}>{c.heroEmoji}</span>
-                            <span style={{ fontSize: 9, letterSpacing: '.15em', fontWeight: 700, color: statusColor }}>{statusLabel}</span>
+                    <div style={{ fontSize: 64, marginBottom: 16 }}>{liveEvent.hero}</div>
+
+                    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 28, flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 260 }}>
+                            <div style={{ color: '#fcd34d', fontSize: 12, fontWeight: 600, letterSpacing: '.08em', marginBottom: 4 }}>{liveEvent.date.toUpperCase()}</div>
+                            <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, margin: 0, fontWeight: 300, color: '#fff' }}>{liveEvent.title}</h2>
+                            <div style={{ color: 'rgba(255,255,255,.75)', fontSize: 15, marginTop: 4 }}>{liveEvent.venue} · {liveEvent.package}</div>
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 600 }}>{c.number ? `Gang ${c.number}` : 'Pauze'} · {c.serveAt}</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
 
-function MiseChecklist({ items, onToggle }: { items: MiseItem[]; onToggle: (id: string) => void }) {
-    const doneCount = items.filter(i => i.done).length;
-    const pct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
-    return (
-        <MetalCard>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div>
-                    <Eyebrow>Mise en place</Eyebrow>
-                    <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 2 }}>{doneCount}/{items.length} klaar</div>
-                </div>
-                <div style={{ width: 60, height: 60, position: 'relative' }}>
-                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                        <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
-                        <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round"
-                            strokeDasharray={`${pct * 2.51} 251`} style={{ transition: '.5s' }} />
-                    </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{pct}%</div>
-                </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {items.map(item => (
-                    <div key={item.id} onClick={() => onToggle(item.id)} style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-                        background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
-                        border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
-                    }}>
-                        <div style={{
-                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                            background: item.done ? 'var(--green)' : 'transparent',
-                            border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        <div style={{ display: 'flex', gap: 22 }}>
+                            <Stat val={liveEvent.guests} label="Gasten" />
+                            <Stat val={liveEvent.courses.length} label="Gangen" />
+                            <Stat val={liveEvent.courses.filter(c => c.status === 'served').length} label="Klaar" tone="success" />
+                            <Stat val={liveEvent.courses.filter(c => c.status === 'active').length} label="Bezig" tone="amber" />
+                        </div>
+
+                        <button style={{
+                            background: BRAND, color: '#0f0f0f', fontWeight: 700, fontSize: 16, padding: '12px 24px',
+                            borderRadius: 12, border: 'none', cursor: 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
                         }}>
-                            {item.done && <Check size={12} style={{ color: '#000' }} />}
+                            <Play size={18} /> Doorgaan met service →
+                        </button>
+                    </div>
+
+                    {liveEvent.allergyTable.length > 0 && (
+                        <div style={{ marginTop: 22, padding: 14, background: 'rgba(0,0,0,.35)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                            <AlertTriangle size={18} style={{ color: '#fbbf24' }} />
+                            <div style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,.9)' }}>
+                                <strong>{liveEvent.allergyTable.length} bijzondere diëten/allergieën</strong> — automatisch gemarkeerd in alle gangen
+                            </div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {[...new Set(liveEvent.allergyTable.flatMap(a => a.allergens))].map(a => (
+                                    <span key={a} style={{ padding: '4px 10px', background: 'rgba(220,38,38,.25)', border: '1px solid rgba(220,38,38,.5)', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+                                        {ALLERGENS[a]?.label || a}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
-                        <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
-                        {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
-                        {item.smokerLink && <Flame size={12} style={{ color: GOLD }} />}
-                    </div>
-                ))}
-            </div>
-        </MetalCard>
-    );
-}
-
-function CourseTimelineList({ timeline }: { timeline: TimelineItem[] }) {
-    return (
-        <MetalCard>
-            <Eyebrow style={{ marginBottom: 12 }}>Battle plan</Eyebrow>
-            <div style={{ position: 'relative', paddingLeft: 18 }}>
-                <div style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 2, background: 'rgba(255,255,255,.08)' }} />
-                {timeline.map((t, i) => (
-                    <div key={i} style={{ position: 'relative', paddingBottom: 14, paddingLeft: 14 }}>
-                        <div style={{
-                            position: 'absolute', left: -7, top: 4, width: 14, height: 14, borderRadius: '50%',
-                            background: t.done ? 'var(--green)' : t.isStart ? GOLD : t.isEnd ? 'var(--red)' : 'rgba(28,28,32,1)',
-                            border: `2px solid ${t.done ? 'var(--green)' : t.critical ? 'var(--red)' : 'var(--border)'}`,
-                            boxShadow: t.isStart && !t.done ? `0 0 0 4px ${BRAND}26` : 'none',
-                        }} />
-                        <div style={{ fontSize: 10, fontFamily: 'Outfit, sans-serif', color: t.critical ? 'var(--red)' : 'var(--muted)', fontWeight: 700, letterSpacing: '.1em' }}>{t.time}</div>
-                        <div style={{ fontSize: 12, color: t.done ? 'var(--muted)' : 'var(--text)', textDecoration: t.done ? 'line-through' : 'none', marginTop: 2, lineHeight: 1.4 }}>{t.label}</div>
-                    </div>
-                ))}
-            </div>
-        </MetalCard>
-    );
-}
-
-const WIZARD_STEPS = [
-    { q: 'Wat voor type event is het?', placeholder: 'Bedrijfsfeest / bruiloft / verjaardag…', key: 'type' },
-    { q: 'Hoeveel gasten en welk service-type?', placeholder: 'Bv. 80 gasten, walking dinner met buffet', key: 'guests' },
-    { q: 'Hoe laat start service en wat is einde?', placeholder: 'Bv. 17:00 start, 22:00 einde', key: 'time' },
-    { q: 'Zijn er pauzes of momenten zonder service?', placeholder: 'Bv. 19:00–20:15 speeches + live band', key: 'pause' },
-    { q: 'Welke gangen wil je serveren?', placeholder: 'Bv. welkomst-bites, BBQ buffet, avondhap, dessert', key: 'courses' },
-    { q: 'Allergieën of dieetwensen?', placeholder: 'Bv. 1× pinda-allergie, 1× glutenvrij', key: 'allergies' },
-];
-
-function AIWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const [step, setStep] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [input, setInput] = useState('');
-    const [generating, setGenerating] = useState(false);
-    const [done, setDone] = useState(false);
-
-    useEffect(() => {
-        if (open) { setStep(0); setAnswers({}); setInput(''); setDone(false); setGenerating(false); }
-    }, [open]);
-
-    if (!open) return null;
-    const current = WIZARD_STEPS[step];
-    const isLast = step === WIZARD_STEPS.length - 1;
-
-    function submit() {
-        if (!input.trim()) return;
-        const newAns = { ...answers, [current.key]: input.trim() };
-        setAnswers(newAns);
-        setInput('');
-        if (isLast) {
-            setGenerating(true);
-            setTimeout(() => { setGenerating(false); setDone(true); }, 2200);
-        } else setStep(s => s + 1);
-    }
-
-    return (
-        <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 30 }}>
-            <div onClick={e => e.stopPropagation()} style={{
-                width: '100%', maxWidth: 640, maxHeight: '85vh', overflow: 'auto',
-                borderRadius: 20, background: 'linear-gradient(180deg, #1a1a1e, #0e0e10)',
-                border: `1px solid ${GOLD}40`, boxShadow: '0 30px 80px rgba(0,0,0,.5)',
-                padding: 30, position: 'relative',
-            }}>
-                <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, width: 32, height: 32, borderRadius: 8, background: 'rgba(0,0,0,.5)', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={14} />
-                </button>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${BRAND}, ${GOLD})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 20px ${BRAND}66` }}>
-                        <Sparkles size={20} style={{ color: '#000' }} />
-                    </div>
-                    <div>
-                        <Eyebrow style={{ color: GOLD }}>AI DRAAIBOEK WIZARD</Eyebrow>
-                        <h2 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 24 }}>Vertel me over je event</h2>
-                    </div>
-                </div>
-
-                {!done && !generating && (
-                    <>
-                        <div style={{ marginBottom: 16, height: 4, borderRadius: 2, background: 'rgba(255,255,255,.05)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${((step + 1) / WIZARD_STEPS.length) * 100}%`, background: `linear-gradient(90deg, ${GOLD}, ${BRAND})`, transition: '.3s' }} />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                            {WIZARD_STEPS.slice(0, step).map((s, i) => (
-                                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                    <div style={{ alignSelf: 'flex-start', maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 14px 4px', background: `${GOLD}14`, border: `1px solid ${GOLD}26`, fontSize: 12, color: 'var(--text)' }}>{s.q}</div>
-                                    <div style={{ alignSelf: 'flex-end', maxWidth: '80%', padding: '8px 12px', borderRadius: '14px 14px 4px 14px', background: 'rgba(255,255,255,.05)', fontSize: 12, color: 'var(--text)' }}>{answers[s.key]}</div>
-                                </div>
-                            ))}
-                            <div style={{ alignSelf: 'flex-start', maxWidth: '80%', padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: `linear-gradient(135deg, ${BRAND}1a, ${GOLD}0a)`, border: `1px solid ${BRAND}40`, fontSize: 13, color: 'var(--text)' }}>{current.q}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <input autoFocus value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder={current.placeholder}
-                                style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, outline: 'none' }} />
-                            <BtnPrimary icon={isLast ? Sparkles : ArrowRight} onClick={submit}>{isLast ? 'Genereer' : 'Volgende'}</BtnPrimary>
-                        </div>
-                        <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', textAlign: 'right' }}>Stap {step + 1}/{WIZARD_STEPS.length}</div>
-                    </>
-                )}
-
-                {generating && (
-                    <div style={{ padding: 40, textAlign: 'center' }}>
-                        <div style={{ width: 60, height: 60, margin: '0 auto 16px', borderRadius: '50%', border: `3px solid ${BRAND}33`, borderTopColor: GOLD, animation: 'spin 1s linear infinite' }} />
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 22 }}>Draaiboek bouwen…</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>Bereken portionering · plan smoker-cycli · check allergieën · genereer tijdlijn</div>
-                    </div>
-                )}
-
-                {done && (
-                    <div style={{ padding: '20px 0' }}>
-                        <div style={{ width: 60, height: 60, margin: '0 auto 16px', borderRadius: '50%', background: 'rgba(34,197,94,.15)', border: '2px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Check size={28} style={{ color: 'var(--green)' }} />
-                        </div>
-                        <h3 style={{ margin: '0 0 8px', fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 24, textAlign: 'center' }}>Draaiboek klaar</h3>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginBottom: 18 }}>4 gangen · 28 mise-stappen · 3 smoker-cycli · 3 allergieën gevlagd</div>
-                        <div style={{ padding: 14, borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}26`, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 16 }}>
-                            <strong style={{ color: 'var(--text)' }}>AI-suggesties:</strong><br />
-                            • Brisket op 01:00 op smoker (low&slow nacht-cyclus)<br />
-                            • Satay op 19:30 tijdens speech-pauze (45 min cyclus)<br />
-                            • Maaike (T3) pinda-allergie: aparte satay-portie zonder pindasaus<br />
-                            • Tom (T5) glutenvrij: bao bun → rijst-bowl variant<br />
-                            • Sara (T7) lactose: sorbet als dessert-alternatief
-                        </div>
-                        <BtnPrimary onClick={onClose} style={{ width: '100%', justifyContent: 'center' }}>Start Service · open KDS</BtnPrimary>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   STICKY ALLERGIE-BAR — bovenaan altijd zichtbaar als allergieën zijn
-   ═══════════════════════════════════════════════════════════════════ */
-function StickyAllergieBar({ rightOffset = 0 }: { rightOffset?: number }) {
-    const critical = SERVICE_EVENT.allergies.filter(a => a.severity === 'critical');
-    if (critical.length === 0) return null;
-    return (
-        <div style={{
-            position: 'sticky', top: 0, zIndex: 50,
-            background: 'rgba(239,68,68,.18)', borderBottom: '2px solid var(--red)',
-            backdropFilter: 'blur(12px)',
-            padding: `10px 32px 10px ${32}px`, marginRight: rightOffset, transition: 'margin-right .25s',
-            display: 'flex', alignItems: 'center', gap: 14,
-            fontSize: 13, color: 'var(--text)',
-        }}>
-            <AlertTriangle size={18} style={{ color: 'var(--red)', flexShrink: 0 }} />
-            <strong style={{ color: 'var(--red)', letterSpacing: '.05em' }}>ALLERGIE-ALERT</strong>
-            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', flex: 1 }}>
-                {critical.map((a, i) => (
-                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: 'rgba(0,0,0,.4)' }}>T{a.table}</span>
-                        <strong>{a.person}</strong>
-                        <span style={{ color: 'var(--red)', fontWeight: 600 }}>· {a.issue}</span>
-                    </span>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   STICKY NOW-BAR — live tijd + active gang + countdown next
-   ═══════════════════════════════════════════════════════════════════ */
-function StickyNowBar({ now, activeCourse, nextCourse, rightOffset = 0 }: { now: string; activeCourse: Course; nextCourse: Course | null; rightOffset?: number }) {
-    return (
-        <div style={{
-            position: 'sticky', top: SERVICE_EVENT.allergies.some(a => a.severity === 'critical') ? 44 : 0,
-            zIndex: 49,
-            background: 'rgba(14,14,16,.95)', borderBottom: `1px solid ${GOLD}33`,
-            backdropFilter: 'blur(12px)',
-            padding: '10px 32px', marginRight: rightOffset, transition: 'margin-right .25s',
-            display: 'flex', alignItems: 'center', gap: 18,
-        }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <Eyebrow>NU</Eyebrow>
-                <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{now}</div>
-            </div>
-            <div style={{ width: 1, height: 24, background: 'var(--border)' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 22 }}>{activeCourse.heroEmoji}</span>
-                <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 9, letterSpacing: '.2em', fontWeight: 700, color: activeCourse.status === 'active' ? 'var(--green)' : GOLD }}>
-                        {activeCourse.status === 'active' ? '● LIVE' : activeCourse.status === 'prep' ? '◐ MISE' : '○ ' + activeCourse.subtitle.toUpperCase().split('·')[0].trim()}
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeCourse.title}</div>
-                </div>
-            </div>
-            {nextCourse && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <ChevronRight size={14} style={{ color: 'var(--muted-light)' }} />
-                    <CountdownToCourse target={nextCourse.serveAt} now={now} label={nextCourse.title} />
+                    )}
                 </div>
             )}
-        </div>
-    );
-}
 
-function CountdownToCourse({ target, now, label }: { target: string; now: string; label: string }) {
-    const { m, s, past } = useLiveCountdown(target, now);
-    return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ minWidth: 0 }}>
-                <Eyebrow style={{ color: 'var(--muted-light)' }}>STRAKS</Eyebrow>
-                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{label}</div>
-            </div>
-            <div style={{
-                fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 24,
-                color: past ? 'var(--green)' : 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, minWidth: 60, textAlign: 'right',
-            }}>
-                {past ? 'NU' : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`}
-            </div>
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   DOE NU PANEL — top-3 acties uit alle courses (NIET-done mise + komende timeline)
-   ═══════════════════════════════════════════════════════════════════ */
-function DoeNuPanel({ activeCourse, miseState, now }: { activeCourse: Course; miseState: Record<string, boolean>; now: string }) {
-    /* Top 3: kritische niet-done mise van actieve gang */
-    const open = (activeCourse.miseChecklist || [])
-        .map(m => ({ ...m, done: miseState[m.id] !== undefined ? miseState[m.id] : m.done }))
-        .filter(m => !m.done)
-        .sort((a, b) => (a.critical ? 0 : 1) - (b.critical ? 0 : 1))
-        .slice(0, 3);
-
-    /* Eerstvolgende 3 timeline-events nog niet done */
-    const nowMin = (() => { const [h, m] = now.split(':').map(Number); return h * 60 + m; })();
-    const hhmmToMin = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
-    const upcomingTl = (activeCourse.timeline || [])
-        .filter(t => !t.done && hhmmToMin(t.time) >= nowMin)
-        .slice(0, 3);
-
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {/* Open mise-acties */}
-            <div style={{
-                padding: 16, borderRadius: 14,
-                background: open.some(o => o.critical) ? 'rgba(239,68,68,.06)' : `${BRAND}0d`,
-                border: `1px solid ${open.some(o => o.critical) ? 'rgba(239,68,68,.3)' : `${BRAND}40`}`,
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Sparkles size={14} style={{ color: open.some(o => o.critical) ? 'var(--red)' : BRAND }} />
-                    <Eyebrow style={{ color: open.some(o => o.critical) ? 'var(--red)' : BRAND }}>DOE NU · MISE</Eyebrow>
-                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>{open.length} open</span>
-                </div>
-                {open.length === 0 ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, color: 'var(--green)' }}>
-                        <Check size={16} /> Alle mise klaar
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {open.map(o => (
-                            <div key={o.id} style={{
-                                padding: '10px 12px', borderRadius: 10,
-                                background: o.critical ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.03)',
-                                border: `1px solid ${o.critical ? 'rgba(239,68,68,.25)' : 'var(--border)'}`,
-                                display: 'flex', alignItems: 'center', gap: 10,
-                            }}>
-                                {o.critical && <AlertTriangle size={14} style={{ color: 'var(--red)' }} />}
-                                {o.smokerLink && <Flame size={14} style={{ color: GOLD }} />}
-                                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4, flex: 1 }}>{o.label}</div>
+            {upcoming.length > 0 && (
+                <>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', margin: '0 0 16px' }}>Komende events</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 14 }}>
+                        {upcoming.map(evt => (
+                            <div key={evt.id} onClick={() => onPickEvent(evt.id)} style={{
+                                background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 20,
+                                cursor: 'pointer', transition: 'transform .15s, border-color .15s, box-shadow .15s',
+                            }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = BRAND; e.currentTarget.style.boxShadow = `0 8px 22px ${BRAND}1f`; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                    <div style={{ fontSize: 32 }}>{evt.hero}</div>
+                                    <Pill tone="gray">{evt.type}</Pill>
+                                </div>
+                                <div style={{ color: BRAND, fontSize: 11, fontWeight: 600, letterSpacing: '.06em', marginBottom: 4 }}>{evt.date.toUpperCase()}</div>
+                                <h3 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, margin: 0, fontWeight: 400 }}>{evt.title}</h3>
+                                <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>{evt.venue}</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                                    <SmallStat val={evt.guests} label="gasten" />
+                                    <SmallStat val={evt.courses.length} label="gangen" />
+                                    <SmallStat val={evt.allergyTable.length} label="diëten" />
+                                </div>
+                                <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
+                                    <span>{evt.package}</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: BRAND, fontWeight: 600 }}>
+                                        Open <ChevronRight size={14} />
+                                    </span>
+                                </div>
                             </div>
                         ))}
                     </div>
-                )}
+                </>
+            )}
+
+            <div style={{ marginTop: 28, padding: 18, background: `linear-gradient(90deg, ${BRAND}14, transparent)`, border: `1px solid ${BRAND}40`, borderRadius: 12, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{ width: 36, height: 36, background: BRAND, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Sparkles size={18} style={{ color: '#0f0f0f' }} />
+                </div>
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Chef AI Coach staat klaar</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                        Tijdens de service krijg je real-time advies: timing, plaats-optimalisatie, allergie-checks en kwaliteit-bewaking.
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function Stat({ val, label, tone }: { val: number | string; label: string; tone?: 'success' | 'amber' }) {
+    return (
+        <div style={{ textAlign: 'center', minWidth: 60 }}>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 200, color: tone === 'success' ? '#34d399' : tone === 'amber' ? '#fbbf24' : '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</div>
+        </div>
+    );
+}
+function SmallStat({ val, label }: { val: number | string; label: string }) {
+    return (
+        <div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 17, fontWeight: 400, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{label}</div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOARD — Kanban (queued / active / ready / served)
+   ═══════════════════════════════════════════════════════════════════ */
+function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, rookOffset }: {
+    event: ServiceEvent;
+    onOpenCourse: (cid: string) => void;
+    onAdvanceStatus: (cid: string) => void;
+    onBack: () => void;
+    rookOffset: number;
+}) {
+    const [now, setNow] = useState(new Date());
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 30000);
+        return () => clearInterval(t);
+    }, []);
+
+    const queued = event.courses.filter(c => c.status === 'queued');
+    const active = event.courses.filter(c => c.status === 'active');
+    const ready = event.courses.filter(c => c.status === 'ready');
+    const served = event.courses.filter(c => c.status === 'served');
+    const totalDone = served.length;
+    const progressPct = (totalDone / event.courses.length) * 100;
+
+    return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Top bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '14px 28px', background: 'var(--color-bg-elevated)', borderBottom: '1px solid var(--border)', marginRight: rookOffset }}>
+                <button onClick={onBack} style={{
+                    background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)',
+                    padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13,
+                }}>
+                    <ArrowLeft size={14} /> Terug
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{event.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{event.venue} · {event.guests}p · gestart {event.startTime}</div>
+                </div>
+                <div style={{ width: 220 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 5 }}>
+                        <span>Voortgang</span>
+                        <span style={{ color: 'var(--text)', fontWeight: 600 }}>{totalDone}/{event.courses.length} gangen</span>
+                    </div>
+                    <div style={{ height: 7, background: 'rgba(255,255,255,.05)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ width: `${progressPct}%`, height: '100%', background: `linear-gradient(90deg, ${BRAND}, ${GOLD})`, transition: 'width .4s' }} />
+                    </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                        {now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>Service tijd</div>
+                </div>
+                <Pill tone="green">
+                    <span style={{ width: 7, height: 7, background: '#34d399', borderRadius: '50%' }} /> Op schema
+                </Pill>
             </div>
 
-            {/* Eerstvolgende timeline-events */}
-            <div style={{ padding: 16, borderRadius: 14, background: `${GOLD}0a`, border: `1px solid ${GOLD}33` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Clock size={14} style={{ color: GOLD }} />
-                    <Eyebrow style={{ color: GOLD }}>STRAKS · TIJDLIJN</Eyebrow>
-                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)' }}>{upcomingTl.length} stappen</span>
+            <ServiceAIBar />
+
+            <div style={{ flex: 1, padding: '20px 22px', overflow: 'auto', marginRight: rookOffset }}>
+                <HelpNote title="Zo werkt het bord" tone="amber">
+                    <strong style={{ color: BRAND }}>Kolommen:</strong> elke gang doorloopt 4 fases — Wachtend → Bezig → Klaar → Geserveerd.<br />
+                    <strong style={{ color: BRAND }}>Knop op de card:</strong> tap "Start" / "Markeer klaar" / "Naar uitgifte" om snel door te schuiven.<br />
+                    <strong style={{ color: BRAND }}>Card tappen:</strong> opent fullscreen bereidingswijze.<br />
+                    <strong style={{ color: BRAND }}>Per-tafel grid:</strong> oranje = bezig, groen = klaar. <span style={{ color: '#f87171' }}>Rode rand = allergie/dieet.</span>
+                </HelpNote>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignContent: 'start' }}>
+                    <Column title="Wachtend" Icon={Clock} tone="gray" courses={queued} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="In bereiding" Icon={Flame} tone="amber" courses={active} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="Klaar voor uitgifte" Icon={CheckCircle} tone="green" courses={ready} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="Geserveerd" Icon={Award} tone="muted" courses={served} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
                 </div>
-                {upcomingTl.length === 0 ? (
-                    <div style={{ padding: 8, color: 'var(--muted)', fontSize: 13 }}>Geen geplande events meer in deze gang.</div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {upcomingTl.map((t, i) => {
-                            const minsAway = hhmmToMin(t.time) - nowMin;
+            </div>
+        </div>
+    );
+}
+
+function ServiceAIBar() {
+    const directives = SERVICE_AI_DIRECTIVES;
+    const [activeIdx, setActiveIdx] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setActiveIdx(i => (i + 1) % directives.length), 6000);
+        return () => clearInterval(t);
+    }, [directives.length]);
+    const d = directives[activeIdx];
+    if (!d) return null;
+    const sevColor = d.severity === 'critical' ? '#f87171' : d.severity === 'opportunity' ? BRAND : '#60a5fa';
+    const sevBg = d.severity === 'critical' ? 'rgba(239,68,68,.08)' : d.severity === 'opportunity' ? `${BRAND}14` : 'rgba(96,165,250,.08)';
+    return (
+        <div style={{ background: sevBg, borderBottom: `1px solid ${sevColor}40`, padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ width: 28, height: 28, background: sevColor, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {d.severity === 'critical' ? <AlertTriangle size={14} style={{ color: '#0f0f0f' }} /> : d.severity === 'opportunity' ? <Sparkles size={14} style={{ color: '#0f0f0f' }} /> : <Clock size={14} style={{ color: '#0f0f0f' }} />}
+            </div>
+            <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: sevColor, marginRight: 10 }}>{d.title}</span>
+                <span style={{ fontSize: 13, color: 'var(--text)' }}>{d.body}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+                {directives.map((_, i) => (
+                    <button key={i} onClick={() => setActiveIdx(i)} style={{ width: 6, height: 6, padding: 0, border: 'none', borderRadius: '50%', background: i === activeIdx ? sevColor : 'rgba(255,255,255,.2)', cursor: 'pointer' }} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function Column({ title, Icon, tone, courses, event, onOpenCourse, onAdvanceStatus }: {
+    title: string; Icon: any; tone: 'gray' | 'amber' | 'green' | 'muted';
+    courses: Course[]; event: ServiceEvent; onOpenCourse: (cid: string) => void; onAdvanceStatus: (cid: string) => void;
+}) {
+    const toneColors = {
+        gray: { border: 'var(--border)', text: 'var(--muted)', bg: 'transparent' },
+        amber: { border: `${BRAND}66`, text: BRAND, bg: `${BRAND}0a` },
+        green: { border: 'rgba(34,197,94,.4)', text: '#34d399', bg: 'rgba(34,197,94,.04)' },
+        muted: { border: 'var(--border)', text: 'var(--muted)', bg: 'transparent' },
+    }[tone];
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+                background: toneColors.bg, border: `1px solid ${toneColors.border}`, borderRadius: 10,
+            }}>
+                <Icon size={15} style={{ color: toneColors.text }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: toneColors.text, letterSpacing: '.04em', textTransform: 'uppercase' }}>{title}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: toneColors.text }}>{courses.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {courses.length === 0 && (
+                    <div style={{ padding: 22, textAlign: 'center', color: 'var(--muted)', fontSize: 12, fontStyle: 'italic', border: '1px dashed var(--border)', borderRadius: 10 }}>geen gangen</div>
+                )}
+                {courses.map(course => (
+                    <CourseCard key={course.id} course={course} event={event} onOpen={() => onOpenCourse(course.id)} onAdvance={() => onAdvanceStatus(course.id)} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function CourseCard({ course, event, onOpen, onAdvance }: { course: Course; event: ServiceEvent; onOpen: () => void; onAdvance: () => void }) {
+    const totalPortions = course.items.reduce((acc, i) => acc + (i.count || 0), 0);
+    const allergyItems = course.items.filter(i => i.special).length;
+    const isActive = course.status === 'active';
+    return (
+        <div onClick={onOpen} style={{
+            background: 'var(--color-bg-elevated)', border: `1px solid ${isActive ? `${BRAND}66` : 'var(--border)'}`,
+            borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+            boxShadow: isActive ? `0 0 0 2px ${BRAND}26` : 'none', transition: 'transform .15s, border-color .15s',
+        }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+            <div style={{ height: 70, background: course.imgGradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: 34 }}>{course.emoji}</div>
+                <div style={{ position: 'absolute', top: 7, left: 7, background: 'rgba(0,0,0,.6)', padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', color: '#fff' }}>
+                    GANG {course.num}/{event.courses.length}
+                </div>
+                {isActive && (
+                    <div style={{ position: 'absolute', top: 7, right: 7, background: 'rgba(220,38,38,.85)', padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 6, height: 6, background: '#fff', borderRadius: '50%', animation: 'pulse-prep 1.4s infinite' }} />
+                        BEZIG
+                    </div>
+                )}
+            </div>
+            <div style={{ padding: 13 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 700, marginBottom: 4, lineHeight: 1.25 }}>{course.title}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.4, marginBottom: 10 }}>{course.description}</div>
+
+                {course.aiNote && (
+                    <div style={{ fontSize: 11, color: BRAND, background: `${BRAND}14`, padding: '6px 8px', borderRadius: 6, border: `1px solid ${BRAND}40`, marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                        <Sparkles size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+                        <span style={{ flex: 1 }}>{course.aiNote}</span>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+                    <MetaTag Icon={Users}>{totalPortions}p</MetaTag>
+                    <MetaTag Icon={Clock}>{course.prepTime}m prep</MetaTag>
+                    {course.vegOption && <MetaTag Icon={Leaf} tone="green">veg/vegan</MetaTag>}
+                    {allergyItems > 0 && <MetaTag Icon={AlertTriangle} tone="red">{allergyItems} allergie</MetaTag>}
+                </div>
+
+                {(course.status === 'active' || course.status === 'ready') && (
+                    <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 5 }}>Per tafel</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(10, course.items.length)}, 1fr)`, gap: 3 }}>
+                            {course.items.map(item => (
+                                <div key={item.id} title={`Tafel ${item.table} · ${item.count}p${item.special ? ' · ' + item.special : ''}`} style={{
+                                    height: 22, borderRadius: 4,
+                                    background: item.served ? 'rgba(34,197,94,.4)' : item.ready ? 'rgba(34,197,94,.2)' : item.inProgress ? `${BRAND}40` : 'rgba(255,255,255,.04)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: 9, fontWeight: 700,
+                                    color: item.served || item.ready ? '#34d399' : item.inProgress ? BRAND : 'var(--muted)',
+                                    border: item.special ? '1px solid #f87171' : 'none',
+                                }}>{item.table}</div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                    <button onClick={(e) => { e.stopPropagation(); onAdvance(); }} style={advanceBtnStyle(course.status)}>
+                        {course.status === 'queued' && <><Play size={12} />Start</>}
+                        {course.status === 'active' && <><Check size={12} />Markeer klaar</>}
+                        {course.status === 'ready' && <><HandPlatter size={12} />Naar uitgifte</>}
+                        {course.status === 'served' && <><Undo2 size={12} />Recall</>}
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); onOpen(); }} style={{
+                        width: 34, height: 34, background: 'var(--color-bg-deep)', border: '1px solid var(--border)', borderRadius: 8,
+                        color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }} title="Bereidingswijze">
+                        <BookOpen size={14} />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function MetaTag({ Icon, children, tone }: { Icon: any; children: React.ReactNode; tone?: 'green' | 'red' }) {
+    const colors = {
+        default: { bg: 'rgba(255,255,255,.05)', color: 'var(--muted)' },
+        green: { bg: 'rgba(34,197,94,.1)', color: '#34d399' },
+        red: { bg: 'rgba(220,38,38,.1)', color: '#f87171' },
+    };
+    const c = colors[tone || 'default'];
+    return (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: c.bg, borderRadius: 6, fontSize: 10.5, color: c.color }}>
+            <Icon size={11} /> {children}
+        </div>
+    );
+}
+
+const advanceBtnStyle = (status: CourseStatus): React.CSSProperties => {
+    const base: React.CSSProperties = {
+        flex: 1, padding: '10px', borderRadius: 8, fontWeight: 700, fontSize: 12,
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        border: '1px solid var(--border)',
+    };
+    if (status === 'queued') return { ...base, background: 'var(--color-bg-deep)', color: 'var(--text)' };
+    if (status === 'active') return { ...base, background: 'rgba(34,197,94,.15)', color: '#34d399', border: '1px solid rgba(34,197,94,.4)' };
+    if (status === 'ready') return { ...base, background: BRAND, color: '#0f0f0f', border: 'none' };
+    return { ...base, background: 'var(--color-bg-deep)', color: 'var(--text)' };
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL — fullscreen course (4 tabs)
+   ═══════════════════════════════════════════════════════════════════ */
+function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, rookOffset }: {
+    event: ServiceEvent; courseId: string;
+    onBack: () => void; onAdvance: () => void; onToggleItem: (cid: string, iid: string) => void;
+    rookOffset: number;
+}) {
+    const course = event.courses.find(c => c.id === courseId);
+    const [tab, setTab] = useState<'steps' | 'mise' | 'tables' | 'quality'>('steps');
+    const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
+
+    if (!course) return null;
+    const totalPortions = course.items.reduce((a, i) => a + (i.count || 0), 0);
+    const servedPortions = course.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
+    const stepsCompleted = Object.values(completedSteps).filter(Boolean).length;
+    const stepsPct = course.steps.length ? (stepsCompleted / course.steps.length) * 100 : 0;
+    const toggleStep = (n: number) => setCompletedSteps(s => ({ ...s, [n]: !s[n] }));
+
+    return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', marginRight: rookOffset }}>
+            {/* Hero header */}
+            <div style={{ position: 'relative', minHeight: 260, background: course.imgGradient, padding: '24px 30px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button onClick={onBack} style={{
+                        background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,.15)', color: '#fff',
+                        padding: '10px 16px', borderRadius: 10, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600,
+                    }}>
+                        <ArrowLeft size={15} /> Terug naar bord
+                    </button>
+                    <div style={{ flex: 1 }} />
+                    <span style={{ background: 'rgba(0,0,0,.55)', padding: '6px 14px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: '#fff' }}>
+                        GANG {course.num} VAN {event.courses.length}
+                    </span>
+                    <span style={{
+                        background: course.status === 'active' ? 'rgba(220,38,38,.85)' : course.status === 'ready' ? 'rgba(34,197,94,.85)' : course.status === 'served' ? 'rgba(100,116,139,.85)' : 'rgba(0,0,0,.55)',
+                        padding: '6px 14px', borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: '#fff',
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}>
+                        {course.status === 'active' && <span style={{ width: 7, height: 7, background: '#fff', borderRadius: '50%', animation: 'pulse-prep 1.4s infinite' }} />}
+                        {course.status === 'queued' ? 'WACHTEND' : course.status === 'active' ? 'BEZIG' : course.status === 'ready' ? 'KLAAR' : 'GESERVEERD'}
+                    </span>
+                </div>
+
+                <div>
+                    <div style={{ fontSize: 86, marginBottom: 4, lineHeight: 1, opacity: 0.9, filter: 'drop-shadow(0 4px 20px rgba(0,0,0,.5))' }}>{course.emoji}</div>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 42, margin: 0, fontWeight: 200, color: '#fff', letterSpacing: '-.02em', lineHeight: 1.05 }}>{course.title}</h1>
+                    <p style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', marginTop: 6, maxWidth: 720, lineHeight: 1.4 }}>{course.description}</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: 22, marginTop: 14, flexWrap: 'wrap' }}>
+                    <HeroStat Icon={Users} val={`${totalPortions}p`} label="Totaal portions" />
+                    <HeroStat Icon={Clock} val={`${course.prepTime}min`} label="Bereiding" />
+                    <HeroStat Icon={CheckCircle} val={servedPortions} label="Geserveerd" />
+                    {course.vegOption && <HeroStat Icon={Leaf} val="Veg/Vegan" label="Variant" />}
+                    {course.aiNote && (
+                        <div style={{ flex: 1, minWidth: 280, background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(10px)', border: `1px solid ${BRAND}66`, padding: '10px 14px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                            <Sparkles size={16} style={{ color: '#fbbf24' }} />
+                            <span style={{ fontSize: 13, color: '#fcd34d', fontWeight: 500 }}>{course.aiNote}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Action bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 30px', background: 'var(--color-bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'inline-flex', gap: 5, background: 'var(--color-bg-deep)', padding: 4, borderRadius: 10 }}>
+                    {(['steps', 'mise', 'tables', 'quality'] as const).map(t => (
+                        <button key={t} onClick={() => setTab(t)} style={{
+                            padding: '8px 14px', background: tab === t ? 'var(--color-bg-elevated)' : 'transparent',
+                            color: tab === t ? 'var(--text)' : 'var(--muted)', border: 'none', borderRadius: 7,
+                            fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                        }}>
+                            {t === 'steps' && <ListChecks size={13} />}
+                            {t === 'mise' && <Package size={13} />}
+                            {t === 'tables' && <Grid3x3 size={13} />}
+                            {t === 'quality' && <ShieldCheck size={13} />}
+                            {{ steps: 'Bereiding', mise: 'Mise en place', tables: 'Per tafel', quality: 'Kwaliteit' }[t]}
+                            {t === 'steps' && course.steps.length > 0 && (
+                                <span style={{ marginLeft: 4, padding: '1px 6px', background: `${BRAND}33`, color: BRAND, borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{stepsCompleted}/{course.steps.length}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ flex: 1 }} />
+                {tab === 'steps' && (
+                    <div style={{ width: 200 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
+                            <span>Voortgang</span>
+                            <span style={{ color: BRAND, fontWeight: 600 }}>{Math.round(stepsPct)}%</span>
+                        </div>
+                        <div style={{ height: 6, background: 'var(--color-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${stepsPct}%`, height: '100%', background: BRAND, transition: 'width .3s' }} />
+                        </div>
+                    </div>
+                )}
+                <button onClick={onAdvance} style={{
+                    background: course.status === 'ready' ? BRAND : course.status === 'active' ? 'rgba(34,197,94,.2)' : 'var(--color-bg-deep)',
+                    color: course.status === 'ready' ? '#0f0f0f' : course.status === 'active' ? '#34d399' : 'var(--text)',
+                    border: course.status === 'ready' ? 'none' : '1px solid var(--border)',
+                    padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}>
+                    {course.status === 'queued' && <><Play size={14} />Start bereiding</>}
+                    {course.status === 'active' && <><Check size={14} />Markeer klaar voor uitgifte</>}
+                    {course.status === 'ready' && <><HandPlatter size={14} />Naar uitgifte</>}
+                    {course.status === 'served' && <><Undo2 size={14} />Recall</>}
+                </button>
+            </div>
+
+            <div style={{ flex: 1, padding: '22px 30px', overflow: 'auto' }}>
+                {tab === 'steps' && <StepsView course={course} completedSteps={completedSteps} toggleStep={toggleStep} />}
+                {tab === 'mise' && <MiseView course={course} />}
+                {tab === 'tables' && <TablesView course={course} onToggleItem={onToggleItem} />}
+                {tab === 'quality' && <QualityView course={course} />}
+            </div>
+        </div>
+    );
+}
+
+function HeroStat({ Icon, val, label }: { Icon: any; val: React.ReactNode; label: string }) {
+    return (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(10px)', padding: '9px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,.1)' }}>
+            <Icon size={17} style={{ color: '#fcd34d' }} />
+            <div>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 17, fontWeight: 400, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', textTransform: 'uppercase', letterSpacing: '.06em', marginTop: 2 }}>{label}</div>
+            </div>
+        </div>
+    );
+}
+
+function StepsView({ course, completedSteps, toggleStep }: { course: Course; completedSteps: Record<number, boolean>; toggleStep: (n: number) => void }) {
+    return (
+        <div>
+            <HelpNote title="Hoe gebruik je de bereidingswijze?" tone="amber">
+                <strong style={{ color: BRAND }}>Tap een stap aan</strong> om af te vinken — de voortgangsbalk loopt mee.<br />
+                Aan de rechterkant zie je <strong>plating-instructies</strong>. <span style={{ color: '#34d399' }}>Groene block = vegan/veggie variant</span>.
+            </HelpNote>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 22, maxWidth: 1400, margin: '0 auto' }} className="responsive-grid">
+                <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Bereidingswijze · stap voor stap</div>
+                    {course.steps.length === 0 && (
+                        <div style={{ padding: 22, textAlign: 'center', color: 'var(--muted)', border: '1px dashed var(--border)', borderRadius: 10 }}>Geen stappen voor deze gang.</div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                        {course.steps.map(step => {
+                            const done = !!completedSteps[step.n];
                             return (
-                                <div key={i} style={{
-                                    padding: '10px 12px', borderRadius: 10,
-                                    background: t.critical ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.03)',
-                                    border: `1px solid ${t.critical ? 'rgba(239,68,68,.25)' : 'var(--border)'}`,
-                                    display: 'grid', gridTemplateColumns: '50px 1fr auto', gap: 10, alignItems: 'center',
+                                <div key={step.n} onClick={() => toggleStep(step.n)} style={{
+                                    background: done ? 'rgba(34,197,94,.06)' : 'var(--color-bg-elevated)',
+                                    border: `1px solid ${done ? 'rgba(34,197,94,.3)' : 'var(--border)'}`,
+                                    borderRadius: 12, padding: 16, cursor: 'pointer',
+                                    display: 'flex', gap: 14, transition: 'all .2s',
                                 }}>
-                                    <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, fontWeight: 500, color: t.critical ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{t.time}</span>
-                                    <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{t.label}</span>
-                                    <span style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                                        {minsAway < 0 ? 'nu' : minsAway < 60 ? `${minsAway}m` : `${Math.floor(minsAway / 60)}u${minsAway % 60}m`}
-                                    </span>
+                                    <div style={{
+                                        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                                        background: done ? '#34d399' : 'var(--color-bg-deep)',
+                                        color: done ? '#0f0f0f' : BRAND,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 16, fontWeight: 700, border: done ? 'none' : `2px solid ${BRAND}`,
+                                    }}>{done ? <Check size={18} /> : step.n}</div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 16, fontWeight: 600, textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1, marginBottom: 4, lineHeight: 1.3 }}>{step.action}</div>
+                                        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, opacity: done ? 0.5 : 1 }}>{step.detail}</div>
+                                    </div>
                                 </div>
                             );
                         })}
                     </div>
-                )}
+                </div>
+                <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Plating · zo ziet hij eruit</div>
+                    <div style={{ background: course.imgGradient, borderRadius: 14, height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ fontSize: 100, opacity: 0.4, filter: 'drop-shadow(0 8px 30px rgba(0,0,0,.6))' }}>{course.emoji}</div>
+                        <div style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,.6)', padding: '5px 10px', borderRadius: 6, fontSize: 10.5, color: 'rgba(255,255,255,.8)' }}>Plating-foto referentie</div>
+                    </div>
+                    {course.plating.length > 0 && (
+                        <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Palette size={13} style={{ color: BRAND }} /> Hoe het bord eruit moet zien
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                                {course.plating.map((p, i) => <li key={i}>{p}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                    {course.vegOption && (
+                        <div style={{ marginTop: 12, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.3)', borderRadius: 10, padding: 12, display: 'flex', gap: 10 }}>
+                            <Leaf size={15} style={{ color: '#34d399', flexShrink: 0, marginTop: 1 }} />
+                            <div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', marginBottom: 2, letterSpacing: '.06em' }}>VEGAN/VEGGIE VARIANT</div>
+                                <div style={{ fontSize: 12.5, color: 'var(--text)' }}>{course.vegOption}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   COMPACT HERO — kleine titel-strip + Wizard knop, geen grote foodporn
-   ═══════════════════════════════════════════════════════════════════ */
-function CompactHeader({ onWizard }: { onWizard: () => void }) {
-    return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, letterSpacing: '-.015em', margin: 0 }}>{SERVICE_EVENT.title}</h1>
-                    <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', fontSize: 10, letterSpacing: '.2em', color: 'var(--green)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
-                        SERVICE LIVE
-                    </span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                    {SERVICE_EVENT.guests} gasten · {SERVICE_EVENT.startTime}–{SERVICE_EVENT.endTime} · pauze {SERVICE_EVENT.pauseStart}–{SERVICE_EVENT.pauseEnd} · {SERVICE_EVENT.venue}
-                </div>
-            </div>
-            <BtnPrimary icon={Sparkles} onClick={onWizard}>AI Draaiboek Wizard</BtnPrimary>
-        </div>
+function MiseView({ course }: { course: Course }) {
+    const [checks, setChecks] = useState<Record<number, boolean>>(() =>
+        course.mise.reduce((acc, _, i) => ({ ...acc, [i]: i % 3 !== 2 }), {})
     );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   PRE-SERVICE: Sectie 1 — Overzicht + Menu + on-site MEP-checklist
-   ═══════════════════════════════════════════════════════════════════ */
-const ON_SITE_MEP_DEFAULT = [
-    { id: 'on-1', label: 'Catering-truck uitladen', critical: false },
-    { id: 'on-2', label: 'Smoker 1 + 2 op locatie zetten', critical: true },
-    { id: 'on-3', label: 'BBQ aansteken (smoker 1) — 18u voor service', critical: true },
-    { id: 'on-4', label: 'BBQ aansteken (smoker 2) — 6u voor service', critical: true },
-    { id: 'on-5', label: 'Service-line tafels uitstallen', critical: false },
-    { id: 'on-6', label: 'Bain-maries opwarmen (>65°C)', critical: true },
-    { id: 'on-7', label: 'Inox bakken + GN-trays op stelling', critical: false },
-    { id: 'on-8', label: 'Cambros + sauce-dippers klaarzetten', critical: false },
-    { id: 'on-9', label: 'Snijplanken + slicers gepoliert', critical: false },
-    { id: 'on-10', label: 'Borden voorverwarmen in stack', critical: false },
-    { id: 'on-11', label: 'Hand-wash station + handgels', critical: true },
-    { id: 'on-12', label: 'Brandblusser + thermometer check', critical: true },
-];
-
-function PreServiceSection({ now, mepState, onToggleMep }: { now: string; mepState: Record<string, boolean>; onToggleMep: (id: string) => void }) {
-    const decoratedMep = ON_SITE_MEP_DEFAULT.map(m => ({ ...m, done: mepState[m.id] || false }));
-    const mepDone = decoratedMep.filter(m => m.done).length;
-    const mepPct = Math.round((mepDone / decoratedMep.length) * 100);
-    const minsToService = (() => {
-        const [nh, nm] = now.split(':').map(Number);
-        const [sh, sm] = SERVICE_EVENT.startTime.split(':').map(Number);
-        return (sh * 60 + sm) - (nh * 60 + nm);
-    })();
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* AI briefing — vooraf wat te doen */}
-            <div style={{ padding: 18, borderRadius: 14, background: `linear-gradient(135deg, ${BRAND}1a, ${GOLD}0a 60%, rgba(28,28,32,.7))`, border: `1px solid ${GOLD}40` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${BRAND}, ${GOLD})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 14px ${BRAND}66` }}>
-                        <Sparkles size={18} style={{ color: '#000' }} />
-                    </div>
-                    <div>
-                        <Eyebrow style={{ color: GOLD }}>ROOK · BRIEFING</Eyebrow>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 22 }}>Voor we starten</div>
-                    </div>
-                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                        <Eyebrow>NOG</Eyebrow>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, color: minsToService < 60 ? BRAND : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                            {minsToService > 0 ? `${Math.floor(minsToService / 60)}u${String(minsToService % 60).padStart(2, '0')}m` : 'NU'}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>tot service start</div>
-                    </div>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, marginTop: 6 }}>
-                    Vandaag {SERVICE_EVENT.guests} gasten op {SERVICE_EVENT.venue}. Vier gangen: walking welcome, BBQ-buffet, avondhap, dessert.
-                    Pauze {SERVICE_EVENT.pauseStart}–{SERVICE_EVENT.pauseEnd} voor speeches.
-                    <strong style={{ color: GOLD }}> Drie kritieke allergieën</strong> — pinda (T3), gluten (T5), lactose (T7).
-                    Brisket-cyclus loopt al sinds 01:00 vannacht; satay-sticks tijdens speech-pauze starten op smoker 2.
-                    Werk de checklist hieronder af voordat de eerste gasten komen — alle critical items moeten af.
-                </div>
-            </div>
-
-            {/* Menu-overzicht: alle 4 gangen zichtbaar */}
-            <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <ClipboardList size={14} style={{ color: GOLD }} />
-                    <Eyebrow>Menu vandaag · {COURSES.filter(c => !c.isPause).length} gangen</Eyebrow>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                    {COURSES.filter(c => !c.isPause).map(c => (
-                        <MetalCard key={c.id} style={{ padding: 0, overflow: 'hidden' }}>
-                            <div style={{ height: 90, background: c.foodHue !== null ? `linear-gradient(135deg, hsl(${c.foodHue} 60% 32%), hsl(${c.foodHue} 50% 20%))` : '#2a2440', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, position: 'relative' }}>
-                                {c.heroEmoji}
-                                <div style={{ position: 'absolute', top: 8, left: 8, padding: '3px 8px', borderRadius: 4, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', fontSize: 10, fontWeight: 700, letterSpacing: '.15em', color: '#fff' }}>
-                                    GANG {c.number} · {c.serveAt}
-                                </div>
-                            </div>
-                            <div style={{ padding: 14 }}>
-                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, fontWeight: 400, marginBottom: 4 }}>{c.title}</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>{c.subtitle}</div>
-                                {c.dishes && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                                        {c.dishes.map((d, i) => (
-                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, alignItems: 'center', fontSize: 12 }}>
-                                                <span style={{ fontSize: 16 }}>{d.emoji}</span>
-                                                <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                                                <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', fontSize: 10 }}>{d.portions}p</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {c.heroDescription && (
-                                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted-light)', fontStyle: 'italic', lineHeight: 1.4 }}>{c.heroDescription}</div>
-                                )}
-                            </div>
-                        </MetalCard>
-                    ))}
-                </div>
-            </div>
-
-            {/* On-site MEP checklist */}
-            <MetalCard>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div>
-                        <Eyebrow>On-site mise en place</Eyebrow>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 2 }}>{mepDone}/{decoratedMep.length} klaar</div>
-                    </div>
-                    <div style={{ width: 60, height: 60, position: 'relative' }}>
-                        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                            <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
-                            <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={`${mepPct * 2.51} 251`} />
-                        </svg>
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{mepPct}%</div>
-                    </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 6 }}>
-                    {decoratedMep.map(item => (
-                        <div key={item.id} onClick={() => onToggleMep(item.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                            background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
-                            border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
-                        }}>
-                            <div style={{
-                                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                                background: item.done ? 'var(--green)' : 'transparent',
-                                border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                {item.done && <Check size={14} style={{ color: '#000' }} />}
-                            </div>
-                            <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
-                            {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
-                        </div>
-                    ))}
-                </div>
-            </MetalCard>
-
-            {/* Allergie-recap */}
-            {SERVICE_EVENT.allergies.length > 0 && (
-                <MetalCard style={{ borderColor: 'rgba(239,68,68,.3)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
-                        <Eyebrow style={{ color: 'var(--red)' }}>Allergieën deze service · {SERVICE_EVENT.allergies.length}</Eyebrow>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                        {SERVICE_EVENT.allergies.map((a, i) => (
-                            <div key={i} style={{ padding: 12, borderRadius: 10, background: a.severity === 'critical' ? 'rgba(239,68,68,.06)' : `${BRAND}0d`, border: `1px solid ${a.severity === 'critical' ? 'rgba(239,68,68,.2)' : `${BRAND}33`}` }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>T{a.table}</span>
-                                    <span style={{ fontWeight: 600, fontSize: 13 }}>{a.person}</span>
-                                </div>
-                                <div style={{ fontSize: 12, color: a.severity === 'critical' ? 'var(--red)' : GOLD, fontWeight: 600 }}>{a.issue}</div>
-                            </div>
+        <div style={{ maxWidth: 920, margin: '0 auto' }}>
+            <HelpNote title="Mise en place check" tone="blue">
+                Vink af welke ingrediënten klaar staan voor je begint. Hoeveelheden zijn berekend voor het aantal portions van deze gang.
+            </HelpNote>
+            <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ background: 'var(--color-bg-deep)' }}>
+                            <th style={miseTh}>Ingrediënt</th>
+                            <th style={miseTh}>Hoeveelheid</th>
+                            <th style={miseTh}>Bron</th>
+                            <th style={{ ...miseTh, textAlign: 'center', width: 80 }}>Klaar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {course.mise.map((m, i) => (
+                            <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                <td style={{ padding: '12px 16px', fontSize: 13.5, fontWeight: 600 }}>{m.item}</td>
+                                <td style={{ padding: '12px 16px', fontSize: 13, color: BRAND, fontFamily: 'ui-monospace, monospace' }}>{m.qty}</td>
+                                <td style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--muted)' }}>{m.source || '—'}</td>
+                                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                    <input type="checkbox" checked={!!checks[i]} onChange={() => setChecks(s => ({ ...s, [i]: !s[i] }))} style={{ width: 18, height: 18, accentColor: BRAND }} />
+                                </td>
+                            </tr>
                         ))}
-                    </div>
-                </MetalCard>
-            )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+const miseTh: React.CSSProperties = { textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' };
+
+function TablesView({ course, onToggleItem }: { course: Course; onToggleItem: (cid: string, iid: string) => void }) {
+    return (
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+            <HelpNote title="Per-tafel uitgifte" tone="green">
+                Per tafel zie je de status. <span style={{ color: '#f87171' }}>Rode "ALLERGIE" badge</span> = let op met deze tafel — speciale variant.
+            </HelpNote>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                {course.items.map(item => {
+                    const status: 'served' | 'ready' | 'active' | 'queued' = item.served ? 'served' : item.ready ? 'ready' : item.inProgress ? 'active' : 'queued';
+                    const colors = {
+                        served: { bg: 'rgba(34,197,94,.08)', border: 'rgba(34,197,94,.3)', text: '#34d399', label: 'Geserveerd' },
+                        ready: { bg: 'rgba(34,197,94,.04)', border: 'rgba(34,197,94,.2)', text: '#34d399', label: 'Klaar voor uitgifte' },
+                        active: { bg: `${BRAND}10`, border: `${BRAND}66`, text: BRAND, label: 'In bereiding' },
+                        queued: { bg: 'var(--color-bg-elevated)', border: 'var(--border)', text: 'var(--muted)', label: 'Wachtend' },
+                    }[status];
+                    return (
+                        <div key={item.id} style={{ background: colors.bg, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 13, position: 'relative' }}>
+                            {item.special && (
+                                <div style={{ position: 'absolute', top: 8, right: 8, background: '#dc2626', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700 }}>⚠ ALLERGIE</div>
+                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                                <div style={{ width: 34, height: 34, background: BRAND, color: '#0f0f0f', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>T{item.table}</div>
+                                <div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>Tafel {item.table}</div>
+                                    <div style={{ fontSize: 15, fontWeight: 700 }}>{item.count} pers.</div>
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 11.5, color: colors.text, fontWeight: 600, marginBottom: item.special ? 6 : 8 }}>{colors.label}</div>
+                            {item.special && (
+                                <div style={{ fontSize: 11, color: '#fca5a5', background: 'rgba(220,38,38,.1)', padding: '6px 8px', borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
+                                    {item.special}
+                                </div>
+                            )}
+                            <button onClick={() => onToggleItem(course.id, item.id)} style={{
+                                width: '100%', padding: '8px',
+                                background: status === 'served' ? 'transparent' : status === 'ready' ? BRAND : 'var(--color-bg-deep)',
+                                color: status === 'ready' ? '#0f0f0f' : status === 'served' ? colors.text : 'var(--text)',
+                                border: status === 'ready' ? 'none' : `1px solid ${colors.border}`,
+                                borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            }}>
+                                {status === 'served' ? '✓ Geserveerd' : status === 'ready' ? 'Markeer geserveerd' : status === 'active' ? 'Markeer klaar' : 'Start'}
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   POST-SERVICE: Sectie 3 — Opruim + Feedback + PDF rapport
-   ═══════════════════════════════════════════════════════════════════ */
-const CLEANUP_DEFAULT = [
-    { id: 'cl-1', label: 'Smokers uit + dom afgekoeld', critical: true },
-    { id: 'cl-2', label: 'Bain-maries leeg + schoonmaken', critical: false },
-    { id: 'cl-3', label: 'Cambros leeg + spoelen', critical: false },
-    { id: 'cl-4', label: 'Snijplanken + slicers wassen', critical: false },
-    { id: 'cl-5', label: 'Service-line afbreken', critical: false },
-    { id: 'cl-6', label: 'Inox / GN-trays inpakken', critical: false },
-    { id: 'cl-7', label: 'Restanten apart (waste-tracking)', critical: false },
-    { id: 'cl-8', label: 'Vuil → afvalcontainer locatie', critical: false },
-    { id: 'cl-9', label: 'Catering-truck inladen', critical: true },
-    { id: 'cl-10', label: 'Locatie eind-check (vergeet niets)', critical: true },
-    { id: 'cl-11', label: 'Smoker-as koud in metalen bak', critical: true },
-    { id: 'cl-12', label: 'Klant bedanken + verlaten', critical: false },
-];
+function QualityView({ course }: { course: Course }) {
+    const [checks, setChecks] = useState<Record<number, boolean>>({});
+    const allChecks = course.qualityChecks || [];
+    const completed = Object.values(checks).filter(Boolean).length;
+    const [aiReply, setAiReply] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
 
-interface FeedbackResult {
-    polishedNarrative: string;
-    keyPoints: string[];
-    sentiment: 'positive' | 'mixed' | 'negative';
-    actionables: string[];
-    tags?: string[];
-}
-
-function PostServiceSection({ cleanupState, onToggleCleanup, miseState }: { cleanupState: Record<string, boolean>; onToggleCleanup: (id: string) => void; miseState: Record<string, boolean> }) {
-    const [rawNotes, setRawNotes] = useState('');
-    const [aiResult, setAiResult] = useState<FeedbackResult | null>(null);
-    const [aiBusy, setAiBusy] = useState(false);
-    const [aiError, setAiError] = useState<string | null>(null);
-
-    /* Persist notes + AI result in localStorage */
-    useEffect(() => {
+    async function aiCheck() {
+        setAiLoading(true);
         try {
-            const stored = localStorage.getItem('service_feedback_v1');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                setRawNotes(parsed.rawNotes || '');
-                setAiResult(parsed.aiResult || null);
-            }
-        } catch { /* ignore */ }
-    }, []);
-    useEffect(() => {
-        try { localStorage.setItem('service_feedback_v1', JSON.stringify({ rawNotes, aiResult })); } catch { /* ignore */ }
-    }, [rawNotes, aiResult]);
-
-    const decoratedCl = CLEANUP_DEFAULT.map(c => ({ ...c, done: cleanupState[c.id] || false }));
-    const clDone = decoratedCl.filter(c => c.done).length;
-    const clPct = Math.round((clDone / decoratedCl.length) * 100);
-
-    async function rewriteFeedback() {
-        if (rawNotes.trim().length < 10) {
-            setAiError('Schrijf eerst een paar zinnen — anders heeft Rook niks om mee te werken.');
-            return;
-        }
-        setAiBusy(true);
-        setAiError(null);
-        try {
-            const res = await fetch('/api/service-feedback-rewrite', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const res = await fetch('/api/chef-coach', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    rawNotes,
-                    eventContext: { title: SERVICE_EVENT.title, date: SERVICE_EVENT.date, guests: SERVICE_EVENT.guests, menu: COURSES.filter(c => !c.isPause).map(c => c.title).join(' · ') },
+                    now: new Date().toTimeString().slice(0, 5),
+                    activeCourseTitle: course.title,
+                    activeCourseStatus: course.status,
+                    miseRemaining: course.qualityChecks.map(q => ({ label: q })),
+                    userQuestion: `Geef in 3 korte bullets in het Nederlands wat je ALS LAATSTE check moet doen voordat "${course.title}" naar de gast gaat. Plating-eisen: ${course.plating.join('; ')}.`,
                 }),
             });
             const body = await res.json();
-            if (!res.ok || !body.success) {
-                setAiError(body.error || 'AI-fout');
-            } else {
-                setAiResult({ polishedNarrative: body.polishedNarrative, keyPoints: body.keyPoints, sentiment: body.sentiment, actionables: body.actionables, tags: body.tags });
-            }
+            setAiReply(body.directive || body.error || 'Geen antwoord');
         } catch (e: any) {
-            setAiError(e?.message || 'Kon Rook niet bereiken');
+            setAiReply('AI niet bereikbaar: ' + (e?.message || 'fout'));
         }
-        setAiBusy(false);
-    }
-
-    async function generatePDF() {
-        const { default: jsPDF } = await import('jspdf');
-        const autoTable = (await import('jspdf-autotable')).default;
-        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-        /* COVER */
-        doc.setFillColor(18, 18, 20); doc.rect(0, 0, 210, 50, 'F');
-        doc.setTextColor(196, 163, 90); doc.setFontSize(11);
-        doc.text('SERVICE RAPPORT', 14, 18);
-        doc.setTextColor(255, 255, 255); doc.setFontSize(22);
-        doc.text(SERVICE_EVENT.title, 14, 30);
-        doc.setTextColor(180, 180, 180); doc.setFontSize(10);
-        doc.text(`${SERVICE_EVENT.date} · ${SERVICE_EVENT.guests} gasten · ${SERVICE_EVENT.venue}`, 14, 38);
-        doc.text(`Service ${SERVICE_EVENT.startTime}–${SERVICE_EVENT.endTime}`, 14, 44);
-
-        /* MENU TABLE */
-        let y = 62;
-        doc.setTextColor(40, 40, 40); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-        doc.text('Menu uitgevoerd', 14, y); y += 6;
-        autoTable(doc, {
-            startY: y,
-            head: [['Gang', 'Tijd', 'Gerechten', 'Porties']],
-            body: COURSES.filter(c => !c.isPause).map(c => [
-                `${c.number}. ${c.title}`,
-                c.serveAt,
-                c.dishes ? c.dishes.map(d => d.name).join(', ') : '—',
-                c.dishes ? c.dishes.reduce((s, d) => s + d.portions, 0) + ' totaal' : '—',
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
-            bodyStyles: { fontSize: 9 },
-            margin: { left: 14, right: 14 },
-        });
-        y = (doc as any).lastAutoTable.finalY + 8;
-
-        /* MISE / TEMPO */
-        const allMise = COURSES.flatMap(c => (c.miseChecklist || []).map(m => ({ ...m, courseTitle: c.title })));
-        const miseTotalDone = allMise.filter(m => miseState[m.id] !== undefined ? miseState[m.id] : m.done).length;
-        const tempoStr = allMise.length ? `${miseTotalDone}/${allMise.length} mise-stappen voltooid (${Math.round((miseTotalDone / allMise.length) * 100)}%)` : '—';
-
-        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-        doc.text('Tempo & uitvoering', 14, y); y += 6;
-        autoTable(doc, {
-            startY: y,
-            head: [['Metriek', 'Waarde']],
-            body: [
-                ['Mise-completion', tempoStr],
-                ['Opruim-completion', `${clDone}/${decoratedCl.length} (${clPct}%)`],
-                ['Aantal gangen', String(COURSES.filter(c => !c.isPause).length)],
-                ['Pauze-moment', `${SERVICE_EVENT.pauseStart}–${SERVICE_EVENT.pauseEnd}`],
-                ['Allergieën', SERVICE_EVENT.allergies.map(a => `${a.person} (T${a.table}) — ${a.issue}`).join('; ') || 'geen'],
-            ],
-            theme: 'striped',
-            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
-            bodyStyles: { fontSize: 9 },
-            margin: { left: 14, right: 14 },
-        });
-        y = (doc as any).lastAutoTable.finalY + 8;
-
-        /* FEEDBACK */
-        if (aiResult) {
-            if (y > 240) { doc.addPage(); y = 20; }
-            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-            doc.text('Pitmaster-evaluatie', 14, y); y += 6;
-            doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-            const wrapped = doc.splitTextToSize(aiResult.polishedNarrative, 180);
-            doc.text(wrapped, 14, y); y += wrapped.length * 5 + 6;
-
-            if (aiResult.keyPoints?.length) {
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-                doc.text('Kernpunten', 14, y); y += 5;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-                aiResult.keyPoints.forEach(kp => {
-                    if (y > 275) { doc.addPage(); y = 20; }
-                    const lines = doc.splitTextToSize('• ' + kp, 180);
-                    doc.text(lines, 18, y); y += lines.length * 5;
-                });
-                y += 4;
-            }
-
-            if (aiResult.actionables?.length) {
-                if (y > 250) { doc.addPage(); y = 20; }
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-                doc.text('Volgende keer', 14, y); y += 5;
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-                aiResult.actionables.forEach(a => {
-                    if (y > 275) { doc.addPage(); y = 20; }
-                    const lines = doc.splitTextToSize('→ ' + a, 180);
-                    doc.text(lines, 18, y); y += lines.length * 5;
-                });
-                y += 4;
-            }
-        }
-
-        /* RAW notes als appendix */
-        if (rawNotes.trim()) {
-            doc.addPage(); y = 20;
-            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-            doc.text('Bijlage: ruwe notities pitmaster', 14, y); y += 8;
-            doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-            const lines = doc.splitTextToSize(rawNotes, 180);
-            doc.text(lines, 14, y);
-        }
-
-        /* Footer */
-        const pageCount = (doc as any).internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8); doc.setTextColor(148, 148, 148);
-            doc.text(`Hop & Bites · BBQ Architect · ${new Date().toLocaleString('nl-NL')} · pagina ${i}/${pageCount}`, 14, 290);
-        }
-
-        doc.save(`service-rapport-${SERVICE_EVENT.id}-${new Date().toISOString().slice(0, 10)}.pdf`);
+        setAiLoading(false);
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Opruim-checklist */}
-            <MetalCard>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Brush size={14} style={{ color: GOLD }} />
-                            <Eyebrow>Opruim-checklist</Eyebrow>
-                        </div>
-                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 4 }}>{clDone}/{decoratedCl.length} klaar</div>
-                    </div>
-                    <div style={{ width: 60, height: 60, position: 'relative' }}>
-                        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                            <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
-                            <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={`${clPct * 2.51} 251`} />
-                        </svg>
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{clPct}%</div>
-                    </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 6 }}>
-                    {decoratedCl.map(item => (
-                        <div key={item.id} onClick={() => onToggleCleanup(item.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                            background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
-                            border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+            <HelpNote title="Laatste check voor uitgifte" tone="amber">
+                Loop deze checks af voordat de gerechten naar de tafel gaan. Onderaan kun je de AI om een Michelin-stijl laatste-check vragen.
+            </HelpNote>
+            {allChecks.length === 0 && (
+                <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)' }}>Geen kwaliteitschecks gedefinieerd voor deze gang.</div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 22 }}>
+                {allChecks.map((check, i) => {
+                    const done = !!checks[i];
+                    return (
+                        <div key={i} onClick={() => setChecks(c => ({ ...c, [i]: !c[i] }))} style={{
+                            background: done ? 'rgba(34,197,94,.06)' : 'var(--color-bg-elevated)',
+                            border: `1px solid ${done ? 'rgba(34,197,94,.3)' : 'var(--border)'}`,
+                            borderRadius: 12, padding: 16, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 12,
                         }}>
-                            <div style={{
-                                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                                background: item.done ? 'var(--green)' : 'transparent',
-                                border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                {item.done && <Check size={14} style={{ color: '#000' }} />}
+                            <div style={{ width: 26, height: 26, borderRadius: 8, background: done ? '#34d399' : 'var(--color-bg-deep)', border: done ? 'none' : '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {done && <Check size={15} style={{ color: '#0f0f0f' }} />}
                             </div>
-                            <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
-                            {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
+                            <div style={{ fontSize: 14, fontWeight: 600, textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>{check}</div>
                         </div>
-                    ))}
-                </div>
-            </MetalCard>
-
-            {/* Feedback input + AI rewrite */}
-            <MetalCard>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Edit3 size={14} style={{ color: GOLD }} />
-                        <Eyebrow>Feedback dump · ruw</Eyebrow>
+                    );
+                })}
+            </div>
+            <div style={{ background: `linear-gradient(135deg, ${BRAND}14, ${BRAND}03)`, border: `1px solid ${BRAND}40`, borderRadius: 14, padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div style={{ width: 36, height: 36, background: BRAND, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Sparkles size={17} style={{ color: '#0f0f0f' }} />
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        {rawNotes && (
-                            <button onClick={() => { setRawNotes(''); setAiResult(null); }} style={{
-                                padding: '6px 10px', borderRadius: 7, fontSize: 11, color: 'var(--muted)',
-                                background: 'transparent', border: '1px solid var(--border)', cursor: 'pointer',
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                            }}>
-                                <Trash2 size={11} /> Wissen
-                            </button>
-                        )}
-                        <button onClick={rewriteFeedback} disabled={aiBusy || rawNotes.trim().length < 10} style={{
-                            padding: '6px 12px', borderRadius: 7, fontSize: 11, fontWeight: 600,
-                            background: aiBusy ? 'var(--muted-light)' : `linear-gradient(180deg, ${GOLD}, #9e781c)`,
-                            color: '#000', border: 'none', cursor: aiBusy ? 'not-allowed' : 'pointer',
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            opacity: rawNotes.trim().length < 10 ? 0.5 : 1,
-                        }}>
-                            {aiBusy ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                            {aiBusy ? 'Rook schrijft…' : 'Rook schrijft uit'}
-                        </button>
+                    <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>AI Kwaliteits-assistent</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>Laatste-check voor de gast door de pitmaster-AI</div>
                     </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
-                    Gooi alles erin wat je nog kwijt wilt — losse zinnen, fragmenten, frustraties, complimenten. Rook leest mee en schrijft het netjes uit voor in het rapport.
-                </div>
-                <textarea
-                    value={rawNotes}
-                    onChange={e => setRawNotes(e.target.value)}
-                    rows={6}
-                    placeholder='Bv: "tempo gang 2 te traag, brisket strak, klant blij — vooral met short ribs, mac & cheese hadden we 8kg over, satay-portie voor maaike T3 ging goed, smoker 1 stookte rommelig, team had te weinig handen tijdens piek"'
-                    style={{
-                        width: '100%', padding: 14, borderRadius: 10,
-                        background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
-                        color: 'var(--text)', fontSize: 13, lineHeight: 1.6,
-                        outline: 'none', resize: 'vertical', fontFamily: 'inherit',
-                    }}
-                />
-                {aiError && (
-                    <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--red)', fontSize: 12 }}>
-                        {aiError}
+                <button onClick={aiCheck} disabled={aiLoading} style={{
+                    width: '100%', padding: 12, background: BRAND, color: '#0f0f0f', border: 'none', borderRadius: 10,
+                    fontSize: 13.5, fontWeight: 700, cursor: aiLoading ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: aiLoading ? 0.7 : 1,
+                }}>
+                    <Camera size={15} /> {aiLoading ? 'AI bekijkt het bord…' : 'Vraag AI om laatste-check'}
+                </button>
+                {aiReply && (
+                    <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--color-bg-deep)', border: `1px solid ${BRAND}40`, fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {aiReply}
                     </div>
                 )}
-            </MetalCard>
-
-            {/* AI-uitgeschreven samenvatting */}
-            {aiResult && (
-                <MetalCard style={{ borderColor: `${GOLD}40` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Sparkles size={14} style={{ color: GOLD }} />
-                        <Eyebrow style={{ color: GOLD }}>Rook · uitgeschreven</Eyebrow>
-                        <span style={{
-                            padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.15em',
-                            background: aiResult.sentiment === 'positive' ? 'rgba(34,197,94,.15)' : aiResult.sentiment === 'mixed' ? `${BRAND}1a` : 'rgba(239,68,68,.15)',
-                            color: aiResult.sentiment === 'positive' ? 'var(--green)' : aiResult.sentiment === 'mixed' ? BRAND : 'var(--red)',
-                        }}>{(aiResult.sentiment || 'mixed').toUpperCase()}</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.7, marginBottom: 14 }}>
-                        {aiResult.polishedNarrative}
-                    </div>
-                    {aiResult.keyPoints?.length > 0 && (
-                        <>
-                            <Eyebrow style={{ marginBottom: 6 }}>Kernpunten</Eyebrow>
-                            <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, marginBottom: 12 }}>
-                                {aiResult.keyPoints.map((p, i) => <li key={i}>{p}</li>)}
-                            </ul>
-                        </>
-                    )}
-                    {aiResult.actionables?.length > 0 && (
-                        <div style={{ padding: 12, borderRadius: 10, background: `${BRAND}0d`, border: `1px solid ${BRAND}33` }}>
-                            <Eyebrow style={{ color: BRAND, marginBottom: 6 }}>Actionables · volgende keer</Eyebrow>
-                            <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7 }}>
-                                {aiResult.actionables.map((a, i) => <li key={i}>{a}</li>)}
-                            </ul>
-                        </div>
-                    )}
-                </MetalCard>
-            )}
-
-            {/* PDF generate */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button onClick={generatePDF} style={{
-                    padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                    background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#000', border: 'none', cursor: 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    boxShadow: `0 0 16px ${GOLD}33`,
-                }}>
-                    <Download size={16} /> Service-rapport als PDF
-                </button>
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>{completed}/{allChecks.length} checks voltooid</div>
             </div>
         </div>
     );
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   MAIN — 3-tab structure
+   MAIN
    ═══════════════════════════════════════════════════════════════════ */
-type Section = 'overzicht' | 'service' | 'opruim';
+export default function ServiceMode() {
+    const [view, setView] = useState<View>('hub');
+    const [eventId, setEventId] = useState<string | null>(null);
+    const [courseId, setCourseId] = useState<string | null>(null);
+    const [eventState, setEventState] = useState<ServiceEvent | null>(null);
+    const [rookDocked, setRookDocked] = useState(true);
 
-export default function ServiceKDS() {
-    const [section, setSection] = useState<Section>('service');
-    const [focusId, setFocusId] = useState<string>('g1');
-    const [wizardOpen, setWizardOpen] = useState(false);
-    const [miseState, setMiseState] = useState<Record<string, boolean>>({});
-    const [rookDocked, setRookDocked] = useState(true);   /* Rook open by default */
-    const [mepState, setMepState] = useState<Record<string, boolean>>({});
-    const [cleanupState, setCleanupState] = useState<Record<string, boolean>>({});
-    const now = useLiveNow('17:42');
-
-    /* Persist all state in localStorage */
+    /* Restore from localStorage */
+    useEffect(() => {
+        const s = loadState();
+        setView(s.view); setEventId(s.eventId); setCourseId(s.courseId); setEventState(s.eventState);
+    }, []);
+    /* Persist on change */
     useEffect(() => {
         try {
-            const stored = localStorage.getItem('service_kds_v3');
-            if (stored) {
-                const p = JSON.parse(stored);
-                if (p.section) setSection(p.section);
-                if (p.miseState) setMiseState(p.miseState);
-                if (p.mepState) setMepState(p.mepState);
-                if (p.cleanupState) setCleanupState(p.cleanupState);
-            }
+            localStorage.setItem(STATE_KEY, JSON.stringify({ view, eventId, courseId, eventState }));
         } catch { /* */ }
-    }, []);
-    useEffect(() => {
-        try { localStorage.setItem('service_kds_v3', JSON.stringify({ section, miseState, mepState, cleanupState })); } catch { /* */ }
-    }, [section, miseState, mepState, cleanupState]);
+    }, [view, eventId, courseId, eventState]);
 
-    const focusCourse = COURSES.find(c => c.id === focusId) || COURSES[0];
-    const focusIdx = COURSES.findIndex(c => c.id === focusId);
-    const nextCourse = focusIdx >= 0 && focusIdx < COURSES.length - 1 ? COURSES[focusIdx + 1] : null;
+    function pickEvent(id: string) {
+        const evt = SERVICE_EVENTS.find(e => e.id === id);
+        if (!evt) return;
+        setEventId(id);
+        setEventState(JSON.parse(JSON.stringify(evt)));
+        setView('board');
+    }
 
-    const decoratedItems = (items: MiseItem[]) => items.map(i => ({
-        ...i, done: miseState[i.id] !== undefined ? miseState[i.id] : i.done,
-    }));
-    const toggleMise = (id: string) => setMiseState(s => {
-        const orig = focusCourse.miseChecklist?.find(i => i.id === id)?.done || false;
-        const cur = s[id] !== undefined ? s[id] : orig;
-        return { ...s, [id]: !cur };
-    });
-    const toggleMep = (id: string) => setMepState(s => ({ ...s, [id]: !s[id] }));
-    const toggleCleanup = (id: string) => setCleanupState(s => ({ ...s, [id]: !s[id] }));
+    function openCourse(cid: string) {
+        setCourseId(cid);
+        setView('detail');
+    }
 
-    const decoratedMise = focusCourse.miseChecklist ? decoratedItems(focusCourse.miseChecklist) : [];
-    const miseDone = decoratedMise.filter(m => m.done).length;
-    const misePct = decoratedMise.length ? Math.round((miseDone / decoratedMise.length) * 100) : 0;
-    const miseRemaining = decoratedMise.filter(m => !m.done).map(m => ({ label: m.label, critical: m.critical }));
+    function advanceStatus(cid: string) {
+        setEventState(state => {
+            if (!state) return state;
+            return {
+                ...state,
+                courses: state.courses.map(c => {
+                    if (c.id !== cid) return c;
+                    const order: CourseStatus[] = ['queued', 'active', 'ready', 'served'];
+                    const idx = order.indexOf(c.status);
+                    const next: CourseStatus = c.status === 'served' ? 'ready' : order[Math.min(idx + 1, order.length - 1)];
+                    return { ...c, status: next };
+                }),
+            };
+        });
+    }
 
-    const minsToNext = nextCourse ? (() => {
-        const [nh, nm] = now.split(':').map(Number);
-        const [th, tm] = nextCourse.serveAt.split(':').map(Number);
-        return (th * 60 + tm) - (nh * 60 + nm);
-    })() : undefined;
+    function toggleItem(cid: string, iid: string) {
+        setEventState(state => {
+            if (!state) return state;
+            return {
+                ...state,
+                courses: state.courses.map(c => {
+                    if (c.id !== cid) return c;
+                    return {
+                        ...c,
+                        items: c.items.map((i: CourseItem) => {
+                            if (i.id !== iid) return i;
+                            if (i.served) return { ...i, served: false, ready: true };
+                            if (i.ready) return { ...i, served: true };
+                            if (i.inProgress) return { ...i, inProgress: false, ready: true };
+                            return { ...i, inProgress: true };
+                        }),
+                    };
+                }),
+            };
+        });
+    }
 
-    const chefContext = useMemo(() => ({
-        now,
-        activeCourseId: focusCourse.id,
-        activeCourseTitle: section === 'overzicht' ? `Pre-service · ${SERVICE_EVENT.title}` : section === 'opruim' ? `Post-service · ${SERVICE_EVENT.title}` : focusCourse.title,
-        activeCourseStart: focusCourse.serveAt,
-        activeCourseStatus: section === 'overzicht' ? 'briefing' : section === 'opruim' ? 'cleanup' : focusCourse.status,
-        minsUntilNextCourse: minsToNext !== undefined && minsToNext > 0 ? minsToNext : undefined,
-        nextCourseTitle: nextCourse?.title,
-        misePctDone: misePct,
-        miseRemaining,
-        smoker: focusCourse.smokerStatus ? {
-            item: focusCourse.smokerStatus.item,
-            temp: focusCourse.smokerStatus.temp,
-            target: focusCourse.smokerStatus.target,
-            etaMinutes: focusCourse.smokerStatus.etaMinutes,
-        } : undefined,
-        allergies: SERVICE_EVENT.allergies.map(a => ({ person: a.person, issue: a.issue, severity: a.severity })),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [section, focusCourse.id, misePct, now.slice(0, 5)]);
+    /* Build chef context for AI */
+    const chefContext = useMemo<ChefContext>(() => {
+        if (!eventState) {
+            return { now: new Date().toTimeString().slice(0, 5) };
+        }
+        const active = eventState.courses.filter(c => c.status === 'active');
+        const queued = eventState.courses.filter(c => c.status === 'queued');
+        const current = view === 'detail' && courseId ? eventState.courses.find(c => c.id === courseId) : active[0] || queued[0];
+        const next = current ? eventState.courses[eventState.courses.indexOf(current) + 1] : undefined;
+        return {
+            now: new Date().toTimeString().slice(0, 5),
+            activeCourseId: current?.id,
+            activeCourseTitle: current?.title,
+            activeCourseStart: current ? `${eventState.startTime} +${current.serveTime}m` : undefined,
+            activeCourseStatus: current?.status,
+            nextCourseTitle: next?.title,
+            misePctDone: undefined,
+            miseRemaining: current?.mise.map(m => ({ label: `${m.item} (${m.qty})`, critical: false })),
+            allergies: eventState.allergyTable.map(a => ({ person: a.name, issue: a.note, severity: a.allergens.includes('N') || a.allergens.includes('VE') ? 'critical' : 'must' })),
+        };
+    }, [eventState, courseId, view]);
 
-    /* Wanneer Rook gedockt is: schuif content 380px naar links zodat het paneel
-       niet over content valt. Sticky bars (allergie, NU) ook smaller. */
     const rookOffset = rookDocked ? 380 : 0;
 
     return (
         <>
-            {section === 'service' && <StickyAllergieBar rightOffset={rookOffset} />}
-            {section === 'service' && <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} rightOffset={rookOffset} />}
-
-            <div style={{ padding: '20px 32px 120px', maxWidth: 1500, margin: '0 auto', paddingRight: 32 + rookOffset, transition: 'padding-right .25s' }}>
-                {/* TAB SWITCHER */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, letterSpacing: '-.015em', margin: 0 }}>{SERVICE_EVENT.title}</h1>
-                            <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', fontSize: 10, letterSpacing: '.2em', color: 'var(--green)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
-                                LIVE · {now}
-                            </span>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-                            {SERVICE_EVENT.guests} gasten · {SERVICE_EVENT.startTime}–{SERVICE_EVENT.endTime} · {SERVICE_EVENT.venue}
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)' }}>
-                        <SectionTab active={section === 'overzicht'} onClick={() => setSection('overzicht')} Icon={ClipboardList} label="Overzicht" hint="Vooraf · MEP" />
-                        <SectionTab active={section === 'service'} onClick={() => setSection('service')} Icon={Tv} label="Service KDS" hint="Live · gangen" />
-                        <SectionTab active={section === 'opruim'} onClick={() => setSection('opruim')} Icon={Brush} label="Opruim" hint="Na · feedback + PDF" />
-                    </div>
+            {view === 'hub' && (
+                <div style={{ marginRight: rookOffset }}>
+                    <ServiceModeHub events={SERVICE_EVENTS} onPickEvent={pickEvent} />
                 </div>
+            )}
 
-                {/* SECTIE 1 — OVERZICHT */}
-                {section === 'overzicht' && <PreServiceSection now={now} mepState={mepState} onToggleMep={toggleMep} />}
+            {view === 'board' && eventState && (
+                <ServiceModeBoard
+                    event={eventState}
+                    onOpenCourse={openCourse}
+                    onAdvanceStatus={advanceStatus}
+                    onBack={() => { setView('hub'); setEventState(null); setEventId(null); setCourseId(null); }}
+                    rookOffset={rookOffset}
+                />
+            )}
 
-                {/* SECTIE 2 — SERVICE KDS (bestaande layout) */}
-                {section === 'service' && (
-                    <>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                            <BtnPrimary icon={Sparkles} onClick={() => setWizardOpen(true)}>AI Draaiboek Wizard</BtnPrimary>
-                        </div>
-                        <DoeNuPanel activeCourse={focusCourse} miseState={miseState} now={now} />
-                        <div style={{ height: 16 }} />
-                        <CourseStrip courses={COURSES} activeId={focusId} onSelect={setFocusId} />
-                        <div style={{ height: 16 }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 320px' : '1fr', gap: 16 }}>
-                            {focusCourse.aiCoach && <AICoach tip={focusCourse.aiCoach.tip} severity={focusCourse.aiCoach.severity} />}
-                            {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
-                        </div>
-                        {focusCourse.miseChecklist && (
-                            <>
-                                <div style={{ height: 16 }} />
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
-                                    <MiseChecklist items={decoratedMise} onToggle={toggleMise} />
-                                    <CourseTimelineList timeline={focusCourse.timeline || []} />
-                                </div>
-                            </>
-                        )}
-                        {focusCourse.dishes && (
-                            <>
-                                <div style={{ height: 16 }} />
-                                <div>
-                                    <Eyebrow style={{ marginBottom: 8 }}>Plating · {focusCourse.dishes.length} gerechten</Eyebrow>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
-                                        {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} compact />)}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        {focusCourse.isPause && focusCourse.timeline && (
-                            <>
-                                <div style={{ height: 16 }} />
-                                <CourseTimelineList timeline={focusCourse.timeline} />
-                            </>
-                        )}
-                    </>
-                )}
+            {view === 'detail' && eventState && courseId && (
+                <ServiceModeDetail
+                    event={eventState}
+                    courseId={courseId}
+                    onBack={() => setView('board')}
+                    onAdvance={() => advanceStatus(courseId)}
+                    onToggleItem={toggleItem}
+                    rookOffset={rookOffset}
+                />
+            )}
 
-                {/* SECTIE 3 — OPRUIM */}
-                {section === 'opruim' && <PostServiceSection cleanupState={cleanupState} onToggleCleanup={toggleCleanup} miseState={miseState} />}
-
-                <div style={{ marginTop: 28, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
-                    <Sparkles size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-                    <span>
-                        <strong style={{ color: 'var(--text)' }}>Service Mode · 3 fases met Pitmaster Rook:</strong>{' '}
-                        <strong>Overzicht</strong> = pre-service briefing + menu + on-site MEP. <strong>Service KDS</strong> = live gang-by-gang met countdown + DOE NU. <strong>Opruim</strong> = checklist + feedback dump → AI maakt nette samenvatting → PDF rapport. Rook staat altijd rechtsonder klaar.
-                    </span>
-                </div>
-
-                <AIWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
-            </div>
-
-            {/* Persistent AI Chef — altijd in beeld over alle 3 secties */}
+            {/* Persistent AI Chef Rook — over alle 3 views */}
             <AIChefAssistant context={chefContext} onDockChange={setRookDocked} />
         </>
-    );
-}
-
-function SectionTab({ active, onClick, Icon, label, hint }: { active: boolean; onClick: () => void; Icon: any; label: string; hint: string }) {
-    return (
-        <button onClick={onClick} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 10,
-            background: active ? `linear-gradient(180deg, ${BRAND}1f, ${GOLD}0a)` : 'transparent',
-            border: 'none', color: active ? 'var(--text)' : 'var(--muted)',
-            cursor: 'pointer', textAlign: 'left',
-            boxShadow: active ? `inset 0 0 0 1px ${GOLD}4D` : 'none',
-            transition: '.15s',
-        }}>
-            <Icon size={14} style={{ color: active ? GOLD : 'var(--muted)' }} />
-            <div>
-                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1 }}>{label}</div>
-                <div style={{ fontSize: 9, color: 'var(--muted-light)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 2 }}>{hint}</div>
-            </div>
-        </button>
     );
 }
