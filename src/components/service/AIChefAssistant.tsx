@@ -19,16 +19,29 @@ const BRAND = '#FFBF00';
 
 export interface ChefContext {
     now: string;
+    /* Event-level info */
+    eventTitle?: string;
+    eventVenue?: string;
+    eventGuests?: number;
+    /* Active course */
     activeCourseId?: string;
     activeCourseTitle?: string;
     activeCourseStart?: string;
     activeCourseStatus?: string;
+    activeCourseDescription?: string;
+    /* Volgende */
     minsUntilNextCourse?: number;
     nextCourseTitle?: string;
+    /* Voortgang */
     misePctDone?: number;
     miseRemaining?: { label: string; critical?: boolean }[];
+    coursesProgress?: { num: number; title: string; status: string; servedPortions?: number; totalPortions?: number }[];
+    /* Smoker */
     smoker?: { item: string; temp: number; target: number; etaMinutes: number };
-    allergies?: { person: string; issue: string; severity: string }[];
+    /* Allergie-detail per tafel — Rook moet weten wélke tafel wat heeft */
+    allergies?: { person: string; issue: string; severity: string; table?: number; allergens?: string[] }[];
+    /* View-context: hub / board / detail / wrapup */
+    currentView?: string;
 }
 
 interface ChefDirective {

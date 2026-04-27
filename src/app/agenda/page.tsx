@@ -616,9 +616,20 @@ function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onCl
                                 <ClipboardList size={14} style={{ color: GOLD }} />
                                 Open prep planning
                             </a>
-                            <a href="/service" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
+                            {/* Service-deeplink: koppel agenda-event aan een service-mock-event als titel matcht */}
+                            <a
+                                href={(() => {
+                                    /* Match op event-naam keywords → mock event-id */
+                                    const t = (event.title || '').toLowerCase();
+                                    if (t.includes('bruiloft') || t.includes('singraven') || t.includes('joost') || t.includes('liane')) return '/service?eventId=evt_singraven';
+                                    if (t.includes('techcorp') || t.includes('bedrijfsfeest')) return '/service?eventId=evt_techcorp';
+                                    if (t.includes('berghuis') || t.includes('verjaardag') || t.includes('familie')) return '/service?eventId=evt_berghuis';
+                                    return '/service';
+                                })()}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}
+                            >
                                 <PartyPopper size={14} style={{ color: GOLD }} />
-                                Service KDS draaiboek
+                                Open Service Mode →
                             </a>
                             <a href="/voorraad" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
                                 <Check size={14} style={{ color: GOLD }} />

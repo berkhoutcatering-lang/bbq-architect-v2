@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
-import { estimateAiCostCents } from '@/lib/aiUsage';
+import { estimateAiCostCentsPure as estimateAiCostCents } from '@/lib/aiCostEstimate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
@@ -22,47 +22,72 @@ export const maxDuration = 20;
 
 const SYSTEM = `Je bent ROOK MAART, een ervaren Nederlandse BBQ-pitmaster. Je werkt als persistent AI-coach in een Kitchen Display System tijdens live BBQ-events.
 
+CONTEXT DIE JE KRIJGT (in user-message):
+- NU (huidige tijd HH:MM)
+- VIEW: waar pitmaster nu kijkt (hub/board/detail/wrapup)
+- EVENT: titel + venue + gasten
+- GANG-OVERZICHT: lijst alle gangen met status (queued/active/ready/served) en portions-voortgang
+- ACTIEVE/HUIDIGE GANG: titel, status, omschrijving — dit is wat de chef NU bekijkt
+- VOLGENDE GANG met minuten countdown
+- MISE: % klaar + open mise-items, kritisch gemarkeerd
+- SMOKER: item op smoker, temp, target, ETA
+- ALLERGIE-TABEL: per gast met tafelnummer, naam, allergenen-codes, severity
+
+WAT ROOK MOET DOEN:
+- Lees ALLES — vooral de allergie-tabel (kritisch voor veiligheid)
+- Bepaal wat NU het meest urgent is op basis van: tijd vs course-start, mise-progress,
+  allergie-risico, smoker-status
+- Bij allergie: noem altijd CONCRETE tafel + persoon ("T3 Maaike pinda — aparte plank")
+- Bij timing-issue: noem concrete tijdstip / minuten ("brisket over 12m klaar")
+- Bij wrapup-view: focus op opruim-volgorde + waste-tracking + feedback-suggesties
+- Bij hub-view: korte algemene status, geen specifieke directives
+
 PERSOONLIJKHEID:
 - Direct, kort, zonder gezeur — zoals een echte head-chef
-- Gebruikt vaktaal (smoker, mise, internal temp, slicen, plate)
-- Geen beleefdheidsformules ("dank je wel", "graag gedaan")
-- Wel: aanmoediging als iets goed gaat ("strak werk", "mooi op tijd")
-- Spreekt aan met "jij" / "je" — collegiaal
+- Vaktaal (smoker, mise, internal temp, slicen, plate)
+- Geen beleefdheidsformules
+- Wel aanmoediging bij goed werk ("strak werk", "mooi op tijd")
+- "jij" / "je", collegiaal
 - Nooit emoji's
 
-OUTPUT-FORMAT:
-- ALLEEN een JSON-object, geen extra tekst
-- {
-    "directive": "1 zin, max 12 woorden — wat moet er NU gebeuren",
-    "severity": "praise" | "normal" | "urgent" | "critical",
-    "actionLabel": "korte CTA, max 3 woorden — bv 'Mac in oven' of 'Wrap nu'" | null,
-    "context": "1 korte zin extra context max 14 woorden" | null
-  }
+OUTPUT-FORMAT (ALLEEN dit JSON-object, geen extra tekst):
+{
+  "directive": "1 zin, max 14 woorden — concrete actie of observatie",
+  "severity": "praise" | "normal" | "urgent" | "critical",
+  "actionLabel": "korte CTA max 3 woorden ('Mac in oven') | null",
+  "context": "1 korte zin extra context max 16 woorden | null"
+}
 
 SEVERITY GIDS:
-- "critical": allergie-issue, missende mise <5 min voor service, smoker te koud
-- "urgent": iets moet binnen 15 min, niet alle mise gedaan voor active gang
-- "normal": tip, vooruitkijkend ("over 30 min start gang 2, plan vast bain")
-- "praise": als alles loopt goed of stap net afgerond
+- "critical": allergie-mismatch dreigt, missende mise <5min voor service, smoker faalt
+- "urgent": actie nodig binnen 15min, gang dreigt achter te lopen
+- "normal": vooruitkijkend, planning, kleine tip
+- "praise": alles loopt strak of stap goed afgerond
 
-Voorbeelden goede directives:
-- "Brisket aansnijden, NU"
-- "Mac in oven 180°C, 15 min"
-- "Tafel 3 pinda — aparte plank klaarzetten"
-- "Mooi tempo, gang 1 zit op schema"`;
+Voorbeelden:
+- {"directive":"Tafel 3 pinda-allergie — satay zonder pindasaus apart","severity":"critical","actionLabel":"Aparte plank","context":"Maaike T3 strikt"}
+- {"directive":"Brisket op 91°C, klaar over 12 min","severity":"normal","actionLabel":null,"context":"Begin mac om 17:45"}
+- {"directive":"Mooi tempo, 4 van 8 gangen klaar","severity":"praise","actionLabel":null,"context":null}
+- {"directive":"Mise gang 5 nog op 60% — focus","severity":"urgent","actionLabel":"PP opwarmen","context":"Service over 18min"}`;
 
 interface ChefContext {
     now: string;                   // HH:MM
+    eventTitle?: string;
+    eventVenue?: string;
+    eventGuests?: number;
     activeCourseId?: string;
     activeCourseTitle?: string;
     activeCourseStart?: string;    // HH:MM
     activeCourseStatus?: string;   // 'prep' | 'active' | etc
+    activeCourseDescription?: string;
     minsUntilNextCourse?: number;
     nextCourseTitle?: string;
     misePctDone?: number;          // 0-100
     miseRemaining?: { label: string; critical?: boolean }[];
+    coursesProgress?: { num: number; title: string; status: string; servedPortions?: number; totalPortions?: number }[];
     smoker?: { item: string; temp: number; target: number; etaMinutes: number };
-    allergies?: { person: string; issue: string; severity: string }[];
+    allergies?: { person: string; issue: string; severity: string; table?: number; allergens?: string[] }[];
+    currentView?: string;          // hub | board | detail | wrapup
     userQuestion?: string;          // optioneel — als gebruiker actief vraagt
 }
 
@@ -82,16 +107,55 @@ export async function POST(req: NextRequest) {
 
         const ctx = (await req.json()) as ChefContext;
 
-        const userMessage = `LIVE EVENT-CONTEXT:
-${ctx.now ? `- Nu: ${ctx.now}` : ''}
-${ctx.activeCourseTitle ? `- Actieve gang: ${ctx.activeCourseTitle} (status: ${ctx.activeCourseStatus || '?'}, start ${ctx.activeCourseStart || '?'})` : ''}
-${ctx.minsUntilNextCourse !== undefined ? `- Volgende gang over ${ctx.minsUntilNextCourse} min: ${ctx.nextCourseTitle || '?'}` : ''}
-${ctx.misePctDone !== undefined ? `- Mise: ${ctx.misePctDone}% klaar` : ''}
-${ctx.miseRemaining && ctx.miseRemaining.length > 0 ? `- Mise nog te doen:\n${ctx.miseRemaining.slice(0, 8).map(m => `  • ${m.label}${m.critical ? ' [CRITICAL]' : ''}`).join('\n')}` : ''}
-${ctx.smoker ? `- Smoker: ${ctx.smoker.item} ${ctx.smoker.temp}°C → ${ctx.smoker.target}°C, ETA ${ctx.smoker.etaMinutes}m` : ''}
-${ctx.allergies && ctx.allergies.length > 0 ? `- Allergieën: ${ctx.allergies.map(a => `${a.person}=${a.issue}(${a.severity})`).join(', ')}` : ''}
+        /* Bouw concrete context op zodat Rook weet wát hij ziet en op welke
+           informatie hij moet acteren. Lege velden worden genegeerd. */
+        const lines: string[] = [];
+        lines.push(`NU: ${ctx.now}`);
+        if (ctx.currentView) lines.push(`VIEW: ${ctx.currentView}  (hub=event-keuze, board=kanban, detail=gang-instructies, wrapup=opruim/feedback)`);
+        if (ctx.eventTitle) lines.push(`EVENT: ${ctx.eventTitle}${ctx.eventVenue ? ` · ${ctx.eventVenue}` : ''}${ctx.eventGuests ? ` · ${ctx.eventGuests} gasten` : ''}`);
 
-${ctx.userQuestion ? `\nVRAAG VAN PITMASTER: "${ctx.userQuestion}"` : ''}
+        if (ctx.coursesProgress && ctx.coursesProgress.length > 0) {
+            lines.push(`\nGANG-OVERZICHT:`);
+            ctx.coursesProgress.forEach(c => {
+                const portions = c.totalPortions ? ` ${c.servedPortions || 0}/${c.totalPortions}p` : '';
+                lines.push(`  ${c.num}. ${c.title} → ${c.status}${portions}`);
+            });
+        }
+
+        if (ctx.activeCourseTitle) {
+            lines.push(`\nACTIEVE/HUIDIGE GANG: "${ctx.activeCourseTitle}" (status: ${ctx.activeCourseStatus || '?'})`);
+            if (ctx.activeCourseStart) lines.push(`  starttijd: ${ctx.activeCourseStart}`);
+            if (ctx.activeCourseDescription) lines.push(`  omschrijving: ${ctx.activeCourseDescription}`);
+        }
+
+        if (ctx.minsUntilNextCourse !== undefined && ctx.nextCourseTitle) {
+            lines.push(`\nVOLGENDE GANG: "${ctx.nextCourseTitle}" over ${ctx.minsUntilNextCourse} min`);
+        }
+
+        if (ctx.misePctDone !== undefined) lines.push(`\nMISE: ${ctx.misePctDone}% klaar`);
+        if (ctx.miseRemaining && ctx.miseRemaining.length > 0) {
+            lines.push(`MISE-OPEN:`);
+            ctx.miseRemaining.slice(0, 10).forEach(m => lines.push(`  • ${m.label}${m.critical ? ' [CRITICAL]' : ''}`));
+        }
+
+        if (ctx.smoker) {
+            lines.push(`\nSMOKER: ${ctx.smoker.item}`);
+            lines.push(`  temp ${ctx.smoker.temp}°C → target ${ctx.smoker.target}°C · ETA ${ctx.smoker.etaMinutes}m`);
+        }
+
+        if (ctx.allergies && ctx.allergies.length > 0) {
+            lines.push(`\nALLERGIE-TABEL (per gast):`);
+            ctx.allergies.forEach(a => {
+                const t = a.table !== undefined ? `T${a.table} ` : '';
+                const al = a.allergens && a.allergens.length > 0 ? ` [${a.allergens.join(',')}]` : '';
+                lines.push(`  ${t}${a.person}: ${a.issue}${al} (${a.severity})`);
+            });
+        }
+
+        const userMessage = `LIVE EVENT-CONTEXT:
+${lines.join('\n')}
+
+${ctx.userQuestion ? `\nVRAAG VAN PITMASTER: "${ctx.userQuestion}"` : '\n(Geen specifieke vraag — geef proactief de meest waardevolle directive op basis van bovenstaande state.)'}
 
 Geef je directive als JSON.`;
 

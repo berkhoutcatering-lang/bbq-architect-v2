@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
     ArrowLeft, Play, Check, Clock, Flame, CheckCircle, Award, ChevronRight, AlertTriangle,
     Sparkles, BookOpen, Users, Leaf, ListChecks, Package, Grid3x3, ShieldCheck, Camera,
-    UtensilsCrossed, Palette, HandPlatter, Undo2, X,
+    Palette, HandPlatter, Undo2, Brush, FileText, Trash2, Edit3, Loader2, Download,
 } from 'lucide-react';
 import {
     SERVICE_EVENTS, SERVICE_AI_DIRECTIVES, ALLERGENS,
@@ -19,7 +19,7 @@ const BRAND = '#FFBF00';
    STATE: deep-clone event op selectie + persist mutaties in localStorage
    ═══════════════════════════════════════════════════════════════════ */
 
-type View = 'hub' | 'board' | 'detail';
+type View = 'hub' | 'board' | 'detail' | 'wrapup';
 
 const STATE_KEY = 'service_mode_v4';
 
@@ -37,6 +37,59 @@ function loadState(): PersistedState {
         if (raw) return JSON.parse(raw);
     } catch { /* */ }
     return { view: 'hub', eventId: null, courseId: null, eventState: null };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VOORRAAD AFTREK — bij course/item "served" trekken we het verbruik
+   van inventory.current_stock af via /api/_supa/stock-movement.
+   Best-effort substring-match op mise.item ↔ inventory.naam.
+   Fail silently zodat service-flow nooit blokkeert op stock-fail.
+   ═══════════════════════════════════════════════════════════════════ */
+async function deductCourseFromInventory(course: Course, portionsServed: number, eventTitle: string): Promise<void> {
+    try {
+        if (portionsServed <= 0 || !course.mise || course.mise.length === 0) return;
+        const totalPortions = course.items.reduce((a, i) => a + (i.count || 0), 0) || 1;
+        const fraction = portionsServed / totalPortions;
+
+        const { supabase } = await import('@/lib/supabase');
+        const { data: inv } = await supabase
+            .from('inventory')
+            .select('id, naam, current_stock, unit, organization_id');
+        if (!inv) return;
+
+        const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+
+        for (const m of course.mise) {
+            /* Parse "1.5 kg pulled pork" / "300g" / "8 stuks" / "2.4kg (30g/p)" */
+            const qtyMatch = m.qty.match(/^([\d.,]+)\s*(kg|g|l|ml|stuks?|pak|krat|fles|bos)?/i);
+            if (!qtyMatch) continue;
+            const totalQty = parseFloat(qtyMatch[1].replace(',', '.'));
+            if (isNaN(totalQty) || totalQty <= 0) continue;
+            const usedQty = totalQty * fraction;
+
+            const itemName = norm(m.item);
+            if (itemName.length < 3) continue;
+            const match = (inv as any[]).find(i => {
+                const iname = norm(i.naam);
+                return iname && (iname.includes(itemName) || itemName.includes(iname));
+            });
+            if (!match) continue;
+
+            const newStock = Math.max(0, Number(match.current_stock || 0) - usedQty);
+            void fetch('/api/_supa/stock-movement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    inventory_id: match.id,
+                    type: 'usage',
+                    qty: -usedQty,
+                    resulting_stock: newStock,
+                    note: `Service ${eventTitle} · gang #${course.num}: ${course.title}`,
+                    update_inventory: true,
+                }),
+            });
+        }
+    } catch { /* silent */ }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -83,6 +136,38 @@ function HelpNote({ title, children, tone = 'amber' }: { title: string; children
 function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPickEvent: (id: string) => void }) {
     const liveEvent = events.find(e => e.status === 'live');
     const upcoming = events.filter(e => e.status !== 'live');
+
+    /* Empty state als helemaal geen events */
+    if (events.length === 0) {
+        return (
+            <div style={{ padding: '60px 40px', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ maxWidth: 540, textAlign: 'center' }}>
+                    <div style={{ fontSize: 64, marginBottom: 18 }}>🍽️</div>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, margin: 0, fontWeight: 200, letterSpacing: '-.02em' }}>Nog geen events ingepland</h1>
+                    <p style={{ color: 'var(--muted)', marginTop: 12, fontSize: 14, lineHeight: 1.55 }}>
+                        Service Mode toont je live KDS-bord wanneer er events in je agenda staan. Voeg eerst een event toe via je{' '}
+                        <a href="/agenda" style={{ color: GOLD, textDecoration: 'underline' }}>Agenda</a>, dan verschijnt hij hier automatisch met menu, allergie-info en voortgang per gang.
+                    </p>
+                    <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center', gap: 10 }}>
+                        <a href="/agenda" style={{
+                            padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                            background: `linear-gradient(180deg, ${BRAND}, ${GOLD})`, color: '#0f0f0f',
+                            textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
+                        }}>
+                            Open Agenda <ChevronRight size={14} />
+                        </a>
+                        <a href="/prep-counter" style={{
+                            padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                            background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)',
+                            textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
+                        }}>
+                            Naar Prep Counter
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ padding: '32px 40px', minHeight: '100vh' }}>
@@ -232,11 +317,12 @@ function SmallStat({ val, label }: { val: number | string; label: string }) {
 /* ═══════════════════════════════════════════════════════════════════
    BOARD — Kanban (queued / active / ready / served)
    ═══════════════════════════════════════════════════════════════════ */
-function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, rookOffset }: {
+function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrapup, rookOffset }: {
     event: ServiceEvent;
     onOpenCourse: (cid: string) => void;
     onAdvanceStatus: (cid: string) => void;
     onBack: () => void;
+    onWrapup: () => void;
     rookOffset: number;
 }) {
     const [now, setNow] = useState(new Date());
@@ -285,6 +371,18 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, rookOf
                 <Pill tone="green">
                     <span style={{ width: 7, height: 7, background: '#34d399', borderRadius: '50%' }} /> Op schema
                 </Pill>
+                {totalDone >= Math.ceil(event.courses.length / 2) && (
+                    <button onClick={onWrapup} style={{
+                        padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                        background: progressPct === 100 ? `linear-gradient(180deg, ${BRAND}, #d97706)` : 'transparent',
+                        color: progressPct === 100 ? '#0f0f0f' : BRAND,
+                        border: progressPct === 100 ? 'none' : `1px solid ${BRAND}66`,
+                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                        boxShadow: progressPct === 100 ? `0 0 14px ${BRAND}66` : 'none',
+                    }}>
+                        <Brush size={13} /> {progressPct === 100 ? 'Service afronden' : 'Wrap-up'}
+                    </button>
+                )}
             </div>
 
             <ServiceAIBar />
@@ -846,6 +944,365 @@ function QualityView({ course }: { course: Course }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   WRAPUP — opruim-checklist + feedback dump + AI rewrite + PDF rapport
+   ═══════════════════════════════════════════════════════════════════ */
+const CLEANUP_DEFAULT = [
+    { id: 'cl-1', label: 'Smokers uit + dom afgekoeld', critical: true },
+    { id: 'cl-2', label: 'Bain-maries leeg + schoonmaken', critical: false },
+    { id: 'cl-3', label: 'Cambros leeg + spoelen', critical: false },
+    { id: 'cl-4', label: 'Snijplanken + slicers wassen', critical: false },
+    { id: 'cl-5', label: 'Service-line afbreken', critical: false },
+    { id: 'cl-6', label: 'Inox / GN-trays inpakken', critical: false },
+    { id: 'cl-7', label: 'Restanten apart (waste-tracking)', critical: false },
+    { id: 'cl-8', label: 'Vuil → afvalcontainer locatie', critical: false },
+    { id: 'cl-9', label: 'Catering-truck inladen', critical: true },
+    { id: 'cl-10', label: 'Locatie eind-check (vergeet niets)', critical: true },
+    { id: 'cl-11', label: 'Smoker-as koud in metalen bak', critical: true },
+    { id: 'cl-12', label: 'Klant bedanken + verlaten', critical: false },
+];
+
+interface FeedbackResult {
+    polishedNarrative: string;
+    keyPoints: string[];
+    sentiment: 'positive' | 'mixed' | 'negative';
+    actionables: string[];
+}
+
+function ServiceModeWrapup({ event, onBackToBoard, rookOffset }: { event: ServiceEvent; onBackToBoard: () => void; rookOffset: number }) {
+    const [cleanupState, setCleanupState] = useState<Record<string, boolean>>({});
+    const [rawNotes, setRawNotes] = useState('');
+    const [aiResult, setAiResult] = useState<FeedbackResult | null>(null);
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
+
+    /* Persist per event-id */
+    const wrapupKey = `service_wrapup_${event.id}`;
+    useEffect(() => {
+        try {
+            const s = localStorage.getItem(wrapupKey);
+            if (s) {
+                const p = JSON.parse(s);
+                setCleanupState(p.cleanupState || {});
+                setRawNotes(p.rawNotes || '');
+                setAiResult(p.aiResult || null);
+            }
+        } catch { /* */ }
+    }, [wrapupKey]);
+    useEffect(() => {
+        try { localStorage.setItem(wrapupKey, JSON.stringify({ cleanupState, rawNotes, aiResult })); } catch { /* */ }
+    }, [wrapupKey, cleanupState, rawNotes, aiResult]);
+
+    const decoratedCl = CLEANUP_DEFAULT.map(c => ({ ...c, done: cleanupState[c.id] || false }));
+    const clDone = decoratedCl.filter(c => c.done).length;
+    const clPct = Math.round((clDone / decoratedCl.length) * 100);
+    const toggleCleanup = (id: string) => setCleanupState(s => ({ ...s, [id]: !s[id] }));
+
+    async function rewriteFeedback() {
+        if (rawNotes.trim().length < 10) {
+            setAiError('Schrijf eerst een paar zinnen — anders heeft Rook niks om mee te werken.');
+            return;
+        }
+        setAiBusy(true); setAiError(null);
+        try {
+            const res = await fetch('/api/service-feedback-rewrite', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rawNotes,
+                    eventContext: {
+                        title: event.title, date: event.date, guests: event.guests,
+                        menu: event.courses.map(c => c.title).join(' · '),
+                    },
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok || !body.success) setAiError(body.error || 'AI-fout');
+            else setAiResult({
+                polishedNarrative: body.polishedNarrative, keyPoints: body.keyPoints,
+                sentiment: body.sentiment, actionables: body.actionables,
+            });
+        } catch (e: any) {
+            setAiError(e?.message || 'Kon Rook niet bereiken');
+        }
+        setAiBusy(false);
+    }
+
+    async function generatePDF() {
+        const { default: jsPDF } = await import('jspdf');
+        const autoTable = (await import('jspdf-autotable')).default;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        /* COVER */
+        doc.setFillColor(18, 18, 20); doc.rect(0, 0, 210, 50, 'F');
+        doc.setTextColor(196, 163, 90); doc.setFontSize(11);
+        doc.text('SERVICE RAPPORT', 14, 18);
+        doc.setTextColor(255, 255, 255); doc.setFontSize(22);
+        doc.text(event.title, 14, 30);
+        doc.setTextColor(180, 180, 180); doc.setFontSize(10);
+        doc.text(`${event.date} · ${event.guests} gasten · ${event.venue}`, 14, 38);
+        doc.text(`Service start ${event.startTime}`, 14, 44);
+
+        let y = 62;
+
+        /* MENU */
+        doc.setTextColor(40, 40, 40); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Menu uitgevoerd', 14, y); y += 6;
+        autoTable(doc, {
+            startY: y,
+            head: [['Gang', 'Status', 'Portions', 'Beschrijving']],
+            body: event.courses.map(c => {
+                const portions = c.items.reduce((a, i) => a + (i.count || 0), 0);
+                const served = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
+                return [
+                    `${c.num}. ${c.title}`,
+                    c.status === 'served' ? 'Geserveerd' : c.status === 'ready' ? 'Klaar' : c.status === 'active' ? 'Bezig' : 'Wachtend',
+                    `${served}/${portions}`,
+                    c.description,
+                ];
+            }),
+            theme: 'striped',
+            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
+            bodyStyles: { fontSize: 9 },
+            columnStyles: { 3: { cellWidth: 80 } },
+            margin: { left: 14, right: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 8;
+
+        /* TEMPO + WASTE */
+        const totalPortions = event.courses.reduce((a, c) => a + c.items.reduce((b, i) => b + (i.count || 0), 0), 0);
+        const servedTotal = event.courses.reduce((a, c) => a + c.items.filter(i => i.served).reduce((b, i) => b + (i.count || 0), 0), 0);
+        const completionPct = totalPortions ? Math.round((servedTotal / totalPortions) * 100) : 0;
+
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Tempo & uitvoering', 14, y); y += 6;
+        autoTable(doc, {
+            startY: y,
+            head: [['Metriek', 'Waarde']],
+            body: [
+                ['Aantal gangen', String(event.courses.length)],
+                ['Totaal portions', String(totalPortions)],
+                ['Geserveerd', `${servedTotal} (${completionPct}%)`],
+                ['Opruim-completion', `${clDone}/${decoratedCl.length} (${clPct}%)`],
+                ['Allergieën', event.allergyTable.map(a => `${a.name} (T${a.table}) — ${a.note}`).join('; ') || 'geen'],
+                ['Team', event.staff.join(', ')],
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14, right: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 8;
+
+        /* FEEDBACK */
+        if (aiResult) {
+            if (y > 240) { doc.addPage(); y = 20; }
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+            doc.text('Pitmaster-evaluatie', 14, y); y += 6;
+            doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+            const wrapped = doc.splitTextToSize(aiResult.polishedNarrative, 180);
+            doc.text(wrapped, 14, y); y += wrapped.length * 5 + 6;
+
+            if (aiResult.keyPoints?.length) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                doc.text('Kernpunten', 14, y); y += 5;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                aiResult.keyPoints.forEach(kp => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                    const lines = doc.splitTextToSize('• ' + kp, 180);
+                    doc.text(lines, 18, y); y += lines.length * 5;
+                });
+                y += 4;
+            }
+            if (aiResult.actionables?.length) {
+                if (y > 250) { doc.addPage(); y = 20; }
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                doc.text('Volgende keer', 14, y); y += 5;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                aiResult.actionables.forEach(a => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                    const lines = doc.splitTextToSize('→ ' + a, 180);
+                    doc.text(lines, 18, y); y += lines.length * 5;
+                });
+            }
+        }
+
+        if (rawNotes.trim()) {
+            doc.addPage(); y = 20;
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+            doc.text('Bijlage: ruwe notities pitmaster', 14, y); y += 8;
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+            const lines = doc.splitTextToSize(rawNotes, 180);
+            doc.text(lines, 14, y);
+        }
+
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8); doc.setTextColor(148, 148, 148);
+            doc.text(`Hop & Bites · BBQ Architect · ${new Date().toLocaleString('nl-NL')} · pagina ${i}/${pageCount}`, 14, 290);
+        }
+        doc.save(`service-rapport-${event.id}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+
+    return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', marginRight: rookOffset }}>
+            {/* Top bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '14px 28px', background: 'var(--color-bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                <button onClick={onBackToBoard} style={{
+                    background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)',
+                    padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13,
+                }}>
+                    <ArrowLeft size={14} /> Terug naar bord
+                </button>
+                <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, fontWeight: 600 }}>
+                        <Brush size={18} style={{ color: GOLD }} /> Service afronden — {event.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Opruim-checklist · feedback · PDF rapport</div>
+                </div>
+            </div>
+
+            <div style={{ flex: 1, padding: '20px 28px', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {/* CLEANUP CHECKLIST */}
+                <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Brush size={14} style={{ color: GOLD }} />
+                                <span style={{ fontSize: 11, letterSpacing: '.18em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase' }}>Opruim-checklist</span>
+                            </div>
+                            <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 4 }}>{clDone}/{decoratedCl.length} klaar</div>
+                        </div>
+                        <div style={{ width: 60, height: 60, position: 'relative' }}>
+                            <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                                <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
+                                <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={`${clPct * 2.51} 251`} />
+                            </svg>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{clPct}%</div>
+                        </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 6 }}>
+                        {decoratedCl.map(item => (
+                            <div key={item.id} onClick={() => toggleCleanup(item.id)} style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                                background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
+                                border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
+                            }}>
+                                <div style={{
+                                    width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                                    background: item.done ? 'var(--green)' : 'transparent',
+                                    border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    {item.done && <Check size={14} style={{ color: '#000' }} />}
+                                </div>
+                                <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
+                                {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* FEEDBACK DUMP */}
+                <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Edit3 size={14} style={{ color: GOLD }} />
+                            <span style={{ fontSize: 11, letterSpacing: '.18em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase' }}>Feedback dump · ruw</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            {rawNotes && (
+                                <button onClick={() => { setRawNotes(''); setAiResult(null); }} style={{
+                                    padding: '6px 10px', borderRadius: 7, fontSize: 11, color: 'var(--muted)',
+                                    background: 'transparent', border: '1px solid var(--border)', cursor: 'pointer',
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                }}>
+                                    <Trash2 size={11} /> Wissen
+                                </button>
+                            )}
+                            <button onClick={rewriteFeedback} disabled={aiBusy || rawNotes.trim().length < 10} style={{
+                                padding: '6px 12px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+                                background: aiBusy ? 'var(--muted-light)' : `linear-gradient(180deg, ${GOLD}, #9e781c)`,
+                                color: '#000', border: 'none', cursor: aiBusy ? 'not-allowed' : 'pointer',
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                opacity: rawNotes.trim().length < 10 ? 0.5 : 1,
+                            }}>
+                                {aiBusy ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                                {aiBusy ? 'Rook schrijft…' : 'Rook schrijft uit'}
+                            </button>
+                        </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+                        Gooi alles erin wat je nog kwijt wilt — losse zinnen, complimenten, frustraties. Rook leest mee en schrijft het netjes uit voor in het rapport.
+                    </div>
+                    <textarea
+                        value={rawNotes}
+                        onChange={e => setRawNotes(e.target.value)}
+                        rows={6}
+                        placeholder='Bv: "tempo gang 4 te traag, brisket strak, klant blij — vooral met short ribs, mac & cheese hadden we 8kg over, satay-portie voor maaike T3 ging goed, smoker 1 stookte rommelig, team had te weinig handen tijdens piek"'
+                        style={{
+                            width: '100%', padding: 14, borderRadius: 10,
+                            background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
+                            color: 'var(--text)', fontSize: 13, lineHeight: 1.6,
+                            outline: 'none', resize: 'vertical', fontFamily: 'inherit',
+                        }}
+                    />
+                    {aiError && (
+                        <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--red)', fontSize: 12 }}>
+                            {aiError}
+                        </div>
+                    )}
+                </div>
+
+                {/* AI UITGESCHREVEN */}
+                {aiResult && (
+                    <div style={{ background: 'var(--color-bg-elevated)', border: `1px solid ${GOLD}40`, borderRadius: 14, padding: 18 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                            <Sparkles size={14} style={{ color: GOLD }} />
+                            <span style={{ fontSize: 11, letterSpacing: '.18em', color: GOLD, fontWeight: 700, textTransform: 'uppercase' }}>Rook · uitgeschreven</span>
+                            <span style={{
+                                padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.15em',
+                                background: aiResult.sentiment === 'positive' ? 'rgba(34,197,94,.15)' : aiResult.sentiment === 'mixed' ? `${BRAND}1a` : 'rgba(239,68,68,.15)',
+                                color: aiResult.sentiment === 'positive' ? 'var(--green)' : aiResult.sentiment === 'mixed' ? BRAND : 'var(--red)',
+                            }}>{(aiResult.sentiment || 'mixed').toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.7, marginBottom: 14 }}>{aiResult.polishedNarrative}</div>
+                        {aiResult.keyPoints?.length > 0 && (
+                            <>
+                                <span style={{ fontSize: 11, letterSpacing: '.18em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Kernpunten</span>
+                                <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, marginBottom: 12 }}>
+                                    {aiResult.keyPoints.map((p, i) => <li key={i}>{p}</li>)}
+                                </ul>
+                            </>
+                        )}
+                        {aiResult.actionables?.length > 0 && (
+                            <div style={{ padding: 12, borderRadius: 10, background: `${BRAND}0d`, border: `1px solid ${BRAND}33` }}>
+                                <span style={{ fontSize: 11, letterSpacing: '.18em', color: BRAND, fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Actionables · volgende keer</span>
+                                <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7 }}>
+                                    {aiResult.actionables.map((a, i) => <li key={i}>{a}</li>)}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* PDF EXPORT */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                    <button onClick={generatePDF} style={{
+                        padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                        background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#000', border: 'none', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        boxShadow: `0 0 16px ${GOLD}33`,
+                    }}>
+                        <Download size={16} /> Service-rapport als PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    MAIN
    ═══════════════════════════════════════════════════════════════════ */
 export default function ServiceMode() {
@@ -855,8 +1312,22 @@ export default function ServiceMode() {
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
     const [rookDocked, setRookDocked] = useState(true);
 
-    /* Restore from localStorage */
+    /* Restore from localStorage + check ?eventId= deeplink.
+       Deeplink wint van localStorage. URL wordt NIET gestript (StrictMode-safe). */
     useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const deeplinkEventId = params.get('eventId');
+            if (deeplinkEventId) {
+                const evt = SERVICE_EVENTS.find(e => e.id === deeplinkEventId);
+                if (evt) {
+                    setEventId(evt.id);
+                    setEventState(JSON.parse(JSON.stringify(evt)));
+                    setView('board');
+                    return;
+                }
+            }
+        }
         const s = loadState();
         setView(s.view); setEventId(s.eventId); setCourseId(s.courseId); setEventState(s.eventState);
     }, []);
@@ -883,16 +1354,24 @@ export default function ServiceMode() {
     function advanceStatus(cid: string) {
         setEventState(state => {
             if (!state) return state;
-            return {
+            const next = {
                 ...state,
                 courses: state.courses.map(c => {
                     if (c.id !== cid) return c;
                     const order: CourseStatus[] = ['queued', 'active', 'ready', 'served'];
                     const idx = order.indexOf(c.status);
-                    const next: CourseStatus = c.status === 'served' ? 'ready' : order[Math.min(idx + 1, order.length - 1)];
-                    return { ...c, status: next };
+                    const newStatus: CourseStatus = c.status === 'served' ? 'ready' : order[Math.min(idx + 1, order.length - 1)];
+                    /* Voorraad-aftrek wanneer een gang nu server-status krijgt */
+                    if (newStatus === 'served' && c.status !== 'served') {
+                        const totalPortions = c.items.reduce((a, i) => a + (i.count || 0), 0);
+                        const alreadyServed = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
+                        const newlyServed = totalPortions - alreadyServed;   /* portions die met deze advance "served" worden */
+                        if (newlyServed > 0) void deductCourseFromInventory(c, newlyServed, state.title);
+                    }
+                    return { ...c, status: newStatus };
                 }),
             };
+            return next;
         });
     }
 
@@ -908,7 +1387,11 @@ export default function ServiceMode() {
                         items: c.items.map((i: CourseItem) => {
                             if (i.id !== iid) return i;
                             if (i.served) return { ...i, served: false, ready: true };
-                            if (i.ready) return { ...i, served: true };
+                            if (i.ready) {
+                                /* Item van ready → served: trek dat aandeel af van voorraad */
+                                void deductCourseFromInventory(c, i.count || 0, state.title);
+                                return { ...i, served: true };
+                            }
                             if (i.inProgress) return { ...i, inProgress: false, ready: true };
                             return { ...i, inProgress: true };
                         }),
@@ -918,25 +1401,57 @@ export default function ServiceMode() {
         });
     }
 
-    /* Build chef context for AI */
+    /* Build chef context for AI — rijk aan info zodat Rook precies weet wat er speelt */
     const chefContext = useMemo<ChefContext>(() => {
-        if (!eventState) {
-            return { now: new Date().toTimeString().slice(0, 5) };
-        }
+        const now = new Date().toTimeString().slice(0, 5);
+        if (!eventState) return { now, currentView: view };
+
         const active = eventState.courses.filter(c => c.status === 'active');
         const queued = eventState.courses.filter(c => c.status === 'queued');
         const current = view === 'detail' && courseId ? eventState.courses.find(c => c.id === courseId) : active[0] || queued[0];
-        const next = current ? eventState.courses[eventState.courses.indexOf(current) + 1] : undefined;
+        const idxOfCurrent = current ? eventState.courses.indexOf(current) : -1;
+        const next = idxOfCurrent >= 0 && idxOfCurrent < eventState.courses.length - 1 ? eventState.courses[idxOfCurrent + 1] : undefined;
+
+        /* Course-progress array */
+        const coursesProgress = eventState.courses.map(c => {
+            const total = c.items.reduce((a, i) => a + (i.count || 0), 0);
+            const served = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
+            return { num: c.num, title: c.title, status: c.status, servedPortions: served, totalPortions: total };
+        });
+
+        /* Mins to next course */
+        const minsToNext = next ? (() => {
+            const [eh, em] = eventState.startTime.split(':').map(Number);
+            const eventStartMin = eh * 60 + em;
+            const nextStartMin = eventStartMin + next.serveTime;
+            const [nh, nm] = now.split(':').map(Number);
+            const nowMin = nh * 60 + nm;
+            return nextStartMin - nowMin;
+        })() : undefined;
+
         return {
-            now: new Date().toTimeString().slice(0, 5),
+            now,
+            currentView: view,
+            eventTitle: eventState.title,
+            eventVenue: eventState.venue,
+            eventGuests: eventState.guests,
             activeCourseId: current?.id,
             activeCourseTitle: current?.title,
             activeCourseStart: current ? `${eventState.startTime} +${current.serveTime}m` : undefined,
             activeCourseStatus: current?.status,
+            activeCourseDescription: current?.description,
+            minsUntilNextCourse: minsToNext !== undefined && minsToNext > 0 ? minsToNext : undefined,
             nextCourseTitle: next?.title,
             misePctDone: undefined,
             miseRemaining: current?.mise.map(m => ({ label: `${m.item} (${m.qty})`, critical: false })),
-            allergies: eventState.allergyTable.map(a => ({ person: a.name, issue: a.note, severity: a.allergens.includes('N') || a.allergens.includes('VE') ? 'critical' : 'must' })),
+            coursesProgress,
+            allergies: eventState.allergyTable.map(a => ({
+                table: a.table,
+                person: a.name,
+                issue: a.note,
+                allergens: a.allergens,
+                severity: a.allergens.includes('N') || a.allergens.includes('VE') ? 'critical' : 'must',
+            })),
         };
     }, [eventState, courseId, view]);
 
@@ -956,8 +1471,13 @@ export default function ServiceMode() {
                     onOpenCourse={openCourse}
                     onAdvanceStatus={advanceStatus}
                     onBack={() => { setView('hub'); setEventState(null); setEventId(null); setCourseId(null); }}
+                    onWrapup={() => setView('wrapup')}
                     rookOffset={rookOffset}
                 />
+            )}
+
+            {view === 'wrapup' && eventState && (
+                <ServiceModeWrapup event={eventState} onBackToBoard={() => setView('board')} rookOffset={rookOffset} />
             )}
 
             {view === 'detail' && eventState && courseId && (
