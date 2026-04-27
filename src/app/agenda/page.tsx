@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useMemo } from 'react';
+import { useSupabase } from '@/lib/useSupabase';
+import { detectAllConflicts } from '@/lib/conflictDetection';
+import type { Event as DbEvent, PrepTask } from '@/types';
 import {
     PartyPopper, ClipboardList, Flame, Users, HeartHandshake, Truck, UserRound,
     ChevronLeft, ChevronRight, Filter, Grid3x3, Columns3, List as ListIcon,
@@ -12,13 +15,12 @@ const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
 
 /* ═══════════════════════════════════════════════════════════════════
-   AGENDA DATA — mock based on mockup (March 2025)
+   AGENDA — gevoed door echte DB events (tabel: events) + prep_tasks.
+   Smoker / Team / Tasting / Delivery / Personal blijven (voorlopig)
+   demo-data tot er DB-tabellen voor zijn — gemarkeerd als "demo".
    ═══════════════════════════════════════════════════════════════════ */
 
-const MONTH_LABEL = 'Maart 2025';
-const VIEW_YEAR = 2025;
-const VIEW_MONTH = 2; /* March */
-const TODAY_DAY = 12;
+const NL_MONTHS = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
 interface CalendarMeta { id: string; label: string; color: string; Icon: any; synced: boolean; source: string; count: number }
 
@@ -110,9 +112,10 @@ const PERSONAL_DATA: AgendaEvent[] = [
     ev('pe4', 'personal', 30, 19, 2.5, 'Bioscoop Lieke', { source: 'Google' }),
 ];
 
-const ALL_EVENTS = [...EVENTS_DATA, ...PREP_DATA, ...SMOKER_DATA, ...TEAM_DATA, ...TASTING_DATA, ...DELIVERY_DATA, ...PERSONAL_DATA];
-
-const KPIS = { upcoming30d: 7, revenuePipeline: 51870, revenuePipelineConfirmed: 47820, smokerCapacity: 76, freeWeekendsLeft: 2, prepConflicts: 1, newLeadOpenings: 3, syncedItems: 62 };
+/* DEMO_FALLBACK_EVENTS bundelt alle hardcoded mock-data; wordt alléén
+   getoond als de DB nog leeg is. Zodra de gebruiker echte events heeft
+   draait de Agenda volledig op live data. */
+const DEMO_FALLBACK_EVENTS: AgendaEvent[] = [...EVENTS_DATA, ...PREP_DATA, ...SMOKER_DATA, ...TEAM_DATA, ...TASTING_DATA, ...DELIVERY_DATA, ...PERSONAL_DATA];
 
 const AI_INSIGHTS = [
     { id: 'ai1', severity: 'critical' as const, Icon: AlertTriangle, title: 'Smoker conflict: 21–22 maart', body: 'Bruiloft Anouk & Tim (110p) en TechCorp (80p) hebben beide brisket nodig. Smoker 1 kan max 30kg in 18u doen — tekort van 12kg.', suggestion: 'Verplaats TechCorp brisket naar Smoker 2 of overweeg pulled pork', action: 'Bekijk schedule' },
@@ -148,7 +151,11 @@ const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL');
 /* ═══════════════════════════════════════════════════════════════════
    HERO + KPIs + SYNC
    ═══════════════════════════════════════════════════════════════════ */
-function AgendaHero({ onAiClick }: { onAiClick: () => void }) {
+interface AgendaKpis {
+    upcoming30d: number; revenuePipeline: number; revenuePipelineConfirmed: number; conflicts: number;
+    freeWeekendsLeft: number; usingDemoData: boolean;
+}
+function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => void }) {
     return (
         <div style={{
             position: 'relative', borderRadius: 20, padding: 24,
@@ -162,11 +169,13 @@ function AgendaHero({ onAiClick }: { onAiClick: () => void }) {
                         <span style={{ padding: '2px 8px', borderRadius: 6, background: `${GOLD}20`, border: `1px solid ${GOLD}4D`, fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>SMART CALENDAR</span>
                     </div>
                     <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        62 items · 3 Google-accounts gekoppeld · AI plant prep + smoker auto
+                        {kpis.usingDemoData
+                            ? 'Demo-modus — voeg een echt event toe in /events om je live agenda te zien'
+                            : 'Live agenda · gevoed door je events + prep-taken'}
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <SyncBadge />
+                    <SyncBadge live={!kpis.usingDemoData} />
                     <button onClick={onAiClick} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 8,
                         background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#0a0a0c',
@@ -178,11 +187,11 @@ function AgendaHero({ onAiClick }: { onAiClick: () => void }) {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-                <KpiTile Icon={PartyPopper} color={BRAND} label="Komende 30d" value={KPIS.upcoming30d.toString()} sub="events bevestigd" />
-                <KpiTile Icon={Euro} color={GOLD} label="Omzet pipeline" value={fmtEur(KPIS.revenuePipeline)} sub={`${fmtEur(KPIS.revenuePipelineConfirmed)} bevestigd`} />
-                <KpiTile Icon={Flame} color="#ef6c4d" label="Smoker bezet" value={`${KPIS.smokerCapacity}%`} sub="komende 14d" />
-                <KpiTile Icon={Calendar} color="#10b981" label="Vrije weekends" value={KPIS.freeWeekendsLeft.toString()} sub="deze maand" />
-                <KpiTile Icon={AlertTriangle} color="var(--red)" label="Conflicten" value={KPIS.prepConflicts.toString()} sub="vraagt actie" />
+                <KpiTile Icon={PartyPopper} color={BRAND} label="Komende 30d" value={kpis.upcoming30d.toString()} sub="events bevestigd" />
+                <KpiTile Icon={Euro} color={GOLD} label="Omzet pipeline" value={fmtEur(kpis.revenuePipeline)} sub={`${fmtEur(kpis.revenuePipelineConfirmed)} bevestigd`} />
+                <KpiTile Icon={Flame} color="#ef6c4d" label="Smoker bezet" value="—" sub="koppel data" />
+                <KpiTile Icon={Calendar} color="#10b981" label="Vrije weekends" value={kpis.freeWeekendsLeft.toString()} sub="deze maand" />
+                <KpiTile Icon={AlertTriangle} color="var(--red)" label="Conflicten" value={kpis.conflicts.toString()} sub={kpis.conflicts > 0 ? 'vraagt actie' : 'geen issues'} />
             </div>
         </div>
     );
@@ -201,16 +210,18 @@ function KpiTile({ Icon, color, label, value, sub }: { Icon: any; color: string;
     );
 }
 
-function SyncBadge() {
+function SyncBadge({ live }: { live: boolean }) {
+    const color = live ? '#10b981' : 'var(--muted)';
+    const bg = live ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.04)';
+    const bd = live ? 'rgba(16,185,129,.3)' : 'var(--border)';
     return (
         <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-            borderRadius: 999, background: 'rgba(16,185,129,.08)',
-            border: '1px solid rgba(16,185,129,.3)', fontSize: 11, color: '#10b981',
+            borderRadius: 999, background: bg,
+            border: `1px solid ${bd}`, fontSize: 11, color,
         }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', animation: 'sync-pulse 2s infinite' }} />
-            <strong>Sync live</strong>
-            <span style={{ color: 'var(--muted)' }}>· 32s geleden</span>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, animation: live ? 'sync-pulse 2s infinite' : 'none' }} />
+            <strong>{live ? 'Live data' : 'Demo data'}</strong>
         </div>
     );
 }
@@ -218,17 +229,25 @@ function SyncBadge() {
 /* ═══════════════════════════════════════════════════════════════════
    MONTH NAV
    ═══════════════════════════════════════════════════════════════════ */
-function MonthNav({ view, setView }: { view: string; setView: (v: 'month' | 'week' | 'list') => void }) {
+interface MonthNavProps {
+    view: string;
+    setView: (v: 'month' | 'week' | 'list') => void;
+    monthLabel: string;
+    onPrev: () => void;
+    onNext: () => void;
+    onToday: () => void;
+}
+function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday }: MonthNavProps) {
     return (
         <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '14px 16px', background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)', borderRadius: 12,
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <button style={navBtnStyle()}><ChevronLeft size={16} /></button>
-                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em' }}>{MONTH_LABEL}</div>
-                <button style={navBtnStyle()}><ChevronRight size={16} /></button>
-                <button style={{
+                <button onClick={onPrev} style={navBtnStyle()} aria-label="Vorige maand"><ChevronLeft size={16} /></button>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em' }}>{monthLabel}</div>
+                <button onClick={onNext} style={navBtnStyle()} aria-label="Volgende maand"><ChevronRight size={16} /></button>
+                <button onClick={onToday} style={{
                     marginLeft: 8, padding: '7px 14px', borderRadius: 8,
                     background: `${BRAND}0f`, border: `1px solid ${BRAND}40`,
                     color: BRAND, fontSize: 11, fontWeight: 600, cursor: 'pointer',
@@ -311,6 +330,10 @@ function dowMon0(date: Date) { return (date.getDay() + 6) % 7; }
 function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
     year: number; month: number; activeCals: string[]; events: AgendaEvent[]; onSelectEvent: (e: AgendaEvent) => void;
 }) {
+    /* "Vandaag" alleen highlighten als de zichtbare maand daadwerkelijk de
+       huidige maand is — anders staat hij verkeerd in een ander tijdvak. */
+    const now = new Date();
+    const todayDay = (now.getFullYear() === year && now.getMonth() === month) ? now.getDate() : -1;
     const totalDays = daysInMonth(year, month);
     const firstDow = dowMon0(new Date(year, month, 1));
     const cells = useMemo(() => {
@@ -346,7 +369,7 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
                 {cells.map((row, rIdx) => (
                     <div key={rIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: rIdx === cells.length - 1 ? 'none' : '1px solid var(--border)' }}>
                         {row.map((cell, cIdx) => (
-                            <DayCell key={cIdx} day={cell.day} isToday={cell.day === TODAY_DAY} isWeekend={cIdx >= 5}
+                            <DayCell key={cIdx} day={cell.day} isToday={cell.day === todayDay} isWeekend={cIdx >= 5}
                                 events={cell.day ? eventsByDay[cell.day] || [] : []}
                                 isLastCol={cIdx === 6}
                                 onSelectEvent={onSelectEvent}
@@ -415,6 +438,8 @@ function EventChip({ event, onClick }: { event: AgendaEvent; onClick: () => void
 function SmokerSchedule({ smokes }: { smokes: AgendaEvent[] }) {
     const startDay = 13;
     const days = 18;
+    /* SmokerSchedule is alleen demo-data; vandaag-highlight match op kalenderdag. */
+    const todayDay = new Date().getDate();
     return (
         <MetalCard>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -428,7 +453,7 @@ function SmokerSchedule({ smokes }: { smokes: AgendaEvent[] }) {
             <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '32px ' + Array.from({ length: days }, () => '1fr').join(' '), gap: 1, fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>
                 <div />
                 {Array.from({ length: days }, (_, i) => (
-                    <div key={i} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: i + startDay === TODAY_DAY ? 700 : 400, color: i + startDay === TODAY_DAY ? BRAND : 'var(--muted)' }}>
+                    <div key={i} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: i + startDay === todayDay ? 700 : 400, color: i + startDay === todayDay ? BRAND : 'var(--muted)' }}>
                         {i + startDay}
                     </div>
                 ))}
@@ -469,7 +494,7 @@ function UpcomingList({ items, onSelect }: { items: typeof UPCOMING; onSelect: (
         <MetalCard>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <Eyebrow>Komende events</Eyebrow>
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{items.length} bevestigd</span>
+                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {items.map((it, i) => (
@@ -658,19 +683,179 @@ function FactRow({ label, value, Icon, highlight }: { label: string; value: Reac
 /* ═══════════════════════════════════════════════════════════════════
    MAIN PAGE
    ═══════════════════════════════════════════════════════════════════ */
+/* Map een DB event naar het AgendaEvent shape dat dit page intern gebruikt. */
+function mapDbEventToAgendaEvent(e: DbEvent): AgendaEvent {
+    const [, , dd] = (e.date || '').split('-');
+    const day = parseInt(dd || '1', 10);
+    const guests = e.guests || 0;
+    const omzet = guests * (e.ppp || 0);
+    return ev(
+        'evt_' + e.id,
+        'events',
+        day,
+        17, /* default 17:00 — DB heeft geen tijd-veld (nog) */
+        guests > 80 ? 8 : 6,
+        e.name + (guests ? ' ' + guests + 'p' : ''),
+        {
+            client: e.client_naam || '—',
+            guests,
+            type: e.type || 'Event',
+            venue: e.location || '—',
+            revenue: omzet,
+            status: e.status || 'pending',
+            dbId: e.id,
+            dbDate: e.date,
+        }
+    );
+}
+
+/* Map prep_tasks naar het AgendaEvent prep-shape, tenzij geen event_id of geen text. */
+function mapPrepTaskToAgendaEvent(p: PrepTask, eventDateMap: Record<number, string>): AgendaEvent | null {
+    const eventDate = eventDateMap[p.event_id];
+    if (!eventDate) return null;
+    /* dagen is offset t.o.v. event-datum (negatief = vooraf, positief = erna) */
+    const dt = new Date(eventDate);
+    dt.setDate(dt.getDate() + (p.dagen || 0));
+    return ev(
+        'pt_' + p.id,
+        'prep',
+        dt.getDate(),
+        8,
+        1,
+        p.text || 'Prep-taak',
+        {
+            for: 'evt_' + p.event_id,
+            critical: false,
+            done: !!p.done,
+            dbDate: dt.toISOString().slice(0, 10),
+        }
+    );
+}
+
 export default function Agenda() {
+    const today = new Date();
+    const [viewYear, setViewYear] = useState(today.getFullYear());
+    const [viewMonth, setViewMonth] = useState(today.getMonth());
     const [activeCals, setActiveCals] = useState<string[]>(CALENDARS.map(c => c.id));
     const [view, setView] = useState<'month' | 'week' | 'list'>('month');
     const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
 
+    const { data: dbEvents } = useSupabase<DbEvent>('events', []);
+    const { data: prepTasks } = useSupabase<PrepTask>('prep_tasks', []);
+
     const toggleCal = (id: string) => setActiveCals(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+    /* Filter DB events op de zichtbare maand, map naar AgendaEvent shape. */
+    const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    const monthDbEvents = useMemo(() => dbEvents.filter(e => (e.date || '').startsWith(monthPrefix)), [dbEvents, monthPrefix]);
+    const dbAgendaEvents = useMemo(() => monthDbEvents.map(mapDbEventToAgendaEvent), [monthDbEvents]);
+
+    /* Prep-taken alleen voor events in de huidige maand. */
+    const eventDateMap = useMemo(() => {
+        const m: Record<number, string> = {};
+        for (const e of dbEvents) m[e.id] = e.date;
+        return m;
+    }, [dbEvents]);
+    const dbPrepEvents = useMemo(() => {
+        const list: AgendaEvent[] = [];
+        for (const p of prepTasks) {
+            const mapped = mapPrepTaskToAgendaEvent(p, eventDateMap);
+            if (mapped && mapped.dbDate && mapped.dbDate.startsWith(monthPrefix)) list.push(mapped);
+        }
+        return list;
+    }, [prepTasks, eventDateMap, monthPrefix]);
+
+    /* Demo-fallback: alleen tonen als er nog géén echte events zijn. */
+    const usingDemoData = dbEvents.length === 0;
+    const allEvents: AgendaEvent[] = useMemo(() => {
+        if (usingDemoData) return DEMO_FALLBACK_EVENTS;
+        return [...dbAgendaEvents, ...dbPrepEvents];
+    }, [usingDemoData, dbAgendaEvents, dbPrepEvents]);
+
+    /* KPIs uit echte data. */
+    const conflicts = useMemo(() => {
+        if (usingDemoData) return [];
+        return detectAllConflicts(dbEvents).conflicts;
+    }, [dbEvents, usingDemoData]);
+
+    const kpis: AgendaKpis = useMemo(() => {
+        if (usingDemoData) {
+            return { upcoming30d: 7, revenuePipeline: 51870, revenuePipelineConfirmed: 47820, conflicts: 1, freeWeekendsLeft: 2, usingDemoData: true };
+        }
+        const now = new Date();
+        const horizon = new Date(); horizon.setDate(horizon.getDate() + 30);
+        const horizonIso = horizon.toISOString().slice(0, 10);
+        const todayIso = now.toISOString().slice(0, 10);
+        const upcoming = dbEvents.filter(e => e.date && e.date.slice(0, 10) >= todayIso && e.date.slice(0, 10) <= horizonIso);
+        /* Case-insensitive status-match — DB-status kan 'confirmed' / 'Confirmed' / 'bevestigd' staan
+           afhankelijk van waar het event vandaan komt (acceptance-workflow vs handmatig). */
+        const isConfirmed = (s: string) => {
+            const x = (s || '').toLowerCase();
+            return x === 'confirmed' || x === 'completed' || x === 'bevestigd';
+        };
+        const upcomingConfirmed = upcoming.filter(e => isConfirmed(e.status));
+        const pipeline = upcoming.reduce((s, e) => s + (e.guests || 0) * (e.ppp || 0), 0);
+        const pipelineConfirmed = upcomingConfirmed.reduce((s, e) => s + (e.guests || 0) * (e.ppp || 0), 0);
+        /* Vrije weekends: in deze maand, weekend-dagen zonder event. */
+        const totalDays = daysInMonth(viewYear, viewMonth);
+        const monthEventDays = new Set(monthDbEvents.map(e => parseInt((e.date || '').split('-')[2] || '0', 10)));
+        let freeWeekends = 0;
+        for (let d = 1; d <= totalDays; d++) {
+            const dow = new Date(viewYear, viewMonth, d).getDay();
+            if ((dow === 0 || dow === 6) && !monthEventDays.has(d)) freeWeekends++;
+        }
+        return {
+            upcoming30d: upcomingConfirmed.length,
+            revenuePipeline: pipeline,
+            revenuePipelineConfirmed: pipelineConfirmed,
+            conflicts: conflicts.length,
+            freeWeekendsLeft: Math.floor(freeWeekends / 2), /* zaterdag+zondag = 1 weekend */
+            usingDemoData: false,
+        };
+    }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, usingDemoData]);
+
+    /* UPCOMING-rail uit live data; demo-fallback bij lege DB. */
+    const upcomingList = useMemo(() => {
+        if (usingDemoData) return UPCOMING;
+        const todayIso = new Date().toISOString().slice(0, 10);
+        return dbEvents
+            .filter(e => e.date >= todayIso)
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 8)
+            .map(e => ({
+                day: parseInt((e.date || '').split('-')[2] || '0', 10),
+                name: e.name,
+                guests: e.guests || 0,
+                time: '17:00',
+                revenue: (e.guests || 0) * (e.ppp || 0),
+                status: e.status,
+                emoji: e.type?.toLowerCase().includes('bruiloft') ? '💍' : e.type?.toLowerCase().includes('bedrijf') ? '🏢' : '🍖',
+                dbId: e.id,
+                dbDate: e.date,
+            }));
+    }, [dbEvents, usingDemoData]);
+
+    function shiftMonth(delta: number) {
+        let m = viewMonth + delta;
+        let y = viewYear;
+        if (m < 0) { m = 11; y--; }
+        if (m > 11) { m = 0; y++; }
+        setViewMonth(m); setViewYear(y);
+    }
 
     return (
         <div style={{ padding: '24px 32px 100px', maxWidth: 1600, margin: '0 auto' }}>
-            <AgendaHero onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
+            <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
 
             <div style={{ height: 18 }} />
-            <MonthNav view={view} setView={setView} />
+            <MonthNav
+                view={view}
+                setView={setView}
+                monthLabel={`${NL_MONTHS[viewMonth]} ${viewYear}`}
+                onPrev={() => shiftMonth(-1)}
+                onNext={() => shiftMonth(1)}
+                onToday={() => { const now = new Date(); setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }}
+            />
             <div style={{ height: 18 }} />
 
             <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 360px', gap: 18, alignItems: 'start' }} className="agenda-grid">
@@ -680,7 +865,7 @@ export default function Agenda() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     {view === 'month' && (
-                        <MonthGrid year={VIEW_YEAR} month={VIEW_MONTH} activeCals={activeCals} events={ALL_EVENTS} onSelectEvent={setSelectedEvent} />
+                        <MonthGrid year={viewYear} month={viewMonth} activeCals={activeCals} events={allEvents} onSelectEvent={setSelectedEvent} />
                     )}
                     {view !== 'month' && (
                         <MetalCard style={{ padding: 60, textAlign: 'center' }}>
@@ -693,16 +878,34 @@ export default function Agenda() {
                             </div>
                         </MetalCard>
                     )}
-                    <SmokerSchedule smokes={SMOKER_DATA} />
+                    {usingDemoData && <SmokerSchedule smokes={SMOKER_DATA} />}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     <span id="ai-rail-anchor" />
-                    <UpcomingList items={UPCOMING} onSelect={(it) => {
-                        const ev = EVENTS_DATA.find(e => e.day === it.day);
-                        if (ev) setSelectedEvent(ev);
+                    <UpcomingList items={upcomingList as any} onSelect={(it: any) => {
+                        if (usingDemoData) {
+                            const ev = EVENTS_DATA.find(e => e.day === it.day);
+                            if (ev) setSelectedEvent(ev);
+                        } else if (it.dbId) {
+                            const ev = dbAgendaEvents.find(e => e.dbId === it.dbId);
+                            if (ev) setSelectedEvent(ev);
+                        }
                     }} />
-                    <AIInsightsPanel />
+                    {usingDemoData && <AIInsightsPanel />}
+                    {!usingDemoData && conflicts.length > 0 && (
+                        <MetalCard>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
+                                <Eyebrow style={{ color: 'var(--red)' }}>Live conflicten</Eyebrow>
+                            </div>
+                            {conflicts.map((c, i) => (
+                                <div key={i} style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.18)', marginBottom: 6, fontSize: 11, color: 'var(--text)', lineHeight: 1.45 }}>
+                                    {c.note}
+                                </div>
+                            ))}
+                        </MetalCard>
+                    )}
                 </div>
             </div>
 
@@ -710,7 +913,8 @@ export default function Agenda() {
                 <Info size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
                 <span>
                     <strong style={{ color: 'var(--text)' }}>Agenda · hoe het werkt:</strong>{' '}
-                    Twee-richting sync met Google Agenda — drie accounts gekoppeld. Events, prep-deadlines, smoker-cycli, leveringen, team-rooster en klantafspraken in één view. Klik elk item voor detail. AI plant prep-deadlines automatisch terug vanaf event-datum, waarschuwt voor capaciteit-conflicten, en stelt openingen voor nieuwe leads voor. Koppelt naar <a href="/prep-counter" style={{ color: GOLD }}>Prep Counter</a>, <a href="/service" style={{ color: GOLD }}>Service KDS</a> en <a href="/voorraad" style={{ color: GOLD }}>Voorraad</a>.
+                    Events uit je database verschijnen automatisch hier; prep-taken worden gekoppeld op datum. Klik elk item voor detail.
+                    Smoker-cycli, leveringen en team-rooster zijn nog demo-data tot er DB-tabellen voor zijn. Koppelt naar <a href="/prep-counter" style={{ color: GOLD }}>Prep Counter</a>, <a href="/service" style={{ color: GOLD }}>Service KDS</a> en <a href="/voorraad" style={{ color: GOLD }}>Voorraad</a>.
                 </span>
             </div>
 
