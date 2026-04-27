@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -25,6 +25,7 @@ import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
+import { calcOfferteMarge } from '@/lib/costCalculations';
 import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
@@ -58,46 +59,24 @@ export default function Offertes() {
     const [followUpTitle, setFollowUpTitle] = useState('');
     const [cascadeSteps, setCascadeSteps] = useState<CascadeStep[] | null>(null);
 
-    function getInvPrice(naam: string) {
-        const inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
-        return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
-    }
-    function calcDishCostPP(gerechtNaam: string) {
-        const gerecht: any = gerechtenData.find(function (g) { return g.naam === gerechtNaam; });
-        if (!gerecht || !gerecht.ingredient_costs) return 0;
-        return (gerecht.ingredient_costs || []).reduce(function (sum: number, item: any) {
-            const inv = getInvPrice(item.naam);
-            const price = inv ? inv.price : 0;
-            const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
-            let unitFactor = 1;
-            if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
-            if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
-            return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
-        }, 0);
-    }
     function calcOfferteMargeData(offerte: Record<string, any>) {
         try {
-            const gasten = offerte.aantal_gasten || (offerte.items && offerte.items[0] ? offerte.items[0].qty : 0) || 0;
-            const prijsPP = offerte.basis_prijs_pp || 38.50;
-            const omzet = gasten * prijsPP;
-            let menuGerechten = offerte.menu_selectie || [];
-            if (!Array.isArray(menuGerechten)) menuGerechten = [];
-            let foodcostPP = 0;
-            menuGerechten.forEach(function (sel: any) {
-                if (sel) foodcostPP += calcDishCostPP(sel.gerecht_naam || sel.naam || '');
-            });
-            const foodcostTotaal = foodcostPP * gasten;
-            let vk = offerte.vaste_kosten;
-            if (!Array.isArray(vk)) vk = [];
-            const vasteKosten = vk.reduce(function (s: number, k: any) { return s + (parseFloat(k.bedrag) || 0); }, 0);
-            const nettoWinst = omzet - foodcostTotaal - vasteKosten;
-            const margePct = omzet > 0 ? (nettoWinst / omzet) * 100 : 0;
-            return { gasten: gasten, prijsPP: prijsPP, omzet: omzet, foodcostPP: foodcostPP, foodcostTotaal: foodcostTotaal, vasteKosten: vasteKosten, nettoWinst: nettoWinst, margePct: margePct };
+            return calcOfferteMarge(offerte, gerechtenData as any, inventoryData as any);
         } catch (e) {
             console.error('[MARGE] calcOfferteMargeData error:', e);
             return { gasten: 0, prijsPP: 38.50, omzet: 0, foodcostPP: 0, foodcostTotaal: 0, vasteKosten: 0, nettoWinst: 0, margePct: 0 };
         }
     }
+
+    /* Marge per offerte caching — voorkomt dat we ingredient_costs door-rekenen
+       op elke render. Re-computed alleen als offertes / gerechten / inventory
+       écht veranderen. Belangrijk voor lijst met 50+ offertes. */
+    const margeMap = useMemo(function () {
+        const map: Record<string, ReturnType<typeof calcOfferteMargeData>> = {};
+        offertes.forEach(function (o: any) { map[String(o.id)] = calcOfferteMargeData(o); });
+        return map;
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [offertes, gerechtenData, inventoryData]);
     function margeColor(pct: number) { return pct > 70 ? 'green' : pct >= 60 ? 'orange' : 'red'; }
     function margeLabel(pct: number) { return pct > 70 ? 'Sterk' : pct >= 60 ? 'Aandacht' : 'Lage marge'; }
     function margeEmoji(pct: number) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
@@ -676,7 +655,7 @@ export default function Offertes() {
                     let total = 0;
                     (o.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
                     const pillMap: Record<string, string> = { concept: 'pill-blue', verzonden: 'pill-amber', geaccepteerd: 'pill-green', akkoord: 'pill-green', betaald: 'pill-green', afgewezen: 'pill-red', verlopen: 'pill-red' };
-                    const m = calcOfferteMargeData(o as any);
+                    const m = margeMap[String(o.id)] || calcOfferteMargeData(o as any);
                     const hasMenu = (o.menu_selectie as any[] || []).length > 0;
                     return (
                         <div key={o.id} className="ev-row" onClick={function () { editOfferte(o); }}>

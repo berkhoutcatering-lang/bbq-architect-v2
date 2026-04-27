@@ -8,7 +8,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
-import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, Flame, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 const CATEGORIES = ['Alle', 'Food', 'Gear', 'Sfeer', 'Admin'];
@@ -208,11 +209,7 @@ export default function FotoArchief() {
     CATEGORIES.forEach(function (c) { catCounts[c] = c === 'Alle' ? fotos.length : fotos.filter(function (f) { return f.categorie === c; }).length; });
 
     if (fotosLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Foto-archief laden" />;
     }
 
     return (

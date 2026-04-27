@@ -9,6 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -237,26 +238,16 @@ export default function OfferteViewPage() {
   }, [offerteId]);
 
   /* Cost model: prefer real data from menu_selectie + vaste_kosten + gerechten/inventory,
-     fallback to 40% estimate on raw items. Tracks which mode is used. */
-  function getInvPrice(naam: string) {
-    if (!naam) return null;
-    const inv = inventory.find(i => i.naam && i.naam.toLowerCase() === naam.toLowerCase());
-    return inv ? { price: Number(inv.purchase_price) || 0, unit: inv.unit || 'kg', yield_factor: Number(inv.yield_factor) || 1.0 } : null;
-  }
+     fallback to 40% estimate on raw items. Tracks which mode is used.
+     ingredient_costs kan als string-JSON in DB staan; we normaliseren naar array
+     vóór we de gedeelde calculator aanroepen. */
   function calcDishCostPP(gerechtNaam: string): number {
-    const g = gerechten.find((x: any) => x.naam === gerechtNaam);
-    if (!g || !g.ingredient_costs) return 0;
-    let ingredients: any[] = g.ingredient_costs;
+    const g: any = gerechten.find((x: any) => x.naam === gerechtNaam);
+    if (!g) return 0;
+    let ingredients: any = g.ingredient_costs;
     if (typeof ingredients === 'string') { try { ingredients = JSON.parse(ingredients); } catch { ingredients = []; } }
-    return (ingredients || []).reduce((sum: number, item: any) => {
-      const inv = getInvPrice(item.naam);
-      const price = inv ? inv.price : 0;
-      const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
-      let unitFactor = 1;
-      if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
-      if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
-      return sum + ((Number(item.qty_pp) || 0) * unitFactor / yld) * price;
-    }, 0);
+    const normalized = [{ naam: gerechtNaam, ingredient_costs: Array.isArray(ingredients) ? ingredients : [] }];
+    return sharedCalcDishCostPP(normalized as any, inventory as any, gerechtNaam);
   }
 
   const items = useMemo(() => {

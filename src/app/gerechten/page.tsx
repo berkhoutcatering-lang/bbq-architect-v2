@@ -11,8 +11,10 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
-import { Flame, Link, Unlink } from 'lucide-react';
+import { Link, Unlink } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import type { InventoryItem, Gang } from '@/types';
 
 export default function Gerechten() {
@@ -302,12 +304,8 @@ export default function Gerechten() {
         items.splice(idx, 1);
         setForm(Object.assign({}, form, { ingredient_costs: items }));
     }
-    function getInvPrice(naam: string) {
-        const inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === naam.toLowerCase(); });
-        return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
-    }
     function calcCostPP(item: any) {
-        const inv = getInvPrice(item.naam);
+        const inv = sharedGetInvPrice(inventoryData as any, item.naam);
         const price = inv ? inv.price : 0;
         const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
         let unitFactor = 1;
@@ -330,11 +328,7 @@ export default function Gerechten() {
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
 
     if (dataLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Gerechten laden" />;
     }
 
     return (
@@ -672,7 +666,7 @@ export default function Gerechten() {
                                 {(form.ingredient_costs || []).length > 0 && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                                         {(form.ingredient_costs || []).map(function (item: any, idx: number) {
-                                            const inv = getInvPrice(item.naam);
+                                            const inv = sharedGetInvPrice(inventoryData as any, item.naam);
                                             const costPP = calcCostPP(item);
                                             return (
                                                 <div key={idx} className="ingredient-cost-row">

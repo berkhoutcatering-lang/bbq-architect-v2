@@ -14,6 +14,7 @@ import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import MetallicCard from '@/components/MetallicCard';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import type { Klant } from '@/types';
@@ -41,25 +42,48 @@ function Klanten() {
 
     // Fetch linked offertes & events counts per klant
     const [klantStats, setKlantStats] = useState<Record<string, { offertes: number; events: number; omzet: number; offerteList: any[]; eventList: any[]; factuurList: any[] }>>({});
+    const [statsLoading, setStatsLoading] = useState<string | null>(null);
 
-    function loadStats(naam: string) {
-        if (klantStats[naam]) return;
-        Promise.all([
-            supabase.from('offertes').select('id,nummer,status,datum,items,aantal_gasten', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
-            supabase.from('events').select('id,name,date,guests,ppp,status', { count: 'exact' }).eq('client_naam', naam).order('date', { ascending: false }),
-            supabase.from('facturen').select('id,nummer,status,datum,items', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
-        ]).then(function ([offRes, evRes, facRes]) {
+    /* loadStats — laadt 3 parallel queries voor klant-historie.
+       Foutafhandeling: per-tabel errors loggen + toast i.p.v. silent fail
+       (eerder werd Promise.all-error gewoon geslikt). Per-klant loading
+       state zodat UI weet dat er iets aan de hand is. */
+    async function loadStats(naam: string) {
+        if (klantStats[naam] || statsLoading === naam) return;
+        setStatsLoading(naam);
+        try {
+            const [offRes, evRes, facRes] = await Promise.all([
+                supabase.from('offertes').select('id,nummer,status,datum,items,aantal_gasten', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
+                supabase.from('events').select('id,name,date,guests,ppp,status', { count: 'exact' }).eq('client_naam', naam).order('date', { ascending: false }),
+                supabase.from('facturen').select('id,nummer,status,datum,items', { count: 'exact' }).eq('client_naam', naam).order('datum', { ascending: false }),
+            ]);
+
+            const errors: string[] = [];
+            if (offRes.error) errors.push('offertes (' + offRes.error.message + ')');
+            if (evRes.error) errors.push('events (' + evRes.error.message + ')');
+            if (facRes.error) errors.push('facturen (' + facRes.error.message + ')');
+            if (errors.length > 0) {
+                console.error('[klanten] loadStats errors:', errors);
+                showToast('Klant-historie deels niet geladen: ' + errors.join(', '), 'error');
+            }
+
             let omzet = 0;
             (offRes.data || []).forEach(function (o: any) {
                 (o.items || []).forEach(function (i: any) { omzet += (i.qty || 0) * (i.prijs || 0); });
             });
             (evRes.data || []).forEach(function (e: any) { omzet += (e.guests || 0) * (e.ppp || 0); });
+
             setKlantStats(function (prev) {
                 return Object.assign({}, prev, {
                     [naam]: { offertes: offRes.count || 0, events: evRes.count || 0, omzet: omzet, offerteList: offRes.data || [], eventList: evRes.data || [], factuurList: facRes.data || [] }
                 });
             });
-        });
+        } catch (e: any) {
+            console.error('[klanten] loadStats fatal:', e);
+            showToast('Kon klant-historie niet laden: ' + (e?.message || 'onbekende fout'), 'error');
+        } finally {
+            setStatsLoading(null);
+        }
     }
 
     function newKlant() {
@@ -87,12 +111,18 @@ function Klanten() {
                 ]);
                 setFollowUpTitle('Klant aangemaakt!');
                 setEditing(null); setForm(null);
+            }).catch(function (e: any) {
+                console.error('[klanten] insert failed:', e);
+                showToast('Aanmaken mislukt: ' + (e?.message || 'onbekende fout'), 'error');
             });
         } else {
             const { id, created_at, ...rest } = form!;
             update(editing as number, rest).then(function () {
                 showToast('Klant bijgewerkt', 'success');
                 setEditing(null); setForm(null);
+            }).catch(function (e: any) {
+                console.error('[klanten] update failed:', e);
+                showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error');
             });
         }
     }
@@ -102,6 +132,9 @@ function Klanten() {
             remove(editing as number).then(function () {
                 showToast('Klant verwijderd', 'success');
                 setEditing(null); setForm(null);
+            }).catch(function (e: any) {
+                console.error('[klanten] remove failed:', e);
+                showToast('Verwijderen mislukt: ' + (e?.message || 'onbekende fout'), 'error');
             });
         });
     }
@@ -159,6 +192,14 @@ function Klanten() {
                                     <Mail size={12} /> Email
                                 </a>
                             )}
+                        </div>
+                    )}
+
+                    {/* Klant-historie loading state — alleen voor bestaande klanten */}
+                    {editing !== 'new' && !stats && statsLoading === form.naam && (
+                        <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 12 }}>
+                            <Flame size={14} className="animate-pulse" style={{ color: 'var(--color-accent-gold)' }} />
+                            Klant-historie laden...
                         </div>
                     )}
 
@@ -250,11 +291,7 @@ function Klanten() {
     }
 
     if (klantenLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Klanten laden" />;
     }
 
     const filtered = klanten.filter(function (k) {

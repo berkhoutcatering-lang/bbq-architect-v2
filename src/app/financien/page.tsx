@@ -8,32 +8,9 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import { BarChart3, ChevronLeft, ChevronRight, Coins, Crosshair, Flame, Lock, UserCog } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import type { Offerte, Gerecht, InventoryItem, TimeLog } from '@/types';
-
-function getInvPrice(inventoryData: InventoryItem[], naam: string) {
-    if (!naam) return null;
-    const inv = inventoryData.find(function (i) { return i.naam && i.naam.toLowerCase() === String(naam).toLowerCase(); });
-    return inv ? { price: inv.purchase_price || 0, unit: inv.unit || 'kg', yield_factor: inv.yield_factor || 1.0 } : null;
-}
-
-function calcDishCostPP(gerechtenData: any[], inventoryData: InventoryItem[], gerechtNaam: string) {
-    if (!gerechtNaam) return 0;
-    const gerecht = gerechtenData.find(function (g: any) { return g.naam === gerechtNaam; });
-    if (!gerecht || !gerecht.ingredient_costs) return 0;
-
-    const costsArray = Array.isArray(gerecht.ingredient_costs) ? gerecht.ingredient_costs : [];
-
-    return costsArray.reduce(function (sum: number, item: any) {
-        if (!item || !item.naam) return sum;
-        const inv = getInvPrice(inventoryData, item.naam);
-        const price = inv ? inv.price : 0;
-        const yld = (item.yield || (inv ? inv.yield_factor : 1.0)) || 1.0;
-        let unitFactor = 1;
-        if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
-        if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
-        return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
-    }, 0);
-}
+import { calcDishCostPP } from '@/lib/costCalculations';
 
 export default function Financien() {
     const { data: offertes, loading: offertesLoading } = useSupabase<Offerte>('offertes', []);
@@ -80,7 +57,7 @@ export default function Financien() {
             const menuOpties = Array.isArray(offerte.menu_selectie) ? offerte.menu_selectie : [];
             menuOpties.forEach(function (sel: any) {
                 if (sel && (sel.gerecht_naam || sel.naam)) {
-                    foodcostTotaal += calcDishCostPP(gerechtenData as any[], inventoryData, sel.gerecht_naam || sel.naam) * gasten;
+                    foodcostTotaal += calcDishCostPP(gerechtenData as any[], inventoryData as any, sel.gerecht_naam || sel.naam) * gasten;
                 }
             });
 
@@ -137,11 +114,7 @@ export default function Financien() {
     const maxOmzet = Math.max(...financialData.months.map((m: any) => m.omzet), 1000);
 
     if (offertesLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Financiën laden" />;
     }
 
     if (financialData.totalOmzet === 0 && financialData.totalFoodcost === 0 && financialData.totalLabor === 0) {

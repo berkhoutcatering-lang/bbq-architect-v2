@@ -7,7 +7,8 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import PageHint from '@/components/PageHint';
 import EmptyState from '@/components/EmptyState';
-import { AlertTriangle, Camera, CloudUpload, Contact, Eye, EyeOff, Flame, Globe, HelpCircle, ImageIcon, Images, Info, Lock, Pencil, Plus, RotateCw, Save, Trash2, UtensilsCrossed } from 'lucide-react';
+import { AlertTriangle, Camera, CloudUpload, Contact, Eye, EyeOff, Globe, HelpCircle, ImageIcon, Images, Info, Lock, Pencil, Plus, RotateCw, Save, Trash2, UtensilsCrossed } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import type { WebsiteFaq, WebsiteGallery, WebsiteGang, WebsiteGerecht, WebsiteHero } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 interface WSettings { id: number; email: string; telefoon: string; adres: string; kvk: string; btw_nummer: string; }
@@ -100,11 +101,7 @@ export default function WebsiteBeheer() {
     ];
 
     if (isLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Website laden" />;
     }
 
     return (

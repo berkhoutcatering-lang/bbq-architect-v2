@@ -12,7 +12,8 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
-import { Camera, FileText, Flame, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
+import { Camera, FileText, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
+import { LoadingState } from '@/components/LoadingState';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 
@@ -173,10 +174,14 @@ export default function Inkoop() {
     }
 
     async function downloadReceiptPDF(bon: any) {
-        const items = bon.raw_analysis?.flatMap((a: any) => a.data.items || []) || [];
+        /* raw_analysis kan string-JSON of array zijn; eerste guarden, anders
+           crasht .flatMap. */
+        let raw: any = bon.raw_analysis;
+        if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
+        const items = Array.isArray(raw) ? raw.flatMap((a: any) => (a?.data?.items || [])) : [];
         await generatePDF({
             type: 'receipt',
-            winkel: bon.winkel,
+            winkel: bon.winkel || '—',
             datum: bon.datum,
             totaal_bedrag: bon.totaal_bedrag,
             items: items,
@@ -190,38 +195,42 @@ export default function Inkoop() {
     function saveLeverancier() {
         if (!levForm!.naam) { showToast('Vul een naam in', 'error'); return; }
         if (editingLev === 'new') {
-            insertLev(levForm!).then(function () { showToast('Leverancier toegevoegd', 'success'); setEditingLev(null); });
+            insertLev(levForm!).then(function () { showToast('Leverancier toegevoegd', 'success'); setEditingLev(null); })
+                .catch(function (e: any) { console.error('[inkoop] insertLev:', e); showToast('Toevoegen mislukt: ' + (e?.message || 'onbekende fout'), 'error'); });
         } else {
             const { id, ...rest } = levForm!;
-            updateLev(editingLev as number, rest).then(function () { showToast('Bijgewerkt', 'success'); setEditingLev(null); });
+            updateLev(editingLev as number, rest).then(function () { showToast('Bijgewerkt', 'success'); setEditingLev(null); })
+                .catch(function (e: any) { console.error('[inkoop] updateLev:', e); showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error'); });
         }
     }
 
     const boodOfferte = offertes.find(function (o) { return String(o.id) === boodschappenOfferte; });
     const winkelGroepen: Record<string, string[]> = { Sligro: [], Crisp: [], PLUS: [], Overig: [] };
     if (boodOfferte && boodOfferte.menu_selectie) {
-        const menuSel: any = typeof boodOfferte.menu_selectie === 'string' ? JSON.parse(boodOfferte.menu_selectie) : boodOfferte.menu_selectie;
-        Object.values(menuSel || {}).forEach(function (dishes: any) {
-            (dishes || []).forEach(function (dishName: string) {
+        /* menu_selectie kan in DB string-JSON óf object zijn; ingredienten kan
+           legacy als string staan i.p.v. array. Beide cases hard guarden zodat
+           page niet meer crasht bij oude offerte-data. */
+        let menuSel: any = boodOfferte.menu_selectie;
+        if (typeof menuSel === 'string') { try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; } }
+        const menuValues = menuSel && typeof menuSel === 'object' ? Object.values(menuSel) : [];
+        menuValues.forEach(function (dishes: any) {
+            const dishArr = Array.isArray(dishes) ? dishes : [];
+            dishArr.forEach(function (dishName: string) {
                 const dish: any = gerechtenData.find(function (g) { return g.naam === dishName; });
-                if (dish && dish.ingredienten) {
-                    const winkels = dish.ingredienten_winkels || {};
-                    dish.ingredienten.forEach(function (ing: string) {
-                        const winkel = winkels[ing] || 'Overig';
-                        if (!winkelGroepen[winkel]) winkelGroepen[winkel] = [];
-                        if (winkelGroepen[winkel].indexOf(ing) < 0) winkelGroepen[winkel].push(ing);
-                    });
-                }
+                if (!dish) return;
+                const ingredienten = Array.isArray(dish.ingredienten) ? dish.ingredienten : [];
+                const winkels = dish.ingredienten_winkels || {};
+                ingredienten.forEach(function (ing: string) {
+                    const winkel = winkels[ing] || 'Overig';
+                    if (!winkelGroepen[winkel]) winkelGroepen[winkel] = [];
+                    if (winkelGroepen[winkel].indexOf(ing) < 0) winkelGroepen[winkel].push(ing);
+                });
             });
         });
     }
 
     if (levLoading) {
-        return (
-            <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-                <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-            </div>
-        );
+        return <LoadingState label="Inkoop laden" />;
     }
 
     return (
@@ -351,7 +360,7 @@ export default function Inkoop() {
                                 <div style={{ height: 120, background: 'rgba(0,0,0,0.2)', borderRadius: 8, marginBottom: 12, overflow: 'hidden', cursor: 'pointer' }} onClick={() => window.open(bon.image_url, '_blank')}>
                                     <img src={bon.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Bon" />
                                 </div>
-                                <div style={{ fontWeight: 900, fontSize: 14 }}>{bon.winkel.toUpperCase()}</div>
+                                <div style={{ fontWeight: 900, fontSize: 14 }}>{(bon.winkel || '—').toUpperCase()}</div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{bon.datum} • {fmt(bon.totaal_bedrag)}</div>
                                 <button className="btn-brand w-full" style={{ padding: '8px', fontSize: 12 }} onClick={() => downloadReceiptPDF(bon)}>
                                     <FileText size={14} /> DOWNLOAD PDF RAPPORT

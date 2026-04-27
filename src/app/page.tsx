@@ -19,6 +19,7 @@ import OnboardingProgress from '@/components/OnboardingProgress';
 import DrillDownKPI from '@/components/DrillDownKPI';
 import DashboardBrandHero from '@/components/DashboardBrandHero';
 import PriceUpdateReminder from '@/components/PriceUpdateReminder';
+import { LoadingState } from '@/components/LoadingState';
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -254,11 +255,7 @@ export default function DashboardPage() {
   const monthRevenue = monthEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
 
   if (!isMounted) {
-    return (
-      <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center text-[var(--text)]/50">
-        <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-      </div>
-    );
+    return <LoadingState label="Dashboard laden" />;
   }
 
   return (

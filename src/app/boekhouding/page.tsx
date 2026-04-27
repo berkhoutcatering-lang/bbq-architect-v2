@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt, MAANDEN_KORT } from '@/lib/utils';
 import {
@@ -7,9 +7,10 @@ import {
     ComposedChart, Line, PieChart, Pie, Legend,
 } from 'recharts';
 import EmptyState from '@/components/EmptyState';
+import { LoadingState } from '@/components/LoadingState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
-import { BarChart3, Calculator, Clock, Euro, Flame, LineChart, Percent, PieChart as PieChartIcon, Star, Users } from 'lucide-react';
+import { BarChart3, Calculator, Clock, Euro, LineChart, Percent, PieChart as PieChartIcon, Star, Users } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import type { Factuur, Event as DbEvent } from '@/types';
 
@@ -18,79 +19,83 @@ export default function Boekhouding() {
     const { data: events } = useSupabase<DbEvent>('events', []);
     const [tab, setTab] = useState('wv');
 
-    const betaald = facturen.filter(function (f) { return f.status === 'betaald'; });
-    const open = facturen.filter(function (f) { return f.status !== 'betaald' && f.status !== 'geannuleerd'; });
+    /* Alle aggregaties in één useMemo zodat we niet bij elke render alle
+       facturen + events her-itereren. Re-computed alleen als facturen of
+       events daadwerkelijk veranderen. */
+    const { omzet, openstaand, prognose, omzetChartData, statusPieData, topClients, btwMap, betaaldCount, openCount } = useMemo(function () {
+        const statusKleuren: Record<string, string> = { betaald: 'var(--green)', verzonden: 'var(--brand)', concept: 'var(--muted)', vervallen: 'var(--red)' };
+        const statusLabels: Record<string, string> = { betaald: 'Betaald', verzonden: 'Verzonden', concept: 'Concept', vervallen: 'Vervallen' };
+        const yearStr = new Date().getFullYear().toString();
 
-    let omzet = 0;
-    betaald.forEach(function (f) {
-        (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { omzet += (item.qty || 0) * (item.prijs || 0); });
-    });
+        const betaald = facturen.filter(function (f) { return f.status === 'betaald'; });
+        const open = facturen.filter(function (f) { return f.status !== 'betaald' && f.status !== 'geannuleerd'; });
 
-    let openstaand = 0;
-    open.forEach(function (f) {
-        (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { openstaand += (item.qty || 0) * (item.prijs || 0); });
-    });
-
-    let prognose = 0;
-    events.forEach(function (e) {
-        if (e.status === 'confirmed' || e.status === 'optie') {
-            prognose += (e.guests || 0) * (e.ppp || 0);
-        }
-    });
-
-    const monthlyData = new Array(12).fill(0);
-    const yearStr = new Date().getFullYear().toString();
-    betaald.forEach(function (f) {
-        if (!f.datum || !f.datum.startsWith(yearStr)) return;
-        const month = parseInt(f.datum.split('-')[1], 10) - 1;
-        (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { monthlyData[month] += (item.qty || 0) * (item.prijs || 0); });
-    });
-
-    let cumulative = 0;
-    const omzetChartData = MAANDEN_KORT.map(function (naam: string, i: number) {
-        cumulative += monthlyData[i];
-        return { naam: naam, omzet: Math.round(monthlyData[i]), cumulatief: Math.round(cumulative) };
-    });
-
-    const statusCounts: Record<string, number> = {};
-    facturen.forEach(function (f) {
-        const s = f.status || 'onbekend';
-        statusCounts[s] = (statusCounts[s] || 0) + 1;
-    });
-    const statusKleuren: Record<string, string> = { betaald: 'var(--green)', verzonden: 'var(--brand)', concept: 'var(--muted)', vervallen: 'var(--red)' };
-    const statusLabels: Record<string, string> = { betaald: 'Betaald', verzonden: 'Verzonden', concept: 'Concept', vervallen: 'Vervallen' };
-    const statusPieData = Object.keys(statusCounts).map(function (s) {
-        return { name: statusLabels[s] || s, value: statusCounts[s], color: statusKleuren[s] || 'var(--purple)' };
-    }).filter(function (d) { return d.value > 0; });
-
-    const clientTotals: Record<string, number> = {};
-    betaald.forEach(function (f) {
-        const naam = f.client_naam || 'Onbekend';
-        if (!clientTotals[naam]) clientTotals[naam] = 0;
-        (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { clientTotals[naam] += (item.qty || 0) * (item.prijs || 0); });
-    });
-    const topClients = Object.keys(clientTotals)
-        .map(function (naam) { return { naam: naam, omzet: clientTotals[naam] }; })
-        .sort(function (a, b) { return b.omzet - a.omzet; })
-        .slice(0, 5);
-
-    const btwMap: Record<string, { netto: number; btw: number }> = {};
-    facturen.forEach(function (f) {
-        (f.items || []).forEach(function (item: { qty?: number; prijs?: number; btw?: number }) {
-            const pct = item.btw || 0;
-            const line = (item.qty || 0) * (item.prijs || 0);
-            const btwBedrag = line * (pct / 100);
-            if (!btwMap[pct]) btwMap[pct] = { netto: 0, btw: 0 };
-            btwMap[pct].netto += line;
-            btwMap[pct].btw += btwBedrag;
+        let omzet = 0;
+        betaald.forEach(function (f) {
+            (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { omzet += (item.qty || 0) * (item.prijs || 0); });
         });
-    });
 
-    if (loading) return (
-        <div className="min-h-screen bg-[var(--color-bg-primary)] flex items-center justify-center">
-            <Flame className="w-8 h-8 text-[var(--color-accent-gold)] animate-pulse" />
-        </div>
-    );
+        let openstaand = 0;
+        open.forEach(function (f) {
+            (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { openstaand += (item.qty || 0) * (item.prijs || 0); });
+        });
+
+        let prognose = 0;
+        events.forEach(function (e) {
+            if (e.status === 'confirmed' || e.status === 'optie') {
+                prognose += (e.guests || 0) * (e.ppp || 0);
+            }
+        });
+
+        const monthlyData = new Array(12).fill(0);
+        betaald.forEach(function (f) {
+            if (!f.datum || !f.datum.startsWith(yearStr)) return;
+            const month = parseInt(f.datum.split('-')[1], 10) - 1;
+            (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { monthlyData[month] += (item.qty || 0) * (item.prijs || 0); });
+        });
+
+        let cumulative = 0;
+        const omzetChartData = MAANDEN_KORT.map(function (naam: string, i: number) {
+            cumulative += monthlyData[i];
+            return { naam: naam, omzet: Math.round(monthlyData[i]), cumulatief: Math.round(cumulative) };
+        });
+
+        const statusCounts: Record<string, number> = {};
+        facturen.forEach(function (f) {
+            const s = f.status || 'onbekend';
+            statusCounts[s] = (statusCounts[s] || 0) + 1;
+        });
+        const statusPieData = Object.keys(statusCounts).map(function (s) {
+            return { name: statusLabels[s] || s, value: statusCounts[s], color: statusKleuren[s] || 'var(--purple)' };
+        }).filter(function (d) { return d.value > 0; });
+
+        const clientTotals: Record<string, number> = {};
+        betaald.forEach(function (f) {
+            const naam = f.client_naam || 'Onbekend';
+            if (!clientTotals[naam]) clientTotals[naam] = 0;
+            (f.items || []).forEach(function (item: { qty?: number; prijs?: number }) { clientTotals[naam] += (item.qty || 0) * (item.prijs || 0); });
+        });
+        const topClients = Object.keys(clientTotals)
+            .map(function (naam) { return { naam: naam, omzet: clientTotals[naam] }; })
+            .sort(function (a, b) { return b.omzet - a.omzet; })
+            .slice(0, 5);
+
+        const btwMap: Record<string, { netto: number; btw: number }> = {};
+        facturen.forEach(function (f) {
+            (f.items || []).forEach(function (item: { qty?: number; prijs?: number; btw?: number }) {
+                const pct = item.btw || 0;
+                const line = (item.qty || 0) * (item.prijs || 0);
+                const btwBedrag = line * (pct / 100);
+                if (!btwMap[pct]) btwMap[pct] = { netto: 0, btw: 0 };
+                btwMap[pct].netto += line;
+                btwMap[pct].btw += btwBedrag;
+            });
+        });
+
+        return { omzet, openstaand, prognose, omzetChartData, statusPieData, topClients, btwMap, betaaldCount: betaald.length, openCount: open.length };
+    }, [facturen, events]);
+
+    if (loading) return <LoadingState label="Boekhouding laden" />;
 
     if (facturen.length === 0) {
         return (
@@ -116,13 +121,13 @@ export default function Boekhouding() {
                             <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Euro size={14} /></div>
                             <div className="stat-val">{fmt(omzet)}</div>
                             <div className="stat-label">Omzet (betaald)</div>
-                            <div className="stat-sub">{betaald.length} facturen</div>
+                            <div className="stat-sub">{betaaldCount} facturen</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(245,158,11,.12)', color: 'var(--amber)' }}><Clock size={14} /></div>
                             <div className="stat-val">{fmt(openstaand)}</div>
                             <div className="stat-label">Openstaand</div>
-                            <div className="stat-sub">{open.length} facturen</div>
+                            <div className="stat-sub">{openCount} facturen</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><LineChart size={14} /></div>
