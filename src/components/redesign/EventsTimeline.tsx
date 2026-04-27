@@ -240,7 +240,10 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
     omzet: number; margin: number | null; countdown: string; countdownLabel: string; eyebrow: string;
   } | null = null;
   if (hero) {
-    const dt = new Date(hero.date + 'T18:00:00'); // default 18:00 if no time column
+    /* Gebruik echte starttijd indien beschikbaar (kolom events.start_time HH:MM); fallback 18:00. */
+    const heroTime = (hero as DbEvent & { start_time?: string | null }).start_time;
+    const heroTimeStr = heroTime ? heroTime.slice(0, 5) : '18:00';
+    const dt = new Date(hero.date + 'T' + heroTimeStr + ':00');
     const nowMs = Date.now();
     const diffMs = dt.getTime() - nowMs;
     const hoursLeft = Math.max(0, Math.floor(diffMs / 3600000));
@@ -261,7 +264,7 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
     heroData = {
       title: titleCase(displayEventName(hero.name)),
       date: hero.date,
-      time: '18:00',
+      time: heroTimeStr,
       location: hero.location || 'Locatie onbekend',
       guests: hero.guests || 0,
       omzet: eventOmzet(hero),
@@ -464,6 +467,10 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
                             </div>
                             <div className="meta-row">
                               <span><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{ev.guests || 0} gasten</span>
+                              {(ev as DbEvent & { start_time?: string | null }).start_time && <>
+                                <span className="dot"></span>
+                                <span>{(ev as DbEvent & { start_time?: string | null }).start_time!.slice(0, 5)}{(ev as DbEvent & { end_time?: string | null }).end_time ? `–${(ev as DbEvent & { end_time?: string | null }).end_time!.slice(0, 5)}` : ''}</span>
+                              </>}
                               <span className="dot"></span>
                               <span>{ev.location || '—'}</span>
                               {ev.type && <>

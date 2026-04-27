@@ -162,6 +162,10 @@ export interface DbEvent {
   id: number;
   name: string;
   date: string;
+  /* Lokale starttijd HH:MM (TIME zonder timezone). NULL = onbekend. */
+  start_time?: string | null;
+  /* Lokale eindtijd HH:MM. NULL = open einde. */
+  end_time?: string | null;
   guests: number;
   location: string;
   ppp: number;

@@ -683,18 +683,29 @@ function FactRow({ label, value, Icon, highlight }: { label: string; value: Reac
 /* ═══════════════════════════════════════════════════════════════════
    MAIN PAGE
    ═══════════════════════════════════════════════════════════════════ */
+/* Parse "HH:MM" of "HH:MM:SS" naar uren-decimaal. Default 17 als ontbrekend. */
+function parseTimeToHours(t: string | null | undefined, fallback: number): number {
+    if (!t) return fallback;
+    const m = t.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return fallback;
+    return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+}
+
 /* Map een DB event naar het AgendaEvent shape dat dit page intern gebruikt. */
 function mapDbEventToAgendaEvent(e: DbEvent): AgendaEvent {
     const [, , dd] = (e.date || '').split('-');
     const day = parseInt(dd || '1', 10);
     const guests = e.guests || 0;
     const omzet = guests * (e.ppp || 0);
+    const start = parseTimeToHours(e.start_time, 17);
+    const end = parseTimeToHours(e.end_time, start + (guests > 80 ? 8 : 6));
+    const duration = Math.max(0.5, end - start);
     return ev(
         'evt_' + e.id,
         'events',
         day,
-        17, /* default 17:00 — DB heeft geen tijd-veld (nog) */
-        guests > 80 ? 8 : 6,
+        start,
+        duration,
         e.name + (guests ? ' ' + guests + 'p' : ''),
         {
             client: e.client_naam || '—',
@@ -705,6 +716,8 @@ function mapDbEventToAgendaEvent(e: DbEvent): AgendaEvent {
             status: e.status || 'pending',
             dbId: e.id,
             dbDate: e.date,
+            startTime: e.start_time,
+            endTime: e.end_time,
         }
     );
 }
@@ -826,7 +839,7 @@ export default function Agenda() {
                 day: parseInt((e.date || '').split('-')[2] || '0', 10),
                 name: e.name,
                 guests: e.guests || 0,
-                time: '17:00',
+                time: e.start_time ? e.start_time.slice(0, 5) : '—',
                 revenue: (e.guests || 0) * (e.ppp || 0),
                 status: e.status,
                 emoji: e.type?.toLowerCase().includes('bruiloft') ? '💍' : e.type?.toLowerCase().includes('bedrijf') ? '🏢' : '🍖',

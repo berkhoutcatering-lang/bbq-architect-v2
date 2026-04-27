@@ -22,6 +22,10 @@ export interface ConflictableEvent {
     id: number | string;
     name?: string;
     date?: string;        // YYYY-MM-DD
+    /* Optioneel: HH:MM lokaal — wanneer aanwezig wordt venue-conflict
+       op tijd-overlap berekend i.p.v. dag-grain. */
+    start_time?: string | null;
+    end_time?: string | null;
     location?: string;
     guests?: number;
     status?: string;       // 'confirmed' | 'optie' | 'cancelled' etc.
@@ -114,7 +118,29 @@ export function detectSmokerConflicts(
     return conflicts;
 }
 
-/** Detecteer dubbele venue-boekingen op dezelfde dag. */
+/** Parse HH:MM naar minuten sinds middernacht; null bij ontbrekende of ongeldige input. */
+function timeToMinutes(t?: string | null): number | null {
+    if (!t) return null;
+    const m = t.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+/** Bepaal of twee event-tijdvakken overlappen op dezelfde dag. Conservatief:
+ *  als beide events tijden hebben → strict half-open overlap [start, end).
+ *  Als één van beide géén tijden heeft → fallback op dag-overlap (true). */
+function timesOverlap(a: ConflictableEvent, b: ConflictableEvent): boolean {
+    const aStart = timeToMinutes(a.start_time);
+    const aEnd = timeToMinutes(a.end_time);
+    const bStart = timeToMinutes(b.start_time);
+    const bEnd = timeToMinutes(b.end_time);
+    /* Mist één een veld → kunnen we tijd-overlap niet uitsluiten; altijd true. */
+    if (aStart == null || aEnd == null || bStart == null || bEnd == null) return true;
+    return aStart < bEnd && bStart < aEnd;
+}
+
+/** Detecteer dubbele venue-boekingen op dezelfde dag.
+ *  Met start_time/end_time: strict tijd-overlap; anders dag-grain. */
 export function detectVenueConflicts(
     events: ConflictableEvent[],
     config: ConflictDetectionConfig = {},
@@ -134,11 +160,24 @@ export function detectVenueConflicts(
         }
         for (const [loc, group] of byVenue) {
             if (group.length < 2) continue;
+            /* Subset events die daadwerkelijk in tijd overlappen — n² is OK,
+               typisch <5 events per locatie/dag. */
+            const overlapping: ConflictableEvent[] = [];
+            const seen = new Set<number | string>();
+            for (let i = 0; i < group.length; i++) {
+                for (let j = i + 1; j < group.length; j++) {
+                    if (timesOverlap(group[i], group[j])) {
+                        if (!seen.has(group[i].id)) { overlapping.push(group[i]); seen.add(group[i].id); }
+                        if (!seen.has(group[j].id)) { overlapping.push(group[j]); seen.add(group[j].id); }
+                    }
+                }
+            }
+            if (overlapping.length < 2) continue;
             conflicts.push({
                 type: 'venue',
                 severity: 'warning',
-                eventIds: group.map(e => e.id),
-                note: `${group.length} events op zelfde locatie (${loc}) op ${date}`,
+                eventIds: overlapping.map(e => e.id),
+                note: `${overlapping.length} events overlappen op zelfde locatie (${loc}) op ${date}`,
                 date,
             });
         }
