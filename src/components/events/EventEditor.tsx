@@ -192,6 +192,9 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
         <div className="field"><label>Eindtijd</label><input type="time" value={(form.end_time || '').slice(0, 5)} onChange={e => setField('end_time', e.target.value || null)} placeholder="23:00" /></div>
         <div className="field full"><label>Locatie</label><input value={form.location || ''} onChange={e => setField('location', e.target.value)} /></div>
         <div className="field"><label>Aantal Gasten</label><input name="guests" type="number" value={form.guests || 0} onChange={e => { setField('guests', parseInt(e.target.value) || 0); clearError('guests'); }} style={errors.guests ? { borderColor: 'var(--red)' } : {}} {...fieldProps('guests', form.guests)} /><FieldError message={errors.guests} fieldName="guests" /></div>
+        <div className="field"><label>Vegetarisch</label><input type="number" min={0} value={form.veg_guests ?? 0} onChange={e => setField('veg_guests', parseInt(e.target.value) || 0)} /></div>
+        <div className="field"><label>Vegan</label><input type="number" min={0} value={form.vegan_guests ?? 0} onChange={e => setField('vegan_guests', parseInt(e.target.value) || 0)} /></div>
+        <div className="field"><label>Glutenvrij</label><input type="number" min={0} value={form.gluten_free_guests ?? 0} onChange={e => setField('gluten_free_guests', parseInt(e.target.value) || 0)} /></div>
         <div className="field"><label>Prijs per Persoon</label><input type="number" step="0.50" value={form.ppp || 0} onChange={e => setField('ppp', parseFloat(e.target.value) || 0)} /></div>
         <div className="field"><label>Type</label>
           <select value={form.type || 'Particulier'} onChange={e => setField('type', e.target.value)}>

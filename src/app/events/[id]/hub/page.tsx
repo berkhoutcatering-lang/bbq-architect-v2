@@ -19,6 +19,8 @@ import { displayEventName, titleCase } from '@/components/redesign/displayHelper
 import EventMenuKaartBuilder from '@/components/EventMenuKaartBuilder';
 import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
 import EventEditor from '@/components/events/EventEditor';
+import CoursesEditor from '@/components/events/CoursesEditor';
+import AllergiesEditor from '@/components/events/AllergiesEditor';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
 import '@/components/redesign/redesign.css';
@@ -1046,6 +1048,24 @@ export default function EventHubPage() {
               await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
               setEvent({ ...event, draaiboek });
             }} />
+          </div>
+        </div>
+
+        {/* ═════════ SERVICE DATA — Gangen + Allergieën voor KDS ═════════ */}
+        <div id="service-data" className="metal" style={{ marginTop: 20 }}>
+          <div className="metal-head">
+            <div className="hstack"><ChefHat size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Service-data — Gangen & Allergieën</span></div>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Voedt de Service Mode KDS bij dit event</span>
+          </div>
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div>
+              <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-gold)', textTransform: 'uppercase', marginBottom: 12, letterSpacing: '.05em' }}>Gangen</h4>
+              <CoursesEditor eventId={event.id} eventGuests={event.guests || 0} />
+            </div>
+            <div>
+              <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-gold)', textTransform: 'uppercase', marginBottom: 12, letterSpacing: '.05em' }}>Allergieën & Diëten</h4>
+              <AllergiesEditor eventId={event.id} />
+            </div>
           </div>
         </div>
 
