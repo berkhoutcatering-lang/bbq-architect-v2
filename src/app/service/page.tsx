@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
     Sparkles, Clock, AlertTriangle, AlertCircle, Check,
-    X, Pause, Flame, ArrowRight, ChevronRight,
+    X, Pause, Flame, ArrowRight, ChevronRight, ClipboardList, Tv, Brush,
+    FileText, Trash2, Edit3, Loader2, Download,
 } from 'lucide-react';
 import AIChefAssistant from '@/components/service/AIChefAssistant';
 
@@ -789,11 +790,528 @@ function CompactHeader({ onWizard }: { onWizard: () => void }) {
     );
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   PRE-SERVICE: Sectie 1 — Overzicht + Menu + on-site MEP-checklist
+   ═══════════════════════════════════════════════════════════════════ */
+const ON_SITE_MEP_DEFAULT = [
+    { id: 'on-1', label: 'Catering-truck uitladen', critical: false },
+    { id: 'on-2', label: 'Smoker 1 + 2 op locatie zetten', critical: true },
+    { id: 'on-3', label: 'BBQ aansteken (smoker 1) — 18u voor service', critical: true },
+    { id: 'on-4', label: 'BBQ aansteken (smoker 2) — 6u voor service', critical: true },
+    { id: 'on-5', label: 'Service-line tafels uitstallen', critical: false },
+    { id: 'on-6', label: 'Bain-maries opwarmen (>65°C)', critical: true },
+    { id: 'on-7', label: 'Inox bakken + GN-trays op stelling', critical: false },
+    { id: 'on-8', label: 'Cambros + sauce-dippers klaarzetten', critical: false },
+    { id: 'on-9', label: 'Snijplanken + slicers gepoliert', critical: false },
+    { id: 'on-10', label: 'Borden voorverwarmen in stack', critical: false },
+    { id: 'on-11', label: 'Hand-wash station + handgels', critical: true },
+    { id: 'on-12', label: 'Brandblusser + thermometer check', critical: true },
+];
+
+function PreServiceSection({ now, mepState, onToggleMep }: { now: string; mepState: Record<string, boolean>; onToggleMep: (id: string) => void }) {
+    const decoratedMep = ON_SITE_MEP_DEFAULT.map(m => ({ ...m, done: mepState[m.id] || false }));
+    const mepDone = decoratedMep.filter(m => m.done).length;
+    const mepPct = Math.round((mepDone / decoratedMep.length) * 100);
+    const minsToService = (() => {
+        const [nh, nm] = now.split(':').map(Number);
+        const [sh, sm] = SERVICE_EVENT.startTime.split(':').map(Number);
+        return (sh * 60 + sm) - (nh * 60 + nm);
+    })();
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* AI briefing — vooraf wat te doen */}
+            <div style={{ padding: 18, borderRadius: 14, background: `linear-gradient(135deg, ${BRAND}1a, ${GOLD}0a 60%, rgba(28,28,32,.7))`, border: `1px solid ${GOLD}40` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${BRAND}, ${GOLD})`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 14px ${BRAND}66` }}>
+                        <Sparkles size={18} style={{ color: '#000' }} />
+                    </div>
+                    <div>
+                        <Eyebrow style={{ color: GOLD }}>ROOK · BRIEFING</Eyebrow>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 22 }}>Voor we starten</div>
+                    </div>
+                    <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                        <Eyebrow>NOG</Eyebrow>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, color: minsToService < 60 ? BRAND : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                            {minsToService > 0 ? `${Math.floor(minsToService / 60)}u${String(minsToService % 60).padStart(2, '0')}m` : 'NU'}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>tot service start</div>
+                    </div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, marginTop: 6 }}>
+                    Vandaag {SERVICE_EVENT.guests} gasten op {SERVICE_EVENT.venue}. Vier gangen: walking welcome, BBQ-buffet, avondhap, dessert.
+                    Pauze {SERVICE_EVENT.pauseStart}–{SERVICE_EVENT.pauseEnd} voor speeches.
+                    <strong style={{ color: GOLD }}> Drie kritieke allergieën</strong> — pinda (T3), gluten (T5), lactose (T7).
+                    Brisket-cyclus loopt al sinds 01:00 vannacht; satay-sticks tijdens speech-pauze starten op smoker 2.
+                    Werk de checklist hieronder af voordat de eerste gasten komen — alle critical items moeten af.
+                </div>
+            </div>
+
+            {/* Menu-overzicht: alle 4 gangen zichtbaar */}
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <ClipboardList size={14} style={{ color: GOLD }} />
+                    <Eyebrow>Menu vandaag · {COURSES.filter(c => !c.isPause).length} gangen</Eyebrow>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                    {COURSES.filter(c => !c.isPause).map(c => (
+                        <MetalCard key={c.id} style={{ padding: 0, overflow: 'hidden' }}>
+                            <div style={{ height: 90, background: c.foodHue !== null ? `linear-gradient(135deg, hsl(${c.foodHue} 60% 32%), hsl(${c.foodHue} 50% 20%))` : '#2a2440', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56, position: 'relative' }}>
+                                {c.heroEmoji}
+                                <div style={{ position: 'absolute', top: 8, left: 8, padding: '3px 8px', borderRadius: 4, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', fontSize: 10, fontWeight: 700, letterSpacing: '.15em', color: '#fff' }}>
+                                    GANG {c.number} · {c.serveAt}
+                                </div>
+                            </div>
+                            <div style={{ padding: 14 }}>
+                                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 18, fontWeight: 400, marginBottom: 4 }}>{c.title}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>{c.subtitle}</div>
+                                {c.dishes && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        {c.dishes.map((d, i) => (
+                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                                                <span style={{ fontSize: 16 }}>{d.emoji}</span>
+                                                <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                                                <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', fontSize: 10 }}>{d.portions}p</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {c.heroDescription && (
+                                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted-light)', fontStyle: 'italic', lineHeight: 1.4 }}>{c.heroDescription}</div>
+                                )}
+                            </div>
+                        </MetalCard>
+                    ))}
+                </div>
+            </div>
+
+            {/* On-site MEP checklist */}
+            <MetalCard>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                        <Eyebrow>On-site mise en place</Eyebrow>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 2 }}>{mepDone}/{decoratedMep.length} klaar</div>
+                    </div>
+                    <div style={{ width: 60, height: 60, position: 'relative' }}>
+                        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                            <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
+                            <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={`${mepPct * 2.51} 251`} />
+                        </svg>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{mepPct}%</div>
+                    </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 6 }}>
+                    {decoratedMep.map(item => (
+                        <div key={item.id} onClick={() => onToggleMep(item.id)} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                            background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
+                            border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
+                        }}>
+                            <div style={{
+                                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                                background: item.done ? 'var(--green)' : 'transparent',
+                                border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                {item.done && <Check size={14} style={{ color: '#000' }} />}
+                            </div>
+                            <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
+                            {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
+                        </div>
+                    ))}
+                </div>
+            </MetalCard>
+
+            {/* Allergie-recap */}
+            {SERVICE_EVENT.allergies.length > 0 && (
+                <MetalCard style={{ borderColor: 'rgba(239,68,68,.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
+                        <Eyebrow style={{ color: 'var(--red)' }}>Allergieën deze service · {SERVICE_EVENT.allergies.length}</Eyebrow>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                        {SERVICE_EVENT.allergies.map((a, i) => (
+                            <div key={i} style={{ padding: 12, borderRadius: 10, background: a.severity === 'critical' ? 'rgba(239,68,68,.06)' : `${BRAND}0d`, border: `1px solid ${a.severity === 'critical' ? 'rgba(239,68,68,.2)' : `${BRAND}33`}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                    <span style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>T{a.table}</span>
+                                    <span style={{ fontWeight: 600, fontSize: 13 }}>{a.person}</span>
+                                </div>
+                                <div style={{ fontSize: 12, color: a.severity === 'critical' ? 'var(--red)' : GOLD, fontWeight: 600 }}>{a.issue}</div>
+                            </div>
+                        ))}
+                    </div>
+                </MetalCard>
+            )}
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   POST-SERVICE: Sectie 3 — Opruim + Feedback + PDF rapport
+   ═══════════════════════════════════════════════════════════════════ */
+const CLEANUP_DEFAULT = [
+    { id: 'cl-1', label: 'Smokers uit + dom afgekoeld', critical: true },
+    { id: 'cl-2', label: 'Bain-maries leeg + schoonmaken', critical: false },
+    { id: 'cl-3', label: 'Cambros leeg + spoelen', critical: false },
+    { id: 'cl-4', label: 'Snijplanken + slicers wassen', critical: false },
+    { id: 'cl-5', label: 'Service-line afbreken', critical: false },
+    { id: 'cl-6', label: 'Inox / GN-trays inpakken', critical: false },
+    { id: 'cl-7', label: 'Restanten apart (waste-tracking)', critical: false },
+    { id: 'cl-8', label: 'Vuil → afvalcontainer locatie', critical: false },
+    { id: 'cl-9', label: 'Catering-truck inladen', critical: true },
+    { id: 'cl-10', label: 'Locatie eind-check (vergeet niets)', critical: true },
+    { id: 'cl-11', label: 'Smoker-as koud in metalen bak', critical: true },
+    { id: 'cl-12', label: 'Klant bedanken + verlaten', critical: false },
+];
+
+interface FeedbackResult {
+    polishedNarrative: string;
+    keyPoints: string[];
+    sentiment: 'positive' | 'mixed' | 'negative';
+    actionables: string[];
+    tags?: string[];
+}
+
+function PostServiceSection({ cleanupState, onToggleCleanup, miseState }: { cleanupState: Record<string, boolean>; onToggleCleanup: (id: string) => void; miseState: Record<string, boolean> }) {
+    const [rawNotes, setRawNotes] = useState('');
+    const [aiResult, setAiResult] = useState<FeedbackResult | null>(null);
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiError, setAiError] = useState<string | null>(null);
+
+    /* Persist notes + AI result in localStorage */
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('service_feedback_v1');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                setRawNotes(parsed.rawNotes || '');
+                setAiResult(parsed.aiResult || null);
+            }
+        } catch { /* ignore */ }
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem('service_feedback_v1', JSON.stringify({ rawNotes, aiResult })); } catch { /* ignore */ }
+    }, [rawNotes, aiResult]);
+
+    const decoratedCl = CLEANUP_DEFAULT.map(c => ({ ...c, done: cleanupState[c.id] || false }));
+    const clDone = decoratedCl.filter(c => c.done).length;
+    const clPct = Math.round((clDone / decoratedCl.length) * 100);
+
+    async function rewriteFeedback() {
+        if (rawNotes.trim().length < 10) {
+            setAiError('Schrijf eerst een paar zinnen — anders heeft Rook niks om mee te werken.');
+            return;
+        }
+        setAiBusy(true);
+        setAiError(null);
+        try {
+            const res = await fetch('/api/service-feedback-rewrite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rawNotes,
+                    eventContext: { title: SERVICE_EVENT.title, date: SERVICE_EVENT.date, guests: SERVICE_EVENT.guests, menu: COURSES.filter(c => !c.isPause).map(c => c.title).join(' · ') },
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok || !body.success) {
+                setAiError(body.error || 'AI-fout');
+            } else {
+                setAiResult({ polishedNarrative: body.polishedNarrative, keyPoints: body.keyPoints, sentiment: body.sentiment, actionables: body.actionables, tags: body.tags });
+            }
+        } catch (e: any) {
+            setAiError(e?.message || 'Kon Rook niet bereiken');
+        }
+        setAiBusy(false);
+    }
+
+    async function generatePDF() {
+        const { default: jsPDF } = await import('jspdf');
+        const autoTable = (await import('jspdf-autotable')).default;
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        /* COVER */
+        doc.setFillColor(18, 18, 20); doc.rect(0, 0, 210, 50, 'F');
+        doc.setTextColor(196, 163, 90); doc.setFontSize(11);
+        doc.text('SERVICE RAPPORT', 14, 18);
+        doc.setTextColor(255, 255, 255); doc.setFontSize(22);
+        doc.text(SERVICE_EVENT.title, 14, 30);
+        doc.setTextColor(180, 180, 180); doc.setFontSize(10);
+        doc.text(`${SERVICE_EVENT.date} · ${SERVICE_EVENT.guests} gasten · ${SERVICE_EVENT.venue}`, 14, 38);
+        doc.text(`Service ${SERVICE_EVENT.startTime}–${SERVICE_EVENT.endTime}`, 14, 44);
+
+        /* MENU TABLE */
+        let y = 62;
+        doc.setTextColor(40, 40, 40); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Menu uitgevoerd', 14, y); y += 6;
+        autoTable(doc, {
+            startY: y,
+            head: [['Gang', 'Tijd', 'Gerechten', 'Porties']],
+            body: COURSES.filter(c => !c.isPause).map(c => [
+                `${c.number}. ${c.title}`,
+                c.serveAt,
+                c.dishes ? c.dishes.map(d => d.name).join(', ') : '—',
+                c.dishes ? c.dishes.reduce((s, d) => s + d.portions, 0) + ' totaal' : '—',
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14, right: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 8;
+
+        /* MISE / TEMPO */
+        const allMise = COURSES.flatMap(c => (c.miseChecklist || []).map(m => ({ ...m, courseTitle: c.title })));
+        const miseTotalDone = allMise.filter(m => miseState[m.id] !== undefined ? miseState[m.id] : m.done).length;
+        const tempoStr = allMise.length ? `${miseTotalDone}/${allMise.length} mise-stappen voltooid (${Math.round((miseTotalDone / allMise.length) * 100)}%)` : '—';
+
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Tempo & uitvoering', 14, y); y += 6;
+        autoTable(doc, {
+            startY: y,
+            head: [['Metriek', 'Waarde']],
+            body: [
+                ['Mise-completion', tempoStr],
+                ['Opruim-completion', `${clDone}/${decoratedCl.length} (${clPct}%)`],
+                ['Aantal gangen', String(COURSES.filter(c => !c.isPause).length)],
+                ['Pauze-moment', `${SERVICE_EVENT.pauseStart}–${SERVICE_EVENT.pauseEnd}`],
+                ['Allergieën', SERVICE_EVENT.allergies.map(a => `${a.person} (T${a.table}) — ${a.issue}`).join('; ') || 'geen'],
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [196, 163, 90], textColor: [255, 255, 255], fontSize: 9 },
+            bodyStyles: { fontSize: 9 },
+            margin: { left: 14, right: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 8;
+
+        /* FEEDBACK */
+        if (aiResult) {
+            if (y > 240) { doc.addPage(); y = 20; }
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+            doc.text('Pitmaster-evaluatie', 14, y); y += 6;
+            doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+            const wrapped = doc.splitTextToSize(aiResult.polishedNarrative, 180);
+            doc.text(wrapped, 14, y); y += wrapped.length * 5 + 6;
+
+            if (aiResult.keyPoints?.length) {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                doc.text('Kernpunten', 14, y); y += 5;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                aiResult.keyPoints.forEach(kp => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                    const lines = doc.splitTextToSize('• ' + kp, 180);
+                    doc.text(lines, 18, y); y += lines.length * 5;
+                });
+                y += 4;
+            }
+
+            if (aiResult.actionables?.length) {
+                if (y > 250) { doc.addPage(); y = 20; }
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+                doc.text('Volgende keer', 14, y); y += 5;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+                aiResult.actionables.forEach(a => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                    const lines = doc.splitTextToSize('→ ' + a, 180);
+                    doc.text(lines, 18, y); y += lines.length * 5;
+                });
+                y += 4;
+            }
+        }
+
+        /* RAW notes als appendix */
+        if (rawNotes.trim()) {
+            doc.addPage(); y = 20;
+            doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+            doc.text('Bijlage: ruwe notities pitmaster', 14, y); y += 8;
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+            const lines = doc.splitTextToSize(rawNotes, 180);
+            doc.text(lines, 14, y);
+        }
+
+        /* Footer */
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8); doc.setTextColor(148, 148, 148);
+            doc.text(`Hop & Bites · BBQ Architect · ${new Date().toLocaleString('nl-NL')} · pagina ${i}/${pageCount}`, 14, 290);
+        }
+
+        doc.save(`service-rapport-${SERVICE_EVENT.id}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Opruim-checklist */}
+            <MetalCard>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Brush size={14} style={{ color: GOLD }} />
+                            <Eyebrow>Opruim-checklist</Eyebrow>
+                        </div>
+                        <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 400, fontSize: 18, marginTop: 4 }}>{clDone}/{decoratedCl.length} klaar</div>
+                    </div>
+                    <div style={{ width: 60, height: 60, position: 'relative' }}>
+                        <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                            <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,.06)" strokeWidth="8" fill="none" />
+                            <circle cx="50" cy="50" r="40" stroke={GOLD} strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={`${clPct * 2.51} 251`} />
+                        </svg>
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600 }}>{clPct}%</div>
+                    </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 6 }}>
+                    {decoratedCl.map(item => (
+                        <div key={item.id} onClick={() => onToggleCleanup(item.id)} style={{
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                            background: item.done ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.02)',
+                            border: `1px solid ${item.critical && !item.done ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,.04)'}`,
+                        }}>
+                            <div style={{
+                                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                                background: item.done ? 'var(--green)' : 'transparent',
+                                border: `1.5px solid ${item.done ? 'var(--green)' : item.critical ? 'var(--red)' : 'var(--border)'}`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                {item.done && <Check size={14} style={{ color: '#000' }} />}
+                            </div>
+                            <span style={{ fontSize: 13, color: item.done ? 'var(--muted)' : 'var(--text)', textDecoration: item.done ? 'line-through' : 'none', flex: 1, lineHeight: 1.4 }}>{item.label}</span>
+                            {item.critical && !item.done && <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontWeight: 700, letterSpacing: '.1em' }}>!</span>}
+                        </div>
+                    ))}
+                </div>
+            </MetalCard>
+
+            {/* Feedback input + AI rewrite */}
+            <MetalCard>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Edit3 size={14} style={{ color: GOLD }} />
+                        <Eyebrow>Feedback dump · ruw</Eyebrow>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        {rawNotes && (
+                            <button onClick={() => { setRawNotes(''); setAiResult(null); }} style={{
+                                padding: '6px 10px', borderRadius: 7, fontSize: 11, color: 'var(--muted)',
+                                background: 'transparent', border: '1px solid var(--border)', cursor: 'pointer',
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                            }}>
+                                <Trash2 size={11} /> Wissen
+                            </button>
+                        )}
+                        <button onClick={rewriteFeedback} disabled={aiBusy || rawNotes.trim().length < 10} style={{
+                            padding: '6px 12px', borderRadius: 7, fontSize: 11, fontWeight: 600,
+                            background: aiBusy ? 'var(--muted-light)' : `linear-gradient(180deg, ${GOLD}, #9e781c)`,
+                            color: '#000', border: 'none', cursor: aiBusy ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            opacity: rawNotes.trim().length < 10 ? 0.5 : 1,
+                        }}>
+                            {aiBusy ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                            {aiBusy ? 'Rook schrijft…' : 'Rook schrijft uit'}
+                        </button>
+                    </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+                    Gooi alles erin wat je nog kwijt wilt — losse zinnen, fragmenten, frustraties, complimenten. Rook leest mee en schrijft het netjes uit voor in het rapport.
+                </div>
+                <textarea
+                    value={rawNotes}
+                    onChange={e => setRawNotes(e.target.value)}
+                    rows={6}
+                    placeholder='Bv: "tempo gang 2 te traag, brisket strak, klant blij — vooral met short ribs, mac & cheese hadden we 8kg over, satay-portie voor maaike T3 ging goed, smoker 1 stookte rommelig, team had te weinig handen tijdens piek"'
+                    style={{
+                        width: '100%', padding: 14, borderRadius: 10,
+                        background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
+                        color: 'var(--text)', fontSize: 13, lineHeight: 1.6,
+                        outline: 'none', resize: 'vertical', fontFamily: 'inherit',
+                    }}
+                />
+                {aiError && (
+                    <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--red)', fontSize: 12 }}>
+                        {aiError}
+                    </div>
+                )}
+            </MetalCard>
+
+            {/* AI-uitgeschreven samenvatting */}
+            {aiResult && (
+                <MetalCard style={{ borderColor: `${GOLD}40` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <Sparkles size={14} style={{ color: GOLD }} />
+                        <Eyebrow style={{ color: GOLD }}>Rook · uitgeschreven</Eyebrow>
+                        <span style={{
+                            padding: '2px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.15em',
+                            background: aiResult.sentiment === 'positive' ? 'rgba(34,197,94,.15)' : aiResult.sentiment === 'mixed' ? `${BRAND}1a` : 'rgba(239,68,68,.15)',
+                            color: aiResult.sentiment === 'positive' ? 'var(--green)' : aiResult.sentiment === 'mixed' ? BRAND : 'var(--red)',
+                        }}>{(aiResult.sentiment || 'mixed').toUpperCase()}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.7, marginBottom: 14 }}>
+                        {aiResult.polishedNarrative}
+                    </div>
+                    {aiResult.keyPoints?.length > 0 && (
+                        <>
+                            <Eyebrow style={{ marginBottom: 6 }}>Kernpunten</Eyebrow>
+                            <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, marginBottom: 12 }}>
+                                {aiResult.keyPoints.map((p, i) => <li key={i}>{p}</li>)}
+                            </ul>
+                        </>
+                    )}
+                    {aiResult.actionables?.length > 0 && (
+                        <div style={{ padding: 12, borderRadius: 10, background: `${BRAND}0d`, border: `1px solid ${BRAND}33` }}>
+                            <Eyebrow style={{ color: BRAND, marginBottom: 6 }}>Actionables · volgende keer</Eyebrow>
+                            <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12, color: 'var(--text)', lineHeight: 1.7 }}>
+                                {aiResult.actionables.map((a, i) => <li key={i}>{a}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                </MetalCard>
+            )}
+
+            {/* PDF generate */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button onClick={generatePDF} style={{
+                    padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                    background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#000', border: 'none', cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    boxShadow: `0 0 16px ${GOLD}33`,
+                }}>
+                    <Download size={16} /> Service-rapport als PDF
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN — 3-tab structure
+   ═══════════════════════════════════════════════════════════════════ */
+type Section = 'overzicht' | 'service' | 'opruim';
+
 export default function ServiceKDS() {
+    const [section, setSection] = useState<Section>('service');
     const [focusId, setFocusId] = useState<string>('g1');
     const [wizardOpen, setWizardOpen] = useState(false);
     const [miseState, setMiseState] = useState<Record<string, boolean>>({});
+    const [mepState, setMepState] = useState<Record<string, boolean>>({});
+    const [cleanupState, setCleanupState] = useState<Record<string, boolean>>({});
     const now = useLiveNow('17:42');
+
+    /* Persist all state in localStorage */
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('service_kds_v3');
+            if (stored) {
+                const p = JSON.parse(stored);
+                if (p.section) setSection(p.section);
+                if (p.miseState) setMiseState(p.miseState);
+                if (p.mepState) setMepState(p.mepState);
+                if (p.cleanupState) setCleanupState(p.cleanupState);
+            }
+        } catch { /* */ }
+    }, []);
+    useEffect(() => {
+        try { localStorage.setItem('service_kds_v3', JSON.stringify({ section, miseState, mepState, cleanupState })); } catch { /* */ }
+    }, [section, miseState, mepState, cleanupState]);
 
     const focusCourse = COURSES.find(c => c.id === focusId) || COURSES[0];
     const focusIdx = COURSES.findIndex(c => c.id === focusId);
@@ -807,8 +1325,9 @@ export default function ServiceKDS() {
         const cur = s[id] !== undefined ? s[id] : orig;
         return { ...s, [id]: !cur };
     });
+    const toggleMep = (id: string) => setMepState(s => ({ ...s, [id]: !s[id] }));
+    const toggleCleanup = (id: string) => setCleanupState(s => ({ ...s, [id]: !s[id] }));
 
-    /* ── AI Chef context (regenereert bij iedere change van actieve gang of mise-progress) ── */
     const decoratedMise = focusCourse.miseChecklist ? decoratedItems(focusCourse.miseChecklist) : [];
     const miseDone = decoratedMise.filter(m => m.done).length;
     const misePct = decoratedMise.length ? Math.round((miseDone / decoratedMise.length) * 100) : 0;
@@ -823,9 +1342,9 @@ export default function ServiceKDS() {
     const chefContext = useMemo(() => ({
         now,
         activeCourseId: focusCourse.id,
-        activeCourseTitle: focusCourse.title,
+        activeCourseTitle: section === 'overzicht' ? `Pre-service · ${SERVICE_EVENT.title}` : section === 'opruim' ? `Post-service · ${SERVICE_EVENT.title}` : focusCourse.title,
         activeCourseStart: focusCourse.serveAt,
-        activeCourseStatus: focusCourse.status,
+        activeCourseStatus: section === 'overzicht' ? 'briefing' : section === 'opruim' ? 'cleanup' : focusCourse.status,
         minsUntilNextCourse: minsToNext !== undefined && minsToNext > 0 ? minsToNext : undefined,
         nextCourseTitle: nextCourse?.title,
         misePctDone: misePct,
@@ -838,70 +1357,116 @@ export default function ServiceKDS() {
         } : undefined,
         allergies: SERVICE_EVENT.allergies.map(a => ({ person: a.person, issue: a.issue, severity: a.severity })),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [focusCourse.id, misePct, now.slice(0, 5)]);
+    }), [section, focusCourse.id, misePct, now.slice(0, 5)]);
 
     return (
         <>
-            <StickyAllergieBar />
-            <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} />
+            {section === 'service' && <StickyAllergieBar />}
+            {section === 'service' && <StickyNowBar now={now} activeCourse={focusCourse} nextCourse={nextCourse} />}
 
             <div style={{ padding: '20px 32px 120px', maxWidth: 1500, margin: '0 auto' }}>
-                <CompactHeader onWizard={() => setWizardOpen(true)} />
-                <div style={{ height: 16 }} />
-
-                <DoeNuPanel activeCourse={focusCourse} miseState={miseState} now={now} />
-                <div style={{ height: 16 }} />
-
-                <CourseStrip courses={COURSES} activeId={focusId} onSelect={setFocusId} />
-                <div style={{ height: 16 }} />
-
-                <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 320px' : '1fr', gap: 16 }}>
-                    {focusCourse.aiCoach && <AICoach tip={focusCourse.aiCoach.tip} severity={focusCourse.aiCoach.severity} />}
-                    {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
+                {/* TAB SWITCHER */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 26, letterSpacing: '-.015em', margin: 0 }}>{SERVICE_EVENT.title}</h1>
+                            <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', fontSize: 10, letterSpacing: '.2em', color: 'var(--green)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} />
+                                LIVE · {now}
+                            </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+                            {SERVICE_EVENT.guests} gasten · {SERVICE_EVENT.startTime}–{SERVICE_EVENT.endTime} · {SERVICE_EVENT.venue}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)' }}>
+                        <SectionTab active={section === 'overzicht'} onClick={() => setSection('overzicht')} Icon={ClipboardList} label="Overzicht" hint="Vooraf · MEP" />
+                        <SectionTab active={section === 'service'} onClick={() => setSection('service')} Icon={Tv} label="Service KDS" hint="Live · gangen" />
+                        <SectionTab active={section === 'opruim'} onClick={() => setSection('opruim')} Icon={Brush} label="Opruim" hint="Na · feedback + PDF" />
+                    </div>
                 </div>
 
-                {focusCourse.miseChecklist && (
+                {/* SECTIE 1 — OVERZICHT */}
+                {section === 'overzicht' && <PreServiceSection now={now} mepState={mepState} onToggleMep={toggleMep} />}
+
+                {/* SECTIE 2 — SERVICE KDS (bestaande layout) */}
+                {section === 'service' && (
                     <>
-                        <div style={{ height: 16 }} />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
-                            <MiseChecklist items={decoratedMise} onToggle={toggleMise} />
-                            <CourseTimelineList timeline={focusCourse.timeline || []} />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                            <BtnPrimary icon={Sparkles} onClick={() => setWizardOpen(true)}>AI Draaiboek Wizard</BtnPrimary>
                         </div>
-                    </>
-                )}
-
-                {focusCourse.dishes && (
-                    <>
+                        <DoeNuPanel activeCourse={focusCourse} miseState={miseState} now={now} />
                         <div style={{ height: 16 }} />
-                        <div>
-                            <Eyebrow style={{ marginBottom: 8 }}>Plating · {focusCourse.dishes.length} gerechten</Eyebrow>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
-                                {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} compact />)}
-                            </div>
+                        <CourseStrip courses={COURSES} activeId={focusId} onSelect={setFocusId} />
+                        <div style={{ height: 16 }} />
+                        <div style={{ display: 'grid', gridTemplateColumns: focusCourse.smokerStatus ? '1fr 320px' : '1fr', gap: 16 }}>
+                            {focusCourse.aiCoach && <AICoach tip={focusCourse.aiCoach.tip} severity={focusCourse.aiCoach.severity} />}
+                            {focusCourse.smokerStatus && <SmokerWidget status={focusCourse.smokerStatus} />}
                         </div>
+                        {focusCourse.miseChecklist && (
+                            <>
+                                <div style={{ height: 16 }} />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
+                                    <MiseChecklist items={decoratedMise} onToggle={toggleMise} />
+                                    <CourseTimelineList timeline={focusCourse.timeline || []} />
+                                </div>
+                            </>
+                        )}
+                        {focusCourse.dishes && (
+                            <>
+                                <div style={{ height: 16 }} />
+                                <div>
+                                    <Eyebrow style={{ marginBottom: 8 }}>Plating · {focusCourse.dishes.length} gerechten</Eyebrow>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
+                                        {focusCourse.dishes.map((d, i) => <DishCard key={i} dish={d} compact />)}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        {focusCourse.isPause && focusCourse.timeline && (
+                            <>
+                                <div style={{ height: 16 }} />
+                                <CourseTimelineList timeline={focusCourse.timeline} />
+                            </>
+                        )}
                     </>
                 )}
 
-                {focusCourse.isPause && focusCourse.timeline && (
-                    <>
-                        <div style={{ height: 16 }} />
-                        <CourseTimelineList timeline={focusCourse.timeline} />
-                    </>
-                )}
+                {/* SECTIE 3 — OPRUIM */}
+                {section === 'opruim' && <PostServiceSection cleanupState={cleanupState} onToggleCleanup={toggleCleanup} miseState={miseState} />}
 
-                <div style={{ marginTop: 24, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
+                <div style={{ marginTop: 28, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
                     <Sparkles size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
                     <span>
-                        <strong style={{ color: 'var(--text)' }}>Service KDS · met Pitmaster Coach Rook:</strong>{' '}
-                        Live tijd + countdown bovenaan. DOE NU toont je top-3 acties. Rook (rechtsonder) kijkt mee, geeft directives elke minuut, accepteert vragen, en kan stem aanzetten voor handsfree. Allergie-alert blijft sticky bovenaan zolang er kritieke gevallen zijn.
+                        <strong style={{ color: 'var(--text)' }}>Service Mode · 3 fases met Pitmaster Rook:</strong>{' '}
+                        <strong>Overzicht</strong> = pre-service briefing + menu + on-site MEP. <strong>Service KDS</strong> = live gang-by-gang met countdown + DOE NU. <strong>Opruim</strong> = checklist + feedback dump → AI maakt nette samenvatting → PDF rapport. Rook staat altijd rechtsonder klaar.
                     </span>
                 </div>
 
                 <AIWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
             </div>
 
-            {/* Persistent AI Chef — altijd in beeld */}
+            {/* Persistent AI Chef — altijd in beeld over alle 3 secties */}
             <AIChefAssistant context={chefContext} />
         </>
+    );
+}
+
+function SectionTab({ active, onClick, Icon, label, hint }: { active: boolean; onClick: () => void; Icon: any; label: string; hint: string }) {
+    return (
+        <button onClick={onClick} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 10,
+            background: active ? `linear-gradient(180deg, ${BRAND}1f, ${GOLD}0a)` : 'transparent',
+            border: 'none', color: active ? 'var(--text)' : 'var(--muted)',
+            cursor: 'pointer', textAlign: 'left',
+            boxShadow: active ? `inset 0 0 0 1px ${GOLD}4D` : 'none',
+            transition: '.15s',
+        }}>
+            <Icon size={14} style={{ color: active ? GOLD : 'var(--muted)' }} />
+            <div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.1 }}>{label}</div>
+                <div style={{ fontSize: 9, color: 'var(--muted-light)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 2 }}>{hint}</div>
+            </div>
+        </button>
     );
 }
