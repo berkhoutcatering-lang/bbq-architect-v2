@@ -278,7 +278,10 @@ export interface InventoryItem {
   par_level: number;
   unit: string;
   purchase_price: number;
+  /* Legacy text-string supplier blijft tijdens transitie; nieuwe FK heeft voorrang. */
   supplier: string;
+  /* FK naar leveranciers — auto-gevuld bij bon-import (migratie 010). */
+  leverancier_id?: number | null;
   yield_factor?: number;
   tht?: string | null;            // ISO date — Tenminste Houdbaar Tot
   avg_daily?: number;              // gemiddeld dagelijks verbruik
@@ -295,9 +298,36 @@ export interface StockMovement {
   type: 'count' | 'usage' | 'receive' | 'adjust' | 'waste';
   qty: number;                    // signed (- voor verbruik, + voor ontvangst)
   resulting_stock?: number | null;
+  /* Inkoopprijs-snapshot per unit op moment van movement (migratie 010);
+     non-null voor type=receive zodat margecalc reproduceerbaar is. */
+  unit_price?: number | null;
+  /* FK naar bron-bon (migratie 010). NULL voor service/usage movements. */
+  bon_id?: number | null;
   by_user?: string | null;
   by_user_id?: string | null;
   note?: string | null;
+  created_at: string;
+}
+
+export interface BonItemRow {
+  naam: string;
+  aantal: number;
+  unit?: string;
+  prijs: number;          // unit-prijs
+  btw_pct?: number;       // 0 / 9 / 21
+  totaal?: number;        // qty × prijs (incl btw indien zo opgegeven)
+}
+
+export interface PriceHistory {
+  id: number;
+  inventory_id: number;
+  leverancier_id?: number | null;
+  bon_id?: number | null;
+  datum: string;          // YYYY-MM-DD
+  unit_price: number;
+  unit?: string | null;
+  source: 'bon' | 'manual' | 'sync' | 'estimate';
+  organization_id?: string | null;
   created_at: string;
 }
 
@@ -331,6 +361,17 @@ export interface Bon {
   image_url: string | null;
   raw_analysis: unknown[];
   notities: string | null;
+  /* Migratie 010 — automatisch gekoppeld door /api/bon-process. */
+  leverancier_id?: number | null;
+  bon_items?: BonItemRow[];
+  btw_laag_bedrag?: number | null;
+  btw_hoog_bedrag?: number | null;
+  netto_bedrag?: number | null;
+  processed_at?: string | null;
+  btw_pct?: number | null;
+  categorie?: string | null;
+  status?: string | null;
+  foto_url?: string | null;
 }
 
 export interface AiConversationFolder {

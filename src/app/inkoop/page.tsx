@@ -308,17 +308,50 @@ export default function Inkoop() {
 
                     {pendingActions.length > 0 && (
                         <div className="artisan-panel">
-                            <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                                 <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
-                                <div style={{ display: 'flex', gap: 8 }}>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                     <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 12, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
-                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 12 }} onClick={async () => {
-                                        for (const a of [...pendingActions]) {
-                                            try { await supabase.from(a.meta.table).insert(a.data); } catch (e) { console.error("Error inserting action:", e); }
+                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 12, background: 'linear-gradient(180deg, var(--brand), #9e781c)', color: '#000', fontWeight: 700 }} onClick={async () => {
+                                        /* Volledig automatisch: leverancier + voorraad + prijs-historie + BTW + boekhouding allemaal in 1 call. */
+                                        if (!lastScanData) { showToast('Geen scan-data — scan eerst een bon', 'error'); return; }
+                                        setScanStatus('AUTOMATISCH VERWERKEN...');
+                                        try {
+                                            const res = await fetch('/api/bon-process', {
+                                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    raw_analysis: lastScanData.actions,
+                                                    /* Direct fields als raw_analysis bij summarizeBon faalt op shape — */
+                                                    winkel: lastScanData.actions[0]?.data?.winkel,
+                                                    datum: lastScanData.actions[0]?.data?.datum,
+                                                    totaal_bedrag: lastScanData.actions[0]?.data?.totaal_bedrag,
+                                                }),
+                                            });
+                                            const body = await res.json();
+                                            if (!res.ok || !body.success) {
+                                                showToast('Fout: ' + (body.error || 'onbekend'), 'error');
+                                                setScanStatus('FOUT');
+                                                return;
+                                            }
+                                            const created = body.items_results.filter((r: any) => r.action === 'created').length;
+                                            const updated = body.items_results.filter((r: any) => r.action === 'updated').length;
+                                            const skipped = body.items_results.filter((r: any) => r.action === 'skipped').length;
+                                            const levMsg = body.leverancier ? `Leverancier ${body.leverancier.naam}${body.leverancier.created ? ' (nieuw)' : ''} · ` : '';
+                                            const btwMsg = `BTW 9%: €${body.btw.laag.toFixed(2)} · 21%: €${body.btw.hoog.toFixed(2)}`;
+                                            showToast(
+                                                `${levMsg}${created} nieuw, ${updated} bijgewerkt${skipped > 0 ? ', ' + skipped + ' overgeslagen' : ''}. ${btwMsg}`,
+                                                'success',
+                                            );
+                                            setPendingActions([]);
+                                            setLastScanData(null);
+                                            setScanInsight('');
+                                            setScanStatus('');
+                                        } catch (e: any) {
+                                            console.error('[bon-process]', e);
+                                            showToast('Verwerkingsfout: ' + (e?.message || 'onbekend'), 'error');
+                                            setScanStatus('FOUT');
                                         }
-                                        setPendingActions([]);
-                                        showToast('Alles ingeboekt!', 'success');
-                                    }}>ALLES INBOEKEN</button>
+                                    }}>⚡ VERWERK VOLLEDIG</button>
                                 </div>
                             </div>
                             <div className="panel-body">

@@ -10,19 +10,29 @@ import EmptyState from '@/components/EmptyState';
 import { LoadingState } from '@/components/LoadingState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
-import { BarChart3, Calculator, Clock, Euro, LineChart, Percent, PieChart as PieChartIcon, Star, Users } from 'lucide-react';
+import { BarChart3, Calculator, Clock, Euro, LineChart, Percent, PieChart as PieChartIcon, Star, Users, Truck, Receipt as ReceiptIcon } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
-import type { Factuur, Event as DbEvent } from '@/types';
+import type { Factuur, Event as DbEvent, Bon } from '@/types';
+
+interface Leverancier { id: number; naam: string; type?: string }
 
 export default function Boekhouding() {
     const { data: facturen, loading } = useSupabase<Factuur>('facturen', []);
     const { data: events } = useSupabase<DbEvent>('events', []);
+    const { data: bonnen } = useSupabase<Bon>('bonnen', []);
+    const { data: leveranciers } = useSupabase<Leverancier>('leveranciers', []);
     const [tab, setTab] = useState('wv');
 
     /* Alle aggregaties in één useMemo zodat we niet bij elke render alle
-       facturen + events her-itereren. Re-computed alleen als facturen of
-       events daadwerkelijk veranderen. */
-    const { omzet, openstaand, prognose, omzetChartData, statusPieData, topClients, btwMap, betaaldCount, openCount } = useMemo(function () {
+       facturen + events + bonnen her-itereren. Re-computed alleen als de
+       brondata daadwerkelijk verandert. */
+    const {
+        omzet, openstaand, prognose, omzetChartData, statusPieData, topClients,
+        btwMap, betaaldCount, openCount,
+        /* Bon-aggregaten — uitgaven & voorbelasting BTW. */
+        uitgavenChartData, totaalUitgaven, totaalVoorbelasting, voorbelastingLaag,
+        voorbelastingHoog, expensesPerSupplier, btwSaldo,
+    } = useMemo(function () {
         const statusKleuren: Record<string, string> = { betaald: 'var(--green)', verzonden: 'var(--brand)', concept: 'var(--muted)', vervallen: 'var(--red)' };
         const statusLabels: Record<string, string> = { betaald: 'Betaald', verzonden: 'Verzonden', concept: 'Concept', vervallen: 'Vervallen' };
         const yearStr = new Date().getFullYear().toString();
@@ -92,8 +102,55 @@ export default function Boekhouding() {
             });
         });
 
-        return { omzet, openstaand, prognose, omzetChartData, statusPieData, topClients, btwMap, betaaldCount: betaald.length, openCount: open.length };
-    }, [facturen, events]);
+        /* ── Bon-aggregaten: uitgaven & voorbelasting BTW per maand ───── */
+        const monthlyExpenses = new Array(12).fill(0);
+        let totaalUitgaven = 0;
+        let voorbelastingLaag = 0;
+        let voorbelastingHoog = 0;
+        const expensesPerSupplierMap: Record<string, { naam: string; totaal: number; bonCount: number }> = {};
+
+        const supplierNameById: Record<number, string> = {};
+        for (const l of leveranciers) supplierNameById[l.id] = l.naam;
+
+        bonnen.forEach(function (b) {
+            const totaal = Number(b.totaal_bedrag) || 0;
+            totaalUitgaven += totaal;
+            voorbelastingLaag += Number(b.btw_laag_bedrag) || 0;
+            voorbelastingHoog += Number(b.btw_hoog_bedrag) || 0;
+
+            if (b.datum && b.datum.startsWith(yearStr)) {
+                const month = parseInt(b.datum.split('-')[1], 10) - 1;
+                if (month >= 0 && month <= 11) monthlyExpenses[month] += totaal;
+            }
+
+            const supplierKey = b.leverancier_id ? supplierNameById[b.leverancier_id] || b.winkel : (b.winkel || 'Onbekend');
+            if (!expensesPerSupplierMap[supplierKey]) {
+                expensesPerSupplierMap[supplierKey] = { naam: supplierKey, totaal: 0, bonCount: 0 };
+            }
+            expensesPerSupplierMap[supplierKey].totaal += totaal;
+            expensesPerSupplierMap[supplierKey].bonCount += 1;
+        });
+
+        const uitgavenChartData = MAANDEN_KORT.map(function (naam: string, i: number) {
+            return { naam, uitgaven: Math.round(monthlyExpenses[i]), omzet: omzetChartData[i].omzet };
+        });
+
+        const expensesPerSupplier = Object.values(expensesPerSupplierMap)
+            .sort(function (a, b) { return b.totaal - a.totaal; })
+            .slice(0, 8);
+
+        const totaalVoorbelasting = voorbelastingLaag + voorbelastingHoog;
+        /* BTW-saldo: totaal te dragen BTW (uit facturen) − voorbelasting (uit bonnen). */
+        const btwAfdracht = Object.values(btwMap).reduce(function (s, v) { return s + v.btw; }, 0);
+        const btwSaldo = btwAfdracht - totaalVoorbelasting;
+
+        return {
+            omzet, openstaand, prognose, omzetChartData, statusPieData, topClients,
+            btwMap, betaaldCount: betaald.length, openCount: open.length,
+            uitgavenChartData, totaalUitgaven, totaalVoorbelasting, voorbelastingLaag,
+            voorbelastingHoog, expensesPerSupplier, btwSaldo,
+        };
+    }, [facturen, events, bonnen, leveranciers]);
 
     if (loading) return <LoadingState label="Boekhouding laden" />;
 
@@ -110,6 +167,7 @@ export default function Boekhouding() {
             <PageHeader title="Boekhouding" />
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'wv' ? ' active' : '')} onClick={function () { setTab('wv'); }}>Winst &amp; Verlies</button>
+                <button className={'tab-btn' + (tab === 'uitgaven' ? ' active' : '')} onClick={function () { setTab('uitgaven'); }}>Uitgaven</button>
                 <button className={'tab-btn' + (tab === 'btw' ? ' active' : '')} onClick={function () { setTab('btw'); }}>BTW Overzicht</button>
                 <button className={'tab-btn' + (tab === 'clients' ? ' active' : '')} onClick={function () { setTab('clients'); }}>Top Klanten</button>
             </div>
@@ -192,6 +250,87 @@ export default function Boekhouding() {
                 </PageSection>
             )}
 
+            {tab === 'uitgaven' && (
+                <PageSection>
+                    <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
+                        <div className="stat-card">
+                            <div className="stat-icon" style={{ background: 'rgba(239,68,68,.12)', color: 'var(--red)' }}><ReceiptIcon size={14} /></div>
+                            <div className="stat-val">{fmt(totaalUitgaven)}</div>
+                            <div className="stat-label">Totale uitgaven</div>
+                            <div className="stat-sub">{bonnen.length} bonnen verwerkt</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Calculator size={14} /></div>
+                            <div className="stat-val">{fmt(totaalVoorbelasting)}</div>
+                            <div className="stat-label">Voorbelasting BTW</div>
+                            <div className="stat-sub">terug te vragen</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-icon" style={{ background: 'rgba(96,165,250,.12)', color: 'var(--blue)' }}><Percent size={14} /></div>
+                            <div className="stat-val">{fmt(voorbelastingLaag)}</div>
+                            <div className="stat-label">Voorbelasting 9%</div>
+                            <div className="stat-sub">food/dranken</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><Percent size={14} /></div>
+                            <div className="stat-val">{fmt(voorbelastingHoog)}</div>
+                            <div className="stat-label">Voorbelasting 21%</div>
+                            <div className="stat-sub">non-food</div>
+                        </div>
+                    </div>
+
+                    <MetallicCard hover={false}>
+                        <div className="panel-head">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <BarChart3 size={12} /> Omzet vs Uitgaven · {new Date().getFullYear()}
+                            </h3>
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>maandelijks</span>
+                        </div>
+                        <div style={{ height: 280, padding: '16px 8px' }}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
+                                <BarChart data={uitgavenChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                                    <XAxis dataKey="naam" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                    <YAxis tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? '€' + Math.round(v / 1000) + 'k' : '€' + v} />
+                                    <Tooltip formatter={(v: number) => '€' + v.toLocaleString('nl-NL')} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10, color: 'var(--zinc)' }} />
+                                    <Bar dataKey="omzet" name="Omzet" fill="var(--brand)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="uitgaven" name="Uitgaven" fill="var(--red)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </MetallicCard>
+
+                    <MetallicCard hover={false} className="mt-4">
+                        <div className="panel-head">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Truck size={12} style={{ color: 'var(--brand)' }} /> Top leveranciers · uitgaven
+                            </h3>
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{expensesPerSupplier.length} leveranciers</span>
+                        </div>
+                        {expensesPerSupplier.length === 0 && (
+                            <div className="empty-state"><ReceiptIcon size={14} /><p>Nog geen bonnen verwerkt — scan een bon op de Inkoop-pagina.</p></div>
+                        )}
+                        {expensesPerSupplier.length > 0 && (
+                            <div style={{ padding: '8px 16px 16px' }}>
+                                {expensesPerSupplier.map(function (s, i) {
+                                    const pct = totaalUitgaven > 0 ? (s.totaal / totaalUitgaven) * 100 : 0;
+                                    return (
+                                        <div key={s.naam} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 900, color: 'var(--brand)', width: 20 }}>#{i + 1}</span>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 600 }}>{s.naam}</div>
+                                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.bonCount} {s.bonCount === 1 ? 'bon' : 'bonnen'} · {pct.toFixed(1)}% van uitgaven</div>
+                                            </div>
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)' }}>−{fmt(s.totaal)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </MetallicCard>
+                </PageSection>
+            )}
+
             {tab === 'btw' && (
                 <PageSection>
                 <MetallicCard hover={false} className="mt-4">
@@ -200,6 +339,7 @@ export default function Boekhouding() {
                         {Object.keys(btwMap).length === 0 && <div className="empty-state"><Calculator size={14} /><p>Geen BTW data beschikbaar</p></div>}
                         <div className="tbl-wrap">
                         <table className="tbl">
+                            <thead><tr><th colSpan={4} style={{ paddingTop: 4, color: 'var(--brand)', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' }}>Te dragen BTW (uit facturen)</th></tr></thead>
                             <thead><tr><th>BTW %</th><th style={{ textAlign: 'right' }}>Netto Omzet</th><th style={{ textAlign: 'right' }}>BTW Bedrag</th><th style={{ textAlign: 'right' }}>Bruto</th></tr></thead>
                             <tbody>
                                 {Object.keys(btwMap).sort().map(function (pct) {
@@ -214,13 +354,29 @@ export default function Boekhouding() {
                                     );
                                 })}
                             </tbody>
+                            <thead><tr><th colSpan={4} style={{ paddingTop: 16, color: 'var(--green)', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' }}>Voorbelasting (uit bonnen — terug te vragen)</th></tr></thead>
+                            <tbody>
+                                <tr><td><span className="pill" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}>9%</span></td><td colSpan={2} style={{ textAlign: 'right', color: 'var(--muted)' }}>food/dranken</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(voorbelastingLaag)}</td></tr>
+                                <tr><td><span className="pill" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}>21%</span></td><td colSpan={2} style={{ textAlign: 'right', color: 'var(--muted)' }}>non-food</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(voorbelastingHoog)}</td></tr>
+                            </tbody>
                         </table>
                         </div>
-                        <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)', textAlign: 'right' }}>
-                            <span style={{ color: 'var(--muted)', marginRight: 12 }}>Totaal af te dragen BTW:</span>
-                            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>
-                                {fmt(Object.values(btwMap).reduce(function (sum, r) { return sum + r.btw; }, 0))}
-                            </span>
+                        <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                            <div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Te dragen</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--brand)' }}>{fmt(Object.values(btwMap).reduce(function (sum, r) { return sum + r.btw; }, 0))}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Voorbelasting</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>−{fmt(totaalVoorbelasting)}</div>
+                            </div>
+                            <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Saldo BTW</div>
+                                <div style={{ fontSize: 20, fontWeight: 700, color: btwSaldo >= 0 ? 'var(--brand)' : 'var(--green)' }}>
+                                    {btwSaldo >= 0 ? fmt(btwSaldo) : '+' + fmt(Math.abs(btwSaldo))}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{btwSaldo >= 0 ? 'aan Belastingdienst' : 'terug te vorderen'}</div>
+                            </div>
                         </div>
                     </div>
                 </MetallicCard>

@@ -221,6 +221,9 @@ export default function Voorraad() {
     const { data: recepten } = useSupabase<Recept>('recepten', []);
     const { data: supplierPrices } = useSupabase<any>('supplier_prices', []);
     const { data: movements } = useSupabase<StockMovement>('stock_movements', []);
+    /* price_history wordt door /api/bon-process gevuld bij elke verwerkte bon —
+       voedt de prijs-trend grafiek per item zonder dat user iets handmatig hoeft te doen. */
+    const { data: priceHistoryRows } = useSupabase<{ id: number; inventory_id: number; datum: string; unit_price: number; unit?: string; source: string }>('price_history', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
 
@@ -560,6 +563,7 @@ export default function Voorraad() {
                         supplierPrices={supplierPrices || []}
                         recepten={recepten || []}
                         movements={(movements || []).filter((m: any) => m.inventory_id === selectedId)}
+                        bonPriceHistory={(priceHistoryRows || []).filter(p => p.inventory_id === selectedId)}
                         onClose={() => setSelectedId(null)}
                         onAdjust={quickAdjust}
                         onEdit={() => {
@@ -1143,8 +1147,16 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
 /* ═══════════════════════════════════════════════════════════════════
    ITEM DETAIL DRAWER — tabs (Prijs, Leveranciers, Verbruik, Audit log)
    ═══════════════════════════════════════════════════════════════════ */
-function ItemDetailDrawer({ item, supplierPrices, recepten, movements, onClose, onAdjust, onEdit }: {
-    item: InventoryItem; supplierPrices: any[]; recepten: Recept[]; movements: StockMovement[]; onClose: () => void; onAdjust: (i: InventoryItem, a: number) => void; onEdit: () => void;
+function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceHistory, onClose, onAdjust, onEdit }: {
+    item: InventoryItem;
+    supplierPrices: any[];
+    recepten: Recept[];
+    movements: StockMovement[];
+    /* Rijen uit price_history-tabel gefilterd op deze inventory_id; gevuld door /api/bon-process. */
+    bonPriceHistory?: { id: number; inventory_id: number; datum: string; unit_price: number; unit?: string; source: string }[];
+    onClose: () => void;
+    onAdjust: (i: InventoryItem, a: number) => void;
+    onEdit: () => void;
 }) {
     const [tab, setTab] = useState<'prijs' | 'leveranciers' | 'verbruik' | 'log'>('prijs');
     const s = stockStatus(item);
@@ -1273,12 +1285,49 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, onClose, 
                 <div style={{ flex: 1, overflow: 'auto', padding: 22 }}>
                     {tab === 'prijs' && (
                         <div>
+                            {/* Bon-prijshistorie — gevuld door /api/bon-process bij elke verwerkte bon */}
+                            {bonPriceHistory && bonPriceHistory.length > 0 && (
+                                <div style={{ marginBottom: 24 }}>
+                                    <Eyebrow style={{ color: 'var(--green)' }}>Inkoopprijs uit verwerkte bonnen ({bonPriceHistory.length})</Eyebrow>
+                                    {(() => {
+                                        const sorted = bonPriceHistory.slice().sort((a, b) => a.datum.localeCompare(b.datum));
+                                        const last = sorted[sorted.length - 1];
+                                        const first = sorted[0];
+                                        const trendPct = first.unit_price > 0 ? ((last.unit_price - first.unit_price) / first.unit_price) * 100 : 0;
+                                        return (
+                                            <>
+                                                <div style={{ marginTop: 8, padding: 12, border: '1px solid rgba(34,197,94,.25)', borderRadius: 10, background: 'rgba(34,197,94,.05)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
+                                                        <span>Laatste inkoop {last.datum}</span>
+                                                        <span style={{ color: trendPct > 5 ? 'var(--red)' : trendPct < -5 ? 'var(--green)' : 'var(--muted)' }}>
+                                                            {trendPct === 0 ? '—' : (trendPct > 0 ? '+' : '') + trendPct.toFixed(1) + '% vs eerste'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                                        {fmt(Number(last.unit_price))} <span style={{ fontSize: 11, color: 'var(--muted)' }}>/ {last.unit || item.unit}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                    {sorted.slice().reverse().slice(0, 8).map(p => (
+                                                        <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr auto', gap: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}>
+                                                            <span style={{ color: 'var(--muted)' }}>{p.datum}</span>
+                                                            <span style={{ color: 'var(--muted-light)', fontSize: 10, alignSelf: 'center' }}>{p.source}</span>
+                                                            <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(Number(p.unit_price))}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+
                             <Eyebrow>Prijshistorie uit Price Intelligence</Eyebrow>
                             {priceHistory.length === 0 ? (
                                 <div style={{ marginTop: 16, padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12, border: '1px dashed var(--border)', borderRadius: 10 }}>
                                     <Info size={20} style={{ color: 'var(--muted-light)', marginBottom: 6 }} />
-                                    <div>Nog geen prijsdata voor dit product.</div>
-                                    <div style={{ fontSize: 11, marginTop: 6 }}>Importeer prijslijsten in <a href="/price-intelligence" style={{ color: GOLD, textDecoration: 'underline' }}>Price Intelligence</a> om trends te zien.</div>
+                                    <div>{bonPriceHistory && bonPriceHistory.length > 0 ? 'Geen extra Price Intelligence-data — bovenstaande inkoopprijs uit bonnen is leidend.' : 'Nog geen prijsdata voor dit product.'}</div>
+                                    <div style={{ fontSize: 11, marginTop: 6 }}>{bonPriceHistory && bonPriceHistory.length > 0 ? '' : <>Verwerk bonnen via <a href="/inkoop" style={{ color: GOLD, textDecoration: 'underline' }}>Inkoop</a> of importeer prijslijsten in <a href="/price-intelligence" style={{ color: GOLD, textDecoration: 'underline' }}>Price Intelligence</a> om trends te zien.</>}</div>
                                 </div>
                             ) : (
                                 <>
