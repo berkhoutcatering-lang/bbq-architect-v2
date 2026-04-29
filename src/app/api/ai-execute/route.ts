@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@/lib/supabase-server';
+import Anthropic from '@anthropic-ai/sdk';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -92,6 +93,154 @@ async function bulkCreateGerechten(sb: SupabaseClient, orgId: string | null, par
     if (errorDetails.length > 0) {
         // Server-log voor debug — anders zien we nooit waarom de insert faalde
         console.error('[bulkCreateGerechten] ' + errorDetails.length + ' insert(s) faalden:');
+        errorDetails.forEach((e) => console.error('  - ' + e.naam + ': ' + e.message));
+    }
+    return { inserted, total: rows.length, errors: errorDetails.map((e) => e.naam + ': ' + e.message) };
+}
+
+// Materieel-type aliasing — DB heeft fixed enum, AI mag synoniemen genereren.
+// Exact-match wint; daarna substring-match per categorie. Order matters:
+// keukengerei wordt EERST gematched naar Overig om te voorkomen dat "snijplank"
+// ten onrechte als Servies gerouteerd wordt door de plank-match.
+const MATERIEEL_TYPE_VALID = ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
+const MATERIEEL_TYPE_HINTS: Array<{ keyword: RegExp; type: typeof MATERIEEL_TYPE_VALID[number] }> = [
+    // Keukengerei + tools → Overig (eerst matchen om Servies-overlap te voorkomen)
+    { keyword: /\b(koksmes|kookmes|kookmesser|chefmes|filetmes|broodmes|hakmes|snijplank|wokpan|koekenpan|sauspan|steelpan|hakblok|weegschaal|thermometer|kerntemperatuur|maatbeker|trechter|spatel|garde|pollepel|schort)/i, type: 'Overig' },
+    { keyword: /\b(bbq|kettle|kamado|smoker|grill|gas-?bbq|kolen|houtskool|plancha|firepit|vuurkorf|brander)/i, type: 'BBQ' },
+    { keyword: /\b(bord|kom|glas|bestek|schaal|mok|kop|ondertafel|tapasschaal|saladekom|amusebord|coupebord)/i, type: 'Servies' },
+    { keyword: /\b(linnen|tafelkleed|servet|doek|kleed|runner|placemat)/i, type: 'Linnen' },
+    { keyword: /\b(koel|freezer|vries|koelbox|koelkist|chafing|koelkar|koeldisplay)/i, type: 'Koeling' },
+    { keyword: /\b(krat|aanhanger|kar|trolley|transport|dolly|rolcontainer|sjorband)/i, type: 'Transport' },
+    { keyword: /\b(tafel|stoel|bank|kruk|bartafel|statafel|parasol|partytent)/i, type: 'Meubilair' },
+];
+function normalizeMaterieelType(input: unknown, naam?: string): typeof MATERIEEL_TYPE_VALID[number] {
+    if (typeof input === 'string') {
+        const exact = MATERIEEL_TYPE_VALID.find((t) => t.toLowerCase() === input.toLowerCase());
+        if (exact) return exact;
+    }
+    const haystack = ((typeof input === 'string' ? input : '') + ' ' + (naam || '')).toLowerCase();
+    for (const h of MATERIEEL_TYPE_HINTS) if (h.keyword.test(haystack)) return h.type;
+    return 'Overig';
+}
+
+// Verrijk een materieel-item via Claude Haiku op basis van train-data over Hop & Bites
+// catering-producten (IKEA, Churchill, Yoder, Burlodge etc). Tool-use forcing dwingt
+// gestructureerde JSON terug — geen vrije tekst.
+const enrichMaterieelTool = {
+    name: 'enrich_materieel',
+    description: 'Lever rijke product-info als gestructureerde data. GEEN markdown, GEEN essays.',
+    input_schema: {
+        type: 'object' as const,
+        properties: {
+            kleur: { type: 'string', description: 'Dominante kleur (bv "wit matt", "antraciet", "Garnet Orange"). Leeg laten als onbekend.' },
+            materiaal: { type: 'string', description: 'Bv "porselein", "stoneware", "RVS", "eiken", "linnen", "polypropyleen". Leeg als onbekend.' },
+            afmetingen: { type: 'string', description: 'Vrije text — bv "Ø 25cm", "31x18cm", "60L", "240x150cm". Leeg als onbekend.' },
+            beschrijving: { type: 'string', description: '1-2 zinnen — wat is het, voor welke gebruik. Bv "Organic-shaped coupebord van Churchill, hand-crafted look met aardse tinten — geschikt voor moderne tasting-menu\'s."' },
+            geschikt_voor_gangen: {
+                type: 'array',
+                items: { type: 'string', enum: ['hapje', 'voorgerecht', 'hoofdgerecht', 'vegetarisch', 'dessert', 'bijgerecht', 'borrelhap'] },
+                description: 'Voor servies/linnen: welke gangen passen erop. Lege array bij apparatuur.',
+            },
+            ai_styling_hint: { type: 'string', description: '1 zin — visuele uitstraling voor latere foto-prompts. Bv "ovaal coupe-bord, organic glaze met hand-crafted vlekken, ideaal voor zalm-tartaar of crudo." Leeg bij apparatuur.' },
+        },
+        required: ['beschrijving'],
+    },
+};
+
+async function enrichSingleItem(client: Anthropic, naam: string, type: string): Promise<Record<string, any>> {
+    try {
+        const resp = await client.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 600,
+            tools: [enrichMaterieelTool],
+            tool_choice: { type: 'tool', name: 'enrich_materieel' },
+            messages: [{
+                role: 'user',
+                content: 'Verrijk dit materieel-item voor een Hop & Bites catering-database.\nNaam: ' + naam + '\nType: ' + type + '\n\nBaseer op je kennis over dit product (IKEA, Churchill, Yoder, Burlodge, Weber etc). Vul aan: kleur, materiaal, afmetingen, beschrijving, geschikt_voor_gangen (alleen servies/linnen), ai_styling_hint (alleen servies/linnen).',
+            }],
+        } as any);
+        const tb = (resp.content as any[]).find((b: any) => b.type === 'tool_use');
+        return (tb?.input as Record<string, any>) || {};
+    } catch (e) {
+        console.error('[enrichSingleItem] ' + naam + ': ' + (e as Error).message);
+        return {};
+    }
+}
+
+async function bulkCreateMaterieel(sb: SupabaseClient, orgId: string | null, params: Record<string, any>): Promise<Record<string, any>> {
+    const items: any[] = params.items || [];
+    if (items.length === 0) return { error: 'Geen items opgegeven', inserted: 0, errors: [] };
+    if (!orgId) return { error: 'Geen actieve organisatie gevonden', inserted: 0, errors: [] };
+
+    // Parallel enrichment in batches van 5 — voorkomt rate-limit, max ~5s totaal voor 14 items.
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    let enriched: Record<string, any>[] = items.map(() => ({}));
+    if (apiKey) {
+        const client = new Anthropic({ apiKey });
+        const BATCH = 5;
+        for (let i = 0; i < items.length; i += BATCH) {
+            const slice = items.slice(i, i + BATCH);
+            const results = await Promise.all(slice.map((it: any) =>
+                enrichSingleItem(client, it.naam || 'Onbekend item', normalizeMaterieelType(it.type, it.naam))
+            ));
+            results.forEach((r, j) => { enriched[i + j] = r; });
+        }
+    }
+
+    // Merge: AI-enrichment vult lege velden van de user-parsed item, overschrijft niet.
+    const mergedItems = items.map((it: any, idx: number) => {
+        const e = enriched[idx] || {};
+        return {
+            ...it,
+            kleur: it.kleur || e.kleur || null,
+            materiaal: it.materiaal || e.materiaal || null,
+            afmetingen: it.afmetingen || e.afmetingen || null,
+            geschikt_voor_gangen: Array.isArray(it.geschikt_voor_gangen) && it.geschikt_voor_gangen.length > 0 ? it.geschikt_voor_gangen : (e.geschikt_voor_gangen || []),
+            ai_styling_hint: it.ai_styling_hint || e.ai_styling_hint || null,
+            beschrijving: e.beschrijving || it.beschrijving || null,
+        };
+    });
+
+    // Single-record per regel — aantal in notitie zodat user later kan splitsen.
+    const rows = mergedItems.map((it: any) => {
+        const naam = it.naam || 'Nieuw item';
+        const aantal = typeof it.aantal === 'number' && it.aantal > 1 ? it.aantal : null;
+        const notitieParts = [
+            aantal ? 'Aantal: ' + aantal : null,
+            it.beschrijving || null,
+            it.notitie || null,
+        ].filter(Boolean);
+        return {
+            naam,
+            type: normalizeMaterieelType(it.type, naam),
+            status: 'ok',
+            kleur: typeof it.kleur === 'string' && it.kleur ? it.kleur : null,
+            materiaal: typeof it.materiaal === 'string' && it.materiaal ? it.materiaal : null,
+            afmetingen: typeof it.afmetingen === 'string' && it.afmetingen ? it.afmetingen : null,
+            locatie: typeof it.locatie === 'string' && it.locatie ? it.locatie : null,
+            notitie: notitieParts.length > 0 ? notitieParts.join(' · ') : null,
+            geschikt_voor_gangen: Array.isArray(it.geschikt_voor_gangen) ? it.geschikt_voor_gangen : [],
+            ai_styling_hint: typeof it.ai_styling_hint === 'string' && it.ai_styling_hint ? it.ai_styling_hint : null,
+            // foto_url uit og:image van gescrapte pagina → opslaan als 1e foto in array.
+            fotos: typeof it.foto_url === 'string' && /^https?:\/\//.test(it.foto_url) ? [it.foto_url] : [],
+            organization_id: orgId,
+            scan_source: typeof it.foto_url === 'string' ? 'ai_url_scrape' : 'ai_bulk_import_enriched',
+        };
+    });
+
+    const results = await Promise.allSettled(rows.map((row) => sb.from('materieel').insert(row).select().single()));
+    const inserted = results.filter((r) => r.status === 'fulfilled' && !(r as any).value?.error).length;
+    const errorDetails = results.flatMap((r, idx) => {
+        const naam = rows[idx]?.naam || 'item ' + (idx + 1);
+        if (r.status === 'rejected') return [{ naam, message: String((r as any).reason?.message || 'onbekend') }];
+        if (r.status === 'fulfilled' && (r as any).value?.error) {
+            const err = (r as any).value.error;
+            return [{ naam, message: String(err?.message || 'onbekend') + (err?.details ? ' — ' + err.details : '') }];
+        }
+        return [];
+    });
+    if (errorDetails.length > 0) {
+        console.error('[bulkCreateMaterieel] ' + errorDetails.length + ' insert(s) faalden:');
         errorDetails.forEach((e) => console.error('  - ' + e.naam + ': ' + e.message));
     }
     return { inserted, total: rows.length, errors: errorDetails.map((e) => e.naam + ': ' + e.message) };
@@ -330,6 +479,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 break;
             case 'bulkCreateGerechten':
                 result = await bulkCreateGerechten(sb, orgId, params || {});
+                break;
+            case 'bulkCreateMaterieel':
+                result = await bulkCreateMaterieel(sb, orgId, params || {});
                 break;
             default:
                 return NextResponse.json({ error: 'Onbekende tool: ' + tool }, { status: 400 });

@@ -425,6 +425,15 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         icon: 'Layers',
         color: '#a78bfa',
     },
+    bulk_create_materieel: {
+        label: 'Materieel toevoegen',
+        table: 'materieel',
+        op: 'bulk_insert',
+        pages: ['/materieel', '/ai-chat'],
+        icon: 'Boxes',
+        color: '#06b6d4',
+        tool: 'bulkCreateMaterieel',
+    },
     filter_gerechten: {
         label: 'Gerechten verwijderen/verbergen',
         table: 'gerechten',
@@ -481,22 +490,55 @@ export function getActionInstructions(pathname: string): string {
 }
 
 // ─── Parseer actieblokken uit AI-responstekst ─────────────────────────────────
+// Brace-balanced parser — robuust tegen ">>>" of "<<<" binnen JSON-strings (bv
+// in foto-prompts of beschrijvingen). Een naïeve regex zou daar verkeerd
+// breaken; deze loopt door de string, telt brace-depth, respecteert string-
+// escapes, en pakt pas JSON op zodra de balans klopt.
 export function parseActions(text: string | null | undefined): ParseActionsResult {
     if (!text) return { cleanText: '', actions: [] };
     const actions: ParsedAction[] = [];
-    const pattern = /<<<ACTION:([\.\s\S]*?)>{2,3}/g;
-    let match: RegExpExecArray | null;
+    const ranges: Array<{ start: number; end: number }> = []; // [start, end) inclusive end-marker
 
-    while ((match = pattern.exec(text)) !== null) {
+    let i = 0;
+    while (i < text.length) {
+        const start = text.indexOf('<<<ACTION:', i);
+        if (start < 0) break;
+        const jsonStart = start + '<<<ACTION:'.length;
+        // Skip leading whitespace
+        let j = jsonStart;
+        while (j < text.length && /\s/.test(text[j])) j++;
+        if (text[j] !== '{') { i = start + 10; continue; }
+
+        // Brace-balanced scan met respect voor strings + escapes
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        let jsonEnd = -1;
+        for (let k = j; k < text.length; k++) {
+            const c = text[k];
+            if (escaped) { escaped = false; continue; }
+            if (c === '\\') { escaped = true; continue; }
+            if (c === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c === '{') depth++;
+            else if (c === '}') {
+                depth--;
+                if (depth === 0) { jsonEnd = k; break; }
+            }
+        }
+        if (jsonEnd < 0) break; // onafgesloten JSON — wacht op meer streaming chunks
+
+        // Verwacht ">>>" (of ">>") na de JSON, evt met whitespace ertussen
+        let after = jsonEnd + 1;
+        while (after < text.length && /\s/.test(text[after])) after++;
+        const closeMatch = text.slice(after, after + 3);
+        if (!/^>{2,3}/.test(closeMatch)) { i = start + 10; continue; }
+        const closeLen = closeMatch.startsWith('>>>') ? 3 : 2;
+        const blockEnd = after + closeLen;
+
+        const jsonStr = text.slice(j, jsonEnd + 1);
         try {
-            const raw = match[1]
-                .replace(/:\s*"([\s\S]*?)"/g, function (_m: string, s: string) {
-                    return ': "' + s.replace(/\n/g, '\\n').replace(/\r/g, '') + '"';
-                })
-                .replace(/[\x00-\x1F\x7F]/g, function (c: string) {
-                    return c === '\n' || c === '\r' || c === '\t' ? '' : '';
-                });
-            const parsed = JSON.parse(raw) as { type?: string; description?: string; data?: Record<string, unknown> };
+            const parsed = JSON.parse(jsonStr) as { type?: string; description?: string; data?: Record<string, unknown> };
             if (parsed.type && ACTION_TYPES[parsed.type]) {
                 actions.push({
                     id: Math.random().toString(36).slice(2, 8),
@@ -510,12 +552,18 @@ export function parseActions(text: string | null | undefined): ParseActionsResul
                 console.warn('[AI Actions] Onbekend actie-type:', parsed.type);
             }
         } catch (e) {
-            console.warn('[AI Actions] Kon actieblok niet parsen:', match[1].slice(0, 80), (e as Error).message);
+            console.warn('[AI Actions] Kon actieblok niet parsen:', jsonStr.slice(0, 80), (e as Error).message);
         }
+        ranges.push({ start, end: blockEnd });
+        i = blockEnd;
     }
 
-    const cleanText = text.replace(/<<<ACTION:[\.\s\S]*?>{2,3}/g, '').trim();
-    return { cleanText, actions };
+    // cleanText: knip alle gevonden ACTION-ranges weg (van achteren naar voren).
+    let cleanText = text;
+    for (let r = ranges.length - 1; r >= 0; r--) {
+        cleanText = cleanText.slice(0, ranges[r].start) + cleanText.slice(ranges[r].end);
+    }
+    return { cleanText: cleanText.trim(), actions };
 }
 
 // ─── Voer een actie uit via Supabase ─────────────────────────────────────────

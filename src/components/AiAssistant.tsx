@@ -136,6 +136,8 @@ export default function AiAssistant(): React.ReactElement {
     const [dishSelections, setDishSelections] = useState<DishSelections>({});
     // Concept-selecties voor brainstorm_gerechten_concepts: per msg-idx welke concept-indices aangevinkt zijn (default: alle)
     const [conceptSelections, setConceptSelections] = useState<Record<number, Record<number, boolean>>>({});
+    // Materieel-selecties voor bulk_create_materieel: per msg-idx welke item-indices aangevinkt blijven (default: alle).
+    const [materieelSelections, setMaterieelSelections] = useState<Record<number, Record<number, boolean>>>({});
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLTextAreaElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -159,6 +161,52 @@ export default function AiAssistant(): React.ReactElement {
     // Wist messages, alle in-flight selecties, abort lopende stream én leegt
     // localStorage zodat bij refresh ook niks meer terugkomt. Voorheen bleef
     // de oude state hangen — gerechten van vorige run werden opnieuw getoond.
+    // Geoptimaliseerde Poe-prompt voor /materieel — kopieer naar clipboard. User
+    // plakt 'm in Poe (Claude-Sonnet-4.5 met browse), Poe scrapet de pagina, output
+    // wordt geplakt in chat → bulk_create_materieel parseert het.
+    const [poeCopied, setPoeCopied] = useState<boolean>(false);
+    function copyPoeScrapePrompt(): void {
+        const tmpl = [
+            'Open deze URL met je browse-tool en geef de product-info terug als PLATTE TEKST.',
+            'GEEN markdown, GEEN code-block, GEEN inleiding — alleen het format hieronder.',
+            '',
+            'URL: <PLAK_HIER_PRODUCT_URL>',
+            '',
+            'Stap 1 — Bepaal zelf om wat voor product het gaat (catering-context Hop & Bites):',
+            '  • BBQ → kettle, kamado, smoker, gas-bbq, plancha, plate setter',
+            '  • Servies → bord, kom, glas, bestek, schaal, plank, mok, schaaltje, mes/koksmes/keukenmes',
+            '  • Linnen → tafelkleed, servet, doek, kleed, runner',
+            '  • Koeling → koelbox, koelkist, freezer, chafing dish, koelkar',
+            '  • Transport → aanhanger, kar, krat, dolly, trolley, rolcontainer',
+            '  • Meubilair → tafel, statafel, stoel, bank, kruk, parasol',
+            '  • Overig → alles wat niet bovenstaand is (bv koksmes, snijplank, weegschaal, thermometer, schort)',
+            '',
+            'Stap 2 — Vul exact dit format in (één veld per regel, in deze volgorde):',
+            'Naam: <productnaam zoals zichtbaar op de pagina>',
+            'Type: <kies precies één: BBQ | Servies | Linnen | Koeling | Transport | Meubilair | Overig>',
+            'Kleur: <kleur, of laat leeg>',
+            'Materiaal: <bv porselein, RVS, hout, linnen, leer, polypropyleen, of laat leeg>',
+            'Afmetingen: <bv "Ø 25cm", "21,7x18cm", "60L inhoud", "lemmet 20cm">',
+            'Vorm/kenmerk: <rond / ovaal / rechthoekig / klapbaar / opvouwbaar / met wielen — kijk naar de foto>',
+            'Aantal: 1',
+            'Foto-URL: <directe link naar de product-image>',
+            'Notitie: <1 zin samenvatting + artikelnummer/SKU als zichtbaar>',
+            '',
+            'Regels:',
+            '- Bekijk de productfoto om vorm/kleur correct te beschrijven. Geen aannames.',
+            '- Bij twijfel over Type: kies "Overig". NIET gokken.',
+            '- Werkt voor ELK soort catering-product: BBQ, mes, plank, aanhanger, bord, etc.',
+            '',
+            '(Werkt met ChatGPT-met-browse, Claude.ai, Poe Claude-Sonnet-4.5 met browse)',
+        ].join('\n');
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(tmpl).then(
+                function () { setPoeCopied(true); setTimeout(function () { setPoeCopied(false); }, 2200); },
+                function () { /* clipboard denied */ }
+            );
+        }
+    }
+
     function clearChat(): void {
         if (abortCtrlRef.current) {
             abortCtrlRef.current.abort();
@@ -167,6 +215,7 @@ export default function AiAssistant(): React.ReactElement {
         setMessages([{ role: 'assistant', content: 'Gesprek gewist. Wat wil je doen?', actions: [] }]);
         setDishSelections({});
         setConceptSelections({});
+        setMaterieelSelections({});
         setActiveConversation(null);
         if (typeof window !== 'undefined') {
             try { window.localStorage.removeItem(storageKey); } catch { /* noop */ }
@@ -197,15 +246,22 @@ export default function AiAssistant(): React.ReactElement {
         if (restored) {
             setMessages(restored);
         } else {
+            // Per-pagina specifieke begroeting — directiever dan generiek welkom.
+            // /materieel wijst expliciet naar de 3 input-modes.
+            const greeting = pathname === '/materieel'
+                ? 'Hi! Op deze pagina voeg je **materieel** toe.\n\n**3 manieren:**\n• Plak een lijst met namen (bv "5 borden, 2 BBQs")\n• Plak een product-URL (Sligro, Webstaurantstore werken het beste)\n• Klik **📋 Kopieer prompt** boven → gebruik in ChatGPT/Poe → plak antwoord hier'
+                : 'Hallo! Ik ben je **BBQ System Operator** op ' + pageName + '.\n\nIk kan data lezen, acties uitvoeren en gerechten direct in je systeem zetten. Wat wil je doen?';
             setMessages([{
                 role: 'assistant',
-                content: 'Hallo! Ik ben je **BBQ System Operator** op ' + pageName + '.\n\nIk kan data lezen, acties uitvoeren en gerechten direct in je systeem zetten. Wat wil je doen?',
+                content: greeting,
                 actions: [],
             }]);
         }
         setContextData(null);
         setContextLoaded(false);
         setDishSelections({});
+        setConceptSelections({});
+        setMaterieelSelections({});
     }, [pathname]);
 
     // Persist messages → localStorage bij elke wijziging. Debounced via
@@ -292,8 +348,17 @@ export default function AiAssistant(): React.ReactElement {
 
         const apiMessages = [
             ...messages
-                .filter(function (m: ChatMessage): boolean { return !!(m.content && m.content.trim() !== ''); })
-                .map(function (m: ChatMessage): { role: string; content: string } { return { role: m.role, content: m.content }; }),
+                .filter(function (m: ChatMessage): boolean {
+                    // Defensive: content kan in zeldzame gevallen array zijn (multimodal restored from state).
+                    // Filter weg leeg-of-niet-string content — voorkomt .trim() TypeError.
+                    if (!m.content) return false;
+                    if (typeof m.content !== 'string') return true;
+                    return m.content.trim() !== '';
+                })
+                .map(function (m: ChatMessage): { role: string; content: string } {
+                    const c = typeof m.content === 'string' ? m.content : '';
+                    return { role: m.role, content: c };
+                }),
             { role: 'user', content: text }
         ];
 
@@ -522,7 +587,9 @@ export default function AiAssistant(): React.ReactElement {
             // ── Bulk gerechten toevoegen ───────────────────────────────────
             if (action.type === 'bulk_create_gerechten') {
                 const sel = dishSelections[msgIdx] || {};
-                const gerechtenToAdd = (action.data.gerechten as any[] || []).filter(function (_: any, i: number): boolean { return sel[i] !== false; });
+                const rawGerechten = (action.data as { gerechten?: unknown } | null | undefined)?.gerechten;
+                const allGerechten: any[] = Array.isArray(rawGerechten) ? rawGerechten : [];
+                const gerechtenToAdd = allGerechten.filter(function (_: any, i: number): boolean { return sel[i] !== false; });
 
                 if (gerechtenToAdd.length === 0) {
                     setActionStatus(msgIdx, actionId, 'rejected');
@@ -570,6 +637,51 @@ export default function AiAssistant(): React.ReactElement {
                         successLink: '/gerechten',
                     }];
                 });
+                return;
+            }
+
+            // ── Bulk materieel toevoegen ──────────────────────────────────
+            if (action.type === 'bulk_create_materieel') {
+                const sel = materieelSelections[msgIdx] || {};
+                const rawItems = (action.data as { items?: unknown } | null | undefined)?.items;
+                const allItems: any[] = Array.isArray(rawItems) ? rawItems : [];
+                const itemsToAdd = allItems.filter((_: any, i: number) => sel[i] !== false);
+
+                if (itemsToAdd.length === 0) {
+                    setActionStatus(msgIdx, actionId, 'rejected');
+                    setMessages((prev) => [...prev, { role: 'assistant', content: 'Geen items geselecteerd.', actions: [] }]);
+                    return;
+                }
+
+                const matRes = await fetch('/api/ai-execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tool: 'bulkCreateMaterieel', params: { items: itemsToAdd } }),
+                });
+                const matJson = await matRes.json();
+                if (!matRes.ok || matJson.error) throw new Error(matJson.error || 'Insert mislukt');
+
+                const inserted = matJson.result?.inserted ?? 0;
+                const errs: string[] = matJson.result?.errors ?? [];
+                if (inserted === 0 && errs.length > 0) {
+                    setActionStatus(msgIdx, actionId, 'error');
+                    const errorList = errs.slice(0, 3).map((e) => '• ' + e).join('\n');
+                    setMessages((prev) => [...prev, {
+                        role: 'assistant',
+                        content: '❌ Geen enkel item kon worden opgeslagen.\n\n' + errorList,
+                        actions: [],
+                    }]);
+                    return;
+                }
+                setActionStatus(msgIdx, actionId, 'done');
+                const partialNote = errs.length > 0 ? '\n\n⚠️ ' + errs.length + ' van de ' + (inserted + errs.length) + ' faalden:\n' + errs.slice(0, 3).map((e) => '• ' + e).join('\n') : '';
+                setMessages((prev) => [...prev, {
+                    role: 'assistant',
+                    content: '✅ ' + inserted + ' item' + (inserted !== 1 ? 's' : '') + ' opgeslagen in **Materieel**.' + partialNote,
+                    actions: [],
+                    successBadge: 'Ga naar Materieel →',
+                    successLink: '/materieel',
+                }]);
                 return;
             }
 
@@ -899,7 +1011,8 @@ export default function AiAssistant(): React.ReactElement {
     // receptuur, marge, pijn/top, foto-prompt (Poe-klaar). User keurt af/goed
     // via de standaard pending-flow van renderActionCard (de wrapper hieronder).
     function renderDishCards(action: ParsedAction, msgIdx: number): React.ReactElement | null {
-        const gerechten = (action.data as { gerechten?: any[] }).gerechten || [];
+        const rawGerechten = (action.data as { gerechten?: unknown } | null | undefined)?.gerechten;
+        const gerechten: any[] = Array.isArray(rawGerechten) ? rawGerechten : [];
         if (gerechten.length === 0) return null;
         const sel = dishSelections[msgIdx] || {};
         const isIncluded = (i: number) => sel[i] !== false;
@@ -1138,7 +1251,8 @@ export default function AiAssistant(): React.ReactElement {
     // uit zodat de AI niet over zijn token-budget heen gaat).
     // Multi-select onderaan voor batch (max 3 tegelijk volgens prompt-instructie).
     function renderConceptCards(action: ParsedAction, msgIdx: number): React.ReactElement {
-        const concepts = (action.data as { concepts?: Array<{ naam: string; gang_slug?: string; smaakprofiel?: string; key_ingredient?: string; samenvatting?: string; ruwe_receptuur?: string }> }).concepts || [];
+        const rawConcepts = (action.data as { concepts?: unknown } | null | undefined)?.concepts;
+        const concepts = (Array.isArray(rawConcepts) ? rawConcepts : []) as Array<{ naam: string; gang_slug?: string; smaakprofiel?: string; key_ingredient?: string; samenvatting?: string; ruwe_receptuur?: string }>;
         const sels = conceptSelections[msgIdx] ?? {};
         // Per-concept state: false=aangevinkt voor batch, 'done'=al uitgewerkt
         const isSelected = (i: number): boolean => sels[i] === true;
@@ -1164,9 +1278,8 @@ export default function AiAssistant(): React.ReactElement {
             const c = concepts[i];
             if (!c || isLoading) return;
             markDone(i);
-            // Korte prompt — de wantsDevelop intent-detector op de server triggert tool-use forcing.
-            // De volledige instructie zit in de tool-schema, niet in de user-message.
-            const userPrompt = 'Ontwikkel & push: ' + c.naam + (c.gang_slug ? ' (' + c.gang_slug + ')' : '');
+            // Expliciet "EXACT 1" zodat AI niet ALL concepts uit de eerdere brainstorm uitwerkt.
+            const userPrompt = 'Ontwikkel & push EXACT 1 gerecht: ' + c.naam + (c.gang_slug ? ' (' + c.gang_slug + ')' : '') + '. Andere concepten NIET meenemen.';
             sendMessage(null, userPrompt);
         }
 
@@ -1176,7 +1289,7 @@ export default function AiAssistant(): React.ReactElement {
             const batch = selected.slice(0, 6);
             batch.forEach((s) => markDone(s.i));
             const lijst = batch.map((s) => s.c.naam).join(', ');
-            const userPrompt = 'Ontwikkel & push ' + batch.length + ': ' + lijst;
+            const userPrompt = 'Ontwikkel & push EXACT deze ' + batch.length + ' gerechten: ' + lijst + '. Andere concepten NIET meenemen.';
             sendMessage(null, userPrompt);
         }
 
@@ -1222,14 +1335,17 @@ export default function AiAssistant(): React.ReactElement {
                                     tabIndex={-1}
                                 />
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>
                                         {c.naam}
                                         {c.gang_slug && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>· {c.gang_slug}</span>}
                                     </div>
-                                    {c.smaakprofiel && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{c.smaakprofiel}</div>}
-                                    {c.samenvatting && <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 4, lineHeight: 1.4, opacity: 0.85 }}>{c.samenvatting}</div>}
-                                    {c.ruwe_receptuur && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, fontFamily: 'var(--font-mono, monospace)' }}>📋 {c.ruwe_receptuur}</div>}
-                                    {c.key_ingredient && !c.ruwe_receptuur && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontStyle: 'italic' }}>met {c.key_ingredient}</div>}
+                                    {/* Compacte 1-regel beschrijving — voorkomt "lap tekst" gevoel.
+                                        Samenvatting heeft prioriteit (technisch); fallback = smaakprofiel. */}
+                                    {(c.samenvatting || c.smaakprofiel) && (
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                            {c.samenvatting || c.smaakprofiel}
+                                        </div>
+                                    )}
                                 </div>
                                 {done ? (
                                     <div style={{ alignSelf: 'center', fontSize: 11, color: 'var(--green)', fontWeight: 700, padding: '4px 10px', whiteSpace: 'nowrap' }}>✓ Bezig…</div>
@@ -1283,6 +1399,90 @@ export default function AiAssistant(): React.ReactElement {
         );
     }
 
+    // ── Materieel-kaart: bulk-import van AI-geparsete lijst ────────────────────
+    // Compact: 1 regel per item (naam + type-badge + detail). Whole-row click toggle.
+    // 1 push-knop onderaan. Geen vrije tekst.
+    function renderMaterieelCards(action: ParsedAction, msgIdx: number): React.ReactElement {
+        const rawItems = (action.data as { items?: unknown } | null | undefined)?.items;
+        const items = (Array.isArray(rawItems) ? rawItems : []) as Array<{ naam: string; type: string; aantal?: number; kleur?: string; materiaal?: string; afmetingen?: string; locatie?: string }>;
+        const sel = materieelSelections[msgIdx] || {};
+        const isIncluded = (i: number): boolean => sel[i] !== false;
+        const includedCount = items.filter((_, i) => isIncluded(i)).length;
+        const isDone = action.status === 'done';
+        const isPending = action.status === 'pending' || !action.status;
+        const isExecuting = action.status === 'executing';
+
+        function toggle(i: number): void {
+            setMaterieelSelections((prev) => ({ ...prev, [msgIdx]: { ...(prev[msgIdx] ?? {}), [i]: !isIncluded(i) } }));
+        }
+
+        const TYPE_COLORS: Record<string, string> = {
+            BBQ: 'var(--red)', Servies: 'var(--brand)', Linnen: 'var(--purple, #a78bfa)',
+            Koeling: 'var(--blue, #3b82f6)', Transport: 'var(--orange, #f97316)',
+            Meubilair: 'var(--green)', Overig: 'var(--muted)',
+        };
+
+        return (
+            <div key={action.id} style={{
+                margin: '10px 0 0', padding: 12, borderRadius: 12,
+                border: '1px solid rgba(6,182,212,.4)',
+                background: 'rgba(6,182,212,.06)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                    📦 {items.length} item{items.length !== 1 ? 's' : ''} geparsed — {isDone ? 'opgeslagen' : 'review en push'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {items.map((it, i) => {
+                        const checked = isIncluded(i);
+                        const color = TYPE_COLORS[it.type] || 'var(--muted)';
+                        const detail = [
+                            it.aantal && it.aantal > 1 ? it.aantal + 'x' : null,
+                            it.kleur, it.materiaal, it.afmetingen, it.locatie,
+                        ].filter(Boolean).join(' · ');
+                        return (
+                            <div key={i}
+                                onClick={() => { if (isPending && !isLoading) toggle(i); }}
+                                role="button" tabIndex={isPending ? 0 : -1} aria-pressed={checked}
+                                onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && isPending && !isLoading) { e.preventDefault(); toggle(i); } }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '6px 10px', borderRadius: 7,
+                                    background: checked ? 'rgba(6,182,212,.10)' : 'rgba(255,255,255,.02)',
+                                    border: '1px solid ' + (checked ? 'rgba(6,182,212,.4)' : 'var(--border)'),
+                                    cursor: isPending && !isLoading ? 'pointer' : 'default',
+                                    opacity: checked ? 1 : 0.55,
+                                }}>
+                                <input type="checkbox" checked={checked} readOnly disabled={!isPending || isLoading}
+                                    style={{ accentColor: '#06b6d4', pointerEvents: 'none' }} aria-hidden="true" tabIndex={-1} />
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {it.naam}
+                                    {detail && <span style={{ marginLeft: 6, color: 'var(--muted)', fontWeight: 400 }}>· {detail}</span>}
+                                </span>
+                                <span style={{ background: color + '22', color, border: '1px solid ' + color + '55', borderRadius: 12, padding: '1px 7px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{it.type}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                {isPending && (
+                    <button
+                        onClick={() => { approveAction(msgIdx, action.id); }}
+                        disabled={isLoading || includedCount === 0}
+                        style={{
+                            marginTop: 12, width: '100%', padding: '10px 0', borderRadius: 8, border: 'none',
+                            background: includedCount > 0 ? '#06b6d4' : 'var(--muted-extra-light)',
+                            color: includedCount > 0 ? '#000' : 'var(--muted)',
+                            fontWeight: 800, fontSize: 12,
+                            cursor: isLoading || includedCount === 0 ? 'not-allowed' : 'pointer',
+                        }}>
+                        ✅ Toevoegen aan Materieel ({includedCount})
+                    </button>
+                )}
+                {isExecuting && <div style={{ marginTop: 8, fontSize: 11, color: '#06b6d4', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={11} className="animate-spin" />Toevoegen…</div>}
+                {isDone && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--green)', fontWeight: 700, textAlign: 'center' }}>✓ Toegevoegd aan Materieel</div>}
+            </div>
+        );
+    }
+
     function renderActionCard(action: ParsedAction, msgIdx: number): React.ReactElement {
         if (action.type === 'create_gerecht') {
             return renderReceptuurKaartje(action, msgIdx);
@@ -1292,6 +1492,9 @@ export default function AiAssistant(): React.ReactElement {
         }
         if (action.type === 'brainstorm_gerechten_concepts') {
             return renderConceptCards(action, msgIdx);
+        }
+        if (action.type === 'bulk_create_materieel') {
+            return renderMaterieelCards(action, msgIdx);
         }
         if (action.type === 'info_blocks') {
             return renderInfoBlocks(action);
@@ -1482,6 +1685,42 @@ export default function AiAssistant(): React.ReactElement {
                             </button>
                         </div>
                     </div>
+
+                    {/* Scrape-prompt banner — alleen op /materieel: kopieert een complete prompt
+                        die je in ChatGPT/Claude/Poe plakt (alle 3 hebben browse). Output van die AI
+                        plak je terug hier → bulk_create_materieel parseert het automatisch. */}
+                    {pathname === '/materieel' && (
+                        <div style={{
+                            padding: '10px 12px',
+                            borderBottom: '1px solid var(--border)',
+                            background: 'linear-gradient(90deg, color-mix(in srgb, #06b6d4 12%, transparent), color-mix(in srgb, #06b6d4 4%, transparent))',
+                            display: 'flex', alignItems: 'center', gap: 10,
+                        }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', marginBottom: 2 }}>
+                                    🌐 Werkt URL niet? Gebruik ChatGPT of Poe
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.3 }}>
+                                    Klik → kopieer prompt → plak in ChatGPT/Poe met URL → antwoord plak je hier terug
+                                </div>
+                            </div>
+                            <button
+                                onClick={copyPoeScrapePrompt}
+                                title="Kopieer scrape-prompt — werkt met ChatGPT met browse, Claude.ai, Poe (Claude-Sonnet-4.5)"
+                                style={{
+                                    background: poeCopied ? 'var(--green)' : '#06b6d4',
+                                    border: 'none',
+                                    color: '#000',
+                                    padding: '8px 14px', borderRadius: 8,
+                                    fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'background 120ms',
+                                    boxShadow: '0 1px 3px rgba(6,182,212,.4)',
+                                }}>
+                                {poeCopied ? '✓ Gekopieerd' : '📋 Kopieer prompt'}
+                            </button>
+                        </div>
+                    )}
 
                     {/* Berichten */}
                     <div className="ai-chat-messages" id="ai-chat-messages">

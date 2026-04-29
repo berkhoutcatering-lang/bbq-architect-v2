@@ -352,6 +352,159 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             }
         }
 
+        // ── URL-scraping op /materieel ────────────────────────────────────────
+        // Wanneer user URLs plakt: fetch elke pagina + product-image server-side,
+        // bouw multimodal content (image + tekst) zodat Claude Vision het werkelijke
+        // product ziet. Loopt vóór intent-detection — daarom mag intent-detection
+        // niet meer aannemen dat content een string is (zie hieronder).
+        let scrapeNeedsScreenshot = false;
+        if (pageContext === '/materieel' && merged.length > 0) {
+            const lastMsg = merged[merged.length - 1];
+            if (lastMsg.role === 'user' && typeof lastMsg.content === 'string') {
+                // BELANGRIJK: na collapse-stap kan content meerdere user-messages bevatten
+                // (gescheiden door "\n\n"). We willen ALLEEN het laatste segment scannen —
+                // anders fired URL-scrape opnieuw wanneer user later Poe-output plakt
+                // ná een eerdere URL-paste, en dat geeft een verwarrende screenshot-warning.
+                const lastSegment = (lastMsg.content as string).split('\n\n').pop() || '';
+                // Detecteer structured Poe/ChatGPT-paste: bevat Naam:/Type:/Materiaal: format.
+                // Bij structured paste skippen we URL-scrape — content is al klaar voor parse.
+                const isStructuredPaste = /^\s*Naam\s*:/im.test(lastSegment) &&
+                                          /^\s*Type\s*:/im.test(lastSegment);
+                if (isStructuredPaste) {
+                    console.log('[chat] structured paste detected — URL-scrape geskipt');
+                }
+                const urlPattern = /https?:\/\/[^\s)<>"]+/g;
+                const urls = isStructuredPaste ? [] : (lastSegment.match(urlPattern) || []);
+                if (urls.length > 0 && urls.length <= 10) {
+                    console.log('[chat] URL-scrape: ' + urls.length + ' URLs gedetecteerd');
+                    // Totaal-image-budget voor multi-URL scrapes — voorkomt 4.5MB body-limit op Vercel.
+                    let totalImageBytes = 0;
+                    const MAX_TOTAL_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB headroom onder Vercel cap
+                    const fetched = await Promise.all(urls.map(async function (url) {
+                        try {
+                            const ctrl = new AbortController();
+                            const t = setTimeout(function () { ctrl.abort(); }, 8000);
+                            const res = await fetch(url, {
+                                signal: ctrl.signal,
+                                headers: {
+                                    'User-Agent': 'Mozilla/5.0 (compatible; BBQArchitect/1.0; product-info-fetch)',
+                                    'Accept': 'text/html,application/xhtml+xml',
+                                    'Accept-Language': 'nl,en;q=0.9',
+                                },
+                            });
+                            clearTimeout(t);
+                            if (!res.ok) return { url, error: 'HTTP ' + res.status };
+                            const html = await res.text();
+                            const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                            // Image-URL extractie — meerdere bronnen, eerste die hit:
+                            // 1) og:image  2) twitter:image  3) link rel image_src  4) eerste <img> met width
+                            const ogImage =
+                                html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                                html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ||
+                                html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i) ||
+                                html.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["'][^>]*(?:width|class=["'][^"']*product[^"']*["'])/i);
+                            const ogDesc = html.match(/<meta[^>]+(?:property|name)=["'](?:og:description|description)["'][^>]+content=["']([^"']+)["']/i);
+                            const stripped = html
+                                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                                .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+                                .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+                                .replace(/<[^>]+>/g, ' ')
+                                .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+                                .replace(/\s+/g, ' ').trim()
+                                .slice(0, 6000);
+
+                            // Probeer image te fetchen als base64 — Claude Vision ziet dan het werkelijke product
+                            let imageData: { mediaType: string; base64: string; url: string } | null = null;
+                            const imgUrl = ogImage ? ogImage[1] : null;
+                            if (imgUrl && /^https?:\/\//.test(imgUrl)) {
+                                try {
+                                    const ictrl = new AbortController();
+                                    const it = setTimeout(function () { ictrl.abort(); }, 6000);
+                                    const ires = await fetch(imgUrl, {
+                                        signal: ictrl.signal,
+                                        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BBQArchitect/1.0)', 'Accept': 'image/*' },
+                                    });
+                                    clearTimeout(it);
+                                    if (ires.ok) {
+                                        const ct = ires.headers.get('content-type') || 'image/jpeg';
+                                        const cleanType = ct.split(';')[0].trim();
+                                        // Alleen Anthropic-supported types; avif/heic skippen.
+                                        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+                                        if (allowedTypes.indexOf(cleanType) >= 0) {
+                                            const buf = Buffer.from(await ires.arrayBuffer());
+                                            // Per-image cap 3MB (Anthropic kan max 5MB) + totaal-cap voor body-size
+                                            if (buf.length < 3 * 1024 * 1024 && totalImageBytes + buf.length < MAX_TOTAL_IMAGE_BYTES) {
+                                                totalImageBytes += buf.length;
+                                                imageData = { mediaType: cleanType, base64: buf.toString('base64'), url: imgUrl };
+                                            } else {
+                                                console.log('[chat] URL-scrape: image skipped (size cap) ' + url + ' ' + buf.length);
+                                            }
+                                        }
+                                    }
+                                } catch { /* image fetch failed — text-only fallback */ }
+                            }
+
+                            return {
+                                url,
+                                title: titleMatch ? titleMatch[1].trim() : null,
+                                ogImage: imgUrl,
+                                ogDesc: ogDesc ? ogDesc[1] : null,
+                                content: stripped,
+                                imageData,
+                            };
+                        } catch (e) {
+                            return { url, error: (e as Error).message };
+                        }
+                    }));
+
+                    // Bouw content-blocks: per URL eerst image (als gefetched) dan text-block
+                    const contentBlocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
+                    contentBlocks.push({ type: 'text', text: (lastMsg.content as string) });
+                    for (const f of fetched) {
+                        if ('error' in f && f.error) {
+                            contentBlocks.push({ type: 'text', text: '\n\n[URL: ' + f.url + ']\nFETCH FAILED: ' + f.error });
+                            continue;
+                        }
+                        if (f.imageData) {
+                            contentBlocks.push({
+                                type: 'image',
+                                source: { type: 'base64', media_type: f.imageData.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif', data: f.imageData.base64 },
+                            });
+                        }
+                        const textBlock = [
+                            '\n\n[URL: ' + f.url + ']',
+                            f.title ? 'TITLE: ' + f.title : null,
+                            f.ogDesc ? 'DESC: ' + f.ogDesc : null,
+                            f.ogImage ? 'IMAGE-URL: ' + f.ogImage : null,
+                            f.imageData ? '(↑ product-foto hierboven — gebruik Vision om vorm/kleur/textuur te beschrijven)' : null,
+                            f.content ? 'TEXT-CONTENT: ' + f.content : null,
+                        ].filter(Boolean).join('\n');
+                        contentBlocks.push({ type: 'text', text: textBlock });
+                    }
+                    // Check: heeft tenminste 1 URL bruikbare data opgeleverd? Een SPA-pagina
+                    // (HANOS, IKEA, Shopify) levert vaak <500 chars content + geen image. In dat
+                    // geval willen we GEEN gokwerk — AI moet vragen om een screenshot.
+                    const anyUsableScrape = fetched.some(function (f) {
+                        return !('error' in f && f.error) && (f.imageData || (f.content && f.content.length > 500));
+                    });
+                    if (!anyUsableScrape) {
+                        scrapeNeedsScreenshot = true;
+                        contentBlocks.push({
+                            type: 'text',
+                            text: '\n\nDeze URL(s) leveren geen bruikbare content (waarschijnlijk SPA / JS-rendered). Vraag de gebruiker via respond_with_blocks om een SCREENSHOT of product-FOTO te sturen via de paperclip-knop. Gebruik action_hint type met titel "Stuur een foto" en korte uitleg waarom (URL niet leesbaar voor server).',
+                        });
+                    } else {
+                        contentBlocks.push({
+                            type: 'text',
+                            text: '\n\nLever items[] via bulk_create_materieel. KIJK NAAR DE FOTO\'S — beschrijf werkelijke vorm (rond/ovaal/rechthoekig), kleur, textuur. NIET blind op TITLE afgaan. Voeg foto_url toe per item.',
+                        });
+                    }
+                    lastMsg.content = contentBlocks;
+                }
+            }
+        }
+
         if (merged.length === 0) {
             return NextResponse.json({ error: 'Geen gebruikersbericht gevonden' }, { status: 400 });
         }
@@ -376,7 +529,18 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         // te gebruiken — valt terug op markdown-tabellen. Tool-use forcing dwingt
         // de AI om EXACT dit JSON-schema terug te geven, geen vrije tekst mogelijk.
         // Detect intent: laatste user-message + pageContext = /gerechten + bevat "bedenk"/"brainstorm"/"concept"/"hapje"/"gerechten" + getal.
-        const lastUserMsg = (merged[merged.length - 1]?.content as string || '').toLowerCase();
+        // BELANGRIJK: collapse-step hierboven kan opeenvolgende user-messages mergen via "\n\n"
+        // (bv. wanneer assistant-message empty content had na een brainstorm-tool-call). Voor
+        // intent-detectie kijken we ALLEEN naar het laatste segment — anders triggert oude
+        // "bedenk 2 bites" een nieuwe brainstorm wanneer user daarna op Ontwikkel klikt.
+        // Content kan string of array zijn (na URL-scrape multimodal). Reduce naar string.
+        const lastContent = merged[merged.length - 1]?.content;
+        const rawLastUserContent: string = typeof lastContent === 'string'
+            ? lastContent
+            : Array.isArray(lastContent)
+                ? lastContent.filter((b: any) => b && b.type === 'text').map((b: any) => b.text || '').join('\n')
+                : '';
+        const lastUserMsg = (rawLastUserContent.split('\n\n').pop() || '').toLowerCase();
         const isOnGerechten = pageContext === '/gerechten' || pageContext === '/menu-engineering' || pageContext === '/ai-chat';
         const wantsBrainstorm = isOnGerechten && (
             /\b(bedenk|brainstorm|maak|geef me|verzin|kom met|stel\s*samen|kom\s*op\s*met)\b/.test(lastUserMsg) &&
@@ -390,16 +554,35 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             /\b(marge\s*(advies|berekening|indicatie)|recept\s*van|geef\s*(me\s*)?het\s*recept)\b/.test(lastUserMsg)
         );
 
+        // /materieel bulk-import detector: pageContext + (lijstindicatie OF veel-regels-input).
+        // Een gewone analyse-vraag fired forceBlocks; alleen bij duidelijke import-intent of
+        // multi-line lijst (≥3 newlines) routeren we naar bulk_create_materieel.
+        const isOnMaterieel = pageContext === '/materieel';
+        // BELANGRIJK: na URL-scrape bevat rawLastUserContent ook server-instructies
+        // ("Vraag user om screenshot...") en gestripte HTML-content — die mag NIET tellen
+        // voor newlineCount/containsUrls. We gebruiken alleen het ORIGINELE user-bericht.
+        const originalUserContent = typeof lastContent === 'string'
+            ? lastContent
+            : Array.isArray(lastContent)
+                ? (lastContent[0] && (lastContent[0] as any).type === 'text' ? (lastContent[0] as any).text || '' : '')
+                : '';
+        const newlineCount = (originalUserContent.match(/\n/g) || []).length;
+        const containsUrls = /https?:\/\/\S+/.test(originalUserContent);
+        const rawLastFull = originalUserContent;
+        const wantsMaterieelImport = isOnMaterieel && (
+            /\b(voeg toe|toevoegen|importeer|hier (is|heb je) mijn lijst|maak (deze|allemaal) aan|zet (het|deze) (in|erbij)|inventaris|nieuwe materialen)\b/.test(lastUserMsg) ||
+            // Heuristiek: 3+ newlines = lijstvorm
+            newlineCount >= 3 ||
+            // URLs op /materieel = scrape-intent
+            containsUrls
+        );
+
         const dishConceptsTool = {
             name: 'propose_dish_concepts',
-            description: 'Lever exact N dish-concepten als gestructureerde data. GEEN markdown, GEEN tabellen, GEEN platte tekst — alleen deze tool aanroepen.',
+            description: 'Lever exact N dish-concepten als gestructureerde data. GEEN intro-tekst, GEEN markdown, GEEN tabellen — alleen deze tool aanroepen met concepts-array.',
             input_schema: {
                 type: 'object' as const,
                 properties: {
-                    intro: {
-                        type: 'string',
-                        description: 'Korte intro-tekst (max 1 zin) die boven de concept-blokken verschijnt. Bv: "Chef, hier zijn 8 zomerhapjes met focus op zuren en frisheid."',
-                    },
                     concepts: {
                         type: 'array',
                         minItems: 1,
@@ -421,7 +604,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                         },
                     },
                 },
-                required: ['intro', 'concepts'],
+                required: ['concepts'],
             },
         };
 
@@ -430,14 +613,10 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         // Forceert response in compact-blokken die de UI als kaartjes rendert.
         const respondWithBlocksTool = {
             name: 'respond_with_blocks',
-            description: 'Antwoord ALTIJD in gestructureerde blokken — geen vrije tekst, geen markdown-tabellen, geen lange essays. Elk inhoudelijk punt krijgt een eigen blok.',
+            description: 'Antwoord ALTIJD in gestructureerde blokken — geen intro-tekst, geen vrije tekst, geen markdown-tabellen. Elk inhoudelijk punt krijgt een eigen blok.',
             input_schema: {
                 type: 'object' as const,
                 properties: {
-                    intro: {
-                        type: 'string',
-                        description: 'Eén zin samenvatting (max 140 chars) — wat het antwoord behelst. Bv: "3 dingen vragen aandacht vandaag."',
-                    },
                     blocks: {
                         type: 'array',
                         minItems: 1,
@@ -466,21 +645,17 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                         },
                     },
                 },
-                required: ['intro', 'blocks'],
+                required: ['blocks'],
             },
         };
 
         // STAP 2 tool: dwingt structured uitwerking ipv markdown-tabellen
         const developDishesTool = {
             name: 'develop_dishes',
-            description: 'Werk N geselecteerde concepten volledig uit als gestructureerde data. ABSOLUUT GEEN markdown-tabellen, GEEN intro-essays, GEEN marge-tabel — alleen deze tool aanroepen.',
+            description: 'Werk N geselecteerde concepten volledig uit als gestructureerde data. ABSOLUUT GEEN markdown-tabellen, GEEN intro-tekst, GEEN essays — alleen deze tool aanroepen met gerechten-array.',
             input_schema: {
                 type: 'object' as const,
                 properties: {
-                    intro: {
-                        type: 'string',
-                        description: 'EEN ZIN max — chef-stijl bevestiging. Bv: "Chef, hier zijn de 3 uitgewerkte concepten — push klaar."',
-                    },
                     gerechten: {
                         type: 'array',
                         minItems: 1,
@@ -542,7 +717,44 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                         },
                     },
                 },
-                required: ['intro', 'gerechten'],
+                required: ['gerechten'],
+            },
+        };
+
+        // /materieel bulk-import: parse user-lijst (vrije tekst) → array materieel-records.
+        // Geen redenering nodig — Haiku is genoeg. Voorkomt vrije-tekst-essays in de chat.
+        const bulkCreateMaterieelTool = {
+            name: 'bulk_create_materieel',
+            description: 'Parse de gebruikers-lijst en lever materieel-records als gestructureerde array. GEEN intro-tekst, GEEN markdown, GEEN essays — alleen items[].',
+            input_schema: {
+                type: 'object' as const,
+                properties: {
+                    items: {
+                        type: 'array',
+                        minItems: 1,
+                        maxItems: 50,
+                        items: {
+                            type: 'object',
+                            properties: {
+                                naam: { type: 'string', description: 'Korte naam, max 60 chars' },
+                                type: {
+                                    type: 'string',
+                                    enum: ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'],
+                                    description: 'Categorie. Aliassen mappen naar enum: bord/kom/glas/bestek→Servies, kettle/kamado/grill→BBQ, koelbox/freezer→Koeling, tafel/stoel→Meubilair, doek/kleed→Linnen, krat/aanhanger→Transport.',
+                                },
+                                aantal: { type: 'integer', description: 'Aantal stuks, default 1' },
+                                kleur: { type: 'string', description: 'Optioneel — bv "wit", "antraciet"' },
+                                materiaal: { type: 'string', description: 'Optioneel — bv "porselein", "rvs", "linnen"' },
+                                afmetingen: { type: 'string', description: 'Optioneel — bv "Ø 28cm", "60x40cm"' },
+                                locatie: { type: 'string', description: 'Optioneel — bv "Loods A", "Truck"' },
+                                notitie: { type: 'string', description: 'Optioneel — extra context uit de bron-lijst' },
+                                foto_url: { type: 'string', description: 'Optioneel — directe URL naar product-image (uit og:image of <img src> van gescrapte URL).' },
+                            },
+                            required: ['naam', 'type'],
+                        },
+                    },
+                },
+                required: ['items'],
             },
         };
 
@@ -564,16 +776,42 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             pageContext === '/offertes' ||
             pageContext === '/facturen' ||
             pageContext === '/recepten' ||
+            pageContext === '/materieel' ||
             (pageContext && pageContext.startsWith('/events'))
         );
 
-        if (wantsBrainstorm) {
+        if (scrapeNeedsScreenshot) {
+            // URL-scrape kreeg geen bruikbare content (SPA-pagina). AI moet om screenshot vragen
+            // via respond_with_blocks ipv te gokken op product-info.
+            streamParams.tools = [respondWithBlocksTool];
+            streamParams.tool_choice = { type: 'tool', name: 'respond_with_blocks' };
+            console.log('[chat] Tool-use forced: respond_with_blocks (URL-scrape needs screenshot)');
+        } else if (wantsMaterieelImport) {
+            // Haiku is genoeg voor pure parse-taak — geen redenering, alleen tekst→JSON.
+            streamParams.tools = [bulkCreateMaterieelTool];
+            streamParams.tool_choice = { type: 'tool', name: 'bulk_create_materieel' };
+            streamParams.model = 'claude-haiku-4-5-20251001';
+            selectedModel = 'claude-haiku-4-5-20251001'; // sync voor token-logging + cost-estimate
+            // 50 items × ~120 tokens (incl kleur/materiaal/afmetingen/foto_url) = 6000.
+            // Met buffer voor multi-URL scrape: 8000.
+            if ((streamParams.max_tokens || 0) < 8000) streamParams.max_tokens = 8000;
+            // Haiku ondersteunt geen extended thinking → strip die params voor de zekerheid.
+            delete streamParams.thinking;
+            delete streamParams.output_config;
+            console.log('[chat] Tool-use forced: bulk_create_materieel (haiku, materieel import)');
+        } else if (wantsBrainstorm) {
             streamParams.tools = [dishConceptsTool];
             streamParams.tool_choice = { type: 'tool', name: 'propose_dish_concepts' };
+            // 6-8 concepten met receptuur passen niet in 1000 tokens (Standaard cap).
+            // Tool-use JSON kapt af → parse faalt → lege response. Bump naar minimaal 4000.
+            if ((streamParams.max_tokens || 0) < 4000) streamParams.max_tokens = 4000;
             console.log('[chat] Tool-use forced: propose_dish_concepts (brainstorm intent)');
         } else if (wantsDevelop) {
             streamParams.tools = [developDishesTool];
             streamParams.tool_choice = { type: 'tool', name: 'develop_dishes' };
+            // Volledige uitwerking (recept + ingrediënten + foto-prompt) per gerecht
+            // is ~2k tokens. Voor 3 gerechten = ~6k. Bump naar minimaal 8000.
+            if ((streamParams.max_tokens || 0) < 8000) streamParams.max_tokens = 8000;
             console.log('[chat] Tool-use forced: develop_dishes (uitwerking intent)');
         } else if (forceBlocks) {
             streamParams.tools = [respondWithBlocksTool];
@@ -644,15 +882,9 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                             if (buf && buf.jsonAcc) {
                                 try {
                                     const input = JSON.parse(buf.jsonAcc);
+                                    // GEEN intro-tekst meer — alles in blokken/cards.
+                                    // De UI rendert action-kaarten met eigen header/description.
                                     if (buf.name === 'propose_dish_concepts') {
-                                        // Zet om naar brainstorm_gerechten_concepts ACTION zodat de
-                                        // bestaande renderConceptCards in AiAssistant.tsx het oppikt.
-                                        const intro = typeof input.intro === 'string' ? input.intro : '';
-                                        if (intro) {
-                                            const introDelta = intro + '\n\n';
-                                            fullText += introDelta;
-                                            safeEnqueue({ delta: introDelta });
-                                        }
                                         const actionPayload = {
                                             type: 'brainstorm_gerechten_concepts',
                                             description: (input.concepts?.length || 0) + ' concepten — klik per blok Ontwikkel & push',
@@ -662,13 +894,6 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                         fullText += actionStr;
                                         safeEnqueue({ delta: actionStr });
                                     } else if (buf.name === 'respond_with_blocks') {
-                                        // Generieke gestructureerde response — UI rendert als kaartjes
-                                        const intro = typeof input.intro === 'string' ? input.intro : '';
-                                        if (intro) {
-                                            const introDelta = intro + '\n\n';
-                                            fullText += introDelta;
-                                            safeEnqueue({ delta: introDelta });
-                                        }
                                         const actionPayload = {
                                             type: 'info_blocks',
                                             description: (input.blocks?.length || 0) + ' antwoord-blokken',
@@ -678,14 +903,6 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                         fullText += actionStr;
                                         safeEnqueue({ delta: actionStr });
                                     } else if (buf.name === 'develop_dishes') {
-                                        // Zet om naar bulk_create_gerechten ACTION zodat renderDishCards het oppikt.
-                                        // Bereidingswijze normaliseren: array of string allebei OK voor downstream.
-                                        const intro = typeof input.intro === 'string' ? input.intro : '';
-                                        if (intro) {
-                                            const introDelta = intro + '\n\n';
-                                            fullText += introDelta;
-                                            safeEnqueue({ delta: introDelta });
-                                        }
                                         const actionPayload = {
                                             type: 'bulk_create_gerechten',
                                             description: (input.gerechten?.length || 0) + ' gerecht(en) uitgewerkt — push naar Gerechten',
@@ -694,9 +911,31 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                         const actionStr = '<<<ACTION:' + JSON.stringify(actionPayload) + '>>>';
                                         fullText += actionStr;
                                         safeEnqueue({ delta: actionStr });
+                                    } else if (buf.name === 'bulk_create_materieel') {
+                                        const actionPayload = {
+                                            type: 'bulk_create_materieel',
+                                            description: (input.items?.length || 0) + ' item(s) gevonden — push naar Materieel',
+                                            data: { items: input.items || [] },
+                                        };
+                                        const actionStr = '<<<ACTION:' + JSON.stringify(actionPayload) + '>>>';
+                                        fullText += actionStr;
+                                        safeEnqueue({ delta: actionStr });
                                     }
                                 } catch (e) {
-                                    console.error('[chat] tool_use JSON parse failed:', (e as Error).message);
+                                    // Truncated tool-use JSON (vaak door max_tokens cap). Geef user
+                                    // een leesbare fout-bubble ipv een lege bubble.
+                                    console.error('[chat] tool_use JSON parse failed:', (e as Error).message, 'jsonAcc length:', buf.jsonAcc.length);
+                                    const errBlock = '<<<ACTION:' + JSON.stringify({
+                                        type: 'info_blocks',
+                                        description: 'AI-antwoord onvolledig',
+                                        data: { blocks: [{
+                                            type: 'warning',
+                                            title: 'Antwoord werd afgekapt',
+                                            text: 'AI raakte tokens kwijt voordat het hele antwoord af was. Probeer specifieker te vragen of kies denkmodus Diep voor meer ruimte.',
+                                        }] },
+                                    }) + '>>>';
+                                    fullText += errBlock;
+                                    safeEnqueue({ delta: errBlock });
                                 }
                             }
                         } else if (event.type === 'message_delta' && event.usage) {
