@@ -1085,7 +1085,8 @@ export default function AiAssistant(): React.ReactElement {
     // Vervangt vrije AI-tekst door compacte kaartjes per type:
     // info | metric | warning | success | bullets | action_hint
     function renderInfoBlocks(action: ParsedAction): React.ReactElement {
-        const blocks = (action.data as { blocks?: Array<{ type: string; title: string; text?: string; items?: string[]; value?: string }> }).blocks || [];
+        const rawBlocks = (action.data as { blocks?: unknown }).blocks;
+        const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []) as Array<{ type: string; title: string; text?: string; items?: string[]; value?: string }>;
         if (blocks.length === 0) return <div key={action.id} />;
 
         const palette: Record<string, { bg: string; border: string; accent: string; emoji: string }> = {
