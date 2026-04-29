@@ -409,6 +409,22 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         color: '#a78bfa',
         tool: 'bulkCreateGerechten',
     },
+    brainstorm_gerechten_concepts: {
+        label: 'Concepten — kies welke je wilt uitwerken',
+        table: null,
+        op: 'client_only',
+        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        icon: 'Sparkles',
+        color: '#f59e0b',
+    },
+    info_blocks: {
+        label: 'Antwoord in blokken',
+        table: null,
+        op: 'client_only',
+        pages: ['*'],
+        icon: 'Layers',
+        color: '#a78bfa',
+    },
     filter_gerechten: {
         label: 'Gerechten verwijderen/verbergen',
         table: 'gerechten',

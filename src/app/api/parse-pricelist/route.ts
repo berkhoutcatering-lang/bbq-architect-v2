@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
-import { estimateAiCostCents } from '@/lib/aiUsage';
+import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';

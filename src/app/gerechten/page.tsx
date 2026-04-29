@@ -845,6 +845,46 @@ export default function Gerechten() {
                                 </div>
                             </div>
 
+                            {/* AI-INZICHTEN sectie — pijnpunten/toppunten/marge%/foto-prompt */}
+                            {(form.foto_prompt || (form.pijnpunten && form.pijnpunten.length > 0) || (form.toppunten && form.toppunten.length > 0) || form.marge_pct != null) && (
+                                <div style={{ marginTop: 18, padding: 14, borderRadius: 10, background: 'rgba(167,139,250,.05)', border: '1px solid rgba(167,139,250,.25)' }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple, #a78bfa)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
+                                        ✨ AI-inzichten
+                                    </div>
+
+                                    {form.marge_pct != null && (
+                                        <div style={{ marginBottom: 10, fontSize: 12 }}>
+                                            <span style={{ color: 'var(--muted)' }}>Marge: </span>
+                                            <strong style={{ color: form.marge_pct >= 70 ? 'var(--green)' : form.marge_pct >= 60 ? 'var(--amber)' : 'var(--red)' }}>
+                                                {form.marge_pct >= 70 ? '🟢' : form.marge_pct >= 60 ? '🟠' : '🔴'} {form.marge_pct}%
+                                            </strong>
+                                        </div>
+                                    )}
+
+                                    {form.toppunten && form.toppunten.length > 0 && (
+                                        <div style={{ marginBottom: 10 }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>↑ TOPPUNTEN</div>
+                                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text)', lineHeight: 1.6 }}>
+                                                {(form.toppunten as string[]).map(function (p, i) { return <li key={i}>{p}</li>; })}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {form.pijnpunten && form.pijnpunten.length > 0 && (
+                                        <div style={{ marginBottom: 10 }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--red)', marginBottom: 4 }}>↓ PIJNPUNTEN</div>
+                                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text)', lineHeight: 1.6 }}>
+                                                {(form.pijnpunten as string[]).map(function (p, i) { return <li key={i}>{p}</li>; })}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {form.foto_prompt && (
+                                        <FotoPromptKnop text={form.foto_prompt as string} />
+                                    )}
+                                </div>
+                            )}
+
                             {editing !== 'new' && stats && (
                                 <div className="gerecht-stats-panel">
                                     <div className="gerecht-stats-title">📊 Statistieken</div>
@@ -931,6 +971,48 @@ export default function Gerechten() {
                     onDismiss={function () { setFollowUpActions(null); }}
                     autoHideMs={15000}
                 />
+            )}
+        </div>
+    );
+}
+
+// Compacte foto-prompt knop met Kopieer + Toon-toggle.
+// Verschijnt in de gerecht edit-modal — maakt de AI-foto-prompt direct
+// te kopiëren naar GPT Image 2 / Imagen / Poe zonder dat de lange prompt
+// het edit-formulier vol-typt.
+function FotoPromptKnop({ text }: { text: string }): React.ReactElement {
+    const [copied, setCopied] = useState(false);
+    const [show, setShow] = useState(false);
+    function copy(): void {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(function () {
+                setCopied(true);
+                setTimeout(function () { setCopied(false); }, 1800);
+            }).catch(function () { /* noop */ });
+        }
+    }
+    return (
+        <div style={{ marginTop: 6, padding: 10, borderRadius: 8, background: 'rgba(167,139,250,.07)', border: '1px dashed rgba(167,139,250,.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple, #a78bfa)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                    📸 AI foto-prompt (Poe / GPT Image 2)
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={() => setShow(function (v) { return !v; })}
+                        style={{ background: 'none', border: '1px solid rgba(167,139,250,.4)', color: 'var(--purple, #a78bfa)', padding: '4px 10px', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        {show ? 'Verberg' : 'Toon'}
+                    </button>
+                    <button type="button" onClick={copy}
+                        style={{ background: copied ? 'var(--purple, #a78bfa)' : 'none', border: '1px solid rgba(167,139,250,.4)', color: copied ? '#000' : 'var(--purple, #a78bfa)', padding: '4px 12px', borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                        {copied ? '✓ Gekopieerd' : '📋 Kopieer prompt'}
+                    </button>
+                </div>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
+                Plak deze prompt in Poe (GPT Image 2) of een andere image-AI om een foto van dit gerecht te genereren.
+            </div>
+            {show && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6, fontFamily: 'var(--font-mono, monospace)', marginTop: 8, padding: '8px 10px', background: 'rgba(0,0,0,.3)', borderRadius: 5, maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{text}</div>
             )}
         </div>
     );

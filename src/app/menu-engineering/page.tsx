@@ -91,7 +91,7 @@ export default function MenuEngineering() {
     if (!supabase) { setLoading(false); return; }
     Promise.all([
       supabase.from('gangen').select('*').order('volgorde'),
-      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze').order('volgorde'),
+      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze,verkoopprijs,marge_pct,pijnpunten,toppunten,foto_prompt').order('volgorde'),
       supabase.from('events').select('id,menu'),
       supabase.from('offertes').select('id,menu_selectie,basis_prijs_pp,aantal_gasten'),
       supabase.from('inventory').select('id,naam,unit,purchase_price,yield_factor'),
@@ -526,7 +526,7 @@ export default function MenuEngineering() {
             if (error) { showToast('❌ ' + error.message); return; }
             showToast(`✅ ${rows.length} gerechten toegevoegd`);
             // refetch
-            const { data } = await supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze').order('volgorde');
+            const { data } = await supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze,verkoopprijs,marge_pct,pijnpunten,toppunten,foto_prompt').order('volgorde');
             setGerechten(data || []);
             setComposedMenu(null);
           }}
@@ -598,14 +598,20 @@ export default function MenuEngineering() {
       )}
 
       <GangPickerModal gerecht={picking} onPick={placeInMap} onClose={() => setPicking(null)} />
-      <GerechtDetailsModal
-        gerecht={viewingGerecht}
-        onSave={handleSaveDetails}
-        onDelete={handleDeleteDetails}
-        onClose={() => setViewingGerecht(null)}
-        onError={(msg: string) => showToast('❌ ' + msg)}
-        supabase={supabase}
-      />
+      {/* Conditioneel renderen + key zorgt voor cleane mount/unmount per gerecht.
+          Voorheen rendered het component altijd (ook met gerecht=null), wat gaf
+          dat hooks bij eerste mount andere init-volgorde hadden dan na update — Rules of Hooks violation. */}
+      {viewingGerecht && (
+        <GerechtDetailsModal
+          key={viewingGerecht.id}
+          gerecht={viewingGerecht}
+          onSave={handleSaveDetails}
+          onDelete={handleDeleteDetails}
+          onClose={() => setViewingGerecht(null)}
+          onError={(msg: string) => showToast('❌ ' + msg)}
+          supabase={supabase}
+        />
+      )}
     </div>
     </RequireTier>
   );

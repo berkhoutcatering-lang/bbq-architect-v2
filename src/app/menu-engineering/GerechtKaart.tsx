@@ -29,11 +29,17 @@ export interface GerechtData {
   tags?: string[];
   allergenen?: string[];
   kostprijs_pp?: number;
+  verkoopprijs?: number;
   actief?: boolean;
   ingredienten?: string;
   bereidingswijze?: string;
   ingredients_list?: string;
   preparation_steps?: string;
+  // AI-inzichten (gevuld door tool-use forced develop_dishes flow)
+  marge_pct?: number | null;
+  pijnpunten?: string[];
+  toppunten?: string[];
+  foto_prompt?: string | null;
 }
 
 export function getGang(slug: string): GangConfig {

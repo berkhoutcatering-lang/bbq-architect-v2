@@ -12,7 +12,7 @@ import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
-import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search } from 'lucide-react';
+import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
@@ -34,6 +34,13 @@ export default function Materieel() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [filter, setFilter] = useState<string>('Alles');
     const [search, setSearch] = useState('');
+    // Scan-flow state: foto upload → AI Vision parse → preview → user-keur → insert
+    const [scanOpen, setScanOpen] = useState(false);
+    const [scanLoading, setScanLoading] = useState(false);
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [scanPreview, setScanPreview] = useState<any>(null);
+    const [scanImageDataUrl, setScanImageDataUrl] = useState<string | null>(null);
+    const scanFileInputRef = useRef<HTMLInputElement>(null);
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
@@ -119,6 +126,94 @@ export default function Materieel() {
         setField('logboek', (form.logboek || []).concat([entry]));
         setNewLog({ actie: '', notitie: '' });
         showToast('Logboek bijgewerkt — vergeet niet op te slaan', 'info');
+    }
+
+    // ── Scan-flow handlers ────────────────────────────────────────────────────
+    function openScan(): void {
+        setScanOpen(true);
+        setScanError(null);
+        setScanPreview(null);
+        setScanImageDataUrl(null);
+    }
+
+    function closeScan(): void {
+        setScanOpen(false);
+        setScanError(null);
+        setScanPreview(null);
+        setScanImageDataUrl(null);
+        if (scanFileInputRef.current) scanFileInputRef.current.value = '';
+    }
+
+    async function handleScanFile(file: File): Promise<void> {
+        setScanLoading(true);
+        setScanError(null);
+        setScanPreview(null);
+        try {
+            // Lees naar base64 data-URL — preview én API in één keer
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => resolve(String(r.result));
+                r.onerror = () => reject(r.error || new Error('Kon bestand niet lezen'));
+                r.readAsDataURL(file);
+            });
+            setScanImageDataUrl(dataUrl);
+            const res = await fetch('/api/materieel/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: dataUrl, model: 'haiku' }),
+            });
+            const json = await res.json();
+            if (!res.ok || json.error) {
+                throw new Error(json.error || 'Scan mislukt');
+            }
+            setScanPreview(json.data);
+        } catch (err: any) {
+            setScanError(err.message || 'Onbekende fout');
+        } finally {
+            setScanLoading(false);
+        }
+    }
+
+    function updateScanPreview(key: string, value: any): void {
+        setScanPreview((prev: any) => prev ? { ...prev, [key]: value } : prev);
+    }
+
+    async function saveScanned(): Promise<void> {
+        if (!scanPreview) return;
+        try {
+            // Upload de foto naar Storage zodat hij gekoppeld is aan het record
+            let fotoUrls: string[] = [];
+            if (scanImageDataUrl) {
+                const blob = await (await fetch(scanImageDataUrl)).blob();
+                const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+                const path = 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+                const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, upsert: false });
+                if (!upErr) {
+                    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+                    if (pub?.publicUrl) fotoUrls = [pub.publicUrl];
+                }
+            }
+            const payload = {
+                naam: scanPreview.naam,
+                type: scanPreview.type,
+                status: 'ok' as const,
+                kleur: scanPreview.kleur,
+                materiaal: scanPreview.materiaal,
+                afmetingen: scanPreview.afmetingen,
+                geschikt_voor_gangen: scanPreview.geschikt_voor_gangen || [],
+                ai_styling_hint: scanPreview.ai_styling_hint,
+                notitie: scanPreview.notitie || '',
+                fotos: fotoUrls,
+                scan_source: scanPreview.scan_source,
+                scan_data: scanPreview.scan_data,
+            };
+            await insert(payload);
+            showToast('Toegevoegd via scan', 'success');
+            closeScan();
+            refetch();
+        } catch (err: any) {
+            showToast('Opslaan mislukt: ' + (err.message || 'onbekend'), 'error');
+        }
     }
 
     if (loading) return (
@@ -217,7 +312,14 @@ export default function Materieel() {
         <>
             <PageHeader
                 title={'Materieel (' + materieel.length + ')'}
-                actions={<button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>}
+                actions={
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-ghost" onClick={openScan} title="Scan product-screenshot of foto via AI">
+                            <Sparkles size={14} /> Scan product
+                        </button>
+                        <button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>
+                    </div>
+                }
             />
 
             {/* ZOEKBALK */}
@@ -294,6 +396,131 @@ export default function Materieel() {
                     );
                 })}
             </div>
+
+            {/* SCAN-MODAL: foto upload → AI Vision parse → preview → user-keur → insert */}
+            {scanOpen && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Product scannen"
+                    onClick={(e) => { if (e.target === e.currentTarget) closeScan(); }}
+                    style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                >
+                    <div style={{ width: '100%', maxWidth: 640, maxHeight: '90vh', overflow: 'auto', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Sparkles size={18} style={{ color: 'var(--brand)' }} />
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Product scannen</h3>
+                            </div>
+                            <button onClick={closeScan} aria-label="Sluiten" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {!scanPreview && !scanLoading && (
+                            <div>
+                                <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
+                                    Upload een screenshot van een productpagina (IKEA, Sligro, etc.) of een foto van het echte product. De AI leest naam, type, kleur, materiaal en afmetingen automatisch uit.
+                                </p>
+                                <button
+                                    onClick={() => scanFileInputRef.current?.click()}
+                                    style={{ width: '100%', padding: '40px 20px', borderRadius: 10, border: '1px dashed var(--border)', background: 'var(--card)', color: 'var(--text)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}
+                                >
+                                    <Upload size={28} style={{ color: 'var(--brand)' }} />
+                                    <div style={{ fontSize: 14, fontWeight: 600 }}>Klik om foto te uploaden</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>JPG / PNG / WebP — max 5MB</div>
+                                </button>
+                                <input
+                                    ref={scanFileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScanFile(f); }}
+                                />
+                            </div>
+                        )}
+
+                        {scanLoading && (
+                            <div style={{ textAlign: 'center', padding: 40 }}>
+                                <Loader2 size={28} className="animate-spin" style={{ color: 'var(--brand)', marginBottom: 12 }} />
+                                <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>AI leest het product…</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>Dit duurt 3-8 seconden</div>
+                            </div>
+                        )}
+
+                        {scanError && !scanLoading && (
+                            <div style={{ padding: 14, borderRadius: 8, border: '1px solid rgba(239,68,68,.4)', background: 'rgba(239,68,68,.06)', color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>
+                                ❌ {scanError}
+                                <button onClick={() => { setScanError(null); setScanImageDataUrl(null); }} style={{ marginLeft: 8, background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>
+                                    Probeer opnieuw
+                                </button>
+                            </div>
+                        )}
+
+                        {scanPreview && !scanLoading && (
+                            <div>
+                                {scanImageDataUrl && (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img src={scanImageDataUrl} alt="Geüpload" style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8, marginBottom: 12, background: 'rgba(0,0,0,0.3)' }} />
+                                )}
+                                <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                                    ✓ AI heeft het product gelezen — review en pas aan waar nodig
+                                </div>
+
+                                <div className="form-grid">
+                                    <div className="field">
+                                        <label>Naam</label>
+                                        <input value={scanPreview.naam || ''} onChange={(e) => updateScanPreview('naam', e.target.value)} />
+                                    </div>
+                                    <div className="field">
+                                        <label>Categorie</label>
+                                        <select value={scanPreview.type} onChange={(e) => updateScanPreview('type', e.target.value)}>
+                                            {CATEGORIES.filter(c => c !== 'Alles').map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="field">
+                                        <label>Kleur</label>
+                                        <input value={scanPreview.kleur || ''} placeholder="bv. wit matt" onChange={(e) => updateScanPreview('kleur', e.target.value || null)} />
+                                    </div>
+                                    <div className="field">
+                                        <label>Materiaal</label>
+                                        <input value={scanPreview.materiaal || ''} placeholder="bv. porselein, RVS" onChange={(e) => updateScanPreview('materiaal', e.target.value || null)} />
+                                    </div>
+                                    <div className="field">
+                                        <label>Afmetingen</label>
+                                        <input value={scanPreview.afmetingen || ''} placeholder="bv. 25cm rond" onChange={(e) => updateScanPreview('afmetingen', e.target.value || null)} />
+                                    </div>
+                                    <div className="field">
+                                        <label>Geschikt voor gangen</label>
+                                        <input
+                                            value={(scanPreview.geschikt_voor_gangen || []).join(', ')}
+                                            placeholder="bv. voorgerecht, hoofdgerecht"
+                                            onChange={(e) => updateScanPreview('geschikt_voor_gangen', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
+                                        />
+                                    </div>
+                                    <div className="field full">
+                                        <label>AI styling-hint</label>
+                                        <textarea rows={2} value={scanPreview.ai_styling_hint || ''} placeholder="Past goed bij…" onChange={(e) => updateScanPreview('ai_styling_hint', e.target.value || null)} />
+                                    </div>
+                                    <div className="field full">
+                                        <label>Notitie</label>
+                                        <textarea rows={2} value={scanPreview.notitie || ''} onChange={(e) => updateScanPreview('notitie', e.target.value)} />
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                                    <button className="btn btn-brand" onClick={saveScanned} style={{ flex: 1 }}>
+                                        <Save size={14} /> Opslaan in materieel
+                                    </button>
+                                    <button className="btn btn-ghost" onClick={() => { setScanPreview(null); setScanImageDataUrl(null); setScanError(null); }}>
+                                        Andere foto
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </>
         </RequireTier>
     );

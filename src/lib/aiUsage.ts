@@ -101,38 +101,7 @@ export function useAiUsageThisMonth(): {
   return { count, loading, refetch: fetchCount };
 }
 
-/**
- * Bereken de kosten van een AI-call in euro-cent op basis van token-gebruik.
- * Claude Sonnet 4.6 pricing (USD, ~€1 = $1.08 in 2026):
- *   - Input: $3 / M tokens
- *   - Output: $15 / M tokens
- *   - Cache read: $0.30 / M tokens (10x goedkoper)
- *   - Cache write: $3.75 / M tokens (25% duurder dan input)
- */
-export function estimateAiCostCents(params: {
-  model?: string;
-  tokens_input?: number;
-  tokens_output?: number;
-  tokens_cache_read?: number;
-  tokens_cache_creation?: number;
-}): number {
-  const USD_TO_EUR = 0.93; // approximate, adjust periodically
-
-  // Claude Sonnet 4.6 pricing per million tokens (USD)
-  const PRICING: Record<string, { input: number; output: number; cache_read: number; cache_write: number }> = {
-    'claude-sonnet-4-6': { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 },
-    'claude-sonnet-4-7': { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 },
-    'claude-opus-4-7':   { input: 15, output: 75, cache_read: 1.5, cache_write: 18.75 },
-    'claude-haiku-4-5':  { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 },
-  };
-
-  const prices = PRICING[params.model || 'claude-sonnet-4-6'] || PRICING['claude-sonnet-4-6'];
-
-  const usd =
-    ((params.tokens_input || 0) * prices.input +
-      (params.tokens_output || 0) * prices.output +
-      (params.tokens_cache_read || 0) * prices.cache_read +
-      (params.tokens_cache_creation || 0) * prices.cache_write) / 1_000_000;
-
-  return Math.round(usd * USD_TO_EUR * 100); // eur cents
-}
+// Re-export voor backward compat — nieuwe code importeert direct uit @/lib/aiCost
+// (zonder 'use client' wrapper). Server-routes MOETEN @/lib/aiCost gebruiken,
+// anders crashen ze met "client function from server".
+export { estimateAiCostCents } from '@/lib/aiCost';

@@ -16,6 +16,39 @@ async function getActiveOrgId(sb: SupabaseClient): Promise<string | null> {
     return data && data[0] ? (data[0].organization_id as string) : null;
 }
 
+// AI levert soms slug-varianten die niet in de gangen-tabel bestaan
+// (bv "bite" ipv "bites"). Mapping naar bestaande slugs voorkomt FK-violations.
+// Onbekende slugs vallen terug op 'anders'.
+const GANG_SLUG_ALIAS: Record<string, string> = {
+    bite: 'bites',
+    bites: 'bites',
+    hapje: 'hapje',
+    borrelhap: 'borrelhap',
+    borrelhapje: 'borrelhap',
+    voorgerecht: 'voorgerechten',
+    voorgerechten: 'voorgerechten',
+    starter: 'voorgerechten',
+    hoofdgerecht: 'hoofdgerechten',
+    hoofdgerechten: 'hoofdgerechten',
+    main: 'hoofdgerechten',
+    bijgerecht: 'bijgerecht',
+    side: 'bijgerecht',
+    bijgerechten: 'bijgerecht',
+    vegetarisch: 'vegetarisch',
+    vega: 'vegetarisch',
+    vegan: 'vegetarisch',
+    dessert: 'dessert',
+    desserts: 'dessert',
+    nagerecht: 'dessert',
+    anders: 'anders',
+};
+
+function normalizeGangSlug(input: unknown): string {
+    if (typeof input !== 'string' || !input.trim()) return 'anders';
+    const k = input.trim().toLowerCase();
+    return GANG_SLUG_ALIAS[k] || 'anders';
+}
+
 async function bulkCreateGerechten(sb: SupabaseClient, orgId: string | null, params: Record<string, any>): Promise<Record<string, any>> {
     const gerechten: any[] = params.gerechten || [];
     if (gerechten.length === 0) return { error: 'Geen gerechten opgegeven', inserted: 0, errors: [] };
@@ -23,7 +56,7 @@ async function bulkCreateGerechten(sb: SupabaseClient, orgId: string | null, par
 
     const rows = gerechten.map((g: any, i: number) => ({
         naam: g.naam || 'Nieuw Gerecht',
-        gang_slug: g.gang_slug || 'anders',
+        gang_slug: normalizeGangSlug(g.gang_slug),
         beschrijving: g.beschrijving || '',
         bereidingswijze: Array.isArray(g.bereidingswijze) ? g.bereidingswijze.join('\n') : (g.bereidingswijze || ''),
         ingredienten: Array.isArray(g.ingredienten) ? g.ingredienten : [],
@@ -32,15 +65,36 @@ async function bulkCreateGerechten(sb: SupabaseClient, orgId: string | null, par
         actief: false,
         volgorde: 900 + i,
         organization_id: orgId,
+        // Nieuwe AI-inzicht velden — komen uit STAP 2 van de brainstorm-flow
+        kostprijs_pp: typeof g.kostprijs_pp === 'number' ? g.kostprijs_pp : 0,
+        verkoopprijs: typeof g.verkoopprijs === 'number' ? g.verkoopprijs : 0,
+        marge_pct: typeof g.marge_pct === 'number' ? g.marge_pct : null,
+        pijnpunten: Array.isArray(g.pijnpunten) ? g.pijnpunten : [],
+        toppunten: Array.isArray(g.toppunten) ? g.toppunten : [],
+        foto_prompt: typeof g.foto_prompt === 'string' ? g.foto_prompt : null,
     }));
 
     const results = await Promise.allSettled(rows.map((row) => sb.from('gerechten').insert(row).select().single()));
     const inserted = results.filter((r) => r.status === 'fulfilled' && !(r as any).value?.error).length;
-    const errors = results
-        .filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && (r as any).value?.error))
-        .map((r) => r.status === 'rejected' ? String((r as any).reason?.message || 'onbekend') : String((r as any).value.error?.message || 'onbekend'));
-
-    return { inserted, total: rows.length, errors };
+    const errorDetails = results.flatMap((r, idx) => {
+        const naam = rows[idx]?.naam || 'gerecht ' + (idx + 1);
+        if (r.status === 'rejected') {
+            const msg = String((r as any).reason?.message || 'onbekend');
+            return [{ naam, message: msg }];
+        }
+        if (r.status === 'fulfilled' && (r as any).value?.error) {
+            const err = (r as any).value.error;
+            const msg = String(err?.message || 'onbekend') + (err?.details ? ' — ' + err.details : '') + (err?.hint ? ' (' + err.hint + ')' : '');
+            return [{ naam, message: msg }];
+        }
+        return [];
+    });
+    if (errorDetails.length > 0) {
+        // Server-log voor debug — anders zien we nooit waarom de insert faalde
+        console.error('[bulkCreateGerechten] ' + errorDetails.length + ' insert(s) faalden:');
+        errorDetails.forEach((e) => console.error('  - ' + e.naam + ': ' + e.message));
+    }
+    return { inserted, total: rows.length, errors: errorDetails.map((e) => e.naam + ': ' + e.message) };
 }
 
 async function generateInkooplijst(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {

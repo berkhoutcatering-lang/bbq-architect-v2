@@ -53,11 +53,13 @@ export const MODES: Record<ThinkingMode, ModeDef> = {
         id: 'deep',
         label: 'Diep',
         shortLabel: 'Diep',
-        description: 'Diepgaande analyse met denkproces. Voor strategie, complexe brainstorm of matrices.',
+        description: 'Diepgaande analyse met denkproces. Voor strategie, complexe brainstorm of bulk-uitwerkingen (recepten, matrices).',
         icon: 'brain',
         model: 'claude-opus-4-7',
         modelKey: 'opus',
-        maxTokens: 2000,
+        // 12000 nodig voor multi-push: tot 6 gerechten in één bulk_create_gerechten met
+        // receptuur+marge+pijn/top+foto-prompt per stuk. Diep is een power-user mode — extra cost OK.
+        maxTokens: 12000,
         thinking: { effort: 'high' },
         temperature: 1.0,
         costMultiplier: 6.0,
