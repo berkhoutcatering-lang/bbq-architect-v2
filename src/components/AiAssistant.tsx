@@ -8,7 +8,10 @@ import { parseActions, executeAction, loadPageContextData } from '@/lib/ai-actio
 import { formatDbError } from '@/lib/aiErrorMessages';
 import type { ParsedAction } from '@/lib/ai-actions';
 import { PAGE_CHIPS } from '@/lib/constants';
-import { ShoppingCart, FileText, ListChecks, PieChart, Plus, X, Check, Loader2, Send, ArrowRight, AlertTriangle, Trash2, Zap, RotateCcw, Database, Bot } from 'lucide-react';
+import { ShoppingCart, FileText, ListChecks, PieChart, Plus, X, Check, Loader2, Send, ArrowRight, AlertTriangle, Trash2, Zap, RotateCcw, Database, Bot, Brain, Maximize2 } from 'lucide-react';
+import { MODES, type ThinkingMode } from '@/lib/ai-modes';
+import { normalizePagePath } from '@/lib/ai-prompts';
+import { useAiStudio } from '@/lib/AiStudioContext';
 
 interface ChatMessage {
     role: 'user' | 'assistant';
@@ -40,6 +43,7 @@ interface DishSelections {
 export default function AiAssistant(): React.ReactElement {
     const pathname = usePathname();
     const { orgId, userRole } = useOrg();
+    const { open: openAiStudio } = useAiStudio();
     const [isOpen, setIsOpen] = useState<boolean>(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState<string>('');
@@ -55,16 +59,16 @@ export default function AiAssistant(): React.ReactElement {
     const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
     const [folders, setFolders] = useState<any[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [aiModel, setAiModel] = useState<'sonnet' | 'opus'>(function () {
-        if (typeof window === 'undefined') return 'sonnet';
-        const stored = localStorage.getItem('bbq_ai_model');
-        return stored === 'opus' ? 'opus' : 'sonnet';
+    const [thinkingMode, setThinkingModeState] = useState<ThinkingMode>(function () {
+        if (typeof window === 'undefined') return 'standard';
+        const stored = localStorage.getItem('bbq_ai_mode');
+        if (stored === 'fast' || stored === 'standard' || stored === 'deep') return stored;
+        return 'standard';
     });
 
-    function toggleModel() {
-        const next: 'sonnet' | 'opus' = aiModel === 'sonnet' ? 'opus' : 'sonnet';
-        setAiModel(next);
-        if (typeof window !== 'undefined') localStorage.setItem('bbq_ai_model', next);
+    function setThinkingMode(next: ThinkingMode): void {
+        setThinkingModeState(next);
+        if (typeof window !== 'undefined') localStorage.setItem('bbq_ai_mode', next);
     }
 
     let pageName = pathname === '/' ? 'Dashboard' : pathname.replace('/', '').replace(/-/g, ' ');
@@ -173,7 +177,7 @@ export default function AiAssistant(): React.ReactElement {
         }
     }, [isOpen]);
 
-    const quickChips: string[] = PAGE_CHIPS[pathname] || ['Maak een prep-lijst', '20 gerechten met buikspek', 'Omzet overzicht', 'Lage voorraad check'];
+    const quickChips: string[] = PAGE_CHIPS[pathname] || PAGE_CHIPS[normalizePagePath(pathname)] || ['Maak een prep-lijst', '20 gerechten met buikspek', 'Omzet overzicht', 'Lage voorraad check'];
 
     // ── Bericht versturen (streaming) ─────────────────────────────────────────
     async function sendMessage(e?: React.FormEvent | null, overrideText?: string): Promise<void> {
@@ -215,7 +219,7 @@ export default function AiAssistant(): React.ReactElement {
                     pageContext: pathname,
                     mode: 'context',
                     contextData: contextData,
-                    model: aiModel,
+                    thinkingMode: thinkingMode,
                     userRole: userRole,
                 }),
                 signal: controller.signal,
@@ -864,32 +868,69 @@ export default function AiAssistant(): React.ReactElement {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <button
-                                onClick={toggleModel}
-                                title={aiModel === 'sonnet' ? 'Sonnet 4.6 actief — klik voor Opus 4.7 (slimmer, duurder)' : 'Opus 4.7 actief — klik voor Sonnet 4.6 (sneller, goedkoper)'}
+                            <div
+                                role="group"
+                                aria-label="Denkmodus"
                                 style={{
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    background: aiModel === 'opus' ? '#c4a35a' : 'rgba(0,0,0,.15)',
-                                    color: aiModel === 'opus' ? '#000' : 'rgba(0,0,0,.85)',
-                                    border: 'none',
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: '.08em',
-                                    textTransform: 'uppercase',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
+                                    display: 'inline-flex',
+                                    background: 'rgba(0,0,0,.18)',
+                                    borderRadius: 7,
+                                    padding: 2,
+                                    gap: 1,
                                 }}
                             >
-                                {aiModel === 'opus' ? '⚡ OPUS' : 'SONNET'}
-                            </button>
+                                {(['fast', 'standard', 'deep'] as ThinkingMode[]).map(function (m) {
+                                    const def = MODES[m];
+                                    const active = thinkingMode === m;
+                                    const Icon = m === 'fast' ? Zap : m === 'deep' ? Brain : Bot;
+                                    return (
+                                        <button
+                                            key={m}
+                                            onClick={function (): void { setThinkingMode(m); }}
+                                            disabled={isLoading}
+                                            title={def.label + ' — ' + def.description}
+                                            style={{
+                                                padding: '3px 7px',
+                                                borderRadius: 5,
+                                                background: active ? '#FFBF00' : 'transparent',
+                                                color: active ? '#000' : 'rgba(0,0,0,.7)',
+                                                border: 'none',
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                cursor: isLoading ? 'not-allowed' : 'pointer',
+                                                opacity: isLoading && !active ? 0.4 : 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 3,
+                                                transition: 'background 120ms',
+                                            }}
+                                        >
+                                            <Icon size={10} />
+                                            {def.shortLabel}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             <button onClick={function (): void { setContextLoaded(false); setContextData(null); loadContext(); }} className="ai-clear-btn" title="Data herladen">
                                 <Database size={11} />
                             </button>
                             <button onClick={function (): void { setMessages([{ role: 'assistant', content: 'Gesprek gewist. Wat wil je doen?', actions: [] }]); setDishSelections({}); }} className="ai-clear-btn" title="Gesprek wissen">
                                 <RotateCcw size={12} />
+                            </button>
+                            <button
+                                onClick={function (): void {
+                                    // Conversatie kopiëren naar overlay zodat de chat naadloos doorloopt.
+                                    // We laten de stream NIET aborten — als er nog gestreamd wordt, blijft
+                                    // de widget die afwerken; de overlay krijgt een snapshot mee.
+                                    openAiStudio({
+                                        messages: messages.map(function (m) { return { role: m.role, content: m.content }; }),
+                                        thinkingMode: thinkingMode,
+                                    });
+                                }}
+                                className="ai-clear-btn"
+                                title="AI groter — open Studio"
+                            >
+                                <Maximize2 size={11} />
                             </button>
                         </div>
                     </div>
@@ -940,8 +981,15 @@ export default function AiAssistant(): React.ReactElement {
                         {isLoading && (
                             <div className="ai-message-wrapper assistant">
                                 <div className="ai-avatar"><Bot size={14} /></div>
-                                <div className="ai-message bubble assistant-bubble loading-dots">
-                                    <span></span><span></span><span></span>
+                                <div className="ai-message bubble assistant-bubble loading-dots" style={thinkingMode === 'deep' ? { display: 'flex', alignItems: 'center', gap: 6 } : undefined}>
+                                    {thinkingMode === 'deep' ? (
+                                        <>
+                                            <Brain size={12} style={{ color: 'var(--purple, #a78bfa)' }} />
+                                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>Diep nadenken…</span>
+                                        </>
+                                    ) : (
+                                        <><span></span><span></span><span></span></>
+                                    )}
                                 </div>
                             </div>
                         )}

@@ -7,6 +7,8 @@ import { useOrg } from '@/lib/OrgContext';
 import { AppProvider } from '@/lib/AppContext';
 import Sidebar from '@/components/Sidebar';
 import AiAssistant from '@/components/AiAssistant';
+import AiStudioOverlay from '@/components/AiStudioOverlay';
+import { AiStudioProvider } from '@/lib/AiStudioContext';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import CommandPalette from '@/components/CommandPalette';
 import OnboardingWizard from '@/components/OnboardingWizard';
@@ -184,31 +186,34 @@ function AppShellInner({ children }: { children: ReactNode }) {
 
   return (
     <ErrorBoundaryLogger organizationId={orgId || undefined}>
-      <a href="#main-content" className="sr-only">
-        Ga naar hoofdinhoud
-      </a>
-      <div className="flex min-h-screen bg-[var(--bg)]">
-        <Sidebar />
-        <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
-          <header role="banner" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <Breadcrumbs />
-            <div style={{ paddingRight: 16 }}>
-              <Changelog />
+      <AiStudioProvider>
+        <a href="#main-content" className="sr-only">
+          Ga naar hoofdinhoud
+        </a>
+        <div className="flex min-h-screen bg-[var(--bg)]">
+          <Sidebar />
+          <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
+            <header role="banner" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <Breadcrumbs />
+              <div style={{ paddingRight: 16 }}>
+                <Changelog />
+              </div>
+            </header>
+            <div id="main-content" className="flex-1 w-full">
+              {children}
             </div>
-          </header>
-          <div id="main-content" className="flex-1 w-full">
-            {children}
-          </div>
-        </main>
-        <AiAssistant />
-      </div>
-      <BottomNav />
-      <CommandPalette />
-      <OnboardingWizard />
-      <OfflineIndicator />
-      <ContextualHelp />
+          </main>
+          <AiAssistant />
+          <AiStudioOverlay />
+        </div>
+        <BottomNav />
+        <CommandPalette />
+        <OnboardingWizard />
+        <OfflineIndicator />
+        <ContextualHelp />
+      </AiStudioProvider>
     </ErrorBoundaryLogger>
   );
 }

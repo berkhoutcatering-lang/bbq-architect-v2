@@ -4,7 +4,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_INSTRUCTIONS, BRAINSTORM_INSTRUCTIONS } from '@/lib/ai-prompts';
+import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_PERSONA, MODE_INSTRUCTIONS, BRAINSTORM_INSTRUCTIONS, normalizePagePath } from '@/lib/ai-prompts';
+import { getMode, isThinkingMode, type ThinkingMode } from '@/lib/ai-modes';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiUsage';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -172,6 +173,7 @@ interface ChatRequestBody {
     mode?: string;
     contextData?: Record<string, any>;
     model?: 'sonnet' | 'opus' | 'haiku';
+    thinkingMode?: ThinkingMode;
     userRole?: 'Admin' | 'Pitmaster' | 'Medewerker' | null;
 }
 
@@ -219,7 +221,9 @@ const MODEL_MAP: Record<string, string> = {
 export async function POST(req: NextRequest): Promise<NextResponse | Response> {
     try {
         const body: ChatRequestBody = await req.json();
-        const { messages, pageContext, mode, contextData, model: modelChoice, userRole } = body;
+        const { messages, pageContext, mode, contextData, model: modelChoice, thinkingMode: rawThinkingMode, userRole } = body;
+        const thinkingMode = isThinkingMode(rawThinkingMode) ? rawThinkingMode : 'standard';
+        const modeDef = getMode(thinkingMode);
 
         if (!messages || !Array.isArray(messages)) {
             return NextResponse.json({ error: 'Berichten zijn onjuist geformatteerd' }, { status: 400 });
@@ -292,8 +296,8 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                 'Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites). ' +
                 'In dit venster beantwoord je vragen over catering, horeca, recepten, inkoop, planning en bedrijfsvoering.'
             );
-        } else if (pageContext && PAGE_SYSTEM_PROMPTS[pageContext]) {
-            staticParts.push(PAGE_SYSTEM_PROMPTS[pageContext]);
+        } else if (pageContext && PAGE_SYSTEM_PROMPTS[normalizePagePath(pageContext)]) {
+            staticParts.push(PAGE_SYSTEM_PROMPTS[normalizePagePath(pageContext)]);
         } else if (pageContext) {
             staticParts.push(
                 'Je bent BBQ Copilot op pagina: ' + pageContext + '. ' +
@@ -313,7 +317,8 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         }
 
         staticParts.push(OPERATOR_INSTRUCTIONS);
-        staticParts.push(BASE_INSTRUCTIONS);
+        staticParts.push(BASE_PERSONA);
+        staticParts.push(MODE_INSTRUCTIONS[thinkingMode]);
 
         const roleConstraint = buildRoleConstraint(userRole);
         if (roleConstraint) staticParts.push(roleConstraint);
@@ -351,18 +356,37 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             return NextResponse.json({ error: 'Geen gebruikersbericht gevonden' }, { status: 400 });
         }
 
-        // Model selection: default sonnet, user can request opus or haiku
-        const selectedModel = MODEL_MAP[modelChoice || 'sonnet'] || MODEL_MAP.sonnet;
-        const maxTokens = mode === 'brainstorm' ? 8000 : 6000;
+        // Model + max_tokens worden bepaald door de denkmodus (single source of truth in ai-modes.ts).
+        // Een expliciete `model` in de request blijft alleen werken als denkmodus standaard is — anders
+        // wint de mode (bv. deep -> opus, ongeacht wat de client meestuurt).
+        let selectedModel = modeDef.model;
+        let maxTokens = modeDef.maxTokens;
+        if (thinkingMode === 'standard' && modelChoice && MODEL_MAP[modelChoice]) {
+            selectedModel = MODEL_MAP[modelChoice];
+        }
+        // Brainstorm-mode (legacy) krijgt extra ruimte ongeacht denkmodus
+        if (mode === 'brainstorm') {
+            maxTokens = Math.max(maxTokens, 4000);
+        }
 
         const client = new Anthropic({ apiKey });
 
-        const stream = client.messages.stream({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const streamParams: any = {
             model: selectedModel,
             max_tokens: maxTokens,
             system: systemBlocks,
             messages: merged,
-        });
+            temperature: modeDef.temperature,
+        };
+        // Extended thinking voor deep-mode (Opus 4.7 = adaptive + output_config.effort).
+        // Temperature blijft staan; geen verplichte override meer.
+        if (modeDef.thinking) {
+            streamParams.thinking = { type: 'adaptive' };
+            streamParams.output_config = { effort: modeDef.thinking.effort };
+        }
+
+        const stream = client.messages.stream(streamParams);
 
         const encoder = new TextEncoder();
         const readable = new ReadableStream({
@@ -379,6 +403,12 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                             if (delta) {
                                 fullText += delta;
                                 controller.enqueue(encoder.encode('data: ' + JSON.stringify({ delta }) + '\n\n'));
+                            }
+                        } else if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') {
+                            // Extended thinking stream — apart kanaal zodat UI dit collapsible kan tonen
+                            const thinking = event.delta.thinking;
+                            if (thinking) {
+                                controller.enqueue(encoder.encode('data: ' + JSON.stringify({ thinking }) + '\n\n'));
                             }
                         } else if (event.type === 'message_delta' && event.usage) {
                             // final output_tokens arrives here
@@ -407,7 +437,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                             tokens_cache_read: usage.cache_read_input_tokens ?? 0,
                             tokens_cache_creation: usage.cache_creation_input_tokens ?? 0,
                             cost_eur_cents: cost,
-                            metadata: { mode, pageContext },
+                            metadata: { mode, pageContext, thinkingMode },
                         }).catch(function (e) { console.warn('[chat] ai_usage log failed:', (e as Error).message); });
                     }
                     controller.enqueue(encoder.encode('data: ' + JSON.stringify({
