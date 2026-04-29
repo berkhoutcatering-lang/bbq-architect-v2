@@ -541,7 +541,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                 ? lastContent.filter((b: any) => b && b.type === 'text').map((b: any) => b.text || '').join('\n')
                 : '';
         const lastUserMsg = (rawLastUserContent.split('\n\n').pop() || '').toLowerCase();
-        const isOnGerechten = pageContext === '/gerechten' || pageContext === '/menu-engineering' || pageContext === '/ai-chat';
+        const isOnGerechten = pageContext === '/gerechten' || pageContext === '/menu-engineering' || pageContext === '/ai-chat' || pageContext === '/recepten';
         const wantsBrainstorm = isOnGerechten && (
             /\b(bedenk|brainstorm|maak|geef me|verzin|kom met|stel\s*samen|kom\s*op\s*met)\b/.test(lastUserMsg) &&
             /\b\d+\b/.test(lastUserMsg) &&
@@ -777,6 +777,14 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             pageContext === '/facturen' ||
             pageContext === '/recepten' ||
             pageContext === '/materieel' ||
+            pageContext === '/agenda' ||
+            pageContext === '/inkoop' ||
+            pageContext === '/uren' ||
+            pageContext === '/haccp' ||
+            pageContext === '/klanten' ||
+            pageContext === '/prep-counter' ||
+            pageContext === '/logistiek' ||
+            pageContext === '/price-intelligence' ||
             (pageContext && pageContext.startsWith('/events'))
         );
 

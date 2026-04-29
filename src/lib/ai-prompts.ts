@@ -376,6 +376,35 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '',
         'Bij waardevolle gesprekken: stel save_conversation voor (vraag toestemming, doe nooit automatisch). Mappen aanmaken via create_folder.',
     ].join('\n'),
+
+    '/klanten': [
+        '**Klanten** — Hop & Bites contact-database (zakelijk + particulier).',
+        'Context bevat klanten met aantal_events, totaal_omzet, laatste_event_datum.',
+        '',
+        '## Tool-use forcing',
+        'Server forceert respond_with_blocks — antwoord ALTIJD in blocks, geen markdown-tabellen.',
+        '',
+        '## Hoofdtaken',
+        '- "Top klanten?" → metric-blocks per klant (omzet + aantal events)',
+        '- "Wie heeft lang niets besteld?" → warning-blocks met klanten >6 maanden inactief',
+        '- "Trouwste klanten?" → bullets-block met top 5 op basis van event-frequentie',
+        '- "Klant X bellen voor herhaalboeking" → action_hint',
+    ].join('\n'),
+
+    '/prep-counter': [
+        '**Prep Counter** — Hop & Bites real-time prep-tracker tijdens service of mise-en-place.',
+        'Operator wil snel: tellen, afvinken, voortgang per gerecht/event.',
+        '',
+        '## Tool-use forcing',
+        'Server forceert respond_with_blocks — kort, geen essays. Operator staat in de keuken.',
+        '',
+        '## Hoofdtaken',
+        '- "Hoeveel ben ik klaar?" → metric-block met percentage + aantal afgevinkt',
+        '- "Wat moet nog?" → bullets-block met openstaande prep-taken',
+        '- "Volgende taak?" → info-block met top 1 prioriteit',
+        '- "Klaar met X" → action_hint naar afvink-actie (later: directe tool)',
+    ].join('\n'),
+
 };
 
 export const OPERATOR_INSTRUCTIONS = [

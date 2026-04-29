@@ -80,6 +80,11 @@ interface ContextData {
     folders?: Record<string, unknown>[];
     recenteOffertes?: Record<string, unknown>[];
     offerteSamenvatting?: Record<string, number>;
+    klanten?: Record<string, unknown>[];
+    klantStats?: Record<string, { events: number; omzet: number; laatste: string }>;
+    prepVoortgang?: { totaal: number; klaar: number; percentage: number };
+    event?: Record<string, unknown>;
+    menu_recepten?: Record<string, unknown>[];
 }
 
 export const ACTION_TYPES: Record<string, ActionTypeDef> = {
@@ -990,6 +995,64 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.gangen = gangEdRes.data || [];
             const offEdRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp').order('datum', { ascending: false }).limit(5);
             ctx.recenteOffertes = offEdRes.data || [];
+        }
+
+        if (pathname === '/klanten') {
+            // Klanten + aggregaties: aantal events per klant + totaal-omzet (op basis van bevestigde offertes).
+            const klRes = await supabase.from('klanten').select('id,naam,email,telefoon,bedrijf,laatste_contact').order('naam').limit(100);
+            ctx.klanten = klRes.data || [];
+            const offKlRes = await supabase.from('offertes').select('client_naam,status,basis_prijs_pp,aantal_gasten,korting,items,datum').limit(500);
+            const klStats: Record<string, { events: number; omzet: number; laatste: string }> = {};
+            (offKlRes.data || []).forEach(function (o: Record<string, unknown>) {
+                if (!['geaccepteerd', 'goedgekeurd', 'betaald', 'voltooid'].includes((o.status as string) || '')) return;
+                const naam = (o.client_naam as string) || 'Onbekend';
+                if (!klStats[naam]) klStats[naam] = { events: 0, omzet: 0, laatste: '' };
+                klStats[naam].events += 1;
+                klStats[naam].omzet += calcOfferteTotaal(o).totaal;
+                if ((o.datum as string) > klStats[naam].laatste) klStats[naam].laatste = (o.datum as string) || '';
+            });
+            ctx.klantStats = klStats;
+        }
+
+        if (pathname === '/prep-counter') {
+            const todayPC = new Date().toISOString().slice(0, 10);
+            const pcEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status')
+                .in('status', ['confirmed', 'pending'])
+                .gte('date', todayPC)
+                .order('date', { ascending: true }).limit(5);
+            ctx.events = pcEvRes.data || [];
+            ctx.volgendEvent = (pcEvRes.data || [])[0] || null;
+            const pcIds = (pcEvRes.data || []).map(function (e: Record<string, unknown>) { return e.id; });
+            if (pcIds.length > 0) {
+                const ptRes = await supabase.from('prep_tasks').select('*').in('event_id', pcIds as (string | number)[]).order('dagen');
+                ctx.prep_tasks = ptRes.data || [];
+                const totaal = (ptRes.data || []).length;
+                const klaar = (ptRes.data || []).filter(function (t: Record<string, unknown>) { return t.status === 'done' || t.status === 'klaar'; }).length;
+                ctx.prepVoortgang = { totaal, klaar, percentage: totaal > 0 ? Math.round((klaar / totaal) * 100) : 0 };
+            }
+        }
+
+        // /events/[id]/hub — fetch het specifieke event op basis van het id-segment in de URL.
+        // Cruciaal: zonder dit krijgt de AI geen event-data en faalt elke briefing/inkooplijst-vraag.
+        if (pathname.startsWith('/events/') && pathname.endsWith('/hub')) {
+            const m = pathname.match(/^\/events\/([^/]+)\/hub$/);
+            const eventId = m ? m[1] : null;
+            if (eventId) {
+                const eventRes = await supabase.from('events').select('*').eq('id', eventId).maybeSingle();
+                if (eventRes.data) {
+                    ctx.event = eventRes.data;
+                    // Prep-tasks voor dit event
+                    const ptHubRes = await supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen');
+                    ctx.prep_tasks = ptHubRes.data || [];
+                    // Menu-items als gerechten
+                    const menuIds = (eventRes.data.menu as string[]) || [];
+                    if (menuIds.length > 0) {
+                        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,kostprijs_pp').in('id', menuIds);
+                        ctx.menu_recepten = recRes.data || [];
+                    }
+                }
+            }
         }
 
         if (pathname === '/event-planner') {
