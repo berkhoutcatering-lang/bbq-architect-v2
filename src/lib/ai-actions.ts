@@ -85,6 +85,9 @@ interface ContextData {
     prepVoortgang?: { totaal: number; klaar: number; percentage: number };
     event?: Record<string, unknown>;
     menu_recepten?: Record<string, unknown>[];
+    event_allergies?: Record<string, unknown>[];
+    klantgesprek_seasonGerechten?: Record<string, unknown>[];
+    klantgesprek_avgPpp?: number;
 }
 
 export const ACTION_TYPES: Record<string, ActionTypeDef> = {
@@ -769,6 +772,23 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.lowStock = (invAll.data || []).filter(function (i: Record<string, unknown>) { return (i.current_stock as number) <= (i.min_stock as number); }).slice(0, 10);
             const dashOffRes = await supabase.from('offertes').select('id,nummer,status,client_naam,aantal_gasten,basis_prijs_pp,korting,items,datum').order('datum', { ascending: false }).limit(20);
             ctx.offertes = dashOffRes.data || [];
+            // Verlopen facturen — primary urgent signal voor "wat moet ik vandaag?"
+            const dashFacRes = await supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').in('status', ['concept', 'verzonden', 'verlopen']).order('vervaldatum', { ascending: true }).limit(20);
+            const todayDash = new Date().toISOString().slice(0, 10);
+            ctx.vervalAlerts = (dashFacRes.data || []).filter(function (f: Record<string, unknown>) {
+                if (!f.vervaldatum || f.status === 'betaald') return false;
+                return (f.vervaldatum as string) <= todayDash;
+            });
+            // Open prep-taken voor events <2 dagen — operator moet deze direct zien
+            const dashEventIds = (evs.data || []).filter(function (e: Record<string, unknown>) {
+                if (!e.date) return false;
+                const dgs = Math.floor((new Date(e.date as string).getTime() - Date.now()) / (24 * 3600 * 1000));
+                return dgs >= 0 && dgs <= 2;
+            }).map(function (e: Record<string, unknown>) { return e.id; });
+            if (dashEventIds.length > 0) {
+                const ptDashRes = await supabase.from('prep_tasks').select('id,event_id,naam,status,dagen').in('event_id', dashEventIds as (string | number)[]);
+                ctx.prep_tasks = (ptDashRes.data || []).filter(function (t: Record<string, unknown>) { return t.status !== 'done' && t.status !== 'klaar'; });
+            }
         }
 
         if (pathname === '/events') {
@@ -790,19 +810,22 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
         }
 
         if (pathname === '/recepten') {
-            const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime').order('naam');
+            // Volledige recept-data — anders kan AI niet schalen of ingrediënten-cross-ref doen
+            const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime,ingredienten,bereiding,allergenen,kostprijs_pp').order('naam');
             ctx.recepten = recRes.data || [];
         }
 
         if (pathname === '/gerechten') {
-            const gerRes = await supabase.from('gerechten').select('id,naam,gang_slug,actief').order('volgorde');
+            // Marge + foto-status erbij voor menu-balance + foto-prompt-suggestie
+            const gerRes = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp,verkoopprijs,marge_pct,allergenen,foto_prompt').order('volgorde');
             const gangRes = await supabase.from('gangen').select('id,naam,slug,volgorde,actief').order('volgorde');
             ctx.gerechten = gerRes.data || [];
             ctx.gangen = gangRes.data || [];
         }
 
         if (pathname === '/menu-engineering') {
-            const gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp').order('naam');
+            // BCG-analyse vereist verkoopprijs + marge + populariteit
+            const gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp,verkoopprijs,marge_pct,pijnpunten,toppunten').order('naam');
             ctx.gerechten = gerRes2.data || [];
         }
 
@@ -997,6 +1020,20 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.recenteOffertes = offEdRes.data || [];
         }
 
+        if (pathname === '/klantgesprek') {
+            // Wizard-context: top-gerechten + gemiddelde ppp voor menu-suggestie tijdens intake.
+            const gangResKg = await supabase.from('gangen').select('id,naam,slug,actief').eq('actief', true).order('volgorde');
+            ctx.gangen = gangResKg.data || [];
+            const gerKgRes = await supabase.from('gerechten').select('id,naam,gang_slug,kostprijs_pp,verkoopprijs,marge_pct,actief').eq('actief', true).order('marge_pct', { ascending: false }).limit(30);
+            ctx.gerechten = gerKgRes.data || [];
+            // Gemiddelde ppp uit recente confirmed events
+            const avgRes = await supabase.from('events').select('ppp,guests').in('status', ['confirmed', 'completed']).gt('ppp', 0).order('date', { ascending: false }).limit(20);
+            const ppps = (avgRes.data || []).map(function (e: Record<string, unknown>) { return (e.ppp as number) || 0; }).filter(function (n: number) { return n > 0; });
+            ctx.klantgesprek_avgPpp = ppps.length > 0 ? Math.round(ppps.reduce(function (a: number, b: number) { return a + b; }, 0) / ppps.length) : 45;
+            // Seizoens-passende gerechten (top 10 op marge)
+            ctx.klantgesprek_seasonGerechten = (gerKgRes.data || []).slice(0, 10);
+        }
+
         if (pathname === '/klanten') {
             // Klanten + aggregaties: aantal events per klant + totaal-omzet (op basis van bevestigde offertes).
             const klRes = await supabase.from('klanten').select('id,naam,email,telefoon,bedrijf,laatste_contact').order('naam').limit(100);
@@ -1048,9 +1085,18 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
                     // Menu-items als gerechten
                     const menuIds = (eventRes.data.menu as string[]) || [];
                     if (menuIds.length > 0) {
-                        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,kostprijs_pp').in('id', menuIds);
+                        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,kostprijs_pp,ingredienten').in('id', menuIds);
                         ctx.menu_recepten = recRes.data || [];
                     }
+                    // Factuur voor dit event — voor winstgevendheid + status
+                    const facHubRes = await supabase.from('facturen').select('id,nummer,status,datum,vervaldatum,items').eq('event_id', eventId);
+                    ctx.facturen = facHubRes.data || [];
+                    // Allergies van gasten
+                    const allergyRes = await supabase.from('event_allergies').select('*').eq('event_id', eventId);
+                    if (allergyRes.data) ctx.event_allergies = allergyRes.data;
+                    // HACCP records voor dit event
+                    const hacHubRes = await supabase.from('haccp_records').select('*').eq('event_id', eventId).order('datum', { ascending: false }).limit(20);
+                    ctx.haccp_records = hacHubRes.data || [];
                 }
             }
         }
@@ -1342,6 +1388,77 @@ export function formatContextForPrompt(contextData: ContextData | null): string 
         lines.push('**Offerte statusverdeling:**');
         Object.entries(contextData.offerteSamenvatting).forEach(function (entry) {
             lines.push('- ' + entry[0] + ': ' + entry[1] + ' offerte(s)');
+        });
+        lines.push('');
+    }
+
+    // /events/[id]/hub: dit is HET event waarvoor we briefing/inkoop/winst genereren.
+    // Alle hub-acties moeten op dit event-id gebaseerd zijn.
+    if (contextData.event) {
+        const e = contextData.event;
+        const dagenTot = e.date ? Math.floor((new Date(e.date as string).getTime() - Date.now()) / (24 * 3600 * 1000)) : null;
+        lines.push('**HUIDIG EVENT (id=' + e.id + ' — gebruik dit id voor alle event-acties op deze pagina):**');
+        lines.push('- Naam: ' + (e.name || '?'));
+        lines.push('- Datum: ' + (e.date || '?') + (dagenTot !== null ? ' (' + (dagenTot < 0 ? 'voltooid' : dagenTot + ' dagen tot event') + ')' : ''));
+        lines.push('- Gasten: ' + (e.guests || '?'));
+        lines.push('- Locatie: ' + (e.location || '?'));
+        lines.push('- Status: ' + (e.status || '?'));
+        lines.push('- Klant: ' + (e.client_naam || '?'));
+        if (e.ppp) lines.push('- Prijs p.p.: ' + fmtEur(e.ppp as number) + (e.guests ? ' | totaal omzet: ' + fmtEur((e.ppp as number) * (e.guests as number)) : ''));
+        if (e.notitie) lines.push('- Notitie: ' + e.notitie);
+        lines.push('');
+    }
+    if (contextData.menu_recepten && contextData.menu_recepten.length > 0) {
+        lines.push('**Menu (gekoppelde recepten — ' + contextData.menu_recepten.length + '):**');
+        contextData.menu_recepten.forEach(function (r) {
+            lines.push('- [' + r.id + '] ' + r.naam + ' | ' + (r.categorie || '?') + ' | ' + (r.porties || '?') + ' porties' + (r.kostprijs_pp ? ' | kost ' + fmtEur(r.kostprijs_pp as number) + '/p' : ''));
+        });
+        lines.push('');
+    }
+    if (contextData.event_allergies && contextData.event_allergies.length > 0) {
+        lines.push('**Allergieën gasten (' + contextData.event_allergies.length + '):**');
+        contextData.event_allergies.slice(0, 20).forEach(function (a) {
+            lines.push('- ' + (a.naam_gast || 'gast') + ': ' + (a.allergeen || '?') + (a.severity ? ' (' + a.severity + ')' : ''));
+        });
+        lines.push('');
+    }
+
+    // /klanten: klantStats voor top-N + retention queries
+    if (contextData.klantStats && Object.keys(contextData.klantStats).length > 0) {
+        const sorted = Object.entries(contextData.klantStats).sort(function (a, b) { return b[1].omzet - a[1].omzet; });
+        lines.push('**Klant-statistieken (top ' + Math.min(sorted.length, 15) + ' op omzet):**');
+        sorted.slice(0, 15).forEach(function (entry) {
+            const naam = entry[0];
+            const s = entry[1];
+            const dagenSinds = s.laatste ? Math.floor((Date.now() - new Date(s.laatste).getTime()) / (24 * 3600 * 1000)) : null;
+            lines.push('- ' + naam + ': ' + s.events + ' events | ' + fmtEur(s.omzet) + ' omzet | laatste ' + (s.laatste || '?') + (dagenSinds !== null ? ' (' + dagenSinds + ' dagen geleden)' : ''));
+        });
+        lines.push('');
+    }
+    if (contextData.klanten && contextData.klanten.length > 0) {
+        lines.push('**Klanten-database (' + contextData.klanten.length + ' totaal):**');
+        contextData.klanten.slice(0, 30).forEach(function (k) {
+            lines.push('- [' + k.id + '] ' + (k.naam || '?') + (k.bedrijf ? ' (' + k.bedrijf + ')' : '') + (k.telefoon ? ' | tel: ' + k.telefoon : '') + (k.email ? ' | ' + k.email : ''));
+        });
+        lines.push('');
+    }
+
+    // /prep-counter: voortgang
+    if (contextData.prepVoortgang) {
+        const p = contextData.prepVoortgang;
+        lines.push('**Prep voortgang:** ' + p.klaar + '/' + p.totaal + ' afgevinkt (' + p.percentage + '%)');
+        lines.push('');
+    }
+
+    // /klantgesprek: wizard-context voor menu-suggestie
+    if (contextData.klantgesprek_avgPpp) {
+        lines.push('**Gemiddelde prijs/persoon (recente confirmed events):** ' + fmtEur(contextData.klantgesprek_avgPpp));
+        lines.push('');
+    }
+    if (contextData.klantgesprek_seasonGerechten && contextData.klantgesprek_seasonGerechten.length > 0) {
+        lines.push('**Top-gerechten op marge (voor menu-suggestie):**');
+        contextData.klantgesprek_seasonGerechten.forEach(function (g) {
+            lines.push('- [' + g.id + '] ' + g.naam + ' | gang: ' + (g.gang_slug || '?') + ' | marge: ' + (g.marge_pct || '?') + '% | ' + (g.verkoopprijs ? fmtEur(g.verkoopprijs as number) : 'geen prijs'));
         });
         lines.push('');
     }

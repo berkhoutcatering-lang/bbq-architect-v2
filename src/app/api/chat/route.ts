@@ -316,7 +316,10 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             }
         }
 
-        staticParts.push(OPERATOR_INSTRUCTIONS);
+        // OPERATOR_INSTRUCTIONS bevatte <<<ACTION:>>> voorbeelden die nu conflicteren met
+        // tool-use forcing — Anthropic dwingt het juiste tool-schema af, dus deze prompt-
+        // sectie is overbodig én schadelijk (AI gaat letterlijk "<<<ACTION:>>>" output
+        // schrijven in blocks). Bewust niet meegestuurd.
         staticParts.push(BASE_PERSONA);
         staticParts.push(MODE_INSTRUCTIONS[thinkingMode]);
 
@@ -782,6 +785,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             pageContext === '/uren' ||
             pageContext === '/haccp' ||
             pageContext === '/klanten' ||
+            pageContext === '/klantgesprek' ||
             pageContext === '/prep-counter' ||
             pageContext === '/logistiek' ||
             pageContext === '/price-intelligence' ||
