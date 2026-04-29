@@ -789,6 +789,8 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             pageContext === '/prep-counter' ||
             pageContext === '/logistiek' ||
             pageContext === '/price-intelligence' ||
+            pageContext === '/financien' ||
+            pageContext === '/boekhouding' ||
             (pageContext && pageContext.startsWith('/events'))
         );
 

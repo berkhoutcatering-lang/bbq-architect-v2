@@ -872,6 +872,20 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             const inkRes = await supabase.from('inkooplijsten').select('id,event_id,items').order('id', { ascending: false }).limit(5);
             ctx.leveranciers = levRes.data || [];
             ctx.inkooplijsten = inkRes.data || [];
+            // Volgend event meegeven zodat AI direct een inkooplijst kan voorstellen
+            // zonder de operator om naam/gasten/menu te vragen.
+            const todayInk = new Date().toISOString().slice(0, 10);
+            const inkEvRes = await supabase.from('events')
+                .select('id,name,date,guests,status,menu,location,client_naam,ppp')
+                .in('status', ['confirmed', 'pending', 'optie'])
+                .gte('date', todayInk)
+                .order('date', { ascending: true })
+                .limit(5);
+            ctx.events = inkEvRes.data || [];
+            ctx.volgendEvent = (inkEvRes.data || [])[0] || null;
+            // Voorraad voor cross-check: wat heb ik al?
+            const inkInvRes = await supabase.from('inventory').select('id,naam,current_stock,min_stock,unit,purchase_price,leverancier_id').order('naam');
+            ctx.inventory = inkInvRes.data || [];
         }
 
         if (pathname === '/haccp') {
