@@ -5,6 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import AllergenBadges from '@/components/AllergenBadges';
+import MenuModuleTabs from '@/components/MenuModuleTabs';
 import {
     Sparkles, Plus, Search, X, Clock, Users, ChefHat, Trash2, Save,
     AlertTriangle, Loader2, Wand2, ArrowLeft, ChevronLeft, ChevronRight,
@@ -106,10 +107,10 @@ export default function ReceptenPage() {
 
     return (
         <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
+            <MenuModuleTabs />
             {/* HEADER */}
             <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 700, marginBottom: 6 }}>De keuken</div>
                     <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>Receptenboek</h1>
                     <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.total} recepten · AI bedenkt nieuwe in jouw stijl</p>
                 </div>

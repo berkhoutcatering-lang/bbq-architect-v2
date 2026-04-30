@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
+import MenuModuleTabs from '@/components/MenuModuleTabs';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, ChefHat, Users, Euro, Save, ShoppingCart, AlertTriangle, Check } from 'lucide-react';
@@ -363,10 +364,11 @@ export default function MenuEngineering() {
         </div>
       )}
 
+      <MenuModuleTabs />
+
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.2em', fontWeight: 700, marginBottom: 6 }}>De keuken</div>
           <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>Menu Engineering</h1>
           <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.totaal} gerechten · AI componeert menu&apos;s in jouw stijl</p>
         </div>

@@ -9,6 +9,7 @@ import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
+import MenuModuleTabs from '@/components/MenuModuleTabs';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
 import { Link, Unlink } from 'lucide-react';
@@ -369,6 +370,7 @@ export default function Gerechten() {
 
     return (
         <div className="main-content">
+            <MenuModuleTabs />
             <PageHeader
                 title="Gerechten Beheer"
                 description="Overzicht van al je gerechten met ingredienten en kostprijzen"
