@@ -26,7 +26,6 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/prep-counter': ['Hoeveel ben ik klaar?', 'Wat staat nog open?', 'Volgende prioriteit?', 'Klaar met deze taak'],
   '/klantgesprek': ['Wat moet ik vragen bij een intake?', 'Gemiddelde prijs per persoon', 'Hoeveel vlees per persoon?', 'Checklist klantbezoek'],
   '/foto-archief': ['Hoe organiseer ik foto\'s per event?', 'Categorisatie tips', 'Export naar klant', 'Watermark toevoegen'],
-  '/berichten': ['Hoe bereik ik een klant?', 'Template voor offertebevestiging', 'Follow-up na event', 'Bedankbericht schrijven'],
   '/mailbox': ['Mail naar klant sturen', 'E-mail template maken', 'Verzonden mails bekijken', 'Follow-up mail sturen'],
   '/gebruikers': ['Welke rollen zijn er?', 'Toegangsrechten instellen', 'Teamlid uitnodigen', 'Rolverdeling bij events'],
   '/website': ['Hoe update ik het menu?', 'SEO tips voor mijn website', 'Galerij beheren', 'FAQ toevoegen'],
@@ -149,12 +148,6 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
     title: 'Nog geen prijsdata',
     description: 'Importeer CSV-prijslijsten van leveranciers om prijzen te vergelijken en marges te beschermen.',
     actionLabel: 'Importeer prijzen',
-  },
-  '/berichten': {
-    icon: 'Mail',
-    title: 'Geen berichten',
-    description: 'Je hebt nog geen berichten. Verstuur je eerste bericht naar een klant of teamlid.',
-    actionLabel: 'Nieuw bericht',
   },
   '/gebruikers': {
     icon: 'UsersCog',

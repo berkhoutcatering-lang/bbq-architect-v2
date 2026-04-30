@@ -30,7 +30,6 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/foto-archief': { label: 'Foto-archief', section: 'Systeem' },
     '/gebruikers': { label: 'Gebruikers', section: 'Systeem' },
     '/instellingen': { label: 'Instellingen', section: 'Systeem' },
-    '/berichten': { label: 'Berichten', section: 'Systeem' },
     '/mailbox': { label: 'Mailbox', section: 'Systeem' },
     '/website': { label: 'Website Beheer', section: 'Systeem' },
     '/faq': { label: 'FAQ', section: 'Systeem' },
