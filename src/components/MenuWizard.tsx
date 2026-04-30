@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Settings } from '@/types';
+import DishQuickEditor, { type DishDraft } from '@/components/DishQuickEditor';
+import { Plus, Pencil } from 'lucide-react';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -38,6 +40,12 @@ interface DishRow {
     naam: string;
     gang_slug: string;
     beschrijving?: string;
+    kostprijs_pp?: number;
+    verkoopprijs?: number;
+    marge_pct?: number;
+    ingredienten?: string[];
+    allergenen?: string[];
+    foto_url?: string;
 }
 
 export default function MenuWizard({ onComplete, onClose, settings, existingOfferte }: MenuWizardProps) {
@@ -55,6 +63,30 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
     const [clientNaam, setClientNaam] = useState(ex.client_naam || '');
     const [clientAdres, setClientAdres] = useState(ex.client_adres || '');
     const [datum, setDatum] = useState(ex.datum || new Date().toISOString().split('T')[0]);
+    const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
+    const [editingDish, setEditingDish] = useState<DishRow | null>(null);
+
+    function refreshGerechten() {
+        if (!supabase) return;
+        supabase.from('gerechten').select('*').eq('actief', true).order('volgorde').then(function (res) {
+            if (res.data) setGerechten(res.data as DishRow[]);
+        });
+    }
+
+    function handleDishSaved(saved: DishDraft) {
+        // Vernieuw de catalog uit DB (creates + edits met sync zijn al opgeslagen).
+        refreshGerechten();
+        // Bij create: meteen toevoegen aan huidige gang-selectie.
+        if (editorMode === 'create' && currentGang && saved.gang_slug === currentGang.slug) {
+            setSelected(prev => {
+                const list = (prev[currentGang.slug] || []).slice();
+                if (list.indexOf(saved.naam) < 0) list.push(saved.naam);
+                return Object.assign({}, prev, { [currentGang.slug]: list });
+            });
+        }
+        setEditorMode(null);
+        setEditingDish(null);
+    }
 
     useEffect(function () {
         if (!supabase) return;
@@ -197,13 +229,56 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                             <div className="gang-counter">{selectedCount} / {currentGang.minimum}</div>
                         </div>
                         <div className="dish-select-grid">
+                            <button
+                                type="button"
+                                className="dish-select-btn dish-select-btn--add"
+                                onClick={function () { setEditingDish(null); setEditorMode('create'); }}
+                                style={{
+                                    borderStyle: 'dashed',
+                                    color: 'var(--brand)',
+                                    minHeight: 64,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                <Plus size={16} />
+                                Nieuw gerecht
+                            </button>
                             {gangDishes.map(function (dish) {
                                 const isSelected = (selected[currentGang.slug] || []).indexOf(dish.naam) >= 0;
                                 return (
-                                    <button key={dish.id} className={'dish-select-btn' + (isSelected ? ' selected' : '')} onClick={function () { toggleDish(currentGang.slug, dish.naam); }}>
-                                        <div className="dish-select-name">{dish.naam}</div>
-                                        <div className="dish-select-desc">{dish.beschrijving || ''}</div>
-                                    </button>
+                                    <div key={dish.id} style={{ position: 'relative' }}>
+                                        <button className={'dish-select-btn' + (isSelected ? ' selected' : '')} onClick={function () { toggleDish(currentGang.slug, dish.naam); }} style={{ width: '100%' }}>
+                                            <div className="dish-select-name">{dish.naam}</div>
+                                            <div className="dish-select-desc">{dish.beschrijving || ''}</div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={function (e) { e.stopPropagation(); setEditingDish(dish); setEditorMode('edit'); }}
+                                            aria-label={'Gerecht ' + dish.naam + ' aanpassen'}
+                                            title="Aanpassen"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 6,
+                                                right: 6,
+                                                width: 28,
+                                                height: 28,
+                                                borderRadius: 6,
+                                                border: '1px solid var(--border)',
+                                                background: 'rgba(0,0,0,.35)',
+                                                color: 'var(--muted)',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <Pencil size={12} />
+                                        </button>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -291,6 +366,27 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                     )}
                 </div>
             </div>
+
+            {editorMode && (
+                <DishQuickEditor
+                    mode={editorMode}
+                    gangSlug={currentGang?.slug}
+                    gangOptions={gangen.map(g => ({ slug: g.slug, naam: g.naam }))}
+                    existing={editingDish ? {
+                        id: editingDish.id,
+                        naam: editingDish.naam,
+                        gang_slug: editingDish.gang_slug,
+                        beschrijving: editingDish.beschrijving,
+                        kostprijs_pp: editingDish.kostprijs_pp,
+                        verkoopprijs: editingDish.verkoopprijs,
+                        ingredienten: editingDish.ingredienten,
+                        allergenen: editingDish.allergenen,
+                        foto_url: editingDish.foto_url,
+                    } : null}
+                    onSave={handleDishSaved}
+                    onClose={() => { setEditorMode(null); setEditingDish(null); }}
+                />
+            )}
         </div>
     );
 }
