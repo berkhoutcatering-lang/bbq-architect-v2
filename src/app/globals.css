@@ -5764,10 +5764,19 @@ body {
   }
   .page-actions {
     width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
   }
-  .page-actions .btn {
-    flex: 1;
+  .page-actions > button,
+  .page-actions .btn,
+  .page-actions .btn-gold,
+  .page-actions .btn-gold-outline {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
     justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -6169,6 +6178,131 @@ textarea:focus-visible,
     padding-left: 12px;
     padding-right: 12px;
   }
+}
+
+/* Menu-engineering stats grid — 4 kolom desktop, 2 kolom mobile */
+.me-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 767px) {
+  .me-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Voorraad KPI strip — 5 kolom desktop, 2 kolom mobile */
+.voorraad-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 767px) {
+  .voorraad-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
+
+/* Voorraad action card-grid — 3 kolom desktop, 1 kolom mobile (cards zijn rijk dus stapelen beter) */
+.voorraad-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 1023px) {
+  .voorraad-action-grid { grid-template-columns: 1fr; }
+}
+
+/* PageHint — info banner met dismiss. Desktop ruimer, mobile compacter (description 2 regels max, "Niet meer tonen" tekst verborgen, alleen X-knop). */
+.page-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 15%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--blue) 50%, transparent);
+  max-height: 80px;
+  overflow: hidden;
+  animation: fadeInDown 0.35s ease-out;
+}
+.page-hint__icon {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--blue) 70%, transparent);
+  display: flex;
+  align-items: center;
+}
+.page-hint__body {
+  flex: 1;
+  min-width: 0;
+}
+.page-hint__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+.page-hint__desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.page-hint__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.page-hint__action {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--blue) 80%, transparent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.page-hint__buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.page-hint__dismiss-text {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 6px 8px;
+  white-space: nowrap;
+  min-height: 32px;
+}
+.page-hint__close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
+}
+
+@media (max-width: 767px) {
+  .page-hint {
+    padding: 8px 10px;
+    gap: 8px;
+    max-height: none;
+  }
+  .page-hint__title { font-size: 12px; }
+  .page-hint__desc {
+    font-size: 11px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .page-hint__dismiss-text { display: none; }
 }
 
 /* Active-resource pill — desktop default + mobile 44px tap targets */

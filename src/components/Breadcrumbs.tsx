@@ -7,8 +7,8 @@ import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 
 const routeMap: Record<string, { label: string; section: string }> = {
     '/menu-engineering': { label: 'Menu Engineering', section: 'Keuken' },
-    '/recepten': { label: 'Recepten', section: 'Keuken' },
     '/gerechten': { label: 'Gerechten', section: 'Keuken' },
+    '/recepten': { label: 'Recepten', section: 'Keuken' },
     '/ai-chat': { label: 'Pitmaster Studio', section: 'Keuken' },
     '/agenda': { label: 'Agenda', section: 'Operatie' },
     '/events': { label: 'Events', section: 'Operatie' },
@@ -17,7 +17,6 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/prep-counter': { label: 'Prep Counter', section: 'Operatie' },
     '/klantgesprek': { label: 'Klantgesprek', section: 'Operatie' },
     '/offertes': { label: 'Offertes', section: 'Verkoop' },
-    '/offerte-editor': { label: 'Snel Aanmaken', section: 'Verkoop' },
     '/facturen': { label: 'Facturen', section: 'Verkoop' },
     '/klanten': { label: 'Klanten', section: 'Verkoop' },
     '/financien': { label: 'Analytics', section: 'Verkoop' },

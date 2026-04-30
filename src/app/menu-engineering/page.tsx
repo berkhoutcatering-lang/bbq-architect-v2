@@ -398,8 +398,8 @@ export default function MenuEngineering() {
 
       {gerechten.length === 0 && <EmptyState page="/menu-engineering" />}
 
-      {/* STATS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+      {/* STATS — responsive: 4 kolom desktop, 2 kolom mobile */}
+      <div className="me-stats-grid">
         {[
           { label: 'Totaal gerechten', value: stats.totaal, sub: `${stats.actief} actief` },
           { label: 'Met kostprijs', value: stats.metKostprijs, sub: 'berekend' },

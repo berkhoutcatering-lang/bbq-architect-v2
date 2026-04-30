@@ -31,10 +31,9 @@ export const navSections: NavSection[] = [
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "keuken",
-        description: "Menu, recepten, gerechten en je AI Pitmaster.",
+        description: "Gerechten, menu-analyse en je AI Pitmaster.",
         children: [
-            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Overzicht van al je gerechten" },
-            { label: "Recepten", icon: <BookOpen size={16} />, href: "/recepten", description: "Beheer al je recepten en bereidingswijzen" },
+            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Overzicht van al je gerechten en recepten" },
             { label: "Menu Engineering", icon: <UtensilsCrossed size={16} />, href: "/menu-engineering", description: "BCG-analyse: marges en populariteit" },
             { label: "Pitmaster Studio", icon: <Palette size={16} />, href: "/ai-chat", description: "Je AI-assistent voor brainstorm en Q&A" },
         ],

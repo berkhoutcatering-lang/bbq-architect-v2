@@ -625,7 +625,7 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }} className="vorraad-kpi-grid">
+            <div className="voorraad-kpi-grid">
                 <StatTile
                     label="Voorraadwaarde"
                     value={fmt(totalValue)}
@@ -778,7 +778,7 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList 
     void inventory;  /* placeholder voor future use */
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }} className="voorraad-action-grid">
+        <div className="voorraad-action-grid">
             {/* Card 1 — Onder par-level */}
             <MetalCard style={{ borderColor: lowStock.length > 0 ? 'rgba(239,68,68,.3)' : undefined }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: lowStock.length > 0 ? 'rgba(239,68,68,.04)' : 'transparent' }}>
