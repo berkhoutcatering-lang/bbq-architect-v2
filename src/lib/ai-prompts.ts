@@ -283,22 +283,16 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         'Onderhoudsalerts in context: items >90d zonder onderhoud — wijs hier proactief op via warning-block.',
     ].join('\n'),
 
-    '/boekhouding': [
-        '**Boekhouding** — Hop & Bites grootboek + cashflow.',
-        'Je hebt overzicht van inkomsten/uitgaven inclusief berekende KPIs: totaalomzet, betaald, openstaand, verlopen.',
-        'Je helpt met financieel inzicht, cashflow-analyse en rendement-overzichten.',
-        'Gebruik de boekhoudingKPIs uit de context direct voor samenvattingen — reken er niet zelf doorheen.',
-        'Adviseer over: winstmarges (streef >65% bruto), cashflow-planning, BTW-administratie.',
-        'Food cost ratio catering: 28-35%. Alles daarboven is een risico voor winstgevendheid.',
-        'BTW-aangifte: kwartaal of maand afhankelijk van omzet. Zet 21% BTW apart op spaarrekening.',
-        'Signaleer verlopen facturen (verlopen status) en adviseer over incasso-stappen.',
-        'BELANGRIJK: de context bevat kant-en-klare KPI-bedragen. Gebruik deze direct voor overzichten.',
-    ].join('\n'),
+    /* /boekhouding gemerged in /financien 2026-04-30: alle 4 tabs (Winst & Verlies,
+       Uitgaven, BTW, Top Klanten) zitten nu samen met het Dashboard onder /financien?tab=...
+       Eén AI-prompt hieronder dekt alles. */
 
     '/financien': [
-        '**Financiën** — Hop & Bites maandelijkse P&L (omzet, foodcost, arbeid, netto).',
-        'Deze pagina toont een maandelijkse P&L: omzet, foodcost, arbeidskosten en netto winst per maand.',
-        'Je hebt toegang tot financialData in de context: maandelijkse omzet, foodcost, arbeidsuren en nettowinst.',
+        '**Financiën** — Hop & Bites finance command-center (Dashboard + Boekhouding).',
+        'Vijf tabs: dashboard (forecast P&L op offerte-basis), wv (winst & verlies uit facturen), uitgaven (bonnen + leveranciers), btw (te dragen + voorbelasting + saldo), clients (top klanten).',
+        'Context bevat: offertes (forecast), facturen + boekhoudingKPIs (realisatie), time_logs (arbeid), financialData (maandelijkse P&L).',
+        'Gebruik boekhoudingKPIs en financialData direct uit context — reken er niet zelf doorheen.',
+        '',
         'Gebruik de cijfers uit de context direct — reken er niet zelf doorheen.',
         'Streefwaarden voor BBQ catering: bruto marge >65%, foodcost ratio 28-35%, arbeidskosten <25% van omzet.',
         'Signaleer maanden met lage marge of hoge kosten en stel verbeteringen voor.',

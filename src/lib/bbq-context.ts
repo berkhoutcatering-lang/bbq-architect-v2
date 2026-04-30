@@ -192,7 +192,7 @@ export async function loadPageContext(pathname: string): Promise<Record<string, 
         if (pathname.startsWith('/uren')) return await loadUrenContext(sb);
         if (pathname.startsWith('/materieel')) return await loadMaterieelContext(sb);
         if (pathname.startsWith('/logistiek')) return await loadLogistiekContext(sb);
-        if (pathname.startsWith('/boekhouding')) return await loadBoekhoudingContext(sb);
+        if (pathname.startsWith('/boekhouding') || pathname.startsWith('/financien')) return await loadBoekhoudingContext(sb);
         if (pathname.startsWith('/menu-engineering')) return await loadMenuEngineeringContext(sb);
         return {};
     } catch (err) {

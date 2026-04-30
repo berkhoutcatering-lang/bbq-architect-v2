@@ -403,7 +403,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Winstgevendheid berekenen',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/facturen', '/boekhouding'],
+        pages: ['/', '/events', '/facturen', '/financien'],
         icon: 'LineChart',
         color: '#22c55e',
         tool: 'getEventWinstgevendheid',
@@ -976,27 +976,27 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.haccp_vandaag = svcHacRes.data || [];
         }
 
-        if (pathname === '/boekhouding') {
-            const offBRes = await supabase.from('offertes').select('id,nummer,status,client_naam,basis_prijs_pp,aantal_gasten,korting,items,datum').order('datum', { ascending: false }).limit(50);
-            const facBRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
-            ctx.offertes = offBRes.data || [];
-            ctx.facturen = facBRes.data || [];
+        if (pathname === '/financien') {
+            // Combineerde context voor /financien dashboard + alle 4 boekhouding-tabs
+            // (Winst & Verlies, Uitgaven, BTW, Top Klanten). /boekhouding redirect
+            // hierheen, dus de hele context laden ongeacht ?tab=...
+            const offFinRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,basis_prijs_pp,aantal_gasten,korting,items,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(100);
+            const facFinRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
+            const urenFinRes = await supabase.from('time_logs').select('id,datum,uren,medewerker').order('datum', { ascending: false }).limit(200);
+            ctx.offertes = offFinRes.data || [];
+            ctx.facturen = facFinRes.data || [];
+            ctx.time_logs = urenFinRes.data || [];
+
+            // Boekhouding-KPIs uit facturen
             let totaalOmzet = 0, totaalBetaald = 0, totaalOpenstaand = 0, totaalVerlopen = 0;
-            (facBRes.data || []).forEach(function (f: Record<string, unknown>) {
+            (facFinRes.data || []).forEach(function (f: Record<string, unknown>) {
                 const t = calcFactuurTotaal(f);
                 totaalOmzet += t.totaal;
                 if (f.status === 'betaald') totaalBetaald += t.totaal;
                 if (f.status === 'concept' || f.status === 'verzonden' || f.status === 'verlopen') totaalOpenstaand += t.totaal;
                 if (f.status === 'verlopen') totaalVerlopen += t.totaal;
             });
-            ctx.boekhoudingKPIs = { totaalOmzet: totaalOmzet, totaalBetaald: totaalBetaald, totaalOpenstaand: totaalOpenstaand, totaalVerlopen: totaalVerlopen };
-        }
-
-        if (pathname === '/financien') {
-            const offFinRes = await supabase.from('offertes').select('id,status,datum,basis_prijs_pp,aantal_gasten,items,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(100);
-            const urenFinRes = await supabase.from('time_logs').select('id,datum,uren,medewerker').order('datum', { ascending: false }).limit(200);
-            ctx.offertes = offFinRes.data || [];
-            ctx.time_logs = urenFinRes.data || [];
+            ctx.boekhoudingKPIs = { totaalOmzet, totaalBetaald, totaalOpenstaand, totaalVerlopen };
             const jaar = new Date().getFullYear();
             const maanden: Record<string, { maand: string; omzet: number; offertes: number; uren: number }> = {};
             for (let m = 1; m <= 12; m++) {

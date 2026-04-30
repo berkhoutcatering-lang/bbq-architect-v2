@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import {
     ChefHat, BookOpen, UtensilsCrossed, Calendar,
-    PartyPopper, HeartHandshake, FileText, Receipt, BarChart3, Calculator,
+    PartyPopper, HeartHandshake, FileText, Receipt, BarChart3,
     ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette, ClipboardList,
     DollarSign, Camera, Settings, Building2,
     Users, Mail, Inbox, Globe,
@@ -62,8 +62,7 @@ export const navSections: NavSection[] = [
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes", description: "Bekijk en beheer je offertes" },
             { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen", description: "Beheer je facturen en betalingen" },
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantbeheer en contactgegevens" },
-            { label: "Analytics", icon: <BarChart3 size={16} />, href: "/financien", description: "Financiele analyses en rapportages" },
-            { label: "Boekhouding", icon: <Calculator size={16} />, href: "/boekhouding", description: "Boekhouding en administratie" },
+            { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, winst & verlies, uitgaven, BTW en top klanten" },
         ],
     },
     {

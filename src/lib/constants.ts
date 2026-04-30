@@ -18,8 +18,7 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/uren': ['Uren registreren voor vandaag', 'Weekoverzicht medewerkers', 'Overuren berekenen', 'Wettelijke limieten NL'],
   '/materieel': ['Welk materieel heeft onderhoud nodig?', 'Onderhoud registreren', 'Materieel toevoegen', 'Levensduur BBQ uitleggen'],
   '/logistiek': ['Wat is nog niet afgevinkt?', 'Bus inlaadvolgorde tips', 'Koelboxen checklist', 'Vergeten items check'],
-  '/boekhouding': ['KPI overzicht', 'Verlopen facturen actie', 'BTW-aangifte tips', 'Food cost ratio berekenen'],
-  '/financien': ['Beste maand analyse', 'Marge per maand vergelijken', 'Stille maanden aanpak', 'YoY groei berekenen'],
+  '/financien': ['Beste maand analyse', 'Marge per maand vergelijken', 'Stille maanden aanpak', 'YoY groei berekenen', 'BTW-aangifte tips', 'Verlopen facturen actie'],
   '/price-intelligence': ['Leverancier vergelijken', 'Beste prijs-kwaliteit vlees', 'Inkoopprijs optimaliseren', 'Seizoensprijzen advies'],
   '/ai-chat': ['20 gerechten met buikspek', 'Thema-BBQ concepten', 'Zomermenu brainstorm', 'Onderscheidend vermogen tips'],
   '/klanten': ['Top 5 klanten op omzet', 'Wie heeft >6 maanden niets besteld?', 'Trouwste klanten op events', 'Klant herhaalboeking voorstel'],
@@ -124,12 +123,6 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
     title: 'Nog geen gerechten',
     description: 'Voeg gerechten toe om je menu te analyseren op marge, populariteit en winstgevendheid.',
     actionLabel: 'Gerecht toevoegen',
-  },
-  '/boekhouding': {
-    icon: 'Calculator',
-    title: 'Geen data beschikbaar',
-    description: 'Boekhouding wordt automatisch gevuld met gegevens uit je facturen en offertes.',
-    actionLabel: 'Naar facturen',
   },
   '/financien': {
     icon: 'Lock',

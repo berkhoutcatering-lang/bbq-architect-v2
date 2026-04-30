@@ -175,6 +175,18 @@ interface ChatRequestBody {
     model?: 'sonnet' | 'opus' | 'haiku';
     thinkingMode?: ThinkingMode;
     userRole?: 'Admin' | 'Pitmaster' | 'Medewerker' | null;
+    /**
+     * Cross-page actieve bron — een event/klant/offerte/klantgesprek waar de
+     * gebruiker aan werkt. Komt mee uit de Active-Resource-pill zodat AI
+     * context behoudt over pagina's heen. Buiten cache-prefix gehouden om
+     * niet bij elke resource-switch een prompt-cache-miss te veroorzaken.
+     */
+    activeResource?: {
+        kind: 'event' | 'klant' | 'offerte' | 'klantgesprek';
+        id: string | number;
+        label: string;
+        meta?: string;
+    } | null;
 }
 
 // Welke actietypes mag elke rol uitvoeren? De AI krijgt dit lijstje mee in
@@ -221,7 +233,7 @@ const MODEL_MAP: Record<string, string> = {
 export async function POST(req: NextRequest): Promise<NextResponse | Response> {
     try {
         const body: ChatRequestBody = await req.json();
-        const { messages, pageContext, mode, contextData, model: modelChoice, thinkingMode: rawThinkingMode, userRole } = body;
+        const { messages, pageContext, mode, contextData, model: modelChoice, thinkingMode: rawThinkingMode, userRole, activeResource } = body;
         const thinkingMode = isThinkingMode(rawThinkingMode) ? rawThinkingMode : 'standard';
         const modeDef = getMode(thinkingMode);
 
@@ -331,6 +343,16 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         ];
         if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
             systemBlocks.push({ type: 'text', text: formatContextForPrompt(contextData) });
+        }
+        // Active-resource-pill (cross-page context). Achter de cache-breakpoint
+        // zodat resource-switches geen prefix-cache-miss veroorzaken.
+        if (activeResource && activeResource.label) {
+            const kindLabel = ({ event: 'Event', klant: 'Klant', offerte: 'Offerte', klantgesprek: 'Klantgesprek' } as const)[activeResource.kind] || activeResource.kind;
+            const metaSuffix = activeResource.meta ? ` (${activeResource.meta})` : '';
+            systemBlocks.push({
+                type: 'text',
+                text: `[ACTIEVE BRON] De gebruiker werkt momenteel aan ${kindLabel}: "${activeResource.label}" — id ${activeResource.id}${metaSuffix}.\nHoud hier rekening mee. Vraag NIET welk ${kindLabel.toLowerCase()} bedoeld wordt — die context is al gegeven. Refereer er expliciet aan in je antwoord wanneer relevant.`,
+            });
         }
 
         // Map messages to Anthropic format — system is separate, only user/assistant in messages
@@ -790,7 +812,6 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             pageContext === '/logistiek' ||
             pageContext === '/price-intelligence' ||
             pageContext === '/financien' ||
-            pageContext === '/boekhouding' ||
             (pageContext && pageContext.startsWith('/events'))
         );
 

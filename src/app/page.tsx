@@ -559,7 +559,7 @@ export default function DashboardPage() {
                   Te dragen: {formatCurrency(btwTeDragen)} · Voorbelasting: {formatCurrency(btwVoorbelasting)} ·
                   <span style={{ color: btwSaldo >= 0 ? 'var(--text)' : 'var(--green)', fontWeight: 600 }}> Saldo: {btwSaldo >= 0 ? formatCurrency(btwSaldo) : '+' + formatCurrency(Math.abs(btwSaldo)) + ' terug'}</span>
                 </div>
-                <Link href="/boekhouding" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold" style={{ color: 'var(--purple)' }}>
+                <Link href="/financien?tab=btw" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold" style={{ color: 'var(--purple)' }}>
                   Open BTW-overzicht <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
