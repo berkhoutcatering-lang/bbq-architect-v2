@@ -317,18 +317,8 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         'Let op: goedkoopste is niet altijd het beste — kwaliteit en consistentie zijn cruciaal voor catering.',
     ].join('\n'),
 
-    '/offerte-editor': [
-        '**Offerte Editor** — Hop & Bites offerte-builder met menu-wizard.',
-        'De gebruiker maakt hier nieuwe offertes aan via een menu-wizard.',
-        'De context bevat de beschikbare gerechten uit het menu en eventueel bestaande offertes.',
-        'Je kunt:',
-        '- Gerechten aanbevelen op basis van aantal gasten, seizoen of budget',
-        '- Prijsstelling adviseren: gemiddelde BBQ catering €35-€75 p.p.',
-        '- Een offerte aanmaken (create_offerte): nummer, client_naam, datum, aantal_gasten, basis_prijs_pp, notitie',
-        '- Een event aanmaken (create_event) als de offerte wordt bevestigd',
-        'Streefmarge: >70% brutomarge op food cost. Waarschuw als de prijsstelling te laag is.',
-        'BTW: standaard 21% op catering-diensten. Controleer of de prijs inclusief of exclusief BTW is.',
-    ].join('\n'),
+    /* /offerte-editor uitgefaseerd 2026-04-30: redirect naar /offertes.
+       Prompt verwijderd; dezelfde logica zit in de /offertes prompt. */
 
     '/event-planner': [
         '**Event Planner** — Hop & Bites planningsdashboard (offertes + events + KPI).',

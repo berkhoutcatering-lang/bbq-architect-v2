@@ -391,7 +391,7 @@ export default function EventPlannerDashboard() {
                                 <h3 className="text-sm font-black uppercase tracking-widest mb-4">Snelle Links</h3>
                                 <div className="space-y-2">
                                     {[
-                                        { label: "Nieuwe Offerte", href: "/offerte-editor" },
+                                        { label: "Nieuwe Offerte", href: "/offertes?new=1" },
                                         { label: "Offertes", href: "/offertes" },
                                         { label: "Agenda", href: "/agenda" },
                                         { label: "Events", href: "/events" },

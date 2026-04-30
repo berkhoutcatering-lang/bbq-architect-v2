@@ -16,6 +16,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
 import { displayEventName, titleCase } from '@/components/redesign/displayHelpers';
+import { useActiveResource } from '@/lib/ActiveResourceContext';
 import EventMenuKaartBuilder from '@/components/EventMenuKaartBuilder';
 import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
 import EventEditor from '@/components/events/EventEditor';
@@ -86,6 +87,24 @@ export default function EventHubPage() {
   useEffect(() => {
     if (event) setMenuIds(parseMenu(event.menu));
   }, [event]);
+
+  const { setActive: setActiveResource } = useActiveResource();
+  useEffect(() => {
+    if (!event) return;
+    const naam = displayEventName(event.name) || event.name || `Event #${eventId}`;
+    let datumDisplay = '';
+    if (event.date) {
+      const d = new Date(event.date + 'T00:00:00');
+      if (!isNaN(d.getTime())) datumDisplay = `${d.getDate()} ${moNamesShort[d.getMonth()]}`;
+    }
+    setActiveResource({
+      kind: 'event',
+      id: eventId,
+      label: datumDisplay ? `${naam} — ${datumDisplay}` : naam,
+      href: `/events/${eventId}/hub`,
+      meta: event.guests ? `${event.guests} gasten${event.ppp ? ` · €${event.ppp}/p` : ''}` : undefined,
+    });
+  }, [event, eventId, setActiveResource]);
 
   // Laad opgeslagen menukaart-templates voor deze org zodat de 3 stijl-tabs
   // de aangepaste template tonen (en niet alleen de hardcoded MenuCard-variant).
@@ -579,7 +598,8 @@ export default function EventHubPage() {
                     <button className="primary" onClick={(e) => {
                       e.stopPropagation();
                       if (!offerte) {
-                        router.push(`/offerte-editor?event=${encodeURIComponent(event.name || '')}&gasten=${event.guests || 50}&ppp=${event.ppp || 45}&datum=${event.date || ''}&client=${encodeURIComponent(event.client_naam || '')}`);
+                        // Open de wizard op /offertes met event-prefill via query params
+                        router.push(`/offertes?new=1&event=${encodeURIComponent(event.name || '')}&gasten=${event.guests || 50}&ppp=${event.ppp || 45}&datum=${event.date || ''}&client=${encodeURIComponent(event.client_naam || '')}`);
                       } else {
                         router.push(`/offertes?edit=${offerte.id}`);
                       }

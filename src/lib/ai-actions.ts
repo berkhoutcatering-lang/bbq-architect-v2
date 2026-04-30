@@ -96,7 +96,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event aanmaken',
         table: 'events',
         op: 'insert',
-        pages: ['/', '/events', '/agenda', '/offertes', '/offerte-editor', '/event-planner'],
+        pages: ['/', '/events', '/agenda', '/offertes', '/event-planner'],
         icon: 'CalendarPlus',
         color: '#3b82f6',
     },
@@ -306,7 +306,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Offerte aanmaken',
         table: 'offertes',
         op: 'insert',
-        pages: ['/offertes', '/offerte-editor', '/event-planner'],
+        pages: ['/offertes', '/event-planner'],
         icon: 'FileText',
         color: '#22c55e',
     },
@@ -1023,15 +1023,6 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
         if (pathname === '/price-intelligence') {
             const levPiRes = await supabase.from('leveranciers').select('id,naam,type').order('naam');
             ctx.leveranciers = levPiRes.data || [];
-        }
-
-        if (pathname === '/offerte-editor') {
-            const gerEdRes = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp').eq('actief', true).order('gang_slug').limit(50);
-            ctx.gerechten = gerEdRes.data || [];
-            const gangEdRes = await supabase.from('gangen').select('id,naam,slug').eq('actief', true).order('volgorde');
-            ctx.gangen = gangEdRes.data || [];
-            const offEdRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp').order('datum', { ascending: false }).limit(5);
-            ctx.recenteOffertes = offEdRes.data || [];
         }
 
         if (pathname === '/klantgesprek') {
