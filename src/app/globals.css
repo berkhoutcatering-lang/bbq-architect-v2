@@ -94,12 +94,149 @@
   --muted-weak: #5a5a5e;         /* disabled icon text */
   --hover: rgba(255, 255, 255, .05);
   --hover-strong: rgba(255, 255, 255, .09);
+
+  /* Status surface tokens — gebruikt door KPI-tegels, banners, cards */
+  --status-success-bg: rgba(34, 197, 94, .08);
+  --status-success-border: rgba(34, 197, 94, .25);
+  --status-success-text: #4ade80;
+  --status-warning-bg: rgba(245, 158, 11, .08);
+  --status-warning-border: rgba(245, 158, 11, .25);
+  --status-warning-text: #fbbf24;
+  --status-danger-bg: rgba(239, 68, 68, .08);
+  --status-danger-border: rgba(239, 68, 68, .25);
+  --status-danger-text: #f87171;
+  --status-info-bg: rgba(96, 165, 250, .08);
+  --status-info-border: rgba(96, 165, 250, .25);
+  --status-info-text: #60a5fa;
+  --status-brand-bg: rgba(255, 191, 0, .08);
+  --status-brand-border: rgba(255, 191, 0, .25);
+  --status-brand-text: #FFBF00;
+  --status-neutral-bg: rgba(255, 255, 255, .04);
+  --status-neutral-border: rgba(255, 255, 255, .08);
+  --status-neutral-text: rgba(255, 255, 255, .85);
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* ───────── Status surface utilities ─────────
+   Gebruik voor banners, KPI-cards, alert-blocks. Eén systeem,
+   overal hetzelfde. Combineer met .kpi-tile of inline. */
+.status-surface-success { background: var(--status-success-bg); border: 1px solid var(--status-success-border); }
+.status-surface-warning { background: var(--status-warning-bg); border: 1px solid var(--status-warning-border); }
+.status-surface-danger  { background: var(--status-danger-bg);  border: 1px solid var(--status-danger-border); }
+.status-surface-info    { background: var(--status-info-bg);    border: 1px solid var(--status-info-border); }
+.status-surface-brand   { background: var(--status-brand-bg);   border: 1px solid var(--status-brand-border); }
+.status-surface-neutral { background: var(--status-neutral-bg); border: 1px solid var(--status-neutral-border); }
+
+.status-text-success { color: var(--status-success-text); }
+.status-text-warning { color: var(--status-warning-text); }
+.status-text-danger  { color: var(--status-danger-text); }
+.status-text-info    { color: var(--status-info-text); }
+.status-text-brand   { color: var(--status-brand-text); }
+
+/* ───────── KPI-strip ─────────
+   Dashboard 6-tegel-strip: label, groot getal, subtekst.
+   Klikbaar (rendert als <a> of <button>) — hover = lift + glow.
+   Eigen class-naam (niet .kpi-grid/.kpi-tile) want bestaande
+   .kpi-grid heeft een !important rule op <380px die conflicteert. */
+.kpi-strip__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease, background .18s ease;
+  min-height: 96px;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.kpi-strip__tile > * { min-width: 0; }
+
+.kpi-strip__tile:hover {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.25), 0 0 32px color-mix(in srgb, var(--brand) 6%, transparent);
+}
+
+.kpi-strip__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kpi-strip__value {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-strip__sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi-strip__spark {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  width: 60px;
+  height: 22px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .kpi-strip__spark { width: 70px; height: 24px; }
+}
+
+/* Status-variant tints */
+.kpi-strip__tile--success { border-color: var(--status-success-border); background: color-mix(in srgb, var(--status-success-bg) 60%, var(--card)); }
+.kpi-strip__tile--warning { border-color: var(--status-warning-border); background: color-mix(in srgb, var(--status-warning-bg) 60%, var(--card)); }
+.kpi-strip__tile--danger  { border-color: var(--status-danger-border);  background: color-mix(in srgb, var(--status-danger-bg) 60%, var(--card)); }
+.kpi-strip__tile--brand   { border-color: var(--status-brand-border);   background: color-mix(in srgb, var(--status-brand-bg) 60%, var(--card)); }
+
+@media (max-width: 767px) {
+  .kpi-strip__tile {
+    padding: 14px 14px;
+    min-height: 88px;
+  }
+  .kpi-strip__value { font-size: 20px; }
+}
+
+/* Responsive 2-4-6 kolom layout */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .kpi-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+}
+@media (min-width: 1280px) {
+  .kpi-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 html,
@@ -6003,6 +6140,79 @@ textarea:focus-visible,
     padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     padding-left: 12px;
     padding-right: 12px;
+  }
+}
+
+/* Active-resource pill — desktop default + mobile 44px tap targets */
+.active-resource-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 36px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, var(--card, rgba(0,0,0,.3)));
+  padding: 0;
+  max-width: 320px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.active-resource-pill__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  height: 100%;
+  min-width: 0;
+  flex: 1;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.active-resource-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-resource-pill__close {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin: 2px;
+  border-radius: 16px;
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.active-resource-pill__close:hover { opacity: 1; }
+
+@media (max-width: 767px) {
+  .active-resource-pill {
+    height: 44px;
+    border-radius: 22px;
+  }
+  .active-resource-pill__link {
+    padding: 0 6px 0 14px;
+    font-size: 13px;
+  }
+  .active-resource-pill__close {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    margin: 0;
+    border-radius: 22px;
+    opacity: 0.85;
   }
 }
 

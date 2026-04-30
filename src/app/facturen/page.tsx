@@ -19,6 +19,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import StatusBadge from '@/components/StatusBadge';
 import type { Factuur } from '@/types';
 import { ArrowLeft, Bell, Code, CreditCard, FileSpreadsheet, FileText, Link2, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
 
@@ -325,7 +326,6 @@ export default function Facturen() {
                     {filteredFacturen.map(function (f) {
                         let total = 0;
                         (f.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
-                        const pill = f.status === 'betaald' ? 'pill-green' : f.status === 'verzonden' ? 'pill-amber' : f.status === 'vervallen' ? 'pill-red' : 'pill-blue';
                         return (
                             <div key={f.id} className="ev-row" onClick={function () { editFactuur(f); }}>
                                 <div style={{ flex: 1 }}>
@@ -334,7 +334,7 @@ export default function Facturen() {
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                    <span className={'pill ' + pill}>{f.status.charAt(0).toUpperCase() + f.status.slice(1)}</span>
+                                    <StatusBadge status={f.status} size="sm" />
                                 </div>
                             </div>
                         );

@@ -5,9 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard,
-    Calendar,
-    PartyPopper,
-    FileText,
+    ShieldCheck,
+    Package,
+    ClipboardList,
     MoreHorizontal,
 } from "lucide-react";
 
@@ -27,22 +27,22 @@ const tabs: Tab[] = [
         match: (p) => p === "/",
     },
     {
-        label: "Agenda",
-        icon: <Calendar size={22} />,
-        href: "/agenda",
-        match: (p) => p === "/agenda" || p.startsWith("/agenda/"),
+        label: "HACCP",
+        icon: <ShieldCheck size={22} />,
+        href: "/haccp",
+        match: (p) => p === "/haccp" || p.startsWith("/haccp/"),
     },
     {
-        label: "Events",
-        icon: <PartyPopper size={22} />,
-        href: "/events",
-        match: (p) => p === "/events" || p.startsWith("/events/"),
+        label: "Voorraad",
+        icon: <Package size={22} />,
+        href: "/voorraad",
+        match: (p) => p === "/voorraad" || p.startsWith("/voorraad/"),
     },
     {
-        label: "Offertes",
-        icon: <FileText size={22} />,
-        href: "/offertes",
-        match: (p) => p === "/offertes" || p.startsWith("/offertes/"),
+        label: "Prep",
+        icon: <ClipboardList size={22} />,
+        href: "/prep-counter",
+        match: (p) => p === "/prep-counter" || p.startsWith("/prep-counter/"),
     },
     {
         label: "Meer",

@@ -137,10 +137,10 @@ function StatsLoading() {
 }
 
 const sectionStatsMap: Record<string, React.FC> = {
-    'de-keuken': DeKeukenStats,
+    'keuken': DeKeukenStats,
     'operatie': OperatieStats,
-    'de-zaak': DeZaakStats,
-    'beheer-logistiek': BeheerStats,
+    'verkoop': DeZaakStats,
+    'beheer': BeheerStats,
 };
 
 /* ── Page ─────────────────────────────────────────────────── */

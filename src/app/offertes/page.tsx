@@ -28,6 +28,7 @@ import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import { calcOfferteMarge } from '@/lib/costCalculations';
 import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
+import StatusBadge from '@/components/StatusBadge';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
 export default function Offertes() {
@@ -397,7 +398,6 @@ export default function Offertes() {
 
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
-        const pillMap: Record<string, string> = { concept: 'pill-blue', verzonden: 'pill-amber', geaccepteerd: 'pill-green', afgewezen: 'pill-red', verlopen: 'pill-red' };
 
         let syncMsg = '📅 Opslaan synchroniseert automatisch met de Agenda';
         if (form.status === 'geaccepteerd' || form.status === 'akkoord' || form.status === 'betaald') syncMsg = '✅ Event bevestigd in Agenda — Groene glow actief';
@@ -658,7 +658,6 @@ export default function Offertes() {
                 }).map(function (o) {
                     let total = 0;
                     (o.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
-                    const pillMap: Record<string, string> = { concept: 'pill-blue', verzonden: 'pill-amber', geaccepteerd: 'pill-green', akkoord: 'pill-green', betaald: 'pill-green', afgewezen: 'pill-red', verlopen: 'pill-red' };
                     const m = margeMap[String(o.id)] || calcOfferteMargeData(o as any);
                     const hasMenu = (o.menu_selectie as any[] || []).length > 0;
                     return (
@@ -686,7 +685,7 @@ export default function Offertes() {
                                 </button>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontWeight: 600 }}>{fmt(total)}</div>
-                                    <span className={'pill ' + (pillMap[o.status] || 'pill-blue')}>{o.status.charAt(0).toUpperCase() + o.status.slice(1)}</span>
+                                    <StatusBadge status={o.status} size="sm" />
                                 </div>
                             </div>
                         </div>

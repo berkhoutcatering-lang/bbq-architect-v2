@@ -21,6 +21,7 @@ import DrillDownKPI from '@/components/DrillDownKPI';
 import DashboardBrandHero from '@/components/DashboardBrandHero';
 import PriceUpdateReminder from '@/components/PriceUpdateReminder';
 import { LoadingState } from '@/components/LoadingState';
+import Sparkline from '@/components/Sparkline';
 
 export default function DashboardPage() {
   const ev = useSupabase('events', []);
@@ -263,6 +264,42 @@ export default function DashboardPage() {
   const monthEvents = events.filter((e: any) => e.date?.startsWith(curMonthPrefix));
   const monthRevenue = monthEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
 
+  /* Sparkline-data: 14-dagen vensters voor KPI-tegels.
+     - revenue: omzet per dag uit afgelopen 14 dgn (events × ppp op datum)
+     - upcoming: aankomende events per dag voor komende 14 dgn
+     Geen mock-data; lege dagen = 0. */
+  const sparkRevenue: number[] = (() => {
+    const buckets: number[] = new Array(14).fill(0);
+    const now = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (13 - i));
+      const iso = d.toISOString().slice(0, 10);
+      events.forEach((e: any) => {
+        if (e.date === iso && e.status !== 'geannuleerd') {
+          buckets[i] += (e.guests || 0) * (e.ppp || 0);
+        }
+      });
+    }
+    return buckets;
+  })();
+
+  const sparkUpcoming: number[] = (() => {
+    const buckets: number[] = new Array(14).fill(0);
+    const now = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      events.forEach((e: any) => {
+        if (e.date === iso && e.status !== 'geannuleerd') {
+          buckets[i] += 1;
+        }
+      });
+    }
+    return buckets;
+  })();
+
   /* ─────────────── Command-Center signalen ─────────────── */
 
   /* 1. Live conflict-detectie op alle aankomende events (smoker / venue / capacity).
@@ -405,6 +442,47 @@ export default function DashboardPage() {
             <Plus size={14} />
             <span className="hidden md:inline">Nieuw Event</span>
           </button>
+        </div>
+
+        {/* ═════════ KPI-STRIP · 6 kerncijfers in één blik ═════════ */}
+        <div className="kpi-strip mb-5">
+          <Link href="/financien" className="kpi-strip__tile">
+            <span className="kpi-strip__label"><Euro size={11} /> Omzet deze maand</span>
+            <span className="kpi-strip__value">{formatCurrency(monthRevenue)}</span>
+            <span className="kpi-strip__sub">{monthEvents.length} {monthEvents.length === 1 ? 'event' : 'events'} · €{events.length > 0 ? Math.round(monthRevenue / Math.max(1, monthEvents.reduce((s: number, e: any) => s + (e.guests || 0), 0))) : 0}/gast</span>
+            <div className="kpi-strip__spark"><Sparkline values={sparkRevenue} color="var(--brand)" fillColor="var(--brand)" width={60} height={22} /></div>
+          </Link>
+
+          <Link href="/agenda" className="kpi-strip__tile">
+            <span className="kpi-strip__label"><Calendar size={11} /> Deze week</span>
+            <span className="kpi-strip__value">{weekEvents.length}</span>
+            <span className="kpi-strip__sub">{weekGuests} gasten · {formatCurrency(weekRevenue)}</span>
+          </Link>
+
+          <Link href="/financien" className={`kpi-strip__tile ${avgMarge >= 65 ? 'kpi-strip__tile--success' : avgMarge >= 55 ? '' : 'kpi-strip__tile--warning'}`}>
+            <span className="kpi-strip__label"><TrendingUp size={11} /> Gem. marge</span>
+            <span className={`kpi-strip__value ${avgMarge >= 65 ? 'status-text-success' : avgMarge >= 55 ? '' : 'status-text-warning'}`}>{isNaN(avgMarge) ? '—' : avgMarge.toFixed(0) + '%'}</span>
+            <span className="kpi-strip__sub">{avgMarge >= 65 ? 'Boven streefwaarde' : avgMarge >= 55 ? 'Aan de marge' : 'Onder 55% — actie'}</span>
+          </Link>
+
+          <Link href="/facturen" className={`kpi-strip__tile ${verlopenFacturen.length > 0 ? 'kpi-strip__tile--danger' : openFacturen.length > 0 ? 'kpi-strip__tile--warning' : ''}`}>
+            <span className="kpi-strip__label"><FileText size={11} /> Openstaand</span>
+            <span className={`kpi-strip__value ${verlopenFacturen.length > 0 ? 'status-text-danger' : ''}`}>{formatCurrency(openFacturenBedrag)}</span>
+            <span className="kpi-strip__sub">{openFacturen.length} {openFacturen.length === 1 ? 'factuur' : 'facturen'}{verlopenFacturen.length > 0 ? ` · ${verlopenFacturen.length} te laat` : ''}</span>
+          </Link>
+
+          <Link href="/events" className="kpi-strip__tile">
+            <span className="kpi-strip__label"><Flame size={11} /> Aankomend</span>
+            <span className="kpi-strip__value">{nextEventsList.length}</span>
+            <span className="kpi-strip__sub">{heroEvent ? `${heroEvent.name} · ${daysToHero}d` : 'Geen events ingepland'}</span>
+            <div className="kpi-strip__spark"><Sparkline values={sparkUpcoming} color="var(--brand)" fillColor="var(--brand)" width={60} height={22} /></div>
+          </Link>
+
+          <Link href="/voorraad" className={`kpi-strip__tile ${lowStockItems.length > 0 ? 'kpi-strip__tile--warning' : 'kpi-strip__tile--success'}`}>
+            <span className="kpi-strip__label"><Package size={11} /> Voorraad</span>
+            <span className={`kpi-strip__value ${lowStockItems.length > 0 ? 'status-text-warning' : 'status-text-success'}`}>{lowStockItems.length > 0 ? lowStockItems.length : 'OK'}</span>
+            <span className="kpi-strip__sub">{lowStockItems.length > 0 ? `${lowStockItems.length === 1 ? 'item' : 'items'} onder minimum` : 'Alles op niveau'}</span>
+          </Link>
         </div>
 
         {/* ═════════ KRITIEKE BANNER · smoker-conflicten ═════════ */}
