@@ -6253,6 +6253,63 @@ textarea:focus-visible,
   }
 }
 
+/* Rook Pitmaster Coach panel — desktop side-aside 380px, mobile full-screen */
+.rook-assistant-aside {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 380px;
+}
+@media (max-width: 767px) {
+  .rook-assistant-aside {
+    width: 100vw;
+    /* Rook neemt de hele mobile viewport — duidelijke focus tijdens service */
+  }
+}
+
+/* Agenda kalender — desktop fluid 7-kolom, mobile horizontaal scrollbaar */
+.agenda-cal-head,
+.agenda-cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.agenda-cal-head { border-bottom: 1px solid var(--border); }
+
+@media (max-width: 767px) {
+  .agenda-cal-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .agenda-cal-head,
+  .agenda-cal-row {
+    /* Min-breedte zodat dagcellen leesbaar blijven; gebruiker swipet horizontaal */
+    grid-template-columns: repeat(7, minmax(80px, 1fr));
+    min-width: 600px;
+  }
+}
+
+/* Agenda hoofdgrid: desktop 3-kolom (sidebar | kalender | side-panel),
+   tablet 2-kolom (kalender + side-panel onderelkaar gestackt is te krap),
+   mobile: alles onder elkaar — kalender wint visueel. */
+.agenda-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr 360px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1279px) {
+  .agenda-grid { grid-template-columns: 220px 1fr; }
+  .agenda-grid > :nth-child(3) { grid-column: 1 / -1; }
+}
+@media (max-width: 767px) {
+  .agenda-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 /* Agenda KPI strip — 5 kolom desktop, 2 kolom mobile */
 .agenda-kpi-grid {
   display: grid;

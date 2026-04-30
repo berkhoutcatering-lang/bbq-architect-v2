@@ -86,7 +86,12 @@ export default function AIChefAssistant({
     enabled?: boolean;
     onDockChange?: (docked: boolean) => void;
 }) {
-    const [docked, setDocked] = useState(true);   /* default: open */
+    // Default: open op desktop, dicht op mobile (Rook is dan een floating bubble
+    // die je antikt, opent als bottom-sheet ipv de hele viewport te kapen).
+    const [docked, setDocked] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        return window.innerWidth >= 768;
+    });
     const [directive, setDirective] = useState<ChefDirective | null>(null);
     const [loading, setLoading] = useState(false);
     const [chatLog, setChatLog] = useState<ChatMsg[]>([]);
@@ -205,10 +210,10 @@ export default function AIChefAssistant({
         );
     }
 
-    /* ── DOCKED: open AI-platform side panel ── */
+    /* ── DOCKED: open AI-platform side panel (mobile: full-screen) ── */
     return (
-        <aside style={{
-            position: 'fixed', top: 0, right: 0, height: '100vh', width: 380, zIndex: 8500,
+        <aside className="rook-assistant-aside" style={{
+            zIndex: 8500,
             display: 'flex', flexDirection: 'column',
             background: 'linear-gradient(180deg, #15151a, #0d0d10)',
             borderLeft: `1px solid ${c.border}`,

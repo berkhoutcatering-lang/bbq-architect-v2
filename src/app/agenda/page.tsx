@@ -359,15 +359,16 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
     }, [events, activeCals]);
 
     return (
-        <MetalCard style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
-                {WEEKDAYS_NL.map(w => (
-                    <div key={w} style={{ padding: '8px 12px', textAlign: 'center', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, background: 'rgba(130,130,130,.04)' }}>{w}</div>
-                ))}
-            </div>
-            <div>
-                {cells.map((row, rIdx) => (
-                    <div key={rIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: rIdx === cells.length - 1 ? 'none' : '1px solid var(--border)' }}>
+        <MetalCard style={{ padding: 0, overflow: 'hidden' }} className="agenda-cal-card">
+            <div className="agenda-cal-scroll">
+                <div className="agenda-cal-head">
+                    {WEEKDAYS_NL.map(w => (
+                        <div key={w} style={{ padding: '8px 12px', textAlign: 'center', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, background: 'rgba(130,130,130,.04)' }}>{w}</div>
+                    ))}
+                </div>
+                <div>
+                    {cells.map((row, rIdx) => (
+                        <div key={rIdx} className="agenda-cal-row" style={{ borderBottom: rIdx === cells.length - 1 ? 'none' : '1px solid var(--border)' }}>
                         {row.map((cell, cIdx) => (
                             <DayCell key={cIdx} day={cell.day} isToday={cell.day === todayDay} isWeekend={cIdx >= 5}
                                 events={cell.day ? eventsByDay[cell.day] || [] : []}
@@ -377,6 +378,7 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
                         ))}
                     </div>
                 ))}
+                </div>
             </div>
         </MetalCard>
     );
@@ -871,7 +873,7 @@ export default function Agenda() {
             />
             <div style={{ height: 18 }} />
 
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 360px', gap: 18, alignItems: 'start' }} className="agenda-grid">
+            <div className="agenda-grid">
                 <div>
                     <CalendarLegend active={activeCals} onToggle={toggleCal} />
                 </div>
