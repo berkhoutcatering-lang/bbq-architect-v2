@@ -4204,6 +4204,11 @@ body {
   gap: 0;
 }
 
+/* Backdrop alleen op mobile zichtbaar — desktop heeft de sidebar inline. */
+.ai-studio-sidebar-backdrop {
+  display: none;
+}
+
 /* Sidebar */
 .ai-studio-sidebar {
   width: 0;
@@ -4508,8 +4513,32 @@ body {
 }
 
 @media (max-width: 768px) {
+  /* Sidebar is overlay-drawer op mobile, niet inline. Chat blijft full-width. */
+  .ai-studio-layout {
+    position: relative;
+  }
+  .ai-studio-sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: 0;
+    box-shadow: 0 0 24px rgba(0,0,0,.4);
+  }
   .ai-studio-sidebar.open {
-    width: 200px;
+    width: min(280px, 80vw);
+  }
+  .ai-studio-sidebar-backdrop {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 55;
+    cursor: pointer;
   }
 
   .ai-studio-topbar {
@@ -6189,6 +6218,49 @@ textarea:focus-visible,
 }
 @media (max-width: 767px) {
   .me-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Prep-counter event hero: desktop 3-kolom (info | donut | AI), mobile stack + smaller text */
+.prep-event-hero {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 28px;
+  align-items: center;
+}
+@media (max-width: 767px) {
+  .prep-event-hero {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 18px !important;
+  }
+  .prep-event-hero h1 { font-size: 26px !important; }
+}
+
+/* Prep-counter step card: desktop 3-kolom (image | content | actions), mobile stack */
+.prep-step-card {
+  display: grid;
+  grid-template-columns: 180px 1fr auto;
+  gap: 18px;
+}
+@media (max-width: 767px) {
+  .prep-step-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .prep-step-card > :first-child {
+    width: 100% !important;
+    height: 140px !important;
+  }
+}
+
+/* Agenda KPI strip — 5 kolom desktop, 2 kolom mobile */
+.agenda-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 767px) {
+  .agenda-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 }
 
 /* Voorraad KPI strip — 5 kolom desktop, 2 kolom mobile */

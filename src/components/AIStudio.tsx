@@ -7,6 +7,7 @@ import { parseActions, executeAction } from '@/lib/ai-actions';
 import { formatDbError } from '@/lib/aiErrorMessages';
 import { Bot, Brain, Check, Flame, Folder, FolderTree, HelpCircle, Loader2, Menu, MessageSquare, PanelLeft, Plus, Save, Send, Trash2, User, X, Zap } from 'lucide-react';
 import { MODES, type ThinkingMode } from '@/lib/ai-modes';
+import { getActiveResourceSnapshot } from '@/lib/ActiveResourceContext';
 
 const BRAINSTORM_SUGGESTIONS = [
     'Bedenk 5 thema-BBQ concepten voor de zomer',
@@ -80,7 +81,11 @@ export default function AIStudio({
     const [messages, setMessages] = useState<ChatMsg[]>(initialMessages && initialMessages.length > 0 ? initialMessages : []);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    // Mobile: standaard dicht zodat de chat full-width is. Desktop: open.
+    const [sidebarOpen, setSidebarOpen] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        return window.innerWidth >= 768;
+    });
 
     const [folders, setFolders] = useState<FolderRow[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -672,6 +677,13 @@ export default function AIStudio({
 
     const studioBody = (
         <div className="ai-studio-layout" style={isOverlay ? { height: '100%' } : undefined}>
+            {sidebarOpen && (
+                <div
+                    className="ai-studio-sidebar-backdrop"
+                    onClick={() => setSidebarOpen(false)}
+                    aria-label="Sidebar sluiten"
+                />
+            )}
             <div className={'ai-studio-sidebar' + (sidebarOpen ? ' open' : '')}>
                 <div className="ai-sidebar-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

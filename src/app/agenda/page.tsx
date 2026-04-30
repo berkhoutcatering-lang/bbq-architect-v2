@@ -186,7 +186,7 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+            <div className="agenda-kpi-grid">
                 <KpiTile Icon={PartyPopper} color={BRAND} label="Komende 30d" value={kpis.upcoming30d.toString()} sub="events bevestigd" />
                 <KpiTile Icon={Euro} color={GOLD} label="Omzet pipeline" value={fmtEur(kpis.revenuePipeline)} sub={`${fmtEur(kpis.revenuePipelineConfirmed)} bevestigd`} />
                 <KpiTile Icon={Flame} color="#ef6c4d" label="Smoker bezet" value="—" sub="koppel data" />

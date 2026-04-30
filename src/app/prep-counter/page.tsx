@@ -318,11 +318,10 @@ const tabBtnStyle = (active: boolean): React.CSSProperties => ({
 function PrepHero({ doneCount, totalCount, activeStep, onAIPlan }: { doneCount: number; totalCount: number; activeStep: PrepStep | null; onAIPlan: () => void }) {
     const pct = Math.round((doneCount / totalCount) * 100);
     return (
-        <div style={{
+        <div className="prep-event-hero" style={{
             position: 'relative', borderRadius: 20, padding: 26,
             background: `linear-gradient(135deg, ${BRAND}0a 0%, ${GOLD}05 50%, rgba(28,28,32,.6) 100%)`,
             border: `1px solid ${GOLD}30`, overflow: 'hidden',
-            display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 28, alignItems: 'center',
         }}>
             <svg viewBox="0 0 600 200" style={{ position: 'absolute', right: -60, top: -20, width: 500, height: 200, opacity: .06, pointerEvents: 'none' }}>
                 <path d="M 100 150 Q 100 80, 180 80 Q 260 80, 260 150" fill="none" stroke={GOLD} strokeWidth="3" />
@@ -454,8 +453,8 @@ function FoodLog({ step, status, onClick }: { step: PrepStep; status: 'todo' | '
     const isActive = status === 'active';
 
     return (
-        <div onClick={onClick} style={{
-            position: 'relative', display: 'grid', gridTemplateColumns: '180px 1fr auto', gap: 18, padding: 16, borderRadius: 16,
+        <div onClick={onClick} className="prep-step-card" style={{
+            position: 'relative', padding: 16, borderRadius: 16,
             background: isDone ? 'linear-gradient(180deg, rgba(34,197,94,.06), rgba(34,197,94,.02))'
                 : isActive ? `linear-gradient(180deg, ${BRAND}14, ${GOLD}08)`
                     : 'linear-gradient(180deg, rgba(28,28,32,.7), rgba(18,18,22,.5))',

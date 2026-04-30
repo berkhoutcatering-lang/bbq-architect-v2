@@ -207,6 +207,22 @@
 }
 .redesign-root .ev-view-tabs button:disabled { opacity: .4; cursor: not-allowed; }
 
+/* Mobile: page-head stapelt verticaal, hstack wrapt, tabs scrollen horizontaal */
+@media (max-width: 767px) {
+  .redesign-root .main { padding: 16px 12px 80px; }
+  .redesign-root .page-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .redesign-root .page-title { font-size: 22px; }
+  .redesign-root .hstack { flex-wrap: wrap; gap: 8px; }
+  .redesign-root .ev-view-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .redesign-root .ev-view-tabs::-webkit-scrollbar { display: none; }
+  .redesign-root .ev-view-tabs button { white-space: nowrap; }
+}
+
 /* Prep task row — native checkbox is visually hidden; label is the interactive surface */
 .redesign-root .prep-task-row { position: relative; }
 .redesign-root .prep-task-row:hover { background: color-mix(in srgb, var(--text) 2%, transparent) !important; }
