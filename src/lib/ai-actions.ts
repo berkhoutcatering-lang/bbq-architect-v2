@@ -96,7 +96,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event aanmaken',
         table: 'events',
         op: 'insert',
-        pages: ['/', '/events', '/agenda', '/offertes', '/event-planner'],
+        pages: ['/', '/events', '/agenda', '/offertes'],
         icon: 'CalendarPlus',
         color: '#3b82f6',
     },
@@ -104,7 +104,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event bijwerken',
         table: 'events',
         op: 'update',
-        pages: ['/events', '/agenda', '/service', '/event-planner'],
+        pages: ['/events', '/agenda', '/service'],
         icon: 'CalendarCheck',
         color: '#f59e0b',
     },
@@ -306,7 +306,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Offerte aanmaken',
         table: 'offertes',
         op: 'insert',
-        pages: ['/offertes', '/event-planner'],
+        pages: ['/offertes'],
         icon: 'FileText',
         color: '#22c55e',
     },
@@ -314,7 +314,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Offerte bijwerken',
         table: 'offertes',
         op: 'update',
-        pages: ['/offertes', '/event-planner'],
+        pages: ['/offertes'],
         icon: 'Pencil',
         color: '#3b82f6',
     },
@@ -322,7 +322,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Offerte status bijwerken',
         table: 'offertes',
         op: 'update',
-        pages: ['/offertes', '/event-planner'],
+        pages: ['/offertes'],
         icon: 'FileText',
         color: '#f59e0b',
     },
@@ -1106,24 +1106,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             }
         }
 
-        if (pathname === '/event-planner') {
-            const offPlanRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,korting,items').order('datum', { ascending: false }).limit(30);
-            ctx.offertes = offPlanRes.data || [];
-            const todayPlan = new Date().toISOString().slice(0, 10);
-            const evPlanRes = await supabase.from('events')
-                .select('id,name,date,guests,status,location,client_naam,ppp')
-                .gte('date', todayPlan)
-                .order('date', { ascending: true })
-                .limit(15);
-            ctx.events = evPlanRes.data || [];
-            ctx.volgendEvent = (evPlanRes.data || [])[0] || null;
-            const statussen: Record<string, number> = {};
-            (offPlanRes.data || []).forEach(function (o: Record<string, unknown>) {
-                const status = o.status as string;
-                statussen[status] = (statussen[status] || 0) + 1;
-            });
-            ctx.offerteSamenvatting = statussen;
-        }
+        /* /event-planner uitgefaseerd 2026-04-30: redirect naar /agenda. */
 
         return Object.keys(ctx).length > 0 ? ctx : null;
     } catch (e) {

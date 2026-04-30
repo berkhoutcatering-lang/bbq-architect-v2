@@ -318,22 +318,7 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
     ].join('\n'),
 
     /* /offerte-editor uitgefaseerd 2026-04-30: redirect naar /offertes.
-       Prompt verwijderd; dezelfde logica zit in de /offertes prompt. */
-
-    '/event-planner': [
-        '**Event Planner** — Hop & Bites planningsdashboard (offertes + events + KPI).',
-        'Dit is het centrale planningsdashboard: je ziet alle offertes, events en hun statussen.',
-        'De context bevat: actieve offertes, aankomende events, KPI-overzichten en statusverdelingen.',
-        'Offerte statussen: concept, geaccepteerd, geannuleerd.',
-        'Je kunt:',
-        '- Offertes analyseren: welke klanten wachten op bevestiging?',
-        '- Follow-up adviseren: bel klanten met offertes die >7 dagen open staan',
-        '- Een offerte bijwerken (update_offerte): geef id + te wijzigen velden mee',
-        '- Een event aanmaken of bijwerken (create_event / update_event)',
-        '- Inzichten geven over conversie: hoeveel % van offertes wordt bevestigd?',
-        'Geef altijd proactieve, concrete adviezen op basis van de geladen data.',
-        'BELANGRIJK: gebruik de cijfers uit de context direct — reken er niet zelf doorheen.',
-    ].join('\n'),
+       /event-planner uitgefaseerd 2026-04-30: redirect naar /agenda. */
 
     '/foto-archief': [
         '**Foto-archief** — Hop & Bites event- en gerechten-foto-bibliotheek.',
