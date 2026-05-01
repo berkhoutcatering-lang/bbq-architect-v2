@@ -14,7 +14,8 @@ import PageHeader from '@/components/PageHeader';
 import FieldTooltip from '@/components/FieldTooltip';
 import VoiceInput from '@/components/VoiceInput';
 import HaccpControlCenter from '@/components/redesign/HaccpControlCenter';
-import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull } from 'lucide-react';
+import { Loader2, CalendarCheck, CheckCircle, Save, Flame, Thermometer, Trash2, FolderOpen, FileText, AlertTriangle, Skull, Smartphone } from 'lucide-react';
+import Link from 'next/link';
 import { RequireTier } from '@/components/PaywallPrompt';
 import type { HaccpRecord, DbEvent, Offerte } from '@/types';
 
@@ -262,6 +263,11 @@ export default function HACCP() {
         <RequireTier feature="haccp">
         <div className="artisan-page haccp-page">
             <PageHeader title="HACCP Monitoring" description="Log temperaturen en beheer compliance-dossiers" />
+
+            <Link href="/haccp/field" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, background: 'rgba(196,163,90,.12)', border: '1px solid rgba(196,163,90,.3)', color: 'var(--color-accent-gold, #c4a35a)', fontSize: 13, fontWeight: 700, textDecoration: 'none', marginBottom: 12 }}>
+                <Smartphone size={14} /> Open Veldmodus — handschoen-vriendelijke temperatuur-logging
+            </Link>
+
             <PageHint id="haccp" title="HACCP Monitoring" description="Log temperaturen via Quick Log (ideaal op mobiel). Alle metingen worden gekoppeld aan events voor compliance-dossiers." />
 
             <div className="tab-bar">
