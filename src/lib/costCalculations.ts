@@ -25,6 +25,8 @@ export interface IngredientCost {
 export interface GerechtForCost {
     naam: string;
     ingredient_costs?: IngredientCost[];
+    /** Pre-calculated cost-per-portie (ingevuld door AI Wizard, handmatige invoer, of menu-engineering). Wordt gebruikt als fallback wanneer ingredient_costs ontbreekt. */
+    kostprijs_pp?: number;
 }
 
 /** Lookup inventory-item op normalised naam (case-insensitive trim). */
@@ -57,20 +59,34 @@ export function calcDishCostPP(
     gerechtNaam: string
 ): number {
     if (!gerechtNaam) return 0;
-    const gerecht = gerechten.find(g => g.naam === gerechtNaam);
-    if (!gerecht || !gerecht.ingredient_costs) return 0;
+    const target = String(gerechtNaam).toLowerCase().trim();
+    const gerecht = gerechten.find(g => (g.naam || '').toLowerCase().trim() === target);
+    if (!gerecht) return 0;
 
     const costsArray = Array.isArray(gerecht.ingredient_costs) ? gerecht.ingredient_costs : [];
-    return costsArray.reduce((sum, item) => {
-        if (!item || !item.naam) return sum;
-        const inv = getInvPrice(inventory, item.naam);
-        const price = inv ? inv.price : 0;
-        const yld = (item.yield || (inv ? inv.yield_factor : 1.0)) || 1.0;
-        let unitFactor = 1;
-        if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
-        if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
-        return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
-    }, 0);
+
+    // Path 1: gedetailleerde ingredient-berekening (gerechten met volledige receptuur)
+    if (costsArray.length > 0) {
+        return costsArray.reduce((sum, item) => {
+            if (!item || !item.naam) return sum;
+            const inv = getInvPrice(inventory, item.naam);
+            const price = inv ? inv.price : 0;
+            const yld = (item.yield || (inv ? inv.yield_factor : 1.0)) || 1.0;
+            let unitFactor = 1;
+            if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
+            if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
+            return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
+        }, 0);
+    }
+
+    // Path 2: fallback naar pre-calculated kostprijs_pp (AI-gegenereerde gerechten,
+    // handmatig ingevoerd, of geïmporteerd zonder ingredient-detail). Voorkomt
+    // €0 foodcost in /financien wanneer gerecht alleen een totaal-kostprijs heeft.
+    if (typeof gerecht.kostprijs_pp === 'number' && gerecht.kostprijs_pp > 0) {
+        return gerecht.kostprijs_pp;
+    }
+
+    return 0;
 }
 
 /**
@@ -97,7 +113,11 @@ export function calcOfferteMarge(
     const prijsPP = offerte.basis_prijs_pp || 38.50;
     const omzet = gasten * prijsPP;
 
-    const menuGerechten = Array.isArray(offerte.menu_selectie) ? offerte.menu_selectie : [];
+    // menu_selectie kan array (legacy) of object-per-gang (huidig: AiOfferteWizard) zijn
+    const ms = offerte.menu_selectie;
+    const menuGerechten: any[] = Array.isArray(ms)
+        ? ms
+        : (ms && typeof ms === 'object' ? Object.values(ms).flat() : []);
     let foodcostPP = 0;
     menuGerechten.forEach((sel: any) => {
         if (sel) foodcostPP += calcDishCostPP(gerechten, inventory, sel.gerecht_naam || sel.naam || '');
