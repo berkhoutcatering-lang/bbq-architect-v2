@@ -47,6 +47,11 @@ export default function Offertes() {
     const [showWizardForExisting, setShowWizardForExisting] = useState(false);
     const [showAiWizard, setShowAiWizard] = useState(false);
     const [showMenuBuilder, setShowMenuBuilder] = useState(false);
+    /* Template-picker: "Nieuwe offerte" opent eerst een keuze tussen handmatig,
+       vanaf nul met wizard, of starten met een opgeslagen menu uit /gerechten. */
+    const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+    const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+    const [prefillFromTemplate, setPrefillFromTemplate] = useState<any | null>(null);
     const [vasteKostenInput, setVasteKostenInput] = useState<Record<string, any>>({ naam: '', bedrag: '' });
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [sortField, setSortField] = useState<string>('datum');
@@ -127,6 +132,45 @@ export default function Offertes() {
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
+    }
+
+    /* Template-picker logica — "Nieuwe offerte" opent een keuze.
+       Templates komen uit menu_templates op /gerechten. */
+    async function openTemplatePicker() {
+        const { data, error } = await supabase
+            .from('menu_templates')
+            .select('id, naam, beschrijving, menu_selectie, basis_prijs_pp, aantal_gasten, is_default')
+            .eq('actief', true)
+            .order('is_default', { ascending: false })
+            .order('updated_at', { ascending: false });
+        if (!error && data) {
+            setAvailableTemplates(data);
+        } else {
+            setAvailableTemplates([]);
+        }
+        setShowTemplatePicker(true);
+    }
+
+    function newOfferteFromWizardBlank() {
+        setPrefillFromTemplate(null);
+        setShowTemplatePicker(false);
+        setShowWizard(true);
+    }
+
+    function newOfferteFromTemplate(t: any) {
+        const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
+        setPrefillFromTemplate({
+            menu_selectie: sel,
+            basis_prijs_pp: t.basis_prijs_pp || undefined,
+            aantal_gasten: t.aantal_gasten || undefined,
+        });
+        setShowTemplatePicker(false);
+        setShowWizard(true);
+    }
+
+    function newOfferteHandmatig() {
+        setShowTemplatePicker(false);
+        newOfferte();
     }
 
     function editOfferte(o: Offerte) { setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
@@ -603,10 +647,79 @@ export default function Offertes() {
                 actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileDown size={14} /> CSV</button>
                     <button className="btn-gold-outline" onClick={function () { setShowAiWizard(true); }}><Sparkles size={14} /> AI Offerte</button>
-                    <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe offerte</button>
+                    <button className="btn-gold" onClick={openTemplatePicker}><Plus size={14} /> Nieuwe offerte</button>
                 </>}
             />
-            {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
+            {showWizard && <MenuWizard
+                onComplete={handleWizardComplete}
+                onClose={function () { setShowWizard(false); setPrefillFromTemplate(null); }}
+                settings={settings}
+                existingOfferte={prefillFromTemplate}
+            />}
+            {showTemplatePicker && (
+                <div className="modal-bg" onClick={function (e) { if (e.target === e.currentTarget) setShowTemplatePicker(false); }}>
+                    <div className="modal-box" style={{ maxWidth: 560, width: '95%', maxHeight: '85vh', overflow: 'auto' }}>
+                        <h3 style={{ marginTop: 0 }}>Hoe wil je beginnen?</h3>
+                        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -4, marginBottom: 16 }}>
+                            Kies een opgeslagen menu uit /gerechten of begin opnieuw met de wizard.
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                            <button className="btn btn-brand" onClick={newOfferteFromWizardBlank} style={{ justifyContent: 'flex-start' }}>
+                                <Sparkles size={14} style={{ marginRight: 8 }} /> Wizard vanaf nul
+                                <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.7 }}>Stel een nieuw menu samen</span>
+                            </button>
+                            <button className="btn btn-ghost" onClick={newOfferteHandmatig} style={{ justifyContent: 'flex-start' }}>
+                                <Plus size={14} style={{ marginRight: 8 }} /> Handmatige offerte
+                                <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.7 }}>Direct items typen, geen menu</span>
+                            </button>
+                        </div>
+
+                        {availableTemplates.length > 0 && (
+                            <>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>
+                                    Of starten met een opgeslagen menu
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {availableTemplates.map(function (t: any) {
+                                        const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
+                                        const dishCount: number = (Object.values(sel) as unknown[]).reduce<number>(function (a, list) { return a + (Array.isArray(list) ? list.length : 0); }, 0);
+                                        return (
+                                            <button
+                                                key={t.id}
+                                                className="btn btn-ghost"
+                                                onClick={function () { newOfferteFromTemplate(t); }}
+                                                style={{ justifyContent: 'flex-start', textAlign: 'left' as const, padding: '10px 14px' }}
+                                            >
+                                                <UtensilsCrossed size={14} style={{ marginRight: 8, flexShrink: 0 }} />
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 600 }}>
+                                                        {t.is_default && <span style={{ color: '#B48C14', marginRight: 4 }}>★</span>}
+                                                        {t.naam}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                                        {dishCount} gerechten · {t.basis_prijs_pp > 0 ? '€' + Number(t.basis_prijs_pp).toFixed(2) + ' p.p.' : 'Geen vaste prijs'}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+
+                        {availableTemplates.length === 0 && (
+                            <div style={{ padding: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' as const, border: '1px dashed var(--border)', borderRadius: 8 }}>
+                                Nog geen opgeslagen menu&rsquo;s. Maak er één aan op <a href="/gerechten" style={{ color: 'var(--brand)', textDecoration: 'underline' }}>/gerechten → tab Menu&rsquo;s</a>.
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={function () { setShowTemplatePicker(false); }}>Annuleren</button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <AiOfferteWizard
                 open={showAiWizard}
                 onClose={function () { setShowAiWizard(false); }}

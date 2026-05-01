@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import {
-    ChefHat, BookOpen, UtensilsCrossed, Calendar,
+    ChefHat, UtensilsCrossed, Calendar,
     PartyPopper, HeartHandshake, FileText, Receipt, BarChart3,
     ShoppingCart, Package, Truck, Wrench, Clock, ShieldCheck, Palette, ClipboardList,
     DollarSign, Camera, Settings, Building2,
@@ -34,12 +34,11 @@ export const navSections: NavSection[] = [
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "keuken",
-        description: "Gerechten, menu-analyse, recepten en je AI Pitmaster.",
+        description: "Gerechten, menu's, analyse en je AI Pitmaster.",
         hubHref: "/gerechten",
         children: [
-            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Catalog: gerechten met ingredienten en kostprijzen" },
+            { label: "Gerechten & Menu's", icon: <ChefHat size={16} />, href: "/gerechten", description: "Gerechten beheren met receptuur + opgeslagen menu's voor offertes" },
             { label: "Menu-analyse", icon: <UtensilsCrossed size={16} />, href: "/menu-engineering", description: "BCG-analyse: marges en populariteit" },
-            { label: "Recepten", icon: <BookOpen size={16} />, href: "/recepten", description: "Receptenbibliotheek met bereidingswijzen" },
             { label: "AI Pitmaster", icon: <Palette size={16} />, href: "/ai-chat", description: "Je AI-assistent voor brainstorm en Q&A" },
         ],
     },

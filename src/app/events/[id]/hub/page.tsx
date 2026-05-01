@@ -17,7 +17,9 @@ import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
 import { displayEventName, titleCase } from '@/components/redesign/displayHelpers';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
-import EventMenuKaartBuilder from '@/components/EventMenuKaartBuilder';
+/* EventMenuKaartBuilder verwijderd 2026-05-01 — menu wordt nu via de offerte
+   aangepast (één plek voor menu-samenstelling). De event-hub toont menu
+   read-only en linkt naar de offerte voor wijzigingen. */
 import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
 import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
@@ -78,10 +80,7 @@ export default function EventHubPage() {
   const [tpl, setTpl] = useState<TplKey>('ambacht');
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [menuBuilderOpen, setMenuBuilderOpen] = useState(false);
   const [menuIds, setMenuIds] = useState<number[]>([]);
-  const [menuBuilderQuery, setMenuBuilderQuery] = useState('');
-  const [menuSaving, setMenuSaving] = useState(false);
   const [menuTemplates, setMenuTemplates] = useState<PdfTemplate[]>([]);
 
   useEffect(() => {
@@ -121,18 +120,9 @@ export default function EventHubPage() {
     return menuTemplates.find(t => t.name === expectedName && (t.organization_id === orgId || !t.organization_id)) || null;
   }, [menuTemplates, tpl, orgId]);
 
-  async function saveMenu() {
-    if (!event) return;
-    setMenuSaving(true);
-    try {
-      await supabase.from('events').update({ menu: menuIds } as any).eq('id', event.id);
-      setEvent({ ...event, menu: menuIds });
-      setMenuBuilderOpen(false);
-    } finally { setMenuSaving(false); }
-  }
-  function toggleMenuItem(id: number) {
-    setMenuIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
+  /* saveMenu / toggleMenuItem verwijderd — menu wordt niet meer op event-niveau
+     bewerkt. Menu komt uit de gekoppelde offerte (acceptance-workflow vult
+     events.menu) en aanpassen gebeurt via de offerte-wizard op /offertes. */
 
   useEffect(() => {
     if (!eventId || Number.isNaN(eventId)) return;
@@ -744,8 +734,14 @@ export default function EventHubPage() {
               <div className="metal-head">
                 <div className="hstack"><ChefHat size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Menu &amp; automatische menukaart</span></div>
                 <div className="hstack" style={{ gap: 6 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setMenuBuilderOpen(true)}><Edit3 size={14} />Menu aanpassen</button>
-                  <button className="btn btn-primary btn-sm" onClick={printMenukaart}><Printer size={14} />Print {event.guests || 0}×</button>
+                    {event.offerte_id ? (
+                        <a href={`/offertes`} className="btn btn-ghost btn-sm" title="Open de offerte om het menu via de wizard aan te passen">
+                            <Edit3 size={14} />Menu aanpassen via offerte
+                        </a>
+                    ) : (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }} title="Dit event heeft geen gekoppelde offerte. Maak een offerte op /offertes en koppel die aan dit event om het menu te wijzigen.">Geen gekoppelde offerte</span>
+                    )}
+                    <button className="btn btn-primary btn-sm" onClick={printMenukaart}><Printer size={14} />Print {event.guests || 0}×</button>
                 </div>
               </div>
               <div className="responsive-grid" style={{ padding: 20, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
@@ -1127,14 +1123,6 @@ export default function EventHubPage() {
           </div>
         </div>
       </div>
-      <EventMenuKaartBuilder
-        open={menuBuilderOpen}
-        onClose={() => setMenuBuilderOpen(false)}
-        eventId={eventId}
-        initialMenuIds={menuIds}
-        onSaved={(ids) => { setMenuIds(ids); setEvent({ ...event, menu: ids }); }}
-        eventName={event.name}
-      />
     </div>
   );
 }
