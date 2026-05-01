@@ -120,6 +120,7 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
       /* Fallback: gebruik candidate-fallbackText direct in de client. */
       const fb: AiBriefingBullet[] = candidates.slice(0, 5).map(c => ({
         id: c.id,
+        label: c.defaultLabel,
         text: c.fallbackText,
         priority: c.priority,
         href: c.href,
