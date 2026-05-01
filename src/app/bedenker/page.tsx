@@ -38,6 +38,9 @@ interface ConceptDish {
     wijn_suggestie?: string;
     service_tip?: string;
     geschatte_kostprijs_pp?: number;
+    /* Citations — namen van bestaande gerechten waar Claude op leunt voor
+       de stijl. Pillar #2: AI hallucineert niet, baseert op jouw werk. */
+    inspired_by?: string[];
     /* UI-state — waar staat dit concept in de save-flow? */
     saveState?: 'idle' | 'saving' | 'saved' | 'error';
     saveError?: string;
@@ -288,6 +291,23 @@ function ConceptCard({ c, onSave, onReject }: { c: ConceptDish; onSave: () => vo
                     {(c.tags || []).length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {(c.tags || []).map(t => <Pill key={t} tone="purple">{t}</Pill>)}
+                        </div>
+                    )}
+                    {/* Citations: laat zien op welke bestaande gerechten dit concept leunt.
+                        Maakt direct duidelijk dat AI niet hallucineert maar baseert op
+                        jouw repertoire. Pillar #2 uit Phase 2 audit. */}
+                    {(c.inspired_by || []).length > 0 && (
+                        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(167,139,250,.06)', border: '1px solid rgba(167,139,250,.2)' }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>
+                                ✦ Geïnspireerd door
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {(c.inspired_by || []).map(name => (
+                                    <span key={name} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'rgba(167,139,250,.12)', color: '#a78bfa', fontWeight: 600, border: '1px solid rgba(167,139,250,.3)' }}>
+                                        {name}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     )}
                     {(c.allergenen || []).length > 0 && (

@@ -14,6 +14,7 @@ import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
 import KitchenModeStepper from '@/components/KitchenModeStepper';
+import AuditTrailTimeline from '@/components/AuditTrailTimeline';
 import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -1336,6 +1337,17 @@ export default function Gerechten() {
                                 </div>
                             );
                         })()}
+
+                        {/* Geschiedenis-sectie — alleen voor bestaande gerechten.
+                            Pillar #5: audit-trail voor compliance + dispute-resolution. */}
+                        {editing !== 'new' && (
+                            <div style={{ marginTop: 14 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    📋 Geschiedenis
+                                </div>
+                                <AuditTrailTimeline recordTable="gerechten" recordId={editing as number} />
+                            </div>
+                        )}
 
                         <div className="modal-actions">
                             {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>🗑️ Verwijderen</button>}
