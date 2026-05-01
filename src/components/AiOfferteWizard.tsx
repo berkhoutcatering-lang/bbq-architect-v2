@@ -160,7 +160,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             <Sparkles size={16} style={{ color: GOLD }} />
                             <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 20, fontWeight: 400, color: 'var(--text)', margin: 0 }}>AI Offerte Wizard</h2>
                         </div>
-                        <p style={{ fontSize: 11, color: 'var(--muted, #999)', margin: 0, marginTop: 2 }}>Claude stelt menu + prijs samen op basis van jouw {existingGerechten.length} gerechten</p>
+                        <p style={{ fontSize: 11, color: 'var(--muted, #999)', margin: 0, marginTop: 2 }}>Rook stelt menu + prijs samen op basis van jouw {existingGerechten.length} gerechten</p>
                     </div>
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted, #999)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
                 </div>
@@ -248,8 +248,8 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                     {step === 'generating' && (
                         <div style={{ padding: 60, textAlign: 'center' }}>
                             <Loader2 size={32} className="spin" style={{ color: GOLD, margin: '0 auto 16px' }} />
-                            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Claude denkt na over jouw menu...</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted, #999)' }}>Meestal 30–60 seconden. AI houdt rekening met je bestaande gerechten, prijs-per-persoon en gangen-indeling.</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>Rook denkt na over jouw menu...</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted, #999)' }}>Meestal 30–60 seconden. Rook houdt rekening met je bestaande gerechten, prijs-per-persoon en gangen-indeling.</div>
                             <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                         </div>
                     )}
