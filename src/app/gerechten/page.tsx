@@ -11,7 +11,6 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
-import PageHint from '@/components/PageHint';
 import { Link, Unlink } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -372,14 +371,12 @@ export default function Gerechten() {
         <div className="main-content">
             <KeukenTabs />
             <PageHeader
-                title="Gerechten Beheer"
-                description="Overzicht van al je gerechten met ingredienten en kostprijzen"
+                title="Gerechten"
+                description="Overzicht van al je gerechten met ingrediënten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling."
                 actions={<>
-                    <button className="btn btn-ghost btn-sm" onClick={newGang}>⚙️ Gang Toevoegen</button>
+                    <button className="btn btn-ghost btn-sm" onClick={newGang}>Gang toevoegen</button>
                 </>}
             />
-
-            <PageHint id="gerechten" title="Gerechten" description="Overzicht van al je gerechten met ingredienten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling." />
 
             <div className="tab-bar">
                 {gangen.map(function (g) {
@@ -400,7 +397,7 @@ export default function Gerechten() {
             </div>
 
             {currentGang && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(180,140,20,.08)', border: '1px solid rgba(180,140,20,.15)', borderRadius: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
                     <div>
                         <span style={{ fontWeight: 600 }}>{currentGang.naam}</span>
                         <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 10 }}>
@@ -409,7 +406,7 @@ export default function Gerechten() {
                         </span>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={function () { editGang(currentGang); }}>✏️ Gang</button>
+                        <button className="btn btn-ghost btn-sm" onClick={function () { editGang(currentGang); }}>Gang bewerken</button>
                         <button className="btn btn-brand btn-sm" onClick={newGerecht}>+ Gerecht</button>
                     </div>
                 </div>

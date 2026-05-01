@@ -1641,7 +1641,7 @@ body {
 
 .dish-name {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 3px;
 }
 
@@ -2265,10 +2265,10 @@ body {
 .ingredient-chip-small {
   display: inline-block;
   padding: 2px 6px;
-  background: rgba(180, 140, 20, .08);
+  background: rgba(180, 140, 20, .07);
   border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: #B48C14;
 }
 
@@ -2464,29 +2464,29 @@ body {
 .dish-tag-chip {
   display: inline-block;
   padding: 2px 7px;
-  background: rgba(107, 122, 47, .12);
-  border: 1px solid rgba(107, 122, 47, .18);
+  background: rgba(107, 122, 47, .1);
+  border: 1px solid rgba(107, 122, 47, .16);
   border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 500;
   color: #6B7A2F;
 }
 
 .dish-allergen-chip {
   display: inline-block;
   padding: 2px 7px;
-  background: rgba(239, 68, 68, .08);
+  background: rgba(239, 68, 68, .07);
   border: 1px solid rgba(239, 68, 68, .14);
   border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--red);
 }
 
 .dish-kostprijs {
   margin-top: 8px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: #B48C14;
   padding: 3px 0;
   border-top: 1px solid rgba(255, 255, 255, .05);
