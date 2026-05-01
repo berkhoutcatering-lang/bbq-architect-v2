@@ -102,18 +102,21 @@ function FinancienInner() {
             const vk = (Array.isArray(offerte.vaste_kosten) ? offerte.vaste_kosten : []).reduce((s: number, k: any) => s + (parseFloat(k.bedrag) || 0), 0);
             const omzet = (gasten * prijsPP) + vk;
             let foodcostTotaal = 0;
-            // menu_selectie kan twee shapes hebben:
-            //  - legacy array: [{gerecht_naam}, ...]
-            //  - huidig object per gang: {voorgerecht: [{gerecht_naam}], hoofdgerecht: [...]}
-            // De AiOfferteWizard slaat ze op als object — Array.isArray-only check miste alle
-            // AI-gegenereerde offertes, waardoor /financien foodcost €0 toonde.
+            // menu_selectie kan drie shapes hebben in de praktijk:
+            //  - legacy array van objects: [{gerecht_naam}, ...]
+            //  - object met arrays van objects: {voorgerecht: [{gerecht_naam}, ...]}
+            //  - object met arrays van strings: {voorgerecht: ["Pinsa", "Carpaccio"]}  ← huidig in productie-DB
+            // De laatste vorm wordt gebruikt door zowel handmatige selectie als AI Wizard.
             const ms = offerte.menu_selectie;
             const menuOpties: any[] = Array.isArray(ms)
                 ? ms
                 : (ms && typeof ms === 'object' ? Object.values(ms).flat() : []);
             menuOpties.forEach(function (sel: any) {
-                if (sel && (sel.gerecht_naam || sel.naam)) {
-                    foodcostTotaal += calcDishCostPP(gerechtenData as any[], inventoryData as any, sel.gerecht_naam || sel.naam) * gasten;
+                const naam = typeof sel === 'string'
+                    ? sel
+                    : (sel && (sel.gerecht_naam || sel.naam)) || '';
+                if (naam) {
+                    foodcostTotaal += calcDishCostPP(gerechtenData as any[], inventoryData as any, naam) * gasten;
                 }
             });
             monthsMap[mStr].omzet += omzet;

@@ -53,14 +53,33 @@ export function getInvPrice(
  *  - Unit-conversie: g→kg en ml→L (factor 0.001) als inventory in kg/L staat
  *  - Eigen yield op het ingredient overrulet inventory yield_factor
  */
+/** Normalize: lowercase, trim, strip "[SEED]" prefix die seed-data gebruikt
+ *  zodat menu_selectie-strings ook matchen op gerecht-namen ongeacht prefix. */
+function normalizeName(s: string | undefined | null): string {
+    return String(s || '').replace(/^\s*\[seed\]\s*/i, '').toLowerCase().trim();
+}
+
 export function calcDishCostPP(
     gerechten: GerechtForCost[],
     inventory: InventoryLookup[],
     gerechtNaam: string
 ): number {
     if (!gerechtNaam) return 0;
-    const target = String(gerechtNaam).toLowerCase().trim();
-    const gerecht = gerechten.find(g => (g.naam || '').toLowerCase().trim() === target);
+    const target = normalizeName(gerechtNaam);
+
+    // 1) Exact match (na normalize) — meest betrouwbaar
+    let gerecht = gerechten.find(g => normalizeName(g.naam) === target);
+
+    // 2) Substring match — voor menu-strings die korter/langer zijn dan gerecht-naam.
+    //    Bijvoorbeeld menu="Sliders" matcht "[SEED] Pulled Pork Sliders".
+    //    Vereist 4+ tekens overlap om accidentele woord-matches te voorkomen.
+    if (!gerecht && target.length >= 4) {
+        gerecht = gerechten.find(g => {
+            const n = normalizeName(g.naam);
+            return n.length >= 4 && (n.includes(target) || target.includes(n));
+        });
+    }
+
     if (!gerecht) return 0;
 
     const costsArray = Array.isArray(gerecht.ingredient_costs) ? gerecht.ingredient_costs : [];
@@ -113,14 +132,20 @@ export function calcOfferteMarge(
     const prijsPP = offerte.basis_prijs_pp || 38.50;
     const omzet = gasten * prijsPP;
 
-    // menu_selectie kan array (legacy) of object-per-gang (huidig: AiOfferteWizard) zijn
+    // menu_selectie kan drie vormen hebben:
+    //  - legacy array van objects: [{gerecht_naam}, ...]
+    //  - object met arrays van objects: {voorgerecht: [{gerecht_naam}], ...}
+    //  - object met arrays van strings: {voorgerecht: ["Pinsa", "Carpaccio"]}  ← huidig in DB
     const ms = offerte.menu_selectie;
     const menuGerechten: any[] = Array.isArray(ms)
         ? ms
         : (ms && typeof ms === 'object' ? Object.values(ms).flat() : []);
     let foodcostPP = 0;
     menuGerechten.forEach((sel: any) => {
-        if (sel) foodcostPP += calcDishCostPP(gerechten, inventory, sel.gerecht_naam || sel.naam || '');
+        const naam = typeof sel === 'string'
+            ? sel
+            : (sel && (sel.gerecht_naam || sel.naam)) || '';
+        if (naam) foodcostPP += calcDishCostPP(gerechten, inventory, naam);
     });
     const foodcostTotaal = foodcostPP * gasten;
 
