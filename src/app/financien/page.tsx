@@ -268,9 +268,9 @@ function FinancienInner() {
                 title="Financiën"
                 description={tab === 'dashboard' ? `Live Profit & Loss Dashboard over ${selectedYear}` : `Boekhouding · ${TAB_LABELS[tab]}`}
                 actions={tab === 'dashboard' ? <>
-                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost" aria-label="Vorig jaar"><ChevronLeft size={14} /></button>
-                    <div style={{ background: 'var(--card)', padding: '8px 16px', borderRadius: 8, fontWeight: 800 }}>{selectedYear}</div>
-                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
+                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost btn-sm" aria-label="Vorig jaar"><ChevronLeft size={14} /></button>
+                    <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{selectedYear}</span>
+                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost btn-sm" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
                 </> : undefined}
             />
 
@@ -316,8 +316,8 @@ function FinancienInner() {
                     <PageSection>
                         <div className="grid gap-5 grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" style={{ alignItems: 'flex-start' }}>
                             <div className="panel uren-glass" style={{ padding: 24, overflow: 'hidden' }}>
-                                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <BarChart3 size={14} style={{ color: 'var(--brand)' }} /> Cashflow per Maand (forecast)
+                                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <BarChart3 size={14} style={{ color: 'var(--brand)' }} /> Cashflow per maand (forecast)
                                 </h3>
                                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 260, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
                                     {forecast.months.map((m: any, idx: number) => {
@@ -341,8 +341,8 @@ function FinancienInner() {
                             </div>
 
                             <div className="panel uren-glass" style={{ padding: 24 }}>
-                                <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Crosshair size={14} style={{ color: 'var(--brand)' }} /> Focus Huidige Maand
+                                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Crosshair size={14} style={{ color: 'var(--brand)' }} /> Focus huidige maand
                                 </h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                                     <div>
@@ -372,14 +372,14 @@ function FinancienInner() {
                                             <div style={{ height: '100%', width: (currentMonthData.omzet ? (currentMonthData.laborCost / currentMonthData.omzet) * 100 : 0) + '%', background: 'var(--purple)' }} />
                                         </div>
                                     </div>
-                                    <div style={{ marginTop: 10, paddingTop: 16, borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                                    <div style={{ marginTop: 10, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Netto</span>
-                                            <span style={{ fontSize: 24, fontWeight: 900, color: currentMonthData.nettoWinst > 0 ? 'var(--green)' : 'var(--text)' }}>
+                                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--muted)' }}>Netto</span>
+                                            <span style={{ fontSize: 24, fontWeight: 800, color: currentMonthData.nettoWinst > 0 ? 'var(--green)' : 'var(--text)' }}>
                                                 {fmt(currentMonthData.nettoWinst)}
                                             </span>
                                         </div>
-                                        <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 800, color: currentMonthData.margePct >= 60 ? 'var(--green)' : currentMonthData.margePct >= 30 ? 'var(--brand)' : 'var(--red)' }}>
+                                        <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: currentMonthData.margePct >= 60 ? 'var(--green)' : currentMonthData.margePct >= 30 ? 'var(--brand)' : 'var(--red)' }}>
                                             Marge: {currentMonthData.margePct.toFixed(1)}%
                                         </div>
                                     </div>
@@ -560,7 +560,7 @@ function FinancienInner() {
                             {Object.keys(realisatie.btwMap).length === 0 && <div className="empty-state"><Calculator size={14} /><p>Geen BTW data beschikbaar</p></div>}
                             <div className="tbl-wrap">
                                 <table className="tbl">
-                                    <thead><tr><th colSpan={4} style={{ paddingTop: 4, color: 'var(--brand)', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' }}>Te dragen BTW (uit facturen)</th></tr></thead>
+                                    <thead><tr><th colSpan={4} style={{ paddingTop: 4, color: 'var(--brand)', fontSize: 13, fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>Te dragen BTW (uit facturen)</th></tr></thead>
                                     <thead><tr><th>BTW %</th><th style={{ textAlign: 'right' }}>Netto Omzet</th><th style={{ textAlign: 'right' }}>BTW Bedrag</th><th style={{ textAlign: 'right' }}>Bruto</th></tr></thead>
                                     <tbody>
                                         {Object.keys(realisatie.btwMap).sort().map(function (pct) {
@@ -575,7 +575,7 @@ function FinancienInner() {
                                             );
                                         })}
                                     </tbody>
-                                    <thead><tr><th colSpan={4} style={{ paddingTop: 16, color: 'var(--green)', fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' }}>Voorbelasting (uit bonnen — terug te vragen)</th></tr></thead>
+                                    <thead><tr><th colSpan={4} style={{ paddingTop: 16, color: 'var(--green)', fontSize: 13, fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>Voorbelasting (uit bonnen — terug te vragen)</th></tr></thead>
                                     <tbody>
                                         <tr><td><span className="pill" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}>9%</span></td><td colSpan={2} style={{ textAlign: 'right', color: 'var(--muted)' }}>food/dranken</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(realisatie.voorbelastingLaag)}</td></tr>
                                         <tr><td><span className="pill" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}>21%</span></td><td colSpan={2} style={{ textAlign: 'right', color: 'var(--muted)' }}>non-food</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(realisatie.voorbelastingHoog)}</td></tr>
@@ -584,19 +584,19 @@ function FinancienInner() {
                             </div>
                             <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                                 <div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Te dragen</div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--brand)' }}>{fmt(Object.values(realisatie.btwMap).reduce(function (sum, r) { return sum + r.btw; }, 0))}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Te dragen</div>
+                                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--brand)', marginTop: 2 }}>{fmt(Object.values(realisatie.btwMap).reduce(function (sum, r) { return sum + r.btw; }, 0))}</div>
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Voorbelasting</div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>−{fmt(realisatie.totaalVoorbelasting)}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Voorbelasting</div>
+                                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)', marginTop: 2 }}>−{fmt(realisatie.totaalVoorbelasting)}</div>
                                 </div>
                                 <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Saldo BTW</div>
-                                    <div style={{ fontSize: 20, fontWeight: 700, color: realisatie.btwSaldo >= 0 ? 'var(--brand)' : 'var(--green)' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Saldo BTW</div>
+                                    <div style={{ fontSize: 20, fontWeight: 700, color: realisatie.btwSaldo >= 0 ? 'var(--brand)' : 'var(--green)', marginTop: 2 }}>
                                         {realisatie.btwSaldo >= 0 ? fmt(realisatie.btwSaldo) : '+' + fmt(Math.abs(realisatie.btwSaldo))}
                                     </div>
-                                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{realisatie.btwSaldo >= 0 ? 'aan Belastingdienst' : 'terug te vorderen'}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{realisatie.btwSaldo >= 0 ? 'aan Belastingdienst' : 'terug te vorderen'}</div>
                                 </div>
                             </div>
                         </div>
