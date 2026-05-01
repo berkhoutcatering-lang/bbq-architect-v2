@@ -274,7 +274,7 @@ export default function Offertes() {
                     { icon: '🧾', label: 'Factuur bekijken', href: '/facturen' },
                     { icon: '📋', label: 'Prep-taken bekijken', href: '/agenda' },
                     { icon: '🍽️', label: 'Service-gangen aanvullen', href: '/service' },
-                    { icon: '📧', label: 'Bevestiging sturen naar klant', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
+                    { icon: '📧', label: 'Stuur bevestiging', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
                 ]);
             }, 3000);
         } catch (e: any) {
@@ -491,7 +491,7 @@ export default function Offertes() {
                                 <LinkIcon size={14} /> Magic Link
                             </button>
                         )}
-                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Naar Factuur</button>}
+                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Maak factuur</button>}
                         {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><Copy size={14} /> Dupliceer</button>}
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><Trash2 size={14} /> Verwijderen</button>}
                     </div>

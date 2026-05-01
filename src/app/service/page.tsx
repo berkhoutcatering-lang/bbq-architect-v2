@@ -148,7 +148,7 @@ function ServiceModeHub({ events, onPickEvent }: { events: ServiceEvent[]; onPic
                             background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)',
                             textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
                         }}>
-                            Naar Prep Counter
+                            Open Prep Counter
                         </a>
                     </div>
                 </div>
@@ -391,7 +391,7 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
             <div style={{ flex: 1, padding: '20px 22px', overflow: 'auto', marginRight: rookOffset }}>
                 <HelpNote title="Zo werkt het bord" tone="amber">
                     <strong style={{ color: BRAND }}>Kolommen:</strong> elke gang doorloopt 4 fases — Wachtend → Bezig → Klaar → Geserveerd.<br />
-                    <strong style={{ color: BRAND }}>Knop op de card:</strong> tap "Start" / "Markeer klaar" / "Naar uitgifte" om snel door te schuiven.<br />
+                    <strong style={{ color: BRAND }}>Knop op de card:</strong> tap "Start" / "Markeer klaar" / "Klaar voor uitgifte" om snel door te schuiven.<br />
                     <strong style={{ color: BRAND }}>Card tappen:</strong> opent fullscreen bereidingswijze.<br />
                     <strong style={{ color: BRAND }}>Per-tafel grid:</strong> oranje = bezig, groen = klaar. <span style={{ color: '#f87171' }}>Rode rand = allergie/dieet.</span>
                 </HelpNote>
@@ -531,7 +531,7 @@ function CourseCard({ course, event, onOpen, onAdvance }: { course: Course; even
                     <button onClick={(e) => { e.stopPropagation(); onAdvance(); }} style={advanceBtnStyle(course.status)}>
                         {course.status === 'queued' && <><Play size={12} />Start</>}
                         {course.status === 'active' && <><Check size={12} />Markeer klaar</>}
-                        {course.status === 'ready' && <><HandPlatter size={12} />Naar uitgifte</>}
+                        {course.status === 'ready' && <><HandPlatter size={12} />Klaar voor uitgifte</>}
                         {course.status === 'served' && <><Undo2 size={12} />Recall</>}
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); onOpen(); }} style={{
@@ -677,7 +677,7 @@ function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, r
                 }}>
                     {course.status === 'queued' && <><Play size={14} />Start bereiding</>}
                     {course.status === 'active' && <><Check size={14} />Markeer klaar voor uitgifte</>}
-                    {course.status === 'ready' && <><HandPlatter size={14} />Naar uitgifte</>}
+                    {course.status === 'ready' && <><HandPlatter size={14} />Klaar voor uitgifte</>}
                     {course.status === 'served' && <><Undo2 size={14} />Recall</>}
                 </button>
             </div>
