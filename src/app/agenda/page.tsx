@@ -8,7 +8,7 @@ import {
     PartyPopper, ClipboardList, Flame, Users, HeartHandshake, Truck, UserRound,
     ChevronLeft, ChevronRight, Filter, Grid3x3, Columns3, List as ListIcon,
     Sparkles, AlertTriangle, TrendingUp, Wand2, X, MapPin, Euro, Clock, Calendar,
-    ArrowRight, Check, RefreshCw, Info,
+    ArrowRight, Check, RefreshCw,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -164,10 +164,7 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
         }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
                 <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: 0 }}>Agenda</h1>
-                        <span style={{ padding: '2px 8px', borderRadius: 6, background: `${GOLD}20`, border: `1px solid ${GOLD}4D`, fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>SMART CALENDAR</span>
-                    </div>
+                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Agenda</h1>
                     <div style={{ color: 'var(--muted)', fontSize: 14 }}>
                         {kpis.usingDemoData
                             ? 'Demo-modus — voeg een echt event toe in /events om je live agenda te zien'
@@ -201,11 +198,11 @@ function KpiTile({ Icon, color, label, value, sub }: { Icon: any; color: string;
     return (
         <div style={{ padding: 14, borderRadius: 12, background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Eyebrow>{label}</Eyebrow>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
                 <Icon size={14} style={{ color }} />
             </div>
             <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 24, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>
         </div>
     );
 }
@@ -243,29 +240,21 @@ function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday }: MonthN
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '14px 16px', background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)', borderRadius: 12,
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <button onClick={onPrev} style={navBtnStyle()} aria-label="Vorige maand"><ChevronLeft size={16} /></button>
-                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em' }}>{monthLabel}</div>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em', minWidth: 180 }}>{monthLabel}</div>
                 <button onClick={onNext} style={navBtnStyle()} aria-label="Volgende maand"><ChevronRight size={16} /></button>
-                <button onClick={onToday} style={{
-                    marginLeft: 8, padding: '7px 14px', borderRadius: 8,
-                    background: `${BRAND}0f`, border: `1px solid ${BRAND}40`,
-                    color: BRAND, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                }}>
+                <button onClick={onToday} style={navPillStyle(BRAND)}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: BRAND }} /> Vandaag
                 </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
                     <button onClick={() => setView('month')} style={viewTabStyle(view === 'month')}><Grid3x3 size={11} /> Maand</button>
                     <button onClick={() => setView('week')} style={viewTabStyle(view === 'week')}><Columns3 size={11} /> Week</button>
                     <button onClick={() => setView('list')} style={viewTabStyle(view === 'list')}><ListIcon size={11} /> Lijst</button>
                 </div>
-                <button style={{
-                    padding: '7px 12px', borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
-                    color: 'var(--muted)', fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
-                }}>
+                <button style={navPillStyle()}>
                     <Filter size={11} /> Filter
                 </button>
             </div>
@@ -276,6 +265,17 @@ function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday }: MonthN
 const navBtnStyle = (): React.CSSProperties => ({
     width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
     color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+});
+
+/* Uniforme pill-style voor MonthNav-knoppen (Vandaag, Filter). Optionele accent-color
+   tint de border + tekst zodat de "Vandaag"-knop herkenbaar blijft als dag-anchor. */
+const navPillStyle = (accent?: string): React.CSSProperties => ({
+    padding: '7px 12px', borderRadius: 8,
+    background: accent ? `${accent}0f` : 'rgba(255,255,255,.04)',
+    border: `1px solid ${accent ? `${accent}40` : 'var(--border)'}`,
+    color: accent || 'var(--muted)',
+    fontSize: 11, fontWeight: 600, cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: 6,
 });
 
 const viewTabStyle = (active: boolean): React.CSSProperties => ({
@@ -293,25 +293,25 @@ const viewTabStyle = (active: boolean): React.CSSProperties => ({
 function CalendarLegend({ active, onToggle }: { active: string[]; onToggle: (id: string) => void }) {
     return (
         <MetalCard>
-            <Eyebrow style={{ marginBottom: 12 }}>Agenda's</Eyebrow>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Agenda&rsquo;s</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {CALENDARS.map(c => {
                     const isOn = active.includes(c.id);
                     return (
                         <div key={c.id} onClick={() => onToggle(c.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
                             background: isOn ? `${c.color}10` : 'transparent', opacity: isOn ? 1 : 0.5,
                             border: `1px solid ${isOn ? `${c.color}33` : 'transparent'}`,
                         }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color }} />
-                            <c.Icon size={13} style={{ color: c.color }} />
+                            <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
+                            <c.Icon size={13} style={{ color: c.color, flexShrink: 0 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
-                                <div style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {c.source} · {c.count}
                                 </div>
                             </div>
-                            {c.synced && <RefreshCw size={9} style={{ color: 'var(--muted-light)' }} />}
+                            {c.synced && <RefreshCw size={10} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />}
                         </div>
                     );
                 })}
@@ -552,24 +552,25 @@ function AIInsightsPanel() {
 
 function AIInsightCard({ insight }: { insight: typeof AI_INSIGHTS[0] }) {
     const colors = {
-        critical: { bg: 'rgba(239,68,68,.06)', border: 'rgba(239,68,68,.25)', icon: 'var(--red)', label: 'KRITISCH' },
-        opportunity: { bg: `${BRAND}0d`, border: `${BRAND}33`, icon: BRAND, label: 'KANS' },
-        info: { bg: `${GOLD}0a`, border: `${GOLD}26`, icon: GOLD, label: 'INFO' },
+        critical: { bg: 'rgba(239,68,68,.06)', border: 'rgba(239,68,68,.25)', icon: 'var(--red)', label: 'Kritisch' },
+        opportunity: { bg: `${BRAND}0d`, border: `${BRAND}33`, icon: BRAND, label: 'Kans' },
+        info: { bg: `${GOLD}0a`, border: `${GOLD}26`, icon: GOLD, label: 'Info' },
     };
     const c = colors[insight.severity];
     return (
         <div style={{ padding: 12, borderRadius: 10, background: c.bg, border: `1px solid ${c.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(0,0,0,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <insight.Icon size={13} style={{ color: c.icon }} />
                 </div>
-                <div style={{ fontSize: 9, letterSpacing: '.18em', color: c.icon, fontWeight: 700 }}>{c.label}</div>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.icon }} />
+                <div style={{ fontSize: 11, color: c.icon, fontWeight: 600 }}>{c.label}</div>
             </div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{insight.title}</div>
             <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 8 }}>{insight.body}</div>
-            <div style={{ fontSize: 10, color: c.icon, fontStyle: 'italic', marginBottom: 8 }}>→ {insight.suggestion}</div>
+            <div style={{ fontSize: 11, color: c.icon, fontStyle: 'italic', marginBottom: 10 }}>→ {insight.suggestion}</div>
             <button style={{
-                width: '100%', padding: '6px 10px', borderRadius: 6,
+                width: '100%', padding: '7px 10px', borderRadius: 6,
                 background: 'rgba(0,0,0,.3)', border: `1px solid ${c.border}`,
                 color: c.icon, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -922,15 +923,6 @@ export default function Agenda() {
                         </MetalCard>
                     )}
                 </div>
-            </div>
-
-            <div style={{ marginTop: 32, padding: 14, borderRadius: 10, background: `${GOLD}0a`, border: `1px solid ${GOLD}24`, display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
-                <Info size={14} style={{ color: GOLD, flexShrink: 0, marginTop: 1 }} />
-                <span>
-                    <strong style={{ color: 'var(--text)' }}>Agenda · hoe het werkt:</strong>{' '}
-                    Events uit je database verschijnen automatisch hier; prep-taken worden gekoppeld op datum. Klik elk item voor detail.
-                    Smoker-cycli, leveringen en team-rooster zijn nog demo-data tot er DB-tabellen voor zijn. Koppelt naar <a href="/prep-counter" style={{ color: GOLD }}>Prep Counter</a>, <a href="/service" style={{ color: GOLD }}>Service KDS</a> en <a href="/voorraad" style={{ color: GOLD }}>Voorraad</a>.
-                </span>
             </div>
 
             <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
