@@ -474,18 +474,20 @@ export default function EventHubPage() {
                 </div>
               </div>
               <div className="eh-hero-actions">
-                <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
-                <button className="btn btn-ghost" onClick={() => router.push(`/events/${event.id}/field`)}>
-                  <Flame size={14} />Ga live (KDS)
-                </button>
-                <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
-                {event.client_email && (
-                  <a className="btn btn-ghost" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
-                )}
-                <button className="btn btn-ghost"><Share2 size={14} />Deel</button>
-                {event.status !== 'confirmed' && (
+                {event.status !== 'confirmed' && event.status !== 'completed' && (
                   <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
                 )}
+                {event.status === 'confirmed' && (
+                  <button className="btn btn-primary" onClick={() => router.push(`/events/${event.id}/field`)}>
+                    <Flame size={14} />Ga live (KDS)
+                  </button>
+                )}
+                <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
+                <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
+                {event.client_email && (
+                  <a className="btn btn-ghost btn-sm" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
+                )}
+                <button className="btn btn-ghost btn-sm"><Share2 size={14} />Deel</button>
               </div>
             </div>
             <div className="eh-countdown">
@@ -709,20 +711,20 @@ export default function EventHubPage() {
                 <div className="hstack"><Flag size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Workflow · 5 stappen</span></div>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{stages.filter(s => s.status === 'done').length} / {stages.length} afgerond</span>
               </div>
-              <div style={{ padding: 18, display: 'grid', gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: 8, position: 'relative' }}>
-                <div style={{ position: 'absolute', left: '8%', right: '8%', top: 30, height: 2, background: 'linear-gradient(90deg, rgba(196,163,90,.35), rgba(196,163,90,.08))', zIndex: 0 }} />
+              <div style={{ padding: 20, display: 'grid', gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: 10, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: '8%', right: '8%', top: 36, height: 2, background: 'linear-gradient(90deg, rgba(196,163,90,.35), rgba(196,163,90,.08))', zIndex: 0 }} />
                 {stages.map(s => {
                   const color = s.status === 'done' ? 'var(--green)' : s.status === 'active' ? 'var(--brand)' : 'var(--muted)';
                   const bg = s.status === 'done' ? 'var(--green)' : s.status === 'active' ? 'rgba(255,191,0,.14)' : 'rgba(130,130,130,.08)';
                   return (
-                    <div key={s.key} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: bg, border: '2px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: s.status === 'active' ? '0 0 0 4px rgba(255,191,0,.15)' : 'none' }}>
-                        {s.status === 'done' && <Check size={12} style={{ color: 'var(--brand-background)' }} />}
-                        {s.status === 'active' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />}
+                    <div key={s.key} style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: bg, border: '2px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: s.status === 'active' ? '0 0 0 4px rgba(255,191,0,.15)' : 'none' }}>
+                        {s.status === 'done' && <Check size={14} style={{ color: 'var(--brand-background)' }} />}
+                        {s.status === 'active' && <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />}
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: s.status === 'upcoming' ? 'var(--muted)' : 'var(--text)', letterSpacing: '-.005em' }}>{s.label}</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, lineHeight: 1.35 }}>{s.hint}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: s.status === 'upcoming' ? 'var(--muted)' : 'var(--text)' }}>{s.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.4 }}>{s.hint}</div>
                       </div>
                     </div>
                   );
@@ -740,7 +742,7 @@ export default function EventHubPage() {
               </div>
               <div className="responsive-grid" style={{ padding: 20, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
                 <div>
-                  <div style={{ fontSize: 11, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>Menu-samenstelling</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Menu-samenstelling</div>
                   {menuGroups.map((g, gi) => (
                     <div key={gi} style={{ marginBottom: 12 }}>
                       <div style={{ fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--brand-gold)', fontWeight: 700, marginBottom: 6 }}>{g.title}</div>
@@ -755,13 +757,13 @@ export default function EventHubPage() {
                       ))}
                     </div>
                   ))}
-                  <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.2)', borderRadius: 9, fontSize: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Sparkles size={14} color="var(--brand)" />
-                    <div style={{ flex: 1, color: 'var(--muted)' }}>Menukaart wordt automatisch gegenereerd — template <strong style={{ color: 'var(--text)' }}>{tpl === 'ambacht' ? 'Ambacht' : tpl === 'modern' ? 'Modern' : 'Slate'}</strong>.</div>
+                  <div style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Sparkles size={11} color="var(--brand-gold)" />
+                    Menukaart wordt automatisch gegenereerd · template <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{tpl === 'ambacht' ? 'Ambacht' : tpl === 'modern' ? 'Modern' : 'Slate'}</strong>
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
                   <div className="mk-preview-wrap">
                     <div className="mk-preview-card mk-printable">
                       {activeTemplate ? (
@@ -917,8 +919,8 @@ export default function EventHubPage() {
                 </div>
                 <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
                   <div>
-                    <div style={{ fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--brand-gold)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Flame size={11} />Service-logs · gangen
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Flame size={13} color="var(--brand-gold)" />Service-logs · gangen
                     </div>
                     {serviceLogs.length === 0 ? (
                       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
@@ -943,8 +945,8 @@ export default function EventHubPage() {
                     )}
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--brand-gold)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Thermometer size={11} />HACCP · laatste metingen
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Thermometer size={13} color="var(--brand-gold)" />HACCP · laatste metingen
                     </div>
                     {haccpRecords.length === 0 ? (
                       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
@@ -1064,13 +1066,20 @@ export default function EventHubPage() {
             </div>
           </div>
           {/* ═════════ KEUKEN COMMAND — Inkooplijst + HACCP + Draaiboek ═════════ */}
-          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
-            <EventInkooplijstCard eventId={eventId} eventName={event.name} menuGroups={menuGroups} recepten={recepten} gerechten={gerechten} />
-            <EventHaccpCard eventId={eventId} />
-            <EventDraaiboekCard event={event} onSave={async (draaiboek) => {
-              await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
-              setEvent({ ...event, draaiboek });
-            }} />
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <Truck size={15} color="var(--brand-gold)" />
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Operationeel</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>Inkoop · HACCP · draaiboek</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+              <EventInkooplijstCard eventId={eventId} eventName={event.name} menuGroups={menuGroups} recepten={recepten} gerechten={gerechten} />
+              <EventHaccpCard eventId={eventId} />
+              <EventDraaiboekCard event={event} onSave={async (draaiboek) => {
+                await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
+                setEvent({ ...event, draaiboek });
+              }} />
+            </div>
           </div>
         </div>
 
@@ -1082,11 +1091,11 @@ export default function EventHubPage() {
           </div>
           <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div>
-              <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-gold)', textTransform: 'uppercase', marginBottom: 12, letterSpacing: '.05em' }}>Gangen</h4>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Gangen</h4>
               <CoursesEditor eventId={event.id} eventGuests={event.guests || 0} />
             </div>
             <div>
-              <h4 style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-gold)', textTransform: 'uppercase', marginBottom: 12, letterSpacing: '.05em' }}>Allergieën & Diëten</h4>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Allergieën &amp; diëten</h4>
               <AllergiesEditor eventId={event.id} />
             </div>
           </div>
