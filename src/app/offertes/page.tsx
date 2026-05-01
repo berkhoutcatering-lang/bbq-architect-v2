@@ -29,6 +29,7 @@ import { calcOfferteMarge } from '@/lib/costCalculations';
 import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
 import StatusBadge from '@/components/StatusBadge';
+import StickyActionBar from '@/components/StickyActionBar';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
 export default function Offertes() {
@@ -585,6 +586,20 @@ export default function Offertes() {
                         initialMenu={typeof form.menu_selectie === 'object' && !Array.isArray(form.menu_selectie) ? form.menu_selectie : {}}
                     />
                 </div>
+
+                <StickyActionBar
+                    hint={form.nummer ? `${form.nummer} · ${form.client_naam || 'Geen klant'}` : 'Nieuwe offerte'}
+                    secondary={
+                        <button className="btn btn-ghost" onClick={function () { setEditing(null); setForm(null); }}>
+                            <ArrowLeft size={14} /> Annuleren
+                        </button>
+                    }
+                    primary={
+                        <button className="btn-gold" onClick={saveOfferte}>
+                            <Save size={14} /> Opslaan
+                        </button>
+                    }
+                />
             </div>
         );
     }

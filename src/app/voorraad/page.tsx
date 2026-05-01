@@ -527,6 +527,7 @@ export default function Voorraad() {
                             inventory={inventory}
                             onOpenItem={setSelectedId}
                             onOpenBuyList={() => setView('inkooplijst')}
+                            onAdjust={quickAdjust}
                         />
 
                         {byCategory.length > 1 && (
@@ -762,7 +763,7 @@ function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
 /* ═══════════════════════════════════════════════════════════════════
    ACTION PANEL — 3 cards (under-par, THT, AI bestelvoorstel)
    ═══════════════════════════════════════════════════════════════════ */
-function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList }: { lowStock: InventoryItem[]; expiring: InventoryItem[]; inventory: InventoryItem[]; onOpenItem: (id: number) => void; onOpenBuyList: () => void }) {
+function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList, onAdjust }: { lowStock: InventoryItem[]; expiring: InventoryItem[]; inventory: InventoryItem[]; onOpenItem: (id: number) => void; onOpenBuyList: () => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
     /* AI bundel-voorstel: groepeer onder-par per leverancier */
     const bySupplier: Record<string, { id: string; name: string; color: string; items: InventoryItem[]; total: number }> = {};
     lowStock.forEach(p => {
@@ -802,16 +803,33 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList 
                         const meta = CAT_META[p.categorie] || CAT_META.Overig;
                         const par = p.par_level || p.min_stock || 0;
                         return (
-                            <div key={p.id} onClick={() => onOpenItem(p.id)} style={{
-                                display: 'grid', gridTemplateColumns: '3px 1fr auto', gap: 10, alignItems: 'center',
-                                padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'background .12s',
+                            <div key={p.id} style={{
+                                display: 'grid', gridTemplateColumns: '3px 1fr auto auto', gap: 8, alignItems: 'center',
+                                padding: '8px 10px', borderRadius: 8, transition: 'background .12s',
                             }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                 <div style={{ width: 3, height: 24, background: meta.color, borderRadius: 2 }} />
-                                <div style={{ minWidth: 0 }}>
+                                <div onClick={() => onOpenItem(p.id)} style={{ minWidth: 0, cursor: 'pointer' }}>
                                     <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.naam}</div>
                                     <div style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{p.current_stock} / {par} {p.unit}</div>
+                                </div>
+                                {/* Inline quick-adjust: +1 stelt voorraad +1 zonder modal te openen */}
+                                <div style={{ display: 'flex', gap: 2 }}>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onAdjust(p, -1); }}
+                                        title={'-1 ' + p.unit + ' (verbruik)'}
+                                        aria-label={p.naam + ' min 1'}
+                                        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >−</button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onAdjust(p, 1); }}
+                                        title={'+1 ' + p.unit + ' (ontvangst)'}
+                                        aria-label={p.naam + ' plus 1'}
+                                        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(34,197,94,.08)', color: 'var(--green)', cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >+</button>
                                 </div>
                                 <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.08em', background: s.bg, color: s.color, border: `1px solid ${s.br}` }}>{s.label}</span>
                             </div>

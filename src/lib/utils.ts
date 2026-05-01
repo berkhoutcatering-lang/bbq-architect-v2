@@ -55,6 +55,20 @@ export function calcLineTotals(items: (FactuurItem | OfferteItem)[] | null | und
     return { subtotaal, btw: btwBedrag, totaal: subtotaal + btwBedrag };
 }
 
+/**
+ * Pluraliseert een Nederlands zelfstandig naamwoord op basis van count.
+ * Voorkomt "1 offertes" en soortgelijke grammatica-fouten.
+ *
+ * @example
+ *   plural(1, 'offerte', 'offertes') → "1 offerte"
+ *   plural(2, 'offerte', 'offertes') → "2 offertes"
+ *   plural(0, 'klant', 'klanten')   → "0 klanten"
+ */
+export function plural(count: number, singular: string, pluralForm?: string): string {
+    const word = count === 1 ? singular : (pluralForm || singular + 'en');
+    return `${count} ${word}`;
+}
+
 // Month names in Dutch
 export const MAANDEN = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 export const MAANDEN_KORT = ['Jan', 'Feb', 'Mrt', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];

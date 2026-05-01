@@ -20,6 +20,7 @@ import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import StatusBadge from '@/components/StatusBadge';
+import StickyActionBar from '@/components/StickyActionBar';
 import type { Factuur } from '@/types';
 import { ArrowLeft, Bell, Code, CreditCard, FileSpreadsheet, FileText, Link2, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
 
@@ -285,6 +286,20 @@ export default function Facturen() {
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>
+
+                <StickyActionBar
+                    hint={form?.nummer ? `${form.nummer} · ${form?.client_naam || 'Geen klant'}` : 'Nieuwe factuur'}
+                    secondary={
+                        <button className="btn btn-ghost" onClick={function () { setEditing(null); setForm(null); }}>
+                            <ArrowLeft size={14} /> Annuleren
+                        </button>
+                    }
+                    primary={
+                        <button className="btn btn-brand" onClick={saveFactuur}>
+                            <Save size={14} /> Opslaan
+                        </button>
+                    }
+                />
             </div>
         );
     }

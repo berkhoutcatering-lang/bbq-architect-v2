@@ -10,7 +10,7 @@ import {
   Plus, FileScan, X, TrendingDown
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
-import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT } from '@/lib/utils';
+import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT, plural } from '@/lib/utils';
 import { detectAllConflicts } from '@/lib/conflictDetection';
 import MetallicCard from '@/components/MetallicCard';
 import { StatusDot } from '@/components/StatusBadge';
@@ -144,7 +144,7 @@ export default function DashboardPage() {
     return o.geldig_tot < today;
   });
   if (verlopenOffertes.length > 0) {
-    aiNudges.push({ id: 'n_verlopen', type: 'warning', icon: '\u23F0', message: `${verlopenOffertes.length} offerte(s) verlopen \u2014 overweeg follow-up`, link: '/offertes' });
+    aiNudges.push({ id: 'n_verlopen', type: 'warning', icon: '\u23F0', message: `${plural(verlopenOffertes.length, 'offerte', 'offertes')} verlopen \u2014 overweeg follow-up`, link: '/offertes' });
   }
 
   // 2. Onverzonden facturen voor afgeronde events
@@ -674,37 +674,25 @@ export default function DashboardPage() {
               </div>
             </button>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Link href="/facturen" className="no-underline">
-                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
-                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Open facturen</div>
-                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(openFacturenBedrag)}</div>
-                  <div className="text-[10px] text-[var(--muted)] mt-1">
-                    {openFacturen.length} stuks
-                    {verlopenFacturen.length > 0 && <span style={{ color: 'var(--red)' }}> · {verlopenFacturen.length} te laat</span>}
-                  </div>
+            {/* Pipeline of bonnen-loop — Open Facturen zit al in KPI-strip bovenaan,
+                hier alleen unieke info tonen die NIET in de strip staat. */}
+            {prognose > 0 ? (
+              <Link href="/offertes" className="no-underline">
+                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer">
+                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
+                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} {openOffertes.length === 1 ? 'offerte' : 'offertes'} open</div>
                 </div>
               </Link>
-              {/* Toont pipeline OF bonnen-loop activiteit; pipeline=€0 is uninformatief
-                  als alle offertes al geaccepteerd zijn. */}
-              {prognose > 0 ? (
-                <Link href="/offertes" className="no-underline">
-                  <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
-                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Pipeline</div>
-                    <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{formatCurrency(prognose)}</div>
-                    <div className="text-[10px] text-[var(--muted)] mt-1">{openOffertes.length} offertes open</div>
-                  </div>
-                </Link>
-              ) : (
-                <Link href="/inkoop" className="no-underline">
-                  <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer h-full">
-                    <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Bonnen deze maand</div>
-                    <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{bonnenDezeMaand.length}</div>
-                    <div className="text-[10px] text-[var(--muted)] mt-1">{formatCurrency(uitgavenDezeMaand)} uitgaven</div>
-                  </div>
-                </Link>
-              )}
-            </div>
+            ) : (
+              <Link href="/inkoop" className="no-underline">
+                <div className="p-4 rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20 transition-colors cursor-pointer">
+                  <div className="text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--muted)] mb-2">Bonnen deze maand</div>
+                  <div className="text-[20px] font-bold text-[var(--text)] tabular-nums">{bonnenDezeMaand.length}</div>
+                  <div className="text-[10px] text-[var(--muted)] mt-1">{formatCurrency(uitgavenDezeMaand)} uitgaven</div>
+                </div>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -729,7 +717,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
-                          {klantenZonderRecentEvent.length} klanten 6+ maand zonder event
+                          {plural(klantenZonderRecentEvent.length, 'klant', 'klanten')} 6+ maand zonder event
                         </div>
                         <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
                           Stuur een seizoens-aanbod om relatie warm te houden
@@ -756,7 +744,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[12px] font-bold mb-1" style={{ color: 'var(--text)' }}>
-                          {lowMargeOffertes.length} offertes onder 40% marge
+                          {plural(lowMargeOffertes.length, 'offerte', 'offertes')} onder 40% marge
                         </div>
                         <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
                           Verhoog prijs of versmal menu vóór verzenden

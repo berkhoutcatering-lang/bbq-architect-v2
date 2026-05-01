@@ -69,6 +69,15 @@ export default function HACCP() {
         { val: 'bewaring', label: 'Bewaring', icon: '\uD83D\uDCE6', color: 'var(--purple)' },
         { val: 'uitgifte', label: 'Uitgifte', icon: '\uD83C\uDF7D\uFE0F', color: 'var(--amber)' }
     ];
+    /* Preset-temperaturen per meting-type — operator tikt 1 knop ipv typen.
+       Drie presets: optimaal (groen, in norm), grens (oranje, randje warn),
+       fout (rood, danger). Werkt met getQuickLogStatus voor instant feedback. */
+    const PRESET_TEMPS: Record<string, { ok: number; warn: number; danger: number }> = {
+        kern:     { ok: 75, warn: 60, danger: 50 },
+        koeling:  { ok: 4,  warn: 7,  danger: 10 },
+        bewaring: { ok: 4,  warn: 7,  danger: 10 },
+        uitgifte: { ok: 65, warn: 55, danger: 45 },
+    };
     const [qlProduct, setQlProduct] = useState('');
     const [qlTemp, setQlTemp] = useState('');
     const [qlType, setQlType] = useState('kern');
@@ -339,6 +348,34 @@ export default function HACCP() {
                                     {s === 'ok' ? '\u2713 OK' : s === 'warn' ? '\u26A0 Risicozone' : '\u2717 AFWIJKING'}
                                 </div>;
                             })()}
+                        </div>
+                        {/* Quick presets — 1 tap voor standaard temperaturen per meting-type */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, maxWidth: 320, margin: '0 auto 10px' }}>
+                            {(['ok', 'warn', 'danger'] as const).map(function (level) {
+                                const presets = PRESET_TEMPS[qlType] || PRESET_TEMPS.kern;
+                                const temp = presets[level];
+                                const labels: Record<string, string> = { ok: 'OK', warn: 'Grens', danger: 'Buiten norm' };
+                                const colors: Record<string, { bg: string; border: string; color: string }> = {
+                                    ok:     { bg: 'color-mix(in srgb, var(--emerald) 12%, transparent)', border: 'color-mix(in srgb, var(--emerald) 40%, transparent)', color: 'var(--emerald)' },
+                                    warn:   { bg: 'color-mix(in srgb, var(--amber) 12%, transparent)',   border: 'color-mix(in srgb, var(--amber) 40%, transparent)',   color: 'var(--amber)' },
+                                    danger: { bg: 'color-mix(in srgb, var(--red) 12%, transparent)',     border: 'color-mix(in srgb, var(--red) 40%, transparent)',     color: 'var(--red)' },
+                                };
+                                const c = colors[level];
+                                return (
+                                    <button
+                                        key={level}
+                                        onClick={() => setQlTemp(String(temp))}
+                                        title={labels[level] + ' \u2014 ' + temp + '°C'}
+                                        style={{
+                                            height: 44, borderRadius: 10, fontSize: 12, fontWeight: 700,
+                                            background: c.bg, border: '1px solid ' + c.border, color: c.color,
+                                            cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
+                                        }}>
+                                        <span style={{ fontSize: 11, opacity: 0.8 }}>{labels[level]}</span>
+                                        <span style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{temp}°C</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                         {/* Number pad */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, maxWidth: 320, margin: '0 auto' }}>
