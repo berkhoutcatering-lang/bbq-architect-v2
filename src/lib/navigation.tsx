@@ -55,7 +55,6 @@ export const navSections: NavSection[] = [
             { label: "Events", icon: <PartyPopper size={16} />, href: "/events", description: "Beheer al je events en boekingen" },
             { label: "Prep Counter", icon: <ClipboardList size={16} />, href: "/prep-counter", description: "Mise en place planner — AI volgorde-plan + sticker generator" },
             { label: "Klantgesprek", icon: <HeartHandshake size={16} />, href: "/klantgesprek", description: "Intake bij potentiële klant" },
-            { label: "Service", icon: <HeartHandshake size={16} />, href: "/service", description: "Beheer je serviceteam en taken" },
             { label: "HACCP", icon: <ShieldCheck size={16} />, href: "/haccp", description: "Voedselveiligheid en temperatuur-logs per event" },
         ],
     },

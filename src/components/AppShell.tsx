@@ -26,6 +26,11 @@ import type { ReactNode } from 'react';
 const AUTH_PAGES = ['/login', '/signup', '/auth/'];
 const PUBLIC_PAGES = ['/q/', '/invite'];
 
+// KDS Service Mode = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
+function isKdsPage(pathname: string): boolean {
+  return /^\/events\/[^/]+\/service(\/.*)?$/.test(pathname);
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, loading: authLoading } = useAuth();
@@ -40,6 +45,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Public pages (quote view) — no sidebar, no auth needed
   const isPublicPage = PUBLIC_PAGES.some(function (p) { return pathname.startsWith(p); });
   if (isPublicPage) {
+    return <>{children}</>;
+  }
+
+  // KDS Service Mode — fullscreen kookbord, geen app-shell chrome
+  if (isKdsPage(pathname)) {
     return <>{children}</>;
   }
 

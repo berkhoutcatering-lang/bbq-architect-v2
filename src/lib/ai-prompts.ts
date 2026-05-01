@@ -166,8 +166,8 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         'BELANGRIJK: de context-data bevat voor elke factuur het berekende TOTAALBEDRAG en samenvattingen van openstaand/betaald. Gebruik deze cijfers direct.',
     ].join('\n'),
 
-    '/service': [
-        '**Service** — Hop & Bites op locatie, live tijdens een event. Operator heeft 5 seconden, niet 5 minuten.',
+    '/events/[id]/service': [
+        '**Service Mode (KDS)** — Hop & Bites live op locatie, fullscreen kookbord tijdens een event. Operator heeft 5 seconden, niet 5 minuten.',
         'MAXIMAAL 1-2 zinnen per antwoord. Geen koppen, geen tabellen, geen uitleg tenzij gevraagd.',
         '',
         'Context: actieve events, prep-taken (done: true/false), HACCP-registraties van vandaag.',

@@ -644,20 +644,13 @@ function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onCl
                                 <ClipboardList size={14} style={{ color: GOLD }} />
                                 Open prep planning
                             </a>
-                            {/* Service-deeplink: koppel agenda-event aan een service-mock-event als titel matcht */}
+                            {/* Service-deeplink: ga naar Event Hub van dit event — daar start je Service Mode (KDS) */}
                             <a
-                                href={(() => {
-                                    /* Match op event-naam keywords → mock event-id */
-                                    const t = (event.title || '').toLowerCase();
-                                    if (t.includes('bruiloft') || t.includes('singraven') || t.includes('joost') || t.includes('liane')) return '/service?eventId=evt_singraven';
-                                    if (t.includes('techcorp') || t.includes('bedrijfsfeest')) return '/service?eventId=evt_techcorp';
-                                    if (t.includes('berghuis') || t.includes('verjaardag') || t.includes('familie')) return '/service?eventId=evt_berghuis';
-                                    return '/service';
-                                })()}
+                                href={event.id ? `/events/${event.id}/hub` : '/events'}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}
                             >
                                 <PartyPopper size={14} style={{ color: GOLD }} />
-                                Open Service Mode →
+                                Open Event Hub →
                             </a>
                             <a href="/voorraad" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
                                 <Check size={14} style={{ color: GOLD }} />

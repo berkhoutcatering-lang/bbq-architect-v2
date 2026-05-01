@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, PartyPopper, MessageSquare, ClipboardList, Bell, ShieldCheck } from 'lucide-react';
+import { Calendar, PartyPopper, MessageSquare, ClipboardList, ShieldCheck } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
 const TABS: HubTab[] = [
@@ -8,7 +8,6 @@ const TABS: HubTab[] = [
   { href: '/events', label: 'Events', icon: PartyPopper },
   { href: '/klantgesprek', label: 'Klantgesprek', icon: MessageSquare },
   { href: '/prep-counter', label: 'Prep', icon: ClipboardList },
-  { href: '/service', label: 'Service', icon: Bell },
   { href: '/haccp', label: 'HACCP', icon: ShieldCheck },
 ];
 

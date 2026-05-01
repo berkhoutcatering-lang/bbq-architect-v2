@@ -7,7 +7,7 @@ import {
     Search, Calendar, FileText, Receipt, Package, ChefHat, BookOpen,
     Users, Euro, ArrowRight, Flame, Sparkles, ShoppingCart, Truck, Wrench, Clock,
     ShieldCheck, DollarSign, Settings, Globe, HelpCircle, Mail, Camera,
-    Building2, MessageSquare, ClipboardList, Bell, Map
+    Building2, MessageSquare, ClipboardList, Map
 } from 'lucide-react';
 
 interface SearchResult {
@@ -41,7 +41,6 @@ const pages: SearchResult[] = [
     { id: 'p_events', type: 'pagina', title: 'Events', subtitle: 'Plannen & Events', href: '/events', icon: Calendar, accent: HUB_ACCENT.plannen },
     { id: 'p_klantgesprek', type: 'pagina', title: 'Klantgesprek', subtitle: 'Plannen & Events', href: '/klantgesprek', icon: MessageSquare, accent: HUB_ACCENT.plannen },
     { id: 'p_prep', type: 'pagina', title: 'Prep Counter', subtitle: 'Plannen & Events', href: '/prep-counter', icon: ClipboardList, accent: HUB_ACCENT.plannen },
-    { id: 'p_service', type: 'pagina', title: 'Service', subtitle: 'Plannen & Events', href: '/service', icon: Bell, accent: HUB_ACCENT.plannen },
     { id: 'p_haccp_plannen', type: 'pagina', title: 'HACCP', subtitle: 'Plannen & Events', href: '/haccp', icon: ShieldCheck, accent: HUB_ACCENT.plannen },
 
     /* Verkoop & Klanten */

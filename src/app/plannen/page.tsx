@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Calendar, PartyPopper, MessageSquare, ClipboardList, Bell, ArrowRight } from 'lucide-react';
+import { Calendar, PartyPopper, MessageSquare, ClipboardList, ArrowRight } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import PlannenTabs from '@/components/PlannenTabs';
 
@@ -33,13 +33,6 @@ const HUB_CARDS = [
     title: 'Prep Counter',
     desc: 'Mise-en-place planner met AI-volgorde en sticker-generator.',
     cta: 'Open prep',
-  },
-  {
-    href: '/service',
-    icon: Bell,
-    title: 'Service',
-    desc: 'Live service-runtime: gangen, taken, team-coördinatie tijdens event.',
-    cta: 'Open service',
   },
 ];
 

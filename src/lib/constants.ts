@@ -13,7 +13,7 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/facturen': ['Nieuwe factuur aanmaken', 'Welke facturen vervallen binnenkort?', 'Openstaand overzicht', 'Cashflow advies'],
   '/voorraad': ['Wat moet ik bestellen voor het volgende event?', 'Lage voorraad nu', 'Bestel-suggestie genereren', 'Nieuw voorraad item'],
   '/inkoop': ['Inkooplijst aanmaken voor event', 'Leverancier toevoegen', 'Vleesinkoop calculeren voor 80p', 'Beste leverancier kiezen'],
-  '/service': ['Open prep-taken nu', 'Temperatuur registreren', 'Vink alle prep af', 'Voorraad bijwerken'],
+  '/events/[id]/service': ['Wat moet ik nu doen?', 'Temp van de smoker?', 'Volgende gang status?', 'Allergie tafel check'],
   '/haccp': ['Temperatuur registreren', 'Welke events missen HACCP?', 'Kerntemperaturen uitleggen', 'Gevaarlijke zone uitleg'],
   '/uren': ['Uren registreren voor vandaag', 'Weekoverzicht medewerkers', 'Overuren berekenen', 'Wettelijke limieten NL'],
   '/materieel': ['Welk materieel heeft onderhoud nodig?', 'Onderhoud registreren', 'Materieel toevoegen', 'Levensduur BBQ uitleggen'],
@@ -112,11 +112,11 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
     description: 'Stel je bus-indeling, checklists en inpaklisten samen voor komende events.',
     actionLabel: 'Item toevoegen',
   },
-  '/service': {
+  '/events/[id]/service': {
     icon: 'BellRing',
-    title: 'Geen events met menu',
-    description: 'Service mode werkt met events die een menu hebben. Maak eerst een event aan met gerechten.',
-    actionLabel: 'Naar events',
+    title: 'Geen gangen voor dit event',
+    description: 'Service Mode draait op de gangen die je in de Event Hub hebt gekoppeld. Voeg eerst een menu toe.',
+    actionLabel: 'Naar event hub',
   },
   '/menu-engineering': {
     icon: 'PieChart',

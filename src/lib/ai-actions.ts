@@ -104,7 +104,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event bijwerken',
         table: 'events',
         op: 'update',
-        pages: ['/events', '/agenda', '/service'],
+        pages: ['/events', '/agenda', '/events/[id]/service'],
         icon: 'CalendarCheck',
         color: '#f59e0b',
     },
@@ -226,7 +226,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Temperatuurmeting registreren',
         table: 'haccp_records',
         op: 'insert',
-        pages: ['/haccp', '/service'],
+        pages: ['/haccp', '/events/[id]/service'],
         icon: 'Thermometer',
         color: '#ef4444',
     },
@@ -280,7 +280,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak aanmaken',
         table: 'prep_tasks',
         op: 'insert',
-        pages: ['/agenda', '/events', '/service'],
+        pages: ['/agenda', '/events', '/events/[id]/service'],
         icon: 'ListChecks',
         color: '#22c55e',
     },
@@ -288,7 +288,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak bijwerken',
         table: 'prep_tasks',
         op: 'update',
-        pages: ['/agenda', '/service'],
+        pages: ['/agenda', '/events/[id]/service'],
         icon: 'Pencil',
         color: '#f59e0b',
     },
@@ -376,7 +376,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-lijst genereren',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/agenda', '/service'],
+        pages: ['/', '/events', '/agenda', '/events/[id]/service'],
         icon: 'ListChecks',
         color: '#22c55e',
         tool: 'generatePrepList',
@@ -394,7 +394,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event briefing genereren',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/agenda', '/service'],
+        pages: ['/', '/events', '/agenda', '/events/[id]/service'],
         icon: 'ClipboardList',
         color: '#a78bfa',
         tool: 'generateEventBriefing',
@@ -956,7 +956,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             }
         }
 
-        if (pathname === '/service') {
+        if (pathname === '/events/[id]/service') {
             const vandaagSvc = new Date().toISOString().slice(0, 10);
             const svcEvRes = await supabase.from('events')
                 .select('id,name,date,status,guests,location,client_naam')

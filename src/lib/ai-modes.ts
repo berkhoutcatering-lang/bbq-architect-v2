@@ -73,7 +73,7 @@ export const DEFAULT_MODE: ThinkingMode = 'standard';
 // een page-load waar nog geen user-keuze ligt voor die pagina.
 export const PAGE_DEFAULT_MODE: Record<string, ThinkingMode> = {
     '/voorraad': 'fast',
-    '/service': 'fast',
+    '/events/[id]/service': 'fast',
     '/recepten': 'deep',
     '/gerechten': 'deep',
     '/menu-engineering': 'deep',
@@ -82,8 +82,9 @@ export const PAGE_DEFAULT_MODE: Record<string, ThinkingMode> = {
 export function getPageDefaultMode(pathname: string | null | undefined): ThinkingMode {
     if (!pathname) return DEFAULT_MODE;
     if (PAGE_DEFAULT_MODE[pathname]) return PAGE_DEFAULT_MODE[pathname];
-    // Match dynamische routes: /events/[id]/hub etc.
+    // Match dynamische routes: /events/[id]/hub, /events/[id]/service etc.
     if (pathname.startsWith('/events/') && pathname.endsWith('/hub')) return 'standard';
+    if (pathname.startsWith('/events/') && pathname.endsWith('/service')) return 'fast';
     return DEFAULT_MODE;
 }
 

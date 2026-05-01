@@ -262,7 +262,7 @@ export default function Offertes() {
                     if (s.id === 'factuur') return { ...s, status: result.factuur.success ? 'completed' as const : 'error' as const, detail: result.factuur.message, href: '/facturen' };
                     if (s.id === 'prep') return { ...s, status: result.prep.success ? 'completed' as const : 'error' as const, detail: result.prep.message, href: '/agenda' };
                     if (s.id === 'inkoop') return { ...s, status: result.inkoop.success ? 'completed' as const : 'error' as const, detail: result.inkoop.message, href: '/inkoop' };
-                    if (s.id === 'courses') return { ...s, status: result.courses.success ? 'completed' as const : 'error' as const, detail: result.courses.message, href: '/service' };
+                    if (s.id === 'courses') return { ...s, status: result.courses.success ? 'completed' as const : 'error' as const, detail: result.courses.message, href: '/events' };
                     return s;
                 });
             });
@@ -273,7 +273,7 @@ export default function Offertes() {
                 setFollowUpActions([
                     { icon: '🧾', label: 'Factuur bekijken', href: '/facturen' },
                     { icon: '📋', label: 'Prep-taken bekijken', href: '/agenda' },
-                    { icon: '🍽️', label: 'Service-gangen aanvullen', href: '/service' },
+                    { icon: '🍽️', label: 'Service-gangen aanvullen', href: '/events' },
                     { icon: '📧', label: 'Stuur bevestiging', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
                 ]);
             }, 3000);

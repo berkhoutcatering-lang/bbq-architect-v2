@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, Save, AlertTriangle, Sparkles } from 'lucide-react';
-import { ALLERGENS, type AllergenCode } from '@/app/service/_data/serviceMockData';
+import { ALLERGENS, type AllergenCode } from '@/app/events/[id]/service/_data/serviceMockData';
 import type { DbEventAllergy } from '@/types';
 
 interface Props {

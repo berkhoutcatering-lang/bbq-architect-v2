@@ -22,7 +22,6 @@ const ROUTES: SitemapRoute[] = [
   { href: '/events', label: 'Events', desc: 'Lijst en detail van alle events', hub: 'Plannen' },
   { href: '/klantgesprek', label: 'Klantgesprek', desc: 'Intake-gesprek met AI-ondersteuning', hub: 'Plannen' },
   { href: '/prep-counter', label: 'Prep Counter', desc: 'Mise-en-place planner met sticker-gen', hub: 'Plannen' },
-  { href: '/service', label: 'Service', desc: 'Live service-runtime tijdens event', hub: 'Plannen' },
 
   // Verkoop
   { href: '/offertes', label: 'Offertes', desc: 'Offerte-overzicht + AI-wizard', hub: 'Verkoop' },

@@ -12,7 +12,6 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/ai-chat': { label: 'AI Pitmaster', section: 'Keuken' },
     '/agenda': { label: 'Agenda', section: 'Plannen' },
     '/events': { label: 'Events', section: 'Plannen' },
-    '/service': { label: 'Service', section: 'Plannen' },
     '/prep-counter': { label: 'Prep Counter', section: 'Plannen' },
     '/klantgesprek': { label: 'Klantgesprek', section: 'Plannen' },
     '/haccp': { label: 'HACCP', section: 'Plannen' },

@@ -188,7 +188,7 @@ export async function loadPageContext(pathname: string): Promise<Record<string, 
         if (pathname.startsWith('/voorraad')) return await loadVoorraadContext(sb);
         if (pathname.startsWith('/inkoop')) return await loadInkoopContext(sb);
         if (pathname.startsWith('/haccp')) return await loadHaccpContext(sb);
-        if (pathname.startsWith('/service')) return await loadServiceContext(sb);
+        if (pathname.startsWith('/events/') && pathname.endsWith('/service')) return await loadServiceContext(sb);
         if (pathname.startsWith('/uren')) return await loadUrenContext(sb);
         if (pathname.startsWith('/materieel')) return await loadMaterieelContext(sb);
         if (pathname.startsWith('/logistiek')) return await loadLogistiekContext(sb);
