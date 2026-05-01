@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 export interface HeatmapCell {
   label: string;
@@ -46,46 +47,62 @@ export default function HeatmapRow({ cells, cellHeight = 56 }: HeatmapRowProps):
         gap: 6,
       }}
     >
-      {cells.map((c, i) => (
-        <div
-          key={i}
-          title={`${c.label}: ${c.value}`}
-          style={{
-            height: cellHeight,
-            borderRadius: 'var(--radius-md)',
-            background: bgFor(c.level, c.value),
-            border: `1px solid ${borderFor(c.level)}`,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-            padding: 6,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: textFor(c.level),
-              lineHeight: 1,
-            }}
+      {cells.map((c, i) => {
+        const cellInner = (
+          <>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: textFor(c.level),
+                lineHeight: 1,
+              }}
+            >
+              {c.value}
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--muted)',
+                textTransform: 'lowercase',
+                letterSpacing: '.04em',
+                textAlign: 'center',
+              }}
+            >
+              {c.label}
+            </div>
+          </>
+        );
+        const cellStyle: React.CSSProperties = {
+          height: cellHeight,
+          borderRadius: 'var(--radius-md)',
+          background: bgFor(c.level, c.value),
+          border: `1px solid ${borderFor(c.level)}`,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          padding: 6,
+          cursor: c.href ? 'pointer' : 'default',
+          textDecoration: 'none',
+          transition: 'transform .15s',
+        };
+        return c.href ? (
+          <Link
+            key={i}
+            href={c.href}
+            title={`${c.label}: ${c.value}`}
+            style={cellStyle}
           >
-            {c.value}
+            {cellInner}
+          </Link>
+        ) : (
+          <div key={i} title={`${c.label}: ${c.value}`} style={cellStyle}>
+            {cellInner}
           </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: 'var(--muted)',
-              textTransform: 'lowercase',
-              letterSpacing: '.04em',
-              textAlign: 'center',
-            }}
-          >
-            {c.label}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

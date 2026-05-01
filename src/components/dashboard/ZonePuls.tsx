@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import StackBarMini from '@/components/charts/StackBarMini';
 import DonutMini from '@/components/charts/DonutMini';
 import StackBarHorizontal from '@/components/charts/StackBarHorizontal';
@@ -62,6 +63,7 @@ export default function ZonePuls({ data }: Props) {
         <PulsTile
           label={`Omzet · ${data.revenue.monthLabel}`}
           value={fmtEuro(data.revenue.monthTotal)}
+          href="/financien"
         >
           <StackBarMini
             data={data.revenue.weeks}
@@ -85,6 +87,7 @@ export default function ZonePuls({ data }: Props) {
         <PulsTile
           label="Marge · gemiddeld"
           value={`${data.margin.avgPct.toFixed(0)}%`}
+          href="/menu-engineering"
         >
           {totalMargin > 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -112,6 +115,7 @@ export default function ZonePuls({ data }: Props) {
           label="Open facturen"
           value={fmtEuro(data.invoices.totalOpen)}
           valueColor={data.invoices.overdue > 0 ? 'var(--red)' : 'var(--text)'}
+          href="/facturen"
         >
           {data.invoices.totalOpen > 0 ? (
             <>
@@ -149,6 +153,7 @@ export default function ZonePuls({ data }: Props) {
           label="In de pipeline"
           value={`${data.pipeline.reduce((s, p) => s + p.count, 0)}`}
           valueSuffix="offertes"
+          href="/offertes"
         >
           <FunnelBars stages={data.pipeline} />
         </PulsTile>
@@ -162,26 +167,63 @@ function PulsTile({
   value,
   valueColor,
   valueSuffix,
+  href,
   children,
 }: {
   label: string;
   value: string;
   valueColor?: string;
   valueSuffix?: string;
+  href?: string;
   children: React.ReactNode;
 }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+  const inner = (
+    <div
+      className={href ? 'puls-tile-clickable' : undefined}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        cursor: href ? 'pointer' : 'default',
+        padding: 4,
+        margin: -4,
+        borderRadius: 'var(--radius-md)',
+        transition: 'background .15s, transform .15s',
+      }}
+    >
       <div
         style={{
-          fontSize: 10,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '.14em',
-          color: 'var(--muted)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
         }}
       >
-        {label}
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '.14em',
+            color: 'var(--muted)',
+          }}
+        >
+          {label}
+        </div>
+        {href ? (
+          <span
+            aria-hidden="true"
+            style={{
+              fontSize: 10,
+              color: 'var(--muted)',
+              opacity: 0.6,
+              letterSpacing: '.05em',
+            }}
+            className="puls-tile-arrow"
+          >
+            →
+          </span>
+        ) : null}
       </div>
       <div
         style={{
@@ -209,8 +251,21 @@ function PulsTile({
         ) : null}
       </div>
       <div style={{ flex: 1, minHeight: 56 }}>{children}</div>
+      <style>{`
+        .puls-tile-clickable:hover { background: rgba(255,255,255,.03); }
+        .puls-tile-clickable:hover .puls-tile-arrow { opacity: 1; color: var(--brand); }
+      `}</style>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
+        {inner}
+      </Link>
+    );
+  }
+  return inner;
 }
 
 function Legend({ color, label, count }: { color: string; label: string; count: number }) {

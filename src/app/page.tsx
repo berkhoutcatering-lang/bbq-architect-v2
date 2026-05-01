@@ -26,6 +26,8 @@ import ZonePuls, { type PulsData } from '@/components/dashboard/ZonePuls';
 import ZoneOperatie, { type OperatieData } from '@/components/dashboard/ZoneOperatie';
 import ZoneKans, { type KansData } from '@/components/dashboard/ZoneKans';
 import ZoneActiviteit, { type ActiviteitData } from '@/components/dashboard/ZoneActiviteit';
+import AiBriefing from '@/components/dashboard/AiBriefing';
+import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rules';
 import type { TimelineEvent } from '@/components/charts/HorizontalTimeline';
 import type { HeatmapCell } from '@/components/charts/HeatmapRow';
 import type { DotStreakDay } from '@/components/charts/DotStreak';
@@ -429,6 +431,7 @@ export default function DashboardPage() {
           label: cat,
           value: info.low,
           level: info.low === 0 ? 'ok' : info.low > 2 ? 'danger' : 'warn',
+          href: `/voorraad?cat=${encodeURIComponent(cat)}`,
         }));
       return cells;
     })(),
@@ -511,7 +514,7 @@ export default function DashboardPage() {
 
   // Zone 5 — Activiteit
   const activiteitData: ActiviteitData = (() => {
-    type Item = { ts: number; text: string; dot: string };
+    type Item = { ts: number; text: string; dot: string; href: string };
     const feed: Item[] = [];
     events.slice(0, 5).forEach((e: any) => {
       if (!e.created_at) return;
@@ -519,6 +522,7 @@ export default function DashboardPage() {
         text: `Event: ${e.name || e.title || 'nieuw'}`,
         ts: new Date(e.created_at).getTime(),
         dot: 'var(--green)',
+        href: e.id ? `/events/${e.id}/hub` : '/agenda',
       });
     });
     offertes.slice(0, 5).forEach((o: any) => {
@@ -527,6 +531,7 @@ export default function DashboardPage() {
         text: `Offerte: ${o.client_naam || 'nieuw'}`,
         ts: new Date(o.created_at).getTime(),
         dot: 'var(--brand)',
+        href: '/offertes',
       });
     });
     facturen.slice(0, 5).forEach((f: any) => {
@@ -535,6 +540,7 @@ export default function DashboardPage() {
         text: `Factuur: ${f.nummer || f.client_naam || 'concept'}`,
         ts: new Date(f.created_at).getTime(),
         dot: 'var(--amber)',
+        href: '/facturen',
       });
     });
     feed.sort((a, b) => b.ts - a.ts);
@@ -543,9 +549,81 @@ export default function DashboardPage() {
       text: it.text,
       time: new Date(it.ts).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }),
       dot: it.dot,
+      href: it.href,
     }));
     return { items };
   })();
+
+  // ─── AI-briefing candidates ─────────────────────────────────────────
+  const briefingInput: BriefingInput = {
+    today,
+    heroEvent: heroEvent ? {
+      id: heroEvent.id,
+      name: heroEvent.name || heroEvent.title || 'event',
+      date: heroEvent.date,
+      daysAway: Math.max(0, Math.ceil(
+        (new Date(heroEvent.date).getTime() - new Date(today).getTime()) / 86400000
+      )),
+      guests: heroEvent.guests || 0,
+    } : null,
+    heroCompletion: heroCompletion ? {
+      gangen: heroCompletion.coursesIngevuld,
+      allergies: heroCompletion.allergiesIngevuld,
+      prep: heroCompletion.prepIngeplannd,
+      confirmed: heroCompletion.confirmed,
+    } : null,
+    verlopenFacturen: verlopenFacturen.map((f: any) => ({
+      client: f.client_naam || 'klant',
+      bedrag: calcFactuurBedrag(f),
+    })),
+    verlopenTotaal,
+    binnenkortVervallen: binnenkortVervallen.map((f: any) => ({
+      client: f.client_naam || 'klant',
+      bedrag: calcFactuurBedrag(f),
+      dagen: f.vervaldatum
+        ? Math.max(0, Math.ceil((new Date(f.vervaldatum).getTime() - new Date(today).getTime()) / 86400000))
+        : 0,
+    })),
+    conflicts: criticalConflicts.length,
+    conceptFacturen: conceptFacturenVoorAfgerondeEvents.map((f: any) => ({
+      client: f.client_naam || 'klant',
+    })),
+    upcomingZonderPrep: upcomingZonderPrep.slice(0, 5).map((e: any) => ({
+      id: e.id,
+      name: e.name || e.title || 'event',
+      daysAway: e.date
+        ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
+        : 0,
+    })),
+    lowStockItems: lowStockItems.slice(0, 5).map((i: any) => ({
+      naam: i.naam || 'item',
+      categorie: (i.categorie || 'overig').toString().toLowerCase(),
+    })),
+    upcomingGuests: nextEventsList
+      .filter((e: any) => {
+        const d = e.date ? Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000) : 999;
+        return d <= 7;
+      })
+      .reduce((s: number, e: any) => s + (e.guests || 0), 0),
+    lowMargeOffertes: lowMargeOffertes.map((o: any) => ({
+      client: o.client_naam || 'klant',
+      margePct: _calcMarge(o).margePct || 0,
+    })),
+    pipelineCount: openOffertes.length,
+    pipelineHighestEuro: kansData.offertes[0]?.amount || 0,
+    pipelineHighestClient: kansData.offertes[0]?.client || null,
+    oldestPipelineDays: kansData.offertes.reduce((m, o) => Math.max(m, o.daysOpen), 0),
+    inactiveKlantenCount: klantenZonderRecentEvent.length,
+    btwDaysUntil: btwDeadline?.daysUntil ?? null,
+    avgMarge,
+    haccpStatus,
+    curMonthLabel: pulsData.revenue.monthLabel,
+  };
+
+  const briefingCandidates = computeCandidates(briefingInput);
+  const firstName = user?.user_metadata?.name
+    ? String(user.user_metadata.name).split(' ')[0]
+    : undefined;
 
   if (!isMounted) {
     return <LoadingState label="Dashboard laden" />;
@@ -630,6 +708,9 @@ export default function DashboardPage() {
 
         {/* Onboarding-checklist (auto-hide na voltooiing) */}
         <OnboardingChecklist data={onboardingData} />
+
+        {/* AI-briefing — Architect-update bovenaan (push), bestaande floating chat blijft (pull) */}
+        <AiBriefing candidates={briefingCandidates} firstName={firstName} />
 
         {/* Alert-strip — alleen als er alerts zijn */}
         {alerts.length > 0 ? (
