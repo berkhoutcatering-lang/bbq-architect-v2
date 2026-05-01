@@ -141,8 +141,8 @@ function Eyebrow({ children, style }: { children: React.ReactNode; style?: React
     return <div style={{ fontSize: 9, letterSpacing: '.2em', color: 'var(--muted-light)', fontWeight: 700, textTransform: 'uppercase', ...style }}>{children}</div>;
 }
 
-function MetalCard({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-    return <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 18, ...style }}>{children}</div>;
+function MetalCard({ children, style, className }: { children: React.ReactNode; style?: React.CSSProperties; className?: string }) {
+    return <div className={className} style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 14, padding: 18, ...style }}>{children}</div>;
 }
 
 const calById = (id: string) => CALENDARS.find(c => c.id === id) || CALENDARS[0];
