@@ -810,8 +810,10 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
         }
 
         if (pathname === '/recepten') {
-            // Volledige recept-data — anders kan AI niet schalen of ingrediënten-cross-ref doen
-            const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime,ingredienten,bereiding,allergenen,kostprijs_pp').order('naam');
+            /* /recepten → /gerechten redirect 2026-05-01. AI-context blijft volledig:
+               receptuur-velden (bereidingswijze, porties, wijn-suggestie) leven nu
+               op de gerecht-rij. */
+            const recRes = await supabase.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,ingredienten,bereidingswijze,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
             ctx.recepten = recRes.data || [];
         }
 
@@ -1087,10 +1089,29 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
                     // Prep-tasks voor dit event
                     const ptHubRes = await supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen');
                     ctx.prep_tasks = ptHubRes.data || [];
-                    // Menu-items als gerechten
-                    const menuIds = (eventRes.data.menu as string[]) || [];
-                    if (menuIds.length > 0) {
-                        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,kostprijs_pp,ingredienten').in('id', menuIds);
+                    /* event.menu is sinds Dag 4 een menu_selectie-object (gangen → dish-namen).
+                       Pre-Dag-4 events hebben nog een id-array — beide vormen handelen. */
+                    const rawMenu = eventRes.data.menu;
+                    const dishNames: string[] = [];
+                    let menuIds: number[] = [];
+                    if (Array.isArray(rawMenu)) {
+                        rawMenu.forEach((v: unknown) => {
+                            if (typeof v === 'number') menuIds.push(v);
+                            else if (typeof v === 'string') dishNames.push(v);
+                        });
+                    } else if (rawMenu && typeof rawMenu === 'object') {
+                        Object.values(rawMenu).forEach((list: unknown) => {
+                            if (Array.isArray(list)) list.forEach(item => {
+                                if (typeof item === 'string') dishNames.push(item);
+                            });
+                        });
+                    }
+                    if (menuIds.length > 0 || dishNames.length > 0) {
+                        let q = supabase.from('gerechten').select('id,naam,gang_slug,porties,kostprijs_pp,ingredienten,bereidingswijze,allergenen');
+                        if (menuIds.length > 0 && dishNames.length === 0) q = q.in('id', menuIds);
+                        else if (dishNames.length > 0 && menuIds.length === 0) q = q.in('naam', dishNames);
+                        else q = q.or('id.in.(' + menuIds.join(',') + '),naam.in.(' + dishNames.map(n => '"' + n + '"').join(',') + ')');
+                        const recRes = await q;
                         ctx.menu_recepten = recRes.data || [];
                     }
                     // Factuur voor dit event — voor winstgevendheid + status

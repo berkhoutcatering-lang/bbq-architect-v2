@@ -136,12 +136,12 @@ export default function CommandPalette() {
         const term = '%' + q + '%';
 
         try {
-            const [evRes, offRes, facRes, recRes, gerRes, invRes, klRes] = await Promise.all([
+            /* recepten samengevouwen onder gerechten 2026-05-01 — één zoek-bron. */
+            const [evRes, offRes, facRes, gerRes, invRes, klRes] = await Promise.all([
                 supabase.from('events').select('id,name,date,guests,location,status,client_naam').or('name.ilike.' + term + ',client_naam.ilike.' + term + ',location.ilike.' + term).limit(5),
                 supabase.from('offertes').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term + ',notitie.ilike.' + term).limit(5),
                 supabase.from('facturen').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term).limit(5),
-                supabase.from('recepten').select('id,naam,categorie').ilike('naam', term).limit(5),
-                supabase.from('gerechten').select('id,naam,categorie').ilike('naam', term).limit(5),
+                supabase.from('gerechten').select('id,naam,gang_slug').ilike('naam', term).limit(8),
                 supabase.from('inventory').select('id,naam,categorie,current_stock,unit').ilike('naam', term).limit(5),
                 supabase.from('klanten').select('id,naam,bedrijf,type,plaats').or('naam.ilike.' + term + ',bedrijf.ilike.' + term + ',plaats.ilike.' + term).limit(5),
             ]);
@@ -184,24 +184,12 @@ export default function CommandPalette() {
                 });
             });
 
-            (recRes.data || []).forEach(function (r: any) {
-                items.push({
-                    id: 'rec_' + r.id,
-                    type: 'recept',
-                    title: r.naam,
-                    subtitle: r.categorie || 'Recept',
-                    href: '/recepten',
-                    icon: BookOpen,
-                    accent: '#8b5cf6',
-                });
-            });
-
             (gerRes.data || []).forEach(function (g: any) {
                 items.push({
                     id: 'ger_' + g.id,
                     type: 'gerecht',
                     title: g.naam,
-                    subtitle: g.categorie || 'Gerecht',
+                    subtitle: g.gang_slug || 'Gerecht',
                     href: '/gerechten',
                     icon: ChefHat,
                     accent: '#8b5cf6',

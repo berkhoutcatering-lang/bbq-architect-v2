@@ -134,7 +134,11 @@ export default function EventHubPage() {
         ev.offerte_id ? supabase.from('offertes').select('*').eq('id', ev.offerte_id).single() : Promise.resolve({ data: null }) as any,
         supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen', { ascending: false }),
         supabase.from('facturen').select('*').eq('client_naam', ev.client_naam || '__none__').limit(1),
-        supabase.from('recepten').select('*'),
+        /* recepten samengevouwen onder gerechten 2026-05-01 — twee aparte queries
+           teruggebracht naar één. `recepten` blijft als alias-key in de result-set
+           zodat downstream component-props (EventInkooplijstCard, menuGroups)
+           niet hoeven te veranderen tot een aparte cleanup-ronde. */
+        Promise.resolve({ data: [] }),
         supabase.from('gerechten').select('*'),
         ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),

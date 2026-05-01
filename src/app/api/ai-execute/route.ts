@@ -255,11 +255,36 @@ async function generateInkooplijst(sb: SupabaseClient, params: Record<string, an
     const event = eventRes.data;
     const gasten = event.guests || 1;
 
-    const menuIds = event.menu || [];
+    /* event.menu is sinds Dag 4 een menu_selectie-object (gangen → dish-namen).
+       Pre-Dag-4 events hebben nog een id-array — beide vormen handelen.
+       recepten samengevouwen onder gerechten 2026-05-01. */
+    const rawMenu = event.menu;
+    const menuIds: number[] = [];
+    const dishNames: string[] = [];
+    if (Array.isArray(rawMenu)) {
+        rawMenu.forEach((v: unknown) => {
+            if (typeof v === 'number') menuIds.push(v);
+            else if (typeof v === 'string') dishNames.push(v);
+        });
+    } else if (rawMenu && typeof rawMenu === 'object') {
+        Object.values(rawMenu).forEach((list: unknown) => {
+            if (Array.isArray(list)) list.forEach(item => {
+                if (typeof item === 'string') dishNames.push(item);
+            });
+        });
+    }
     let recepten: any[] = [];
-    if (menuIds.length > 0) {
-        const recRes = await sb.from('recepten').select('*').in('id', menuIds);
-        recepten = recRes.data || [];
+    if (menuIds.length > 0 || dishNames.length > 0) {
+        let q = sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,ingredienten,bereidingswijze,allergenen,kostprijs_pp');
+        if (menuIds.length > 0 && dishNames.length === 0) q = q.in('id', menuIds);
+        else if (dishNames.length > 0 && menuIds.length === 0) q = q.in('naam', dishNames);
+        else q = q.or('id.in.(' + menuIds.join(',') + '),naam.in.(' + dishNames.map(n => '"' + n + '"').join(',') + ')');
+        const recRes = await q;
+        recepten = (recRes.data || []).map((d: any) => ({
+            ...d,
+            categorie: d.gang_slug,
+            preptime: d.target_prep_time ? Math.round(d.target_prep_time / 60) : null,
+        }));
     }
 
     const invRes = await sb.from('inventory').select('naam,current_stock,unit,purchase_price');
@@ -327,11 +352,34 @@ async function generateEventBriefing(sb: SupabaseClient, params: Record<string, 
     if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
     const event = eventRes.data;
 
-    const menuIds = event.menu || [];
+    /* event.menu is een menu_selectie-object of legacy id-array. */
+    const rawMenu2 = event.menu;
+    const menuIds2: number[] = [];
+    const dishNames2: string[] = [];
+    if (Array.isArray(rawMenu2)) {
+        rawMenu2.forEach((v: unknown) => {
+            if (typeof v === 'number') menuIds2.push(v);
+            else if (typeof v === 'string') dishNames2.push(v);
+        });
+    } else if (rawMenu2 && typeof rawMenu2 === 'object') {
+        Object.values(rawMenu2).forEach((list: unknown) => {
+            if (Array.isArray(list)) list.forEach(item => {
+                if (typeof item === 'string') dishNames2.push(item);
+            });
+        });
+    }
     let recepten: any[] = [];
-    if (menuIds.length > 0) {
-        const recRes = await sb.from('recepten').select('id,naam,categorie,porties,preptime').in('id', menuIds);
-        recepten = recRes.data || [];
+    if (menuIds2.length > 0 || dishNames2.length > 0) {
+        let q = sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time');
+        if (menuIds2.length > 0 && dishNames2.length === 0) q = q.in('id', menuIds2);
+        else if (dishNames2.length > 0 && menuIds2.length === 0) q = q.in('naam', dishNames2);
+        else q = q.or('id.in.(' + menuIds2.join(',') + '),naam.in.(' + dishNames2.map(n => '"' + n + '"').join(',') + ')');
+        const recRes = await q;
+        recepten = (recRes.data || []).map((d: any) => ({
+            ...d,
+            categorie: d.gang_slug,
+            preptime: d.target_prep_time ? Math.round(d.target_prep_time / 60) : null,
+        }));
     }
 
     const prepRes = await sb.from('prep_tasks').select('*').eq('event_id', event_id).order('dagen');
