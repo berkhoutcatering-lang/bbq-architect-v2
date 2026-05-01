@@ -293,7 +293,7 @@ function OfferteStep({ onNext }: { onNext: () => void }) {
     <StepShell
       icon={Sparkles}
       title="Maak nu je eerste offerte met AI"
-      subtitle="Vertel onze AI-wizard over een denkbeeldig event en zie hem een complete offerte genereren in 30 seconden."
+      subtitle="Vertel Rook (de AI Offerte Wizard) over een denkbeeldig event en zie hem een complete offerte genereren in 30 seconden."
     >
       <div className="rounded-xl border border-[var(--color-accent-gold)]/30 bg-gradient-to-br from-[var(--color-accent-gold)]/[0.06] to-transparent p-6 mb-6">
         <div className="flex items-start gap-3 mb-4">

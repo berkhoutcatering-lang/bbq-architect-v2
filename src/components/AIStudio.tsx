@@ -115,8 +115,8 @@ export default function AIStudio({
         setMessages([{
             role: 'assistant',
             content: mode === 'brainstorm'
-                ? '🔥 **Brainstorm Modus actief!**\n\nWelkom in de AI Studio van Hop & Bites. Hier denk ik creatief met je mee over menu\'s, events, marketing en alles wat BBQ-catering groot maakt.\n\nWaar wil je over brainstormen?'
-                : '💡 **Vraag & Antwoord Modus**\n\nStel me directe vragen over catering, BBQ-technieken, calculaties, planning of bedrijfsvoering. Ik geef concrete, praktische antwoorden.\n\nWat wil je weten?',
+                ? '🔥 **Brainstorm-modus actief!**\n\nDit is de Pitmaster Studio — hier denk ik (Rook) creatief met je mee over menu\'s, events, marketing en alles wat BBQ-catering groot maakt.\n\nWaar wil je over brainstormen?'
+                : '💡 **Vraag & Antwoord-modus**\n\nStel me directe vragen over catering, BBQ-technieken, calculaties, planning of bedrijfsvoering. Ik geef concrete, praktische antwoorden.\n\nWat wil je weten?',
             actions: [],
         }]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -822,8 +822,8 @@ export default function AIStudio({
                             <Bot size={14} />
                         </div>
                         <div>
-                            <div style={{ fontWeight: 800, fontSize: 15 }}>BBQ AI Studio</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Hop & Bites — Powered by Claude</div>
+                            <div style={{ fontWeight: 800, fontSize: 15 }}>Pitmaster Studio · Rook</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Jouw AI-collega voor brainstorm en uitwerking</div>
                         </div>
                     </div>
 

@@ -432,7 +432,7 @@ export default function KlantGesprek() {
                 setAiSuggesting(false);
               }
             }} disabled={aiSuggesting} style={{ padding: '8px 14px', borderRadius: 8, background: '#c4a35a', color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-              <Sparkles size={13} /> {aiSuggesting ? 'Claude denkt na...' : 'Stel menu voor'}
+              <Sparkles size={13} /> {aiSuggesting ? 'Rook denkt na...' : 'Stel menu voor'}
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

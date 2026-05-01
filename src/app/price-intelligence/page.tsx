@@ -2718,7 +2718,7 @@ function SubstitutionAdviceModal({ masterId, productName, onClose }: { masterId:
                     {loading || refreshing ? (
                         <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
                             <Loader2 size={22} className="animate-spin" style={{ marginBottom: 10 }} />
-                            <div style={{ fontSize: 13 }}>Claude denkt na over de beste vervangingen...</div>
+                            <div style={{ fontSize: 13 }}>Rook denkt na over de beste vervangingen...</div>
                             <div style={{ fontSize: 10, marginTop: 4 }}>~10-20 seconden, daarna gecached</div>
                         </div>
                     ) : error ? (
