@@ -566,7 +566,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                 ? lastContent.filter((b: any) => b && b.type === 'text').map((b: any) => b.text || '').join('\n')
                 : '';
         const lastUserMsg = (rawLastUserContent.split('\n\n').pop() || '').toLowerCase();
-        const isOnGerechten = pageContext === '/gerechten' || pageContext === '/menu-engineering' || pageContext === '/ai-chat' || pageContext === '/recepten';
+        const isOnGerechten = pageContext === '/gerechten' || pageContext === '/marges' || pageContext === '/ai-chat' || pageContext === '/recepten';
         const wantsBrainstorm = isOnGerechten && (
             /\b(bedenk|brainstorm|maak|geef me|verzin|kom met|stel\s*samen|kom\s*op\s*met)\b/.test(lastUserMsg) &&
             /\b\d+\b/.test(lastUserMsg) &&
@@ -795,7 +795,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         // Service-mode is uitgesloten — daar wil je ultrakort tekst-antwoord, geen kaarten.
         const forceBlocks = (
             pageContext === '/gerechten' ||
-            pageContext === '/menu-engineering' ||
+            pageContext === '/marges' ||
             pageContext === '/voorraad' ||
             pageContext === '/' ||
             pageContext === '/offertes' ||

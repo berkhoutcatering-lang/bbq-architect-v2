@@ -7,7 +7,7 @@ import {
     Search, Calendar, FileText, Receipt, Package, ChefHat, BookOpen,
     Users, Euro, ArrowRight, Flame, Sparkles, ShoppingCart, Truck, Wrench, Clock,
     ShieldCheck, DollarSign, Settings, Globe, HelpCircle, Mail, Camera,
-    Building2, MessageSquare, ClipboardList, Map
+    Building2, MessageSquare, ClipboardList, Map, UtensilsCrossed
 } from 'lucide-react';
 
 interface SearchResult {
@@ -53,11 +53,11 @@ const pages: SearchResult[] = [
     { id: 'p_uren', type: 'pagina', title: 'Uren', subtitle: 'Geld & Boekhouding', href: '/uren', icon: Clock, accent: HUB_ACCENT.geld },
     { id: 'p_boekhouding', type: 'pagina', title: 'Boekhouding (alias)', subtitle: 'Geld & Boekhouding', href: '/financien?tab=wv', icon: Euro, accent: HUB_ACCENT.geld },
 
-    /* Menu & Recepten */
-    { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Menu & Recepten', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
-    { id: 'p_menu_eng', type: 'pagina', title: 'Menu-analyse', subtitle: 'Menu & Recepten', href: '/menu-engineering', icon: ChefHat, accent: HUB_ACCENT.keuken },
-    { id: 'p_recepten', type: 'pagina', title: 'Recepten', subtitle: 'Menu & Recepten', href: '/recepten', icon: BookOpen, accent: HUB_ACCENT.keuken },
-    { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Menu & Recepten · AI', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
+    /* Keuken */
+    { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Keuken', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
+    { id: 'p_menus', type: 'pagina', title: 'Menu\u2019s', subtitle: 'Keuken \u00b7 opgeslagen menu-templates', href: '/gerechten?view=menus', icon: UtensilsCrossed, accent: HUB_ACCENT.keuken },
+    { id: 'p_marges', type: 'pagina', title: 'Marges & analyse', subtitle: 'Keuken \u00b7 BCG en foodcost', href: '/marges', icon: Sparkles, accent: HUB_ACCENT.keuken },
+    { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Keuken \u00b7 AI chat (power)', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
 
     /* Voorraad & Beheer */
     { id: 'p_voorraad', type: 'pagina', title: 'Voorraad', subtitle: 'Voorraad & Beheer', href: '/voorraad', icon: Package, accent: HUB_ACCENT.voorraad },

@@ -76,7 +76,7 @@ export const PAGE_DEFAULT_MODE: Record<string, ThinkingMode> = {
     '/events/[id]/service': 'fast',
     '/recepten': 'deep',
     '/gerechten': 'deep',
-    '/menu-engineering': 'deep',
+    '/marges': 'deep',
 };
 
 export function getPageDefaultMode(pathname: string | null | undefined): ThinkingMode {

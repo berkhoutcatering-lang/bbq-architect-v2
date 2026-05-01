@@ -116,7 +116,7 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '- mark_weak_dishes: bij vraag "zwakste eruit halen"',
     ].join('\n'),
 
-    '/menu-engineering': [
+    '/marges': [
         '**Menu Engineering** — BCG-analyse op alle Hop & Bites gerechten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair).',
         'Operator denkt in food-cost%, omzetbijdrage, moeilijkheid, schaalbaarheid en marge-stoplichten (≥70% groen, 60-69% oranje, <60% rood).',
         '',

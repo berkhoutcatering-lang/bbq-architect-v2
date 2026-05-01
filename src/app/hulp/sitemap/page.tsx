@@ -30,8 +30,8 @@ const ROUTES: SitemapRoute[] = [
 
   // Keuken
   { href: '/gerechten', label: 'Gerechten', desc: 'Catalog: gerechten met kostprijzen', hub: 'Keuken' },
-  { href: '/menu-engineering', label: 'Menu-analyse', desc: 'BCG-analyse op marges en populariteit', hub: 'Keuken' },
-  { href: '/recepten', label: 'Recepten', desc: 'Receptenbibliotheek', hub: 'Keuken' },
+  { href: '/marges', label: 'Marges & analyse', desc: 'BCG-matrix op marges en populariteit', hub: 'Keuken' },
+  { href: '/gerechten?view=menus', label: 'Menu\u2019s', desc: 'Opgeslagen menu-templates voor offertes', hub: 'Keuken' },
   { href: '/ai-chat', label: 'AI Pitmaster', desc: 'AI-chat voor brainstorm en Q&A', hub: 'Keuken' },
   { href: '/foto-archief', label: 'Foto-archief', desc: 'Beheer fotos en media', hub: 'Keuken' },
 

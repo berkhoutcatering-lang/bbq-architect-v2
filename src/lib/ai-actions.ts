@@ -148,7 +148,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerecht aanmaken',
         table: 'gerechten',
         op: 'insert',
-        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/gerechten', '/marges', '/ai-chat'],
         icon: 'UtensilsCrossed',
         color: '#a78bfa',
     },
@@ -156,7 +156,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerecht bijwerken',
         table: 'gerechten',
         op: 'update',
-        pages: ['/gerechten', '/menu-engineering'],
+        pages: ['/gerechten', '/marges'],
         icon: 'Pencil',
         color: '#f59e0b',
     },
@@ -412,7 +412,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerechten toevoegen aan Menu Ontwikkelaar',
         table: 'gerechten',
         op: 'bulk_insert',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'UtensilsCrossed',
         color: '#a78bfa',
         tool: 'bulkCreateGerechten',
@@ -421,7 +421,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Concepten — kies welke je wilt uitwerken',
         table: null,
         op: 'client_only',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'Sparkles',
         color: '#f59e0b',
     },
@@ -446,7 +446,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerechten verwijderen/verbergen',
         table: 'gerechten',
         op: 'bulk_delete',
-        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/gerechten', '/marges', '/ai-chat'],
         icon: 'Filter',
         color: '#ef4444',
         tool: 'filterGerechten',
@@ -455,7 +455,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Zwakke gerechten markeren',
         table: null,
         op: 'client_only',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'StarHalf',
         color: '#f59e0b',
     },
@@ -825,7 +825,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.gangen = gangRes.data || [];
         }
 
-        if (pathname === '/menu-engineering') {
+        if (pathname === '/marges') {
             // BCG-analyse vereist verkoopprijs + marge + populariteit
             const gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp,verkoopprijs,marge_pct,pijnpunten,toppunten').order('naam');
             ctx.gerechten = gerRes2.data || [];

@@ -1,17 +1,18 @@
 'use client';
 
-import { ChefHat, UtensilsCrossed, Sparkles } from 'lucide-react';
+import { ChefHat, BarChart3 } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
-/* "Recepten" verwijderd 2026-05-01 — receptuur leeft nu in de gerecht-modal
-   op /gerechten (bereidingswijze + porties + wijn-suggestie + Kitchen Mode).
-   Eén plek voor wat-eet-je content; /recepten redirect naar /gerechten. */
+/* Keuken-hub: één plek voor gerechten + samenstelling, één plek voor analyse.
+   - "Recepten" weg 2026-05-01 → receptuur leeft in de gerecht-modal op /gerechten.
+   - "AI Pitmaster" weg 2026-05-01 → AI woont waar de actie is (slide-over op
+     /gerechten + floating chat-bubble), niet als losse tab. /ai-chat blijft
+     bestaan en is vindbaar via ⌘K. */
 const TABS: HubTab[] = [
   { href: '/gerechten', label: 'Gerechten', icon: ChefHat },
-  { href: '/menu-engineering', label: 'Menu-analyse', icon: UtensilsCrossed },
-  { href: '/ai-chat', label: 'AI Pitmaster', icon: Sparkles },
+  { href: '/marges', label: 'Marges', icon: BarChart3 },
 ];
 
 export default function KeukenTabs() {
-  return <HubTabs tabs={TABS} ariaLabel="Menu & Recepten modules" />;
+  return <HubTabs tabs={TABS} ariaLabel="Keuken modules" />;
 }

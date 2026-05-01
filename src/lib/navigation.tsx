@@ -30,16 +30,15 @@ export interface NavSection {
 
 export const navSections: NavSection[] = [
     {
-        title: "Menu & Recepten",
+        title: "Keuken",
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "keuken",
-        description: "Gerechten, menu's, analyse en je AI Pitmaster.",
+        description: "Gerechten, opgeslagen menu's en marge-analyse.",
         hubHref: "/gerechten",
         children: [
             { label: "Gerechten & Menu's", icon: <ChefHat size={16} />, href: "/gerechten", description: "Gerechten beheren met receptuur + opgeslagen menu's voor offertes" },
-            { label: "Menu-analyse", icon: <UtensilsCrossed size={16} />, href: "/menu-engineering", description: "BCG-analyse: marges en populariteit" },
-            { label: "AI Pitmaster", icon: <Palette size={16} />, href: "/ai-chat", description: "Je AI-assistent voor brainstorm en Q&A" },
+            { label: "Marges", icon: <BarChart3 size={16} />, href: "/marges", description: "BCG-analyse: marges en populariteit per gerecht" },
         ],
     },
     {

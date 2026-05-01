@@ -725,7 +725,7 @@ export default function AiAssistant(): React.ReactElement {
                     const ins = await supabase.from('gerechten').insert(insertRow).select().single();
                     if (ins.error) throw new Error(ins.error.message);
                     setActionStatus(msgIdx, actionId, 'done');
-                    setMessages(function (prev: ChatMessage[]): ChatMessage[] { return [...prev, { role: 'assistant', content: '\u2705 **' + insertRow.naam + '** is toegevoegd! Activeer het in Menu Engineering en stel een kostprijs in.', actions: [], successBadge: 'Open Menu Engineering \u2192', successLink: '/menu-engineering' }]; });
+                    setMessages(function (prev: ChatMessage[]): ChatMessage[] { return [...prev, { role: 'assistant', content: '\u2705 **' + insertRow.naam + '** is toegevoegd! Activeer het in Menu Engineering en stel een kostprijs in.', actions: [], successBadge: 'Open Menu Engineering \u2192', successLink: '/marges' }]; });
                     return;
             }
 

@@ -87,7 +87,7 @@ export default function ZonePuls({ data }: Props) {
         <PulsTile
           label="Marge · gemiddeld"
           value={`${data.margin.avgPct.toFixed(0)}%`}
-          href="/menu-engineering"
+          href="/marges"
         >
           {totalMargin > 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
