@@ -335,7 +335,7 @@ Onderaan de instellingen-pagina kun je een **logo** uploaden — zowel voor lich
 
 ## Email-handtekening
 
-In **Systeem → Mailbox → Templates** stel je standaard email-templates in voor: offerte, factuur, herinnering, na-event-bedankje. Met variabelen `{{klant_naam}}` en `{{bedrijfsnaam}}` worden ze per email gepersonaliseerd.`,
+In **Systeem → Mailbox → Templates** stel je standaard email-templates in voor: offerte, factuur, herinnering, na-event-bedankje. Met variabelen \`{{klant_naam}}\` en \`{{bedrijfsnaam}}\` worden ze per email gepersonaliseerd.`,
     },
 ];
 
