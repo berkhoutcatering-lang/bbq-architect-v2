@@ -12,6 +12,7 @@ import { ShoppingCart, FileText, ListChecks, PieChart, Plus, X, Check, Loader2, 
 import { MODES, type ThinkingMode } from '@/lib/ai-modes';
 import { normalizePagePath } from '@/lib/ai-prompts';
 import { useAiStudio } from '@/lib/AiStudioContext';
+import { getActiveResourceSnapshot } from '@/lib/ActiveResourceContext';
 
 interface ChatMessage {
     role: 'user' | 'assistant';
@@ -391,6 +392,7 @@ export default function AiAssistant(): React.ReactElement {
                     contextData: contextData,
                     thinkingMode: thinkingMode,
                     userRole: userRole,
+                    activeResource: getActiveResourceSnapshot(),
                 }),
                 signal: controller.signal,
             });

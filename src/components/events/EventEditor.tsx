@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
@@ -40,6 +40,8 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
   const [form, setForm] = useState<Record<string, any> | null>(null);
   const [saving, setSaving] = useState(false);
   const [showInkoop, setShowInkoop] = useState(false);
+  /* Onthoud de geladen server-status zodat saveEvent geen extra round-trip nodig heeft */
+  const lastSavedStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -56,6 +58,7 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
       copy.menu = coerce(copy.menu);
       copy.team = coerce(copy.team);
       copy.draaiboek = coerce(copy.draaiboek);
+      lastSavedStatusRef.current = data.status || 'pending';
       setForm(copy);
     })();
     return () => { alive = false; };
@@ -71,13 +74,14 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
   async function saveEvent() {
     if (!form || !validateEvent()) return;
     setSaving(true);
-    const { data: fresh } = await supabase.from('events').select('status').eq('id', eventId).single();
-    const freshStatus = fresh?.status || 'pending';
-    const justCompleted = freshStatus !== 'completed' && form.status === 'completed';
+    /* Skip extra fetch — gebruik onthouden status van laatste load. Spaart één round-trip. */
+    const lastStatus = lastSavedStatusRef.current || 'pending';
+    const justCompleted = lastStatus !== 'completed' && form.status === 'completed';
     const { id: _id, created_at: _c, ...rest } = form;
     const { error } = await supabase.from('events').update(rest).eq('id', eventId);
     setSaving(false);
     if (error) { showToast('Fout bij opslaan: ' + error.message, 'error'); return; }
+    lastSavedStatusRef.current = form.status || 'pending';
     showToast('Event bijgewerkt', 'success');
     if (justCompleted) drainInventoryForEvent(form);
     if (form.status === 'confirmed' && form.client_email) {

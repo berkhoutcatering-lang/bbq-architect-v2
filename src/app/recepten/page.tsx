@@ -5,7 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import AllergenBadges from '@/components/AllergenBadges';
-import MenuModuleTabs from '@/components/MenuModuleTabs';
+import KeukenTabs from '@/components/KeukenTabs';
 import {
     Sparkles, Plus, Search, X, Clock, Users, ChefHat, Trash2, Save,
     AlertTriangle, Loader2, Wand2, ArrowLeft, ChevronLeft, ChevronRight,
@@ -107,7 +107,7 @@ export default function ReceptenPage() {
 
     return (
         <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
-            <MenuModuleTabs />
+            <KeukenTabs />
             {/* HEADER */}
             <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <div>

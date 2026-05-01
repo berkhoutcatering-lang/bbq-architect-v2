@@ -2,6 +2,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { useAiStudio } from '@/lib/AiStudioContext';
 import type { Event as DbEvent } from '@/types';
 import {
     Sparkles, Layers, Map, RefreshCw, X, Play, Pause, CheckCircle, Check,
@@ -134,9 +135,36 @@ export default function PrepCounter() {
     const [variant, setVariant] = useState<'A' | 'B'>('A');
     const [openStep, setOpenStep] = useState<PrepStep | null>(null);
     const [stepStatus, setStepStatus] = usePrepState();
+    const aiStudio = useAiStudio();
 
     const doneCount = PREP_STEPS.filter(s => stepStatus[s.id] === 'done').length;
     const activeStep = PREP_STEPS.find(s => stepStatus[s.id] === 'active') || null;
+
+    /* AI-plan: opent AiStudio met context-prompt voor prep-volgorde-optimalisatie.
+       Hergebruikt bestaande AI-infrastructuur i.p.v. nieuwe API. */
+    function handleAiPlan() {
+        const openSteps = PREP_STEPS.filter(s => stepStatus[s.id] !== 'done');
+        const stepList = openSteps.map(s => `- ${s.title} (dag: ${s.day}, ${s.duration} min, station: ${s.station})`).join('\n');
+        const prompt = `Plan de prep-volgorde voor "${PREP_EVENT.title}" — ${PREP_EVENT.guests} gasten, start ${PREP_EVENT.startTime}, ${PREP_EVENT.daysUntil} dagen vooruit.
+
+Menu: ${PREP_EVENT.menu}
+
+Open prep-stappen (${openSteps.length}):
+${stepList}
+
+Geef een geoptimaliseerde volgorde met tijdslots (T-2 do / vr 04:00 / za 13:00 etc.) gebaseerd op:
+- Marinades & rubs eerst (T-2 do)
+- Smoker-cycli (lange cooks zoals brisket en pulled pork starten 's nachts)
+- Sides & dressings T-1
+- Same-day finishes (slicing, plating)
+- Houdbaarheid en temperatuur-eisen
+
+Houd het kort en concreet — een uitvoerbare lijst, geen uitleg over de regels.`;
+        aiStudio.open({
+            mode: 'brainstorm',
+            messages: [{ role: 'user', content: prompt }],
+        });
+    }
 
     const byDay = useMemo(() => {
         const groups: Record<'do' | 'vr' | 'za', PrepStep[]> = { do: [], vr: [], za: [] };
@@ -168,7 +196,7 @@ export default function PrepCounter() {
             <DemoModeBanner />
 
             <PrepHero doneCount={doneCount} totalCount={PREP_STEPS.length} activeStep={activeStep}
-                onAIPlan={() => alert('AI heeft 18 stappen geoptimaliseerd:\n• Marinades & rubs eerst (T-2 do)\n• Smoker-cycli ingepland (vr 04:00 pulled / za 01:00 brisket)\n• Sides & dressings T-1 vrijdag\n• Same-day finals zaterdag')}
+                onAIPlan={handleAiPlan}
             />
 
             <div style={{ height: 22 }} />

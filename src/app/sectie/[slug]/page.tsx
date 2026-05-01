@@ -138,7 +138,7 @@ function StatsLoading() {
 
 const sectionStatsMap: Record<string, React.FC> = {
     'keuken': DeKeukenStats,
-    'operatie': OperatieStats,
+    'plannen': OperatieStats,
     'verkoop': DeZaakStats,
     'beheer': BeheerStats,
 };

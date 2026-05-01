@@ -649,7 +649,36 @@ export default function Offertes() {
                 </select>
             </div>
             <div className="panel">
-                {offertes.length === 0 && <EmptyState page="/offertes" onAction={newOfferte} />}
+                {offertes.length === 0 && (
+                    <div style={{
+                        padding: 'var(--space-8) var(--space-6)',
+                        textAlign: 'center',
+                        background: 'linear-gradient(135deg, var(--brand-tint) 0%, var(--card) 70%)',
+                        border: '1px solid var(--brand-tint-border)',
+                        borderRadius: 'var(--radius-xl)',
+                        margin: 'var(--space-4) 0',
+                    }}>
+                        <div style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 56, height: 56, borderRadius: 'var(--radius-xl)',
+                            background: 'var(--brand)', color: '#000', marginBottom: 'var(--space-4)',
+                        }}>
+                            <Sparkles size={26} />
+                        </div>
+                        <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Maak je eerste offerte met AI</h3>
+                        <p style={{ fontSize: 14, color: 'var(--muted)', maxWidth: 460, margin: '0 auto var(--space-5)', lineHeight: 1.5 }}>
+                            Beschrijf je klant + event in één zin en de AI bouwt een volledig menu met adviesprijs en marge-berekening. In ~2 minuten klaar om te versturen.
+                        </p>
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button onClick={() => setShowAiWizard(true)} className="btn btn-brand" style={{ padding: '12px 24px', fontSize: 14 }}>
+                                <Sparkles size={14} /> Start met AI
+                            </button>
+                            <button onClick={newOfferte} className="btn btn-ghost" style={{ padding: '12px 20px', fontSize: 13 }}>
+                                Lege offerte starten
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {offertes.filter(function (o) {
                     if (filterStatus !== 'alle' && o.status !== filterStatus) return false;
                     if (searchQuery) {
@@ -696,7 +725,7 @@ export default function Offertes() {
                                     title="Bekijk in nieuwe Margin Doctor weergave"
                                     style={{ padding: '6px 12px', fontSize: 11.5, letterSpacing: '.05em', textTransform: 'uppercase' }}
                                 >
-                                    Margin view
+                                    Margin Doctor
                                 </button>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontWeight: 600 }}>{fmt(total)}</div>

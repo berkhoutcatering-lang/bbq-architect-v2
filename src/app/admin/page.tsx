@@ -294,14 +294,28 @@ export default function AdminPortal() {
     <>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #c4a35a 0%, #8b6914 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Building2 size={20} style={{ color: 'var(--text)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #c4a35a 0%, #8b6914 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Building2 size={20} style={{ color: 'var(--text)' }} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Platform Beheer</h1>
+              <p style={{ fontSize: 12, color: 'var(--muted)' }}>Ingelogd als {currentUser}</p>
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Platform Beheer</h1>
-            <p style={{ fontSize: 12, color: 'var(--muted)' }}>Ingelogd als {currentUser}</p>
-          </div>
+          <a
+            href="/admin/funnel"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 10,
+              border: '1px solid var(--border)', background: 'var(--card)',
+              color: 'var(--text)', fontSize: 12, fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            <BarChart3 size={14} /> Funnel-analytics
+          </a>
         </div>
       </div>
 

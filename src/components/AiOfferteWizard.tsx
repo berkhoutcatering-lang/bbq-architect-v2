@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro } from 'lucide-react';
+import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const GOLD = '#c4a35a';
@@ -24,8 +24,19 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
     const [existingKlanten, setExistingKlanten] = useState<any[]>([]);
     const [existingGerechten, setExistingGerechten] = useState<any[]>([]);
     const [generated, setGenerated] = useState<any | null>(null);
+    const [prijsPp, setPrijsPp] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+
+    // Sync prijsPp met AI-suggestie zodra generated binnenkomt; reset bij weg-gaan
+    useEffect(() => {
+        if (generated) {
+            const suggestion = generated.adviesprijs_pp || Math.ceil((generated.totale_kostprijs_pp || 35) * 2);
+            setPrijsPp(Number(suggestion));
+        } else {
+            setPrijsPp(null);
+        }
+    }, [generated]);
 
     // Preload klanten + gerechten
     useEffect(() => {
@@ -109,7 +120,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                 datum: eventDate,
                 aantal_gasten: gasten,
                 aantal_vega: vegaCount,
-                basis_prijs_pp: generated.adviesprijs_pp || Math.ceil((generated.totale_kostprijs_pp || 35) * 2),
+                basis_prijs_pp: prijsPp ?? generated.adviesprijs_pp ?? Math.ceil((generated.totale_kostprijs_pp || 35) * 2),
                 menu_selectie: menuSelectie,
                 notitie,
                 items: [],
@@ -122,6 +133,12 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                 setSaving(false);
                 return;
             }
+
+            /* Activation-tracking: AI-wizard gebruikt + first_offerte_concept (idempotent
+               via trackOnce zodat alleen de allereerste offerte als first_* telt). */
+            const { track, trackOnce } = await import('@/lib/track');
+            track('ai_wizard_used', { offerteId: data?.id, gangen: (generated.gerechten || []).length });
+            if (data?.id) trackOnce('first_offerte_concept', 'first_offerte_concept', { via: 'ai_wizard', offerteId: data.id });
 
             // Ook gerechten opslaan als ze nieuw zijn (optioneel, zodat ze in de pool komen)
             const newDishes = (generated.gerechten || []).filter((g: any) => !existingGerechten.some(eg => eg.naam.toLowerCase() === g.naam.toLowerCase()));
@@ -273,15 +290,64 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                 <Stat icon={Euro} label="Advies/p" value={generated.adviesprijs_pp ? `€${Number(generated.adviesprijs_pp).toFixed(2)}` : '—'} highlight />
                             </div>
 
-                            <div style={{ padding: 14, borderRadius: 10, background: 'linear-gradient(135deg, rgba(196,163,90,.12), rgba(255,255,255,.02))', border: '1px solid rgba(196,163,90,.25)' }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 4 }}>Totale offerte-waarde</div>
-                                <div style={{ fontSize: 28, fontFamily: 'Outfit, sans-serif', fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>
-                                    €{((generated.adviesprijs_pp || generated.totale_kostprijs_pp * 2 || 70) * gasten).toFixed(2)}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted, #999)', marginTop: 2 }}>
-                                    {gasten} gasten × €{(generated.adviesprijs_pp || Math.ceil((generated.totale_kostprijs_pp || 35) * 2)).toFixed(2)} per persoon
-                                </div>
-                            </div>
+                            {(() => {
+                                const kost = Number(generated.totale_kostprijs_pp) || 0;
+                                const aiSuggest = Number(generated.adviesprijs_pp) || Math.ceil(kost * 2) || 0;
+                                const huidig = prijsPp ?? aiSuggest;
+                                const margePp = huidig - kost;
+                                const margePct = huidig > 0 ? (margePp / huidig) * 100 : 0;
+                                const margeColor = margePct >= 40 ? '#22c55e' : margePct >= 30 ? '#f59e0b' : '#ef4444';
+                                const aangepast = prijsPp !== null && Math.round(prijsPp) !== Math.round(aiSuggest);
+                                const adjust = (delta: number) => setPrijsPp(Math.max(0, Math.round((huidig + delta) * 100) / 100));
+                                return (
+                                    <div style={{ padding: 14, borderRadius: 10, background: 'linear-gradient(135deg, rgba(196,163,90,.12), rgba(255,255,255,.02))', border: '1px solid rgba(196,163,90,.25)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                                            <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '.15em' }}>Prijs per persoon</div>
+                                            {kost > 0 && (
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: margeColor, fontVariantNumeric: 'tabular-nums' }}>
+                                                    Marge {margePct.toFixed(0)}% (€{margePp.toFixed(2)}/p)
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                            <button type="button" onClick={() => adjust(-2.5)} aria-label="€2,50 minder"
+                                                style={{ minWidth: 44, height: 44, borderRadius: 10, border: '1px solid rgba(196,163,90,.3)', background: 'rgba(196,163,90,.08)', color: GOLD, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Minus size={16} />
+                                            </button>
+                                            <div style={{ flex: 1, position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 500, color: GOLD, pointerEvents: 'none' }}>€</span>
+                                                <input
+                                                    type="number" min={0} step={0.5}
+                                                    value={huidig}
+                                                    onChange={(e) => setPrijsPp(parseFloat(e.target.value) || 0)}
+                                                    style={{ width: '100%', height: 44, paddingLeft: 30, paddingRight: 12, borderRadius: 10, border: '1px solid rgba(196,163,90,.3)', background: 'rgba(0,0,0,.25)', color: GOLD, fontSize: 22, fontFamily: 'Outfit, sans-serif', fontWeight: 500, fontVariantNumeric: 'tabular-nums', textAlign: 'center', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <button type="button" onClick={() => adjust(2.5)} aria-label="€2,50 meer"
+                                                style={{ minWidth: 44, height: 44, borderRadius: 10, border: '1px solid rgba(196,163,90,.3)', background: 'rgba(196,163,90,.08)', color: GOLD, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Plus size={16} />
+                                            </button>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
+                                            <div>
+                                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted, #999)', textTransform: 'uppercase', letterSpacing: '.15em' }}>Totaal offerte</div>
+                                                <div style={{ fontSize: 24, fontFamily: 'Outfit, sans-serif', fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>
+                                                    €{(huidig * gasten).toFixed(2)}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: 11, color: 'var(--muted, #999)', textAlign: 'right' }}>
+                                                {gasten} gasten × €{huidig.toFixed(2)}
+                                                {aangepast && (
+                                                    <button type="button" onClick={() => setPrijsPp(aiSuggest)}
+                                                        style={{ display: 'block', marginLeft: 'auto', marginTop: 4, padding: '2px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: GOLD, fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>
+                                                        ↺ AI-advies (€{aiSuggest.toFixed(2)})
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             <div>
                                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted, #999)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 8 }}>Menu · {(generated.gerechten || []).length} gerechten</div>

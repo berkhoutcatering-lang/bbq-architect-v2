@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { TrendingUp, Users, Clock, AlertCircle } from 'lucide-react';
+import { TrendingUp, Users, Clock, AlertCircle, Sparkles, CheckCircle, Activity } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -37,10 +37,21 @@ type FunnelRow = {
   activated_60min: boolean;
 };
 
+interface ActivationEvent {
+  id: number;
+  organization_id: string;
+  user_id: string | null;
+  event_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export default function FunnelDashboardPage() {
   const { user } = useAuth();
   const [weeks, setWeeks] = useState<WeekRow[]>([]);
   const [recent, setRecent] = useState<FunnelRow[]>([]);
+  const [events, setEvents] = useState<ActivationEvent[]>([]);
+  const [offerteCount, setOfferteCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
 
@@ -58,6 +69,14 @@ export default function FunnelDashboardPage() {
     }
 
     (async function () {
+      /* Pro-tier KPI's — laad activation_events + offerte-count voor AI-adoptie. */
+      const [{ data: rawEvents }, { count: offCount }] = await Promise.all([
+        supabase.from('activation_events').select('*').order('created_at', { ascending: false }).limit(500),
+        supabase.from('offertes').select('id', { count: 'exact', head: true }),
+      ]);
+      setEvents((rawEvents || []) as ActivationEvent[]);
+      setOfferteCount(offCount || 0);
+
       const { data: funnel, error } = await supabase
         .from('activation_funnel')
         .select('*')
@@ -119,6 +138,37 @@ export default function FunnelDashboardPage() {
   const overallRate = totalSignups > 0 ? Math.round(100 * totalActivated / totalSignups) : 0;
   const sentTimes = recent.map(r => r.min_to_sent).filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b);
   const medianMinToSent = sentTimes.length > 0 ? sentTimes[Math.floor(sentTimes.length / 2)] : null;
+
+  /* ─── Pro-tier launch KPI's ─── */
+  const eventCounts = events.reduce<Record<string, number>>((acc, e) => {
+    acc[e.event_type] = (acc[e.event_type] || 0) + 1;
+    return acc;
+  }, {});
+  const uniqueOrgsWithEvents = new Set(events.map(e => e.organization_id)).size;
+
+  const quizCompleted = eventCounts.quiz_completed || 0;
+  const checklistItemsDone = eventCounts.checklist_item_done || 0;
+  const aiWizardUsed = eventCounts.ai_wizard_used || 0;
+  const firstOfferteConcept = eventCounts.first_offerte_concept || 0;
+  const firstOfferteSent = eventCounts.first_offerte_sent || 0;
+
+  /* Activation-rate target ≥40%: % orgs met ≥4 checklist_item_done events. */
+  const orgsWithFullChecklist = Object.entries(
+    events.filter(e => e.event_type === 'checklist_item_done').reduce<Record<string, Set<string>>>((acc, e) => {
+      const itemKey = String((e.metadata as { item?: string })?.item || '');
+      if (!acc[e.organization_id]) acc[e.organization_id] = new Set();
+      acc[e.organization_id].add(itemKey);
+      return acc;
+    }, {}),
+  ).filter(([, items]) => items.size >= 4).length;
+  const activationRate = uniqueOrgsWithEvents > 0
+    ? Math.round(100 * orgsWithFullChecklist / uniqueOrgsWithEvents)
+    : 0;
+
+  /* AI-adoptie-rate target ≥30%: ai_wizard_used events / totaal aantal offertes. */
+  const aiAdoptionRate = offerteCount > 0
+    ? Math.round(100 * aiWizardUsed / offerteCount)
+    : 0;
 
   return (
     <div className="max-w-[1100px] mx-auto p-6">
@@ -184,6 +234,87 @@ export default function FunnelDashboardPage() {
             </tbody>
           </table>
         )}
+      </section>
+
+      {/* ═════════ PRO-TIER LAUNCH KPI's (uit activation_events tabel) ═════════ */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[13px] font-bold uppercase tracking-[0.15em] text-[var(--muted)]">Pro-tier launch KPI&apos;s</h2>
+          <span className="text-[11px] text-[var(--muted)]">{events.length} events · {uniqueOrgsWithEvents} {uniqueOrgsWithEvents === 1 ? 'org' : 'orgs'}</span>
+        </div>
+        <div className="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/[0.04] px-4 py-3 text-[12px] text-[var(--muted)]">
+          <strong className="text-amber-400">⚠ Vanaf 2026-05-01:</strong> deze KPI&apos;s tellen alleen events vanaf het moment dat tracking is geactiveerd. Historische offertes, klanten en gerechten van vóór die datum tellen niet mee — bedoeld als baseline voor nieuwe Pro-tier tenants, niet voor bestaande data.
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+          <Kpi
+            icon={<CheckCircle className="w-4 h-4" />}
+            label="Quiz voltooid"
+            value={quizCompleted.toString()}
+            target="orgs"
+          />
+          <Kpi
+            icon={<Activity className="w-4 h-4" />}
+            label="Activation-rate"
+            value={`${activationRate}%`}
+            target="Doel ≥40%"
+            highlight={activationRate >= 40 ? 'good' : 'bad'}
+          />
+          <Kpi
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="1e offerte concept"
+            value={firstOfferteConcept.toString()}
+            target="leading"
+          />
+          <Kpi
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="1e offerte verzonden"
+            value={firstOfferteSent.toString()}
+            target="lagging"
+          />
+          <Kpi
+            icon={<Sparkles className="w-4 h-4" />}
+            label="AI-wizard adoptie"
+            value={offerteCount > 0 ? `${aiAdoptionRate}%` : '—'}
+            target={offerteCount > 0 ? `Doel ≥30% (${aiWizardUsed}/${offerteCount})` : 'Wacht op offertes'}
+            highlight={offerteCount > 0 ? (aiAdoptionRate >= 30 ? 'good' : 'bad') : undefined}
+          />
+        </div>
+
+        {/* Event-feed: laatste 10 raw events */}
+        <div className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--card-solid)] text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--muted)] flex items-center justify-between">
+            <span>Laatste 10 events</span>
+            <span className="text-[10px] normal-case tracking-normal text-[var(--muted)]">checklist {checklistItemsDone} · ai-wizard {aiWizardUsed}</span>
+          </div>
+          {events.length === 0 ? (
+            <div className="p-6 text-[13px] text-[var(--muted)]">Nog geen events. Quiz invullen op startpagina vult deze feed.</div>
+          ) : (
+            <table className="w-full text-[12.5px]">
+              <thead className="text-[10px] uppercase tracking-[0.1em] text-[var(--muted)] bg-[var(--color-bg-deep)]/40">
+                <tr>
+                  <th className="text-left px-5 py-2.5">Wanneer</th>
+                  <th className="text-left px-5 py-2.5">Event</th>
+                  <th className="text-left px-5 py-2.5">Org</th>
+                  <th className="text-left px-5 py-2.5">Metadata</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.slice(0, 10).map(e => (
+                  <tr key={e.id} className="border-t border-[var(--card-solid)]/40">
+                    <td className="px-5 py-2 font-mono text-[10px] text-white/60">
+                      {new Date(e.created_at).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })}
+                    </td>
+                    <td className="px-5 py-2 font-mono text-[11px] text-[var(--brand)]">{e.event_type}</td>
+                    <td className="px-5 py-2 font-mono text-[10px] text-white/50">{e.organization_id.slice(0, 8)}</td>
+                    <td className="px-5 py-2 font-mono text-[10px] text-white/50 truncate max-w-[280px]">
+                      {Object.keys(e.metadata || {}).length > 0 ? JSON.stringify(e.metadata) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
 
       {/* Recent rijen */}

@@ -10,6 +10,7 @@ import {
   Plus, FileScan, X, TrendingDown
 } from "lucide-react";
 import { useSupabase } from '@/lib/useSupabase';
+import { useAuth } from '@/lib/AuthContext';
 import { fmt, fmtNl, safeJsonParse, calcMargeForOfferte, calcLineTotals, MAANDEN_KORT, plural } from '@/lib/utils';
 import { detectAllConflicts } from '@/lib/conflictDetection';
 import MetallicCard from '@/components/MetallicCard';
@@ -22,8 +23,18 @@ import DashboardBrandHero from '@/components/DashboardBrandHero';
 import PriceUpdateReminder from '@/components/PriceUpdateReminder';
 import { LoadingState } from '@/components/LoadingState';
 import Sparkline from '@/components/Sparkline';
+import ActiveEventCard from '@/components/dashboard/ActiveEventCard';
+import PendingActions, { type PendingItem } from '@/components/dashboard/PendingActions';
+import StatusStrip, { type StatusTile } from '@/components/dashboard/StatusStrip';
+import OnboardingChecklist, { type ChecklistData } from '@/components/onboarding/OnboardingChecklist';
+import PersonaQuiz from '@/components/onboarding/PersonaQuiz';
+import { useBrandLogo } from '@/lib/useBrandLogo';
+import { trackOnce } from '@/lib/track';
+import { Clipboard, ShieldCheck } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const brand = useBrandLogo();
   const ev = useSupabase('events', []);
   const fac = useSupabase('facturen', []);
   const off = useSupabase('offertes', []);
@@ -71,6 +82,16 @@ export default function DashboardPage() {
     else setGreeting("Goedenavond");
     return () => clearInterval(timer);
   }, []);
+
+  /* Activation-tracking: signup_completed fire't 1x per user zodra dashboard
+     voor het eerst rendert. Voor cold-start Pro-tier-tenants is dit het juiste
+     moment (post-uitnodiging-eerste-login). Voor bestaande tenants (Mathijs)
+     wordt het alleen vanaf NU gemeten — historische data tellen niet. */
+  useEffect(() => {
+    if (user?.id) {
+      trackOnce('signup_completed', `signup_${user.id}`, { userId: user.id });
+    }
+  }, [user?.id]);
 
   const today = new Date().toISOString().slice(0, 10);
   const jaarNu = new Date().getFullYear().toString();
@@ -382,12 +403,102 @@ export default function DashboardPage() {
     return !lastEvent || lastEvent.date < sixMonthsAgoIso;
   }).slice(0, 5);
 
+  /* ── Vandaag-laag · drie niveaus: Hero (event) → Actie-nu (urgent) → Status-strip (kijk-info). ── */
+  const prepTasksForNextEvent = nextEventForPrep
+    ? prepTasks.filter((t: any) => t.event_id === nextEventForPrep.id && !t.done)
+    : [];
+  const haccpLast7Days = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    const cutoff = d.toISOString().slice(0, 10);
+    return haccpRecords.filter((r: any) => (r.created_at || r.date || '') >= cutoff);
+  })();
+
+  /* Niveau 2: alleen écht urgente items (rood, vraagt actie nu). Max 2-3 stuks. */
+  const vandaagUrgentItems: PendingItem[] = [];
+  if (verlopenFacturen.length > 0) {
+    vandaagUrgentItems.push({
+      key: 'verlopen-facturen',
+      label: 'Te laat — stuur herinnering',
+      count: verlopenFacturen.length,
+      hint: `€${Math.round(verlopenTotaal).toLocaleString('nl-NL')} openstaand`,
+      icon: 'warning',
+      href: '/facturen',
+      urgent: true,
+    });
+  }
+  if (criticalConflicts.length > 0) {
+    vandaagUrgentItems.push({
+      key: 'planning-conflict',
+      label: 'Planning-conflict in agenda',
+      count: criticalConflicts.length,
+      hint: 'controleer en los op',
+      icon: 'warning',
+      href: '/agenda',
+      urgent: true,
+    });
+  }
+
+  /* Onboarding-checklist data: leid af uit bestaande Supabase-data zodat items
+     auto-checken zodra tenant ze daadwerkelijk doet. */
+  const onboardingData: ChecklistData = {
+    hasLogo: !!brand?.logoUrl,
+    hasOwnGerecht: gerechtenData.length > 0,
+    hasRealOfferte: offertes.length > 0,
+    hasSentOfferte: offertes.some((o: any) => o.status === 'verzonden' || o.status === 'geaccepteerd'),
+  };
+
+  /* Track first_offerte_sent zodra ten minste 1 offerte status='verzonden' heeft.
+     Idempotent via trackOnce. Telt voor de "First Real Offerte Sent"-KPI. */
+  const sentOffertesCount = offertes.filter((o: any) => o.status === 'verzonden' || o.status === 'geaccepteerd').length;
+  useEffect(() => {
+    if (sentOffertesCount > 0) {
+      trackOnce('first_offerte_sent', 'first_offerte_sent', { count: sentOffertesCount });
+    }
+  }, [sentOffertesCount]);
+
+  /* Niveau 3: status-strip — kijk-info, geen knop-vibe. Altijd 4 tegels voor consistentie. */
+  const vandaagStatusTiles: StatusTile[] = [
+    {
+      key: 'offertes',
+      count: openOffertes.length,
+      label: openOffertes.length === 1 ? 'offerte open' : 'offertes open',
+      href: '/offertes',
+      icon: <FileText size={14} />,
+      attention: openOffertes.length > 0,
+    },
+    {
+      key: 'prep',
+      count: prepTasksForNextEvent.length,
+      label: prepTasksForNextEvent.length === 1 ? 'prep-taak open' : 'prep-taken open',
+      href: '/prep-counter',
+      icon: <Clipboard size={14} />,
+      attention: prepTasksForNextEvent.length > 0,
+    },
+    {
+      key: 'voorraad',
+      count: lowStockItems.length,
+      label: 'voorraad laag',
+      href: '/voorraad',
+      icon: <Package size={14} />,
+      attention: lowStockItems.length > 0,
+    },
+    {
+      key: 'haccp',
+      count: haccpLast7Days.length,
+      label: 'HACCP deze week',
+      href: '/haccp',
+      icon: <ShieldCheck size={14} />,
+    },
+  ];
+
   if (!isMounted) {
     return <LoadingState label="Dashboard laden" />;
   }
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] selection:bg-[var(--color-accent-gold)]/30">
+      <PersonaQuiz />
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--color-bg-elevated)]">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -425,26 +536,71 @@ export default function DashboardPage() {
 
       <main className="max-w-[1400px] mx-auto px-4 md:px-8 py-5 md:py-8 font-['Outfit'] dashboard-main">
         <style>{`.dashboard-main a, .dashboard-main a *, .dashboard-main button, .dashboard-main button * { text-decoration: none !important; }`}</style>
-        {/* ═════════ COMMAND CENTER · ACTIE-BAR ═════════ */}
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-[22px] md:text-[26px] font-bold text-[var(--text)] font-['Outfit'] leading-tight">Command center</h2>
-            <p className="text-[12px] text-[var(--muted)] mt-0.5">
-              {(criticalConflicts.length + verlopenFacturen.length) > 0
-                ? `${criticalConflicts.length + verlopenFacturen.length} ${(criticalConflicts.length + verlopenFacturen.length) === 1 ? 'item' : 'items'} vragen aandacht`
-                : 'Alles loopt — geen open kritieke items'}
-            </p>
-          </div>
-          <button
-            onClick={() => setWizardOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90 shrink-0"
-          >
-            <Plus size={14} />
-            <span className="hidden md:inline">Nieuw Event</span>
-          </button>
-        </div>
 
-        {/* ═════════ KPI-STRIP · 6 kerncijfers in één blik ═════════ */}
+        {/* ═════════ VANDAAG · 3 niveaus: hero, actie-nu, status ═════════ */}
+        <section style={{ marginBottom: 28 }}>
+          {/* Subtitle + Nieuw Event-knop op één rij */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              marginBottom: 14,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 8,
+                fontSize: 12,
+                color: 'var(--muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '.08em',
+              }}
+            >
+              <span style={{ fontWeight: 700 }}>
+                {greeting}
+                {user?.user_metadata?.name ? `, ${user.user_metadata.name.split(' ')[0]}` : ''}
+              </span>
+              {isMounted && (
+                <span>· {currentTime.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+              )}
+            </div>
+            <button
+              onClick={() => setWizardOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[12px] font-bold transition-all active:scale-95 border border-white/20 bg-white text-black hover:bg-white/90 shrink-0"
+            >
+              <Plus size={14} />
+              <span className="hidden md:inline">Nieuw event</span>
+            </button>
+          </div>
+
+          {/* Onboarding-checklist (zichtbaar tot alle 4 stappen klaar of dismissed) */}
+          <OnboardingChecklist data={onboardingData} />
+
+          {/* Niveau 1: HERO — Active event op volle breedte */}
+          <div style={{ marginBottom: vandaagUrgentItems.length > 0 ? 14 : 12 }}>
+            <ActiveEventCard event={nextEventForPrep} onNewEvent={() => setWizardOpen(true)} />
+          </div>
+
+          {/* Niveau 2: ACTIE-NU — alleen écht urgente items (max 2) */}
+          {vandaagUrgentItems.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <PendingActions items={vandaagUrgentItems} title="Vraagt nu actie" />
+            </div>
+          )}
+
+          {/* Niveau 3: STATUS-STRIP — kijk-info, smal, geen knop-vibe */}
+          <StatusStrip tiles={vandaagStatusTiles} />
+        </section>
+
+        {/* ═════════ KPI-STRIP · 6 kerncijfers in één blik (secundair onder Vandaag) ═════════ */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>
+          Cijfers van de zaak
+        </div>
         <div className="kpi-strip mb-5">
           <Link href="/financien" className="kpi-strip__tile">
             <span className="kpi-strip__label"><Euro size={11} /> Omzet deze maand</span>

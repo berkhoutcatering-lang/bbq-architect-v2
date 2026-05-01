@@ -21,7 +21,7 @@ interface Tab {
 
 const tabs: Tab[] = [
     {
-        label: "Dashboard",
+        label: "Vandaag",
         icon: <LayoutDashboard size={22} />,
         href: "/",
         match: (p) => p === "/",

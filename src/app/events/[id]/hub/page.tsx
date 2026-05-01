@@ -475,6 +475,9 @@ export default function EventHubPage() {
               </div>
               <div className="eh-hero-actions">
                 <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
+                <button className="btn btn-ghost" onClick={() => router.push(`/events/${event.id}/field`)}>
+                  <Flame size={14} />Ga live (KDS)
+                </button>
                 <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
                 {event.client_email && (
                   <a className="btn btn-ghost" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
