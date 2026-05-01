@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ai-eval": "tsx scripts/ai-eval.ts",
-    "enable-leaked-password-protection": "tsx scripts/enable-leaked-password-protection.ts"
+    "enable-leaked-password-protection": "tsx scripts/enable-leaked-password-protection.ts",
+    "seed-help": "node scripts/seed-help-articles.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
