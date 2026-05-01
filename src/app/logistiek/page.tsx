@@ -9,7 +9,8 @@ import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import MetallicCard from '@/components/MetallicCard';
 import type { RtrItem, PackList, DbEvent, Offerte, Gerecht } from '@/types';
-import { Check, ChevronDown, ChevronUp, ClipboardCheck, Loader2, Package, PackageOpen, Plus, RotateCcw, Trash2, Truck } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ClipboardCheck, Loader2, Package, PackageOpen, Plus, RotateCcw, Trash2, Truck, Smartphone } from 'lucide-react';
+import Link from 'next/link';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 interface HardwareItem {
@@ -153,6 +154,10 @@ export default function Logistiek() {
         <RequireTier feature="logistiek">
         <>
             <PageHeader title="Logistiek" description="Plan transport en check je materiaallijsten voor events" />
+
+            <Link href="/logistiek/field" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, background: 'rgba(196,163,90,.12)', border: '1px solid rgba(196,163,90,.3)', color: 'var(--color-accent-gold, #c4a35a)', fontSize: 13, fontWeight: 700, textDecoration: 'none', marginBottom: 12 }}>
+                <Smartphone size={14} /> Open Veldmodus — handschoen-vriendelijke check vóór vertrek
+            </Link>
 
             <div className="tab-bar">
                 <button className={'tab-btn' + (tab === 'buscheck' ? ' active' : '')} onClick={function () { setTab('buscheck'); }}>🚛 Alles in de bus</button>
