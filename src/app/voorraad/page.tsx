@@ -44,10 +44,10 @@ function stockStatus(item: InventoryItem) {
     const cur = Number(item.current_stock || 0);
     const reorder = Number(item.min_stock || 0);
     const par = Number(item.par_level || 0);
-    if (cur === 0) return { key: 'out', label: 'OP', color: 'var(--red)', bg: 'rgba(239,68,68,.12)', br: 'rgba(239,68,68,.35)', pct: 0 };
-    if (cur <= reorder) return { key: 'low', label: 'LAAG', color: 'var(--amber)', bg: 'rgba(245,158,11,.12)', br: 'rgba(245,158,11,.3)', pct: par > 0 ? (cur / par) * 100 : 50 };
-    if (par > 0 && cur >= par * 0.85) return { key: 'ok', label: 'VOLDOENDE', color: 'var(--green)', bg: 'rgba(34,197,94,.1)', br: 'rgba(34,197,94,.25)', pct: Math.min(100, (cur / par) * 100) };
-    return { key: 'mid', label: 'OP PEIL', color: 'var(--muted)', bg: 'transparent', br: 'var(--border)', pct: par > 0 ? Math.min(100, (cur / par) * 100) : 100 };
+    if (cur === 0) return { key: 'out', label: 'Op', color: 'var(--red)', bg: 'rgba(239,68,68,.12)', br: 'rgba(239,68,68,.35)', pct: 0 };
+    if (cur <= reorder) return { key: 'low', label: 'Laag', color: 'var(--amber)', bg: 'rgba(245,158,11,.12)', br: 'rgba(245,158,11,.3)', pct: par > 0 ? (cur / par) * 100 : 50 };
+    if (par > 0 && cur >= par * 0.85) return { key: 'ok', label: 'Voldoende', color: 'var(--green)', bg: 'rgba(34,197,94,.1)', br: 'rgba(34,197,94,.25)', pct: Math.min(100, (cur / par) * 100) };
+    return { key: 'mid', label: 'Op peil', color: 'var(--muted)', bg: 'transparent', br: 'var(--border)', pct: par > 0 ? Math.min(100, (cur / par) * 100) : 100 };
 }
 
 function stockValue(item: InventoryItem) {
@@ -128,7 +128,7 @@ function StatTile({ label, value, sub, tone, icon: I }: { label: React.ReactNode
         <MetalCard>
             <div style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <Eyebrow>{label}</Eyebrow>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
                     {I && <I size={14} style={{ color: 'var(--muted-light)' }} />}
                 </div>
                 <div style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontSize: 28, fontWeight: 200, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
@@ -517,10 +517,6 @@ export default function Voorraad() {
                         <AIAssistantBar inventory={inventory} />
 
                         <div style={{ height: 20 }} />
-                        <SectionExplain>
-                            <strong style={{ color: 'var(--text)' }}>Welkom bij Smart Inventory.</strong> Hieronder zie je in 3 kaarten direct wat actie vereist: items onder par-level, producten waarvan THT bijna verloopt, en een gebundeld bestelvoorstel per leverancier.
-                        </SectionExplain>
-
                         <ActionPanel
                             lowStock={lowStock}
                             expiring={expiringSoon}
@@ -609,18 +605,15 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
                 <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: 0 }}>Voorraad</h1>
-                        <span style={{ padding: '2px 8px', borderRadius: 6, background: `${GOLD}20`, border: `1px solid ${GOLD}4D`, fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>SMART INVENTORY</span>
-                    </div>
+                    <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Voorraad</h1>
                     <div style={{ color: 'var(--muted)', fontSize: 14 }}>
                         {totalItems} producten · live gesynct · altijd zicht op wat je nodig hebt
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <BtnGhost icon={ScanLine} onClick={onTell}>Tellen</BtnGhost>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <BtnGhost icon={Barcode} onClick={onScan}>Scan</BtnGhost>
-                    <BtnGhost icon={Printer} onClick={onPDF}>Voorraadlijst PDF</BtnGhost>
+                    <BtnGhost icon={ScanLine} onClick={onTell} style={{ padding: '6px 12px', fontSize: 11 }}>Tellen</BtnGhost>
+                    <BtnGhost icon={Printer} onClick={onPDF} style={{ padding: '6px 12px', fontSize: 11 }}>Voorraadlijst PDF</BtnGhost>
                     <BtnGhost icon={Sparkles} right={ArrowUpRight} onClick={onAI} style={{ borderColor: `${GOLD}66`, color: GOLD }}>AI Advies</BtnGhost>
                     <BtnPrimary icon={Plus} onClick={onAdd}>Item toevoegen</BtnPrimary>
                 </div>
@@ -706,12 +699,11 @@ function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
     }
 
     return (
-        <MetalCard style={{ position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, #FFBF00, ${GOLD}, transparent)` }} />
+        <MetalCard>
             <div style={{ padding: '16px 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: response || answering ? 14 : 0 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: `${GOLD}26`, border: `1px solid ${GOLD}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Sparkles size={17} style={{ color: GOLD }} />
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: `${GOLD}1f`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Sparkles size={15} style={{ color: GOLD }} />
                     </div>
                     <div style={{ flex: 1, position: 'relative' }}>
                         <input
@@ -749,7 +741,7 @@ function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
                         ) : response}
                         {response && (
                             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Eyebrow style={{ color: GOLD }}>AI antwoord · op basis van live voorraad</Eyebrow>
+                                <span style={{ fontSize: 11, color: GOLD, fontWeight: 500 }}>AI antwoord · op basis van live voorraad</span>
                                 <button onClick={() => { setResponse(null); setQ(''); }} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>Wissen</button>
                             </div>
                         )}
