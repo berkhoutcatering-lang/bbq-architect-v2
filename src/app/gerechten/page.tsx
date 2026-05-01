@@ -50,6 +50,8 @@ export default function Gerechten() {
     /* Menu's-tab op /gerechten — herbruikbare menu-templates die de wizard
        opslaat. Eén plek voor menu-samenstelling, hergebruikt vanuit /offertes. */
     const [view, setView] = useState<'gerechten' | 'menus'>('gerechten');
+    /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
+    const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
     const [menuTemplates, setMenuTemplates] = useState<any[]>([]);
     const [showMenuWizard, setShowMenuWizard] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<MenuTemplateInput | null>(null);
@@ -322,6 +324,13 @@ export default function Gerechten() {
         }
 
         const dbData: Record<string, any> = Object.assign({}, saveData);
+        /* Status-systeem (migratie 016): handmatig nieuw gerecht = direct actief
+           (de chef weet wat ie kookt, geen review-stap nodig). AI-creaties komen
+           via ai-tools binnen met status='concept' + bron='ai'. */
+        if (editing === 'new') {
+            if (!dbData.status) dbData.status = 'actief';
+            if (!dbData.bron) dbData.bron = 'manual';
+        }
 
         if (editing === 'new') {
             const { error } = await supabase.from('gerechten').insert([dbData]);
@@ -462,8 +471,42 @@ export default function Gerechten() {
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    const gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang; });
+    /* Status-systeem: cards filteren op huidige gang + huidige status-filter.
+       Status is single source of truth — `actief` blijft via DB-trigger in sync
+       voor backwards-compat met oudere queries. */
+    function getStatus(g: any): 'concept' | 'review_nodig' | 'actief' | 'inactief' {
+        if (g.status) return g.status;
+        return g.actief === false ? 'inactief' : 'actief';
+    }
+    const gangGerechten = gerechten
+        .filter(function (g) { return g.gang_slug === activeGang; })
+        .filter(function (g) {
+            if (statusFilter === 'all') return true;
+            return getStatus(g) === statusFilter;
+        });
     const currentGang = gangen.find(function (g) { return g.slug === activeGang; });
+
+    /* Tellingen per status voor de filter-pills bovenaan (over alle gangen). */
+    const statusCounts = {
+        all: gerechten.length,
+        concept: gerechten.filter(g => getStatus(g) === 'concept').length,
+        review_nodig: gerechten.filter(g => getStatus(g) === 'review_nodig').length,
+        actief: gerechten.filter(g => getStatus(g) === 'actief').length,
+        inactief: gerechten.filter(g => getStatus(g) === 'inactief').length,
+    };
+
+    /* Compleetheid-meter: welke velden zijn nog niet ingevuld? */
+    function checklistVoor(g: any): { label: string; ok: boolean }[] {
+        return [
+            { label: 'Naam', ok: !!(g.naam && String(g.naam).trim()) },
+            { label: 'Beschrijving', ok: !!(g.beschrijving && String(g.beschrijving).trim()) },
+            { label: 'Foto', ok: !!g.foto_url },
+            { label: 'Kostprijs', ok: Number(g.kostprijs_pp || 0) > 0 },
+            { label: 'Ingrediënten', ok: Array.isArray(g.ingredienten) && g.ingredienten.length > 0 },
+            { label: 'Allergenen', ok: Array.isArray(g.allergenen) && g.allergenen.length > 0 },
+            { label: 'Bereidingswijze', ok: !!(g.bereidingswijze && String(g.bereidingswijze).trim()) },
+        ];
+    }
 
     const ALLERGENEN_PRESETS = ['Glutenvrij', 'Lactosevrij', 'Notenvrij', 'Vegetarisch', 'Veganistisch', 'Vis', 'Schaaldieren'];
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
@@ -563,6 +606,55 @@ export default function Gerechten() {
             )}
 
             {view === 'gerechten' && (<>
+            {/* Status-filter pills — alleen tonen als er iets te filteren valt
+                (concept of review_nodig > 0). Anders: stille progressive disclosure. */}
+            {(statusCounts.concept > 0 || statusCounts.review_nodig > 0 || statusFilter !== 'all') && (
+                <div role="tablist" aria-label="Status-filter" style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {([
+                        { key: 'all', label: 'Alle', tone: 'neutral' },
+                        { key: 'actief', label: 'Actief', tone: 'green' },
+                        { key: 'concept', label: '✦ Concepten', tone: 'purple' },
+                        { key: 'review_nodig', label: 'Review nodig', tone: 'amber' },
+                        { key: 'inactief', label: 'Inactief', tone: 'gray' },
+                    ] as const).map(p => {
+                        const count = statusCounts[p.key];
+                        const isActive = statusFilter === p.key;
+                        const tones: Record<string, { bg: string; color: string; border: string }> = {
+                            neutral: { bg: 'rgba(255,255,255,.05)', color: 'var(--text)', border: 'var(--border)' },
+                            green: { bg: 'rgba(34,197,94,.08)', color: '#22c55e', border: 'rgba(34,197,94,.3)' },
+                            purple: { bg: 'rgba(167,139,250,.08)', color: '#a78bfa', border: 'rgba(167,139,250,.35)' },
+                            amber: { bg: 'rgba(245,158,11,.08)', color: '#f59e0b', border: 'rgba(245,158,11,.35)' },
+                            gray: { bg: 'rgba(130,130,130,.06)', color: 'var(--muted)', border: 'rgba(130,130,130,.2)' },
+                        };
+                        const t = tones[p.tone];
+                        return (
+                            <button
+                                key={p.key}
+                                role="tab"
+                                aria-selected={isActive}
+                                onClick={() => setStatusFilter(p.key)}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: 999,
+                                    border: '1px solid ' + (isActive ? t.color : t.border),
+                                    background: isActive ? t.color + '22' : t.bg,
+                                    color: t.color,
+                                    fontSize: 12,
+                                    fontWeight: isActive ? 700 : 500,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                {p.label}
+                                <span style={{ opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             <div className="tab-bar">
                 {gangen.map(function (g) {
                     const count = gerechten.filter(function (gr) { return gr.gang_slug === g.slug; }).length;
@@ -602,14 +694,46 @@ export default function Gerechten() {
             <PageSection>
             <div className="dish-grid">
                 {gangGerechten.map(function (g) {
+                    const status = getStatus(g);
+                    const isAi = g.bron === 'ai';
+                    /* Visuele state per status — AI-creaties krijgen daarbij een
+                       extra diagonal-stripe-rand zodat ze direct opvallen. */
+                    const cardOpacity = status === 'inactief' ? 0.55 : 1;
+                    const stripeBg = isAi ? 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(167,139,250,.06) 8px 16px)' : undefined;
+                    const cardBorder = status === 'concept'
+                        ? '1px solid rgba(167,139,250,.45)'
+                        : status === 'review_nodig'
+                            ? '1px solid rgba(245,158,11,.45)'
+                            : undefined;
+                    const statusPill = status === 'concept'
+                        ? { text: '✦ Concept', bg: 'rgba(167,139,250,.15)', color: '#a78bfa' }
+                        : status === 'review_nodig'
+                            ? { text: 'Review nodig', bg: 'rgba(245,158,11,.15)', color: '#f59e0b' }
+                            : status === 'inactief'
+                                ? { text: 'Inactief', bg: 'rgba(239,68,68,.15)', color: 'var(--red)' }
+                                : null;
                     return (
-                        <div key={g.id} className="dish-card" onClick={function () { editGerecht(g); }} style={{ opacity: g.actief === false ? 0.55 : 1 }}>
+                        <div
+                            key={g.id}
+                            className="dish-card"
+                            onClick={function () { editGerecht(g); }}
+                            style={{ opacity: cardOpacity, backgroundImage: stripeBg, border: cardBorder, position: 'relative' }}
+                        >
+                            {isAi && (
+                                <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(167,139,250,.2)', color: '#a78bfa', fontWeight: 700, letterSpacing: '.05em' }} title="Door AI gegenereerd">
+                                    ✦ AI
+                                </span>
+                            )}
                             {g.foto_url && (
                                 <div className="dish-foto-preview" style={{ backgroundImage: 'url(' + g.foto_url + ')' }}></div>
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                 <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
-                                {g.actief === false && <span style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: 'var(--red)', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
+                                {statusPill && (
+                                    <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: statusPill.bg, color: statusPill.color, fontWeight: 700, flexShrink: 0 }}>
+                                        {statusPill.text}
+                                    </span>
+                                )}
                             </div>
                             <div className="dish-desc">{g.beschrijving || '—'}</div>
 
@@ -1172,8 +1296,85 @@ export default function Gerechten() {
                             )}
                         </div>
 
+                        {/* Compleetheid-meter — toont in één oogopslag wat nog mist
+                            voordat een concept geactiveerd kan worden. */}
+                        {(function () {
+                            const checks = checklistVoor(form);
+                            const okCount = checks.filter(c => c.ok).length;
+                            const total = checks.length;
+                            const pct = Math.round((okCount / total) * 100);
+                            const currentStatus = form.status || (editing === 'new' ? 'actief' : 'inactief');
+                            const isConcept = currentStatus === 'concept' || currentStatus === 'review_nodig';
+                            return (
+                                <div style={{ marginTop: 12, padding: 14, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Compleetheid</div>
+                                        <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{okCount} / {total}</div>
+                                    </div>
+                                    <div style={{ height: 6, background: 'var(--color-bg-deep)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+                                        <div style={{ height: '100%', width: pct + '%', background: pct >= 100 ? '#22c55e' : pct >= 60 ? '#FFBF00' : '#f59e0b', transition: 'width .3s' }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {checks.map(c => (
+                                            <span key={c.label} style={{
+                                                fontSize: 11,
+                                                padding: '3px 8px',
+                                                borderRadius: 4,
+                                                background: c.ok ? 'rgba(34,197,94,.1)' : 'rgba(245,158,11,.1)',
+                                                color: c.ok ? '#22c55e' : '#f59e0b',
+                                                fontWeight: 600,
+                                            }}>
+                                                {c.ok ? '✓' : '○'} {c.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    {isConcept && pct >= 100 && (
+                                        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.3)', fontSize: 12, color: '#22c55e' }}>
+                                            ✓ Compleet — klaar om te activeren met de knop hieronder.
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
                         <div className="modal-actions">
                             {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>🗑️ Verwijderen</button>}
+                            {/* Status-toggle: concept/review → activeer · actief → deactiveer · inactief → activeer */}
+                            {editing !== 'new' && (function () {
+                                const cur = form.status || (form.actief === false ? 'inactief' : 'actief');
+                                if (cur === 'concept' || cur === 'review_nodig') {
+                                    return (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={function () { setForm(Object.assign({}, form, { status: 'actief' })); }}
+                                            style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,.4)' }}
+                                            title="Maak klant-klaar — verschijnt dan in de offerte-wizard"
+                                        >
+                                            ✓ Activeer
+                                        </button>
+                                    );
+                                }
+                                if (cur === 'actief') {
+                                    return (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={function () { setForm(Object.assign({}, form, { status: 'inactief' })); }}
+                                            title="Verberg uit offerte-wizard zonder te verwijderen"
+                                        >
+                                            Deactiveer
+                                        </button>
+                                    );
+                                }
+                                return (
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={function () { setForm(Object.assign({}, form, { status: 'actief' })); }}
+                                        style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,.4)' }}
+                                    >
+                                        ✓ Activeer
+                                    </button>
+                                );
+                            })()}
                             <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); }}>Annuleren</button>
                             <button className="btn btn-brand btn-sm" onClick={saveGerecht}>💾 Opslaan</button>
                         </div>

@@ -572,9 +572,11 @@ async function handleEngineerMenuProfitability(sb: SupabaseClient, params: Recor
 }
 
 async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
-    /* Recept = gerecht sinds 2026-05-01. Map velden van AI-tool naam naar
-       gerechten-schema: categorie → gang_slug, instructies → bereidingswijze,
-       preptime (minuten) → target_prep_time (seconden). */
+    /* Recept = gerecht sinds 2026-05-01. Map velden van AI-tool naar gerechten:
+       categorie → gang_slug, instructies → bereidingswijze, preptime → seconden.
+       Status-systeem (migratie 016): AI-creaties komen binnen als 'concept' met
+       bron='ai' zodat ze in /gerechten visueel onderscheidbaar zijn (diagonal
+       stripe + ✦ AI pill) en niet direct in de offerte-wizard verschijnen. */
     const { data, error } = await sb.from('gerechten').insert([{
         naam: params.naam,
         gang_slug: params.categorie || 'hoofdgerechten',
@@ -583,10 +585,11 @@ async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any
         ingredienten: params.ingredienten || [],
         bereidingswijze: params.instructies || '',
         organization_id: orgId,
-        actief: false,  /* AI-creaties blijven inactief tot user 'm reviewt */
+        status: 'concept',
+        bron: 'ai',
     }]).select().single();
     if (error) throw new Error(error.message);
-    return { created: data, message: 'Gerecht "' + params.naam + '" toegevoegd (inactief — review en activeer in /gerechten)' };
+    return { created: data, message: 'Gerecht "' + params.naam + '" als concept opgeslagen — review en activeer in /gerechten' };
 }
 
 async function handleUpdateRecept(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {

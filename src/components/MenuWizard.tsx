@@ -94,8 +94,18 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
 
     function refreshGerechten() {
         if (!supabase) return;
-        supabase.from('gerechten').select('*').eq('actief', true).order('volgorde').then(function (res) {
-            if (res.data) setGerechten(res.data as DishRow[]);
+        /* Wizard toont alleen klant-klare gerechten — concepten en
+           review_nodig blijven verstopt tot ze geactiveerd zijn. Status is de
+           single source of truth (migratie 016); we filteren hier in JS zodat
+           pre-migratie omgevingen ook werken (status undefined → val terug op
+           legacy `actief`-vlag). */
+        supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
+            const rows = ((res.data as DishRow[]) || []).filter(g => {
+                const status = (g as unknown as Record<string, unknown>).status;
+                if (typeof status === 'string') return status === 'actief';
+                return (g as unknown as Record<string, unknown>).actief !== false;
+            });
+            setGerechten(rows);
         });
     }
 
@@ -119,8 +129,14 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
         supabase.from('gangen').select('*').eq('actief', true).order('volgorde').then(function (res) {
             if (res.data) setGangen(res.data as GangRow[]);
         });
-        supabase.from('gerechten').select('*').eq('actief', true).order('volgorde').then(function (res) {
-            if (res.data) setGerechten(res.data as DishRow[]);
+        /* Initial load gebruikt dezelfde status-filter als refreshGerechten. */
+        supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
+            const rows = ((res.data as DishRow[]) || []).filter(g => {
+                const status = (g as unknown as Record<string, unknown>).status;
+                if (typeof status === 'string') return status === 'actief';
+                return (g as unknown as Record<string, unknown>).actief !== false;
+            });
+            setGerechten(rows);
         });
     }, []);
 
