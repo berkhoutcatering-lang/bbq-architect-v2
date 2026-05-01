@@ -34,10 +34,11 @@ export const navSections: NavSection[] = [
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "keuken",
-        description: "Gerechten, opgeslagen menu's en marge-analyse.",
+        description: "Vaste gerechten, AI-bedenker en marge-analyse.",
         hubHref: "/gerechten",
         children: [
-            { label: "Gerechten & Menu's", icon: <ChefHat size={16} />, href: "/gerechten", description: "Gerechten beheren met receptuur + opgeslagen menu's voor offertes" },
+            { label: "Gerechten & Menu's", icon: <ChefHat size={16} />, href: "/gerechten", description: "Vaste gerechten met receptuur + opgeslagen menu's voor offertes" },
+            { label: "Bedenker", icon: <Palette size={16} />, href: "/bedenker", description: "AI-speeltuin: brainstorm gerechten zonder ze direct op het menu te zetten" },
             { label: "Marges", icon: <BarChart3 size={16} />, href: "/marges", description: "BCG-analyse: marges en populariteit per gerecht" },
         ],
     },

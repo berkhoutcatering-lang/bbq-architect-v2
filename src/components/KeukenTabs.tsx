@@ -1,15 +1,19 @@
 'use client';
 
-import { ChefHat, BarChart3 } from 'lucide-react';
+import { ChefHat, BarChart3, Sparkles } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
-/* Keuken-hub: één plek voor gerechten + samenstelling, één plek voor analyse.
-   - "Recepten" weg 2026-05-01 → receptuur leeft in de gerecht-modal op /gerechten.
-   - "AI Pitmaster" weg 2026-05-01 → AI woont waar de actie is (slide-over op
-     /gerechten + floating chat-bubble), niet als losse tab. /ai-chat blijft
-     bestaan en is vindbaar via ⌘K. */
+/* Keuken-hub:
+   - Gerechten: vaste bibliotheek — wat je écht kookt, klant-klaar
+   - Bedenker: AI-speeltuin — vrij brainstormen, opslaan als concept
+   - Marges:   analyse — BCG-matrix + foodcost-trends
+
+   "Recepten" weg 2026-05-01 (receptuur in gerecht-modal). "AI Pitmaster" tab
+   weg (chat blijft bestaan via ⌘K). De Bedenker is een gerichte AI-tool,
+   niet een losse chat — daarom verdient hij wel een tab. */
 const TABS: HubTab[] = [
   { href: '/gerechten', label: 'Gerechten', icon: ChefHat },
+  { href: '/bedenker', label: 'Bedenker', icon: Sparkles },
   { href: '/marges', label: 'Marges', icon: BarChart3 },
 ];
 
