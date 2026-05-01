@@ -6300,6 +6300,259 @@ textarea:focus-visible,
   }
 }
 
+/* ───────── KDS (Kitchen Display System) ─────────
+   Full-screen live-service modus voor BBQ Architect. Dark theme,
+   hoog contrast (WCAG AAA), tap-targets ≥56px voor handschoen-gebruik.
+   Geen sidebar/bottom-nav/breadcrumb — alleen wat tijdens service telt. */
+
+.kds-layout {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0c;
+  color: #f8f8f8;
+  display: grid;
+  grid-template-rows: 56px auto 1fr 32px 64px;
+  z-index: 9999;
+  overflow: hidden;
+  font-family: 'Outfit', system-ui, sans-serif;
+}
+
+.kds-top-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: #0e0e10;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  gap: 16px;
+}
+.kds-top-event { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.kds-top-event__name { font-size: 16px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kds-top-event__meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.kds-top-clock { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.kds-top-clock__time { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.kds-top-clock__schedule { font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: .08em; }
+.kds-top-exit {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: transparent; border: 1px solid rgba(255,255,255,.12);
+  color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.kds-top-exit:hover { background: rgba(239,68,68,.12); color: var(--red); border-color: rgba(239,68,68,.4); }
+
+.kds-status-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kds-alert-strip {
+  display: flex; align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  animation: kdsAlertSlideIn 200ms ease-out;
+}
+.kds-alert-strip__message { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kds-alert-strip__action {
+  padding: 6px 14px; border-radius: 8px;
+  background: transparent; border: 1px solid;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  white-space: nowrap;
+}
+.kds-alert-strip__close {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: transparent; border: none;
+  color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+@keyframes kdsAlertSlideIn {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.kds-main {
+  display: grid;
+  grid-template-columns: 60% 40%;
+  gap: 16px;
+  padding: 20px;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .kds-main { grid-template-columns: 1fr; grid-template-rows: auto auto; overflow-y: auto; }
+}
+
+.kds-now { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.kds-next { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+
+.kds-zone-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .2em;
+  color: var(--muted); margin-bottom: 4px;
+}
+
+.kds-course-card {
+  background: linear-gradient(180deg, rgba(28,28,32,.7), rgba(18,18,22,.6));
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+  transition: border-color .15s, transform .15s;
+}
+.kds-course-card--now { padding: 28px; gap: 18px; }
+.kds-course-card--next { padding: 14px; gap: 8px; }
+
+.kds-course-card__header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.kds-course-card__number {
+  font-size: 11px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--muted-light);
+}
+.kds-course-card__status {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.kds-course-card__title {
+  font-size: 32px; font-weight: 600; line-height: 1.05; margin: 0;
+  color: var(--text);
+}
+.kds-course-card--next .kds-course-card__title { font-size: 18px; }
+.kds-course-card__meta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  font-size: 14px; color: var(--muted);
+}
+.kds-course-card__countdown {
+  font-size: 18px; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.kds-course-card--next .kds-course-card__countdown { font-size: 14px; }
+.kds-course-card__tables {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.kds-course-card__table-chip {
+  font-size: 12px; font-weight: 700;
+  padding: 4px 10px; border-radius: 6px;
+  background: rgba(239,68,68,.12); color: var(--red);
+  border: 1px solid rgba(239,68,68,.3);
+}
+.kds-course-card__cta {
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: none;
+  background: var(--brand);
+  color: #0a0a0c;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: auto;
+  min-height: 56px;
+  transition: filter .12s;
+}
+.kds-course-card__cta:hover { filter: brightness(1.1); }
+.kds-course-card__cta--small {
+  padding: 10px 14px;
+  min-height: 40px;
+  font-size: 14px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.kds-course-card__recall {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.12);
+  color: var(--muted);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+
+.kds-course-card--active { background: linear-gradient(180deg, rgba(245,158,11,.08), rgba(18,18,22,.6)); }
+.kds-course-card--ready { background: linear-gradient(180deg, rgba(34,197,94,.08), rgba(18,18,22,.6)); }
+.kds-course-card--served { opacity: 0.6; }
+
+.kds-rook {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px;
+  font-size: 13px;
+  background: rgba(96,165,250,.05);
+  border-top: 1px solid rgba(96,165,250,.15);
+  border-bottom: 1px solid rgba(96,165,250,.15);
+  color: var(--muted-light);
+}
+.kds-rook__icon { font-size: 14px; }
+.kds-rook__action {
+  margin-left: auto;
+  padding: 4px 10px; border-radius: 6px;
+  background: transparent; border: 1px solid var(--blue);
+  color: var(--blue); font-size: 11px; font-weight: 700;
+  cursor: pointer;
+}
+
+.kds-bottom-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  background: #0e0e10;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.kds-bottom-bar__btn {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.kds-bottom-bar__btn:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.kds-bottom-bar__btn--brand { background: rgba(255,191,0,.1); border-color: rgba(255,191,0,.3); color: var(--brand); }
+
+.kds-modal-bg {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.kds-modal {
+  background: #15151a;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px; width: 100%;
+  color: var(--text);
+}
+.kds-modal h3 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+.kds-modal p { color: var(--muted); margin-bottom: 12px; font-size: 14px; line-height: 1.5; }
+.kds-modal ul { list-style: none; padding: 0; margin: 0 0 18px 0; }
+.kds-modal ul li { padding: 8px 12px; background: rgba(239,68,68,.08); border-radius: 8px; margin-bottom: 6px; font-size: 14px; }
+.kds-modal__actions { display: flex; gap: 10px; }
+.kds-modal__cancel {
+  flex: 1; padding: 14px; border-radius: 10px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.kds-modal__confirm {
+  flex: 1; padding: 14px; border-radius: 10px;
+  background: var(--green); border: none;
+  color: #0a0a0c; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+
+/* Tablet/foodtruck mode — pointer:coarse → grotere taps */
+@media (pointer: coarse) {
+  .kds-course-card__cta { min-height: 64px; font-size: 20px; }
+  .kds-bottom-bar__btn { height: 56px; padding: 0 20px; font-size: 14px; }
+  .kds-top-exit { width: 52px; height: 52px; }
+}
+
 /* Sticky action bar — onderaan formulier-pagina's. Op mobile boven bottom-nav. */
 .sticky-action-bar {
   position: sticky;

@@ -478,8 +478,16 @@ export default function EventHubPage() {
                   <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
                 )}
                 {event.status === 'confirmed' && (
-                  <button className="btn btn-primary" onClick={() => router.push(`/events/${event.id}/field`)}>
-                    <Flame size={14} />Ga live (KDS)
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (confirm('Service Mode starten? KDS opent in fullscreen — scherm blijft aan tijdens service.')) {
+                        router.push(`/events/${event.id}/service?fullscreen=1`);
+                      }
+                    }}
+                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                  >
+                    <Flame size={14} />Start Service (KDS)
                   </button>
                 )}
                 <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
@@ -924,7 +932,7 @@ export default function EventHubPage() {
                     </div>
                     {serviceLogs.length === 0 ? (
                       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                        Nog geen service-log. Start tijdens het event via <button onClick={() => router.push('/service')} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Service Mode</button>.
+                        Nog geen service-log. Start tijdens het event via <button onClick={() => router.push(`/events/${eventId}/service?fullscreen=1`)} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Service Mode</button>.
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
