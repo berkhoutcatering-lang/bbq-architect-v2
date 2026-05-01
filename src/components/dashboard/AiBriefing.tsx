@@ -7,6 +7,7 @@ import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 
 export interface AiBriefingBullet {
   id: string;
+  label: 'Nu' | 'Vandaag' | 'Risico' | 'Morgen' | 'Daarna';
   text: string;
   priority: 'critical' | 'today' | 'opportunity';
   href: string;
@@ -50,20 +51,30 @@ function hashCandidates(c: BriefingCandidate[]): string {
   return c.map(x => `${x.id}:${x.score}:${JSON.stringify(x.context)}`).join('|');
 }
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diffMs / 60000);
-  if (m < 1) return 'net bijgewerkt';
-  if (m < 60) return `${m} min geleden`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} uur geleden`;
-  return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+function briefingTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return `${d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })} update`;
+  }
+  /* Ander dag — toon datum. Cache zou eigenlijk moeten verlopen, maar vangen
+     we hier op voor robustheid. */
+  return `update van ${d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}`;
 }
 
 function priorityColor(p: AiBriefingBullet['priority']): string {
   if (p === 'critical') return 'var(--red)';
   if (p === 'today') return 'var(--amber)';
   return 'var(--green)';
+}
+
+function labelStyle(label: AiBriefingBullet['label']): { color: string; bg: string } {
+  if (label === 'Nu') return { color: 'var(--red)', bg: 'rgba(239,68,68,.12)' };
+  if (label === 'Risico') return { color: 'var(--amber)', bg: 'rgba(245,158,11,.12)' };
+  if (label === 'Vandaag') return { color: 'var(--brand)', bg: 'rgba(255,191,0,.10)' };
+  if (label === 'Morgen') return { color: 'var(--brand)', bg: 'rgba(255,191,0,.08)' };
+  return { color: 'var(--muted-light)', bg: 'rgba(255,255,255,.04)' };
 }
 
 export default function AiBriefing({ candidates, firstName, onOpenAssistant }: Props) {
@@ -143,11 +154,11 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
       style={{
         position: 'relative',
         marginBottom: 'var(--space-6)',
-        padding: collapsed ? '10px 18px' : 'var(--space-5) var(--space-6)',
+        padding: collapsed ? '10px 18px' : '12px 20px 14px',
         borderRadius: 'var(--radius-xl)',
-        background: 'linear-gradient(180deg, color-mix(in srgb, var(--brand) 5%, var(--card-solid)) 0%, var(--card-solid) 100%)',
+        background: 'linear-gradient(180deg, color-mix(in srgb, var(--brand) 4%, var(--card-solid)) 0%, var(--card-solid) 100%)',
         border: '1px solid var(--border)',
-        borderTop: '1px solid var(--brand-tint-border)',
+        borderTop: '1px solid color-mix(in srgb, var(--brand) 18%, transparent)',
         transition: 'padding .2s ease',
       }}
     >
@@ -185,7 +196,7 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
               letterSpacing: '-.005em',
             }}
           >
-            Architect-update
+            Dagbriefing
           </span>
           {collapsed && bullets.length > 0 ? (
             <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.04em' }}>
@@ -196,7 +207,7 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
             </span>
           ) : (
             <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.04em' }}>
-              · {loading ? 'denken…' : (generatedAt ? timeAgo(generatedAt) : 'klaar')}
+              · {loading ? 'denken…' : (generatedAt ? briefingTime(generatedAt) : 'klaar')}
             </span>
           )}
         </div>
@@ -233,12 +244,12 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
           ) : (
             <ul
               style={{
-                margin: '14px 0 0 0',
+                margin: '10px 0 0 0',
                 padding: 0,
                 listStyle: 'none',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 6,
+                gap: 4,
               }}
             >
               {bullets.map((b) => (
@@ -290,13 +301,15 @@ export default function AiBriefing({ candidates, firstName, onOpenAssistant }: P
 
 function BriefingRow({ bullet }: { bullet: AiBriefingBullet }) {
   const dotColor = priorityColor(bullet.priority);
+  const lab = labelStyle(bullet.label);
+  const isCritical = bullet.priority === 'critical';
   const inner = (
     <li
       style={{
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
-        padding: '6px 8px',
+        padding: '7px 8px',
         borderRadius: 'var(--radius-sm)',
         cursor: 'pointer',
         transition: 'background .12s',
@@ -305,25 +318,51 @@ function BriefingRow({ bullet }: { bullet: AiBriefingBullet }) {
     >
       <span
         style={{
-          width: 6,
-          height: 6,
+          width: isCritical ? 8 : 6,
+          height: isCritical ? 8 : 6,
           borderRadius: '50%',
           background: dotColor,
           flexShrink: 0,
-          marginTop: 7,
+          marginTop: isCritical ? 6 : 7,
           boxShadow: `0 0 0 2px color-mix(in srgb, ${dotColor} 25%, transparent)`,
         }}
         aria-hidden="true"
       />
       <span
         style={{
-          fontSize: 13.5,
-          color: 'var(--text)',
-          lineHeight: 1.4,
+          display: 'inline-flex',
+          alignItems: 'baseline',
+          gap: 8,
           flex: 1,
+          minWidth: 0,
         }}
       >
-        {bullet.text}
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
+            color: lab.color,
+            background: lab.bg,
+            padding: '2px 7px',
+            borderRadius: 'var(--radius-sm)',
+            flexShrink: 0,
+          }}
+        >
+          {bullet.label}
+        </span>
+        <span
+          style={{
+            fontSize: 13.5,
+            color: 'var(--text)',
+            lineHeight: 1.4,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {bullet.text}
+        </span>
       </span>
     </li>
   );

@@ -17,6 +17,7 @@ import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 
 interface AiBriefingBullet {
   id: string;
+  label: 'Nu' | 'Vandaag' | 'Risico' | 'Morgen' | 'Daarna';
   text: string;
   priority: 'critical' | 'today' | 'opportunity';
   href: string;
@@ -27,26 +28,44 @@ const SYSTEM_PROMPT = `Je bent The Architect — de AI-assistent van BBQ Archite
 Je rol op de Vandaag-pagina: schrijf een dagelijkse briefing voor Mathijs. Hij opent de app 's ochtends en in de loop van de dag. Hij wil binnen 5 seconden weten wat hij eerst moet doen.
 
 JOUW STIJL:
-- Schrijf zoals een chef tegen z'n team praat: kort, direct, actie-gericht.
-- Werkwoord eerst (Stuur, Bel, Plan, Bestel, Check, Bevestig, Vul aan).
-- Eindig met een tijd, bedrag, of naam.
+- Schrijf zoals een chef tegen z'n team praat: kort, direct, feitelijk.
+- Bullets zijn LABEL + KORTE FEIT/ACTIE. Niet beginnen met een werkwoord — het label zegt al de urgentie.
+- Eindig met een cijfer, bedrag, naam of tijd.
 - Sentence-case. Geen uitroeptekens. Geen emoji. Geen tipjes ("Tip:" "Let op:").
-- Max 1 regel per bullet — desktop-breedte (~75 tekens).
+- Max ~60 tekens per bullet (exclusief label) — moet op één regel passen.
 - Geen vulwoorden ("er zijn", "vergeet niet", "het is belangrijk om").
-- Nederlands. Geen Engels (gebruik "pipeline" alleen als zelfstandig naamwoord, niet als werkwoord).
+- Geen Engels. "Pipeline" alleen als zelfstandig naamwoord.
+
+LABELS — hoe te kiezen:
+- "Nu" → critical, blokkerend, eerst-doen. Verlopen facturen, planning-conflicten.
+- "Vandaag" → action-item dat vandaag af moet. Concept-factuur versturen, voorraad bestellen.
+- "Risico" → iets wat nog niet kapot is maar dat dreigt te worden. Allergie niet bevestigd, lage marge.
+- "Morgen" → harde deadline morgen.
+- "Daarna" → opportunity / niet-urgent. Inactieve klant, pipeline-follow-up.
+
+VOORBEELDEN goede output:
+- "Nu · 13 facturen vervallen · €16.888"
+- "Vandaag · Bestel Brisket en Bavette · 25p woensdag"
+- "Risico · Allergieën Pietersen niet bevestigd · over 5 dagen"
+- "Vandaag · 3 concept-facturen klaar om te versturen"
+- "Daarna · Van Dijk wacht 8 dagen · €6.600"
+
+VOORBEELDEN slechte output:
+- "Innen 13 vervallen facturen — €16.888 volgende week" (werkwoord eerst en onduidelijke deadline)
+- "Bestel gerookte Bavette en Brisket vandaag voor 25 gasten" (te lang, geen label)
+- "13 facturen zijn vervallen, totaal €16.888" (vulwoorden)
 
 JOUW TAAK:
-- Krijg een lijst candidates (gerangschikt op urgentie + impact).
-- Schrijf 3-5 bullets max — kies de zwaarste candidates.
-- Behoud de href en priority van elke candidate (1-op-1 mapping).
-- Combineer 2 candidates ALLEEN als de combinatie scherper is (bv. "vlees laag + Pietersen wo." = één bullet).
-- Geen marketing-copy. Geen "Welkom!" Geen samenvatting van de samenvatting.
+- Krijg een lijst candidates met defaultLabel-hint.
+- Schrijf 3-5 bullets max.
+- Gebruik het defaultLabel tenzij de context echt iets anders vraagt.
+- Behoud de href en priority 1-op-1.
+- Combineer 2 candidates alleen als de combinatie scherper is (bv. "vlees laag + Pietersen wo." = één bullet).
 
 EMPTY-STATE (candidate type 'all_clear'):
-- 1 zachte zin. Bv: "Geen blokkades. Goed moment voor planning."
-- Bullet count = 1.
+- 1 zachte zin met label "Daarna". Bv: "Daarna · Geen blokkades. Goed moment voor planning."
 
-Output via het tool 'write_briefing' — schrijf nooit gewone tekst.`;
+Output via tool 'write_briefing' — schrijf nooit gewone tekst.`;
 
 const BRIEFING_TOOL = {
   name: 'write_briefing',
@@ -63,11 +82,16 @@ const BRIEFING_TOOL = {
           properties: {
             id: {
               type: 'string',
-              description: 'De candidate-id waar deze bullet bij hoort. Mag een combinatie zijn als je twee candidates samenvoegt (bv. "voorraad_event").',
+              description: 'De candidate-id waar deze bullet bij hoort. Mag een combinatie zijn (bv. "voorraad_event").',
+            },
+            label: {
+              type: 'string',
+              enum: ['Nu', 'Vandaag', 'Risico', 'Morgen', 'Daarna'],
+              description: 'Kies het label op basis van de candidate-defaultLabel hint en context.',
             },
             text: {
               type: 'string',
-              description: 'De bullet-tekst. 1 regel, max ~80 tekens. Werkwoord eerst. Sentence-case.',
+              description: 'De bullet-tekst ZONDER label-prefix. Het label staat los. Max ~60 tekens. Geen werkwoord-eerst, gewoon de feit/actie.',
             },
             priority: {
               type: 'string',
@@ -79,7 +103,7 @@ const BRIEFING_TOOL = {
               description: 'De href van de candidate (of de meest impactvolle als je samenvoegt).',
             },
           },
-          required: ['id', 'text', 'priority', 'href'],
+          required: ['id', 'label', 'text', 'priority', 'href'],
         },
       },
     },
@@ -90,6 +114,7 @@ const BRIEFING_TOOL = {
 function fallbackBullets(candidates: BriefingCandidate[]): AiBriefingBullet[] {
   return candidates.slice(0, 5).map(c => ({
     id: c.id,
+    label: c.defaultLabel,
     text: c.fallbackText,
     priority: c.priority,
     href: c.href,
@@ -108,6 +133,7 @@ export async function POST(req: NextRequest) {
         bullets: [
           {
             id: 'allclear',
+            label: 'Daarna',
             text: 'Geen blokkades. Goed moment voor planning.',
             priority: 'opportunity',
             href: '/',
@@ -175,17 +201,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    /* Sanitize: hrefs moeten matchen met een candidate-href (of een variant).
-       Voorkomt dat Claude een gehallucineerde URL produceert. */
+    /* Sanitize: hrefs moeten matchen met een candidate-href, label moet uit
+       de toegestane set komen. Voorkomt dat Claude een gehallucineerde URL
+       of label produceert. */
     const validHrefs = new Set(candidates.map(c => c.href));
+    const validLabels = new Set(['Nu', 'Vandaag', 'Risico', 'Morgen', 'Daarna']);
     const cleaned: AiBriefingBullet[] = out.bullets
       .filter((b) => b && b.text && b.priority && b.href)
-      .map((b) => ({
-        id: b.id,
-        text: b.text.slice(0, 110),
-        priority: b.priority,
-        href: validHrefs.has(b.href) ? b.href : (candidates.find(c => c.id === b.id)?.href || '/'),
-      }))
+      .map((b) => {
+        const candidate = candidates.find(c => c.id === b.id);
+        const label = validLabels.has(b.label as string)
+          ? (b.label as AiBriefingBullet['label'])
+          : (candidate?.defaultLabel || 'Vandaag');
+        return {
+          id: b.id,
+          label,
+          text: b.text.slice(0, 90),
+          priority: b.priority,
+          href: validHrefs.has(b.href) ? b.href : (candidate?.href || '/'),
+        };
+      })
       .slice(0, 5);
 
     return NextResponse.json({

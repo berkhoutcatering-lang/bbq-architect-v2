@@ -709,15 +709,10 @@ export default function DashboardPage() {
         {/* Onboarding-checklist (auto-hide na voltooiing) */}
         <OnboardingChecklist data={onboardingData} />
 
-        {/* AI-briefing — Architect-update bovenaan (push), bestaande floating chat blijft (pull) */}
+        {/* Dagbriefing absorbeert critical alerts (push). Bestaande floating chat blijft (pull).
+            AlertStrip is verplaatst naar sub-pagina's; op / is alle critical-content al
+            in de briefing-bullets. */}
         <AiBriefing candidates={briefingCandidates} firstName={firstName} />
-
-        {/* Alert-strip — alleen als er alerts zijn */}
-        {alerts.length > 0 ? (
-          <div style={{ marginBottom: 32 }}>
-            <AlertStrip alerts={alerts} />
-          </div>
-        ) : null}
 
         {/* ─── ZONE 1 — NU ─── */}
         <ZoneLabel>nu</ZoneLabel>

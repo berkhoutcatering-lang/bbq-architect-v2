@@ -8,6 +8,7 @@
  */
 
 export type BriefingPriority = 'critical' | 'today' | 'opportunity';
+export type BriefingLabel = 'Nu' | 'Vandaag' | 'Risico' | 'Morgen' | 'Daarna';
 
 export type BriefingCandidateType =
   | 'overdue_invoice'
@@ -27,6 +28,8 @@ export interface BriefingCandidate {
   id: string;
   type: BriefingCandidateType;
   priority: BriefingPriority;
+  /** Label-hint voor de AI — die mag dit overschrijven als context het aangeeft. */
+  defaultLabel: BriefingLabel;
   score: number;
   context: Record<string, string | number>;
   href: string;
@@ -72,13 +75,14 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'overdue',
       type: 'overdue_invoice',
       priority: 'critical',
+      defaultLabel: 'Nu',
       score: 90 + Math.min(8, input.verlopenFacturen.length),
       context: {
         count: input.verlopenFacturen.length,
         bedrag: input.verlopenTotaal,
       },
       href: '/facturen',
-      fallbackText: `${input.verlopenFacturen.length} facturen vervallen — €${Math.round(input.verlopenTotaal).toLocaleString('nl-NL')} inhalen.`,
+      fallbackText: `${input.verlopenFacturen.length} facturen vervallen · €${Math.round(input.verlopenTotaal).toLocaleString('nl-NL')}`,
     });
   }
 
@@ -88,26 +92,29 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'conflicts',
       type: 'planning_conflict',
       priority: 'critical',
+      defaultLabel: 'Nu',
       score: 95,
       context: { count: input.conflicts },
       href: '/agenda',
-      fallbackText: `${input.conflicts} planning-conflict${input.conflicts !== 1 ? 'en' : ''} in agenda.`,
+      fallbackText: `${input.conflicts} planning-conflict${input.conflicts !== 1 ? 'en' : ''} in agenda`,
     });
   }
 
   // 3. Hero event allergie-gap
   if (input.heroEvent && input.heroCompletion && !input.heroCompletion.allergies && input.heroEvent.daysAway <= 7) {
+    const closeBy = input.heroEvent.daysAway <= 2;
     out.push({
       id: 'allergie',
       type: 'allergie_gap',
-      priority: input.heroEvent.daysAway <= 2 ? 'critical' : 'today',
-      score: input.heroEvent.daysAway <= 2 ? 88 : 75,
+      priority: closeBy ? 'critical' : 'today',
+      defaultLabel: 'Risico',
+      score: closeBy ? 88 : 75,
       context: {
         event: input.heroEvent.name,
         days: input.heroEvent.daysAway,
       },
       href: `/events/${input.heroEvent.id}/hub`,
-      fallbackText: `Bevestig allergieën ${input.heroEvent.name} — ${input.heroEvent.daysAway === 0 ? 'vandaag' : input.heroEvent.daysAway === 1 ? 'morgen' : `over ${input.heroEvent.daysAway} dagen`}.`,
+      fallbackText: `Allergieën ${input.heroEvent.name} niet bevestigd · over ${input.heroEvent.daysAway} ${input.heroEvent.daysAway === 1 ? 'dag' : 'dagen'}`,
     });
   }
 
@@ -116,18 +123,20 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
     const missing: string[] = [];
     if (!input.heroCompletion.gangen) missing.push('gangen');
     if (!input.heroCompletion.prep) missing.push('prep');
+    const closeBy = input.heroEvent.daysAway <= 3;
     out.push({
       id: 'prep',
       type: 'prep_gap',
-      priority: input.heroEvent.daysAway <= 3 ? 'today' : 'opportunity',
-      score: input.heroEvent.daysAway <= 3 ? 70 : 50,
+      priority: closeBy ? 'today' : 'opportunity',
+      defaultLabel: closeBy ? 'Vandaag' : 'Daarna',
+      score: closeBy ? 70 : 50,
       context: {
         event: input.heroEvent.name,
         days: input.heroEvent.daysAway,
         missing: missing.join(' + '),
       },
       href: `/events/${input.heroEvent.id}/hub`,
-      fallbackText: `Vul ${missing.join(' en ')} aan voor ${input.heroEvent.name} — over ${input.heroEvent.daysAway} dagen.`,
+      fallbackText: `Vul ${missing.join(' en ')} aan voor ${input.heroEvent.name}`,
     });
   }
 
@@ -138,6 +147,7 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'voorraad_event',
       type: 'voorraad_event_link',
       priority: 'today',
+      defaultLabel: 'Vandaag',
       score: 78,
       context: {
         items: sample,
@@ -145,17 +155,18 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
         guests: input.upcomingGuests,
       },
       href: '/voorraad',
-      fallbackText: `${sample} laag — ${input.upcomingGuests} gasten aankomend, bestel vandaag.`,
+      fallbackText: `Bestel ${sample} · ${input.upcomingGuests} gasten aankomend`,
     });
   } else if (input.lowStockItems.length > 0) {
     out.push({
       id: 'voorraad',
       type: 'voorraad_low',
       priority: 'opportunity',
+      defaultLabel: 'Daarna',
       score: 40,
       context: { count: input.lowStockItems.length },
       href: '/voorraad',
-      fallbackText: `${input.lowStockItems.length} ingrediënten onder minimum.`,
+      fallbackText: `${input.lowStockItems.length} ingrediënten onder minimum`,
     });
   }
 
@@ -165,10 +176,11 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'concept_invoice',
       type: 'concept_invoice',
       priority: 'today',
+      defaultLabel: 'Vandaag',
       score: 65,
       context: { count: input.conceptFacturen.length },
       href: '/facturen',
-      fallbackText: `${input.conceptFacturen.length} concept-factu${input.conceptFacturen.length === 1 ? 'ur' : 'ren'} klaar om te versturen.`,
+      fallbackText: `${input.conceptFacturen.length} concept-factu${input.conceptFacturen.length === 1 ? 'ur' : 'ren'} klaar om te versturen`,
     });
   }
 
@@ -178,6 +190,7 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'low_marge',
       type: 'low_marge',
       priority: 'today',
+      defaultLabel: 'Risico',
       score: 55,
       context: {
         count: input.lowMargeOffertes.length,
@@ -185,7 +198,7 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
         worstPct: input.lowMargeOffertes[0]?.margePct || 0,
       },
       href: '/offertes',
-      fallbackText: `${input.lowMargeOffertes.length} offerte${input.lowMargeOffertes.length === 1 ? '' : 's'} onder 40% marge — herzie prijs.`,
+      fallbackText: `${input.lowMargeOffertes.length} offerte${input.lowMargeOffertes.length === 1 ? '' : 's'} onder 40% marge`,
     });
   }
 
@@ -195,6 +208,7 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'pipeline',
       type: 'pipeline_followup',
       priority: 'opportunity',
+      defaultLabel: 'Daarna',
       score: 45,
       context: {
         count: input.pipelineCount,
@@ -204,21 +218,23 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       },
       href: '/offertes',
       fallbackText: input.pipelineHighestClient
-        ? `${input.pipelineHighestClient} wacht ${input.oldestPipelineDays} dagen op antwoord — €${Math.round(input.pipelineHighestEuro).toLocaleString('nl-NL')}.`
-        : `${input.pipelineCount} offertes open in pipeline.`,
+        ? `${input.pipelineHighestClient} wacht ${input.oldestPipelineDays} dagen · €${Math.round(input.pipelineHighestEuro).toLocaleString('nl-NL')}`
+        : `${input.pipelineCount} offertes open in pipeline`,
     });
   }
 
   // 9. BTW-deadline
   if (input.btwDaysUntil !== null && input.btwDaysUntil <= 14) {
+    const close = input.btwDaysUntil <= 7;
     out.push({
       id: 'btw',
       type: 'btw_deadline',
-      priority: input.btwDaysUntil <= 7 ? 'today' : 'opportunity',
-      score: input.btwDaysUntil <= 7 ? 60 : 35,
+      priority: close ? 'today' : 'opportunity',
+      defaultLabel: close ? 'Vandaag' : 'Daarna',
+      score: close ? 60 : 35,
       context: { days: input.btwDaysUntil },
       href: '/financien',
-      fallbackText: `BTW-aangifte over ${input.btwDaysUntil} dag${input.btwDaysUntil === 1 ? '' : 'en'}.`,
+      fallbackText: `BTW-aangifte over ${input.btwDaysUntil} dag${input.btwDaysUntil === 1 ? '' : 'en'}`,
     });
   }
 
@@ -228,10 +244,11 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       id: 'inactive_klant',
       type: 'inactive_klant',
       priority: 'opportunity',
+      defaultLabel: 'Daarna',
       score: 25,
       context: { count: input.inactiveKlantenCount },
       href: '/klanten',
-      fallbackText: `${input.inactiveKlantenCount} klanten 6+ maanden niet gezien — kans voor opvolging.`,
+      fallbackText: `${input.inactiveKlantenCount} klanten 6+ maanden niet gezien`,
     });
   }
 
@@ -244,9 +261,21 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
     return b.score - a.score;
   });
 
+  /* Calendar-aware: als hero-event ≤2 dagen weg is, weg met
+     lange-termijn opportunities (inactive_klant, pipeline_followup zonder
+     concrete deadline). Operator op event-dag wil geen lead-gen-tip. */
+  const eventModeNear = input.heroEvent !== null && input.heroEvent.daysAway <= 2;
+  let filtered = out;
+  if (eventModeNear) {
+    filtered = out.filter(c =>
+      c.type !== 'inactive_klant' &&
+      !(c.type === 'pipeline_followup' && c.priority === 'opportunity')
+    );
+  }
+
   // Als ≥3 critical/today, snij opportunity weg
-  const urgent = out.filter(c => c.priority !== 'opportunity').length;
-  const trimmed = urgent >= 3 ? out.filter(c => c.priority !== 'opportunity') : out;
+  const urgent = filtered.filter(c => c.priority !== 'opportunity').length;
+  const trimmed = urgent >= 3 ? filtered.filter(c => c.priority !== 'opportunity') : filtered;
 
   // All-clear fallback
   if (trimmed.length === 0) {
@@ -255,10 +284,11 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
         id: 'allclear',
         type: 'all_clear',
         priority: 'opportunity',
+        defaultLabel: 'Daarna',
         score: 0,
         context: { month: input.curMonthLabel },
         href: '/',
-        fallbackText: 'Geen blokkades. Rustig moment voor planning.',
+        fallbackText: 'Geen blokkades. Goed moment voor planning.',
       },
     ];
   }
