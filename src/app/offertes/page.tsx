@@ -400,10 +400,6 @@ export default function Offertes() {
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
 
-        let syncMsg = '📅 Opslaan synchroniseert automatisch met de Agenda';
-        if (form.status === 'geaccepteerd' || form.status === 'akkoord' || form.status === 'betaald') syncMsg = '✅ Event bevestigd in Agenda — Groene glow actief';
-        else if (form.status === 'afgewezen' || form.status === 'verlopen') syncMsg = '🗑️ Optie wordt verwijderd uit Agenda bij opslaan';
-
         return (
             <div className="hopbites-theme panel">
                 <div className="panel-head">
@@ -429,11 +425,6 @@ export default function Offertes() {
                         <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); clearError('datum'); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} /><FieldError message={errors.datum} fieldName="datum" /></div>
                         <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
-                    </div>
-
-                    <div style={{ margin: '16px 0 8px', padding: '10px 14px', background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.12)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <LinkIcon size={12} style={{ color: 'var(--brand)' }} />
-                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{syncMsg}</span>
                     </div>
 
                     <div style={{ marginTop: 24 }}>
@@ -466,8 +457,6 @@ export default function Offertes() {
                     </div>
                     <div className="editor-actions">
                         <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><Save size={14} /> Opslaan</button>
-                        <button className="btn-gold-outline" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><UtensilsCrossed size={14} /> Menu Wizard</button>
-                        <button className="btn btn-ghost" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
                         <button className="btn btn-ghost" onClick={async function () {
                             const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites');
                             showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error');
@@ -478,12 +467,16 @@ export default function Offertes() {
                                     logActivationEvent(orgId, 'first_quote_sent', { offerte_id: form.id });
                                 }
                             }
-                        }}><Mail size={14} /> Mail</button>
-                        <button className="btn btn-cyan" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
-                        <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: 'var(--color-accent-gold)', border: '1px solid var(--color-accent-gold)' }} onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
-                        {(form.aantal_vega || 0) > 0 && <button className="btn" style={{ background: 'rgba(15,15,15,.85)', color: '#6B7A2F', border: '1px solid #6B7A2F' }} onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega Menukaart</button>}
+                        }} title="Stuur de offerte per e-mail naar de klant"><Mail size={14} /> Mail</button>
+                        <button className="btn btn-ghost" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
+                        <button className="btn btn-ghost" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><UtensilsCrossed size={14} /> Menu Wizard</button>
+                    </div>
+                    <div className="editor-actions-more">
+                        <button className="btn btn-ghost btn-sm" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
+                        <button className="btn btn-ghost btn-sm" onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
+                        {(form.aantal_vega || 0) > 0 && <button className="btn btn-ghost btn-sm" onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega menukaart</button>}
                         {editing !== 'new' && (
-                            <button className="btn" style={{ background: 'var(--purple)', color: 'var(--text)' }} onClick={function () {
+                            <button className="btn btn-ghost btn-sm" onClick={function () {
                                 const link = window.location.origin + '/q/' + editing;
                                 navigator.clipboard.writeText(link);
                                 showToast('Magic Link gekopieerd!', 'success');
@@ -491,22 +484,20 @@ export default function Offertes() {
                                 <LinkIcon size={14} /> Magic Link
                             </button>
                         )}
-                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Maak factuur</button>}
-                        {editing !== 'new' && <button className="btn btn-ghost" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><Copy size={14} /> Dupliceer</button>}
-                        {editing !== 'new' && <button className="btn btn-red" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><Trash2 size={14} /> Verwijderen</button>}
+                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green btn-sm" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Maak factuur</button>}
+                        {editing !== 'new' && <button className="btn btn-ghost btn-sm" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><Copy size={14} /> Dupliceer</button>}
+                        {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><Trash2 size={14} /> Verwijderen</button>}
                     </div>
 
                     <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 }}>
-                            ⚙️ Vaste Kosten per Event
-                        </div>
+                        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Vaste kosten</h4>
                         {(form.vaste_kosten || []).length > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
                                 {(form.vaste_kosten || []).map(function (k: any, idx: number) {
                                     return (
-                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(180,140,20,.04)', borderRadius: 8, border: '1px solid rgba(180,140,20,.1)' }}>
-                                            <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{k.naam}</span>
-                                            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--brand)' }}>€{(parseFloat(k.bedrag) || 0).toFixed(2)}</span>
+                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                                            <span style={{ flex: 1, fontSize: 13 }}>{k.naam}</span>
+                                            <span style={{ fontSize: 13, fontWeight: 700 }}>€{(parseFloat(k.bedrag) || 0).toFixed(2)}</span>
                                             <button type="button" className="tag-remove" onClick={function () {
                                                 const items = (form.vaste_kosten || []).slice();
                                                 items.splice(idx, 1);
@@ -517,23 +508,23 @@ export default function Offertes() {
                                 })}
                             </div>
                         )}
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                             <div className="field" style={{ flex: 1 }}>
                                 <label>Kostenpost</label>
                                 <input value={vasteKostenInput.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { naam: e.target.value })); }}
-                                    placeholder="bijv. Brandstof, Personeel" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    placeholder="bijv. Brandstof, Personeel" />
                             </div>
-                            <div className="field" style={{ width: 100 }}>
+                            <div className="field" style={{ width: 110 }}>
                                 <label>Bedrag €</label>
                                 <input type="number" step="0.01" value={vasteKostenInput.bedrag}
                                     onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { bedrag: e.target.value })); }}
-                                    placeholder="75" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                    placeholder="75" />
                             </div>
-                            <button type="button" className="btn btn-brand btn-sm" style={{ height: 34 }} onClick={function () {
+                            <button type="button" className="btn btn-brand btn-sm" onClick={function () {
                                 if (!vasteKostenInput.naam.trim()) return;
                                 setField('vaste_kosten', (form.vaste_kosten || []).concat([{ naam: vasteKostenInput.naam.trim(), bedrag: parseFloat(vasteKostenInput.bedrag) || 0 }]));
                                 setVasteKostenInput({ naam: '', bedrag: '' });
-                            }}>+</button>
+                            }}><Plus size={14} /> Toevoegen</button>
                         </div>
                     </div>
 
@@ -611,9 +602,8 @@ export default function Offertes() {
                 description="BBQ Architect"
                 actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(offertesToCsv(offertes), 'offertes-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileDown size={14} /> CSV</button>
-                    <button className="btn-gold-outline" onClick={function () { setShowWizard(true); }}><UtensilsCrossed size={14} /> Stel Menu Samen</button>
-                    <button className="btn-gold-outline" onClick={function () { setShowAiWizard(true); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} /> AI Offerte</button>
-                    <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe Offerte</button>
+                    <button className="btn-gold-outline" onClick={function () { setShowAiWizard(true); }}><Sparkles size={14} /> AI Offerte</button>
+                    <button className="btn-gold" onClick={newOfferte}><Plus size={14} /> Nieuwe offerte</button>
                 </>}
             />
             {showWizard && <MenuWizard onComplete={handleWizardComplete} onClose={function () { setShowWizard(false); }} settings={settings} />}
@@ -623,14 +613,24 @@ export default function Offertes() {
                 onSaved={function (id) { showToast('✨ AI-offerte opgeslagen als concept', 'success'); loadOffertes(); void id; }}
             />
             <PageHint id="offertes" title="Offertes" description="Maak offertes met menu-selectie en live marge-berekening. Geaccepteerde offertes genereren automatisch een event en factuur." />
-            <div style={{ marginBottom: 12 }}>
+            <div style={{
+                display: 'flex',
+                gap: 10,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                padding: 'var(--space-3) var(--space-4)',
+                background: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)',
+                marginBottom: 12,
+            }}>
                 <input
                     value={searchQuery}
                     onChange={function (e) { setSearchQuery(e.target.value); }}
                     placeholder="Zoek op klant of nummer..."
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginBottom: 8 }}
+                    style={{ flex: '1 1 220px', padding: '8px 12px', fontSize: 13, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                 />
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' as any }}>
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
                     {['alle', 'concept', 'verzonden', 'geaccepteerd', 'betaald', 'afgewezen'].map(function (s) {
                         return <button key={s} className={'btn btn-sm ' + (filterStatus === s ? 'btn-brand' : 'btn-ghost')}
                             onClick={function () { setFilterStatus(s); }}
@@ -640,7 +640,7 @@ export default function Offertes() {
                 <select value={sortField + '_' + sortDir} onChange={function (e) {
                     const [f, d] = e.target.value.split('_');
                     setSortField(f); setSortDir(d as 'asc' | 'desc');
-                }} style={{ padding: '8px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', marginTop: 6 }}>
+                }} style={{ flex: '0 0 auto', padding: '8px 12px', fontSize: 12, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}>
                     <option value="datum_desc">Datum (nieuwste eerst)</option>
                     <option value="datum_asc">Datum (oudste eerst)</option>
                     <option value="totaal_desc">Bedrag (hoog-laag)</option>
