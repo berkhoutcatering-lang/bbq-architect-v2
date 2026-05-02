@@ -20,21 +20,25 @@ import {
 } from 'lucide-react';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
+import { ReizenTab } from './_components/ReizenTab';
+import { useTier } from '@/lib/featureFlags';
+import PaywallPrompt from '@/components/PaywallPrompt';
 
 interface Leverancier { id: number; naam: string; type?: string }
 
-type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'clients';
+type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'reizen' | 'clients';
 const TAB_LABELS: Record<Tab, string> = {
     dashboard: 'Dashboard',
     wv: 'Winst & Verlies',
     uitgaven: 'Uitgaven',
     btw: 'BTW',
+    reizen: 'Reizen',
     clients: 'Top Klanten',
 };
-const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'clients'];
+const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'reizen', 'clients'];
 
 function parseTab(value: string | null): Tab {
-    if (value === 'wv' || value === 'uitgaven' || value === 'btw' || value === 'clients') return value;
+    if (value === 'wv' || value === 'uitgaven' || value === 'btw' || value === 'reizen' || value === 'clients') return value;
     return 'dashboard';
 }
 
@@ -604,6 +608,13 @@ function FinancienInner() {
                 </PageSection>
             )}
 
+            {/* ── REIZEN & KILOMETERS ── */}
+            {tab === 'reizen' && (
+                <PageSection>
+                    <ReizenTabGate />
+                </PageSection>
+            )}
+
             {/* ── TOP KLANTEN ── */}
             {tab === 'clients' && (
                 <PageSection>
@@ -647,4 +658,19 @@ function FinancienInner() {
             )}
         </div>
     );
+}
+
+function ReizenTabGate() {
+    const { hasFeature, loaded } = useTier();
+    if (!loaded) return <LoadingState label="Reizen laden" />;
+    if (!hasFeature('ritten')) {
+        return (
+            <PaywallPrompt
+                feature="ritten"
+                title="Reizen & Kilometers"
+                description="Houd je rittenadministratie bij voor de Belastingdienst. Eén-klik export voor je boekhouder, optionele Moneybird-koppeling, AI-recap per kwartaal."
+            />
+        );
+    }
+    return <ReizenTab />;
 }

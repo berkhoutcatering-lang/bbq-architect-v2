@@ -74,6 +74,10 @@ export interface Settings {
   logo_dark_url: string | null;
   brand_primary: string | null;
   brand_accent: string | null;
+  brand_background: string | null;
+  brand_card: string | null;
+  brand_text: string | null;
+  brand_secondary: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -634,4 +638,54 @@ export interface HealthScore {
   lastActivity: string | null;
   daysInactive: number;
   status: 'healthy' | 'at-risk' | 'critical' | 'churned';
+}
+
+// ── Rittenregistratie (migration 020) ─────────────────────────────
+// Pro-tier feature. Voldoet aan Belastingdienst-eisen 2026.
+
+export interface DbVoertuig {
+  id: number;
+  organization_id: string;
+  kenteken: string;
+  merk: string | null;
+  type: string | null;
+  ingangsdatum: string;        // ISO date
+  einddatum: string | null;
+  begin_km: number;
+  actief: boolean;
+  notitie: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbRit {
+  id: number;
+  organization_id: string;
+  voertuig_id: number;
+  event_id: number | null;
+  datum: string;               // ISO date
+  vertrek_adres: string;
+  aankomst_adres: string;
+  route_omleiding: string | null;
+  km_begin: number;
+  km_eind: number;
+  kilometers: number;          // generated column
+  zakelijk: boolean;
+  prive_omleiding_km: number;
+  doel: string | null;
+  user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbRittenMoneybirdPush {
+  id: number;
+  organization_id: string;
+  jaar: number;
+  kwartaal: 1 | 2 | 3 | 4;
+  moneybird_invoice_id: string;
+  totaal_km: number;
+  totaal_bedrag: number;
+  pushed_by: string | null;
+  pushed_at: string;
 }

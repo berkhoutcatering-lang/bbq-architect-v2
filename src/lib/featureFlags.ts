@@ -78,6 +78,7 @@ export const TIER_FEATURES: Record<Tier, string[]> = {
     'crew_uren',
     'materieel',
     'logistiek',
+    'ritten',          // Reizen & Kilometers — rittenregistratie voor Belastingdienst
     'moneybird_sync',
     'mollie_ideal',
     'e_signature',

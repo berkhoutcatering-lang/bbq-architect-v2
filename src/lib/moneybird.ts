@@ -30,7 +30,9 @@ export function buildAuthorizeUrl(state: string): string {
   url.searchParams.set('client_id', cfg.id);
   url.searchParams.set('redirect_uri', cfg.redirect);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'sales_invoices contacts ledger_accounts');
+  // documents + purchase_invoices toegevoegd voor Reizen & Kilometers (Q2 2026).
+  // Bestaande klanten: re-consent vereist — surface banner in Settings.
+  url.searchParams.set('scope', 'sales_invoices contacts ledger_accounts documents purchase_invoices');
   url.searchParams.set('state', state);
   return url.toString();
 }
