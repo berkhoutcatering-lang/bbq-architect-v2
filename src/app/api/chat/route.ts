@@ -8,6 +8,8 @@ import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_PERSONA, MODE_INSTRUCT
 import { getMode, isThinkingMode, type ThinkingMode } from '@/lib/ai-modes';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { BLOCK_TOOL_SCHEMA, isBlock } from '@/lib/ai/blocks';
+import { buildBlockDirective, isRouteAllowed, PAGE_TOOL_WHITELIST } from '@/lib/ai/page-contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -300,6 +302,11 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         // voor ~10% van de input-kosten.
         const staticParts: string[] = [];
 
+        // Page-context aware: kies het juiste systeem-prompt + voeg het
+        // block-contract toe (welke nav_card-routes zijn toegestaan, welke
+        // block-types geprefereerd). Beide blijven in dezelfde cache-prefix
+        // omdat ze byte-identiek zijn per (pageContext, mode, userRole).
+        const normalizedPage = pageContext ? normalizePagePath(pageContext) : '/';
         if (mode === 'brainstorm') {
             staticParts.push(PAGE_SYSTEM_PROMPTS['/ai-chat']);
             staticParts.push(BRAINSTORM_INSTRUCTIONS);
@@ -308,13 +315,15 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                 'Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites). ' +
                 'In dit venster beantwoord je vragen over catering, horeca, recepten, inkoop, planning en bedrijfsvoering.'
             );
-        } else if (pageContext && PAGE_SYSTEM_PROMPTS[normalizePagePath(pageContext)]) {
-            staticParts.push(PAGE_SYSTEM_PROMPTS[normalizePagePath(pageContext)]);
+        } else if (PAGE_SYSTEM_PROMPTS[normalizedPage]) {
+            staticParts.push(PAGE_SYSTEM_PROMPTS[normalizedPage]);
+            staticParts.push(buildBlockDirective(normalizedPage));
         } else if (pageContext) {
             staticParts.push(
                 'Je bent BBQ Copilot op pagina: ' + pageContext + '. ' +
                 'Help de gebruiker met alles wat gerelateerd is aan deze pagina van BBQ Architect.'
             );
+            staticParts.push(buildBlockDirective(normalizedPage));
         } else {
             staticParts.push(
                 'Je bent BBQ Copilot, de AI-assistent van BBQ Architect (Hop & Bites).'
@@ -635,43 +644,13 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
 
         // Algemene structured-output tool voor ALLE andere vragen.
         // Voorkomt dat de AI vrije tekst typt (markdown-tabellen, lange essays, bullet-lijsten).
-        // Forceert response in compact-blokken die de UI als kaartjes rendert.
+        // Forceert response in typed blocks — single source of truth in
+        // src/lib/ai/blocks.ts (BLOCK_TOOL_SCHEMA). 8 block-types, waarvan
+        // nav_card en action_card de UI rendert als klikbare kaarten.
         const respondWithBlocksTool = {
             name: 'respond_with_blocks',
-            description: 'Antwoord ALTIJD in gestructureerde blokken — geen intro-tekst, geen vrije tekst, geen markdown-tabellen. Elk inhoudelijk punt krijgt een eigen blok.',
-            input_schema: {
-                type: 'object' as const,
-                properties: {
-                    blocks: {
-                        type: 'array',
-                        minItems: 1,
-                        maxItems: 8,
-                        items: {
-                            type: 'object',
-                            properties: {
-                                type: {
-                                    type: 'string',
-                                    enum: ['info', 'metric', 'warning', 'success', 'bullets', 'action_hint'],
-                                    description: 'info = standaard tekst-blok | metric = highlight cijfer/percentage | warning = rode alert | success = groen succes | bullets = compacte lijst | action_hint = suggestie voor vervolgactie',
-                                },
-                                title: { type: 'string', description: 'Korte titel (max 60 chars)' },
-                                text: { type: 'string', description: 'Body tekst — kort en bondig, max 200 chars. Voor bullets: leeg laten en gebruik items[].' },
-                                items: {
-                                    type: 'array',
-                                    items: { type: 'string' },
-                                    description: 'Bullet-items (max 6, elk max 80 chars). Alleen bij type=bullets.',
-                                },
-                                value: {
-                                    type: 'string',
-                                    description: 'Highlight-waarde voor metric (bv "70%", "€8.400", "12 verlopen"). Alleen bij type=metric.',
-                                },
-                            },
-                            required: ['type', 'title'],
-                        },
-                    },
-                },
-                required: ['blocks'],
-            },
+            description: 'Antwoord ALTIJD in gestructureerde blokken — geen intro-tekst, geen vrije tekst, geen markdown-tabellen. Gebruik nav_card om te wijzen naar in-app routes (klikbaar voor de operator), action_card voor confirm-acties die direct DB-mutatie doen.',
+            input_schema: BLOCK_TOOL_SCHEMA,
         };
 
         // STAP 2 tool: dwingt structured uitwerking ipv markdown-tabellen
@@ -792,28 +771,12 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             temperature: modeDef.temperature,
         };
         // Pages waar we ALTIJD structured blocks willen ipv vrije tekst.
-        // Service-mode is uitgesloten — daar wil je ultrakort tekst-antwoord, geen kaarten.
-        const forceBlocks = (
-            pageContext === '/gerechten' ||
-            pageContext === '/marges' ||
-            pageContext === '/voorraad' ||
-            pageContext === '/' ||
-            pageContext === '/offertes' ||
-            pageContext === '/facturen' ||
-            pageContext === '/recepten' ||
-            pageContext === '/materieel' ||
-            pageContext === '/agenda' ||
-            pageContext === '/inkoop' ||
-            pageContext === '/uren' ||
-            pageContext === '/haccp' ||
-            pageContext === '/klanten' ||
-            pageContext === '/klantgesprek' ||
-            pageContext === '/prep-counter' ||
-            pageContext === '/logistiek' ||
-            pageContext === '/price-intelligence' ||
-            pageContext === '/financien' ||
-            (pageContext && pageContext.startsWith('/events'))
-        );
+        // Block-forced op elke pagina die in PAGE_TOOL_WHITELIST staat. Self-
+        // maintaining: voeg een page toe aan src/lib/ai/page-contracts.ts en
+        // hij krijgt automatisch het block-contract. /ai-chat en /q/[id] zijn
+        // bewust uit de whitelist gelaten — chat-studio heeft geen page-context,
+        // klant-portal heeft helemaal geen AI.
+        const forceBlocks = !!PAGE_TOOL_WHITELIST[normalizedPage];
 
         if (scrapeNeedsScreenshot) {
             // URL-scrape kreeg geen bruikbare content (SPA-pagina). AI moet om screenshot vragen
@@ -929,10 +892,21 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                         fullText += actionStr;
                                         safeEnqueue({ delta: actionStr });
                                     } else if (buf.name === 'respond_with_blocks') {
+                                        // Filter hallucinated nav_card routes — als de AI een route
+                                        // verzint die niet in PAGE_ROUTE_WHITELIST staat, gooien we
+                                        // alleen DAT block weg (rest van blocks blijft renderen).
+                                        const rawBlocks: unknown[] = Array.isArray(input.blocks) ? input.blocks : [];
+                                        const cleanBlocks = rawBlocks.filter((b) => {
+                                            if (!isBlock(b)) return false;
+                                            if (b.type !== 'nav_card') return true;
+                                            if (isRouteAllowed(normalizedPage, b.route)) return true;
+                                            console.warn('[chat] nav_card route geblokkeerd (niet in whitelist voor ' + normalizedPage + '):', b.route);
+                                            return false;
+                                        });
                                         const actionPayload = {
                                             type: 'info_blocks',
-                                            description: (input.blocks?.length || 0) + ' antwoord-blokken',
-                                            data: { blocks: input.blocks || [] },
+                                            description: cleanBlocks.length + ' antwoord-blokken',
+                                            data: { blocks: cleanBlocks },
                                         };
                                         const actionStr = '<<<ACTION:' + JSON.stringify(actionPayload) + '>>>';
                                         fullText += actionStr;

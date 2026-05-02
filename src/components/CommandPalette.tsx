@@ -7,8 +7,9 @@ import {
     Search, Calendar, FileText, Receipt, Package, ChefHat, BookOpen,
     Users, Euro, ArrowRight, Flame, Sparkles, ShoppingCart, Truck, Wrench, Clock,
     ShieldCheck, DollarSign, Settings, Globe, HelpCircle, Mail, Camera,
-    Building2, MessageSquare, ClipboardList, Map, UtensilsCrossed
+    Building2, MessageSquare, ClipboardList, Map, UtensilsCrossed, Bot
 } from 'lucide-react';
+import PaletteAiInput from '@/components/ai/PaletteAiInput';
 
 interface SearchResult {
     id: string;
@@ -98,6 +99,7 @@ const typeConfig: Record<string, { icon: typeof Calendar; accent: string; label:
 
 export default function CommandPalette() {
     const [open, setOpen] = useState(false);
+    const [mode, setMode] = useState<'search' | 'ask'>('search');
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -167,11 +169,11 @@ export default function CommandPalette() {
     }, [router]);
 
     useEffect(function () {
-        if (open && inputRef.current) {
+        if (open && inputRef.current && mode === 'search') {
             setTimeout(function () { inputRef.current?.focus(); }, 50);
         }
-        if (!open) { setQuery(''); setResults([]); setSelectedIndex(0); }
-    }, [open]);
+        if (!open) { setQuery(''); setResults([]); setSelectedIndex(0); setMode('search'); }
+    }, [open, mode]);
 
     const searchData = useCallback(async function (q: string) {
         if (!q || q.length < 2) {
@@ -303,6 +305,11 @@ export default function CommandPalette() {
         } else if (e.key === 'Enter' && results[selectedIndex]) {
             e.preventDefault();
             handleSelect(results[selectedIndex]);
+        } else if (e.key === 'Tab') {
+            // Tab schakelt naar Vraag-Rook-mode. Huidige query wordt
+            // doorgegeven zodat de gebruiker niet hoeft over te typen.
+            e.preventDefault();
+            setMode('ask');
         }
     }
 
@@ -339,6 +346,14 @@ export default function CommandPalette() {
                     animation: 'cmdFadeIn 0.15s ease',
                 }}
             >
+                {mode === 'ask' ? (
+                    <PaletteAiInput
+                        initialQuery={query}
+                        onClose={function () { setOpen(false); }}
+                        onSwitchToSearch={function () { setMode('search'); }}
+                    />
+                ) : (
+                <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
                     <Search size={18} style={{ color: 'var(--muted)', flexShrink: 0 }} />
                     <input
@@ -449,14 +464,42 @@ export default function CommandPalette() {
                     padding: '8px 18px',
                     borderTop: '1px solid var(--border)',
                     display: 'flex',
-                    gap: 16,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
                     fontSize: 10,
                     color: 'var(--color-text-muted)',
                 }}>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={function () { setMode('ask'); }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 10px',
+                            background: 'var(--brand-tint-subtle)',
+                            border: '1px solid var(--brand-tint-border)',
+                            borderRadius: 'var(--radius-full)',
+                            color: 'var(--brand)',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                        aria-label="Schakel naar Vraag Rook modus"
+                    >
+                        <Bot size={11} aria-hidden="true" />
+                        Vraag Rook
+                        <kbd style={{ padding: '0 4px', borderRadius: 3, background: 'var(--card-solid)', border: '1px solid var(--brand-tint-border)', fontFamily: 'monospace', fontSize: 9, color: 'var(--brand)' }}>Tab</kbd>
+                    </button>
                 </div>
+                </>
+                )}
             </div>
 
             <style>{`

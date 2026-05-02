@@ -6,8 +6,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { useOrg } from '@/lib/OrgContext';
 import { AppProvider } from '@/lib/AppContext';
 import Sidebar from '@/components/Sidebar';
-import AiAssistant from '@/components/AiAssistant';
 import AiStudioOverlay from '@/components/AiStudioOverlay';
+import ChatPanel from '@/components/ai/ChatPanel';
 import { AiStudioProvider } from '@/lib/AiStudioContext';
 import { ActiveResourceProvider } from '@/lib/ActiveResourceContext';
 import ActiveResourcePill from '@/components/ActiveResourcePill';
@@ -221,7 +221,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
                 {children}
               </div>
             </main>
-            <AiAssistant />
+            <ChatPanel />
             <AiStudioOverlay />
           </div>
           <BottomNav />
@@ -235,3 +235,4 @@ function AppShellInner({ children }: { children: ReactNode }) {
     </ErrorBoundaryLogger>
   );
 }
+
