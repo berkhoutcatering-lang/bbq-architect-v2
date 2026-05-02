@@ -318,12 +318,12 @@ function ConceptCard({ c, onSave, onReject }: { c: ConceptDish; onSave: () => vo
                     )}
                     {c.wijn_suggestie && (
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 8 }}>
-                            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>🍷 Wijn:</strong> {c.wijn_suggestie}
+                            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>Wijn:</strong> {c.wijn_suggestie}
                         </div>
                     )}
                     {c.service_tip && (
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>🎯 Service:</strong> {c.service_tip}
+                            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>Service:</strong> {c.service_tip}
                         </div>
                     )}
                 </div>

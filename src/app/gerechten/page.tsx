@@ -793,7 +793,7 @@ export default function Gerechten() {
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>
                     <div className="modal-box" style={{ maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <h3 style={{ margin: 0 }}>{editing === 'new' ? '➕ Nieuw Gerecht' : '✏️ Gerecht Bewerken'}</h3>
+                            <h3 style={{ margin: 0 }}>{editing === 'new' ? 'Nieuw gerecht' : 'Gerecht bewerken'}</h3>
                             <button type="button" disabled={aiEnriching || !form.naam}
                                 onClick={async function () {
                                     setAiEnriching(true);
@@ -819,19 +819,19 @@ export default function Gerechten() {
                                     }
                                 }}
                                 style={{ padding: '8px 14px', borderRadius: 8, background: form.naam && !aiEnriching ? 'rgba(196,163,90,.15)' : 'rgba(255,255,255,.05)', border: '1px solid ' + (form.naam ? 'rgba(196,163,90,.35)' : 'rgba(255,255,255,.1)'), color: form.naam ? '#c4a35a' : 'rgba(255,255,255,.3)', fontSize: 11, fontWeight: 700, cursor: form.naam && !aiEnriching ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                ✨ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
+                                ✦ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
                             </button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
 
                             <div className="field">
-                                <label>📸 Foto</label>
+                                <label>Foto</label>
                                 {form.foto_url ? (
                                     <div className="foto-upload-zone has-foto">
                                         <img src={form.foto_url} alt="Gerecht" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 8 }} />
                                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { fileInputRef.current!.click(); }}>🔄 Vervangen</button>
-                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { foto_url: '' })); }}>🗑️ Verwijder</button>
+                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { fileInputRef.current!.click(); }}>Vervangen</button>
+                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { foto_url: '' })); }}>Verwijder</button>
                                         </div>
                                     </div>
                                 ) : (
@@ -862,7 +862,7 @@ export default function Gerechten() {
                             </div>
 
                             <div className="field">
-                                <label>🧾 Ingrediënten</label>
+                                <label>Ingrediënten</label>
                                 <div className="tag-input-container">
                                     <div className="tag-list">
                                         {(form.ingredienten || []).map(function (tag: string, idx: number) {
@@ -881,7 +881,7 @@ export default function Gerechten() {
                             </div>
 
                             <div className="field">
-                                <label>👨‍🍳 Bereidingswijze / Opbouw <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(één stap per regel voor Kitchen Mode)</span></label>
+                                <label>Bereidingswijze <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(één stap per regel voor Kitchen Mode)</span></label>
                                 <textarea value={form.bereidingswijze || ''}
                                     onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setForm(Object.assign({}, form, { bereidingswijze: e.target.value })); }}
                                     placeholder={'bijv.\n1. Brisket 12u op 110°C\n2. Wrap in butcher paper bij 75°C kerntemp\n3. Snijd tegen draad in van 5mm'}
@@ -890,7 +890,7 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>📖 Receptuur</span>
+                                    <span>Receptuur</span>
                                     {form.bereidingswijze && (
                                         <button
                                             type="button"
@@ -917,7 +917,7 @@ export default function Gerechten() {
                                             placeholder="bijv. 10" />
                                     </div>
                                     <div className="field">
-                                        <label>⏱️ Bereidingstijd (sec)</label>
+                                        <label>Bereidingstijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(seconden)</span></label>
                                         <input type="number" min={0} step={30} value={form.target_prep_time || ''}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
                                             placeholder="bijv. 1800 (= 30 min)" />
@@ -925,14 +925,14 @@ export default function Gerechten() {
                                 </div>
 
                                 <div className="field">
-                                    <label>🍷 Wijn-suggestie <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
+                                    <label>Wijn-suggestie <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                     <input value={form.wijn_suggestie || ''}
                                         onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { wijn_suggestie: e.target.value })); }}
                                         placeholder="bijv. Stevige rode Pinotage of Zuid-Afrikaanse Cabernet" />
                                 </div>
 
                                 <div className="field">
-                                    <label>🎯 Service-tip <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(plating / serveren)</span></label>
+                                    <label>Service-tip <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(plating / serveren)</span></label>
                                     <input value={form.service_tip || ''}
                                         onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { service_tip: e.target.value })); }}
                                         placeholder="bijv. Serveer op voorverwarmd bord, mierikswortel apart in een kleine schaal" />
@@ -941,17 +941,17 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    🔥 The Architect — Service Mode
+                                    Service Mode — chef-instructies
                                 </div>
 
                                 <div className="field">
-                                    <label>🎯 Service Foto <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(perfecte opmaak)</span></label>
+                                    <label>Service-foto <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(perfecte opmaak)</span></label>
                                     {form.service_image ? (
                                         <div className="foto-upload-zone has-foto">
                                             <img src={form.service_image} alt="Service" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8 }} />
                                             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { serviceImageRef.current!.click(); }}>🔄 Vervangen</button>
-                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { service_image: '' })); }}>🗑️ Verwijder</button>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { serviceImageRef.current!.click(); }}>Vervangen</button>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { service_image: '' })); }}>Verwijder</button>
                                             </div>
                                         </div>
                                     ) : (
@@ -963,7 +963,7 @@ export default function Gerechten() {
                                 </div>
 
                                 <div className="field">
-                                    <label>⚔️ Battle Plan <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(stappen voor de chef)</span></label>
+                                    <label>Battle plan <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(stappen voor de chef)</span></label>
                                     <div className="tag-input-container">
                                         <div className="tag-list">
                                             {(form.battle_plan_steps || []).map(function (step: string, idx: number) {
@@ -983,7 +983,7 @@ export default function Gerechten() {
                                 </div>
 
                                 <div className="field">
-                                    <label>⏱️ Doeltijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel, in seconden)</span></label>
+                                    <label>Doeltijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel, in seconden)</span></label>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                         <input type="number" min="0" step="30" value={form.target_prep_time || ''}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
@@ -999,7 +999,7 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    🍽️ Hardware per Gast
+                                    Hardware per gast
                                 </div>
 
                                 {(form.hardware_items || []).length > 0 && (
@@ -1052,7 +1052,7 @@ export default function Gerechten() {
                             {(form.ingredienten || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                     <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                        🛒 Winkel per Ingrediënt
+                                        Winkel per ingrediënt
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                         {(form.ingredienten || []).map(function (ing: string, idx: number) {
@@ -1074,7 +1074,7 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    💰 Kostprijsberekening
+                                    Kostprijsberekening
                                 </div>
 
                                 {(form.ingredient_costs || []).length > 0 && (
@@ -1193,7 +1193,7 @@ export default function Gerechten() {
 
                             <div className="form-grid">
                                 <div className="field">
-                                    <label>💰 Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
+                                    <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                     <input type="number" step="0.01" value={form.kostprijs_pp || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} placeholder="€0.00" />
                                 </div>
                                 <div className="field">
@@ -1215,7 +1215,7 @@ export default function Gerechten() {
                                             color: form.actief ? 'var(--green)' : 'var(--red)',
                                         }}
                                     >
-                                        {form.actief ? '✅ Actief' : '⏸ Inactief'}
+                                        {form.actief ? 'Actief' : 'Inactief'}
                                     </button>
                                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                                         {form.actief ? 'Zichtbaar in offertes en menu' : 'Verborgen — niet beschikbaar voor offertes'}
@@ -1227,7 +1227,7 @@ export default function Gerechten() {
                             {(form.foto_prompt || (form.pijnpunten && form.pijnpunten.length > 0) || (form.toppunten && form.toppunten.length > 0) || form.marge_pct != null) && (
                                 <div style={{ marginTop: 18, padding: 14, borderRadius: 10, background: 'rgba(167,139,250,.05)', border: '1px solid rgba(167,139,250,.25)' }}>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple, #a78bfa)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
-                                        ✨ AI-inzichten
+                                        ✦ AI-inzichten
                                     </div>
 
                                     {form.marge_pct != null && (
@@ -1265,7 +1265,7 @@ export default function Gerechten() {
 
                             {editing !== 'new' && stats && (
                                 <div className="gerecht-stats-panel">
-                                    <div className="gerecht-stats-title">📊 Statistieken</div>
+                                    <div className="gerecht-stats-title">Statistieken</div>
                                     <div className="gerecht-stats-grid">
                                         <div className="gerecht-stat-item">
                                             <div className="gerecht-stat-value">{stats.offCount}</div>
@@ -1343,14 +1343,14 @@ export default function Gerechten() {
                         {editing !== 'new' && (
                             <div style={{ marginTop: 14 }}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                    📋 Geschiedenis
+                                    Geschiedenis
                                 </div>
                                 <AuditTrailTimeline recordTable="gerechten" recordId={editing as number} />
                             </div>
                         )}
 
                         <div className="modal-actions">
-                            {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>🗑️ Verwijderen</button>}
+                            {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>Verwijderen</button>}
                             {/* Status-toggle: concept/review → activeer · actief → deactiveer · inactief → activeer */}
                             {editing !== 'new' && (function () {
                                 const cur = form.status || (form.actief === false ? 'inactief' : 'actief');
@@ -1388,7 +1388,7 @@ export default function Gerechten() {
                                 );
                             })()}
                             <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); }}>Annuleren</button>
-                            <button className="btn btn-brand btn-sm" onClick={saveGerecht}>💾 Opslaan</button>
+                            <button className="btn btn-brand btn-sm" onClick={saveGerecht}>Opslaan</button>
                         </div>
                     </div>
                 </div>
@@ -1397,7 +1397,7 @@ export default function Gerechten() {
             {gangEditing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setGangEditing(null); }}>
                     <div className="modal-box" style={{ maxWidth: 440, width: '100%' }}>
-                        <h3>{gangEditing === 'new' ? '➕ Nieuwe Gang' : '⚙️ Gang Bewerken'}</h3>
+                        <h3>{gangEditing === 'new' ? 'Nieuwe gang' : 'Gang bewerken'}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                             <div className="field">
                                 <label>Naam</label>
@@ -1423,9 +1423,9 @@ export default function Gerechten() {
                             </div>
                         </div>
                         <div className="modal-actions">
-                            {gangEditing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGang(gangEditing as number); }}>🗑️ Verwijderen</button>}
+                            {gangEditing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGang(gangEditing as number); }}>Verwijderen</button>}
                             <button className="btn btn-ghost btn-sm" onClick={function () { setGangEditing(null); }}>Annuleren</button>
-                            <button className="btn btn-brand btn-sm" onClick={saveGang}>💾 Opslaan</button>
+                            <button className="btn btn-brand btn-sm" onClick={saveGang}>Opslaan</button>
                         </div>
                     </div>
                 </div>
