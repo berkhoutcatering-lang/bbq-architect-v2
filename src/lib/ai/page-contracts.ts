@@ -219,6 +219,14 @@ export function buildBlockDirective(pagePath: string): string {
     }
 
     lines.push('');
+    lines.push('## ALLES MET EEN ENTITY-NAAM IS KLIKBAAR (CRUCIAAL)');
+    lines.push('Wanneer je een specifieke entity noemt — een event-naam, klant-naam, offerte-nummer, factuur-nummer, gerecht-naam, leverancier — moet die regel KLIKBAAR zijn naar de detail-pagina van die entity. Anders moet de operator zelf weer naar de juiste pagina zoeken — slechte UX.');
+    lines.push('');
+    lines.push('Drie vormen om dit te doen:');
+    lines.push('1. **bullets-items als objects met route**: voor lijsten van events/klanten/offertes/etc. Elk object: `{ "text": "20 jun — Mariel Velema · 44 gasten · €1.554", "route": "/events/12", "icon": "Calendar", "badge": { "text": "menu OK", "tone": "success" } }`. NOOIT plain string als je een entity-id beschikbaar hebt.');
+    lines.push('2. **metric met route**: voor "totaal omzet" / "6 events" / "23 facturen open" — voeg `route` + `label` toe zodat hele kaart klikbaar is naar het overzicht.');
+    lines.push('3. **nav_card**: voor één enkele primaire actie (bv "Open inkooplijst voor Bruiloft Berkhout").');
+    lines.push('');
     lines.push('## NAV-CARD STIJL');
     lines.push('- title: korte zin met concrete entity (bv "Inkooplijst voor Bruiloft Berkhout"), max 60 chars');
     lines.push('- summary: 1 zin met sleutel-cijfers (bv "23 items, €847 totaal, event over 2 dagen"), max 140 chars');
@@ -226,6 +234,15 @@ export function buildBlockDirective(pagePath: string): string {
     lines.push('- icon: lucide-react naam in PascalCase (bv "ShoppingCart", "ChefHat", "Calendar", "BarChart3")');
     lines.push('- badge.tone: info | warning | success | danger | neutral — alleen bij echte status');
     lines.push('- preview (optioneel): max 5 strings, één regel per item');
+    lines.push('');
+    lines.push('## METRIC + ROUTE');
+    lines.push('Wanneer een metric naar een lijst-pagina kan verwijzen, geef altijd `route` + `label` mee. Voorbeelden:');
+    lines.push('- value="6 events" → route="/events", label="Open events"');
+    lines.push('- value="€10.051,58" totale pipeline → route="/offertes", label="Open offertes"');
+    lines.push('- value="3 verlopen facturen" → route="/facturen?status=verlopen", label="Bekijk verlopen"');
+    lines.push('');
+    lines.push('## BULLETS-ITEM ROUTES');
+    lines.push('Voor item.route gelden DEZELFDE whitelist-regels als nav_card.route. Voor specifieke entities gebruik dynamic-id paden zoals "/events/[id]" met de echte id ingevuld uit context-data. Als je geen specifieke route weet voor een item, gebruik dan een string i.p.v. object — niet verzinnen.');
     lines.push('');
     lines.push('## ACTION-CARD STIJL');
     lines.push('- Gebruik action_card alleen als er een concrete database-mutatie achter zit (create/update/delete/generate)');

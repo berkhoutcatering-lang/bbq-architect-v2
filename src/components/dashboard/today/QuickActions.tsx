@@ -44,10 +44,8 @@ interface Props {
 export default function QuickActions({ actions = DEFAULT_QUICK_ACTIONS }: Props): React.ReactElement {
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         padding: '20px 22px',
         height: '100%',
         display: 'flex',

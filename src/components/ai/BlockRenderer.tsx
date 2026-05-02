@@ -36,13 +36,13 @@ export default function BlockRenderer({ blocks, onNavigate, onExecute, compact =
                     case 'info':
                         return <InfoBlock key={i} block={block} />;
                     case 'metric':
-                        return <MetricBlock key={i} block={block} />;
+                        return <MetricBlock key={i} block={block} onNavigate={onNavigate} />;
                     case 'warning':
                         return <WarningBlock key={i} block={block} />;
                     case 'success':
                         return <SuccessBlock key={i} block={block} />;
                     case 'bullets':
-                        return <BulletsBlock key={i} block={block} />;
+                        return <BulletsBlock key={i} block={block} onNavigate={onNavigate} />;
                     case 'action_hint':
                         return <ActionHintBlock key={i} block={block} />;
                     case 'nav_card':

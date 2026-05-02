@@ -61,8 +61,7 @@ export default function PaletteAiInput({ initialQuery = '', onClose, onSwitchToS
     const inputRef = useRef<HTMLInputElement>(null);
     const pathname = usePathname() || '/';
     const router = useRouter();
-    const { org } = useOrg();
-    const orgId = org?.id ?? null;
+    const { orgId } = useOrg();
     const execute = useActionDispatcher();
 
     useEffect(function () {
@@ -86,10 +85,10 @@ export default function PaletteAiInput({ initialQuery = '', onClose, onSwitchToS
             setError(null);
 
             try {
-                let contextData: Record<string, unknown> = {};
+                let contextData: unknown = {};
                 if (supabase && orgId) {
                     try {
-                        contextData = (await loadPageContextData(pathname, supabase, orgId)) || {};
+                        contextData = (await loadPageContextData(pathname, supabase)) || {};
                     } catch {
                         // niet-blokkerend
                     }

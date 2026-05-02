@@ -41,8 +41,8 @@ export default function ActionCardBlock({ block, onExecute }: Props) {
 
     return (
         <div
+            className="smoke-card"
             style={{
-                background: 'var(--card)',
                 border: '1px solid ' + accentBorder,
                 borderRadius: 'var(--radius-lg)',
                 padding: 'var(--space-4)',

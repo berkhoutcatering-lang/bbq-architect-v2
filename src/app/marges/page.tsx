@@ -453,7 +453,7 @@ export default function MenuEngineering() {
           <button onClick={selectVisible} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Selecteer zichtbare</button>
           <button onClick={clearSelection} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Deselecteer</button>
           {selectedIds.length > 0 && (
-            <button onClick={deleteSelected} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.1)', color: '#fca5a5', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={deleteSelected} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.1)', color: 'var(--red)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Trash2 size={12} /> Verwijder ({selectedIds.length})
             </button>
           )}

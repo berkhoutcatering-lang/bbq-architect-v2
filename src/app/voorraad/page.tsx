@@ -25,7 +25,7 @@ const CATEGORIEEN = ['Vlees', 'Vis', 'Groenten', 'Zuivel', 'Kruiden', 'Sauzen', 
 const EENHEDEN = ['kg', 'g', 'L', 'ml', 'stuks', 'bos', 'pot', 'fles', 'zak', 'doos', 'krat', 'bakje'] as const;
 
 const CAT_META: Record<string, { color: string; icon: any }> = {
-    Vlees: { color: '#ef4444', icon: Beef },
+    Vlees: { color: 'var(--red)', icon: Beef },
     Vis: { color: '#4ECDC4', icon: Fish },
     Groenten: { color: '#22c55e', icon: Carrot },
     Zuivel: { color: '#FFBF00', icon: Milk },
@@ -71,7 +71,7 @@ function coverageDays(item: InventoryItem): number {
 /* Stable kleur-hash voor leverancier-strings (geen hardcoded SUPPLIER lijst) */
 function supplierColor(name: string): string {
     if (!name) return '#949494';
-    const palette = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#ef4444', '#f97316', '#3b82f6'];
+    const palette = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', 'var(--red)', '#f97316', '#3b82f6'];
     let h = 0;
     for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
     return palette[Math.abs(h) % palette.length];

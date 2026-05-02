@@ -62,8 +62,7 @@ export default function ChatPanel() {
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
     const pathname = usePathname() || '/';
-    const { org } = useOrg();
-    const orgId = org?.id ?? null;
+    const { orgId } = useOrg();
     const execute = useActionDispatcher();
     const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -95,11 +94,13 @@ export default function ChatPanel() {
             setBusy(true);
 
             try {
-                // Page context-data laden (zelfde route als oude AiAssistant)
-                let contextData: Record<string, unknown> = {};
+                // Page context-data laden (zelfde route als oude AiAssistant).
+                // Bewust unknown getypt — gaat alleen JSON-encoded naar /api/chat,
+                // server kent z'n eigen schema per page.
+                let contextData: unknown = {};
                 if (supabase && orgId) {
                     try {
-                        contextData = (await loadPageContextData(pathname, supabase, orgId)) || {};
+                        contextData = (await loadPageContextData(pathname, supabase)) || {};
                     } catch {
                         // Niet-blokkerend — context is bonus
                     }

@@ -547,7 +547,7 @@ export default function DashboardPage() {
               {(verlopenFacturen.length > 0 || criticalConflicts.length > 0) && (
                 <span
                   className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                  style={{ background: '#ef4444', border: '2px solid var(--color-bg-primary)' }}
+                  style={{ background: 'var(--red)', border: '2px solid var(--color-bg-primary)' }}
                 />
               )}
             </button>

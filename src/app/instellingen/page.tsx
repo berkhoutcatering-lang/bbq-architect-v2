@@ -264,62 +264,46 @@ export default function Instellingen() {
     );
 }
 
-// ── Curated thema's — elk met zorgvuldig afgestemde 5 kleuren ──
+// ── Curated thema's — 6 sterke caterer-archetypes, geen overlap ──
 const THEMES = [
-    // Elke thema heeft NU veel meer contrast tussen bg ↔ card (minimaal 10-15% helderheid verschil)
+    // 3 donker (Smokehouse / Graphite / Cellar) + 3 licht (Linen / Studio / Garden).
+    // Elke preset heeft een eigen silhouette en spreekt een ander caterer-type aan.
+    // Kleuren zijn afgestemd op OKLCH-lightness zodat contrast perceptueel uniform is.
     {
-        id: 'hop-bites',
-        naam: 'Hop & Bites ⭐',
-        omschrijving: 'Signature thema — olijfgroen, mat zwart, mat goud',
-        bg: '#0f110d', card: '#2a2d1f', text: '#f0ece0', primary: '#a89a5e', accent: '#6b6835', secondary: '#05060a',
+        id: 'smokehouse',
+        naam: 'Smokehouse',
+        omschrijving: 'Voor traditionele BBQ-caterers — slow smoke, charcoal, pitmaster',
+        bg: '#181412', card: '#2c241d', text: '#f4efe4', primary: '#d49b4d', accent: '#b3611f', secondary: '#100c0a',
     },
     {
-        id: 'dark-bbq',
-        naam: 'Dark BBQ',
-        omschrijving: 'Het origineel — diep donker met warme gouden accenten',
-        bg: '#070709', card: '#1c1c24', text: '#ffffff', primary: '#c4a35a', accent: '#a8893e', secondary: '#0f0f13',
+        id: 'graphite',
+        naam: 'Graphite',
+        omschrijving: 'Voor moderne event-caterers — editorial, premium, tech-forward',
+        bg: '#0e1014', card: '#1f2128', text: '#f4f5f7', primary: '#d8c277', accent: '#a89d83', secondary: '#08090d',
     },
     {
-        id: 'mat-zwart-goud',
-        naam: 'Mat Zwart + Goud',
-        omschrijving: 'Echt zwart met felle goud-accenten — premium uitstraling',
-        bg: '#030303', card: '#1a1a1c', text: '#f5f5f5', primary: '#d4af37', accent: '#b8942d', secondary: '#0d0d0d',
+        id: 'cellar',
+        naam: 'Cellar',
+        omschrijving: 'Voor fine-dining caterers en premium bruiloften — kelder-warm, gastronomisch',
+        bg: '#241015', card: '#4a1f2a', text: '#f1ead8', primary: '#dac786', accent: '#a96940', secondary: '#1a0a0d',
     },
     {
-        id: 'licht-goud',
-        naam: 'Licht Warm + Goud',
-        omschrijving: 'Beige achtergrond, witte kaarten, zwarte tekst — rustig en professioneel',
-        bg: '#ede6d4', card: '#ffffff', text: '#1a1a1a', primary: '#a8893e', accent: '#8b7355', secondary: '#dccfb2',
+        id: 'linen',
+        naam: 'Linen',
+        omschrijving: 'Voor klassieke wedding-caterers — papier-en-inkt, professioneel',
+        bg: '#f4eed8', card: '#fcfaf3', text: '#1c1814', primary: '#9a6a3e', accent: '#6b4a30', secondary: '#e7dfc6',
     },
     {
-        id: 'mat-wit-zwart',
-        naam: 'Mat Wit + Zwart',
-        omschrijving: 'Clean wit met zwart als hoofdaccent — editoriale stijl',
-        bg: '#f0f0f0', card: '#ffffff', text: '#0a0a0a', primary: '#1a1a1a', accent: '#404040', secondary: '#e0e0e0',
+        id: 'studio',
+        naam: 'Studio',
+        omschrijving: 'Voor minimalistische caterers — magazine-clean, één scherpe rode accent',
+        bg: '#f6f6f6', card: '#ffffff', text: '#181818', primary: '#222222', accent: '#b73020', secondary: '#ebebeb',
     },
     {
-        id: 'bos-natuur',
-        naam: 'Bos & Natuur',
-        omschrijving: 'Donker bosgroen met gedempte sage accenten — organisch',
-        bg: '#122019', card: '#2f4a42', text: '#f0ebe0', primary: '#8ab89c', accent: '#5c8875', secondary: '#0a1411',
-    },
-    {
-        id: 'midnight-blauw',
-        naam: 'Midnight Blauw',
-        omschrijving: 'Diep marineblauw met licht staalblauwe accenten — professioneel',
-        bg: '#061020', card: '#1e2e4a', text: '#ffffff', primary: '#60a5fa', accent: '#3b82f6', secondary: '#030811',
-    },
-    {
-        id: 'koper-rook',
-        naam: 'Koper & Rook',
-        omschrijving: 'Warme bruintinten met koperen highlights — rustieke keuken',
-        bg: '#17110c', card: '#3a2c23', text: '#f0e6d8', primary: '#c17e4a', accent: '#8b5a2b', secondary: '#0c0805',
-    },
-    {
-        id: 'wijnrood',
-        naam: 'Bordeaux',
-        omschrijving: 'Diep wijnrood met zachte crème accenten — gastronomisch',
-        bg: '#14070a', card: '#3a1a24', text: '#f5e6d3', primary: '#c9a961', accent: '#9f7e42', secondary: '#0a0405',
+        id: 'garden',
+        naam: 'Garden',
+        omschrijving: 'Voor garden-party en sustainable caterers — organisch, plantaardig, aards',
+        bg: '#ece9d6', card: '#fbf9ef', text: '#1f2117', primary: '#6b7847', accent: '#a96b40', secondary: '#dad6b8',
     },
 ] as const;
 
@@ -351,7 +335,17 @@ function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) =>
                             onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
                             {/* Visuele mini-preview van het thema */}
                             <div style={{ padding: 14, background: t.bg, borderBottom: '1px solid ' + t.card }}>
-                                <div style={{ padding: 10, borderRadius: 8, background: t.card, marginBottom: 8 }}>
+                                <div style={{
+                                    padding: 10, borderRadius: 8, marginBottom: 8,
+                                    background:
+                                        'radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, ' + t.primary + ', transparent 80%), transparent 65%), ' +
+                                        'radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, ' + t.primary + ', transparent 92%), transparent 55%), ' +
+                                        t.card,
+                                    boxShadow:
+                                        'inset 0 1px 0 0 color-mix(in oklch, ' + t.text + ', transparent 92%), ' +
+                                        'inset 0 0 20px 0 color-mix(in oklch, ' + t.primary + ', transparent 92%), ' +
+                                        '0 1px 2px rgba(0,0,0,.06), 0 6px 16px -6px rgba(0,0,0,.22)',
+                                }}>
                                     <div style={{ fontSize: 9, color: t.primary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>Event</div>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>Hop &amp; Bites</div>
                                     <div style={{ display: 'flex', gap: 4 }}>

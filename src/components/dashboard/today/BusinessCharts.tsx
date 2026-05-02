@@ -140,7 +140,7 @@ export default function BusinessCharts({
           <span>
             <span
               style={{
-                color: monthGrowth > 0 ? '#86efac' : '#fca5a5',
+                color: monthGrowth > 0 ? '#86efac' : 'var(--red)',
                 fontWeight: 600,
               }}
             >
@@ -233,10 +233,8 @@ function ChartCard({
 }) {
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         padding: '16px 18px',
         display: 'flex',
         flexDirection: 'column',

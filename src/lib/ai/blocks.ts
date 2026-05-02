@@ -40,6 +40,8 @@ export interface MetricBlock {
     value: string;                 // bv "70%", "€8.400", "12 verlopen"
     text?: string;                 // optionele context-zin onder de waarde
     delta?: { value: string; tone: DeltaTone }; // optionele vs-vorige-periode
+    route?: string;                // optionele deep-link — hele kaart wordt klikbaar
+    label?: string;                // optioneel knop-label, default "Open"
 }
 
 export interface WarningBlock {
@@ -55,10 +57,15 @@ export interface SuccessBlock {
     text?: string;
 }
 
+/** Bullet-item: ofwel kale tekst ofwel een klikbare regel met route. */
+export type BulletItem =
+    | string
+    | { text: string; route?: string; icon?: string; badge?: { text: string; tone: BadgeTone } };
+
 export interface BulletsBlock {
     type: 'bullets';
     title: string;
-    items: string[];               // max 6, elk max 80 chars
+    items: BulletItem[];           // max 6, elk max 80 chars; items met route worden klikbare links
 }
 
 export interface ActionHintBlock {
@@ -150,7 +157,31 @@ export const BLOCK_TOOL_SCHEMA = {
                     },
                     title: { type: 'string', description: 'Korte titel (max 60 chars). Verplicht voor alle types.' },
                     text: { type: 'string', description: 'Body tekst — kort, max 200 chars. Voor info/metric/warning/success.' },
-                    items: { type: 'array', items: { type: 'string' }, description: 'Bullets (max 6, elk max 80 chars). Alleen bij type=bullets.' },
+                    items: {
+                        type: 'array',
+                        description: 'Bullets (max 6). Elk item ofwel een string OF object {text, route?, icon?, badge?}. Wanneer je een specifieke entity noemt (event, klant, offerte, factuur, gerecht) MOET je object-form met route gebruiken zodat de regel klikbaar is.',
+                        items: {
+                            oneOf: [
+                                { type: 'string' },
+                                {
+                                    type: 'object',
+                                    properties: {
+                                        text: { type: 'string', description: 'De zichtbare tekst, max 80 chars.' },
+                                        route: { type: 'string', description: 'Optionele deep-link, ALLEEN routes uit de page-whitelist.' },
+                                        icon: { type: 'string', description: 'Optionele lucide icon naam.' },
+                                        badge: {
+                                            type: 'object',
+                                            properties: {
+                                                text: { type: 'string' },
+                                                tone: { type: 'string', enum: ['info', 'warning', 'success', 'danger', 'neutral'] },
+                                            },
+                                        },
+                                    },
+                                    required: ['text'],
+                                },
+                            ],
+                        },
+                    },
                     value: { type: 'string', description: 'Highlight-waarde voor metric (bv "70%", "€8.400").' },
                     delta: {
                         type: 'object',
@@ -162,8 +193,8 @@ export const BLOCK_TOOL_SCHEMA = {
                     },
                     severity: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Severity voor warning.' },
                     summary: { type: 'string', description: 'Korte samenvatting (max 140 chars). Verplicht bij nav_card/action_card.' },
-                    route: { type: 'string', description: 'Next.js href, bv "/inkoop?event=12". ALLEEN routes uit PAGE_ROUTE_WHITELIST. Verplicht bij nav_card.' },
-                    label: { type: 'string', description: 'Knop-tekst, max 4 woorden, bv "Open inkooplijst". Verplicht bij nav_card.' },
+                    route: { type: 'string', description: 'Next.js href, bv "/inkoop?event=12". ALLEEN routes uit PAGE_ROUTE_WHITELIST. Verplicht bij nav_card, optioneel bij metric (maakt hele kaart klikbaar).' },
+                    label: { type: 'string', description: 'Knop-tekst, max 4 woorden, bv "Open inkooplijst". Verplicht bij nav_card, optioneel bij metric+route.' },
                     icon: { type: 'string', description: 'Lucide-react icon naam (bv "ShoppingCart", "ChefHat"). Optioneel.' },
                     badge: {
                         type: 'object',

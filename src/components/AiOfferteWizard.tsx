@@ -246,7 +246,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             </div>
 
                             {error && (
-                                <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: '#fca5a5', display: 'flex', gap: 8 }}>
+                                <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: 'var(--red)', display: 'flex', gap: 8 }}>
                                     <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
                                     <span>{error}</span>
                                 </div>
@@ -296,7 +296,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                 const huidig = prijsPp ?? aiSuggest;
                                 const margePp = huidig - kost;
                                 const margePct = huidig > 0 ? (margePp / huidig) * 100 : 0;
-                                const margeColor = margePct >= 40 ? '#22c55e' : margePct >= 30 ? '#f59e0b' : '#ef4444';
+                                const margeColor = margePct >= 40 ? '#22c55e' : margePct >= 30 ? '#f59e0b' : 'var(--red)';
                                 const aangepast = prijsPp !== null && Math.round(prijsPp) !== Math.round(aiSuggest);
                                 const adjust = (delta: number) => setPrijsPp(Math.max(0, Math.round((huidig + delta) * 100) / 100));
                                 return (
@@ -370,7 +370,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             </div>
 
                             {error && (
-                                <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: '#fca5a5' }}>{error}</div>
+                                <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: 'var(--red)' }}>{error}</div>
                             )}
 
                             <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, paddingTop: 10, background: 'var(--bg, #0a0a0d)' }}>

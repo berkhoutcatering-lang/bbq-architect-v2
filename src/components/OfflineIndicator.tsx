@@ -1,16 +1,42 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getPendingSyncCount } from '@/lib/offlineStorage';
+import { getPendingSyncCount, clearActiveOfflineEvent } from '@/lib/offlineStorage';
 import { onSWMessage } from '@/lib/pushNotifications';
 import { useActiveOfflineEvent } from '@/lib/useActiveOfflineEvent';
-import { triggerAutoSyncIfActive } from '@/lib/syncQueue';
+import { triggerAutoSyncIfActive, syncEventQueue } from '@/lib/syncQueue';
+import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 
 export default function OfflineIndicator() {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showSyncComplete, setShowSyncComplete] = useState(false);
+  const [endingOfflineEvent, setEndingOfflineEvent] = useState(false);
   const offlineEvent = useActiveOfflineEvent();
+  const { orgId } = useOrg();
+
+  // Beëindig-knop in de balk: synct queue (indien online) en clear de
+  // active-event flag. Werkt zonder dat user naar /events/[id] hoeft —
+  // voorkomt "balk hangt vast en ik weet niet hoe weg" UX.
+  async function handleEndFromBanner() {
+    const ev = offlineEvent.event;
+    if (!ev || endingOfflineEvent) return;
+    setEndingOfflineEvent(true);
+    try {
+      if (navigator.onLine && supabase && orgId && offlineEvent.queuedCount > 0) {
+        await syncEventQueue(ev.eventId, { cleanupOnSuccess: true });
+      }
+      clearActiveOfflineEvent();
+    } catch (err) {
+      console.warn('[OfflineIndicator] beëindig faalde:', (err as Error).message);
+      // Clear toch — anders blijft balk eeuwig hangen. Queue blijft in IDB
+      // voor recovery via /events/[id]/hub knop.
+      clearActiveOfflineEvent();
+    } finally {
+      setEndingOfflineEvent(false);
+    }
+  }
 
   useEffect(function () {
     // Set initial state
@@ -86,12 +112,37 @@ export default function OfflineIndicator() {
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: 4, background: '#fff' }} />
+        <span style={{ flex: '0 1 auto', minWidth: 0 }}>
         {offlineEvent.isSyncing ? (
           <>Synchroniseren {queued > 0 ? `(${queued} pending)` : '...'}</>
         ) : isOffline ? (
           <>Offline-mode actief · event #{offlineEvent.event?.eventId} · {queued} {queued === 1 ? 'wijziging' : 'wijzigingen'} wachten</>
         ) : (
-          <>Offline-mode actief · event #{offlineEvent.event?.eventId}{queued > 0 ? ` · ${queued} pending` : ''} · druk &quot;Eindig event&quot; om te syncen</>
+          <>Offline-mode actief · event #{offlineEvent.event?.eventId}{queued > 0 ? ` · ${queued} pending` : ''}</>
+        )}
+        </span>
+        {!offlineEvent.isSyncing && (
+          <button
+            type="button"
+            onClick={handleEndFromBanner}
+            disabled={endingOfflineEvent}
+            aria-label="Beëindig offline-mode en synchroniseer"
+            style={{
+              marginLeft: 'auto',
+              flexShrink: 0,
+              padding: '4px 12px',
+              borderRadius: 'var(--radius-full)',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1px solid rgba(255, 255, 255, 0.35)',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: endingOfflineEvent ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {endingOfflineEvent ? 'Bezig…' : (queued > 0 && navigator.onLine ? 'Sync & beëindig' : 'Beëindig')}
+          </button>
         )}
       </div>
     );

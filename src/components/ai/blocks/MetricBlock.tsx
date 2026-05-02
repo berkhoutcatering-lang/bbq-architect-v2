@@ -1,28 +1,27 @@
 'use client';
 
+import Link from 'next/link';
 import { ArrowDown, ArrowRight, ArrowUp } from 'lucide-react';
-import type { MetricBlock as MetricBlockType } from '@/lib/ai/blocks';
+import type { MetricBlock as MetricBlockType, DeltaTone } from '@/lib/ai/blocks';
 
-const deltaStyle: Record<MetricBlockType['delta'] extends infer D ? D extends { tone: infer T } ? T & string : never : never, { color: string; bg: string }> = {
+const deltaStyle: Record<DeltaTone, { color: string; bg: string }> = {
     positive: { color: 'var(--status-success-text)', bg: 'var(--status-success-bg)' },
     negative: { color: 'var(--status-danger-text)', bg: 'var(--status-danger-bg)' },
     neutral: { color: 'var(--muted-light)', bg: 'var(--status-neutral-bg)' },
 };
 
-export default function MetricBlock({ block }: { block: MetricBlockType }) {
+interface Props {
+    block: MetricBlockType;
+    onNavigate?: () => void;
+}
+
+export default function MetricBlock({ block, onNavigate }: Props) {
     const DeltaIcon = block.delta?.tone === 'positive' ? ArrowUp : block.delta?.tone === 'negative' ? ArrowDown : ArrowRight;
     const deltaTone = block.delta ? deltaStyle[block.delta.tone] : null;
+    const isLink = !!block.route;
 
-    return (
-        <div
-            style={{
-                background: 'var(--card)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-4)',
-                color: 'var(--text)',
-            }}
-        >
+    const content = (
+        <>
             <div
                 style={{
                     fontSize: 'var(--text-xs)',
@@ -76,6 +75,40 @@ export default function MetricBlock({ block }: { block: MetricBlockType }) {
                     {block.text}
                 </div>
             )}
-        </div>
+            {isLink && (
+                <div
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-1)',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 600,
+                        color: 'var(--brand)',
+                        marginTop: 'var(--space-3)',
+                    }}
+                >
+                    {block.label || 'Open'}
+                    <ArrowRight size={12} aria-hidden="true" />
+                </div>
+            )}
+        </>
     );
+
+    const baseStyle = {
+        display: 'block',
+        borderRadius: 'var(--radius-lg)',
+        padding: 'var(--space-4)',
+        color: 'var(--text)',
+        textDecoration: 'none',
+    } as const;
+
+    if (isLink && block.route) {
+        return (
+            <Link href={block.route} onClick={onNavigate} style={baseStyle} className="smoke-card smoke-card-interactive ai-metric-link">
+                {content}
+            </Link>
+        );
+    }
+
+    return <div style={baseStyle} className="smoke-card">{content}</div>;
 }

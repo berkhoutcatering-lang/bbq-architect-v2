@@ -184,8 +184,15 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     {settings?.ondertitel && <p style={{ fontSize: 12, color: 'var(--zinc)', margin: 0 }}>{settings.ondertitel}</p>}
                 </div>
 
-                {/* Main card */}
-                <div style={{ background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
+                {/* Main card — lampion-effect met klant's brand-kleur */}
+                <div style={{
+                    background: 'radial-gradient(140% 60% at 50% 0%, ' + brandColor + '1f, transparent 65%), radial-gradient(120% 45% at 50% 100%, ' + brandColor + '12, transparent 55%), rgba(255,255,255,0.025)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,.08), inset 0 0 32px 0 ' + brandColor + '14, 0 1px 2px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,.5)',
+                }}>
 
                     {/* Header section */}
                     <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

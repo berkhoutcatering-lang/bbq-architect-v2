@@ -25,14 +25,14 @@ interface Props {
 const TONE_COLOR: Record<KpiItem['tone'], string> = {
   ok: '#86efac',
   warn: '#fbbf24',
-  bad: '#fca5a5',
+  bad: 'var(--red)',
   default: 'var(--brand-gold)',
 };
 
 const TONE_VALUE_COLOR: Record<KpiItem['tone'], string> = {
   ok: 'var(--text)',
   warn: '#fbbf24',
-  bad: '#fca5a5',
+  bad: 'var(--red)',
   default: 'var(--text)',
 };
 
@@ -45,10 +45,8 @@ export default function KPIStrip({ kpis, updatedAt }: Props): React.ReactElement
 
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         marginBottom: 18,
         overflow: 'hidden',
       }}

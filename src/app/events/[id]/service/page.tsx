@@ -626,7 +626,7 @@ function TablesView({ course, onToggleItem }: { course: Course; onToggleItem: (c
                             </div>
                             <div style={{ fontSize: 11.5, color: colors.text, fontWeight: 600, marginBottom: item.special ? 6 : 8 }}>{colors.label}</div>
                             {item.special && (
-                                <div style={{ fontSize: 11, color: '#fca5a5', background: 'rgba(220,38,38,.1)', padding: '6px 8px', borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
+                                <div style={{ fontSize: 11, color: 'var(--red)', background: 'rgba(220,38,38,.1)', padding: '6px 8px', borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
                                     {item.special}
                                 </div>
                             )}

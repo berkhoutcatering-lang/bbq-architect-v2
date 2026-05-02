@@ -44,7 +44,7 @@ function Sparkline({ data, range, alertHigh, breached }: { data: number[]; range
   const yAlert = y(alertHigh);
   const lastX = pad + (data.length - 1) * step;
   const lastY = y(data[data.length - 1]);
-  const color = breached ? '#ef4444' : '#22c55e';
+  const color = breached ? 'var(--red)' : '#22c55e';
   return (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" width="100%" height="100%">
       <line x1={pad} x2={w - pad} y1={yAlert} y2={yAlert} stroke="rgba(239,68,68,.25)" strokeWidth="1" strokeDasharray="2 3" />
