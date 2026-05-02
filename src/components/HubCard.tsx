@@ -37,9 +37,8 @@ export default function HubCard({ href, icon: Icon, title, desc, cta, stats, rec
   return (
     <Link
       href={href}
-      className="hub-card-v2"
+      className="hub-card-v2 smoke-card smoke-card-interactive"
       aria-label={`${title} — ${cta}`}
-      className="smoke-card smoke-card-interactive"
       style={{
         display: 'flex',
         flexDirection: 'column',

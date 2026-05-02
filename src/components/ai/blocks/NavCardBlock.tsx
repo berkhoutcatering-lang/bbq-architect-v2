@@ -32,7 +32,7 @@ export default function NavCardBlock({ block, onNavigate }: { block: NavCardBloc
         <Link
             href={block.route}
             onClick={onNavigate}
-            className="smoke-card smoke-card-interactive"
+            className="smoke-card smoke-card-interactive ai-nav-card"
             style={{
                 display: 'block',
                 borderRadius: 'var(--radius-lg)',
@@ -41,7 +41,6 @@ export default function NavCardBlock({ block, onNavigate }: { block: NavCardBloc
                 color: 'var(--text)',
                 minHeight: 64,
             }}
-            className="ai-nav-card"
         >
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
                 <div
