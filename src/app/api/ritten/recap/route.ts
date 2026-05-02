@@ -5,8 +5,9 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { kwartaalRange, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 
 export const runtime = 'nodejs';
@@ -61,6 +62,23 @@ export async function POST(req: Request) {
     .eq('status', 'active')
     .maybeSingle();
   if (!mem) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
+
+  // Recap is een dure call (Haiku op 50+ ritten = ~3000 tokens). Rate-limit
+  // 10/min per user voorkomt accidental loop. Cost-cap voorkomt abuse.
+  const rl = checkRateLimit(`ritten-recap:${user.id}`, 10);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Recap te vaak gevraagd — wacht ${rl.resetInSeconds}s` },
+      { status: 429 },
+    );
+  }
+  const cap = await checkAiCapServer(mem.organization_id);
+  if (!cap.allowed) {
+    return NextResponse.json(
+      { error: 'AI-limiet bereikt deze maand', tier: cap.tier, used: cap.used, cap: cap.cap },
+      { status: 429 },
+    );
+  }
 
   const { start, eind } = kwartaalRange(body.jaar, body.kwartaal);
   const { data: ritten } = await sb

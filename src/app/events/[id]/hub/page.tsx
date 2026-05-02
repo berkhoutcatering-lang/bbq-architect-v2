@@ -8,7 +8,7 @@ import {
   Calendar, MessageCircle, Share2, CheckCheck, FileText, UtensilsCrossed,
   Eye, Download, Send, Printer, Receipt, ClipboardList, Truck, ShieldCheck,
   ChefHat, Edit3, Sparkles, Check, Users, Plus, MapPin, Mail, Phone, Navigation,
-  ArrowLeft, AlertTriangle, Flame, Thermometer, Star, Flag, Pencil,
+  ArrowLeft, AlertTriangle, Flame, Thermometer, Star, Flag, Pencil, Car,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
@@ -490,6 +490,16 @@ export default function EventHubPage() {
                 )}
                 <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
                 <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
+                {/* Pillar #1 — één-klik rit-uit-event: stuurt naar Reizen-tab met
+                    prefilled state (datum + adres + event-koppeling). ReizenTab
+                    leest searchParam newRitForEvent en opent RitDialog automatisch. */}
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => router.push(`/financien?tab=reizen&newRitForEvent=${event.id}`)}
+                  aria-label="Rit toevoegen voor dit event"
+                >
+                  <Car size={14} />Rit toevoegen
+                </button>
                 {event.client_email && (
                   <a className="btn btn-ghost btn-sm" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
                 )}

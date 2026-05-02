@@ -41,12 +41,16 @@ export function bedragAftrekbaar(opts: BedragOpts): number {
 }
 
 export function kwartaalRange(jaar: number, kwartaal: 1 | 2 | 3 | 4): { start: string; eind: string } {
-  const startMaand = (kwartaal - 1) * 3;
-  const start = new Date(jaar, startMaand, 1);
-  const eind = new Date(jaar, startMaand + 3, 0);
+  // Bewust géén Date.toISOString() — dat converteert local-midnight naar UTC
+  // en geeft in CEST 1 dag eerder ("2026-04-01T00:00 local" → "2026-03-31T22:00Z" → "2026-03-31").
+  // Belastingdienst-kwartaal is een DATE, geen TIMESTAMP — string-formatting is veiliger.
+  const startMaand = (kwartaal - 1) * 3 + 1; // 1-based maand
+  const eindMaand = startMaand + 2;
+  const eindDag = new Date(Date.UTC(jaar, eindMaand, 0)).getUTCDate(); // dag-0 van volgende = laatste dag van deze
+  const pad = (n: number) => String(n).padStart(2, '0');
   return {
-    start: start.toISOString().slice(0, 10),
-    eind: eind.toISOString().slice(0, 10),
+    start: `${jaar}-${pad(startMaand)}-01`,
+    eind: `${jaar}-${pad(eindMaand)}-${pad(eindDag)}`,
   };
 }
 

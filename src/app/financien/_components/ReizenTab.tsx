@@ -1,5 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Car,
   Plus,
@@ -14,7 +15,7 @@ import { bedragAftrekbaar, kwartaalRange, huidigKwartaal } from '@/lib/ritten-ta
 import { VoertuigDialog } from './VoertuigDialog';
 import { RitDialog } from './RitDialog';
 import { RecapDialog } from './RecapDialog';
-import type { DbVoertuig, DbRit } from '@/types/database.types';
+import type { DbVoertuig, DbRit, DbEvent } from '@/types/database.types';
 
 type Periode = 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'YTD';
 
@@ -28,12 +29,42 @@ function fmtEUR(n: number): string {
 export function ReizenTab() {
   const { data: voertuigen, loading: voertuigenLoading } = useSupabase<DbVoertuig>('voertuigen', []);
   const { data: ritten, loading: rittenLoading } = useSupabase<DbRit>('ritten', []);
+  const { data: events } = useSupabase<DbEvent>('events', []);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [voertuigDialogOpen, setVoertuigDialogOpen] = useState(false);
   const [ritDialogOpen, setRitDialogOpen] = useState(false);
   const [recapDialogOpen, setRecapDialogOpen] = useState(false);
   const [editVoertuig, setEditVoertuig] = useState<DbVoertuig | null>(null);
   const [editRit, setEditRit] = useState<DbRit | null>(null);
+  const [prefilledFromEvent, setPrefilledFromEvent] = useState<{
+    event_id: number;
+    aankomst_adres: string;
+    datum: string;
+  } | null>(null);
+
+  // Pillar #1 — één-klik rit-uit-event. Event-hub stuurt
+  // ?newRitForEvent=<id> hierheen; we openen de dialog met prefill
+  // en strippen de query-param zodat refresh hem niet opnieuw triggert.
+  useEffect(() => {
+    const newRitForEvent = searchParams.get('newRitForEvent');
+    if (!newRitForEvent || events.length === 0 || ritDialogOpen) return;
+    const eventId = Number(newRitForEvent);
+    const ev = events.find((e) => e.id === eventId);
+    if (!ev) return;
+    setPrefilledFromEvent({
+      event_id: eventId,
+      aankomst_adres: ev.location ?? '',
+      datum: ev.date,
+    });
+    setEditRit(null);
+    setRitDialogOpen(true);
+    // Strip param uit URL zodat het niet herhaalt op tab-switch
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('newRitForEvent');
+    router.replace(`/financien?${params.toString()}`, { scroll: false });
+  }, [searchParams, events, ritDialogOpen, router]);
   const [periode, setPeriode] = useState<Periode>(`Q${huidigKwartaal()}` as Periode);
   const [voertuigFilter, setVoertuigFilter] = useState<number | 'alle'>('alle');
   const [typeFilter, setTypeFilter] = useState<'alle' | 'zakelijk' | 'prive'>('alle');
@@ -435,7 +466,11 @@ export function ReizenTab() {
         <RitDialog
           rit={editRit}
           voertuigen={voertuigen}
-          onClose={() => setRitDialogOpen(false)}
+          prefilledFromEvent={prefilledFromEvent ?? undefined}
+          onClose={() => {
+            setRitDialogOpen(false);
+            setPrefilledFromEvent(null); // reset zodat volgende open clean is
+          }}
         />
       )}
       {recapDialogOpen && periode !== 'YTD' && (

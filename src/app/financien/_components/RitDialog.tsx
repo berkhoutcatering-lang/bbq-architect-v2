@@ -249,7 +249,9 @@ export function RitDialog({ rit, voertuigen, onClose, prefilledFromEvent }: Prop
               </p>
             </Field>
           )}
-          {routeOmleiding || zakelijk ? (
+          {/* Route-veld is alleen relevant voor zakelijke ritten — privé hoeft
+              dit niet voor de Belastingdienst. State blijft behouden bij toggle. */}
+          {zakelijk && (
             <Field label="Route (alleen invullen als afwijkend)" className="col-span-2">
               <input
                 value={routeOmleiding}
@@ -259,7 +261,7 @@ export function RitDialog({ rit, voertuigen, onClose, prefilledFromEvent }: Prop
                 style={{ background: 'var(--bg, #fff)' }}
               />
             </Field>
-          ) : null}
+          )}
         </div>
 
         <div

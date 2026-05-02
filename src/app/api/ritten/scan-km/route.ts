@@ -5,11 +5,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
+
+// Hard ceiling tegen DDoS via giant base64 payloads. 5MB raw ≈ 7MB base64.
+// Een normale dashboard-foto is 200-800KB; 5MB dekt zware HEIC ruim.
+const MAX_IMAGE_BASE64_BYTES = 7 * 1024 * 1024;
 
 const KM_SCAN_SYSTEM = `Je leest een foto van een dashboard / kilometerteller van een auto of bestelbus. Geef ALLEEN JSON terug:
 
@@ -64,6 +69,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'imageBase64 verplicht' }, { status: 400 });
   }
 
+  // Size guard — base64-string-length is een goedkope proxy voor payload-omvang.
+  if (imageBase64.length > MAX_IMAGE_BASE64_BYTES) {
+    return NextResponse.json(
+      { error: 'Foto te groot (max ~5MB) — comprimeer of maak een nieuwe foto' },
+      { status: 413 },
+    );
+  }
+
   const sb = await createServerSupabase();
   const {
     data: { user },
@@ -77,6 +90,31 @@ export async function POST(req: NextRequest) {
     .eq('status', 'active')
     .maybeSingle();
   if (!mem) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
+
+  // Rate limit per user — 30 scans/min is ruim voor handmatig invoeren maar
+  // blokkeert script-abuse. Sliding window in-memory (zelfde patroon als chat).
+  const rl = checkRateLimit(`ritten-scan:${user.id}`, 30);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Te veel scans achter elkaar — wacht ${rl.resetInSeconds}s en probeer opnieuw` },
+      { status: 429 },
+    );
+  }
+
+  // Cost-cap per tier — soft 100% throttle, hard 150% block. Voorkomt dat
+  // een vision-loop een tenant-bill exploit creëert.
+  const cap = await checkAiCapServer(mem.organization_id);
+  if (!cap.allowed) {
+    return NextResponse.json(
+      {
+        error: 'AI-limiet voor deze maand bereikt — upgrade abonnement of wacht tot volgende maand',
+        used: cap.used,
+        cap: cap.cap,
+        tier: cap.tier,
+      },
+      { status: 429 },
+    );
+  }
 
   const parsed = parseDataUrl(imageBase64);
   const client = new Anthropic({ apiKey });
