@@ -226,19 +226,24 @@ export default function Sidebar() {
     const [showSecondary, setShowSecondary] = useState(false);
     const [isDesktop, setIsDesktop] = useState(false);
 
+    // Tijdens event-runtime (service of field) krimpt sidebar automatisch zodat
+    // Lars meer schermbreedte heeft op de tablet — tenzij hij hem zelf openzet.
+    const isEventRuntime = pathname.startsWith('/events/') &&
+        (pathname.endsWith('/service') || pathname.endsWith('/field') || pathname.includes('/service/') || pathname.includes('/field/'));
+
     useEffect(() => {
         const check = () => {
             const w = window.innerWidth;
             setIsDesktop(w >= 768);
             // Auto-manage collapsed state based on viewport unless user manually toggled
             if (!userToggledCollapse) {
-                setCollapsed(w >= 768 && w < 1280);
+                setCollapsed(isEventRuntime || (w >= 768 && w < 1280));
             }
         };
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
-    }, [userToggledCollapse]);
+    }, [userToggledCollapse, isEventRuntime]);
 
     const primarySections = navSections.filter(s => !s.secondary);
     const secondarySections = navSections.filter(s => s.secondary);

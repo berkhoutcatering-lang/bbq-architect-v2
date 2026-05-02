@@ -18,6 +18,7 @@ import BottomNav from '@/components/BottomNav';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
+import FAB from '@/components/FAB';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
@@ -225,6 +226,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
           </div>
           <BottomNav />
           <CommandPalette />
+          <FAB />
           <OnboardingWizard />
           <OfflineIndicator />
           <ContextualHelp />

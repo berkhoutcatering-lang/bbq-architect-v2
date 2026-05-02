@@ -135,21 +135,24 @@ export default function CommandPalette() {
                 return;
             }
 
-            // Tweede toets binnen 1500ms = sneltoets
+            // Tweede toets binnen 1500ms = sneltoets (IA 2026-05-02 — task-frequency sidebar)
             if (lastGRef.current && (Date.now() - lastGRef.current) < 1500) {
                 const shortcuts: Record<string, string> = {
-                    h: '/',
-                    p: '/plannen',
-                    v: '/verkoop',
-                    k: '/keuken',
-                    w: '/voorraad',
-                    g: '/geld',
-                    s: '/systeem',
+                    // Top-level sidebar items
+                    h: '/',                  // Home / Vandaag
                     a: '/agenda',
-                    o: '/offertes',
                     e: '/events',
-                    f: '/facturen',
+                    r: '/gerechten',         // Recepten (canonical URL = /gerechten)
+                    f: '/factuur-lezer',
+                    d: '/administratie',     // aDministratie
+                    s: '/systeem',
+                    // Veelgebruikte sub-pages
+                    o: '/offertes',
+                    i: '/facturen',          // Invoices
+                    b: '/financien',         // Boekhouding/finance
+                    u: '/uren',
                     c: '/klanten',
+                    w: '/voorraad',          // Warehouse
                 };
                 const dest = shortcuts[e.key.toLowerCase()];
                 if (dest) {
