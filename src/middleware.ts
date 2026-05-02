@@ -39,10 +39,23 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session (important for SSR)
-  const { data: { user } } = await supabase.auth.getUser();
+  // getUser() valideert tegen de Auth-server (netwerkcall). Bij wifi-loss willen
+  // we niet uitloggen — val terug op getSession() zodat een geldige cookie-sessie
+  // (en dus een actief offline-event) blijft werken tot de cookie echt verloopt.
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      user = sessionData.session?.user ?? null;
+    } else {
+      user = data.user;
+    }
+  } catch {
+    const { data: sessionData } = await supabase.auth.getSession();
+    user = sessionData.session?.user ?? null;
+  }
 
-  // Redirect to login if not authenticated
   if (!user) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);

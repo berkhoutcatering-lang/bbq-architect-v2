@@ -67,12 +67,35 @@ async function handleGetEventDetail(sb: SupabaseClient, params: Record<string, a
     const { data, error } = await sb.from('events').select('*').eq('id', params.event_id).single();
     if (error) throw new Error(error.message);
     if (!data) return { error: 'Event niet gevonden' };
+    /* event.menu kan menu_selectie-object of legacy id-array zijn — beide
+       vormen handelen, recepten samengevouwen onder gerechten 2026-05-01. */
     let menuRecepten: any[] = [];
-    if (data.menu && data.menu.length > 0) {
-        const { data: recepten } = await sb.from('recepten').select('*').in('naam', data.menu);
-        menuRecepten = recepten || [];
+    const dishNames: string[] = collectDishNames(data.menu);
+    const menuIdsLegacy: number[] = Array.isArray(data.menu) ? data.menu.filter((v: unknown) => typeof v === 'number') : [];
+    if (dishNames.length > 0 || menuIdsLegacy.length > 0) {
+        let q = sb.from('gerechten').select('*');
+        if (dishNames.length > 0 && menuIdsLegacy.length === 0) q = q.in('naam', dishNames);
+        else if (menuIdsLegacy.length > 0 && dishNames.length === 0) q = q.in('id', menuIdsLegacy);
+        else q = q.or('id.in.(' + menuIdsLegacy.join(',') + '),naam.in.(' + dishNames.map(n => '"' + n + '"').join(',') + ')');
+        const { data: gerechten } = await q;
+        menuRecepten = gerechten || [];
     }
     return { event: data, menu_recepten: menuRecepten };
+}
+
+/* Helper: extract dish-namen uit zowel menu_selectie-object als id-array. */
+function collectDishNames(rawMenu: unknown): string[] {
+    const names: string[] = [];
+    if (Array.isArray(rawMenu)) {
+        rawMenu.forEach((v: unknown) => { if (typeof v === 'string') names.push(v); });
+    } else if (rawMenu && typeof rawMenu === 'object') {
+        Object.values(rawMenu as Record<string, unknown>).forEach((list: unknown) => {
+            if (Array.isArray(list)) list.forEach(item => {
+                if (typeof item === 'string') names.push(item);
+            });
+        });
+    }
+    return names;
 }
 
 async function handleCreateEvent(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
@@ -110,11 +133,15 @@ async function handleGeneratePrepList(sb: SupabaseClient, params: Record<string,
     }
     if (!eventData) return { error: 'Geen aankomend event gevonden. Voeg eerst een event toe.' };
 
-    const menuIds: string[] = Array.isArray(eventData.menu) ? eventData.menu : [];
+    const dishNames = collectDishNames(eventData.menu);
     let recepten: any[] = [];
-    if (menuIds.length > 0) {
-        const { data: receptenData } = await sb.from('recepten').select('*').in('naam', menuIds);
-        recepten = receptenData || [];
+    if (dishNames.length > 0) {
+        const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,ingredienten,bereidingswijze,allergenen,kostprijs_pp').in('naam', dishNames);
+        recepten = (gerechten || []).map((d: any) => ({
+            ...d,
+            categorie: d.gang_slug,
+            preptime: d.target_prep_time ? Math.round(d.target_prep_time / 60) : null,
+        }));
     }
 
     const eventDate = new Date(eventData.date);
@@ -437,17 +464,33 @@ async function handleAnalyzeMenuBalance(sb: SupabaseClient): Promise<Record<stri
 }
 
 async function handleGetRecepten(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
-    let query = sb.from('recepten').select('*').order('naam');
-    if (params.categorie) query = query.eq('categorie', params.categorie);
+    /* recepten samengevouwen onder gerechten 2026-05-01. Param `categorie`
+       map'en op `gang_slug` zodat oude AI-tool-calls blijven werken. */
+    let query = sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,ingredienten,bereidingswijze,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
+    if (params.categorie) query = query.eq('gang_slug', params.categorie);
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-    return { recepten: data || [], count: (data || []).length };
+    const mapped = (data || []).map((d: any) => ({
+        ...d,
+        categorie: d.gang_slug,
+        preptime: d.target_prep_time ? Math.round(d.target_prep_time / 60) : null,
+        instructies: d.bereidingswijze,
+    }));
+    return { recepten: mapped, count: mapped.length };
 }
 
 async function handleGetReceptDetail(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
-    const { data, error } = await sb.from('recepten').select('*').eq('id', params.recept_id).single();
+    const { data, error } = await sb.from('gerechten').select('*').eq('id', params.recept_id).single();
     if (error) throw new Error(error.message);
-    return { recept: data };
+    if (!data) return { recept: null };
+    return {
+        recept: {
+            ...data,
+            categorie: data.gang_slug,
+            preptime: data.target_prep_time ? Math.round(data.target_prep_time / 60) : null,
+            instructies: data.bereidingswijze,
+        },
+    };
 }
 
 async function handlePlanEventFull(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
@@ -529,26 +572,34 @@ async function handleEngineerMenuProfitability(sb: SupabaseClient, params: Recor
 }
 
 async function handleCreateRecept(sb: SupabaseClient, params: Record<string, any>, orgId?: string | null): Promise<Record<string, any>> {
-    const { data, error } = await sb.from('recepten').insert([{
+    /* Recept = gerecht sinds 2026-05-01. Map velden van AI-tool naar gerechten:
+       categorie → gang_slug, instructies → bereidingswijze, preptime → seconden.
+       Status-systeem (migratie 016): AI-creaties komen binnen als 'concept' met
+       bron='ai' zodat ze in /gerechten visueel onderscheidbaar zijn (diagonal
+       stripe + ✦ AI pill) en niet direct in de offerte-wizard verschijnen. */
+    const { data, error } = await sb.from('gerechten').insert([{
         naam: params.naam,
-        categorie: params.categorie,
+        gang_slug: params.categorie || 'hoofdgerechten',
         porties: params.porties || 4,
-        preptime: params.preptime || 30,
+        target_prep_time: (params.preptime || 30) * 60,
         ingredienten: params.ingredienten || [],
-        instructies: params.instructies || '',
-        notitie: params.notitie || '',
+        bereidingswijze: params.instructies || '',
         organization_id: orgId,
+        status: 'concept',
+        bron: 'ai',
     }]).select().single();
     if (error) throw new Error(error.message);
-    return { created: data, message: 'Recept "' + params.naam + '" toegevoegd aan The Vault' };
+    return { created: data, message: 'Gerecht "' + params.naam + '" als concept opgeslagen — review en activeer in /gerechten' };
 }
 
 async function handleUpdateRecept(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
     const update: Record<string, any> = {};
-    ['naam', 'instructies', 'porties', 'preptime', 'ingredienten', 'notitie'].forEach((k) => {
-        if (params[k] !== undefined) update[k] = params[k];
-    });
-    const { error } = await sb.from('recepten').update(update).eq('id', params.recept_id);
+    if (params.naam !== undefined) update.naam = params.naam;
+    if (params.instructies !== undefined) update.bereidingswijze = params.instructies;
+    if (params.porties !== undefined) update.porties = params.porties;
+    if (params.preptime !== undefined) update.target_prep_time = params.preptime * 60;
+    if (params.ingredienten !== undefined) update.ingredienten = params.ingredienten;
+    const { error } = await sb.from('gerechten').update(update).eq('id', params.recept_id);
     if (error) throw new Error(error.message);
     return { updated: true, recept_id: params.recept_id };
 }
@@ -556,13 +607,13 @@ async function handleUpdateRecept(sb: SupabaseClient, params: Record<string, any
 async function handleCalcPortiesVoor(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
     let recept: any = null;
     if (params.recept_id) {
-        const { data } = await sb.from('recepten').select('*').eq('id', params.recept_id).single();
+        const { data } = await sb.from('gerechten').select('*').eq('id', params.recept_id).single();
         recept = data;
     } else if (params.recept_naam) {
-        const { data } = await sb.from('recepten').select('*').ilike('naam', '%' + params.recept_naam + '%').limit(1);
+        const { data } = await sb.from('gerechten').select('*').ilike('naam', '%' + params.recept_naam + '%').limit(1);
         if (data && data.length > 0) recept = data[0];
     }
-    if (!recept) return { error: 'Recept niet gevonden' };
+    if (!recept) return { error: 'Gerecht niet gevonden' };
     const factor = Math.ceil(params.gasten / (recept.porties || 4));
     return {
         recept: recept.naam,
@@ -1081,11 +1132,10 @@ async function handleFilterSystemData(sb: SupabaseClient, params: Record<string,
     const criteria = params.criteria;
     let items: any[] = [];
 
-    if (module === 'gerechten') {
+    if (module === 'gerechten' || module === 'recepten') {
+        /* recepten samengevouwen onder gerechten 2026-05-01 — beide aliasen
+           gaan naar dezelfde tabel. */
         const { data } = await sb.from('gerechten').select('id,naam,gang_slug,beschrijving,ingredienten,tags');
-        items = data || [];
-    } else if (module === 'recepten') {
-        const { data } = await sb.from('recepten').select('id,naam,categorie,ingredienten');
         items = data || [];
     }
 

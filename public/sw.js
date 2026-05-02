@@ -1,7 +1,7 @@
 // ─── BBQ Architect Service Worker ─────────────────────────────────────────────
 // Offline support, background sync for HACCP records, push notifications
 
-const CACHE_VERSION = 'bbq-v1';
+const CACHE_VERSION = 'bbq-v2';
 const STATIC_CACHE = 'bbq-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'bbq-dynamic-' + CACHE_VERSION;
 const HACCP_STORE = 'haccp-offline-queue';
@@ -10,6 +10,8 @@ const OFFLINE_URL = '/offline.html';
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
   '/',
+  '/login',
+  '/welkom',
   '/offline.html',
   '/manifest.json',
   '/icons/icon-192.svg',

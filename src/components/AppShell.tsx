@@ -6,8 +6,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { useOrg } from '@/lib/OrgContext';
 import { AppProvider } from '@/lib/AppContext';
 import Sidebar from '@/components/Sidebar';
-import AiAssistant from '@/components/AiAssistant';
 import AiStudioOverlay from '@/components/AiStudioOverlay';
+import ChatPanel from '@/components/ai/ChatPanel';
 import { AiStudioProvider } from '@/lib/AiStudioContext';
 import { ActiveResourceProvider } from '@/lib/ActiveResourceContext';
 import ActiveResourcePill from '@/components/ActiveResourcePill';
@@ -18,6 +18,7 @@ import BottomNav from '@/components/BottomNav';
 import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
+import FAB from '@/components/FAB';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
@@ -25,6 +26,11 @@ import type { ReactNode } from 'react';
 
 const AUTH_PAGES = ['/login', '/signup', '/auth/'];
 const PUBLIC_PAGES = ['/q/', '/invite'];
+
+// KDS Service Mode = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
+function isKdsPage(pathname: string): boolean {
+  return /^\/events\/[^/]+\/service(\/.*)?$/.test(pathname);
+}
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -40,6 +46,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Public pages (quote view) — no sidebar, no auth needed
   const isPublicPage = PUBLIC_PAGES.some(function (p) { return pathname.startsWith(p); });
   if (isPublicPage) {
+    return <>{children}</>;
+  }
+
+  // KDS Service Mode — fullscreen kookbord, geen app-shell chrome
+  if (isKdsPage(pathname)) {
     return <>{children}</>;
   }
 
@@ -210,11 +221,12 @@ function AppShellInner({ children }: { children: ReactNode }) {
                 {children}
               </div>
             </main>
-            <AiAssistant />
+            <ChatPanel />
             <AiStudioOverlay />
           </div>
           <BottomNav />
           <CommandPalette />
+          <FAB />
           <OnboardingWizard />
           <OfflineIndicator />
           <ContextualHelp />
@@ -223,3 +235,4 @@ function AppShellInner({ children }: { children: ReactNode }) {
     </ErrorBoundaryLogger>
   );
 }
+

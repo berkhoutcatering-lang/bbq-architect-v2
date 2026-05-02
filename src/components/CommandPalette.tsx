@@ -7,8 +7,9 @@ import {
     Search, Calendar, FileText, Receipt, Package, ChefHat, BookOpen,
     Users, Euro, ArrowRight, Flame, Sparkles, ShoppingCart, Truck, Wrench, Clock,
     ShieldCheck, DollarSign, Settings, Globe, HelpCircle, Mail, Camera,
-    Building2, MessageSquare, ClipboardList, Bell, Map
+    Building2, MessageSquare, ClipboardList, Map, UtensilsCrossed, Bot
 } from 'lucide-react';
+import PaletteAiInput from '@/components/ai/PaletteAiInput';
 
 interface SearchResult {
     id: string;
@@ -41,7 +42,6 @@ const pages: SearchResult[] = [
     { id: 'p_events', type: 'pagina', title: 'Events', subtitle: 'Plannen & Events', href: '/events', icon: Calendar, accent: HUB_ACCENT.plannen },
     { id: 'p_klantgesprek', type: 'pagina', title: 'Klantgesprek', subtitle: 'Plannen & Events', href: '/klantgesprek', icon: MessageSquare, accent: HUB_ACCENT.plannen },
     { id: 'p_prep', type: 'pagina', title: 'Prep Counter', subtitle: 'Plannen & Events', href: '/prep-counter', icon: ClipboardList, accent: HUB_ACCENT.plannen },
-    { id: 'p_service', type: 'pagina', title: 'Service', subtitle: 'Plannen & Events', href: '/service', icon: Bell, accent: HUB_ACCENT.plannen },
     { id: 'p_haccp_plannen', type: 'pagina', title: 'HACCP', subtitle: 'Plannen & Events', href: '/haccp', icon: ShieldCheck, accent: HUB_ACCENT.plannen },
 
     /* Verkoop & Klanten */
@@ -54,11 +54,11 @@ const pages: SearchResult[] = [
     { id: 'p_uren', type: 'pagina', title: 'Uren', subtitle: 'Geld & Boekhouding', href: '/uren', icon: Clock, accent: HUB_ACCENT.geld },
     { id: 'p_boekhouding', type: 'pagina', title: 'Boekhouding (alias)', subtitle: 'Geld & Boekhouding', href: '/financien?tab=wv', icon: Euro, accent: HUB_ACCENT.geld },
 
-    /* Menu & Recepten */
-    { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Menu & Recepten', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
-    { id: 'p_menu_eng', type: 'pagina', title: 'Menu-analyse', subtitle: 'Menu & Recepten', href: '/menu-engineering', icon: ChefHat, accent: HUB_ACCENT.keuken },
-    { id: 'p_recepten', type: 'pagina', title: 'Recepten', subtitle: 'Menu & Recepten', href: '/recepten', icon: BookOpen, accent: HUB_ACCENT.keuken },
-    { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Menu & Recepten · AI', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
+    /* Keuken */
+    { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Keuken', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
+    { id: 'p_menus', type: 'pagina', title: 'Menu\u2019s', subtitle: 'Keuken \u00b7 opgeslagen menu-templates', href: '/gerechten?view=menus', icon: UtensilsCrossed, accent: HUB_ACCENT.keuken },
+    { id: 'p_marges', type: 'pagina', title: 'Marges & analyse', subtitle: 'Keuken \u00b7 BCG en foodcost', href: '/marges', icon: Sparkles, accent: HUB_ACCENT.keuken },
+    { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Keuken \u00b7 AI chat (power)', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
 
     /* Voorraad & Beheer */
     { id: 'p_voorraad', type: 'pagina', title: 'Voorraad', subtitle: 'Voorraad & Beheer', href: '/voorraad', icon: Package, accent: HUB_ACCENT.voorraad },
@@ -99,6 +99,7 @@ const typeConfig: Record<string, { icon: typeof Calendar; accent: string; label:
 
 export default function CommandPalette() {
     const [open, setOpen] = useState(false);
+    const [mode, setMode] = useState<'search' | 'ask'>('search');
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -107,24 +108,72 @@ export default function CommandPalette() {
     const router = useRouter();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    /* G-prefix sneltoetsen (Linear-stijl): druk 'g' dan een letter om naar een hub te springen.
+       G H = Vandaag, G P = Plannen, G V = Verkoop, G K = Keuken, G W = Voorraad,
+       G G = Geld, G S = Systeem, G A = Agenda, G O = Offertes, G E = Events,
+       G F = Facturen, G C = Klanten. Skip wanneer gebruiker typt in een input. */
+    const lastGRef = useRef<number>(0);
+    const openRef = useRef<boolean>(false);
+    useEffect(function () { openRef.current = open; }, [open]);
+
     useEffect(function () {
         function handleKeyDown(e: KeyboardEvent) {
+            // ⌘K / Ctrl+K: toggle palette
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
                 setOpen(function (prev) { return !prev; });
+                return;
             }
-            if (e.key === 'Escape') setOpen(false);
+            if (e.key === 'Escape') { setOpen(false); return; }
+
+            // Skip sneltoetsen wanneer in input/textarea/contenteditable of palette open
+            const target = e.target as HTMLElement | null;
+            const isTyping = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+            if (isTyping || openRef.current) return;
+
+            // Eerste 'g' zet de prefix-timer
+            if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+                lastGRef.current = Date.now();
+                return;
+            }
+
+            // Tweede toets binnen 1500ms = sneltoets (IA 2026-05-02 — task-frequency sidebar)
+            if (lastGRef.current && (Date.now() - lastGRef.current) < 1500) {
+                const shortcuts: Record<string, string> = {
+                    // Top-level sidebar items
+                    h: '/',                  // Home / Vandaag
+                    a: '/agenda',
+                    e: '/events',
+                    r: '/gerechten',         // Recepten (canonical URL = /gerechten)
+                    f: '/factuur-lezer',
+                    d: '/administratie',     // aDministratie
+                    s: '/systeem',
+                    // Veelgebruikte sub-pages
+                    o: '/offertes',
+                    i: '/facturen',          // Invoices
+                    b: '/financien',         // Boekhouding/finance
+                    u: '/uren',
+                    c: '/klanten',
+                    w: '/voorraad',          // Warehouse
+                };
+                const dest = shortcuts[e.key.toLowerCase()];
+                if (dest) {
+                    e.preventDefault();
+                    router.push(dest);
+                    lastGRef.current = 0;
+                }
+            }
         }
         window.addEventListener('keydown', handleKeyDown);
         return function () { window.removeEventListener('keydown', handleKeyDown); };
-    }, []);
+    }, [router]);
 
     useEffect(function () {
-        if (open && inputRef.current) {
+        if (open && inputRef.current && mode === 'search') {
             setTimeout(function () { inputRef.current?.focus(); }, 50);
         }
-        if (!open) { setQuery(''); setResults([]); setSelectedIndex(0); }
-    }, [open]);
+        if (!open) { setQuery(''); setResults([]); setSelectedIndex(0); setMode('search'); }
+    }, [open, mode]);
 
     const searchData = useCallback(async function (q: string) {
         if (!q || q.length < 2) {
@@ -137,12 +186,12 @@ export default function CommandPalette() {
         const term = '%' + q + '%';
 
         try {
-            const [evRes, offRes, facRes, recRes, gerRes, invRes, klRes] = await Promise.all([
+            /* recepten samengevouwen onder gerechten 2026-05-01 — één zoek-bron. */
+            const [evRes, offRes, facRes, gerRes, invRes, klRes] = await Promise.all([
                 supabase.from('events').select('id,name,date,guests,location,status,client_naam').or('name.ilike.' + term + ',client_naam.ilike.' + term + ',location.ilike.' + term).limit(5),
                 supabase.from('offertes').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term + ',notitie.ilike.' + term).limit(5),
                 supabase.from('facturen').select('id,nummer,client_naam,datum,status').or('client_naam.ilike.' + term + ',nummer.ilike.' + term).limit(5),
-                supabase.from('recepten').select('id,naam,categorie').ilike('naam', term).limit(5),
-                supabase.from('gerechten').select('id,naam,categorie').ilike('naam', term).limit(5),
+                supabase.from('gerechten').select('id,naam,gang_slug').ilike('naam', term).limit(8),
                 supabase.from('inventory').select('id,naam,categorie,current_stock,unit').ilike('naam', term).limit(5),
                 supabase.from('klanten').select('id,naam,bedrijf,type,plaats').or('naam.ilike.' + term + ',bedrijf.ilike.' + term + ',plaats.ilike.' + term).limit(5),
             ]);
@@ -185,24 +234,12 @@ export default function CommandPalette() {
                 });
             });
 
-            (recRes.data || []).forEach(function (r: any) {
-                items.push({
-                    id: 'rec_' + r.id,
-                    type: 'recept',
-                    title: r.naam,
-                    subtitle: r.categorie || 'Recept',
-                    href: '/recepten',
-                    icon: BookOpen,
-                    accent: '#8b5cf6',
-                });
-            });
-
             (gerRes.data || []).forEach(function (g: any) {
                 items.push({
                     id: 'ger_' + g.id,
                     type: 'gerecht',
                     title: g.naam,
-                    subtitle: g.categorie || 'Gerecht',
+                    subtitle: g.gang_slug || 'Gerecht',
                     href: '/gerechten',
                     icon: ChefHat,
                     accent: '#8b5cf6',
@@ -268,6 +305,11 @@ export default function CommandPalette() {
         } else if (e.key === 'Enter' && results[selectedIndex]) {
             e.preventDefault();
             handleSelect(results[selectedIndex]);
+        } else if (e.key === 'Tab') {
+            // Tab schakelt naar Vraag-Rook-mode. Huidige query wordt
+            // doorgegeven zodat de gebruiker niet hoeft over te typen.
+            e.preventDefault();
+            setMode('ask');
         }
     }
 
@@ -304,6 +346,14 @@ export default function CommandPalette() {
                     animation: 'cmdFadeIn 0.15s ease',
                 }}
             >
+                {mode === 'ask' ? (
+                    <PaletteAiInput
+                        initialQuery={query}
+                        onClose={function () { setOpen(false); }}
+                        onSwitchToSearch={function () { setMode('search'); }}
+                    />
+                ) : (
+                <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
                     <Search size={18} style={{ color: 'var(--muted)', flexShrink: 0 }} />
                     <input
@@ -414,14 +464,42 @@ export default function CommandPalette() {
                     padding: '8px 18px',
                     borderTop: '1px solid var(--border)',
                     display: 'flex',
-                    gap: 16,
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
                     fontSize: 10,
                     color: 'var(--color-text-muted)',
                 }}>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
-                    <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
+                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={function () { setMode('ask'); }}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 10px',
+                            background: 'var(--brand-tint-subtle)',
+                            border: '1px solid var(--brand-tint-border)',
+                            borderRadius: 'var(--radius-full)',
+                            color: 'var(--brand)',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                        }}
+                        aria-label="Schakel naar Vraag Rook modus"
+                    >
+                        <Bot size={11} aria-hidden="true" />
+                        Vraag Rook
+                        <kbd style={{ padding: '0 4px', borderRadius: 3, background: 'var(--card-solid)', border: '1px solid var(--brand-tint-border)', fontFamily: 'monospace', fontSize: 9, color: 'var(--brand)' }}>Tab</kbd>
+                    </button>
                 </div>
+                </>
+                )}
             </div>
 
             <style>{`

@@ -17,6 +17,19 @@ interface WizardResult {
     client_adres: string;
     datum: string;
     items: Array<{ desc: string; qty: number; prijs: number; btw: number }>;
+    /* Alleen aanwezig in mode === 'template' — caller persisteert ze in menu_templates. */
+    template_naam?: string;
+    template_beschrijving?: string;
+    template_id?: number;
+}
+
+export interface MenuTemplateInput {
+    id?: number;
+    naam: string;
+    beschrijving?: string;
+    menu_selectie: Record<string, string[]>;
+    basis_prijs_pp?: number;
+    aantal_gasten?: number;
 }
 
 interface MenuWizardProps {
@@ -24,6 +37,10 @@ interface MenuWizardProps {
     onClose: () => void;
     settings?: Partial<Settings> | null;
     existingOfferte?: Record<string, any> | null;
+    /* 'offerte' = klantgegevens + prijs (default, bestaande gedrag).
+       'template' = naam + beschrijving voor herbruikbaar menu, geen klant. */
+    mode?: 'template' | 'offerte';
+    existingTemplate?: MenuTemplateInput | null;
 }
 
 interface GangRow {
@@ -48,28 +65,47 @@ interface DishRow {
     foto_url?: string;
 }
 
-export default function MenuWizard({ onComplete, onClose, settings, existingOfferte }: MenuWizardProps) {
+export default function MenuWizard({ onComplete, onClose, settings, existingOfferte, mode = 'offerte', existingTemplate }: MenuWizardProps) {
+    const isTemplateMode = mode === 'template';
     const ex = existingOfferte || {};
-    const existingMenu: Record<string, string[]> = ex.menu_selectie ? (typeof ex.menu_selectie === 'string' ? JSON.parse(ex.menu_selectie) : ex.menu_selectie) : {};
+    /* Prefill: in template-mode komt menu_selectie + prijs uit existingTemplate;
+       in offerte-mode (default) komt 't uit existingOfferte zoals voorheen. */
+    const seed = isTemplateMode && existingTemplate ? existingTemplate : ex;
+    const seedMenu: unknown = (seed as Record<string, unknown>).menu_selectie;
+    const existingMenu: Record<string, string[]> = seedMenu
+        ? (typeof seedMenu === 'string' ? JSON.parse(seedMenu) : (seedMenu as Record<string, string[]>))
+        : {};
 
     const [gangen, setGangen] = useState<GangRow[]>([]);
     const [gerechten, setGerechten] = useState<DishRow[]>([]);
     const [step, setStep] = useState(0);
     const [selected, setSelected] = useState<Record<string, string[]>>(existingMenu);
-    const [aantalGasten, setAantalGasten] = useState(ex.aantal_gasten || 40);
+    const [aantalGasten, setAantalGasten] = useState(ex.aantal_gasten || existingTemplate?.aantal_gasten || 40);
     const [aantalVega, setAantalVega] = useState(ex.aantal_vega || 0);
-    const [basisPrijs, setBasisPrijs] = useState(ex.basis_prijs_pp || 38.50);
+    const [basisPrijs, setBasisPrijs] = useState(ex.basis_prijs_pp || existingTemplate?.basis_prijs_pp || 38.50);
     const [korting, setKorting] = useState(ex.korting || 0);
     const [clientNaam, setClientNaam] = useState(ex.client_naam || '');
     const [clientAdres, setClientAdres] = useState(ex.client_adres || '');
     const [datum, setDatum] = useState(ex.datum || new Date().toISOString().split('T')[0]);
+    const [templateNaam, setTemplateNaam] = useState(existingTemplate?.naam || '');
+    const [templateBeschrijving, setTemplateBeschrijving] = useState(existingTemplate?.beschrijving || '');
     const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
     const [editingDish, setEditingDish] = useState<DishRow | null>(null);
 
     function refreshGerechten() {
         if (!supabase) return;
-        supabase.from('gerechten').select('*').eq('actief', true).order('volgorde').then(function (res) {
-            if (res.data) setGerechten(res.data as DishRow[]);
+        /* Wizard toont alleen klant-klare gerechten — concepten en
+           review_nodig blijven verstopt tot ze geactiveerd zijn. Status is de
+           single source of truth (migratie 016); we filteren hier in JS zodat
+           pre-migratie omgevingen ook werken (status undefined → val terug op
+           legacy `actief`-vlag). */
+        supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
+            const rows = ((res.data as DishRow[]) || []).filter(g => {
+                const status = (g as unknown as Record<string, unknown>).status;
+                if (typeof status === 'string') return status === 'actief';
+                return (g as unknown as Record<string, unknown>).actief !== false;
+            });
+            setGerechten(rows);
         });
     }
 
@@ -93,8 +129,14 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
         supabase.from('gangen').select('*').eq('actief', true).order('volgorde').then(function (res) {
             if (res.data) setGangen(res.data as GangRow[]);
         });
-        supabase.from('gerechten').select('*').eq('actief', true).order('volgorde').then(function (res) {
-            if (res.data) setGerechten(res.data as DishRow[]);
+        /* Initial load gebruikt dezelfde status-filter als refreshGerechten. */
+        supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
+            const rows = ((res.data as DishRow[]) || []).filter(g => {
+                const status = (g as unknown as Record<string, unknown>).status;
+                if (typeof status === 'string') return status === 'actief';
+                return (g as unknown as Record<string, unknown>).actief !== false;
+            });
+            setGerechten(rows);
         });
     }, []);
 
@@ -116,7 +158,10 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
     }
 
     function canGoNext(): boolean {
-        if (isOverview) return clientNaam.trim() !== '' && aantalGasten > 0;
+        if (isOverview) {
+            if (isTemplateMode) return templateNaam.trim() !== '';
+            return clientNaam.trim() !== '' && aantalGasten > 0;
+        }
         if (!currentGang) return false;
         const count = (selected[currentGang.slug] || []).length;
         return count >= currentGang.minimum;
@@ -143,6 +188,26 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
     }
 
     function handleComplete() {
+        /* Template-mode: geen offerte-items, alleen menu + naam + beschrijving.
+           Caller (op /gerechten) persisteert 't naar menu_templates. */
+        if (isTemplateMode) {
+            onComplete({
+                menu_selectie: selected,
+                aantal_gasten: aantalGasten,
+                aantal_vega: aantalVega,
+                basis_prijs_pp: basisPrijs,
+                korting: 0,
+                client_naam: '',
+                client_adres: '',
+                datum: '',
+                items: [],
+                template_naam: templateNaam.trim(),
+                template_beschrijving: templateBeschrijving.trim() || undefined,
+                template_id: existingTemplate?.id,
+            });
+            return;
+        }
+
         const prices = calcTotal();
         const aantalNormaal = aantalGasten - aantalVega;
         const defaultBtw = (settings && settings.default_btw) || 9;
@@ -285,7 +350,7 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                     </div>
                 ) : (
                     <div>
-                        <h3 style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, marginBottom: 20 }}>Overzicht & Definitief</h3>
+                        <h3 style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, marginBottom: 20 }}>{isTemplateMode ? 'Menu opslaan' : 'Overzicht & Definitief'}</h3>
                         <div style={{ marginBottom: 20 }}>
                             {gangen.map(function (g) {
                                 const sel = selected[g.slug] || [];
@@ -299,6 +364,20 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                                 );
                             })}
                         </div>
+                        {isTemplateMode ? (
+                            <div className="form-grid" style={{ marginBottom: 16 }}>
+                                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Naam menu *</label>
+                                    <input value={templateNaam} onChange={function (e) { setTemplateNaam(e.target.value); }} placeholder="bv. Zomers BBQ 4 gangen, Bruiloft Signature, Zakenlunch" autoFocus />
+                                </div>
+                                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Beschrijving</label>
+                                    <input value={templateBeschrijving} onChange={function (e) { setTemplateBeschrijving(e.target.value); }} placeholder="Korte omschrijving (optioneel)" />
+                                </div>
+                                <div className="field"><label>Basisprijs p.p. ({'\u20ac'})</label><input type="number" step="0.50" value={basisPrijs} onChange={function (e) { setBasisPrijs(parseFloat(e.target.value) || 0); }} /></div>
+                                <div className="field"><label>Referentie gasten</label><input type="number" value={aantalGasten} onChange={function (e) { setAantalGasten(parseInt(e.target.value) || 0); }} /></div>
+                            </div>
+                        ) : (
                         <div className="form-grid" style={{ marginBottom: 16 }}>
                             <div className="field"><label>Klantnaam</label><input value={clientNaam} onChange={function (e) { setClientNaam(e.target.value); }} placeholder="Naam klant" /></div>
                             <div className="field"><label>Klantadres</label><input value={clientAdres} onChange={function (e) { setClientAdres(e.target.value); }} placeholder="Adres" /></div>
@@ -307,6 +386,8 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                             <div className="field"><label>Totaal Gasten</label><input type="number" value={aantalGasten} onChange={function (e) { setAantalGasten(parseInt(e.target.value) || 0); }} /></div>
                             <div className="field"><label>Waarvan Vega</label><input type="number" value={aantalVega} onChange={function (e) { setAantalVega(Math.min(parseInt(e.target.value) || 0, aantalGasten)); }} /></div>
                         </div>
+                        )}
+                        {!isTemplateMode && (<>
                         <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                             <div style={{ flex: 1, padding: '10px 14px', background: 'rgba(180,140,20,.08)', border: '1px solid rgba(180,140,20,.15)', borderRadius: 10, textAlign: 'center' as const }}>
                                 <div style={{ fontSize: 22, fontWeight: 700, color: '#B48C14' }}>{'\ud83c\udf56'} {aantalGasten - aantalVega}</div>
@@ -348,6 +429,7 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                                 </div>
                             );
                         })()}
+                        </>)}
                     </div>
                 )}
 
@@ -357,7 +439,7 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                     </button>
                     {isOverview ? (
                         <button className="btn btn-brand" onClick={handleComplete} disabled={!canGoNext()} style={{ flex: 1, marginLeft: 8, justifyContent: 'center', opacity: canGoNext() ? 1 : 0.5 }}>
-                            {'\ud83d\udd12'} Maak Definitief
+                            {isTemplateMode ? '\ud83d\udcbe Menu opslaan' : '\ud83d\udd12 Maak Definitief'}
                         </button>
                     ) : (
                         <button className="btn btn-brand" onClick={goNext} disabled={!canGoNext()} style={{ flex: 1, marginLeft: 8, justifyContent: 'center', opacity: canGoNext() ? 1 : 0.5 }}>

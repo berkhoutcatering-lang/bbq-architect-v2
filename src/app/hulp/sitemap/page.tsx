@@ -22,7 +22,6 @@ const ROUTES: SitemapRoute[] = [
   { href: '/events', label: 'Events', desc: 'Lijst en detail van alle events', hub: 'Plannen' },
   { href: '/klantgesprek', label: 'Klantgesprek', desc: 'Intake-gesprek met AI-ondersteuning', hub: 'Plannen' },
   { href: '/prep-counter', label: 'Prep Counter', desc: 'Mise-en-place planner met sticker-gen', hub: 'Plannen' },
-  { href: '/service', label: 'Service', desc: 'Live service-runtime tijdens event', hub: 'Plannen' },
 
   // Verkoop
   { href: '/offertes', label: 'Offertes', desc: 'Offerte-overzicht + AI-wizard', hub: 'Verkoop' },
@@ -31,8 +30,8 @@ const ROUTES: SitemapRoute[] = [
 
   // Keuken
   { href: '/gerechten', label: 'Gerechten', desc: 'Catalog: gerechten met kostprijzen', hub: 'Keuken' },
-  { href: '/menu-engineering', label: 'Menu-analyse', desc: 'BCG-analyse op marges en populariteit', hub: 'Keuken' },
-  { href: '/recepten', label: 'Recepten', desc: 'Receptenbibliotheek', hub: 'Keuken' },
+  { href: '/marges', label: 'Marges & analyse', desc: 'BCG-matrix op marges en populariteit', hub: 'Keuken' },
+  { href: '/gerechten?view=menus', label: 'Menu\u2019s', desc: 'Opgeslagen menu-templates voor offertes', hub: 'Keuken' },
   { href: '/ai-chat', label: 'AI Pitmaster', desc: 'AI-chat voor brainstorm en Q&A', hub: 'Keuken' },
   { href: '/foto-archief', label: 'Foto-archief', desc: 'Beheer fotos en media', hub: 'Keuken' },
 

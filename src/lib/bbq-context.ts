@@ -45,8 +45,9 @@ function calcOfferteTotaal(o: OfferteContext): number {
 async function loadEventsContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
     const today = new Date().toISOString().slice(0, 10);
     const { data: events } = await sb.from('events').select('*').gte('date', today).order('date').limit(10);
-    const { data: recepten } = await sb.from('recepten').select('id,naam,categorie,porties,preptime').limit(50);
-    return { events: events || [], recepten: recepten || [] };
+    /* recepten samengevouwen onder gerechten 2026-05-01. */
+    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time').limit(50);
+    return { events: events || [], gerechten: gerechten || [] };
 }
 
 async function loadAgendaContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
@@ -95,9 +96,12 @@ async function loadGerechtenContext(sb: SupabaseClient): Promise<Record<string, 
 }
 
 async function loadReceptenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: recepten } = await sb.from('recepten').select('*').order('naam');
+    /* /recepten leeft nu onder /gerechten — receptuur (bereidingswijze, porties,
+       wijn-suggestie) zit op de gerecht-rij. Alias-key 'recepten' behouden zodat
+       AI-prompts die om recepten vragen niet breken. */
+    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,bereidingswijze,ingredienten,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
     const { data: inventory } = await sb.from('inventory').select('id,naam,hoeveelheid,unit,min_par,purchase_price').order('naam');
-    return { recepten: recepten || [], inventory: inventory || [] };
+    return { recepten: gerechten || [], inventory: inventory || [] };
 }
 
 async function loadVoorraadContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
@@ -188,12 +192,12 @@ export async function loadPageContext(pathname: string): Promise<Record<string, 
         if (pathname.startsWith('/voorraad')) return await loadVoorraadContext(sb);
         if (pathname.startsWith('/inkoop')) return await loadInkoopContext(sb);
         if (pathname.startsWith('/haccp')) return await loadHaccpContext(sb);
-        if (pathname.startsWith('/service')) return await loadServiceContext(sb);
+        if (pathname.startsWith('/events/') && pathname.endsWith('/service')) return await loadServiceContext(sb);
         if (pathname.startsWith('/uren')) return await loadUrenContext(sb);
         if (pathname.startsWith('/materieel')) return await loadMaterieelContext(sb);
         if (pathname.startsWith('/logistiek')) return await loadLogistiekContext(sb);
         if (pathname.startsWith('/boekhouding') || pathname.startsWith('/financien')) return await loadBoekhoudingContext(sb);
-        if (pathname.startsWith('/menu-engineering')) return await loadMenuEngineeringContext(sb);
+        if (pathname.startsWith('/marges')) return await loadMenuEngineeringContext(sb);
         return {};
     } catch (err) {
         console.error('[bbq-context] loadPageContext error:', err);

@@ -104,7 +104,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event bijwerken',
         table: 'events',
         op: 'update',
-        pages: ['/events', '/agenda', '/service'],
+        pages: ['/events', '/agenda', '/events/[id]/service'],
         icon: 'CalendarCheck',
         color: '#f59e0b',
     },
@@ -148,7 +148,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerecht aanmaken',
         table: 'gerechten',
         op: 'insert',
-        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/gerechten', '/marges', '/ai-chat'],
         icon: 'UtensilsCrossed',
         color: '#a78bfa',
     },
@@ -156,7 +156,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerecht bijwerken',
         table: 'gerechten',
         op: 'update',
-        pages: ['/gerechten', '/menu-engineering'],
+        pages: ['/gerechten', '/marges'],
         icon: 'Pencil',
         color: '#f59e0b',
     },
@@ -226,7 +226,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Temperatuurmeting registreren',
         table: 'haccp_records',
         op: 'insert',
-        pages: ['/haccp', '/service'],
+        pages: ['/haccp', '/events/[id]/service'],
         icon: 'Thermometer',
         color: '#ef4444',
     },
@@ -280,7 +280,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak aanmaken',
         table: 'prep_tasks',
         op: 'insert',
-        pages: ['/agenda', '/events', '/service'],
+        pages: ['/agenda', '/events', '/events/[id]/service'],
         icon: 'ListChecks',
         color: '#22c55e',
     },
@@ -288,7 +288,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak bijwerken',
         table: 'prep_tasks',
         op: 'update',
-        pages: ['/agenda', '/service'],
+        pages: ['/agenda', '/events/[id]/service'],
         icon: 'Pencil',
         color: '#f59e0b',
     },
@@ -376,7 +376,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-lijst genereren',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/agenda', '/service'],
+        pages: ['/', '/events', '/agenda', '/events/[id]/service'],
         icon: 'ListChecks',
         color: '#22c55e',
         tool: 'generatePrepList',
@@ -394,7 +394,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Event briefing genereren',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/agenda', '/service'],
+        pages: ['/', '/events', '/agenda', '/events/[id]/service'],
         icon: 'ClipboardList',
         color: '#a78bfa',
         tool: 'generateEventBriefing',
@@ -412,7 +412,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerechten toevoegen aan Menu Ontwikkelaar',
         table: 'gerechten',
         op: 'bulk_insert',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'UtensilsCrossed',
         color: '#a78bfa',
         tool: 'bulkCreateGerechten',
@@ -421,7 +421,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Concepten — kies welke je wilt uitwerken',
         table: null,
         op: 'client_only',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'Sparkles',
         color: '#f59e0b',
     },
@@ -446,7 +446,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Gerechten verwijderen/verbergen',
         table: 'gerechten',
         op: 'bulk_delete',
-        pages: ['/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/gerechten', '/marges', '/ai-chat'],
         icon: 'Filter',
         color: '#ef4444',
         tool: 'filterGerechten',
@@ -455,7 +455,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Zwakke gerechten markeren',
         table: null,
         op: 'client_only',
-        pages: ['/', '/gerechten', '/menu-engineering', '/ai-chat'],
+        pages: ['/', '/gerechten', '/marges', '/ai-chat'],
         icon: 'StarHalf',
         color: '#f59e0b',
     },
@@ -810,8 +810,10 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
         }
 
         if (pathname === '/recepten') {
-            // Volledige recept-data — anders kan AI niet schalen of ingrediënten-cross-ref doen
-            const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,preptime,ingredienten,bereiding,allergenen,kostprijs_pp').order('naam');
+            /* /recepten → /gerechten redirect 2026-05-01. AI-context blijft volledig:
+               receptuur-velden (bereidingswijze, porties, wijn-suggestie) leven nu
+               op de gerecht-rij. */
+            const recRes = await supabase.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,ingredienten,bereidingswijze,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
             ctx.recepten = recRes.data || [];
         }
 
@@ -823,7 +825,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             ctx.gangen = gangRes.data || [];
         }
 
-        if (pathname === '/menu-engineering') {
+        if (pathname === '/marges') {
             // BCG-analyse vereist verkoopprijs + marge + populariteit
             const gerRes2 = await supabase.from('gerechten').select('id,naam,gang_slug,actief,kostprijs_pp,verkoopprijs,marge_pct,pijnpunten,toppunten').order('naam');
             ctx.gerechten = gerRes2.data || [];
@@ -956,7 +958,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             }
         }
 
-        if (pathname === '/service') {
+        if (pathname === '/events/[id]/service') {
             const vandaagSvc = new Date().toISOString().slice(0, 10);
             const svcEvRes = await supabase.from('events')
                 .select('id,name,date,status,guests,location,client_naam')
@@ -1087,10 +1089,29 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
                     // Prep-tasks voor dit event
                     const ptHubRes = await supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen');
                     ctx.prep_tasks = ptHubRes.data || [];
-                    // Menu-items als gerechten
-                    const menuIds = (eventRes.data.menu as string[]) || [];
-                    if (menuIds.length > 0) {
-                        const recRes = await supabase.from('recepten').select('id,naam,categorie,porties,kostprijs_pp,ingredienten').in('id', menuIds);
+                    /* event.menu is sinds Dag 4 een menu_selectie-object (gangen → dish-namen).
+                       Pre-Dag-4 events hebben nog een id-array — beide vormen handelen. */
+                    const rawMenu = eventRes.data.menu;
+                    const dishNames: string[] = [];
+                    let menuIds: number[] = [];
+                    if (Array.isArray(rawMenu)) {
+                        rawMenu.forEach((v: unknown) => {
+                            if (typeof v === 'number') menuIds.push(v);
+                            else if (typeof v === 'string') dishNames.push(v);
+                        });
+                    } else if (rawMenu && typeof rawMenu === 'object') {
+                        Object.values(rawMenu).forEach((list: unknown) => {
+                            if (Array.isArray(list)) list.forEach(item => {
+                                if (typeof item === 'string') dishNames.push(item);
+                            });
+                        });
+                    }
+                    if (menuIds.length > 0 || dishNames.length > 0) {
+                        let q = supabase.from('gerechten').select('id,naam,gang_slug,porties,kostprijs_pp,ingredienten,bereidingswijze,allergenen');
+                        if (menuIds.length > 0 && dishNames.length === 0) q = q.in('id', menuIds);
+                        else if (dishNames.length > 0 && menuIds.length === 0) q = q.in('naam', dishNames);
+                        else q = q.or('id.in.(' + menuIds.join(',') + '),naam.in.(' + dishNames.map(n => '"' + n + '"').join(',') + ')');
+                        const recRes = await q;
                         ctx.menu_recepten = recRes.data || [];
                     }
                     // Factuur voor dit event — voor winstgevendheid + status

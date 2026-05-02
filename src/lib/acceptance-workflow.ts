@@ -38,6 +38,32 @@ export interface WorkflowResult {
     courses: { success: boolean; message: string; count: number };
 }
 
+// ── 0. Sync events.menu ← offertes.menu_selectie ──
+//
+// Eerder bleef events.menu leeg na acceptatie — alleen de courses-tabel werd
+// gevuld. Daardoor kon prep/inkooplijst niets met het menu, en de event-hub
+// toonde een lege menukaart. Nu kopiëren we de wizard-output 1-op-1 naar
+// events.menu zodat alles downstream kan lezen wat de klant heeft besteld.
+//
+// Idempotent: als events.menu al gevuld is (handmatig aangepast, eerder
+// doorgelopen workflow) overschrijven we niet. Manual-edits winnen altijd.
+async function syncEventMenuFromOfferte(supabase: Supa, params: WorkflowParams): Promise<void> {
+    try {
+        if (!supabase) return;
+        const menuSel = params.offerteData?.menu_selectie;
+        if (!menuSel) return;
+        const { data: ev } = await supabase.from('events').select('menu').eq('id', params.eventId).single();
+        const existing = ev?.menu;
+        const isEmpty = !existing
+            || (Array.isArray(existing) && existing.length === 0)
+            || (typeof existing === 'object' && Object.keys(existing).length === 0);
+        if (!isEmpty) return; /* manual edit — niet overschrijven */
+        await supabase.from('events').update({ menu: menuSel }).eq('id', params.eventId);
+    } catch {
+        /* silent — best-effort sync, downstream functies hebben fallback. */
+    }
+}
+
 // ── 1. Auto-create factuur ──
 async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
     try {
@@ -121,47 +147,71 @@ async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promis
 }
 
 // ── 2. Auto-generate prep tasks ──
+//
+// Bron: offerte.menu_selectie (object { gang_slug: dish_naam[] }) joinen met
+// gerechten-tabel (target_prep_time, ingredient_costs). De recepten-tabel is
+// gedropt in migratie 015 — gerechten is nu de single source of truth voor
+// prep-tijden en ingredients.
 async function autoGeneratePrepTasks(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
-        // Get event data
         const { data: event } = await supabase.from('events').select('*').eq('id', params.eventId).single();
         if (!event) return { success: false, message: 'Event niet gevonden', count: 0 };
+        const guests = event.guests || 50;
 
-        const eventDate = new Date(event.date);
-        const menuIds: string[] = Array.isArray(event.menu) ? event.menu : [];
-
-        // Get recepten if menu has items
-        let recepten: any[] = [];
-        if (menuIds.length > 0) {
-            const { data: receptenData } = await supabase.from('recepten').select('*').in('naam', menuIds);
-            recepten = receptenData || [];
+        /* Pak menu_selectie (object met gangen → dish-namen) en flatten naar één
+           lijst van unieke gerecht-namen. Werkt zowel voor het JSON-formaat
+           als de string-JSON legacy-vorm. */
+        let menuSel: any = params.offerteData?.menu_selectie || event.menu;
+        if (typeof menuSel === 'string') {
+            try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; }
+        }
+        const dishNames: string[] = [];
+        if (menuSel && typeof menuSel === 'object') {
+            for (const list of Object.values(menuSel)) {
+                if (Array.isArray(list)) {
+                    for (const item of list) {
+                        if (typeof item === 'string' && item.trim()) dishNames.push(item.trim());
+                    }
+                }
+            }
         }
 
-        // Generate prep tasks based on timeline
+        let dishes: any[] = [];
+        if (dishNames.length > 0) {
+            const { data } = await supabase
+                .from('gerechten')
+                .select('naam, target_prep_time, porties, gang_slug')
+                .in('naam', Array.from(new Set(dishNames)));
+            dishes = data || [];
+        }
+
         const tasks: { event_id: number; text: string; dagen: number; done: boolean }[] = [];
 
         // D-3: Bestelling & check
         tasks.push({ event_id: params.eventId, text: 'Voorraad check en ingredienten bestellen', dagen: -3, done: false });
         tasks.push({ event_id: params.eventId, text: 'Materieel controleren en inladen', dagen: -3, done: false });
-        recepten.filter(function (r: any) { return r.preptime && r.preptime > 120; }).forEach(function (r: any) {
-            tasks.push({ event_id: params.eventId, text: r.naam + ': bestel vers vlees, check ingredienten', dagen: -3, done: false });
+        /* target_prep_time staat in seconden — > 7200s = > 2 uur prep-tijd.
+           Die gerechten verdienen een aparte D-3 bestel-task. */
+        dishes.filter(d => (d.target_prep_time || 0) > 7200).forEach(d => {
+            tasks.push({ event_id: params.eventId, text: d.naam + ': bestel vers vlees, check ingredienten', dagen: -3, done: false });
         });
 
         // D-2: Marineren & rubben
         tasks.push({ event_id: params.eventId, text: 'Rubs en sauzen aanmaken', dagen: -2, done: false });
         tasks.push({ event_id: params.eventId, text: 'Rookhout weken', dagen: -2, done: false });
-        recepten.filter(function (r: any) { return r.preptime && r.preptime > 60; }).forEach(function (r: any) {
-            tasks.push({ event_id: params.eventId, text: r.naam + ': marineren/rubben (' + r.preptime + ' min)', dagen: -2, done: false });
+        dishes.filter(d => (d.target_prep_time || 0) > 3600).forEach(d => {
+            const minutes = Math.round((d.target_prep_time || 0) / 60);
+            tasks.push({ event_id: params.eventId, text: d.naam + ': marineren/rubben (' + minutes + ' min)', dagen: -2, done: false });
         });
 
         // D-1: Mise-en-place
         tasks.push({ event_id: params.eventId, text: 'Smoker/BBQ testen', dagen: -1, done: false });
         tasks.push({ event_id: params.eventId, text: 'Bus inladen', dagen: -1, done: false });
         tasks.push({ event_id: params.eventId, text: 'Service materiaal checken', dagen: -1, done: false });
-        recepten.forEach(function (r: any) {
-            tasks.push({ event_id: params.eventId, text: r.naam + ': mise-en-place, portioneren voor ' + (event.guests || 50) + ' gasten', dagen: -1, done: false });
+        dishes.forEach(d => {
+            tasks.push({ event_id: params.eventId, text: d.naam + ': mise-en-place, portioneren voor ' + guests + ' gasten', dagen: -1, done: false });
         });
 
         // D-0: Event dag
@@ -177,50 +227,77 @@ async function autoGeneratePrepTasks(supabase: Supa, params: WorkflowParams): Pr
 
         const { error } = await supabase.from('prep_tasks').insert(tasks);
         if (error) return { success: false, message: 'Prep fout: ' + error.message, count: 0 };
-        return { success: true, message: tasks.length + ' prep-taken aangemaakt', count: tasks.length };
+        return { success: true, message: tasks.length + ' prep-taken aangemaakt (' + dishes.length + ' gerechten)', count: tasks.length };
     } catch (e: any) {
         return { success: false, message: 'Prep fout: ' + (e.message || ''), count: 0 };
     }
 }
 
 // ── 3. Auto-generate inkooplijst ──
+//
+// Bron: offerte.menu_selectie joinen met gerechten.ingredient_costs (per-portion
+// hoeveelheden, geen batch-recept). De recepten-tabel is gedropt in migratie 015.
+//
+// Schaling: gerechten.ingredient_costs is per-portie/per-gast, dus we
+// vermenigvuldigen direct met event.guests (geen porties-deling zoals bij
+// recepten). Dit voorkomt dat lege porties=0 fields tot Infinity kosten leiden.
 async function autoGenerateInkooplijst(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding' };
 
-        // Get event data
         const { data: event } = await supabase.from('events').select('*').eq('id', params.eventId).single();
         if (!event) return { success: false, message: 'Event niet gevonden' };
 
         const gasten = event.guests || 1;
-        const menuIds = event.menu || [];
 
-        let recepten: any[] = [];
-        if (Array.isArray(menuIds) && menuIds.length > 0) {
-            const { data: recData } = await supabase.from('recepten').select('*').in('id', menuIds);
-            recepten = recData || [];
+        /* Pak menu_selectie van de offerte (preferred) of van de event-row als
+           fallback. Flatten naar een unieke lijst dish-namen. */
+        let menuSel: any = params.offerteData?.menu_selectie || event.menu;
+        if (typeof menuSel === 'string') {
+            try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; }
+        }
+        const dishNames: string[] = [];
+        if (menuSel && typeof menuSel === 'object') {
+            for (const list of Object.values(menuSel)) {
+                if (Array.isArray(list)) {
+                    for (const item of list) {
+                        if (typeof item === 'string' && item.trim()) dishNames.push(item.trim());
+                    }
+                }
+            }
         }
 
-        // Get inventory for voorraadcheck
+        let dishes: any[] = [];
+        if (dishNames.length > 0) {
+            const { data } = await supabase
+                .from('gerechten')
+                .select('naam, ingredient_costs')
+                .in('naam', Array.from(new Set(dishNames)));
+            dishes = data || [];
+        }
+
         const { data: invData } = await supabase.from('inventory').select('naam,current_stock,unit');
         const invMap: Record<string, any> = {};
         (invData || []).forEach(function (i: any) { invMap[(i.naam || '').toLowerCase().trim()] = i; });
 
-        // Aggregate ingredients
+        /* Aggregeer ingredient_costs over alle gerechten in het menu. Shape:
+           gerechten.ingredient_costs = [{ naam, qty_pp, eenheid, yield_factor }] */
         const ingredientMap: Record<string, { naam: string; qty: number; unit: string; checked: boolean }> = {};
-        recepten.forEach(function (recept: any) {
-            const multiplier = gasten / (recept.porties || 1);
-            let ingredienten = recept.ingredienten || [];
-            if (typeof ingredienten === 'string') {
-                try { ingredienten = JSON.parse(ingredienten); } catch { ingredienten = []; }
-            }
-            ingredienten.forEach(function (ing: any) {
-                const key = (ing.naam || '').toLowerCase().trim();
+        dishes.forEach(function (dish: any) {
+            const costs = Array.isArray(dish.ingredient_costs) ? dish.ingredient_costs : [];
+            costs.forEach(function (c: any) {
+                const key = String(c.naam || '').toLowerCase().trim();
                 if (!key) return;
+                const qtyPp = parseFloat(c.qty_pp) || 0;
+                const yld = parseFloat(c.yield_factor) || 1;
+                /* Yield factor: 0.85 = 15% loss; je moet 1/yld inkopen om qtyPp te
+                   krijgen aan eindproduct. Voorbeeld: 100g ribeye met yld=0.85 → 117g
+                   inkopen per gast. */
+                const totalQty = (qtyPp / (yld || 1)) * gasten;
                 if (!ingredientMap[key]) {
-                    ingredientMap[key] = { naam: ing.naam, qty: 0, unit: ing.eenheid || '', checked: false };
+                    ingredientMap[key] = { naam: c.naam, qty: 0, unit: c.eenheid || c.unit || '', checked: false };
                 }
-                ingredientMap[key].qty += (parseFloat(ing.hoeveelheid) || 0) * multiplier;
+                ingredientMap[key].qty += totalQty;
             });
         });
 
@@ -410,7 +487,10 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
         /* Haal event op voor guests-count (voor portion-distribution). */
         const { data: event } = await supabase.from('events').select('guests').eq('id', params.eventId).single();
         const guests = event?.guests || 0;
-        const tableCount = 6; /* default; user kan later aanpassen via editor */
+        /* tableCount schaalt met gasten — ~10 gasten per tafel is een goede default
+           voor BBQ-events. Minimum 1 zodat distributePortions niet door 0 deelt.
+           User kan dit later via de courses-editor aanpassen. */
+        const tableCount = Math.max(1, Math.ceil(guests / 10));
 
         /* Haal alle gerechten in één call zodat aggregateMiseFromDishes
            geen N+1 doet. Gerechten zonder ingredient_costs leveren gewoon
@@ -500,6 +580,11 @@ export async function runAcceptanceWorkflow(
         supabase = mod.supabase as Supa;
         params = arg1 as WorkflowParams;
     }
+
+    /* Stap 0 (sequentieel, vóór allSettled): kopieer offerte.menu_selectie naar
+       events.menu zodat alle downstream functies (prep/inkoop/courses) van één
+       bron lezen. Best-effort — fouten breken de workflow niet. */
+    await syncEventMenuFromOfferte(supabase, params);
 
     const results = await Promise.allSettled([
         autoCreateFactuur(supabase, params),

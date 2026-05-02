@@ -6,13 +6,12 @@ import { ChevronRight, Home } from 'lucide-react';
 import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 
 const routeMap: Record<string, { label: string; section: string }> = {
-    '/menu-engineering': { label: 'Menu-analyse', section: 'Keuken' },
+    '/marges': { label: 'Marges & analyse', section: 'Keuken' },
     '/gerechten': { label: 'Gerechten', section: 'Keuken' },
     '/recepten': { label: 'Recepten', section: 'Keuken' },
     '/ai-chat': { label: 'AI Pitmaster', section: 'Keuken' },
     '/agenda': { label: 'Agenda', section: 'Plannen' },
     '/events': { label: 'Events', section: 'Plannen' },
-    '/service': { label: 'Service', section: 'Plannen' },
     '/prep-counter': { label: 'Prep Counter', section: 'Plannen' },
     '/klantgesprek': { label: 'Klantgesprek', section: 'Plannen' },
     '/haccp': { label: 'HACCP', section: 'Plannen' },

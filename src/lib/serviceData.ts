@@ -14,7 +14,7 @@
 import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
 import type {
     ServiceEvent, Course, AllergyEntry, AllergenCode,
-} from '@/app/service/_data/serviceMockData';
+} from '@/app/events/[id]/service/_data/serviceMockData';
 
 /* Lichte gerecht-shape — alleen wat we nodig hebben voor allergie-cross-ref. */
 export interface GerechtAllergenLookup {

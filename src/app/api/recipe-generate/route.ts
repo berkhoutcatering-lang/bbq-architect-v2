@@ -45,7 +45,11 @@ const RECIPE_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (één recept):
   "battle_plan": ["T-24h: marinade maken", "T-4h: kerntemperatuur naar 55°C...", "T-30min: afgrillen..."] (3–6 stappen, optioneel maar gewenst),
   "wijn_suggestie": "string (naam + korte reden)",
   "service_tip": "string (plating / bordje / temperatuur)",
-  "geschatte_kostprijs_pp": number (ruwe schatting in EUR, excl BTW)
+  "geschatte_kostprijs_pp": number (ruwe schatting in EUR, excl BTW),
+  "inspired_by": ["string"]   /* 1–3 bestaande gerechten uit JOUW REPERTOIRE
+                                 die als stijl-bron dienen. Gebruik EXACT de
+                                 naam zoals die in de lijst staat. Lege array
+                                 alleen als geen referentie bestaat. */
 }`;
 
 const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met meerdere gerechten):

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
+import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -11,7 +12,10 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
-import { Link, Unlink } from 'lucide-react';
+import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
+import KitchenModeStepper from '@/components/KitchenModeStepper';
+import AuditTrailTimeline from '@/components/AuditTrailTimeline';
+import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
@@ -20,6 +24,7 @@ import type { InventoryItem, Gang } from '@/types';
 export default function Gerechten() {
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const { orgId } = useOrg();
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
@@ -43,6 +48,17 @@ export default function Gerechten() {
     const [dataLoading, setDataLoading] = useState(true);
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
+    /* Menu's-tab op /gerechten — herbruikbare menu-templates die de wizard
+       opslaat. Eén plek voor menu-samenstelling, hergebruikt vanuit /offertes. */
+    const [view, setView] = useState<'gerechten' | 'menus'>('gerechten');
+    /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
+    const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
+    const [menuTemplates, setMenuTemplates] = useState<any[]>([]);
+    const [showMenuWizard, setShowMenuWizard] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<MenuTemplateInput | null>(null);
+    /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).
+       Dit object bewaart titel + stappen array voor de stepper. */
+    const [kitchenMode, setKitchenMode] = useState<{ titel: string; stappen: string[] } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const serviceImageRef = useRef<HTMLInputElement>(null);
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
@@ -59,6 +75,95 @@ export default function Gerechten() {
         }
         const r = await supabase.from('gerechten').select('*').order('volgorde');
         if (r.data) setGerechten(r.data);
+        await loadMenuTemplates();
+    }
+
+    async function loadMenuTemplates() {
+        const { data, error } = await supabase
+            .from('menu_templates')
+            .select('*')
+            .eq('actief', true)
+            .order('is_default', { ascending: false })
+            .order('updated_at', { ascending: false });
+        if (error) {
+            /* Migratie nog niet gedraaid → tabel ontbreekt. Niet-fataal: lege state. */
+            if (/relation .* does not exist/i.test(error.message)) {
+                setMenuTemplates([]);
+                return;
+            }
+            console.warn('[gerechten] menu_templates load error:', error.message);
+            return;
+        }
+        setMenuTemplates(data || []);
+    }
+
+    function newMenuTemplate() {
+        setEditingTemplate(null);
+        setShowMenuWizard(true);
+    }
+
+    function editMenuTemplate(t: any) {
+        setEditingTemplate({
+            id: t.id,
+            naam: t.naam,
+            beschrijving: t.beschrijving || '',
+            menu_selectie: typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {}),
+            basis_prijs_pp: t.basis_prijs_pp || undefined,
+            aantal_gasten: t.aantal_gasten || undefined,
+        });
+        setShowMenuWizard(true);
+    }
+
+    async function handleMenuTemplateComplete(result: any) {
+        const naam = (result.template_naam || '').trim();
+        if (!naam) { showToast('Geef het menu een naam', 'error'); return; }
+
+        const payload = {
+            naam,
+            beschrijving: result.template_beschrijving || null,
+            menu_selectie: result.menu_selectie || {},
+            basis_prijs_pp: result.basis_prijs_pp || 0,
+            aantal_gasten: result.aantal_gasten || 40,
+            organization_id: orgId || null,
+            actief: true,
+        };
+
+        if (result.template_id) {
+            const { error } = await supabase.from('menu_templates').update(payload).eq('id', result.template_id);
+            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+            showToast('Menu bijgewerkt!');
+        } else {
+            const { error } = await supabase.from('menu_templates').insert([payload]);
+            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+            showToast('Menu opgeslagen!');
+        }
+        setShowMenuWizard(false);
+        setEditingTemplate(null);
+        await loadMenuTemplates();
+    }
+
+    function deleteMenuTemplate(id: number | string) {
+        showConfirm('Weet je zeker dat je dit menu wilt verwijderen?', async function () {
+            const { error } = await supabase.from('menu_templates').delete().eq('id', id);
+            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+            showToast('Menu verwijderd');
+            await loadMenuTemplates();
+        });
+    }
+
+    async function toggleDefaultTemplate(t: any) {
+        if (t.is_default) {
+            const { error } = await supabase.from('menu_templates').update({ is_default: false }).eq('id', t.id);
+            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+        } else {
+            /* Eerst alle defaults voor deze org clearen — partial unique index dwingt 1 default per org af. */
+            if (orgId) {
+                await supabase.from('menu_templates').update({ is_default: false }).eq('organization_id', orgId).eq('is_default', true);
+            }
+            const { error } = await supabase.from('menu_templates').update({ is_default: true }).eq('id', t.id);
+            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+        }
+        await loadMenuTemplates();
     }
 
     function newGang() {
@@ -101,7 +206,8 @@ export default function Gerechten() {
             allergenen: [], tags: [], kostprijs_pp: '',
             service_image: '', battle_plan_steps: [], target_prep_time: 0,
             hardware_items: [], ingredienten_winkels: {},
-            ingredient_costs: [], actief: false
+            ingredient_costs: [], actief: false,
+            porties: 10, wijn_suggestie: '', service_tip: ''
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
@@ -134,7 +240,10 @@ export default function Gerechten() {
             hardware_items: g.hardware_items || [],
             ingredienten_winkels: g.ingredienten_winkels || {},
             ingredient_costs: g.ingredient_costs || [],
-            actief: g.actief !== false
+            actief: g.actief !== false,
+            porties: g.porties || 10,
+            wijn_suggestie: g.wijn_suggestie || '',
+            service_tip: g.service_tip || ''
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
@@ -216,14 +325,20 @@ export default function Gerechten() {
         }
 
         const dbData: Record<string, any> = Object.assign({}, saveData);
+        /* Status-systeem (migratie 016): handmatig nieuw gerecht = direct actief
+           (de chef weet wat ie kookt, geen review-stap nodig). AI-creaties komen
+           via ai-tools binnen met status='concept' + bron='ai'. */
+        if (editing === 'new') {
+            if (!dbData.status) dbData.status = 'actief';
+            if (!dbData.bron) dbData.bron = 'manual';
+        }
 
         if (editing === 'new') {
             const { error } = await supabase.from('gerechten').insert([dbData]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht toegevoegd!');
             setFollowUpActions([
-                { icon: '\ud83d\udccb', label: 'Recept koppelen', href: '/recepten' },
-                { icon: '\ud83c\udf7d\ufe0f', label: 'Aan menu toevoegen', href: '/menu-engineering' },
+                { icon: '\ud83c\udf7d\ufe0f', label: 'Stel een menu samen', onClick: function() { newMenuTemplate(); } },
                 { icon: '\u2795', label: 'Nog een gerecht toevoegen', onClick: function() { newGerecht(); } },
             ]);
             setFollowUpTitle('Gerecht toegevoegd!');
@@ -357,8 +472,42 @@ export default function Gerechten() {
         return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }
 
-    const gangGerechten = gerechten.filter(function (g) { return g.gang_slug === activeGang; });
+    /* Status-systeem: cards filteren op huidige gang + huidige status-filter.
+       Status is single source of truth — `actief` blijft via DB-trigger in sync
+       voor backwards-compat met oudere queries. */
+    function getStatus(g: any): 'concept' | 'review_nodig' | 'actief' | 'inactief' {
+        if (g.status) return g.status;
+        return g.actief === false ? 'inactief' : 'actief';
+    }
+    const gangGerechten = gerechten
+        .filter(function (g) { return g.gang_slug === activeGang; })
+        .filter(function (g) {
+            if (statusFilter === 'all') return true;
+            return getStatus(g) === statusFilter;
+        });
     const currentGang = gangen.find(function (g) { return g.slug === activeGang; });
+
+    /* Tellingen per status voor de filter-pills bovenaan (over alle gangen). */
+    const statusCounts = {
+        all: gerechten.length,
+        concept: gerechten.filter(g => getStatus(g) === 'concept').length,
+        review_nodig: gerechten.filter(g => getStatus(g) === 'review_nodig').length,
+        actief: gerechten.filter(g => getStatus(g) === 'actief').length,
+        inactief: gerechten.filter(g => getStatus(g) === 'inactief').length,
+    };
+
+    /* Compleetheid-meter: welke velden zijn nog niet ingevuld? */
+    function checklistVoor(g: any): { label: string; ok: boolean }[] {
+        return [
+            { label: 'Naam', ok: !!(g.naam && String(g.naam).trim()) },
+            { label: 'Beschrijving', ok: !!(g.beschrijving && String(g.beschrijving).trim()) },
+            { label: 'Foto', ok: !!g.foto_url },
+            { label: 'Kostprijs', ok: Number(g.kostprijs_pp || 0) > 0 },
+            { label: 'Ingrediënten', ok: Array.isArray(g.ingredienten) && g.ingredienten.length > 0 },
+            { label: 'Allergenen', ok: Array.isArray(g.allergenen) && g.allergenen.length > 0 },
+            { label: 'Bereidingswijze', ok: !!(g.bereidingswijze && String(g.bereidingswijze).trim()) },
+        ];
+    }
 
     const ALLERGENEN_PRESETS = ['Glutenvrij', 'Lactosevrij', 'Notenvrij', 'Vegetarisch', 'Veganistisch', 'Vis', 'Schaaldieren'];
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
@@ -371,12 +520,141 @@ export default function Gerechten() {
         <div className="main-content">
             <KeukenTabs />
             <PageHeader
-                title="Gerechten"
-                description="Overzicht van al je gerechten met ingrediënten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling."
+                title={view === 'menus' ? 'Menu\u2019s' : 'Gerechten'}
+                description={view === 'menus'
+                    ? 'Stel hier je menu\u2019s samen met de wizard. Gebruik ze later als startpunt voor offertes.'
+                    : 'Overzicht van al je gerechten met ingrediënten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling.'}
                 actions={<>
-                    <button className="btn btn-ghost btn-sm" onClick={newGang}>Gang toevoegen</button>
+                    {view === 'menus'
+                        ? <button className="btn btn-brand btn-sm" onClick={newMenuTemplate}><UtensilsCrossed size={14} style={{ marginRight: 6 }} />Nieuw menu</button>
+                        : <button className="btn btn-ghost btn-sm" onClick={newGang}>Gang toevoegen</button>}
                 </>}
             />
+
+            {/* View-toggle: één plek voor menu-samenstelling. Gerechten = bouwblokken,
+                Menu's = opgeslagen samenstellingen die /offertes hergebruikt. */}
+            <div role="tablist" aria-label="Weergave" style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                <button
+                    role="tab"
+                    aria-selected={view === 'gerechten'}
+                    onClick={function () { setView('gerechten'); }}
+                    className={'tab-btn' + (view === 'gerechten' ? ' active' : '')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                    <ChefHat size={14} /> Gerechten
+                    <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>({gerechten.length})</span>
+                </button>
+                <button
+                    role="tab"
+                    aria-selected={view === 'menus'}
+                    onClick={function () { setView('menus'); }}
+                    className={'tab-btn' + (view === 'menus' ? ' active' : '')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                    <UtensilsCrossed size={14} /> Menu&rsquo;s
+                    <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>({menuTemplates.length})</span>
+                </button>
+            </div>
+
+            {view === 'menus' && (
+                <PageSection>
+                    {menuTemplates.length === 0 ? (
+                        <div style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 12, background: 'var(--card)' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>🍽️</div>
+                            <div style={{ fontWeight: 600, marginBottom: 4 }}>Nog geen menu&rsquo;s opgeslagen</div>
+                            <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
+                                Bouw een menu met de wizard en sla het op. Hergebruik het later in een offerte zodat je niet elke keer opnieuw begint.
+                            </div>
+                            <button className="btn btn-brand btn-sm" onClick={newMenuTemplate}>
+                                <UtensilsCrossed size={14} style={{ marginRight: 6 }} />Nieuw menu maken
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="dish-grid">
+                            {menuTemplates.map(function (t: any) {
+                                const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
+                                const dishCount: number = (Object.values(sel) as unknown[]).reduce<number>(function (a, list) { return a + (Array.isArray(list) ? list.length : 0); }, 0);
+                                return (
+                                    <div key={t.id} className="dish-card" style={{ position: 'relative' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                            {t.is_default && <Star size={14} style={{ color: '#B48C14', fill: '#B48C14' }} />}
+                                            <div className="dish-name" style={{ margin: 0, flex: 1 }}>{t.naam}</div>
+                                        </div>
+                                        {t.beschrijving && <div className="dish-desc">{t.beschrijving}</div>}
+                                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+                                            {dishCount} gerechten over {Object.keys(sel).length} gangen
+                                        </div>
+                                        {t.basis_prijs_pp > 0 && (
+                                            <div className="dish-kostprijs">€{Number(t.basis_prijs_pp).toFixed(2)} p.p.</div>
+                                        )}
+                                        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                            <button className="btn btn-ghost btn-sm" onClick={function () { editMenuTemplate(t); }} title="Aanpassen">
+                                                <Pencil size={12} style={{ marginRight: 4 }} /> Aanpassen
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" onClick={function () { toggleDefaultTemplate(t); }} title={t.is_default ? 'Standaard af' : 'Maak standaard'}>
+                                                <Star size={12} style={{ marginRight: 4, color: t.is_default ? '#B48C14' : undefined }} /> {t.is_default ? 'Standaard' : 'Maak standaard'}
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" onClick={function () { deleteMenuTemplate(t.id); }} title="Verwijderen" style={{ color: 'var(--red)' }}>
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </PageSection>
+            )}
+
+            {view === 'gerechten' && (<>
+            {/* Status-filter pills — alleen tonen als er iets te filteren valt
+                (concept of review_nodig > 0). Anders: stille progressive disclosure. */}
+            {(statusCounts.concept > 0 || statusCounts.review_nodig > 0 || statusFilter !== 'all') && (
+                <div role="tablist" aria-label="Status-filter" style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {([
+                        { key: 'all', label: 'Alle', tone: 'neutral' },
+                        { key: 'actief', label: 'Actief', tone: 'green' },
+                        { key: 'concept', label: '✦ Concepten', tone: 'purple' },
+                        { key: 'review_nodig', label: 'Review nodig', tone: 'amber' },
+                        { key: 'inactief', label: 'Inactief', tone: 'gray' },
+                    ] as const).map(p => {
+                        const count = statusCounts[p.key];
+                        const isActive = statusFilter === p.key;
+                        const tones: Record<string, { bg: string; color: string; border: string }> = {
+                            neutral: { bg: 'rgba(255,255,255,.05)', color: 'var(--text)', border: 'var(--border)' },
+                            green: { bg: 'rgba(34,197,94,.08)', color: '#22c55e', border: 'rgba(34,197,94,.3)' },
+                            purple: { bg: 'rgba(167,139,250,.08)', color: '#a78bfa', border: 'rgba(167,139,250,.35)' },
+                            amber: { bg: 'rgba(245,158,11,.08)', color: '#f59e0b', border: 'rgba(245,158,11,.35)' },
+                            gray: { bg: 'rgba(130,130,130,.06)', color: 'var(--muted)', border: 'rgba(130,130,130,.2)' },
+                        };
+                        const t = tones[p.tone];
+                        return (
+                            <button
+                                key={p.key}
+                                role="tab"
+                                aria-selected={isActive}
+                                onClick={() => setStatusFilter(p.key)}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: 999,
+                                    border: '1px solid ' + (isActive ? t.color : t.border),
+                                    background: isActive ? t.color + '22' : t.bg,
+                                    color: t.color,
+                                    fontSize: 12,
+                                    fontWeight: isActive ? 700 : 500,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                {p.label}
+                                <span style={{ opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
             <div className="tab-bar">
                 {gangen.map(function (g) {
@@ -417,14 +695,46 @@ export default function Gerechten() {
             <PageSection>
             <div className="dish-grid">
                 {gangGerechten.map(function (g) {
+                    const status = getStatus(g);
+                    const isAi = g.bron === 'ai';
+                    /* Visuele state per status — AI-creaties krijgen daarbij een
+                       extra diagonal-stripe-rand zodat ze direct opvallen. */
+                    const cardOpacity = status === 'inactief' ? 0.55 : 1;
+                    const stripeBg = isAi ? 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(167,139,250,.06) 8px 16px)' : undefined;
+                    const cardBorder = status === 'concept'
+                        ? '1px solid rgba(167,139,250,.45)'
+                        : status === 'review_nodig'
+                            ? '1px solid rgba(245,158,11,.45)'
+                            : undefined;
+                    const statusPill = status === 'concept'
+                        ? { text: '✦ Concept', bg: 'rgba(167,139,250,.15)', color: '#a78bfa' }
+                        : status === 'review_nodig'
+                            ? { text: 'Review nodig', bg: 'rgba(245,158,11,.15)', color: '#f59e0b' }
+                            : status === 'inactief'
+                                ? { text: 'Inactief', bg: 'rgba(239,68,68,.15)', color: 'var(--red)' }
+                                : null;
                     return (
-                        <div key={g.id} className="dish-card" onClick={function () { editGerecht(g); }} style={{ opacity: g.actief === false ? 0.55 : 1 }}>
+                        <div
+                            key={g.id}
+                            className="dish-card"
+                            onClick={function () { editGerecht(g); }}
+                            style={{ opacity: cardOpacity, backgroundImage: stripeBg, border: cardBorder, position: 'relative' }}
+                        >
+                            {isAi && (
+                                <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(167,139,250,.2)', color: '#a78bfa', fontWeight: 700, letterSpacing: '.05em' }} title="Door AI gegenereerd">
+                                    ✦ AI
+                                </span>
+                            )}
                             {g.foto_url && (
                                 <div className="dish-foto-preview" style={{ backgroundImage: 'url(' + g.foto_url + ')' }}></div>
                             )}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                                 <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
-                                {g.actief === false && <span style={{ fontSize: 12, padding: '4px 8px', borderRadius: 4, background: 'rgba(239,68,68,.15)', color: 'var(--red)', fontWeight: 700, flexShrink: 0 }}>inactief</span>}
+                                {statusPill && (
+                                    <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: statusPill.bg, color: statusPill.color, fontWeight: 700, flexShrink: 0 }}>
+                                        {statusPill.text}
+                                    </span>
+                                )}
                             </div>
                             <div className="dish-desc">{g.beschrijving || '—'}</div>
 
@@ -460,12 +770,30 @@ export default function Gerechten() {
                 )}
             </div>
             </PageSection>
+            </>)}
+
+            {showMenuWizard && (
+                <MenuWizard
+                    mode="template"
+                    existingTemplate={editingTemplate}
+                    onComplete={handleMenuTemplateComplete}
+                    onClose={function () { setShowMenuWizard(false); setEditingTemplate(null); }}
+                />
+            )}
+
+            {kitchenMode && (
+                <KitchenModeStepper
+                    titel={kitchenMode.titel}
+                    stappen={kitchenMode.stappen}
+                    onClose={function () { setKitchenMode(null); }}
+                />
+            )}
 
             {editing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>
                     <div className="modal-box" style={{ maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <h3 style={{ margin: 0 }}>{editing === 'new' ? '➕ Nieuw Gerecht' : '✏️ Gerecht Bewerken'}</h3>
+                            <h3 style={{ margin: 0 }}>{editing === 'new' ? 'Nieuw gerecht' : 'Gerecht bewerken'}</h3>
                             <button type="button" disabled={aiEnriching || !form.naam}
                                 onClick={async function () {
                                     setAiEnriching(true);
@@ -491,19 +819,19 @@ export default function Gerechten() {
                                     }
                                 }}
                                 style={{ padding: '8px 14px', borderRadius: 8, background: form.naam && !aiEnriching ? 'rgba(196,163,90,.15)' : 'rgba(255,255,255,.05)', border: '1px solid ' + (form.naam ? 'rgba(196,163,90,.35)' : 'rgba(255,255,255,.1)'), color: form.naam ? '#c4a35a' : 'rgba(255,255,255,.3)', fontSize: 11, fontWeight: 700, cursor: form.naam && !aiEnriching ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                ✨ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
+                                ✦ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
                             </button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
 
                             <div className="field">
-                                <label>📸 Foto</label>
+                                <label>Foto</label>
                                 {form.foto_url ? (
                                     <div className="foto-upload-zone has-foto">
                                         <img src={form.foto_url} alt="Gerecht" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 8 }} />
                                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { fileInputRef.current!.click(); }}>🔄 Vervangen</button>
-                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { foto_url: '' })); }}>🗑️ Verwijder</button>
+                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { fileInputRef.current!.click(); }}>Vervangen</button>
+                                            <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { foto_url: '' })); }}>Verwijder</button>
                                         </div>
                                     </div>
                                 ) : (
@@ -534,7 +862,7 @@ export default function Gerechten() {
                             </div>
 
                             <div className="field">
-                                <label>🧾 Ingrediënten</label>
+                                <label>Ingrediënten</label>
                                 <div className="tag-input-container">
                                     <div className="tag-list">
                                         {(form.ingredienten || []).map(function (tag: string, idx: number) {
@@ -553,26 +881,77 @@ export default function Gerechten() {
                             </div>
 
                             <div className="field">
-                                <label>👨‍🍳 Bereidingswijze / Opbouw</label>
+                                <label>Bereidingswijze <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(één stap per regel voor Kitchen Mode)</span></label>
                                 <textarea value={form.bereidingswijze || ''}
                                     onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setForm(Object.assign({}, form, { bereidingswijze: e.target.value })); }}
-                                    placeholder="bijv. Krokant gyoza vel met gerookte zalm en mierikswortel mayo, garneer met borage cress"
-                                    rows={3} style={{ resize: 'vertical' }} />
+                                    placeholder={'bijv.\n1. Brisket 12u op 110°C\n2. Wrap in butcher paper bij 75°C kerntemp\n3. Snijd tegen draad in van 5mm'}
+                                    rows={4} style={{ resize: 'vertical' }} />
+                            </div>
+
+                            <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>Receptuur</span>
+                                    {form.bereidingswijze && (
+                                        <button
+                                            type="button"
+                                            onClick={function () {
+                                                const stappen = String(form.bereidingswijze || '')
+                                                    .split('\n')
+                                                    .map(function (s: string) { return s.trim().replace(/^\d+\.\s*/, ''); })
+                                                    .filter(Boolean);
+                                                setKitchenMode({ titel: form.naam || 'Gerecht', stappen });
+                                            }}
+                                            style={{ padding: '6px 12px', borderRadius: 8, background: 'rgba(196,163,90,.15)', border: '1px solid rgba(196,163,90,.35)', color: 'var(--color-accent-gold)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, textTransform: 'none', letterSpacing: 'normal' }}
+                                            title="Open de stappen full-screen voor in de keuken"
+                                        >
+                                            <Flame size={12} /> Kitchen Mode
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="form-grid">
+                                    <div className="field">
+                                        <label>Porties (referentie)</label>
+                                        <input type="number" min={1} value={form.porties || 10}
+                                            onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { porties: parseInt(e.target.value) || 1 })); }}
+                                            placeholder="bijv. 10" />
+                                    </div>
+                                    <div className="field">
+                                        <label>Bereidingstijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(seconden)</span></label>
+                                        <input type="number" min={0} step={30} value={form.target_prep_time || ''}
+                                            onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
+                                            placeholder="bijv. 1800 (= 30 min)" />
+                                    </div>
+                                </div>
+
+                                <div className="field">
+                                    <label>Wijn-suggestie <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
+                                    <input value={form.wijn_suggestie || ''}
+                                        onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { wijn_suggestie: e.target.value })); }}
+                                        placeholder="bijv. Stevige rode Pinotage of Zuid-Afrikaanse Cabernet" />
+                                </div>
+
+                                <div className="field">
+                                    <label>Service-tip <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(plating / serveren)</span></label>
+                                    <input value={form.service_tip || ''}
+                                        onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { service_tip: e.target.value })); }}
+                                        placeholder="bijv. Serveer op voorverwarmd bord, mierikswortel apart in een kleine schaal" />
+                                </div>
                             </div>
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    🔥 The Architect — Service Mode
+                                    Service Mode — chef-instructies
                                 </div>
 
                                 <div className="field">
-                                    <label>🎯 Service Foto <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(perfecte opmaak)</span></label>
+                                    <label>Service-foto <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(perfecte opmaak)</span></label>
                                     {form.service_image ? (
                                         <div className="foto-upload-zone has-foto">
                                             <img src={form.service_image} alt="Service" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8 }} />
                                             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { serviceImageRef.current!.click(); }}>🔄 Vervangen</button>
-                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { service_image: '' })); }}>🗑️ Verwijder</button>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { serviceImageRef.current!.click(); }}>Vervangen</button>
+                                                <button type="button" className="btn btn-ghost btn-sm" onClick={function () { setForm(Object.assign({}, form, { service_image: '' })); }}>Verwijder</button>
                                             </div>
                                         </div>
                                     ) : (
@@ -584,7 +963,7 @@ export default function Gerechten() {
                                 </div>
 
                                 <div className="field">
-                                    <label>⚔️ Battle Plan <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(stappen voor de chef)</span></label>
+                                    <label>Battle plan <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(stappen voor de chef)</span></label>
                                     <div className="tag-input-container">
                                         <div className="tag-list">
                                             {(form.battle_plan_steps || []).map(function (step: string, idx: number) {
@@ -604,7 +983,7 @@ export default function Gerechten() {
                                 </div>
 
                                 <div className="field">
-                                    <label>⏱️ Doeltijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel, in seconden)</span></label>
+                                    <label>Doeltijd <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel, in seconden)</span></label>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                         <input type="number" min="0" step="30" value={form.target_prep_time || ''}
                                             onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { target_prep_time: e.target.value === '' ? 0 : parseInt(e.target.value) })); }}
@@ -620,7 +999,7 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    🍽️ Hardware per Gast
+                                    Hardware per gast
                                 </div>
 
                                 {(form.hardware_items || []).length > 0 && (
@@ -673,7 +1052,7 @@ export default function Gerechten() {
                             {(form.ingredienten || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                     <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                        🛒 Winkel per Ingrediënt
+                                        Winkel per ingrediënt
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                         {(form.ingredienten || []).map(function (ing: string, idx: number) {
@@ -695,7 +1074,7 @@ export default function Gerechten() {
 
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    💰 Kostprijsberekening
+                                    Kostprijsberekening
                                 </div>
 
                                 {(form.ingredient_costs || []).length > 0 && (
@@ -814,7 +1193,7 @@ export default function Gerechten() {
 
                             <div className="form-grid">
                                 <div className="field">
-                                    <label>💰 Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
+                                    <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                     <input type="number" step="0.01" value={form.kostprijs_pp || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} placeholder="€0.00" />
                                 </div>
                                 <div className="field">
@@ -836,7 +1215,7 @@ export default function Gerechten() {
                                             color: form.actief ? 'var(--green)' : 'var(--red)',
                                         }}
                                     >
-                                        {form.actief ? '✅ Actief' : '⏸ Inactief'}
+                                        {form.actief ? 'Actief' : 'Inactief'}
                                     </button>
                                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>
                                         {form.actief ? 'Zichtbaar in offertes en menu' : 'Verborgen — niet beschikbaar voor offertes'}
@@ -848,7 +1227,7 @@ export default function Gerechten() {
                             {(form.foto_prompt || (form.pijnpunten && form.pijnpunten.length > 0) || (form.toppunten && form.toppunten.length > 0) || form.marge_pct != null) && (
                                 <div style={{ marginTop: 18, padding: 14, borderRadius: 10, background: 'rgba(167,139,250,.05)', border: '1px solid rgba(167,139,250,.25)' }}>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--purple, #a78bfa)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
-                                        ✨ AI-inzichten
+                                        ✦ AI-inzichten
                                     </div>
 
                                     {form.marge_pct != null && (
@@ -886,7 +1265,7 @@ export default function Gerechten() {
 
                             {editing !== 'new' && stats && (
                                 <div className="gerecht-stats-panel">
-                                    <div className="gerecht-stats-title">📊 Statistieken</div>
+                                    <div className="gerecht-stats-title">Statistieken</div>
                                     <div className="gerecht-stats-grid">
                                         <div className="gerecht-stat-item">
                                             <div className="gerecht-stat-value">{stats.offCount}</div>
@@ -918,10 +1297,98 @@ export default function Gerechten() {
                             )}
                         </div>
 
+                        {/* Compleetheid-meter — toont in één oogopslag wat nog mist
+                            voordat een concept geactiveerd kan worden. */}
+                        {(function () {
+                            const checks = checklistVoor(form);
+                            const okCount = checks.filter(c => c.ok).length;
+                            const total = checks.length;
+                            const pct = Math.round((okCount / total) * 100);
+                            const currentStatus = form.status || (editing === 'new' ? 'actief' : 'inactief');
+                            const isConcept = currentStatus === 'concept' || currentStatus === 'review_nodig';
+                            return (
+                                <div style={{ marginTop: 12, padding: 14, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Compleetheid</div>
+                                        <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{okCount} / {total}</div>
+                                    </div>
+                                    <div style={{ height: 6, background: 'var(--color-bg-deep)', borderRadius: 3, overflow: 'hidden', marginBottom: 10 }}>
+                                        <div style={{ height: '100%', width: pct + '%', background: pct >= 100 ? '#22c55e' : pct >= 60 ? '#FFBF00' : '#f59e0b', transition: 'width .3s' }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {checks.map(c => (
+                                            <span key={c.label} style={{
+                                                fontSize: 11,
+                                                padding: '3px 8px',
+                                                borderRadius: 4,
+                                                background: c.ok ? 'rgba(34,197,94,.1)' : 'rgba(245,158,11,.1)',
+                                                color: c.ok ? '#22c55e' : '#f59e0b',
+                                                fontWeight: 600,
+                                            }}>
+                                                {c.ok ? '✓' : '○'} {c.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    {isConcept && pct >= 100 && (
+                                        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.3)', fontSize: 12, color: '#22c55e' }}>
+                                            ✓ Compleet — klaar om te activeren met de knop hieronder.
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Geschiedenis-sectie — alleen voor bestaande gerechten.
+                            Pillar #5: audit-trail voor compliance + dispute-resolution. */}
+                        {editing !== 'new' && (
+                            <div style={{ marginTop: 14 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    Geschiedenis
+                                </div>
+                                <AuditTrailTimeline recordTable="gerechten" recordId={editing as number} />
+                            </div>
+                        )}
+
                         <div className="modal-actions">
-                            {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>🗑️ Verwijderen</button>}
+                            {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>Verwijderen</button>}
+                            {/* Status-toggle: concept/review → activeer · actief → deactiveer · inactief → activeer */}
+                            {editing !== 'new' && (function () {
+                                const cur = form.status || (form.actief === false ? 'inactief' : 'actief');
+                                if (cur === 'concept' || cur === 'review_nodig') {
+                                    return (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={function () { setForm(Object.assign({}, form, { status: 'actief' })); }}
+                                            style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,.4)' }}
+                                            title="Maak klant-klaar — verschijnt dan in de offerte-wizard"
+                                        >
+                                            ✓ Activeer
+                                        </button>
+                                    );
+                                }
+                                if (cur === 'actief') {
+                                    return (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={function () { setForm(Object.assign({}, form, { status: 'inactief' })); }}
+                                            title="Verberg uit offerte-wizard zonder te verwijderen"
+                                        >
+                                            Deactiveer
+                                        </button>
+                                    );
+                                }
+                                return (
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={function () { setForm(Object.assign({}, form, { status: 'actief' })); }}
+                                        style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,.4)' }}
+                                    >
+                                        ✓ Activeer
+                                    </button>
+                                );
+                            })()}
                             <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); }}>Annuleren</button>
-                            <button className="btn btn-brand btn-sm" onClick={saveGerecht}>💾 Opslaan</button>
+                            <button className="btn btn-brand btn-sm" onClick={saveGerecht}>Opslaan</button>
                         </div>
                     </div>
                 </div>
@@ -930,7 +1397,7 @@ export default function Gerechten() {
             {gangEditing && (
                 <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setGangEditing(null); }}>
                     <div className="modal-box" style={{ maxWidth: 440, width: '100%' }}>
-                        <h3>{gangEditing === 'new' ? '➕ Nieuwe Gang' : '⚙️ Gang Bewerken'}</h3>
+                        <h3>{gangEditing === 'new' ? 'Nieuwe gang' : 'Gang bewerken'}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                             <div className="field">
                                 <label>Naam</label>
@@ -956,9 +1423,9 @@ export default function Gerechten() {
                             </div>
                         </div>
                         <div className="modal-actions">
-                            {gangEditing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGang(gangEditing as number); }}>🗑️ Verwijderen</button>}
+                            {gangEditing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGang(gangEditing as number); }}>Verwijderen</button>}
                             <button className="btn btn-ghost btn-sm" onClick={function () { setGangEditing(null); }}>Annuleren</button>
-                            <button className="btn btn-brand btn-sm" onClick={saveGang}>💾 Opslaan</button>
+                            <button className="btn btn-brand btn-sm" onClick={saveGang}>Opslaan</button>
                         </div>
                     </div>
                 </div>

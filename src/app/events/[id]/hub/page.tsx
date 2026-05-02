@@ -17,11 +17,15 @@ import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
 import { displayEventName, titleCase } from '@/components/redesign/displayHelpers';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
-import EventMenuKaartBuilder from '@/components/EventMenuKaartBuilder';
+/* EventMenuKaartBuilder verwijderd 2026-05-01 — menu wordt nu via de offerte
+   aangepast (één plek voor menu-samenstelling). De event-hub toont menu
+   read-only en linkt naar de offerte voor wijzigingen. */
 import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
 import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
+import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
+import EventTabs from '@/components/EventTabs';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
 import '@/components/redesign/redesign.css';
@@ -78,10 +82,7 @@ export default function EventHubPage() {
   const [tpl, setTpl] = useState<TplKey>('ambacht');
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [menuBuilderOpen, setMenuBuilderOpen] = useState(false);
   const [menuIds, setMenuIds] = useState<number[]>([]);
-  const [menuBuilderQuery, setMenuBuilderQuery] = useState('');
-  const [menuSaving, setMenuSaving] = useState(false);
   const [menuTemplates, setMenuTemplates] = useState<PdfTemplate[]>([]);
 
   useEffect(() => {
@@ -121,18 +122,9 @@ export default function EventHubPage() {
     return menuTemplates.find(t => t.name === expectedName && (t.organization_id === orgId || !t.organization_id)) || null;
   }, [menuTemplates, tpl, orgId]);
 
-  async function saveMenu() {
-    if (!event) return;
-    setMenuSaving(true);
-    try {
-      await supabase.from('events').update({ menu: menuIds } as any).eq('id', event.id);
-      setEvent({ ...event, menu: menuIds });
-      setMenuBuilderOpen(false);
-    } finally { setMenuSaving(false); }
-  }
-  function toggleMenuItem(id: number) {
-    setMenuIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
+  /* saveMenu / toggleMenuItem verwijderd — menu wordt niet meer op event-niveau
+     bewerkt. Menu komt uit de gekoppelde offerte (acceptance-workflow vult
+     events.menu) en aanpassen gebeurt via de offerte-wizard op /offertes. */
 
   useEffect(() => {
     if (!eventId || Number.isNaN(eventId)) return;
@@ -144,7 +136,11 @@ export default function EventHubPage() {
         ev.offerte_id ? supabase.from('offertes').select('*').eq('id', ev.offerte_id).single() : Promise.resolve({ data: null }) as any,
         supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen', { ascending: false }),
         supabase.from('facturen').select('*').eq('client_naam', ev.client_naam || '__none__').limit(1),
-        supabase.from('recepten').select('*'),
+        /* recepten samengevouwen onder gerechten 2026-05-01 — twee aparte queries
+           teruggebracht naar één. `recepten` blijft als alias-key in de result-set
+           zodat downstream component-props (EventInkooplijstCard, menuGroups)
+           niet hoeven te veranderen tot een aparte cleanup-ronde. */
+        Promise.resolve({ data: [] }),
         supabase.from('gerechten').select('*'),
         ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),
@@ -450,6 +446,7 @@ export default function EventHubPage() {
             <ArrowLeft size={14} />Terug naar events
           </button>
         </div>
+        <EventTabs eventId={event.id} eventName={event.name} />
         <div className="eh-hero">
           <div className="eh-hero-bg"></div>
           <div className="eh-hero-content">
@@ -474,12 +471,21 @@ export default function EventHubPage() {
                 </div>
               </div>
               <div className="eh-hero-actions">
+                <OfflineEventToggle eventId={event.id} klantId={klant?.id ?? null} variant="wide" />
                 {event.status !== 'confirmed' && event.status !== 'completed' && (
                   <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
                 )}
                 {event.status === 'confirmed' && (
-                  <button className="btn btn-primary" onClick={() => router.push(`/events/${event.id}/field`)}>
-                    <Flame size={14} />Ga live (KDS)
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (confirm('Service Mode starten? KDS opent in fullscreen — scherm blijft aan tijdens service.')) {
+                        router.push(`/events/${event.id}/service?fullscreen=1`);
+                      }
+                    }}
+                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                  >
+                    <Flame size={14} />Start Service (KDS)
                   </button>
                 )}
                 <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
@@ -736,8 +742,14 @@ export default function EventHubPage() {
               <div className="metal-head">
                 <div className="hstack"><ChefHat size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Menu &amp; automatische menukaart</span></div>
                 <div className="hstack" style={{ gap: 6 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setMenuBuilderOpen(true)}><Edit3 size={14} />Menu aanpassen</button>
-                  <button className="btn btn-primary btn-sm" onClick={printMenukaart}><Printer size={14} />Print {event.guests || 0}×</button>
+                    {event.offerte_id ? (
+                        <a href={`/offertes`} className="btn btn-ghost btn-sm" title="Open de offerte om het menu via de wizard aan te passen">
+                            <Edit3 size={14} />Menu aanpassen via offerte
+                        </a>
+                    ) : (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }} title="Dit event heeft geen gekoppelde offerte. Maak een offerte op /offertes en koppel die aan dit event om het menu te wijzigen.">Geen gekoppelde offerte</span>
+                    )}
+                    <button className="btn btn-primary btn-sm" onClick={printMenukaart}><Printer size={14} />Print {event.guests || 0}×</button>
                 </div>
               </div>
               <div className="responsive-grid" style={{ padding: 20, display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
@@ -924,7 +936,7 @@ export default function EventHubPage() {
                     </div>
                     {serviceLogs.length === 0 ? (
                       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                        Nog geen service-log. Start tijdens het event via <button onClick={() => router.push('/service')} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Service Mode</button>.
+                        Nog geen service-log. Start tijdens het event via <button onClick={() => router.push(`/events/${eventId}/service?fullscreen=1`)} style={{ background: 'none', border: 'none', color: 'var(--brand-gold)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0, textDecoration: 'underline' }}>Service Mode</button>.
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -1119,14 +1131,6 @@ export default function EventHubPage() {
           </div>
         </div>
       </div>
-      <EventMenuKaartBuilder
-        open={menuBuilderOpen}
-        onClose={() => setMenuBuilderOpen(false)}
-        eventId={eventId}
-        initialMenuIds={menuIds}
-        onSaved={(ids) => { setMenuIds(ids); setEvent({ ...event, menu: ids }); }}
-        eventName={event.name}
-      />
     </div>
   );
 }
