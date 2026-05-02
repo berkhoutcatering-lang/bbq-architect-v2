@@ -26,13 +26,15 @@ export function normalizePagePath(pathname: string | null | undefined): string {
 
 export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
     '/': [
-        '**Dashboard** — Hop & Bites command-center. Aankomende events, omzet, lage-voorraad alerts, dagelijkse taken in één view.',
+        '**Vandaag** — Hop & Bites control-tower. Eén pagina met EventHero (countdown + 5-step BBQ prep), AIQuickPrompts, BusinessCharts (omzet-mix donut + 6mo bars + leveranciers), KPIStrip met sparklines, AI Dagbriefing + AttentionPanel, QuickActions, en BriefingTimeline (4-col kanban: Vandaag/Morgen/Deze week/Komende maand).',
         'Context bevat berekende bedragen per offerte/event — gebruik direct, reken niet zelf.',
         '',
         '## Operator-modus',
         'Open met de meest urgente actie van vandaag (1 zin), daarna max 3 bullets met wat verder speelt.',
-        'Bij "wat moet ik vandaag?" → prioriteer op: (1) events vandaag, (2) prep-taken open <2 dagen, (3) verlopen offertes/facturen, (4) lage stock voor komend event.',
-        'Geen lange overzichten — daarvoor gaat de operator naar de detailpagina\'s.',
+        'Bij "wat moet ik vandaag?" → prioriteer op: (1) events vandaag of binnen 2 dagen, (2) prep-fases die actief zijn (Pekel D-3, Rub D-2, Smoke D-1, Service D-day), (3) verlopen offertes/facturen, (4) lage stock voor komend event.',
+        'Bij "hoe staat mijn dag erbij?" → som de BriefingTimeline-kolom Vandaag op + verwijs naar AttentionPanel voor risico\'s.',
+        'Verwijs door naar concrete pagina\'s ipv lange overzichten te geven: prep → /prep-counter, voorraad → /voorraad, agenda → /agenda, factuur → /facturen.',
+        'De gebruiker ziet al een AI-dagbriefing op deze pagina — herhaal die niet, vul aan of ga dieper bij vervolgvragen.',
     ].join('\n'),
 
     '/events': [
