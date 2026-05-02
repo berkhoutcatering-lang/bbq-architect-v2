@@ -19,6 +19,15 @@ const SAMPLE_BLOCKS: Block[] = [
         delta: { value: '+4% vs april', tone: 'positive' },
         text: 'Boven 60% target, ruim binnen Pro-tier streefcijfer.',
     },
+    // ─── NIEUW: klikbare metric (route + label) ───
+    {
+        type: 'metric',
+        title: 'Totale pipeline-omzet',
+        value: '€10.051,58',
+        text: '6 events · 404 gasten',
+        route: '/offertes',
+        label: 'Open offertes',
+    },
     {
         type: 'info',
         title: 'Prep-tijdlijn voor 60 gasten',
@@ -49,6 +58,18 @@ const SAMPLE_BLOCKS: Block[] = [
             'Voorgerecht: Beef tartaar',
             'Hoofd: Pulled pork brioche',
             'Dessert: Smoked cheesecake',
+        ],
+    },
+    // ─── NIEUW: bullets met klikbare items per entity (Sam's vraag) ───
+    {
+        type: 'bullets',
+        title: 'Aankomende events op een rij',
+        items: [
+            { text: '20 jun — Mariel Velema · 44 gasten · €1.554', route: '/events/12', icon: 'Calendar', badge: { text: 'menu OK', tone: 'success' } },
+            { text: '27 jun — Offerte Platen · 40 gasten · €1.700', route: '/events/13', icon: 'Calendar', badge: { text: 'geen menu', tone: 'danger' } },
+            { text: '09 aug — Miranda Berkhout · 45 gasten · €1.733', route: '/events/14', icon: 'Calendar', badge: { text: 'geen menu', tone: 'danger' } },
+            { text: '16 aug — Cor Berkhout · 60 gasten · €2.490', route: '/events/15', icon: 'Calendar', badge: { text: 'geen menu', tone: 'danger' } },
+            'Plus 2 meer (sleep om te scrollen)',
         ],
     },
     {

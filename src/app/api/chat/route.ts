@@ -892,17 +892,41 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                                         fullText += actionStr;
                                         safeEnqueue({ delta: actionStr });
                                     } else if (buf.name === 'respond_with_blocks') {
-                                        // Filter hallucinated nav_card routes — als de AI een route
-                                        // verzint die niet in PAGE_ROUTE_WHITELIST staat, gooien we
-                                        // alleen DAT block weg (rest van blocks blijft renderen).
+                                        // Hallucination-guard. Voor elk block-type met een route-veld
+                                        // (nav_card, metric.route, bullets-items[].route): controleer
+                                        // tegen PAGE_ROUTE_WHITELIST. Een verboden route op een nav_card
+                                        // doodt het hele block; op een metric/bullet-item alleen het
+                                        // route-veld (block blijft over zonder klik-target).
                                         const rawBlocks: unknown[] = Array.isArray(input.blocks) ? input.blocks : [];
-                                        const cleanBlocks = rawBlocks.filter((b) => {
-                                            if (!isBlock(b)) return false;
-                                            if (b.type !== 'nav_card') return true;
-                                            if (isRouteAllowed(normalizedPage, b.route)) return true;
-                                            console.warn('[chat] nav_card route geblokkeerd (niet in whitelist voor ' + normalizedPage + '):', b.route);
-                                            return false;
-                                        });
+                                        const cleanBlocks = rawBlocks
+                                            .filter((b) => isBlock(b))
+                                            .map((b) => {
+                                                if (b.type === 'nav_card') {
+                                                    if (isRouteAllowed(normalizedPage, b.route)) return b;
+                                                    console.warn('[chat] nav_card route geblokkeerd (niet in whitelist voor ' + normalizedPage + '):', b.route);
+                                                    return null;
+                                                }
+                                                if (b.type === 'metric' && b.route && !isRouteAllowed(normalizedPage, b.route)) {
+                                                    console.warn('[chat] metric.route geblokkeerd:', b.route);
+                                                    const { route: _r, label: _l, ...rest } = b;
+                                                    return rest;
+                                                }
+                                                if (b.type === 'bullets' && Array.isArray(b.items)) {
+                                                    const cleanItems = b.items.map((it) => {
+                                                        if (typeof it === 'string') return it;
+                                                        if (!it || typeof it !== 'object') return it;
+                                                        if (typeof it.text !== 'string') return null;
+                                                        if (it.route && !isRouteAllowed(normalizedPage, it.route)) {
+                                                            console.warn('[chat] bullets-item route geblokkeerd:', it.route);
+                                                            return { ...it, route: undefined };
+                                                        }
+                                                        return it;
+                                                    }).filter((it) => it !== null);
+                                                    return { ...b, items: cleanItems };
+                                                }
+                                                return b;
+                                            })
+                                            .filter((b) => b !== null);
                                         const actionPayload = {
                                             type: 'info_blocks',
                                             description: cleanBlocks.length + ' antwoord-blokken',
