@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import {
   ArrowLeft, MapPin, Clock, Play, Square, Check,
   Truck, Users, Phone, Thermometer,
@@ -179,6 +180,7 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
             <div className="text-[15px] font-bold truncate">{event.name}</div>
             <div className="text-[11px] text-[var(--muted)]">Veldmodus • {event.date}</div>
           </div>
+          <OfflineEventToggle eventId={parseInt(id, 10)} variant="compact" />
         </div>
       </header>
 

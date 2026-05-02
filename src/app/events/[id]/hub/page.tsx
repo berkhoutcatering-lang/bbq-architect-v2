@@ -24,6 +24,7 @@ import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards
 import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
+import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
 import '@/components/redesign/redesign.css';
@@ -468,6 +469,7 @@ export default function EventHubPage() {
                 </div>
               </div>
               <div className="eh-hero-actions">
+                <OfflineEventToggle eventId={event.id} klantId={klant?.id ?? null} variant="wide" />
                 {event.status !== 'confirmed' && event.status !== 'completed' && (
                   <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
                 )}

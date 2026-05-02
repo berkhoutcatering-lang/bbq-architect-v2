@@ -2,9 +2,42 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
+import {
+  getActiveOfflineEvent,
+  readLocal,
+  enqueueWrite,
+  applyLocalMutation,
+  emitQueueChange,
+  EVENT_SCOPED_TABLES,
+  STAM_TABLES,
+  OFFLINE_EVENT_CHANGE,
+  type ActiveOfflineEvent,
+  type OfflineTable,
+} from './offlineStorage';
 
 // Shared channel registry — prevents duplicate subscriptions for the same table+org
 const channelRegistry = new Map<string, { refCount: number; channel: ReturnType<typeof supabase.channel> }>();
+
+/** Set van tabellen die offline-mode ondersteunen — anders gewoon online-only. */
+const OFFLINE_TABLES = new Set<string>([...EVENT_SCOPED_TABLES, ...STAM_TABLES]);
+
+function isOfflineEnabledTable(table: string): table is OfflineTable {
+  return OFFLINE_TABLES.has(table);
+}
+
+/** Hook leest active-offline-event reactive zodat fetchData + writes weten welk
+ *  pad ze moeten kiezen. Update bij OFFLINE_EVENT_CHANGE custom events. */
+function useActiveOfflineState(): ActiveOfflineEvent | null {
+    const [state, setState] = useState<ActiveOfflineEvent | null>(null);
+    useEffect(function () {
+        if (typeof window === 'undefined') return;
+        function refresh() { setState(getActiveOfflineEvent()); }
+        refresh();
+        window.addEventListener(OFFLINE_EVENT_CHANGE, refresh);
+        return function () { window.removeEventListener(OFFLINE_EVENT_CHANGE, refresh); };
+    }, []);
+    return state;
+}
 
 export function useSupabase<T extends { id: number }>(table: string, defaultVal?: T[]): {
     data: T[];
@@ -19,8 +52,26 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
     const [loading, setLoading] = useState(true);
     const { orgId } = useOrg();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const activeOffline = useActiveOfflineState();
+    const offlineMode = activeOffline !== null && isOfflineEnabledTable(table);
 
     const fetchData = useCallback(function () {
+        // Offline-mode pad: lees uit IndexedDB ipv Supabase REST.
+        if (offlineMode && activeOffline) {
+            const eventScoped = (EVENT_SCOPED_TABLES as readonly string[]).includes(table);
+            setLoading(true);
+            readLocal<T>(table as OfflineTable, eventScoped ? activeOffline.eventId : undefined)
+                .then(function (rows) {
+                    setData(rows);
+                    setLoading(false);
+                })
+                .catch(function (e) {
+                    console.warn('[offline] readLocal failed for ' + table, e);
+                    setLoading(false);
+                });
+            return;
+        }
+
         if (!supabase || !orgId) { setLoading(false); return; }
         setLoading(true);
         supabase
@@ -33,7 +84,7 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
                 if (res.data) setData(res.data as T[]);
                 setLoading(false);
             });
-    }, [table, orgId]);
+    }, [table, orgId, offlineMode, activeOffline]);
 
     // Debounced refetch — coalesces rapid-fire realtime events (e.g. bulk inserts)
     const debouncedFetch = useCallback(function () {
@@ -43,9 +94,12 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
 
     useEffect(function () { fetchData(); }, [fetchData]);
 
-    // Supabase Realtime — shared channel per table+org, debounced refresh
+    // Supabase Realtime — shared channel per table+org, debounced refresh.
+    // Offline-mode: skip subscribe — anders eindeloos reconnect-pogingen op
+    // tablet zonder wifi, en bij offline werken we toch op IndexedDB.
     useEffect(function () {
         if (!supabase || !orgId) return;
+        if (offlineMode) return;
         const key = table + ':' + orgId;
         let entry = channelRegistry.get(key);
 
@@ -84,7 +138,7 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
                 }
             }
         };
-    }, [table, orgId, debouncedFetch]);
+    }, [table, orgId, debouncedFetch, offlineMode]);
 
     const insert = useCallback(function (row: Partial<T>): Promise<T | null> {
         if (!supabase || !orgId) return Promise.resolve(null);
@@ -92,6 +146,31 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
         const rowWithOrg = { ...row, id: tempId, organization_id: orgId } as unknown as T;
         // Optimistic: add temp row immediately
         setData(function (prev) { return prev.concat([rowWithOrg]); });
+
+        // Offline-mode pad: queue + apply lokaal, geen Supabase-call.
+        if (offlineMode && activeOffline) {
+            return enqueueWrite({
+                eventId: activeOffline.eventId,
+                table: table as OfflineTable,
+                op: 'insert',
+                row: rowWithOrg as unknown as Record<string, unknown>,
+                rowId: null,
+                tempId,
+            })
+                .then(function () {
+                    return applyLocalMutation(table as OfflineTable, 'insert', rowWithOrg as unknown as Record<string, unknown>);
+                })
+                .then(function () {
+                    emitQueueChange();
+                    return rowWithOrg;
+                })
+                .catch(function (e) {
+                    setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
+                    console.error('[offline] enqueue insert failed', table, e);
+                    throw e;
+                });
+        }
+
         return Promise.resolve(supabase.from(table).insert({ ...row, organization_id: orgId } as Record<string, unknown>).select().single()).then(function (res) {
             if (res.error) {
                 setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
@@ -101,18 +180,47 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
             setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
             return res.data as T;
         });
-    }, [table, orgId]);
+    }, [table, orgId, offlineMode, activeOffline]);
 
     const update = useCallback(function (id: number, row: Partial<T>): Promise<T | null> {
         if (!supabase || !orgId) return Promise.resolve(null);
         let previousRow: T | undefined;
+        let merged: T | undefined;
         // Optimistic: apply update immediately
         setData(function (prev) {
             return prev.map(function (item) {
-                if (item.id === id) { previousRow = item; return { ...item, ...row } as T; }
+                if (item.id === id) {
+                    previousRow = item;
+                    merged = { ...item, ...row } as T;
+                    return merged;
+                }
                 return item;
             });
         });
+
+        // Offline-mode pad: queue + apply lokaal.
+        if (offlineMode && activeOffline) {
+            return enqueueWrite({
+                eventId: activeOffline.eventId,
+                table: table as OfflineTable,
+                op: 'update',
+                row: row as Record<string, unknown>,
+                rowId: id,
+            })
+                .then(function () {
+                    if (merged) return applyLocalMutation(table as OfflineTable, 'update', merged as unknown as Record<string, unknown>, id);
+                })
+                .then(function () {
+                    emitQueueChange();
+                    return merged ?? null;
+                })
+                .catch(function (e) {
+                    if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
+                    console.error('[offline] enqueue update failed', table, e);
+                    throw e;
+                });
+        }
+
         return Promise.resolve(supabase.from(table).update(row as Record<string, unknown>).eq('id', id).eq('organization_id', orgId).select().single()).then(function (res) {
             if (res.error) {
                 if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
@@ -126,7 +234,7 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
             }
             return res.data as T;
         });
-    }, [table, orgId]);
+    }, [table, orgId, offlineMode, activeOffline]);
 
     const remove = useCallback(function (id: number): Promise<void> {
         if (!supabase || !orgId) return Promise.resolve();
@@ -136,6 +244,29 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
             removedRow = prev.find(function (item) { return item.id === id; });
             return prev.filter(function (item) { return item.id !== id; });
         });
+
+        // Offline-mode pad: queue + apply lokaal.
+        if (offlineMode && activeOffline) {
+            return enqueueWrite({
+                eventId: activeOffline.eventId,
+                table: table as OfflineTable,
+                op: 'delete',
+                row: { id },
+                rowId: id,
+            })
+                .then(function () {
+                    return applyLocalMutation(table as OfflineTable, 'delete', { id }, id);
+                })
+                .then(function () {
+                    emitQueueChange();
+                })
+                .catch(function (e) {
+                    if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
+                    console.error('[offline] enqueue delete failed', table, e);
+                    throw e;
+                });
+        }
+
         return Promise.resolve(supabase.from(table).delete().eq('id', id).eq('organization_id', orgId)).then(function (res) {
             if (res.error) {
                 if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
@@ -143,7 +274,7 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
                 throw res.error;
             }
         });
-    }, [table, orgId]);
+    }, [table, orgId, offlineMode, activeOffline]);
 
     return { data, loading, refetch: fetchData, insert, update, remove, setData };
 }

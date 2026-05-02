@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react';
 import { getPendingSyncCount } from '@/lib/offlineStorage';
 import { onSWMessage } from '@/lib/pushNotifications';
+import { useActiveOfflineEvent } from '@/lib/useActiveOfflineEvent';
+import { triggerAutoSyncIfActive } from '@/lib/syncQueue';
 
 export default function OfflineIndicator() {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showSyncComplete, setShowSyncComplete] = useState(false);
+  const offlineEvent = useActiveOfflineEvent();
 
   useEffect(function () {
     // Set initial state
@@ -15,6 +18,8 @@ export default function OfflineIndicator() {
 
     function handleOnline() {
       setIsOffline(false);
+      // Auto-sync trigger als er een active offline event is — throttled in syncQueue
+      triggerAutoSyncIfActive().catch(function () {});
     }
 
     function handleOffline() {
@@ -49,6 +54,48 @@ export default function OfflineIndicator() {
       unsubscribe();
     };
   }, []);
+
+  // Active offline-event banner heeft hoogste prioriteit
+  if (offlineEvent.isActive) {
+    const queued = offlineEvent.queuedCount;
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          padding: '8px 16px',
+          fontSize: 13,
+          fontWeight: 500,
+          textAlign: 'center',
+          fontFamily: "'DM Sans', sans-serif",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          background: offlineEvent.isSyncing
+            ? 'rgba(245, 158, 11, 0.95)'
+            : (isOffline ? 'rgba(239, 68, 68, 0.95)' : 'rgba(34, 197, 94, 0.95)'),
+          color: '#fff',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: 4, background: '#fff' }} />
+        {offlineEvent.isSyncing ? (
+          <>Synchroniseren {queued > 0 ? `(${queued} pending)` : '...'}</>
+        ) : isOffline ? (
+          <>Offline-mode actief · event #{offlineEvent.event?.eventId} · {queued} {queued === 1 ? 'wijziging' : 'wijzigingen'} wachten</>
+        ) : (
+          <>Offline-mode actief · event #{offlineEvent.event?.eventId}{queued > 0 ? ` · ${queued} pending` : ''} · druk &quot;Eindig event&quot; om te syncen</>
+        )}
+      </div>
+    );
+  }
 
   // Don't render anything when online and no sync notification
   if (!isOffline && !showSyncComplete) return null;
