@@ -31,7 +31,8 @@
   /* Status */
   --green: #22c55e;
   --emerald: #10b981;
-  --red: #ef4444;
+  --red: #ff2929;
+  --red-glow: rgba(255, 41, 41, .4);
   --amber: #f59e0b;
   --cyan: #4ECDC4;
   --purple: #a78bfa;
@@ -90,6 +91,23 @@
   --lift-shadow: 0 8px 24px rgba(0, 0, 0, .4);
   --overlay: rgba(0, 0, 0, .5);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, .3);
+  /* Rest-state card elevation — vier-laags effect:
+     1) inset top highlight (1px wit) → metaal/glas-feel
+     2) inset all-sides aura → 24px brand-kleur op 5% binnen de randen, alsof
+        de card vanbinnen licht (lampion / keramiek)
+     3) sharp drop shadow → randdefinitie
+     4) wide soft shadow → float-effect */
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, .06),
+    inset 0 0 24px 0 color-mix(in oklch, var(--brand), transparent 94%),
+    0 1px 2px rgba(0, 0, 0, .06),
+    0 8px 28px -10px rgba(0, 0, 0, .22);
+  /* Hover-state — lift + intensifeer glow (voor .panel-interactive). */
+  --shadow-card-hover:
+    inset 0 1px 0 0 rgba(255, 255, 255, .08),
+    inset 0 0 32px 0 color-mix(in oklch, var(--brand), transparent 88%),
+    0 2px 4px rgba(0, 0, 0, .08),
+    0 16px 40px -12px rgba(0, 0, 0, .3);
 
   /* Mercedes-style semantic aliases */
   --color-bg-primary: #121215;
@@ -286,14 +304,171 @@ body {
   margin: 0 auto;
 }
 
-/* Panels */
+/* Auto-ambiance — elk DIV/SECTION/ARTICLE/ASIDE met een card-background als
+   inline style krijgt automatisch de lampion-glow + shadow. Pakt alle gangbare
+   varianten: var(--card-solid), var(--card), var(--bg-card), var(--color-bg-card).
+   Filter: alleen container-tags, niet inputs/textareas/buttons (rust-elementen).
+   Opt-out: voeg className="no-glow" toe waar de glow niet gewenst is. */
+div[style*="background: var(--card-solid)"]:not(.no-glow):not(.btn),
+div[style*="background:var(--card-solid)"]:not(.no-glow):not(.btn),
+div[style*="background: var(--card)"]:not(.no-glow):not(.btn),
+div[style*="background:var(--card)"]:not(.no-glow):not(.btn),
+div[style*="background: var(--bg-card)"]:not(.no-glow):not(.btn),
+div[style*="background:var(--bg-card)"]:not(.no-glow):not(.btn),
+div[style*="background: var(--color-bg-card)"]:not(.no-glow):not(.btn),
+section[style*="background: var(--card-solid)"]:not(.no-glow),
+section[style*="background: var(--card)"]:not(.no-glow),
+article[style*="background: var(--card-solid)"]:not(.no-glow),
+article[style*="background: var(--card)"]:not(.no-glow),
+aside[style*="background: var(--card-solid)"]:not(.no-glow),
+aside[style*="background: var(--card)"]:not(.no-glow) {
+  background:
+    radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, var(--brand), transparent 80%), transparent 65%),
+    radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, var(--brand), transparent 92%), transparent 55%),
+    var(--card-solid) !important;
+  box-shadow: var(--shadow-card);
+}
+
+/* Prep Counter master-detail layout (page /prep-counter) */
+.prep-master-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 16px;
+  align-items: start;
+}
+.prep-master {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prep-detail {
+  position: sticky;
+  top: 90px;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+}
+@media (max-width: 1024px) {
+  .prep-master-detail {
+    grid-template-columns: 1fr;
+  }
+  .prep-detail {
+    position: fixed;
+    inset: 0;
+    max-height: 100vh;
+    z-index: 50;
+    background: var(--bg);
+    padding: 16px;
+    display: none;
+    overflow-y: auto;
+  }
+  .prep-detail.prep-detail--open {
+    display: block;
+  }
+}
+
+/* Class-based cards die door de hele app gebruikt worden — krijgen automatisch
+   de lampion-ambiance via background-image (stapelt non-destructief over hun
+   bestaande background-color). Box-shadow wordt vervangen voor consistency. */
+.rec-card:not(.no-glow),
+.modal-box:not(.no-glow),
+.dish-card:not(.no-glow),
+.bon-card:not(.no-glow),
+.timing-event-card:not(.no-glow),
+.gerecht-stats-panel:not(.no-glow),
+.bus-log-panel:not(.no-glow),
+.haccp-dossier-card:not(.no-glow),
+.artisan-panel:not(.no-glow),
+.prep-card:not(.no-glow),
+.artisan-stat-box:not(.no-glow),
+.nav-box:not(.no-glow),
+.tool-card:not(.no-glow),
+.hb-card:not(.no-glow),
+.prep-step-card:not(.no-glow),
+.kds-course-card:not(.no-glow),
+.diag-card:not(.no-glow),
+.ev-kanban-card:not(.no-glow) {
+  background-image:
+    radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, var(--brand), transparent 80%), transparent 65%),
+    radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, var(--brand), transparent 92%), transparent 55%);
+  box-shadow: var(--shadow-card);
+}
+
+/* Auto-pop op alle rode tekst — letterlijk elke inline `color: var(--red)`
+   wordt automatisch dikker (700 minimum) + krijgt een subtle red neon-glow.
+   Filter: niet op svg/path (icons hebben alleen color, niet weight/shadow).
+   Opt-out via .no-glow class. */
+[style*="color: var(--red)"]:not(.no-glow):not(svg):not(path),
+[style*="color:var(--red)"]:not(.no-glow):not(svg):not(path),
+[style*="color:'var(--red)'"]:not(.no-glow):not(svg):not(path) {
+  font-weight: 700 !important;
+  text-shadow: 0 0 10px var(--red-glow);
+}
+/* Op grote display-numbers (≥18px) extra pop via fontWeight 800 — gebeurt al
+   inline waar nodig. Hier alleen guarantee dat álle rode tekst minimaal 700 is. */
+
+/* Display-numbers met meer pop — gebruik op grote rode/groene/gouden
+   warning- of stat-getallen voor extra visuele weight + neon-glow. */
+.danger-number {
+  color: var(--red);
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  text-shadow: 0 0 16px rgba(239, 68, 68, .35);
+}
+.success-number {
+  color: var(--green);
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  text-shadow: 0 0 16px rgba(34, 197, 94, .3);
+}
+.brand-number {
+  color: var(--brand);
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  text-shadow: 0 0 18px color-mix(in oklch, var(--brand), transparent 70%);
+}
+
+/* Smoke-glow utility — voor inline-styled cards die geen .panel zijn maar
+   wel hetzelfde "uit de bg gelift met warm topje" effect verdienen. */
+.smoke-card {
+  background:
+    radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, var(--brand), transparent 80%), transparent 65%),
+    radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, var(--brand), transparent 92%), transparent 55%),
+    var(--card-solid);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .3s ease, transform .3s ease;
+}
+
+.smoke-card.smoke-card-interactive {
+  cursor: pointer;
+}
+
+.smoke-card.smoke-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Panels — lampion-effect: dual radial-glow (top sterk, bottom subtiel) +
+   inner brand-aura via shadow-card → cards lijken vanbinnen warm te gloeien. */
 .panel {
-  background: var(--card);
+  background:
+    radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, var(--brand), transparent 80%), transparent 65%),
+    radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, var(--brand), transparent 92%), transparent 55%),
+    var(--card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
   border-radius: 14px;
   overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .3s ease, transform .3s ease;
 }
 
 /* Only clickable/interactive cards should lift on hover */
@@ -304,7 +479,7 @@ body {
 
 .panel-interactive:hover {
   transform: translateY(-2px);
-  box-shadow: var(--lift-shadow);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .panel-head {
@@ -519,18 +694,22 @@ body {
 }
 
 .stat-card {
-  background: var(--card);
+  background:
+    radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, var(--brand), transparent 80%), transparent 65%),
+    radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, var(--brand), transparent 92%), transparent 55%),
+    var(--card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border);
   border-radius: 14px;
   padding: 18px;
-  transition: transform .2s ease, box-shadow .2s ease;
+  box-shadow: var(--shadow-card);
+  transition: transform .3s ease, box-shadow .3s ease;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--lift-shadow);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .stat-card .stat-icon {

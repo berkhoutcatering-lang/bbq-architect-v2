@@ -40,9 +40,8 @@ export default function AIQuickPrompts({ onPrompt }: Props): React.ReactElement 
 
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '12px 14px',
         marginBottom: 14,

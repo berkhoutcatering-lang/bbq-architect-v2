@@ -96,8 +96,6 @@ export default function MetricBlock({ block, onNavigate }: Props) {
 
     const baseStyle = {
         display: 'block',
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)',
         padding: 'var(--space-4)',
         color: 'var(--text)',
@@ -106,11 +104,11 @@ export default function MetricBlock({ block, onNavigate }: Props) {
 
     if (isLink && block.route) {
         return (
-            <Link href={block.route} onClick={onNavigate} style={baseStyle} className="ai-metric-link">
+            <Link href={block.route} onClick={onNavigate} style={baseStyle} className="smoke-card smoke-card-interactive ai-metric-link">
                 {content}
             </Link>
         );
     }
 
-    return <div style={baseStyle}>{content}</div>;
+    return <div style={baseStyle} className="smoke-card">{content}</div>;
 }

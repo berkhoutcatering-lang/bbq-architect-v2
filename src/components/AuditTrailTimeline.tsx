@@ -89,7 +89,7 @@ export default function AuditTrailTimeline({ recordTable, recordId, limit = 20 }
                 const overflow = changes.length - visible.length;
 
                 const ActionIcon = entry.action === 'insert' ? Plus : entry.action === 'delete' ? Trash2 : Pencil;
-                const actionColor = entry.action === 'insert' ? '#22c55e' : entry.action === 'delete' ? '#ef4444' : '#FFBF00';
+                const actionColor = entry.action === 'insert' ? '#22c55e' : entry.action === 'delete' ? 'var(--red)' : '#FFBF00';
 
                 return (
                     <div key={entry.id} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'var(--card)', border: '1px solid var(--border)' }}>

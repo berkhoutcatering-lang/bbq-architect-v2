@@ -39,19 +39,16 @@ export default function HubCard({ href, icon: Icon, title, desc, cta, stats, rec
       href={href}
       className="hub-card-v2"
       aria-label={`${title} — ${cta}`}
+      className="smoke-card smoke-card-interactive"
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
         padding: 20,
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border)',
-        background: 'var(--card)',
         textDecoration: 'none',
         color: 'var(--text)',
-        transition: 'border-color 150ms ease, background 150ms ease, transform 150ms ease, box-shadow 150ms ease',
         minHeight: 200,
-        cursor: 'pointer',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>

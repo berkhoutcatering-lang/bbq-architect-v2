@@ -1945,7 +1945,7 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
    FOLDER 3 — BOEKHOUDING (inzichten per leverancier + CSV-import)
    ═══════════════════════════════════════════════════════════════════ */
 
-const SUPPLIER_COLORS = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#3b82f6', '#f97316', '#ef4444', '#10b981', '#8b8bf0'];
+const SUPPLIER_COLORS = ['#FFBF00', '#c4a35a', '#4ECDC4', '#22c55e', '#a78bfa', '#3b82f6', '#f97316', 'var(--red)', '#10b981', '#8b8bf0'];
 
 /** KPI-tegel in design-stijl: eyebrow-label, groot cijfer, sub */
 function BoekKPI({ label, value, sub, tone, icon: I }: { label: string; value: string | number; sub?: string; tone?: 'ok' | 'warn' | 'bad'; icon?: any }) {
@@ -2013,7 +2013,7 @@ function buildAiTips(bySupplier: BookSupplier[], invoices: any[]): AiTip[] {
     if (smallRunner) {
         const avg = smallRunner.spend / smallRunner.count;
         tips.push({
-            id: 't2', supplierName: smallRunner.name, supplierColor: '#ef4444',
+            id: 't2', supplierName: smallRunner.name, supplierColor: 'var(--red)',
             action: 'Verminder',
             headline: `Je doet te veel ${smallRunner.name}-runs`,
             body: `${smallRunner.count} facturen met gemiddeld €${avg.toFixed(0)} per ritje. Consolideer wekelijks en gebruik ${smallRunner.name} alléén voor last-minute of unieke items.`,
@@ -3562,10 +3562,10 @@ function FolderBooks() {
                                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.product}</div>
                                 <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 10 }}>{a.leverancier}</div>
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Outfit, sans-serif', color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>€{a.laatst.toFixed(2)}</span>
+                                    <span style={{ fontSize: 26, fontWeight: 800, fontFamily: 'Outfit, sans-serif', color: 'var(--red)', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 16px rgba(239,68,68,.35)', letterSpacing: '-.01em' }}>€{a.laatst.toFixed(2)}</span>
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>nu</span>
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>gemiddeld <span style={{ color: 'var(--text)' }}>€{a.gem.toFixed(2)}</span> · <span style={{ color: 'var(--red)', fontWeight: 700 }}>↑ {a.pct.toFixed(0)}%</span></div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>gemiddeld <span style={{ color: 'var(--text)' }}>€{a.gem.toFixed(2)}</span> · <span style={{ color: 'var(--red)', fontWeight: 800, fontSize: 13, textShadow: '0 0 12px rgba(239,68,68,.4)' }}>↑ {a.pct.toFixed(0)}%</span></div>
                             </div>
                         ))}
                     </div>

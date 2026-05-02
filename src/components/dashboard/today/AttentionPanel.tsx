@@ -28,7 +28,7 @@ export interface AttentionItem {
 }
 
 const SEV: Record<AttentionSeverity, { bg: string; border: string; dot: string; label: string }> = {
-  high: { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', dot: '#ef4444', label: 'Hoog' },
+  high: { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', dot: 'var(--red)', label: 'Hoog' },
   medium: { bg: 'rgba(217, 119, 6, 0.08)', border: 'rgba(217, 119, 6, 0.3)', dot: '#f59e0b', label: 'Gemiddeld' },
   low: { bg: 'rgba(255,255,255,.03)', border: 'var(--border)', dot: '#94a3b8', label: 'Laag' },
 };
@@ -43,10 +43,8 @@ export default function AttentionPanel({ items }: Props): React.ReactElement | n
 
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         padding: '20px 22px',
         height: '100%',
         display: 'flex',
@@ -75,7 +73,7 @@ export default function AttentionPanel({ items }: Props): React.ReactElement | n
               gap: 6,
             }}
           >
-            <BellRing size={11} color="#fca5a5" />
+            <BellRing size={11} color="var(--red)" />
             AANDACHT NODIG
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 400 }}>
@@ -86,7 +84,7 @@ export default function AttentionPanel({ items }: Props): React.ReactElement | n
           <span
             style={{
               fontSize: 11,
-              color: '#fca5a5',
+              color: 'var(--red)',
               background: 'rgba(239,68,68,.1)',
               border: '1px solid rgba(239,68,68,.25)',
               padding: '3px 9px',

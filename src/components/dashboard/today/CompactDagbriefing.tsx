@@ -49,7 +49,7 @@ function hashCandidates(c: BriefingCandidate[]): string {
 }
 
 const PRIORITY_DOT: Record<CompactBullet['priority'], { color: string; glow: string }> = {
-  critical: { color: '#ef4444', glow: 'rgba(239,68,68,.55)' },
+  critical: { color: 'var(--red)', glow: 'rgba(239,68,68,.55)' },
   today: { color: '#f59e0b', glow: 'rgba(245,158,11,.45)' },
   opportunity: { color: '#22c55e', glow: 'rgba(34,197,94,.45)' },
 };
@@ -120,10 +120,8 @@ export default function CompactDagbriefing({
 
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         padding: '16px 18px',
         display: 'flex',
         flexDirection: 'column',

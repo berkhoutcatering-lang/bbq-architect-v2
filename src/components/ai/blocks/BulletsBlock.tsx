@@ -34,9 +34,8 @@ interface Props {
 export default function BulletsBlock({ block, onNavigate }: Props) {
     return (
         <div
+            className="smoke-card"
             style={{
-                background: 'var(--card)',
-                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-lg)',
                 padding: 'var(--space-4)',
                 color: 'var(--text)',

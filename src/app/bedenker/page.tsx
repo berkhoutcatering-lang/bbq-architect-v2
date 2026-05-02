@@ -214,7 +214,7 @@ export default function BedenkerPage() {
                     ))}
                 </div>
                 {error && (
-                    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: '#fca5a5', marginBottom: 10 }}>
+                    <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>
                         {error}
                     </div>
                 )}
@@ -355,7 +355,7 @@ function ConceptCard({ c, onSave, onReject }: { c: ConceptDish; onSave: () => vo
             </div>
 
             {c.saveError && (
-                <div style={{ marginTop: 8, padding: 8, borderRadius: 6, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: '#fca5a5' }}>
+                <div style={{ marginTop: 8, padding: 8, borderRadius: 6, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: 'var(--red)' }}>
                     {c.saveError}
                 </div>
             )}

@@ -32,15 +32,13 @@ export default function NavCardBlock({ block, onNavigate }: { block: NavCardBloc
         <Link
             href={block.route}
             onClick={onNavigate}
+            className="smoke-card smoke-card-interactive"
             style={{
                 display: 'block',
-                background: 'var(--card)',
-                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-lg)',
                 padding: 'var(--space-4)',
                 textDecoration: 'none',
                 color: 'var(--text)',
-                transition: 'border-color 120ms ease, transform 120ms ease, background 120ms ease',
                 minHeight: 64,
             }}
             className="ai-nav-card"

@@ -111,7 +111,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
   }, [menuItems, gerechten, inventoryData]);
 
   const menuMargePct = details.ppp > 0 ? ((details.ppp - menuFoodcostPP) / details.ppp) * 100 : 0;
-  const margeColor = menuMargePct > 70 ? '#10b981' : menuMargePct >= 55 ? '#f59e0b' : '#ef4444';
+  const margeColor = menuMargePct > 70 ? '#10b981' : menuMargePct >= 55 ? '#f59e0b' : 'var(--red)';
 
   function canProceed(): boolean {
     if (step === 0) return klant.naam.length > 0;

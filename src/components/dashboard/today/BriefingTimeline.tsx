@@ -31,14 +31,14 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 const TONE: Record<BriefingTimelineTone, { bg: string; border: string; text: string; accent: string }> = {
   amber: { bg: 'rgba(217, 119, 6, 0.08)', border: 'rgba(217, 119, 6, 0.3)', text: 'var(--brand)', accent: '#fbbf24' },
-  red: { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', text: '#fca5a5', accent: '#ef4444' },
+  red: { bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.3)', text: 'var(--red)', accent: 'var(--red)' },
   green: { bg: 'rgba(34, 197, 94, 0.08)', border: 'rgba(34, 197, 94, 0.3)', text: '#86efac', accent: '#22c55e' },
   blue: { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.3)', text: '#93c5fd', accent: '#3b82f6' },
   gray: { bg: 'rgba(255,255,255,.03)', border: 'var(--border)', text: 'var(--text)', accent: 'var(--muted)' },
 };
 
 const COLUMN_DOT_COLOR: Record<BriefingTimelineWhen, string> = {
-  Vandaag: '#ef4444',
+  Vandaag: 'var(--red)',
   Morgen: '#f59e0b',
   'Deze week': '#3b82f6',
   'Komende maand': '#94a3b8',
@@ -56,10 +56,8 @@ export default function BriefingTimeline({ items }: Props): React.ReactElement |
 
   return (
     <div
+      className="smoke-card"
       style={{
-        background: 'var(--card-solid)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
         padding: '20px 24px 24px',
         marginBottom: 18,
       }}
