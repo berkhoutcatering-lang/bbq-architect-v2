@@ -25,6 +25,7 @@ import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
+import EventTabs from '@/components/EventTabs';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
 import '@/components/redesign/redesign.css';
@@ -445,6 +446,7 @@ export default function EventHubPage() {
             <ArrowLeft size={14} />Terug naar events
           </button>
         </div>
+        <EventTabs eventId={event.id} eventName={event.name} />
         <div className="eh-hero">
           <div className="eh-hero-bg"></div>
           <div className="eh-hero-content">
