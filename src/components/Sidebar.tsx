@@ -29,40 +29,71 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
         || (section.hubHref && (pathname === section.hubHref || pathname.startsWith(section.hubHref + '/')));
     const sectionBadgeCount = section.children.reduce((sum, child) => sum + (badges[child.href] || 0), 0);
 
-    /* Hub-link variant: directe link naar de hub-page, geen children in sidebar (alleen via tabs op hub of ⌘K). */
+    /* Hub-link variant: kopje is directe link naar hub-canvas, children altijd zichtbaar eronder (geen toggle nodig). */
     if (section.hubHref) {
         return (
-            <Link
-                href={section.hubHref}
-                onClick={onNavigate}
-                title={collapsed ? section.title : ""}
-                aria-label={section.title}
-                className={`group mt-1 flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap no-underline ${isActiveFolder
-                    ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] border border-[color-mix(in_srgb,var(--brand)_15%,transparent)] text-[var(--text)] shadow-[inset_0px_1px_1px_color-mix(in_srgb,var(--brand)_6%,transparent)]"
-                    : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
-                    }`}
-                style={collapsed ? { justifyContent: 'center' } : {}}
-            >
-                <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[var(--brand)]' : 'group-hover:text-[var(--brand)]'}`}>
-                    {section.icon}
-                    {sectionBadgeCount > 0 && collapsed && (
-                        <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
+            <div className="mt-1">
+                <Link
+                    href={section.hubHref}
+                    onClick={onNavigate}
+                    title={collapsed ? section.title : ""}
+                    aria-label={section.title}
+                    className={`group flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-xl transition-all duration-200 overflow-hidden whitespace-nowrap no-underline ${isActiveFolder
+                        ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] border border-[color-mix(in_srgb,var(--brand)_15%,transparent)] text-[var(--text)] shadow-[inset_0px_1px_1px_color-mix(in_srgb,var(--brand)_6%,transparent)]"
+                        : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--sidebar-bg-hover)] border border-transparent"
+                        }`}
+                    style={collapsed ? { justifyContent: 'center' } : {}}
+                >
+                    <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[var(--brand)]' : 'group-hover:text-[var(--brand)]'}`}>
+                        {section.icon}
+                        {sectionBadgeCount > 0 && collapsed && (
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
+                                {sectionBadgeCount}
+                            </span>
+                        )}
+                    </span>
+                    <span
+                        className="text-[13.5px] font-semibold transition-all duration-300 flex-1"
+                        style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto' }}
+                    >
+                        {section.title}
+                    </span>
+                    {sectionBadgeCount > 0 && !collapsed && (
+                        <span className="min-w-[18px] h-[18px] rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold flex items-center justify-center px-1">
                             {sectionBadgeCount}
                         </span>
                     )}
-                </span>
-                <span
-                    className="text-[13.5px] font-semibold transition-all duration-300 flex-1"
-                    style={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto' }}
-                >
-                    {section.title}
-                </span>
-                {sectionBadgeCount > 0 && !collapsed && (
-                    <span className="min-w-[18px] h-[18px] rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold flex items-center justify-center px-1">
-                        {sectionBadgeCount}
-                    </span>
+                </Link>
+                {!collapsed && (
+                    <div className="ml-[18px] mt-0.5 mb-2 space-y-px border-l border-[var(--sidebar-border)] pl-2">
+                        {section.children.map((item) => {
+                            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                            const badgeCount = badges[item.href] || 0;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    onClick={onNavigate}
+                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-all duration-150 whitespace-nowrap overflow-hidden no-underline text-[12px] ${isActive
+                                        ? "bg-white/[0.04] text-[var(--text)] border-l-2 border-[var(--brand)] -ml-[10px] pl-3"
+                                        : "text-[var(--muted-light)] hover:text-[var(--text)] hover:bg-white/[0.02]"
+                                        }`}
+                                >
+                                    <span className={`shrink-0 ${isActive ? "text-[var(--brand)]" : "text-[var(--muted-light)]"}`}>
+                                        {item.icon}
+                                    </span>
+                                    <span className="font-medium truncate flex-1">{item.label}</span>
+                                    {badgeCount > 0 && (
+                                        <span className="min-w-[16px] h-[16px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                            {badgeCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            );
+                        })}
+                    </div>
                 )}
-            </Link>
+            </div>
         );
     }
 

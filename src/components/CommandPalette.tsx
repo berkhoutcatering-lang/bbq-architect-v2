@@ -106,17 +106,62 @@ export default function CommandPalette() {
     const router = useRouter();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    /* G-prefix sneltoetsen (Linear-stijl): druk 'g' dan een letter om naar een hub te springen.
+       G H = Vandaag, G P = Plannen, G V = Verkoop, G K = Keuken, G W = Voorraad,
+       G G = Geld, G S = Systeem, G A = Agenda, G O = Offertes, G E = Events,
+       G F = Facturen, G C = Klanten. Skip wanneer gebruiker typt in een input. */
+    const lastGRef = useRef<number>(0);
+    const openRef = useRef<boolean>(false);
+    useEffect(function () { openRef.current = open; }, [open]);
+
     useEffect(function () {
         function handleKeyDown(e: KeyboardEvent) {
+            // ⌘K / Ctrl+K: toggle palette
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
                 setOpen(function (prev) { return !prev; });
+                return;
             }
-            if (e.key === 'Escape') setOpen(false);
+            if (e.key === 'Escape') { setOpen(false); return; }
+
+            // Skip sneltoetsen wanneer in input/textarea/contenteditable of palette open
+            const target = e.target as HTMLElement | null;
+            const isTyping = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+            if (isTyping || openRef.current) return;
+
+            // Eerste 'g' zet de prefix-timer
+            if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+                lastGRef.current = Date.now();
+                return;
+            }
+
+            // Tweede toets binnen 1500ms = sneltoets
+            if (lastGRef.current && (Date.now() - lastGRef.current) < 1500) {
+                const shortcuts: Record<string, string> = {
+                    h: '/',
+                    p: '/plannen',
+                    v: '/verkoop',
+                    k: '/keuken',
+                    w: '/voorraad',
+                    g: '/geld',
+                    s: '/systeem',
+                    a: '/agenda',
+                    o: '/offertes',
+                    e: '/events',
+                    f: '/facturen',
+                    c: '/klanten',
+                };
+                const dest = shortcuts[e.key.toLowerCase()];
+                if (dest) {
+                    e.preventDefault();
+                    router.push(dest);
+                    lastGRef.current = 0;
+                }
+            }
         }
         window.addEventListener('keydown', handleKeyDown);
         return function () { window.removeEventListener('keydown', handleKeyDown); };
-    }, []);
+    }, [router]);
 
     useEffect(function () {
         if (open && inputRef.current) {
