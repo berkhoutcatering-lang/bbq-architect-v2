@@ -206,6 +206,9 @@ export function conceptToGerechtPayload(c: Concept, orgId: string) {
     Borrel: 'bites',
     Saus: 'bijgerechten',
   };
+  // Note: `gerechten` tabel heeft GEEN `bron` of `status` kolom — alleen `actief`.
+  // Bij latere migration (voor "concept-tier" gerechten in /gerechten) hier
+  // weer status='concept' + bron='ai' toevoegen.
   return {
     naam: c.name,
     beschrijving: c.tagline,
@@ -220,8 +223,6 @@ export function conceptToGerechtPayload(c: Concept, orgId: string) {
     wijn_suggestie: c.pairing,
     service_tip: c.serviceTip,
     organization_id: orgId,
-    status: 'concept' as const,
-    bron: 'ai' as const,
     actief: false,
   };
 }

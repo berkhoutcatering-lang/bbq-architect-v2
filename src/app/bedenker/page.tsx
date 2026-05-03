@@ -19,9 +19,15 @@ import BedenkerKpiTiles from './_components/BedenkerKpiTiles';
 import LatestConceptSpotlight from './_components/LatestConceptSpotlight';
 import StudioBackground from './_components/StudioBackground';
 import { mapApiToConcept, conceptToGerechtPayload } from './_components/mapping';
-import type { Concept, HistoryItem } from './_components/types';
+import type { Concept } from './_components/types';
+import {
+  useConceptHistory,
+  type BedenkMode,
+  type ModeContext,
+  type ConceptHistoryRow,
+} from './_components/useConceptHistory';
 
-const VERRAS_PROMPTS = [
+const VERRAS_PROMPTS_VRIJ = [
   'Verrassend hoofdgerecht in BBQ-stijl voor 60 personen — gebruik een seizoens-ingredient',
   'Borrelhapje dat niemand nog op een BBQ heeft gedaan',
   'Smoke-dessert dat past bij een zomeravond',
@@ -32,6 +38,25 @@ const VERRAS_PROMPTS = [
   'Fine-dining hapje uit BBQ-restjes (zero-waste, signature)',
 ];
 
+const VERRAS_PROMPTS_VOORRAAD = [
+  'Maak hier iets pittigs van voor de lunch',
+  'Bedenk een zero-waste finger-food uit deze restjes',
+  'Comfort-gerecht op basis van deze ingrediënten',
+];
+
+const VERRAS_PROMPTS_KLANT = [
+  'Een gerecht dat indruk maakt zonder te zwaar te worden',
+  'Iets feestelijks dat past bij de gelegenheid',
+  'Verras de gasten met een onverwachte twist',
+];
+
+const VERRAS_VOORRAAD_FILLERS = [
+  '2kg pulled pork over, 500g cheddar, 1kg ui',
+  '5kg paprika, 1kg feta, 200g basilicum, 500g rijst',
+  '3kg kipdijen, 1kg champignon, 500g spinazie',
+  'Restjes brisket 1.5kg + 2kg bonen + 500g ui',
+];
+
 interface ExistingDish {
   id?: number | string;
   naam: string;
@@ -39,15 +64,18 @@ interface ExistingDish {
   tags?: string[];
 }
 
-const HISTORY_KEY = 'bbq.bedenker.history.v1';
 const HOWTO_DISMISS_KEY = 'bbq.bedenker.howto.dismissed.v1';
-const MAX_HISTORY = 12;
 
 type SortKey = 'confidence' | 'margin' | 'prep' | 'risk';
+
+/** Concept-id (lokaal) → concept_history row-id (UUID) zodat we bij save ook de
+ *  history-rij kunnen markeren als 'bewaard'. */
+type ConceptHistoryMap = Record<string, string>;
 
 export default function BedenkerPage() {
   const showToast = useToast();
   const { orgId } = useOrg();
+  const conceptHistory = useConceptHistory();
 
   const [prompt, setPrompt] = useState('');
   const [lastPrompt, setLastPrompt] = useState('');
@@ -56,9 +84,16 @@ export default function BedenkerPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openConcept, setOpenConcept] = useState<Concept | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHow, setShowHow] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('confidence');
+
+  /** Mode + per-mode context. Vrij = open brainstorm, voorraad = restjes-input,
+   *  klant = wizard-feeder met dieet/budget/gasten. */
+  const [mode, setMode] = useState<BedenkMode>('vrij');
+  const [modeContext, setModeContext] = useState<ModeContext>({});
+
+  /** concept-id → concept_history.id mapping voor save-tracking */
+  const [conceptToHistory, setConceptToHistory] = useState<ConceptHistoryMap>({});
 
   // Latest gerecht voor de spotlight — accepteert UUID-string of bigint id
   interface LatestConcept {
@@ -75,43 +110,77 @@ export default function BedenkerPage() {
 
   useEffect(() => {
     if (!orgId) return;
-    // Pak meest recent toegevoegde gerecht — `bron` kolom bestaat niet in
-    // huidige DB-schema, dus fallback op meest recent overall.
+    // Eerst: pak meest recent BEWAARDE concept_history-entry (= via /bedenker
+    // opgeslagen). Pas als daar geen rij is, fallback op meest recent toegevoegd
+    // gerecht overall — zodat de spotlight niet leeg blijft bij een verse account.
     supabase
-      .from('gerechten')
-      .select('id, naam, beschrijving, gang_slug, created_at, kostprijs_pp, marge_pct')
+      .from('concept_history')
+      .select('saved_gerecht_id, naam, tagline, glyph, categorie, saved_at, kostprijs_pp, marge_pct')
       .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
+      .eq('status', 'bewaard')
+      .not('saved_gerecht_id', 'is', null)
+      .order('saved_at', { ascending: false })
       .limit(1)
       .then((res) => {
         if (res.data && res.data.length > 0) {
-          const r = res.data[0];
-          // Smart glyph keyword match (light version)
-          const name = (r.naam || '').toLowerCase();
-          const glyph = /watermel|meloen/i.test(name)
-            ? '🍉'
-            : /taco/i.test(name)
-            ? '🌮'
-            : /brisket|burnt/i.test(name)
-            ? '🥩'
-            : /tofu|vegan/i.test(name)
-            ? '🌱'
-            : /chocola|brownie/i.test(name)
-            ? '🍫'
-            : /bonbon|spies/i.test(name)
-            ? '🍢'
-            : '✨';
+          const r = res.data[0] as {
+            saved_gerecht_id: string;
+            naam: string;
+            tagline: string | null;
+            glyph: string | null;
+            categorie: string | null;
+            saved_at: string;
+            kostprijs_pp: number | null;
+            marge_pct: number | null;
+          };
           setLatestSavedConcept({
-            id: r.id,
+            id: r.saved_gerecht_id,
             naam: r.naam,
-            beschrijving: r.beschrijving,
-            glyph,
-            gang_naam: r.gang_slug,
-            created_at: r.created_at,
-            kostprijs_pp: r.kostprijs_pp,
-            marge_pct: r.marge_pct,
+            beschrijving: r.tagline ?? undefined,
+            glyph: r.glyph ?? '✨',
+            gang_naam: r.categorie ?? undefined,
+            created_at: r.saved_at,
+            kostprijs_pp: r.kostprijs_pp ?? undefined,
+            marge_pct: r.marge_pct ?? undefined,
           });
+          return;
         }
+        // Fallback: meest recent overall
+        supabase
+          .from('gerechten')
+          .select('id, naam, beschrijving, gang_slug, created_at, kostprijs_pp, marge_pct')
+          .eq('organization_id', orgId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .then((r2) => {
+            if (r2.data && r2.data.length > 0) {
+              const r = r2.data[0];
+              const name = (r.naam || '').toLowerCase();
+              const glyph = /watermel|meloen/i.test(name)
+                ? '🍉'
+                : /taco/i.test(name)
+                ? '🌮'
+                : /brisket|burnt/i.test(name)
+                ? '🥩'
+                : /tofu|vegan/i.test(name)
+                ? '🌱'
+                : /chocola|brownie/i.test(name)
+                ? '🍫'
+                : /bonbon|spies/i.test(name)
+                ? '🍢'
+                : '✨';
+              setLatestSavedConcept({
+                id: r.id,
+                naam: r.naam,
+                beschrijving: r.beschrijving,
+                glyph,
+                gang_naam: r.gang_slug,
+                created_at: r.created_at,
+                kostprijs_pp: r.kostprijs_pp,
+                marge_pct: r.marge_pct,
+              });
+            }
+          });
       });
   }, [orgId]);
 
@@ -124,25 +193,14 @@ export default function BedenkerPage() {
       .then((res) => setBestaande((res.data as ExistingDish[]) || []));
   }, []);
 
-  // Load history + howto-dismiss from localStorage
+  // Howto-dismiss blijft op localStorage — pure UI-preference, geen team-state
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(HISTORY_KEY);
-      if (raw) setHistory(JSON.parse(raw));
       if (localStorage.getItem(HOWTO_DISMISS_KEY) === '1') setShowHow(false);
     } catch {
       /* noop */
     }
   }, []);
-
-  function persistHistory(items: HistoryItem[]) {
-    setHistory(items);
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
-    } catch {
-      /* noop */
-    }
-  }
 
   function dismissHow() {
     setShowHow(false);
@@ -153,7 +211,7 @@ export default function BedenkerPage() {
     }
   }
 
-  async function fetchOneConcept(p: string): Promise<Concept | null> {
+  async function fetchOneConcept(p: string): Promise<{ concept: Concept; raw: Record<string, unknown> } | null> {
     try {
       const res = await fetch('/api/recipe-generate', {
         method: 'POST',
@@ -162,18 +220,38 @@ export default function BedenkerPage() {
           prompt: p,
           mode: 'recipe',
           existing: bestaande.map((g) => ({ naam: g.naam, gang: g.gang_slug, tags: g.tags })),
+          options: {
+            flavour: mode,
+            flavourContext: modeContext,
+            porties: modeContext.gasten,
+          },
         }),
       });
       const body = await res.json();
       if (!res.ok || !body?.data) return null;
-      return mapApiToConcept(body.data, p, bestaande);
+      return { concept: mapApiToConcept(body.data, p, bestaande), raw: body.data };
     } catch {
       return null;
     }
   }
 
+  /** Bouw de effectieve prompt — voor klant-mode voegt deze automatisch
+   *  klant-context toe als die expliciet is. Voor voorraad-mode gebruikt
+   *  hij de voorraad-input als impliciete prompt-leader. */
+  function buildEffectivePrompt(): string {
+    if (mode === 'voorraad') {
+      const voorraad = (modeContext.voorraad || '').trim();
+      const userText = prompt.trim();
+      if (!voorraad && !userText) return '';
+      if (!userText) return `Bedenk een gerecht uit deze restjes: ${voorraad}`;
+      if (!voorraad) return userText;
+      return `${userText} — uit deze restjes: ${voorraad}`;
+    }
+    return prompt;
+  }
+
   async function bedenk() {
-    return bedenkWithPrompt(prompt);
+    return bedenkWithPrompt(buildEffectivePrompt());
   }
 
   async function bedenkWithPrompt(p: string) {
@@ -186,26 +264,35 @@ export default function BedenkerPage() {
       // Fire 3 parallel calls — variety via repeated prompts
       const variants = [p, `${p} (alternatieve aanpak)`, `${p} (creatieve twist)`];
       const results = await Promise.all(variants.map((v) => fetchOneConcept(v)));
-      const ok = results.filter((c): c is Concept => c !== null);
+      const ok = results.filter((c): c is { concept: Concept; raw: Record<string, unknown> } => c !== null);
       if (ok.length === 0) {
         setError('AI gaf geen geldige concepten terug. Probeer het opnieuw of verfijn de prompt.');
         showToast({ type: 'error', message: 'Geen concepten gegenereerd' });
         return;
       }
-      setConcepts(ok);
-      // Add to history
-      const today = new Date();
-      const dateLabel = `${today.getDate()} ${['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'][today.getMonth()]}`;
-      persistHistory([
-        {
-          id: 'h_' + Date.now(),
-          prompt: p,
-          date: dateLabel,
-          total: ok.length,
-          saved: 0,
-        },
-        ...history,
-      ]);
+      const newConcepts = ok.map((r) => r.concept);
+      setConcepts(newConcepts);
+
+      // Persist alle 3 concepten naar concept_history (parallel, fire-and-forget
+      // failures want UI moet niet vastlopen op één DB-fout). Mappingstap onthoudt
+      // welke concept-id bij welke history-row hoort, voor latere markBewaard.
+      const inserts = await Promise.all(
+        ok.map((r) =>
+          conceptHistory.insertConcept({
+            concept: r.concept,
+            prompt: p,
+            mode,
+            modeContext,
+            body: r.raw,
+          }),
+        ),
+      );
+      const newMap: ConceptHistoryMap = { ...conceptToHistory };
+      ok.forEach((r, idx) => {
+        const histRow = inserts[idx];
+        if (histRow) newMap[r.concept.id] = histRow.id;
+      });
+      setConceptToHistory(newMap);
     } catch (e) {
       setError((e as Error).message || 'Onbekende fout');
       showToast({ type: 'error', message: (e as Error).message });
@@ -222,13 +309,21 @@ export default function BedenkerPage() {
     setConcepts((prev) => prev.map((p) => (p.id === c.id ? { ...p, saveState: 'saving' } : p)));
     try {
       const payload = conceptToGerechtPayload(c, orgId);
-      const { error: dbErr } = await supabase.from('gerechten').insert([payload]);
+      const { data: inserted, error: dbErr } = await supabase
+        .from('gerechten')
+        .insert([payload])
+        .select('id')
+        .single();
       if (dbErr) throw new Error(dbErr.message);
       setConcepts((prev) => prev.map((p) => (p.id === c.id ? { ...p, saveState: 'saved' } : p)));
-      // Update history saved count
-      if (history[0]?.prompt === lastPrompt) {
-        persistHistory([{ ...history[0], saved: history[0].saved + 1 }, ...history.slice(1)]);
+
+      // Mark concept_history-row als bewaard zodat KPI-tile updatet en
+      // andere team-leden in realtime zien dat er iets is opgeslagen.
+      const histId = conceptToHistory[c.id];
+      if (histId && inserted?.id) {
+        conceptHistory.markBewaard(histId, inserted.id as string);
       }
+
       showToast({
         type: 'success',
         message: 'Concept opgeslagen',
@@ -266,23 +361,77 @@ export default function BedenkerPage() {
 
   const truncatedPrompt = lastPrompt.length > 40 ? lastPrompt.slice(0, 40) + '…' : lastPrompt;
 
-  // KPI data uit history + saved + current session
-  const totaalBedacht = history.reduce((s, h) => s + (h.total || 0), 0) + concepts.length;
-  const totaalBewaard = history.reduce((s, h) => s + (h.saved || 0), 0) + savedConcepts.length;
-  const inspiratiesUniek = useMemo(() => {
+  // HistoryRail werkt op (prompt, total, saved, date) — aggregeer concept_history
+  // rows hierop. Zelfde prompt-tekst binnen 1 sessie = 1 entry.
+  const historyAggregated = useMemo(() => {
+    const map = new Map<string, { id: string; prompt: string; date: string; total: number; saved: number; created: number }>();
+    const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+    conceptHistory.rows
+      .filter((r) => r.status !== 'verlopen')
+      .forEach((r) => {
+        const dt = new Date(r.created_at);
+        const dayKey = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}-${r.prompt.toLowerCase().slice(0, 60)}`;
+        const dateLabel = `${dt.getDate()} ${months[dt.getMonth()]}`;
+        const existing = map.get(dayKey);
+        if (existing) {
+          existing.total += 1;
+          if (r.status === 'bewaard') existing.saved += 1;
+          if (dt.getTime() > existing.created) existing.created = dt.getTime();
+        } else {
+          map.set(dayKey, {
+            id: r.id,
+            prompt: r.prompt,
+            date: dateLabel,
+            total: 1,
+            saved: r.status === 'bewaard' ? 1 : 0,
+            created: dt.getTime(),
+          });
+        }
+      });
+    return Array.from(map.values())
+      .sort((a, b) => b.created - a.created)
+      .slice(0, 12);
+  }, [conceptHistory.rows]);
+
+  // KPI data — primair uit concept_history (echte multi-tenant data), fallback
+  // op huidige sessie als de migration nog niet draait.
+  const stats = conceptHistory.stats;
+  const sessionInspiraties = useMemo(() => {
     const set = new Set<string>();
     concepts.forEach((c) => c.inspiredBy.forEach((p) => set.add(p.name)));
     return set.size;
   }, [concepts]);
+
+  const totaalBedacht = stats.totaalBedacht || concepts.length;
+  const totaalBewaard = stats.totaalBewaard || savedConcepts.length;
+  const inspiratiesUniek = stats.inspiratiesUniek || sessionInspiraties;
   const gemConfidence =
-    concepts.length > 0 ? concepts.reduce((s, c) => s + c.confidence, 0) / concepts.length : 0;
+    stats.gemConfidence > 0
+      ? stats.gemConfidence
+      : concepts.length > 0
+      ? concepts.reduce((s, c) => s + c.confidence, 0) / concepts.length
+      : 0;
 
   function verrasMe() {
-    const random = VERRAS_PROMPTS[Math.floor(Math.random() * VERRAS_PROMPTS.length)];
+    const pool =
+      mode === 'voorraad'
+        ? VERRAS_PROMPTS_VOORRAAD
+        : mode === 'klant'
+        ? VERRAS_PROMPTS_KLANT
+        : VERRAS_PROMPTS_VRIJ;
+    const random = pool[Math.floor(Math.random() * pool.length)];
     setPrompt(random);
+
+    // In voorraad-mode: vul ook een willekeurige restjes-set, zodat verras-me
+    // direct een complete query oplevert zonder dat Sam handmatig moet typen.
+    if (mode === 'voorraad' && !modeContext.voorraad?.trim()) {
+      const filler = VERRAS_VOORRAAD_FILLERS[Math.floor(Math.random() * VERRAS_VOORRAAD_FILLERS.length)];
+      setModeContext({ ...modeContext, voorraad: filler });
+    }
+
     setTimeout(() => {
-      setPrompt(random);
-      bedenkWithPrompt(random);
+      // buildEffectivePrompt leest uit state, dus we wachten één tick op de re-render.
+      bedenk();
     }, 250);
   }
 
@@ -314,7 +463,21 @@ export default function BedenkerPage() {
 
       {showHow && <HowItWorksStrip onDismiss={dismissHow} />}
 
-      <PromptHero value={prompt} onChange={setPrompt} onGenerate={bedenk} busy={busy} />
+      <PromptHero
+        value={prompt}
+        onChange={setPrompt}
+        onGenerate={bedenk}
+        busy={busy}
+        mode={mode}
+        onModeChange={(m) => {
+          setMode(m);
+          // Wis prompt-state als gebruiker switcht naar voorraad — anders blijft
+          // er irrelevante tekst staan die een verkeerde leader-prompt vormt.
+          if (m === 'voorraad' && prompt.length > 0) setPrompt('');
+        }}
+        modeContext={modeContext}
+        onModeContextChange={setModeContext}
+      />
 
       {error && (
         <div
@@ -456,7 +619,16 @@ export default function BedenkerPage() {
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    onClick={() => setConcepts([])}
+                    onClick={() => {
+                      // Mark unsaved concepts as 'afgewezen' in history zodat
+                      // KPI-tile niet vervuilt en team-rooster zuiver blijft.
+                      const unsavedIds = concepts
+                        .filter((c) => c.saveState !== 'saved')
+                        .map((c) => conceptToHistory[c.id])
+                        .filter((id): id is string => Boolean(id));
+                      if (unsavedIds.length > 0) conceptHistory.markAfgewezen(unsavedIds);
+                      setConcepts([]);
+                    }}
                     className="btn btn-ghost btn-sm"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
@@ -476,9 +648,14 @@ export default function BedenkerPage() {
         </div>
 
         <HistoryRail
-          items={history}
+          items={historyAggregated}
           onPick={(p) => setPrompt(p)}
-          onClear={() => persistHistory([])}
+          onClear={() => {
+            // 'Geschiedenis wissen' = alle nieuw-status rows naar 'afgewezen'
+            // markeren zodat ze uit de UI verdwijnen maar audit-trail blijft.
+            const ids = conceptHistory.rows.filter((r) => r.status === 'nieuw').map((r) => r.id);
+            if (ids.length > 0) conceptHistory.markAfgewezen(ids);
+          }}
         />
       </div>
 
