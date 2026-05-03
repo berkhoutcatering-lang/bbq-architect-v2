@@ -10,6 +10,7 @@
   /* Brand & primary */
   --brand: #FFBF00;
   --brand-light: rgba(255, 191, 0, .12);
+  --brand-gold: #c4a35a;
 
   /* Backgrounds */
   --bg: #121214;
@@ -7585,4 +7586,13 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   .kds-board-grid > * {
     scroll-snap-align: start;
   }
+}
+
+/* Rittenregistratie — eyebrow label, used in stat tiles and section heads */
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
 }

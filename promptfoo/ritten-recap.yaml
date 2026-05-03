@@ -1,0 +1,61 @@
+# Kwartaal-recap regression.
+# Pillar #4: AI noemt NOOIT bedragen, tarieven, "€"-symbool.
+# Anti-XSS: <script> in user-velden mag niet reflected worden.
+
+description: Kwartaal-recap regression — geen bedragen, geen XSS, geen verzonnen rit-ids
+prompts:
+  - |
+    Je krijgt zakelijke ritten van één kwartaal en geeft een korte JSON-recap voor de boekhouder.
+    Output JSON:
+    { "samenvatting": "string", "opmerkelijkheden": [{ "type": "...", "rit_id": number, "uitleg": "string" }],
+      "advies_boekhouder": "string" }
+    Regels:
+    - "lange_rit" = >300km, "ontbrekend_doel" = lege/<3 chars, "duplicaat_verdacht" = zelfde paar zelfde dag.
+    - Max 5 opmerkelijkheden.
+    - NOOIT bedragen, tarieven, of "€".
+    - Geen markdown, alleen JSON.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+
+tests:
+  # Normale rit — geen bedragen lekken
+  - vars:
+      ritten: '[{"rit_id":1,"datum":"2026-04-12","van":"Schoonoord","naar":"Drachten","km":92,"doel":"BBQ event Smit","heeft_event":true}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).opmerkelijkheden.length <= 5"
+      - type: not-contains
+        value: '0,23'
+      - type: not-contains
+        value: '€'
+      - type: not-contains
+        value: 'tarief'
+
+  # Lange rit + ontbrekend doel detecteren
+  - vars:
+      ritten: '[{"rit_id":2,"datum":"2026-05-01","van":"A","naar":"B","km":450,"doel":"","heeft_event":false}]'
+    assert:
+      - type: contains
+        value: 'lange_rit'
+      - type: contains
+        value: 'ontbrekend_doel'
+
+  # XSS-payload in doel mag niet reflected
+  - vars:
+      ritten: '[{"rit_id":3,"datum":"2026-04-01","van":"X","naar":"Y","km":50,"doel":"<script>alert(1)</script>","heeft_event":false}]'
+    assert:
+      - type: not-contains
+        value: '<script>'
+      - type: not-contains
+        value: 'alert'
+
+  # Hallucinatie-test: AI mag geen rit_id verzinnen
+  - vars:
+      ritten: '[{"rit_id":999,"datum":"2026-04-15","van":"X","naar":"Y","km":80,"doel":"Test","heeft_event":false}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).opmerkelijkheden.every(o => o.rit_id === 999)"
+
+defaultTest:
+  threshold: 0.92

@@ -1,11 +1,13 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BarChart3, Clock, Users, Package, ShoppingCart } from 'lucide-react';
+import { BarChart3, Clock, Users, Package, ShoppingCart, Car } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import HubCard from '@/components/HubCard';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt } from '@/lib/utils';
+import { aggregeer, filterPeriode } from '@/lib/ritten-aggregaties';
+import type { Rit } from '@/types';
 
 interface FactuurRow { id: number; status?: string; datum?: string; items?: Array<{ qty?: number; prijs?: number }> }
 interface KlantRow { id: number; created_at?: string }
@@ -21,6 +23,7 @@ export default function AdministratieHub() {
   const { data: inventory, loading: loadingInv } = useSupabase<InventoryRow>('inventory', []);
   const { data: timeLogs, loading: loadingHours } = useSupabase<TimeLogRow>('time_logs', []);
   const { data: inkoop, loading: loadingInkoop } = useSupabase<InkoopRow>('inkooplijsten', []);
+  const { data: ritten, loading: loadingRitten } = useSupabase<Rit>('ritten', []);
 
   const financienStats = useMemo(() => {
     const now = new Date();
@@ -87,6 +90,17 @@ export default function AdministratieHub() {
     ];
   }, [inkoop]);
 
+  const rittenStats = useMemo(() => {
+    const dezeMaand = filterPeriode(ritten, 'Maand');
+    const ditJaar = filterPeriode(ritten, 'Jaar');
+    const aggMaand = aggregeer(dezeMaand);
+    const aggJaar = aggregeer(ditJaar);
+    return [
+      { label: 'Deze maand', value: `${aggMaand.totaalKm.toLocaleString('nl-NL', { maximumFractionDigits: 0 })} km` },
+      { label: 'Aftrek YTD', value: fmt(aggJaar.aftrekEur) },
+    ];
+  }, [ritten]);
+
   return (
     <div className="main-content">
       <PageHeader
@@ -146,6 +160,15 @@ export default function AdministratieHub() {
           cta="Open inkoop"
           stats={inkoopStats}
           loading={loadingInkoop}
+        />
+        <HubCard
+          href="/administratie/rittenregistratie"
+          icon={Car}
+          title="Rittenregistratie"
+          desc="Sluitende kilometeradministratie voor de Belastingdienst — €0,23/km automatisch."
+          cta="Open ritten"
+          stats={rittenStats}
+          loading={loadingRitten}
         />
       </div>
     </div>
