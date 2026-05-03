@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Button from '@/components/Button';
 import { useSupabase } from '@/lib/useSupabase';
+import { useToast } from '@/components/Toast';
 import type { Rit, Voertuig, DbEvent } from '@/types';
 import { fmtKm, fmtEur, fmtDateR, categoriseerRit, CAT_BY_ID } from '@/lib/ritten-aggregaties';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
@@ -46,13 +47,23 @@ const ICON_MAP = {
   milestone: Milestone,
 } as const;
 
+function addMinutesToTime(hhmmss: string, minutes: number): string {
+  const [h, m] = hhmmss.split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  const newH = Math.floor(total / 60) % 24;
+  const newM = total % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:00`;
+}
+
 export default function RitDetailClient({ id }: Props) {
   const router = useRouter();
-  const { data: ritten, loading } = useSupabase<Rit>('ritten', []);
+  const showToast = useToast();
+  const { data: ritten, loading, update, insert, remove } = useSupabase<Rit>('ritten', []);
   const { data: voertuigen } = useSupabase<Voertuig>('voertuigen', []);
   const { data: events } = useSupabase<DbEvent>('events', []);
 
   const [tab, setTab] = useState<Tab>('route');
+  const [actieBezig, setActieBezig] = useState<'goedkeur' | 'kopieer' | 'verwijder' | null>(null);
 
   const sortedRitten = useMemo(
     () => [...ritten].sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : a.id - b.id)),
@@ -703,13 +714,93 @@ export default function RitDetailClient({ id }: Props) {
               </div>
             </div>
             <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Button variant="brand" icon={<CheckCircle2 size={14} />} style={{ width: '100%', justifyContent: 'center' }}>
-                Goedkeuren & boeken
-              </Button>
-              <Button variant="ghost" icon={<Edit3 size={14} />} style={{ width: '100%', justifyContent: 'center' }}>
+              {rit.status === 'open' ? (
+                <Button
+                  variant="brand"
+                  icon={<CheckCircle2 size={14} />}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  loading={actieBezig === 'goedkeur'}
+                  onClick={async () => {
+                    setActieBezig('goedkeur');
+                    try {
+                      const ok = await update(rit.id, { status: 'goedgekeurd' });
+                      if (!ok) throw new Error('Update mislukt');
+                      showToast({ type: 'success', message: 'Rit goedgekeurd & geboekt' });
+                    } catch (e) {
+                      showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
+                    } finally {
+                      setActieBezig(null);
+                    }
+                  }}
+                >
+                  Goedkeuren & boeken
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  icon={<CheckCircle2 size={14} />}
+                  style={{ width: '100%', justifyContent: 'center', color: 'var(--green)' }}
+                  loading={actieBezig === 'goedkeur'}
+                  onClick={async () => {
+                    if (!confirm('Rit terug naar status "open" zetten?')) return;
+                    setActieBezig('goedkeur');
+                    try {
+                      await update(rit.id, { status: 'open' });
+                      showToast({ type: 'success', message: 'Rit teruggezet naar open' });
+                    } catch (e) {
+                      showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
+                    } finally {
+                      setActieBezig(null);
+                    }
+                  }}
+                >
+                  ✓ Geboekt — terugzetten
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                icon={<Edit3 size={14} />}
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => router.push(`/administratie/rittenregistratie/${rit.id}/bewerken`)}
+              >
                 Bewerk rit
               </Button>
-              <Button variant="ghost" icon={<Copy size={14} />} style={{ width: '100%', justifyContent: 'center' }}>
+              <Button
+                variant="ghost"
+                icon={<Copy size={14} />}
+                style={{ width: '100%', justifyContent: 'center' }}
+                loading={actieBezig === 'kopieer'}
+                onClick={async () => {
+                  setActieBezig('kopieer');
+                  try {
+                    const retourKm = rit.km_eind - rit.km_begin;
+                    const created = await insert({
+                      voertuig_id: rit.voertuig_id,
+                      datum: rit.datum,
+                      vertrek_tijd: rit.vertrek_tijd
+                        ? addMinutesToTime(rit.vertrek_tijd, (rit.duur_minuten ?? 30) + 60)
+                        : null,
+                      duur_minuten: rit.duur_minuten,
+                      vertrek_adres: rit.aankomst_adres,
+                      aankomst_adres: rit.vertrek_adres,
+                      km_begin: rit.km_eind,
+                      km_eind: rit.km_eind + retourKm,
+                      zakelijk: rit.zakelijk,
+                      prive_omleiding_km: 0,
+                      doel: 'Retour ' + (rit.doel || ''),
+                      event_id: rit.event_id,
+                      status: 'open',
+                    });
+                    if (!created) throw new Error('Aanmaken mislukt');
+                    showToast({ type: 'success', message: 'Retour-rit aangemaakt' });
+                    router.push(`/administratie/rittenregistratie/${created.id}`);
+                  } catch (e) {
+                    showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
+                  } finally {
+                    setActieBezig(null);
+                  }
+                }}
+              >
                 Kopieer als retour
               </Button>
               <a
@@ -723,7 +814,24 @@ export default function RitDetailClient({ id }: Props) {
                 </Button>
               </a>
               <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
-              <Button variant="red" icon={<Trash2 size={14} />} style={{ width: '100%', justifyContent: 'center' }}>
+              <Button
+                variant="red"
+                icon={<Trash2 size={14} />}
+                style={{ width: '100%', justifyContent: 'center' }}
+                loading={actieBezig === 'verwijder'}
+                onClick={async () => {
+                  if (!confirm(`Rit r-${String(rit.id).padStart(3, '0')} verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+                  setActieBezig('verwijder');
+                  try {
+                    await remove(rit.id);
+                    showToast({ type: 'success', message: 'Rit verwijderd' });
+                    router.push('/administratie/rittenregistratie');
+                  } catch (e) {
+                    showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
+                    setActieBezig(null);
+                  }
+                }}
+              >
                 Verwijder
               </Button>
             </div>

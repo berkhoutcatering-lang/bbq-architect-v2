@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Route, Plus, Download } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import Button from '@/components/Button';
@@ -19,9 +20,27 @@ export default function RittenregistratieClient() {
   const { data: ritten, loading } = useSupabase<Rit>('ritten', []);
   const { data: voertuigen } = useSupabase<Voertuig>('voertuigen', []);
 
-  const [periode, setPeriode] = useState<Periode>('Maand');
-  const [filter, setFilter] = useState<FilterValue>('all');
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const periode = (searchParams.get('p') || 'Maand') as Periode;
+  const filter = (searchParams.get('cat') || 'all') as FilterValue;
+
+  const updateParam = useCallback(
+    (key: string, value: string | null, defaultValue: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (!value || value === defaultValue) params.delete(key);
+      else params.set(key, value);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [searchParams, pathname, router],
+  );
+  const setPeriode = useCallback((p: Periode) => updateParam('p', p, 'Maand'), [updateParam]);
+  const setFilter = useCallback((f: FilterValue) => updateParam('cat', f, 'all'), [updateParam]);
+
+  const activeId: number | null = null;
 
   const inPeriode = useMemo(() => filterPeriode(ritten, periode), [ritten, periode]);
   const filtered = useMemo(() => {
@@ -74,8 +93,17 @@ export default function RittenregistratieClient() {
         description="Sluitende kilometeradministratie voor de Belastingdienst — €0,23 per zakelijke kilometer 2026."
         actions={
           <>
-            <Button variant="ghost" size="sm" icon={<Download size={14} />}>
-              Export
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={() => {
+                const jaar = new Date().getFullYear();
+                window.location.href = `/api/ritten/export?start=${jaar}-01-01&eind=${jaar}-12-31`;
+              }}
+              title="Belastingdienst-conforme CSV downloaden voor heel ${jaar}"
+            >
+              Export {new Date().getFullYear()}
             </Button>
             <Link
               href="/administratie/rittenregistratie/nieuw"
@@ -123,7 +151,13 @@ export default function RittenregistratieClient() {
       ) : (
         <div className="ritten-layout">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-            <RittenMap routes={routes} markers={markers} activeRouteId={activeId !== null ? String(activeId) : null} height={460} onRouteClick={(id) => setActiveId(Number(id))} />
+            <RittenMap
+              routes={routes}
+              markers={markers}
+              activeRouteId={activeId !== null ? String(activeId) : null}
+              height={460}
+              onRouteClick={(id) => router.push(`/administratie/rittenregistratie/${id}`)}
+            />
             <RittenTabel ritten={filtered} voertuigen={voertuigen} activeId={activeId} />
           </div>
           <RittenSidebar ritten={inPeriode} voertuigen={voertuigen} />
