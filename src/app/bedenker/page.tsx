@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Wand2, Utensils, Settings2, RefreshCw, Filter, Lightbulb, ThumbsDown } from 'lucide-react';
+import { Wand2, Utensils, Settings2, RefreshCw, Filter, Lightbulb, ThumbsDown, Dices } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
@@ -14,8 +14,20 @@ import ConceptCard, { SkeletonCard } from './_components/ConceptCard';
 import ConceptDrawer from './_components/ConceptDrawer';
 import HistoryRail from './_components/HistoryRail';
 import SavedTray from './_components/SavedTray';
+import AIThinkingTrail from './_components/AIThinkingTrail';
 import { mapApiToConcept, conceptToGerechtPayload } from './_components/mapping';
 import type { Concept, HistoryItem } from './_components/types';
+
+const VERRAS_PROMPTS = [
+  'Verrassend hoofdgerecht in BBQ-stijl voor 60 personen — gebruik een seizoens-ingredient',
+  'Borrelhapje dat niemand nog op een BBQ heeft gedaan',
+  'Smoke-dessert dat past bij een zomeravond',
+  'Plantaardig hoofdgerecht dat vleeseters wegblaast',
+  'Aziatische twist op een Hop & Bites-klassieker',
+  'Streetfood-concept met pulled pork in een nieuw jasje',
+  'Side-dish die de hoofdgerechten steelt — comfort food twist',
+  'Fine-dining hapje uit BBQ-restjes (zero-waste, signature)',
+];
 
 interface ExistingDish {
   id?: number | string;
@@ -103,14 +115,18 @@ export default function BedenkerPage() {
   }
 
   async function bedenk() {
-    if (!prompt.trim() || busy) return;
+    return bedenkWithPrompt(prompt);
+  }
+
+  async function bedenkWithPrompt(p: string) {
+    if (!p.trim() || busy) return;
     setBusy(true);
     setError(null);
-    setLastPrompt(prompt);
+    setLastPrompt(p);
 
     try {
       // Fire 3 parallel calls — variety via repeated prompts
-      const variants = [prompt, `${prompt} (alternatieve aanpak)`, `${prompt} (creatieve twist)`];
+      const variants = [p, `${p} (alternatieve aanpak)`, `${p} (creatieve twist)`];
       const results = await Promise.all(variants.map((v) => fetchOneConcept(v)));
       const ok = results.filter((c): c is Concept => c !== null);
       if (ok.length === 0) {
@@ -125,7 +141,7 @@ export default function BedenkerPage() {
       persistHistory([
         {
           id: 'h_' + Date.now(),
-          prompt,
+          prompt: p,
           date: dateLabel,
           total: ok.length,
           saved: 0,
@@ -243,7 +259,31 @@ export default function BedenkerPage() {
             opslaat landen ze in /gerechten.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost bedenker-verras-btn"
+            onClick={() => {
+              const random = VERRAS_PROMPTS[Math.floor(Math.random() * VERRAS_PROMPTS.length)];
+              setPrompt(random);
+              // Auto-generate na korte delay zodat user de prompt ziet verschijnen
+              setTimeout(() => {
+                setPrompt(random);
+                bedenkWithPrompt(random);
+              }, 250);
+            }}
+            disabled={busy}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'linear-gradient(135deg, rgba(255,191,0,.15), rgba(167,139,250,.15))',
+              border: '1px solid rgba(255,191,0,.3)',
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}
+            title="Random prompt + meteen genereren"
+          >
+            <Dices size={14} /> Verras me
+          </button>
           <Link
             href="/gerechten"
             className="btn btn-ghost"
@@ -355,18 +395,27 @@ export default function BedenkerPage() {
 
           {/* Concept grid */}
           {busy ? (
-            <div className="bedenker-grid">
-              {[0, 1, 2].map((i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
+            <>
+              <AIThinkingTrail />
+              <div className="bedenker-grid">
+                {[0, 1, 2].map((i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            </>
           ) : concepts.length === 0 ? (
             <EmptyConceptArea />
           ) : (
             <>
               <div className="bedenker-grid">
-                {sortedConcepts.map((c) => (
-                  <ConceptCard key={c.id} concept={c} onSave={bewaarConcept} onOpen={setOpenConcept} />
+                {sortedConcepts.map((c, idx) => (
+                  <ConceptCard
+                    key={c.id}
+                    concept={c}
+                    onSave={bewaarConcept}
+                    onOpen={setOpenConcept}
+                    revealIndex={idx}
+                  />
                 ))}
               </div>
 

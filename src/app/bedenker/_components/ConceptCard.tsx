@@ -1,21 +1,39 @@
 'use client';
 
+import { useRef } from 'react';
 import { Sparkles, BookmarkPlus, Check, Maximize2 } from 'lucide-react';
 import type { Concept } from './types';
 import { RISK_COLOR, RISK_LABEL } from './types';
+import { useAnimatedNumber, useTilt, fireSparkles } from './wow-hooks';
 
 interface Props {
   concept: Concept;
   onSave: (c: Concept) => void;
   onOpen: (c: Concept) => void;
+  /** Index voor stagger-reveal animation (0,1,2,…) */
+  revealIndex?: number;
 }
 
-export default function ConceptCard({ concept, onSave, onOpen }: Props) {
+export default function ConceptCard({ concept, onSave, onOpen, revealIndex = 0 }: Props) {
   const saving = concept.saveState === 'saving';
   const saved = concept.saveState === 'saved' || !!concept.saved;
+  const tiltRef = useTilt();
+  const saveBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Animated stat numbers
+  const aniCost = useAnimatedNumber(concept.estCost, 700);
+  const aniPrice = useAnimatedNumber(concept.estPrice, 700);
+  const aniMargin = useAnimatedNumber(concept.margin * 100, 700);
+  const aniConfidence = useAnimatedNumber(concept.confidence * 100, 800);
+
+  function handleSave() {
+    if (saveBtnRef.current) fireSparkles(saveBtnRef.current);
+    onSave(concept);
+  }
 
   return (
     <article
+      ref={tiltRef}
       className="bedenker-card"
       style={{
         position: 'relative',
@@ -25,7 +43,10 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'transform .2s, box-shadow .2s',
+        transformStyle: 'preserve-3d',
+        animation: `bedenker-reveal .6s cubic-bezier(.2,.8,.2,1) both`,
+        animationDelay: `${revealIndex * 120}ms`,
+        transition: 'box-shadow .2s',
       }}
     >
       {/* Hero with glyph */}
@@ -75,7 +96,17 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
           />
           {RISK_LABEL(concept.risk)}
         </div>
-        <div style={{ fontSize: 76, filter: 'drop-shadow(0 8px 18px rgba(0,0,0,.4))' }}>{concept.glyph}</div>
+        <div
+          className="bedenker-glyph"
+          style={{
+            fontSize: 76,
+            filter: 'drop-shadow(0 8px 18px rgba(0,0,0,.4))',
+            transform: 'translateZ(40px)',
+            transition: 'transform .3s cubic-bezier(.2,.8,.2,1)',
+          }}
+        >
+          {concept.glyph}
+        </div>
       </div>
 
       <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
@@ -123,11 +154,11 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
             overflow: 'hidden',
           }}
         >
-          <Stat label="KOSTPRIJS" value={`€${concept.estCost.toFixed(2)}`} sub="per portie" />
+          <Stat label="KOSTPRIJS" value={`€${aniCost.toFixed(2)}`} sub="per portie" />
           <Stat
             label="VERKOOP"
-            value={concept.estPrice > 0 ? `€${concept.estPrice.toFixed(2)}` : '—'}
-            sub={concept.margin > 0 ? `${Math.round(concept.margin * 100)}% marge` : 'geen marge'}
+            value={concept.estPrice > 0 ? `€${aniPrice.toFixed(2)}` : '—'}
+            sub={concept.margin > 0 ? `${aniMargin.toFixed(0)}% marge` : 'geen marge'}
             tone="brand"
           />
           <Stat
@@ -168,7 +199,7 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
               AI Confidence
             </span>
           </div>
-          <ConfidenceBar pct={concept.confidence} />
+          <ConfidenceBar pct={aniConfidence / 100} />
         </div>
 
         {/* Inspired by */}
@@ -213,7 +244,8 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
         {/* Footer actions */}
         <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
           <button
-            onClick={() => onSave(concept)}
+            ref={saveBtnRef}
+            onClick={handleSave}
             disabled={saved || saving}
             className={saved ? 'btn btn-ghost' : 'btn btn-brand'}
             style={{
@@ -261,9 +293,26 @@ export default function ConceptCard({ concept, onSave, onOpen }: Props) {
         </div>
       </div>
       <style jsx>{`
+        :global(.bedenker-card) {
+          will-change: transform;
+        }
         :global(.bedenker-card:hover) {
-          transform: translateY(-3px);
-          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 191, 0, 0.18);
+        }
+        :global(.bedenker-card:hover .bedenker-glyph) {
+          transform: translateZ(60px) scale(1.12) rotate(-3deg);
+        }
+        @keyframes bedenker-reveal {
+          from {
+            opacity: 0;
+            transform: translateY(16px) scale(0.96);
+            filter: blur(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+          }
         }
         @keyframes bedenker-spin {
           to {

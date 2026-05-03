@@ -77,6 +77,42 @@ export default function PromptHero({ value, onChange, onGenerate, busy, defaultP
           pointerEvents: 'none',
         }}
       />
+      {/* Floating sparkles — pure CSS, slow drift */}
+      <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        {[
+          { x: 8, y: 22, size: 3, delay: 0, dur: 8 },
+          { x: 92, y: 30, size: 2, delay: 2, dur: 9 },
+          { x: 78, y: 14, size: 4, delay: 1, dur: 7 },
+          { x: 18, y: 78, size: 2, delay: 3, dur: 10 },
+          { x: 65, y: 88, size: 3, delay: 4, dur: 8 },
+          { x: 42, y: 10, size: 2, delay: 5, dur: 9 },
+          { x: 88, y: 60, size: 3, delay: 1.5, dur: 7.5 },
+        ].map((s, i) => (
+          <span
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${s.x}%`,
+              top: `${s.y}%`,
+              width: s.size,
+              height: s.size,
+              borderRadius: '50%',
+              background: i % 2 ? '#a78bfa' : '#FFBF00',
+              boxShadow: `0 0 ${s.size * 3}px ${i % 2 ? '#a78bfa' : '#FFBF00'}`,
+              animation: `bedenker-float ${s.dur}s ease-in-out ${s.delay}s infinite`,
+              opacity: 0.65,
+            }}
+          />
+        ))}
+        <style>{`
+          @keyframes bedenker-float {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+            25% { transform: translate(8px, -10px) scale(1.2); opacity: 0.85; }
+            50% { transform: translate(-6px, -18px) scale(0.9); opacity: 0.6; }
+            75% { transform: translate(4px, -8px) scale(1.1); opacity: 0.8; }
+          }
+        `}</style>
+      </div>
 
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div
