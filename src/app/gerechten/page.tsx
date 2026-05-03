@@ -517,7 +517,7 @@ export default function Gerechten() {
     }
 
     return (
-        <div className="main-content">
+        <div className="main-content mobile-safe-bottom">
             <KeukenTabs />
             <PageHeader
                 title={view === 'menus' ? 'Menu\u2019s' : 'Gerechten'}

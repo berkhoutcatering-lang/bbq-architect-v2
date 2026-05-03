@@ -263,7 +263,7 @@ function FinancienInner() {
     }
 
     return (
-        <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+        <div className="mobile-safe-bottom" style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <PageHeader
                 title="Financiën"
                 description={tab === 'dashboard' ? `Live Profit & Loss Dashboard over ${selectedYear}` : `Boekhouding · ${TAB_LABELS[tab]}`}

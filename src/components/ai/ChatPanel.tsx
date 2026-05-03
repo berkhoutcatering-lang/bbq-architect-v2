@@ -181,7 +181,8 @@ export default function ChatPanel() {
         [busy, input, messages, pathname, orgId, execute]
     );
 
-    const drawerWidth = expanded ? 'min(720px, 92vw)' : 'min(420px, 92vw)';
+    // Op phone (<=767) = full-screen sheet (100vw); op tablet+ = drawer met max-width
+    const drawerWidth = expanded ? 'min(720px, 100vw)' : 'min(420px, 100vw)';
 
     return (
         <>
@@ -211,7 +212,7 @@ export default function ChatPanel() {
                 </button>
             )}
 
-            {/* Drawer */}
+            {/* Drawer — phone: full-screen incl. safe-area, tablet+: side-drawer */}
             {open && (
                 <aside
                     role="complementary"
@@ -229,6 +230,8 @@ export default function ChatPanel() {
                         display: 'flex',
                         flexDirection: 'column',
                         color: 'var(--text)',
+                        paddingTop: 'env(safe-area-inset-top, 0px)',
+                        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
                     }}
                 >
                     {/* Header */}
@@ -385,6 +388,7 @@ export default function ChatPanel() {
                             }}
                             placeholder="Vraag iets over deze pagina…"
                             rows={1}
+                            aria-label="Vraag aan AI"
                             style={{
                                 flex: 1,
                                 background: 'var(--card)',
@@ -392,10 +396,10 @@ export default function ChatPanel() {
                                 borderRadius: 'var(--radius-md)',
                                 padding: 'var(--space-2) var(--space-3)',
                                 color: 'var(--text)',
-                                fontSize: 'var(--text-sm)',
+                                fontSize: 16, // 16px voorkomt iOS auto-zoom on focus
                                 resize: 'none',
                                 fontFamily: 'inherit',
-                                minHeight: 40,
+                                minHeight: 44,
                                 maxHeight: 120,
                             }}
                             disabled={busy}
@@ -403,8 +407,8 @@ export default function ChatPanel() {
                         <button
                             type="submit"
                             disabled={busy || !input.trim()}
-                            className="btn btn-brand"
-                            style={{ minHeight: 40, padding: '8px 12px' }}
+                            className="btn btn-brand touch-manipulation"
+                            style={{ minHeight: 44, minWidth: 44, padding: '8px 12px' }}
                             aria-label="Verstuur"
                         >
                             {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}

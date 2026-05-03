@@ -66,30 +66,38 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">
+              <label htmlFor="login-email" className="block text-sm font-medium text-[var(--muted)] mb-1.5">
                 Email
               </label>
               <input
+                id="login-email"
                 type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
                 value={email}
                 onChange={function (e) { setEmail(e.target.value); }}
                 required
                 autoFocus
-                className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
+                className="w-full px-3 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
+                style={{ minHeight: 44, fontSize: 16 }}
                 placeholder="jouw@email.nl"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[var(--muted)] mb-1.5">
+              <label htmlFor="login-password" className="block text-sm font-medium text-[var(--muted)] mb-1.5">
                 Wachtwoord
               </label>
               <input
+                id="login-password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={function (e) { setPassword(e.target.value); }}
                 required
-                className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
+                className="w-full px-3 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--muted)] focus:border-[var(--brand)] focus:outline-none transition-colors"
+                style={{ minHeight: 44, fontSize: 16 }}
                 placeholder="Je wachtwoord"
               />
             </div>
@@ -97,10 +105,12 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-lg font-semibold text-[var(--bg)] transition-all"
+              className="w-full rounded-lg font-semibold text-[var(--bg)] transition-all touch-manipulation"
               style={{
                 background: loading ? 'var(--muted)' : 'var(--brand)',
                 opacity: loading ? 0.7 : 1,
+                minHeight: 48,
+                padding: '12px 16px',
               }}
             >
               {loading ? 'Inloggen...' : 'Inloggen'}

@@ -351,7 +351,7 @@ export default function MenuEngineering() {
   const GOLD = '#c4a35a';
   return (
     <RequireTier feature="menu_engineering">
-    <div style={{ paddingBottom: 40 }}>
+    <div className="mobile-safe-bottom" style={{ paddingBottom: 40 }}>
 
       {toast && (
         <div style={{
@@ -590,7 +590,7 @@ function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bc
         </div>
 
         {bcgStats && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+          <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
             {[
               { label: 'Geanalyseerd', value: bcgStats.totaal, color: 'var(--text)' },
               { label: '⭐ Stars', value: bcgStats.stars, color: '#4ade80' },

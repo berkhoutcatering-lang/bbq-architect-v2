@@ -164,9 +164,12 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
     : null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-[var(--color-bg-primary)]/95 backdrop-blur-xl border-b border-[var(--card-solid)]">
+    <div className="mobile-safe-bottom min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)]">
+      {/* Header — sticky met safe-area-top voor notched devices */}
+      <header
+        className="sticky top-0 z-30 bg-[var(--color-bg-primary)]/95 backdrop-blur-xl border-b border-[var(--card-solid)]"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="px-4 py-3 flex items-center gap-3">
           <Link
             href={`/events/${id}`}

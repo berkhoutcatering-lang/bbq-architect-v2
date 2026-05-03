@@ -635,3 +635,54 @@ export interface HealthScore {
   daysInactive: number;
   status: 'healthy' | 'at-risk' | 'critical' | 'churned';
 }
+
+// ── Rittenregistratie (Pro-tier, Belastingdienst-conform) ──
+export interface Voertuig {
+  id: number;
+  organization_id: string;
+  kenteken: string;
+  merk?: string | null;
+  type?: string | null;
+  ingangsdatum: string; // ISO date
+  einddatum?: string | null;
+  begin_km: number;
+  actief: boolean;
+  notitie?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Rit {
+  id: number;
+  organization_id: string;
+  voertuig_id: number;
+  event_id?: number | null;
+  datum: string; // ISO date
+  vertrek_tijd?: string | null; // HH:MM:SS (TIME)
+  duur_minuten?: number | null;
+  vertrek_adres: string;
+  aankomst_adres: string;
+  route_omleiding?: string | null;
+  km_begin: number;
+  km_eind: number;
+  kilometers: number; // GENERATED column
+  zakelijk: boolean;
+  prive_omleiding_km: number;
+  doel?: string | null;
+  status: 'open' | 'goedgekeurd';
+  user_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RittenMoneybirdPush {
+  id: number;
+  organization_id: string;
+  jaar: number;
+  kwartaal: 1 | 2 | 3 | 4;
+  moneybird_invoice_id: string;
+  totaal_km: number;
+  totaal_bedrag: number;
+  pushed_by?: string | null;
+  pushed_at: string;
+}

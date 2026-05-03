@@ -32,8 +32,8 @@ export default function SignupPage() {
 
           <a
             href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-semibold text-[var(--bg)]"
-            style={{ background: 'var(--brand)' }}
+            className="flex items-center justify-center gap-2 w-full rounded-lg font-semibold text-[var(--bg)] touch-manipulation"
+            style={{ background: 'var(--brand)', minHeight: 48, padding: '12px 16px' }}
           >
             <Mail size={16} />
             Plan een demo

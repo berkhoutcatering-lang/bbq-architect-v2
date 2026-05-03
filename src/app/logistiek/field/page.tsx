@@ -170,16 +170,16 @@ export default function LogistiekFieldPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] p-4 md:p-8">
+        <div className="mobile-safe-bottom min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] p-4 md:p-8">
             {/* Header */}
-            <div className="max-w-[900px] mx-auto flex items-center justify-between mb-6">
-                <Link href="/logistiek" className="inline-flex items-center gap-2 px-4 py-3 rounded-lg text-[14px] text-[var(--muted)] hover:text-[var(--text)] no-underline" style={{ minHeight: 56 }}>
+            <div className="max-w-[900px] mx-auto flex items-center justify-between mb-6 gap-3">
+                <Link href="/logistiek" className="inline-flex items-center gap-2 px-3 sm:px-4 py-3 rounded-lg text-[14px] text-[var(--muted)] hover:text-[var(--text)] no-underline shrink-0 touch-manipulation" style={{ minHeight: 56 }}>
                     <ArrowLeft className="w-5 h-5" />
                     Terug
                 </Link>
-                <div className="text-right">
-                    <div className="text-[18px] font-bold">Bus-check — Veldmodus</div>
-                    <div className="text-[12px] text-[var(--muted)]">Snel aftikken voor vertrek</div>
+                <div className="text-right min-w-0">
+                    <div className="text-[16px] sm:text-[18px] font-bold truncate">Bus-check — Veldmodus</div>
+                    <div className="text-[11px] sm:text-[12px] text-[var(--muted)]">Snel aftikken voor vertrek</div>
                 </div>
             </div>
 

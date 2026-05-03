@@ -19,6 +19,7 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
 import FAB from '@/components/FAB';
+import { MobileCmdKTrigger } from '@/components/mobile';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
@@ -217,7 +218,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
                   <Changelog />
                 </div>
               </header>
-              <div id="main-content" className="flex-1 w-full">
+              <div id="main-content" className="flex-1 w-full mobile-safe-bottom">
                 {children}
               </div>
             </main>
@@ -227,6 +228,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
           <BottomNav />
           <CommandPalette />
           <FAB />
+          <MobileCmdKTrigger />
           <OnboardingWizard />
           <OfflineIndicator />
           <ContextualHelp />

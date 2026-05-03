@@ -853,7 +853,7 @@ export default function Agenda() {
     }
 
     return (
-        <div style={{ padding: '24px 32px 100px', maxWidth: 1600, margin: '0 auto' }}>
+        <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1600, margin: '0 auto' }}>
             <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
 
             <div style={{ height: 18 }} />

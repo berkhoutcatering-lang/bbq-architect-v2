@@ -139,20 +139,26 @@ export default function InstallPrompt() {
         >
             <button
                 onClick={handleClose}
-                aria-label="Sluiten"
+                aria-label="Sluit installatie-tip"
+                className="touch-manipulation"
                 style={{
                     position: 'absolute',
-                    top: 8,
-                    right: 8,
+                    top: 4,
+                    right: 4,
                     background: 'transparent',
                     border: 'none',
                     color: 'var(--muted, #949494)',
                     cursor: 'pointer',
-                    padding: 4,
-                    borderRadius: 6,
+                    padding: 8,
+                    minWidth: 44,
+                    minHeight: 44,
+                    borderRadius: 8,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                 }}
             >
-                <X size={16} />
+                <X size={18} />
             </button>
 
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', paddingRight: 20 }}>

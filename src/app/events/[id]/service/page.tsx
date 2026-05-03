@@ -16,6 +16,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { dbEventToServiceEvent } from '@/lib/serviceData';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useFullscreen } from '@/hooks/useFullscreen';
+import { useIsPhone } from '@/hooks/useIsMobile';
 import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
 
 const GOLD = '#c4a35a';
@@ -180,7 +181,7 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
                     <strong style={{ color: BRAND }}>Card tappen:</strong> opent fullscreen bereidingswijze.<br />
                     <strong style={{ color: BRAND }}>Per-tafel grid:</strong> oranje = bezig, groen = klaar. <span style={{ color: '#f87171' }}>Rode rand = allergie/dieet.</span>
                 </HelpNote>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignContent: 'start' }}>
+                <div className="kds-board-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignContent: 'start' }}>
                     <Column title="Wachtend" Icon={Clock} tone="gray" courses={queued} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
                     <Column title="In bereiding" Icon={Flame} tone="amber" courses={active} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
                     <Column title="Klaar voor uitgifte" Icon={CheckCircle} tone="green" courses={ready} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
@@ -1105,7 +1106,13 @@ export default function ServiceMode() {
     const [view, setView] = useState<Exclude<View, 'hub'>>('board');
     const [courseId, setCourseId] = useState<string | null>(null);
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
+    // Op phone start Rook NIET docked — anders covert hij het hele scherm voor de board zichtbaar wordt.
     const [rookDocked, setRookDocked] = useState(true);
+    const isPhone = useIsPhone();
+    useEffect(() => {
+        if (isPhone) setRookDocked(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     /* DB-bronnen: events met bijbehorende courses + allergies + gerechten. */
     const { data: dbEvents } = useSupabase<DbEvent>('events', []);
@@ -1267,7 +1274,9 @@ export default function ServiceMode() {
         };
     }, [eventState, courseId, view]);
 
-    const rookOffset = rookDocked ? 380 : 0;
+    // Op phone (<768) docken we Rook NIET — hij staat als overlay/sheet
+    // op z-index, anders neemt hij 380px breedte in op een 375px scherm.
+    const rookOffset = isPhone ? 0 : (rookDocked ? 380 : 0);
 
     /* Loading state: dbEvents nog niet ingeladen */
     if (!dbEvents.length && !dbEvent) {

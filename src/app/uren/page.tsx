@@ -97,7 +97,7 @@ export default function Uren() {
 
     return (
         <RequireTier feature="crew_uren">
-        <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+        <div className="mobile-safe-bottom" style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <PageHeader title="Workforce & Uren" />
 
             <div className="uren-punch-section mb-24" style={{ textAlign: 'center', padding: '32px 16px', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--border)' }}>

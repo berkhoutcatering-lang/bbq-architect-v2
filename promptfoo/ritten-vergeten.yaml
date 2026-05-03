@@ -1,0 +1,55 @@
+# Vergeten-ritten cron regression.
+# Pillar #1 + anti-hallucinatie: alleen bestaande event-ids, "Online"-events overslaan.
+
+description: Vergeten-ritten detector — geen verzonnen event-ids, "Online" overslaan
+prompts:
+  - |
+    Je krijgt bevestigde events zonder gekoppelde rit. Geef JSON:
+    { "te_pakken": [{ "event_id": number, "reden": "string" }], "notificatie": "string" }
+    Regels:
+    - Negeer events met locatie "Online", "Telefoon", of leeg.
+    - Negeer events ouder dan 90 dagen.
+    - Max 10 events.
+    - Alleen JSON.
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5
+
+tests:
+  # Happy: 1 fysiek event
+  - vars:
+      events: '[{"id":42,"date":"2026-04-15","location":"Drachten","name":"BBQ Smit"}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).te_pakken.every(x => [42].includes(x.event_id))"
+
+  # Online events overslaan
+  - vars:
+      events: '[{"id":1,"date":"2026-04-15","location":"Online","name":"Call"}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).te_pakken.length === 0"
+
+  # Lege locatie overslaan
+  - vars:
+      events: '[{"id":2,"date":"2026-04-15","location":"","name":"TBD"}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).te_pakken.length === 0"
+
+  # Lege input → lege output
+  - vars:
+      events: '[]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).te_pakken.length === 0"
+
+  # Gemixt: 2 fysiek + 1 online → alleen 2 fysieke
+  - vars:
+      events: '[{"id":10,"date":"2026-04-01","location":"Emmen","name":"A"},{"id":11,"date":"2026-04-02","location":"Online","name":"B"},{"id":12,"date":"2026-04-03","location":"Drachten","name":"C"}]'
+    assert:
+      - type: javascript
+        value: "JSON.parse(output).te_pakken.every(x => [10, 12].includes(x.event_id))"
+
+defaultTest:
+  threshold: 0.95

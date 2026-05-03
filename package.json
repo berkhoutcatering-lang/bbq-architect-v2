@@ -20,10 +20,12 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.97.0",
+    "@tanstack/react-table": "^8.21.3",
     "framer-motion": "^12.4.7",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.476.0",
+    "maplibre-gl": "^5.24.0",
     "nanoid": "^5.1.7",
     "next": "16.1.6",
     "papaparse": "^5.5.3",
@@ -33,7 +35,8 @@
     "react-dom": "19.2.3",
     "react-rnd": "^10.5.3",
     "recharts": "^3.8.0",
-    "resend": "^6.10.0"
+    "resend": "^6.10.0",
+    "vaul": "^1.1.2"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

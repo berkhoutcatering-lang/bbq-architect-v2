@@ -307,7 +307,7 @@ function Klanten() {
     }).sort(function (a, b) { return (a.naam || '').localeCompare(b.naam || ''); });
 
     return (
-        <>
+        <div className="mobile-safe-bottom">
             <PageHeader
                 title={`Klanten (${filtered.length}${filtered.length !== klanten.length ? ' / ' + klanten.length : ''})`}
                 actions={<button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>}
@@ -382,6 +382,6 @@ function Klanten() {
                     autoHideMs={15000}
                 />
             )}
-        </>
+        </div>
     );
 }

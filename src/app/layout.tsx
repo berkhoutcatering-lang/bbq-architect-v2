@@ -25,6 +25,10 @@ export const metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#c4a35a', // Keep as hex — viewport meta requires static value
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  // Note: NO maximumScale or userScalable=false — pinch-zoom must work (WCAG 2.2 SC 1.4.4)
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

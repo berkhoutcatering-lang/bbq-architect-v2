@@ -162,7 +162,7 @@ export default function BedenkerPage() {
     }
 
     return (
-        <div className="main-content">
+        <div className="main-content mobile-safe-bottom">
             <KeukenTabs />
             <PageHeader
                 title="Gerechten-bedenker"

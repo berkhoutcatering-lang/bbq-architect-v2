@@ -167,8 +167,17 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     const brandLogoUrl = (settings as any)?.logo_url || null;
     const currentStep = getStepIndex(offer.status);
 
+    // Sticky CTA only appears when offerte not yet accepted AND user has not opened the signature step
+    const showStickyCTA = !accepted && !signStep;
+
     return (
-        <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, var(--color-bg-darker) 0%, #111 100%)', color: '#e5e7eb', fontFamily: "'DM Sans', system-ui, sans-serif", padding: '24px 16px 60px' }}>
+        <div style={{
+            minHeight: '100vh',
+            background: 'linear-gradient(180deg, var(--color-bg-darker) 0%, #111 100%)',
+            color: '#e5e7eb',
+            fontFamily: "'DM Sans', system-ui, sans-serif",
+            padding: 'clamp(16px, 4vw, 28px) var(--space-mobile-edge) calc(' + (showStickyCTA ? 120 : 60) + 'px + env(safe-area-inset-bottom, 0px))',
+        }}>
             <div style={{ maxWidth: 720, margin: '0 auto' }}>
 
                 {/* Company header */}
@@ -189,30 +198,30 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     background: 'radial-gradient(140% 60% at 50% 0%, ' + brandColor + '1f, transparent 65%), radial-gradient(120% 45% at 50% 100%, ' + brandColor + '12, transparent 55%), rgba(255,255,255,0.025)',
                     backdropFilter: 'blur(20px)',
                     border: '1px solid rgba(255,255,255,0.06)',
-                    borderRadius: 20,
+                    borderRadius: 'clamp(14px, 3vw, 20px)',
                     overflow: 'hidden',
                     boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,.08), inset 0 0 32px 0 ' + brandColor + '14, 0 1px 2px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,.5)',
                 }}>
 
                     {/* Header section */}
-                    <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ padding: 'clamp(20px, 5vw, 28px) clamp(18px, 4.5vw, 28px) clamp(16px, 4vw, 20px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                             <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', margin: '0 0 6px', lineHeight: 1.2 }}>
+                                <h1 style={{ fontSize: 'clamp(20px, 5.5vw, 24px)', fontWeight: 800, color: 'var(--text)', margin: '0 0 6px', lineHeight: 1.2 }}>
                                     {offer.client_naam || 'Klant'}
                                 </h1>
                                 {offer.client_adres && <p style={{ color: 'var(--zinc)', fontSize: 13, margin: 0 }}>{offer.client_adres}</p>}
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: 28, fontWeight: 800, color: brandColor, lineHeight: 1 }}>{formatEuro(totaal)}</div>
+                                <div style={{ fontSize: 'clamp(22px, 6.5vw, 28px)', fontWeight: 800, color: brandColor, lineHeight: 1 }}>{formatEuro(totaal)}</div>
                                 <div style={{ fontSize: 12, color: 'var(--zinc)', marginTop: 4 }}>Inclusief {defaultBtw}% BTW</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Meta info */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.03)' }}>
+                    {/* Meta info — 2-cols op phone (grids van 2x2), auto-fit op breder scherm */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.03)' }}>
                         {[
                             { label: 'Datum', value: formatDate(offer.datum) },
                             { label: 'Gasten', value: (offer.aantal_gasten || '—') + ' personen' },
@@ -220,8 +229,8 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             { label: 'Prijs p.p.', value: offer.aantal_gasten ? formatEuro(totaal / offer.aantal_gasten) : '—' },
                         ].map(function (m) {
                             return (
-                                <div key={m.label} style={{ padding: '14px 28px', background: 'rgba(0,0,0,0.15)' }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
+                                <div key={m.label} style={{ padding: '14px clamp(14px, 4vw, 28px)', background: 'rgba(0,0,0,0.15)' }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
                                     <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{m.value}</div>
                                 </div>
                             );
@@ -230,7 +239,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Items */}
                     {items.length > 0 && (
-                        <div style={{ padding: '24px 28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 24px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Overzicht</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                                 {items.map(function (item: any, i: number) {
@@ -254,7 +263,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Menu items */}
                     {menuItems.length > 0 && (
-                        <div style={{ padding: '0 28px 24px' }}>
+                        <div style={{ padding: '0 clamp(18px, 4.5vw, 28px) clamp(20px, 5vw, 24px)' }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Menu</h3>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                 {menuItems.map(function (naam, i) {
@@ -270,9 +279,9 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         </div>
                     )}
 
-                    {/* Totals */}
-                    <div style={{ padding: '20px 28px', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 300, marginLeft: 'auto' }}>
+                    {/* Totals — full-width op phone, max 320 op desktop right-aligned */}
+                    <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="qportal-totals" style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 320, marginLeft: 'auto' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                                 <span>Subtotaal</span>
                                 <span>{formatEuro(subtotal)}</span>
@@ -302,15 +311,15 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Notes */}
                     {offer.notitie && (
-                        <div style={{ padding: '20px 28px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
                             <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
                         </div>
                     )}
 
-                    {/* Status tracker (shown after acceptance) */}
+                    {/* Status tracker (shown after acceptance) — compactere circles op phone zodat 4-stappen passen op 375px */}
                     {accepted && (
-                        <div style={{ padding: '24px 28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="qportal-status" style={{ padding: 'clamp(20px, 5vw, 24px) clamp(14px, 4vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Voortgang</h3>
                             <div style={{ display: 'flex', gap: 0 }}>
                                 {STATUS_STEPS.map(function (step, i) {
@@ -361,7 +370,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Signature & Accept */}
                     {!accepted && !signStep && (
-                        <div style={{ padding: '32px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+                        <div style={{ padding: 'clamp(24px, 6vw, 32px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(158,120,28,.06)', borderRadius: 16, border: '1px solid rgba(158,120,28,.12)' }}>
                                 <h3 style={{ color: 'var(--text)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Akkoord met deze offerte?</h3>
                                 <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
@@ -371,9 +380,10 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     onClick={function () { setSignStep(true); }}
                                     style={{
                                         background: brandColor, color: 'var(--brand-background)', border: 'none',
-                                        padding: '14px 36px', borderRadius: 99, fontSize: 15, fontWeight: 800,
+                                        minHeight: 48, padding: '14px 36px', borderRadius: 99, fontSize: 15, fontWeight: 800,
                                         cursor: 'pointer', boxShadow: '0 4px 20px rgba(158,120,28,0.3)',
                                         transition: 'transform 0.15s, box-shadow 0.15s',
+                                        touchAction: 'manipulation',
                                     }}
                                     onMouseOver={function (e) { (e.target as HTMLButtonElement).style.transform = 'translateY(-2px)'; }}
                                     onMouseOut={function (e) { (e.target as HTMLButtonElement).style.transform = 'translateY(0)'; }}
@@ -386,23 +396,27 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Signature step */}
                     {!accepted && signStep && (
-                        <div style={{ padding: '28px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Digitale handtekening</h3>
                             <p style={{ color: 'var(--zinc)', fontSize: 13, marginBottom: 20 }}>
                                 Vul uw naam in en plaats een handtekening om de offerte te bevestigen.
                             </p>
 
                             <div style={{ marginBottom: 16 }}>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Naam ondertekenaar</label>
+                                <label htmlFor="qportal-signer-name" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>Naam ondertekenaar</label>
                                 <input
+                                    id="qportal-signer-name"
                                     type="text"
+                                    inputMode="text"
+                                    autoComplete="name"
+                                    autoCapitalize="words"
                                     value={signerName}
                                     onChange={function (e) { setSignerName(e.target.value); }}
                                     placeholder="Uw volledige naam"
                                     style={{
-                                        width: '100%', padding: '10px 14px', borderRadius: 10,
+                                        width: '100%', minHeight: 44, padding: '12px 14px', borderRadius: 10,
                                         background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#e5e7eb', fontSize: 14, outline: 'none',
+                                        color: '#e5e7eb', fontSize: 16, outline: 'none', // 16px voorkomt iOS auto-zoom op focus
                                         boxSizing: 'border-box',
                                     }}
                                 />
@@ -417,9 +431,10 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 <button
                                     onClick={function () { setSignStep(false); }}
                                     style={{
-                                        padding: '12px 24px', borderRadius: 10,
+                                        minHeight: 44, padding: '12px 24px', borderRadius: 10,
                                         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                                         color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                        touchAction: 'manipulation',
                                     }}
                                 >
                                     Annuleren
@@ -428,11 +443,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     onClick={handleAccept}
                                     disabled={submitting || !signatureData || !signerName.trim()}
                                     style={{
-                                        flex: 1, padding: '12px 24px', borderRadius: 10,
+                                        flex: 1, minHeight: 48, padding: '12px 24px', borderRadius: 10,
                                         background: signatureData && signerName.trim() ? 'var(--amber)' : 'rgba(158,120,28,.3)',
                                         color: signatureData && signerName.trim() ? '#000' : 'rgba(0,0,0,.5)',
-                                        border: 'none', fontSize: 14, fontWeight: 800, cursor: signatureData && signerName.trim() ? 'pointer' : 'not-allowed',
+                                        border: 'none', fontSize: 15, fontWeight: 800, cursor: signatureData && signerName.trim() ? 'pointer' : 'not-allowed',
                                         opacity: submitting ? 0.6 : 1,
+                                        touchAction: 'manipulation',
                                     }}
                                 >
                                     {submitting ? 'Verwerken...' : 'Bevestigen en ondertekenen'}
@@ -448,7 +464,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Post-acceptance */}
                     {accepted && !signStep && (
-                        <div style={{ padding: '28px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(16,185,129,.06)', borderRadius: 16, border: '1px solid rgba(16,185,129,.12)' }}>
                                 <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
                                 <h3 style={{ color: 'var(--emerald)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Offerte geaccepteerd!</h3>
@@ -471,6 +487,54 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     <p style={{ marginTop: 16, color: '#2a2a2a' }}>Powered by <strong>BBQ Architect</strong></p>
                 </div>
             </div>
+
+            {/* Sticky bottom CTA — phone-only, geen BottomNav op publieke /q/[id] dus zit direct aan onderkant met safe-area */}
+            {showStickyCTA && (
+                <div className="qportal-sticky-cta">
+                    <button
+                        onClick={function () { setSignStep(true); }}
+                        style={{
+                            width: '100%',
+                            minHeight: 52,
+                            padding: '14px 24px',
+                            borderRadius: 12,
+                            background: brandColor,
+                            color: 'var(--brand-background, #000)',
+                            border: 'none',
+                            fontSize: 16,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '0 6px 20px rgba(0,0,0,.35)',
+                            touchAction: 'manipulation',
+                        }}
+                    >
+                        Offerte accepteren — {formatEuro(totaal)}
+                    </button>
+                </div>
+            )}
+
+            <style jsx>{`
+                .qportal-sticky-cta {
+                    display: none;
+                }
+                @media (max-width: 767px) {
+                    .qportal-sticky-cta {
+                        display: block;
+                        position: fixed;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        padding: 12px var(--space-mobile-edge) calc(12px + env(safe-area-inset-bottom, 0px));
+                        background: linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,.92) 30%, rgba(17,17,17,.98) 100%);
+                        backdrop-filter: blur(8px);
+                        z-index: 40;
+                    }
+                    .qportal-totals {
+                        max-width: none !important;
+                        margin-left: 0 !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

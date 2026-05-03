@@ -452,13 +452,14 @@ function StageGroup({
                         >
                             <button
                                 onClick={(e) => { e.stopPropagation(); onToggle(task); }}
-                                className="no-glow"
-                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                className="no-glow touch-manipulation"
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44 }}
                                 aria-label={task.done ? 'Markeer ongedaan' : 'Markeer klaar'}
+                                aria-pressed={task.done}
                             >
                                 {task.done
-                                    ? <Check size={20} style={{ color: '#22c55e' }} />
-                                    : <Circle size={20} style={{ color: 'var(--muted)' }} />}
+                                    ? <Check size={22} style={{ color: '#22c55e' }} />
+                                    : <Circle size={22} style={{ color: 'var(--muted)' }} />}
                             </button>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{
@@ -511,11 +512,12 @@ function TaskDetail({
                     </div>
                     <button
                         onClick={onClose}
-                        className="no-glow"
-                        aria-label="Sluit detail"
-                        style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: RADIUS.md, padding: 6, cursor: 'pointer', color: 'var(--muted)', display: 'flex' }}
+                        className="no-glow prep-detail-close touch-manipulation"
+                        aria-label="Sluit detail en ga terug naar lijst"
+                        style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: RADIUS.md, padding: 6, cursor: 'pointer', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, minWidth: 44, justifyContent: 'center' }}
                     >
-                        <X size={14} />
+                        <X size={16} />
+                        <span className="prep-detail-close-label">Terug</span>
                     </button>
                 </div>
                 <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, margin: 0, lineHeight: 1.25, color: 'var(--text)', letterSpacing: '-.02em' }}>

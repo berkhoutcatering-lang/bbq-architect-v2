@@ -13,6 +13,8 @@ import { useApp } from "@/lib/AppContext";
 import { useAuth } from "@/lib/AuthContext";
 import { useOrg } from "@/lib/OrgContext";
 import AiUsageMeter from "@/components/AiUsageMeter";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { BREAKPOINTS } from "@/lib/breakpoints";
 
 interface SidebarFolderProps {
     section: NavSection;
@@ -224,25 +226,27 @@ export default function Sidebar() {
     };
 
     const [showSecondary, setShowSecondary] = useState(false);
-    const [isDesktop, setIsDesktop] = useState(false);
+    const { isPhone } = useIsMobile();
+    const isDesktop = !isPhone;
 
     // Tijdens event-runtime (service of field) krimpt sidebar automatisch zodat
     // Lars meer schermbreedte heeft op de tablet — tenzij hij hem zelf openzet.
     const isEventRuntime = pathname.startsWith('/events/') &&
         (pathname.endsWith('/service') || pathname.endsWith('/field') || pathname.includes('/service/') || pathname.includes('/field/'));
 
+    // Auto-manage collapsed state based on viewport unless user manually toggled.
+    // Tablet (≥768) but pre-desktop (<1280) → collapsed by default for the icon-rail look.
     useEffect(() => {
-        const check = () => {
-            const w = window.innerWidth;
-            setIsDesktop(w >= 768);
-            // Auto-manage collapsed state based on viewport unless user manually toggled
-            if (!userToggledCollapse) {
-                setCollapsed(isEventRuntime || (w >= 768 && w < 1280));
-            }
+        if (userToggledCollapse) return;
+        if (typeof window === 'undefined') return;
+        const w = window.innerWidth;
+        setCollapsed(isEventRuntime || (w >= BREAKPOINTS.phone && w < BREAKPOINTS.desktop));
+        const onResize = () => {
+            const ww = window.innerWidth;
+            setCollapsed(isEventRuntime || (ww >= BREAKPOINTS.phone && ww < BREAKPOINTS.desktop));
         };
-        check();
-        window.addEventListener('resize', check);
-        return () => window.removeEventListener('resize', check);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
     }, [userToggledCollapse, isEventRuntime]);
 
     const primarySections = navSections.filter(s => !s.secondary);
@@ -269,7 +273,7 @@ export default function Sidebar() {
                 {/* Desktop: collapse toggle. Mobile: close button */}
                 <button
                     onClick={() => {
-                        if (window.innerWidth < 768) {
+                        if (isPhone) {
                             setMobileOpen(false);
                         } else {
                             setUserToggledCollapse(true);
