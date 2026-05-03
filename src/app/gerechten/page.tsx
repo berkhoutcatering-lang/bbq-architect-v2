@@ -13,7 +13,7 @@ import PageHeader from '@/components/PageHeader';
 import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
 import GerechtenPageHero from './_components/GerechtenPageHero';
-import RichKeukenTabs from './_components/RichKeukenTabs';
+import RichKeukenTabs from '@/components/RichKeukenTabs';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
 import SignatureSpotlight from './_components/SignatureSpotlight';
 import DietAllergensOverview from './_components/DietAllergensOverview';
