@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { Wand2, Utensils, Settings2, RefreshCw, Filter, Lightbulb, ThumbsDown, Dices } from 'lucide-react';
+import { RefreshCw, Filter, Lightbulb, ThumbsDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
-import KeukenTabs from '@/components/KeukenTabs';
+import RichKeukenTabs from '@/components/RichKeukenTabs';
 
 import PromptHero from './_components/PromptHero';
 import HowItWorksStrip from './_components/HowItWorksStrip';
@@ -15,6 +14,9 @@ import ConceptDrawer from './_components/ConceptDrawer';
 import HistoryRail from './_components/HistoryRail';
 import SavedTray from './_components/SavedTray';
 import AIThinkingTrail from './_components/AIThinkingTrail';
+import BedenkerPageHero from './_components/BedenkerPageHero';
+import BedenkerKpiTiles from './_components/BedenkerKpiTiles';
+import LatestConceptSpotlight from './_components/LatestConceptSpotlight';
 import { mapApiToConcept, conceptToGerechtPayload } from './_components/mapping';
 import type { Concept, HistoryItem } from './_components/types';
 
@@ -56,6 +58,61 @@ export default function BedenkerPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHow, setShowHow] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>('confidence');
+
+  // Latest gerecht voor de spotlight — accepteert UUID-string of bigint id
+  interface LatestConcept {
+    id: number | string;
+    naam: string;
+    beschrijving?: string;
+    glyph?: string;
+    gang_naam?: string;
+    created_at?: string;
+    kostprijs_pp?: number;
+    marge_pct?: number;
+  }
+  const [latestSavedConcept, setLatestSavedConcept] = useState<LatestConcept | null>(null);
+
+  useEffect(() => {
+    if (!orgId) return;
+    // Pak meest recent toegevoegde gerecht — `bron` kolom bestaat niet in
+    // huidige DB-schema, dus fallback op meest recent overall.
+    supabase
+      .from('gerechten')
+      .select('id, naam, beschrijving, gang_slug, created_at, kostprijs_pp, marge_pct')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          const r = res.data[0];
+          // Smart glyph keyword match (light version)
+          const name = (r.naam || '').toLowerCase();
+          const glyph = /watermel|meloen/i.test(name)
+            ? '🍉'
+            : /taco/i.test(name)
+            ? '🌮'
+            : /brisket|burnt/i.test(name)
+            ? '🥩'
+            : /tofu|vegan/i.test(name)
+            ? '🌱'
+            : /chocola|brownie/i.test(name)
+            ? '🍫'
+            : /bonbon|spies/i.test(name)
+            ? '🍢'
+            : '✨';
+          setLatestSavedConcept({
+            id: r.id,
+            naam: r.naam,
+            beschrijving: r.beschrijving,
+            glyph,
+            gang_naam: r.gang_slug,
+            created_at: r.created_at,
+            kostprijs_pp: r.kostprijs_pp,
+            marge_pct: r.marge_pct,
+          });
+        }
+      });
+  }, [orgId]);
 
   // Load existing dishes (style reference)
   useEffect(() => {
@@ -208,94 +265,50 @@ export default function BedenkerPage() {
 
   const truncatedPrompt = lastPrompt.length > 40 ? lastPrompt.slice(0, 40) + '…' : lastPrompt;
 
+  // KPI data uit history + saved + current session
+  const totaalBedacht = history.reduce((s, h) => s + (h.total || 0), 0) + concepts.length;
+  const totaalBewaard = history.reduce((s, h) => s + (h.saved || 0), 0) + savedConcepts.length;
+  const inspiratiesUniek = useMemo(() => {
+    const set = new Set<string>();
+    concepts.forEach((c) => c.inspiredBy.forEach((p) => set.add(p.name)));
+    return set.size;
+  }, [concepts]);
+  const gemConfidence =
+    concepts.length > 0 ? concepts.reduce((s, c) => s + c.confidence, 0) / concepts.length : 0;
+
+  function verrasMe() {
+    const random = VERRAS_PROMPTS[Math.floor(Math.random() * VERRAS_PROMPTS.length)];
+    setPrompt(random);
+    setTimeout(() => {
+      setPrompt(random);
+      bedenkWithPrompt(random);
+    }, 250);
+  }
+
   return (
     <div className="main-content mobile-safe-bottom" style={{ maxWidth: 1500 }}>
-      <KeukenTabs />
+      <RichKeukenTabs />
+      <BedenkerPageHero onVerrasMe={verrasMe} busy={busy} />
 
-      {/* Page header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          marginBottom: 18,
-          gap: 16,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 6,
-              fontSize: 10,
-              letterSpacing: '.22em',
-              textTransform: 'uppercase',
-              color: 'var(--brand-gold)',
-              fontWeight: 700,
-            }}
-          >
-            <Wand2 size={11} />
-            <span>Brainstorm Studio</span>
-          </div>
-          <h1 style={{ fontWeight: 200, fontSize: 32, margin: 0, lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-            Gerechten{' '}
-            <em
-              style={{
-                fontStyle: 'normal',
-                fontWeight: 500,
-                background: 'linear-gradient(90deg, var(--brand) 0%, #c4a35a 70%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Bedenker
-            </em>
-          </h1>
-          <p style={{ marginTop: 6, marginBottom: 0, fontSize: 13, color: 'var(--muted)', maxWidth: 620 }}>
-            Speel los met ideeën. AI verzint concept-gerechten geleund op jouw eigen receptuur — pas wanneer jij ze
-            opslaat landen ze in /gerechten.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-ghost bedenker-verras-btn"
-            onClick={() => {
-              const random = VERRAS_PROMPTS[Math.floor(Math.random() * VERRAS_PROMPTS.length)];
-              setPrompt(random);
-              // Auto-generate na korte delay zodat user de prompt ziet verschijnen
-              setTimeout(() => {
-                setPrompt(random);
-                bedenkWithPrompt(random);
-              }, 250);
-            }}
-            disabled={busy}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'linear-gradient(135deg, rgba(255,191,0,.15), rgba(167,139,250,.15))',
-              border: '1px solid rgba(255,191,0,.3)',
-              cursor: busy ? 'not-allowed' : 'pointer',
-            }}
-            title="Random prompt + meteen genereren"
-          >
-            <Dices size={14} /> Verras me
-          </button>
-          <Link
-            href="/gerechten"
-            className="btn btn-ghost"
-            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <Utensils size={14} /> Naar /gerechten
-          </Link>
-          <button className="btn btn-ghost" disabled style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Settings2 size={14} /> AI-instellingen
-          </button>
-        </div>
-      </div>
+      <BedenkerKpiTiles
+        conceptenBedacht={totaalBedacht}
+        conceptenBewaard={totaalBewaard}
+        inspiratiesUniek={inspiratiesUniek}
+        gemConfidence={gemConfidence}
+      />
+
+      {latestSavedConcept && (
+        <LatestConceptSpotlight
+          name={latestSavedConcept.naam}
+          tagline={latestSavedConcept.beschrijving}
+          glyph={latestSavedConcept.glyph}
+          category={latestSavedConcept.gang_naam}
+          bewaardOp={latestSavedConcept.created_at}
+          kostprijsPp={latestSavedConcept.kostprijs_pp}
+          margePct={latestSavedConcept.marge_pct}
+          href={`/gerechten`}
+        />
+      )}
 
       {showHow && <HowItWorksStrip onDismiss={dismissHow} />}
 
