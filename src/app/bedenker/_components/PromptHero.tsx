@@ -148,46 +148,40 @@ export default function PromptHero({
         `}</style>
       </div>
 
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            background: 'linear-gradient(135deg, var(--brand), #9e781c)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(255,191,0,.3)',
+          }}
+        >
+          <Sparkles size={16} color="#0a0a0c" />
+        </div>
+        <div>
           <div
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9,
-              background: 'linear-gradient(135deg, var(--brand), #9e781c)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(255,191,0,.3)',
+              fontSize: 10,
+              letterSpacing: '.22em',
+              textTransform: 'uppercase',
+              color: 'var(--brand)',
+              fontWeight: 700,
             }}
           >
-            <Sparkles size={16} color="#0a0a0c" />
+            AI Brainstorm
           </div>
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                letterSpacing: '.22em',
-                textTransform: 'uppercase',
-                color: 'var(--brand)',
-                fontWeight: 700,
-              }}
-            >
-              AI Brainstorm
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-              {mode === 'voorraad'
-                ? 'Geef restjes/ingrediënten op — AI verzint een passend gerecht.'
-                : mode === 'klant'
-                ? 'Geef klant-context op — AI bedenkt een gerecht dat past.'
-                : 'Vrije brainstorm — concepten landen niet in je bibliotheek tot jij ze opslaat.'}
-            </div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+            Concepten landen niet in je bibliotheek tot jij ze opslaat. Kies eerst je modus.
           </div>
         </div>
-
-        <ModeSwitcher mode={mode} onChange={onModeChange} />
       </div>
+
+      <ModeSwitcher mode={mode} onChange={onModeChange} />
 
       {mode === 'voorraad' && (
         <VoorraadPanel
@@ -388,39 +382,37 @@ function Pill({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
 interface ModeDef {
   id: BedenkMode;
   label: string;
+  eyebrow: string;
+  description: string;
   icon: LucideIcon;
-  /** OKLCH-tinted gradient voor de active-pill */
-  gradient: string;
-  /** Glow-color voor de active-button (rgba) */
-  glow: string;
-  /** Accent-line-color (subtle 1-px onder active button) */
-  accent: string;
+  /** Accent-color in hex — gebruikt voor active gradient + icon-tile + eyebrow */
+  color: string;
 }
 
 const MODES: ModeDef[] = [
   {
     id: 'vrij',
     label: 'Vrij denken',
+    eyebrow: 'Modus · Open',
+    description: 'Open brainstorm',
     icon: Lightbulb,
-    gradient: 'linear-gradient(135deg, rgba(255,191,0,.32) 0%, rgba(255,191,0,.08) 100%)',
-    glow: 'rgba(255,191,0,.35)',
-    accent: '#FFBF00',
+    color: '#FFBF00',
   },
   {
     id: 'voorraad',
     label: 'Uit voorraad',
+    eyebrow: 'Modus · Zero-waste',
+    description: 'Restjes als basis',
     icon: PackageOpen,
-    gradient: 'linear-gradient(135deg, rgba(34,197,94,.32) 0%, rgba(34,197,94,.08) 100%)',
-    glow: 'rgba(34,197,94,.35)',
-    accent: '#22c55e',
+    color: '#22c55e',
   },
   {
     id: 'klant',
     label: 'Klant-input',
+    eyebrow: 'Modus · Wizard',
+    description: 'Dieet · budget · gasten',
     icon: UserRound,
-    gradient: 'linear-gradient(135deg, rgba(167,139,250,.32) 0%, rgba(167,139,250,.10) 100%)',
-    glow: 'rgba(167,139,250,.40)',
-    accent: '#a78bfa',
+    color: '#a78bfa',
   },
 ];
 
@@ -430,14 +422,10 @@ function ModeSwitcher({ mode, onChange }: { mode: BedenkMode; onChange: (m: Bede
       role="tablist"
       className="bedenker-mode-switcher"
       style={{
-        display: 'inline-flex',
-        gap: 4,
-        padding: 4,
-        background: 'linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.20) 100%)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 12,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.25)',
-        position: 'relative',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 12,
+        marginBottom: 16,
       }}
     >
       {MODES.map((m) => {
@@ -450,41 +438,104 @@ function ModeSwitcher({ mode, onChange }: { mode: BedenkMode; onChange: (m: Bede
             role="tab"
             aria-selected={active}
             onClick={() => onChange(m.id)}
-            className={active ? 'mode-pill mode-pill-active' : 'mode-pill'}
+            className={active ? 'mode-rich-card mode-rich-card-active' : 'mode-rich-card'}
             style={{
               position: 'relative',
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
-              gap: 7,
-              padding: '8px 14px',
-              borderRadius: 9,
-              border: 'none',
-              background: active ? m.gradient : 'transparent',
-              color: active ? '#fff' : 'var(--muted)',
-              fontSize: 12.5,
-              fontWeight: active ? 700 : 500,
+              gap: 14,
+              padding: '16px 20px',
+              borderRadius: 14,
+              background: active
+                ? `linear-gradient(135deg, color-mix(in oklab, ${m.color} 16%, transparent), transparent 70%)`
+                : 'var(--card)',
+              border:
+                '1px solid ' +
+                (active
+                  ? `color-mix(in oklab, ${m.color} 42%, transparent)`
+                  : 'var(--border)'),
               cursor: 'pointer',
               fontFamily: 'inherit',
-              transition: 'background .25s, color .2s, transform .12s',
-              boxShadow: active
-                ? `inset 0 0 0 1px ${m.accent}66, 0 0 24px -4px ${m.glow}, 0 2px 8px ${m.glow}`
-                : undefined,
-              letterSpacing: active ? '.01em' : 0,
+              textAlign: 'left',
+              color: 'var(--text)',
+              transition: 'transform .15s, box-shadow .2s, border-color .2s, background .2s',
+              overflow: 'hidden',
+              boxShadow: active ? `0 8px 32px -10px ${m.color}66` : undefined,
             }}
           >
-            <Icon size={14} color={active ? m.accent : 'currentColor'} />
-            <span>{m.label}</span>
             {active && (
               <span
                 aria-hidden
                 style={{
                   position: 'absolute',
-                  left: 12,
+                  inset: 0,
+                  background: `radial-gradient(circle at 0% 0%, ${m.color}22, transparent 60%)`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            <div
+              aria-hidden
+              style={{
+                position: 'relative',
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: active
+                  ? `linear-gradient(135deg, ${m.color}, color-mix(in oklab, ${m.color} 60%, #000))`
+                  : 'rgba(255,255,255,.04)',
+                border: active ? 'none' : '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: active ? `0 4px 16px ${m.color}55` : 'none',
+              }}
+            >
+              <Icon size={18} color={active ? '#0a0a0c' : m.color} />
+            </div>
+            <div style={{ position: 'relative', minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 9,
+                  letterSpacing: '.22em',
+                  textTransform: 'uppercase',
+                  color: active ? m.color : 'var(--muted)',
+                  fontWeight: 700,
+                  marginBottom: 2,
+                }}
+              >
+                {m.eyebrow}
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-.01em', lineHeight: 1.15 }}>
+                {m.label}
+              </div>
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: 'var(--muted)',
+                  marginTop: 3,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {m.description}
+              </div>
+            </div>
+            {active && (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 10,
                   right: 12,
-                  bottom: 2,
-                  height: 1,
-                  background: `linear-gradient(90deg, transparent, ${m.accent}, transparent)`,
-                  opacity: 0.7,
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: m.color,
+                  boxShadow: `0 0 10px ${m.color}`,
+                  animation: 'mode-rich-dot-pulse 1.8s ease-in-out infinite',
                 }}
               />
             )}
@@ -492,20 +543,25 @@ function ModeSwitcher({ mode, onChange }: { mode: BedenkMode; onChange: (m: Bede
         );
       })}
       <style jsx>{`
-        :global(.mode-pill:hover:not(.mode-pill-active)) {
-          color: var(--text) !important;
-          background: rgba(255, 255, 255, 0.04) !important;
+        :global(.mode-rich-card:hover:not(.mode-rich-card-active)) {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+          border-color: var(--border-strong) !important;
         }
-        :global(.mode-pill-active) {
-          animation: mode-pill-glow 4s ease-in-out infinite;
-        }
-        @keyframes mode-pill-glow {
+        @keyframes mode-rich-dot-pulse {
           0%,
           100% {
-            filter: brightness(1);
+            opacity: 1;
+            transform: scale(1);
           }
           50% {
-            filter: brightness(1.08);
+            opacity: 0.5;
+            transform: scale(1.4);
+          }
+        }
+        @media (max-width: 900px) {
+          :global(.bedenker-mode-switcher) {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
