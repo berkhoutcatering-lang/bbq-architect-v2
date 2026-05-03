@@ -658,6 +658,8 @@ export interface Rit {
   voertuig_id: number;
   event_id?: number | null;
   datum: string; // ISO date
+  vertrek_tijd?: string | null; // HH:MM:SS (TIME)
+  duur_minuten?: number | null;
   vertrek_adres: string;
   aankomst_adres: string;
   route_omleiding?: string | null;
@@ -667,6 +669,7 @@ export interface Rit {
   zakelijk: boolean;
   prive_omleiding_km: number;
   doel?: string | null;
+  status: 'open' | 'goedgekeurd';
   user_id?: string | null;
   created_at: string;
   updated_at: string;

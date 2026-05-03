@@ -268,16 +268,33 @@ export default function RitDetailClient({ id }: Props) {
                   fontSize: 10,
                   padding: '2px 8px',
                   borderRadius: 999,
-                  background: rit.zakelijk ? 'rgba(34,197,94,0.12)' : 'rgba(130,130,130,0.12)',
-                  color: rit.zakelijk ? 'var(--green)' : 'var(--muted)',
+                  background: rit.status === 'goedgekeurd' ? 'rgba(34,197,94,0.12)' : 'rgba(255,191,0,0.12)',
+                  color: rit.status === 'goedgekeurd' ? 'var(--green)' : 'var(--brand)',
                   border: '1px solid currentColor',
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',
                 }}
               >
-                {rit.zakelijk ? '✓ Zakelijk' : '○ Privé'}
+                {rit.status === 'goedgekeurd' ? '✓ Geboekt' : '○ Open'}
               </span>
+              {!rit.zakelijk && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    background: 'rgba(130,130,130,0.12)',
+                    color: 'var(--muted)',
+                    border: '1px solid var(--border-strong)',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  Privé
+                </span>
+              )}
             </div>
             <h1
               style={{
@@ -307,10 +324,10 @@ export default function RitDetailClient({ id }: Props) {
               {dagNaam} {fmtDateR(datum)}
             </div>
             <div style={{ fontSize: 26, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-              {km.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} km
+              {rit.vertrek_tijd ? rit.vertrek_tijd.slice(0, 5) : km.toLocaleString('nl-NL', { maximumFractionDigits: 1 }) + ' km'}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted-light)' }}>
-              {voertuig?.kenteken || 'Geen voertuig'}
+              {rit.duur_minuten ? `${rit.duur_minuten} min reistijd` : voertuig?.kenteken || 'Geen voertuig'}
             </div>
           </div>
         </div>
@@ -325,17 +342,21 @@ export default function RitDetailClient({ id }: Props) {
               sub: rit.zakelijk ? `× €${tarief.toFixed(2)}/km` : '—',
               color: rit.zakelijk ? 'var(--green)' : 'var(--muted)',
             },
-            {
-              label: 'Privé-omleiding',
-              value: rit.prive_omleiding_km > 0 ? fmtKm(rit.prive_omleiding_km) : '—',
-              sub: rit.prive_omleiding_km > 0 ? 'aftrekken van zakelijk' : 'geen omleiding',
-              color: rit.prive_omleiding_km > 0 ? 'var(--brand-gold)' : 'var(--text)',
-            },
+            (() => {
+              const brandstofEur = km * 0.18;
+              const btw = brandstofEur * 0.21 / 1.21;
+              return {
+                label: 'Brandstof',
+                value: fmtEur(brandstofEur),
+                sub: `BTW ${fmtEur(btw)}`,
+                color: 'var(--text)',
+              };
+            })(),
             {
               label: 'Voertuig',
               value: voertuig?.kenteken || '—',
               sub: voertuig?.merk ? `${voertuig.merk}${voertuig.type ? ` ${voertuig.type}` : ''}` : '—',
-              color: 'var(--text)',
+              color: 'var(--brand-gold)',
             },
           ].map((t, i) => (
             <div
