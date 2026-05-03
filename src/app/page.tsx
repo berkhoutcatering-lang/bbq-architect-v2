@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Bell, Flame, Plus, X, ChevronRight } from 'lucide-react';
+import { Bell, Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useSupabase } from '@/lib/useSupabase';
 import { useAuth } from '@/lib/AuthContext';
@@ -594,9 +594,14 @@ export default function DashboardPage() {
             currentTime={currentTime}
             daysToNextEvent={heroEvent ? heroEvent.daysAway : null}
           />
-          <button onClick={() => setWizardOpen(true)} className="btn btn-brand" style={{ flexShrink: 0 }}>
-            <Plus size={14} /> Nieuw event
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+            <Link href="/administratie/rittenregistratie" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Car size={14} /> Rit registreren
+            </Link>
+            <button onClick={() => setWizardOpen(true)} className="btn btn-brand">
+              <Plus size={14} /> Nieuw event
+            </button>
+          </div>
         </div>
 
         {/* Onboarding-checklist (auto-hide na voltooiing) */}

@@ -3,7 +3,7 @@ import {
     ChefHat, Calendar, PartyPopper, BarChart3,
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
-    HelpCircle, Sparkles, ScanLine, Image as ImageIcon
+    HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car
 } from "lucide-react";
 
 export interface NavChild {
@@ -90,6 +90,7 @@ export const navSections: NavSection[] = [
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
             { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
             { label: "Inkooplijsten", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en leveranciers" },
+            { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
     },
     {
