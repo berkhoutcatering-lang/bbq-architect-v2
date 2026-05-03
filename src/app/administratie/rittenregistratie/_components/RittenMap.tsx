@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 
 /* Bbox: lng 5.8 → 7.4 (west-oost), lat 52.20 → 53.40 (zuid-noord) */
 const BBOX = { lngMin: 5.8, lngMax: 7.4, latMin: 52.2, latMax: 53.4 };
@@ -134,22 +134,11 @@ export default function RittenMap({
   onMarkerClick,
   onRouteClick,
 }: RittenMapProps) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 800, h: height });
-
-  useEffect(() => {
-    const update = () => {
-      if (!wrapRef.current) return;
-      const r = wrapRef.current.getBoundingClientRect();
-      setSize({ w: Math.max(320, r.width), h: height });
-    };
-    update();
-    const obs = new ResizeObserver(update);
-    if (wrapRef.current) obs.observe(wrapRef.current);
-    return () => obs.disconnect();
-  }, [height]);
-
-  const { w, h } = size;
+  // Fixed internal coordinate system. SVG schaalt automatisch via viewBox +
+  // preserveAspectRatio. Geen ResizeObserver nodig — die veroorzaakte een
+  // feedback-loop met de wrapper width.
+  const w = 1100;
+  const h = height;
   const stedenMarkers = useMemo(
     () => STEDEN.map((s) => ({ ...s, p: project(s.coord, w, h) })),
     [w, h],
@@ -168,22 +157,24 @@ export default function RittenMap({
 
   return (
     <div
-      ref={wrapRef}
       style={{
         position: 'relative',
         width: '100%',
         minWidth: 0,
-        maxWidth: '100%',
         height,
         borderRadius: 14,
         overflow: 'hidden',
         background: 'radial-gradient(ellipse at 30% 20%, #1a1a1f 0%, #0e0e10 50%, #0a0a0c 100%)',
         border: '1px solid var(--border)',
         boxShadow: 'inset 0 1px 0 rgba(196,163,90,0.08), 0 8px 32px rgba(0,0,0,0.4)',
-        contain: 'layout size',
       }}
     >
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block', maxWidth: '100%', height: 'auto' }} aria-label="Rittenkaart Drenthe en omstreken">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="xMidYMid slice"
+        style={{ display: 'block', width: '100%', height: '100%' }}
+        aria-label="Rittenkaart Drenthe en omstreken"
+      >
         <defs>
           <radialGradient id="markerGlow">
             <stop offset="0%" stopColor="#FFBF00" stopOpacity="0.6" />
