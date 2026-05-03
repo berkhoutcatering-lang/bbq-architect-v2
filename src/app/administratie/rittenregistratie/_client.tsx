@@ -122,7 +122,7 @@ export default function RittenregistratieClient() {
         </div>
       ) : (
         <div className="ritten-layout">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <RittenMap routes={routes} markers={markers} activeRouteId={activeId !== null ? String(activeId) : null} height={460} onRouteClick={(id) => setActiveId(Number(id))} />
             <RittenTabel ritten={filtered} voertuigen={voertuigen} activeId={activeId} />
           </div>
