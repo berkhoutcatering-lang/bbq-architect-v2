@@ -17,6 +17,7 @@ import AIThinkingTrail from './_components/AIThinkingTrail';
 import BedenkerPageHero from './_components/BedenkerPageHero';
 import BedenkerKpiTiles from './_components/BedenkerKpiTiles';
 import LatestConceptSpotlight from './_components/LatestConceptSpotlight';
+import StudioBackground from './_components/StudioBackground';
 import { mapApiToConcept, conceptToGerechtPayload } from './_components/mapping';
 import type { Concept, HistoryItem } from './_components/types';
 
@@ -286,7 +287,8 @@ export default function BedenkerPage() {
   }
 
   return (
-    <div className="main-content mobile-safe-bottom" style={{ maxWidth: 1500 }}>
+    <div className="main-content mobile-safe-bottom" style={{ maxWidth: 1500, position: 'relative', zIndex: 1 }}>
+      <StudioBackground />
       <RichKeukenTabs />
       <BedenkerPageHero onVerrasMe={verrasMe} busy={busy} />
 
