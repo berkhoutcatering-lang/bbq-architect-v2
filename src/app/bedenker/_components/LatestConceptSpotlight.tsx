@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Sparkles, ArrowUpRight } from 'lucide-react';
+import { useTilt } from './wow-hooks';
 
 interface Props {
   name: string;
@@ -26,9 +27,12 @@ export default function LatestConceptSpotlight({
   margePct,
   href,
 }: Props) {
+  const tiltRef = useTilt();
   const inner = (
     <div
+      ref={tiltRef}
       style={{
+        transformStyle: 'preserve-3d',
         position: 'relative',
         borderRadius: 16,
         background:
@@ -179,10 +183,12 @@ export default function LatestConceptSpotlight({
         />
         <div
           style={{
-            fontSize: 96,
-            filter: 'drop-shadow(0 12px 32px rgba(167,139,250,.4))',
+            fontSize: 110,
+            filter: 'drop-shadow(0 12px 32px rgba(167,139,250,.5))',
             position: 'relative',
+            transform: 'translateZ(40px)',
             transition: 'transform .3s cubic-bezier(.2,.8,.2,1)',
+            animation: 'latest-glyph-float 5s ease-in-out infinite',
           }}
           className="latest-concept-glyph"
         >
@@ -190,13 +196,18 @@ export default function LatestConceptSpotlight({
         </div>
       </div>
       <style jsx>{`
-        :global(.latest-concept-card:hover) {
-          transform: translateY(-2px);
-          box-shadow: 0 1px 0 rgba(167, 139, 250, 0.22) inset, 0 14px 32px rgba(0, 0, 0, 0.5),
-            0 0 80px rgba(167, 139, 250, 0.14);
+        @keyframes latest-glyph-float {
+          0%,
+          100% {
+            transform: translateZ(40px) translateY(0) rotate(-2deg);
+          }
+          50% {
+            transform: translateZ(50px) translateY(-8px) rotate(2deg);
+          }
         }
         :global(.latest-concept-card:hover .latest-concept-glyph) {
-          transform: scale(1.08) rotate(-3deg);
+          animation-play-state: paused;
+          transform: translateZ(70px) scale(1.12) rotate(-4deg);
         }
         @media (max-width: 800px) {
           :global(.latest-concept-card) {
