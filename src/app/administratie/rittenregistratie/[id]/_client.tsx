@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -30,11 +30,9 @@ import {
 import Button from '@/components/Button';
 import { useSupabase } from '@/lib/useSupabase';
 import type { Rit, Voertuig, DbEvent } from '@/types';
-import { fmtKm, fmtEur, fmtDateR, categoriseerRit, CAT_BY_ID, adresNaarCoord } from '@/lib/ritten-aggregaties';
+import { fmtKm, fmtEur, fmtDateR, categoriseerRit, CAT_BY_ID } from '@/lib/ritten-aggregaties';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
-import RittenMap, { type MapRoute, type MapMarker, type LatLng } from '../_components/RittenMap';
-
-const HQ_COORD: LatLng = [52.917, 6.799];
+import RealRouteMap from '../_components/RealRouteMap';
 
 type Tab = 'route' | 'kosten' | 'fiscaal' | 'log';
 
@@ -68,22 +66,6 @@ export default function RitDetailClient({ id }: Props) {
   const voertuig = useMemo(() => voertuigen.find((v) => v.id === rit?.voertuig_id), [voertuigen, rit]);
   const event = useMemo(() => events.find((e) => e.id === rit?.event_id), [events, rit]);
 
-  // Auto-play route animation when rit changes
-  const [animPct, setAnimPct] = useState(0);
-  useEffect(() => {
-    if (!rit) return;
-    setAnimPct(0);
-    let raf = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / 2400);
-      setAnimPct(p);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [rit?.id]);
-
   if (loading) {
     return (
       <div className="main-content" style={{ padding: 32 }}>
@@ -115,24 +97,6 @@ export default function RitDetailClient({ id }: Props) {
     priveOmleidingKm: rit.prive_omleiding_km,
     datum: rit.datum,
   });
-
-  const fromCoord = adresNaarCoord(rit.vertrek_adres);
-  const toCoord = adresNaarCoord(rit.aankomst_adres);
-  const fromLatLng: LatLng | null = fromCoord ? [fromCoord.lat, fromCoord.lng] : null;
-  const toLatLng: LatLng | null = toCoord ? [toCoord.lat, toCoord.lng] : null;
-
-  const route: MapRoute[] = fromLatLng && toLatLng
-    ? [{ id: String(rit.id), from: fromLatLng, to: toLatLng, color: cat.color, curvature: 0.18 }]
-    : [];
-
-  const carCoord: LatLng | null = fromLatLng && toLatLng
-    ? [fromLatLng[0] + (toLatLng[0] - fromLatLng[0]) * animPct, fromLatLng[1] + (toLatLng[1] - fromLatLng[1]) * animPct]
-    : null;
-
-  const markers: MapMarker[] = [];
-  if (fromLatLng) markers.push({ coord: fromLatLng, kind: 'home', color: '#FFBF00', label: rit.vertrek_adres.split(',')[0] });
-  if (toLatLng) markers.push({ coord: toLatLng, kind: 'stop', color: cat.color, label: rit.aankomst_adres.split(',')[0] });
-  if (carCoord) markers.push({ coord: carCoord, kind: 'stop', color: '#fff' });
 
   const stops = [
     { type: 'start', label: rit.vertrek_adres, time: null, icon: 'circle-dot' as const, color: 'var(--brand-gold)' },
@@ -427,7 +391,12 @@ export default function RitDetailClient({ id }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {tab === 'route' && (
             <>
-              <RittenMap routes={route} markers={markers} activeRouteId={String(rit.id)} height={460} />
+              <RealRouteMap
+                vertrekAdres={rit.vertrek_adres}
+                aankomstAdres={rit.aankomst_adres}
+                routeColor={cat.color}
+                height={460}
+              />
               <div className="metal">
                 <div className="metal-head">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
