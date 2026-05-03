@@ -466,7 +466,7 @@ export default function PriceIntelligence() {
 
     return (
         <RequireTier feature="price_intelligence">
-        <div className="page-container-compact" style={{ padding: '24px 32px 100px', maxWidth: 1440, margin: '0 auto' }}>
+        <div className="page-container-compact mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>

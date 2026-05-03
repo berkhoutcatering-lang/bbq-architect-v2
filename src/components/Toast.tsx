@@ -113,9 +113,10 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
                 role="status"
                 aria-live="polite"
                 aria-label="Meldingen"
+                className="toast-stack"
                 style={{
                     position: 'fixed',
-                    top: '1.5rem',
+                    top: 'calc(1.5rem + env(safe-area-inset-top, 0px))',
                     right: '1.5rem',
                     zIndex: 9999,
                     display: 'flex',

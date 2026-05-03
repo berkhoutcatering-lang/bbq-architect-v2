@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Minus, Plus, Thermometer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
+import { MobileSafeBottom } from '@/components/mobile';
 
 /**
  * SF-3 — HACCP Field Mode
@@ -110,16 +111,16 @@ export default function HaccpFieldPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] p-4 md:p-8">
+    <MobileSafeBottom as="div" className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] p-4 md:p-8">
       {/* Header */}
-      <div className="max-w-[900px] mx-auto flex items-center justify-between mb-6">
-        <Link href="/haccp" className="inline-flex items-center gap-2 px-4 py-3 rounded-lg text-[14px] text-[var(--muted)] hover:text-[var(--text)] no-underline" style={{ minHeight: 56 }}>
+      <div className="max-w-[900px] mx-auto flex items-center justify-between mb-6 gap-3">
+        <Link href="/haccp" className="inline-flex items-center gap-2 px-3 sm:px-4 py-3 rounded-lg text-[14px] text-[var(--muted)] hover:text-[var(--text)] no-underline shrink-0 touch-manipulation" style={{ minHeight: 56 }}>
           <ArrowLeft className="w-5 h-5" />
           Terug
         </Link>
-        <div className="text-right">
-          <div className="text-[18px] font-bold">HACCP — Veldmodus</div>
-          <div className="text-[12px] text-[var(--muted)]">Snelle temperatuur-logging</div>
+        <div className="text-right min-w-0">
+          <div className="text-[16px] sm:text-[18px] font-bold truncate">HACCP — Veldmodus</div>
+          <div className="text-[11px] sm:text-[12px] text-[var(--muted)]">Snelle temperatuur-logging</div>
         </div>
       </div>
 
@@ -127,9 +128,13 @@ export default function HaccpFieldPage() {
         {/* Hoofd-formulier */}
         <div className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] p-5 md:p-7">
           {/* Stap 1: chef */}
-          <label className="block text-[12px] uppercase tracking-[0.15em] text-[var(--muted)] mb-2">Chef (optioneel)</label>
+          <label htmlFor="haccp-field-chef" className="block text-[12px] uppercase tracking-[0.15em] text-[var(--muted)] mb-2">Chef (optioneel)</label>
           <input
+            id="haccp-field-chef"
             type="text"
+            inputMode="text"
+            autoCapitalize="words"
+            autoComplete="given-name"
             value={chef}
             onChange={function (e) { setChef(e.target.value); }}
             placeholder="Bv. Bas"
@@ -157,12 +162,15 @@ export default function HaccpFieldPage() {
           {presetIdx !== null && !PRESETS[presetIdx].wat && (
             <input
               type="text"
+              inputMode="text"
+              autoCapitalize="words"
               value={customWat}
               onChange={function (e) { setCustomWat(e.target.value); }}
               placeholder="Naam product..."
               className="w-full px-4 mb-6 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)] text-[var(--text)] text-[16px]"
               style={{ minHeight: 56 }}
               autoFocus
+              aria-label="Naam van het gemeten product"
             />
           )}
 
@@ -185,39 +193,66 @@ export default function HaccpFieldPage() {
             })}
           </div>
 
-          {/* Stap 4: temperatuur */}
+          {/* Stap 4: temperatuur — phone toont 3-knop rij (-1, display, +1) met ±5 als kleine pillen erboven; tablet+ houdt 5-knop rij */}
           <label className="block text-[12px] uppercase tracking-[0.15em] text-[var(--muted)] mb-3">Temperatuur</label>
-          <div className="flex items-center justify-center gap-3 mb-6">
+
+          {/* ±5 als pillen — alleen op phone (waar 5-knop niet past). Op tablet+ staan ze inline in de hoofdrij. */}
+          <div className="flex justify-center gap-3 mb-3 md:hidden">
             <button
               onClick={function () { adjustTemp(-5); }}
-              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[18px] font-bold hover:border-red-500/50"
+              className="rounded-lg bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[14px] font-bold touch-manipulation"
+              style={{ minWidth: 96, minHeight: 44 }}
+              aria-label="Verlaag temperatuur 5 graden"
+            >
+              −5°
+            </button>
+            <button
+              onClick={function () { adjustTemp(5); }}
+              className="rounded-lg bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[14px] font-bold touch-manipulation"
+              style={{ minWidth: 96, minHeight: 44 }}
+              aria-label="Verhoog temperatuur 5 graden"
+            >
+              +5°
+            </button>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
+            {/* -5 alleen op tablet+ (md+) */}
+            <button
+              onClick={function () { adjustTemp(-5); }}
+              className="hidden md:inline-flex items-center justify-center rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[18px] font-bold hover:border-red-500/50 touch-manipulation"
               style={{ minWidth: 72, minHeight: 72 }}
+              aria-label="Verlaag temperatuur 5 graden"
             >
               -5
             </button>
             <button
               onClick={function () { adjustTemp(-1); }}
-              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] hover:border-red-500/50"
-              style={{ minWidth: 72, minHeight: 72 }}
+              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] hover:border-red-500/50 touch-manipulation"
+              style={{ minWidth: 64, minHeight: 64 }}
+              aria-label="Verlaag temperatuur 1 graad"
             >
               <Minus className="w-6 h-6 mx-auto" />
             </button>
-            <div className="flex-1 text-center px-4 py-5 rounded-xl bg-[var(--color-accent-gold)]/8 border-2 border-[var(--color-accent-gold)]/40">
-              <div className="text-[44px] font-extralight text-[var(--text)] tabular-nums leading-none">
-                {temp.toFixed(1)}<span className="text-[24px] text-[var(--muted)]">°C</span>
+            <div className="flex-1 min-w-0 text-center px-3 sm:px-4 py-4 sm:py-5 rounded-xl bg-[var(--color-accent-gold)]/8 border-2 border-[var(--color-accent-gold)]/40">
+              <div className="text-[36px] sm:text-[44px] font-extralight text-[var(--text)] tabular-nums leading-none">
+                {temp.toFixed(1)}<span className="text-[20px] sm:text-[24px] text-[var(--muted)]">°C</span>
               </div>
             </div>
             <button
               onClick={function () { adjustTemp(1); }}
-              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] hover:border-emerald-500/50"
-              style={{ minWidth: 72, minHeight: 72 }}
+              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] hover:border-emerald-500/50 touch-manipulation"
+              style={{ minWidth: 64, minHeight: 64 }}
+              aria-label="Verhoog temperatuur 1 graad"
             >
               <Plus className="w-6 h-6 mx-auto" />
             </button>
+            {/* +5 alleen op tablet+ */}
             <button
               onClick={function () { adjustTemp(5); }}
-              className="rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[18px] font-bold hover:border-emerald-500/50"
+              className="hidden md:inline-flex items-center justify-center rounded-xl bg-[var(--color-bg-deep)] border-2 border-[var(--card-solid)] text-[var(--text)] text-[18px] font-bold hover:border-emerald-500/50 touch-manipulation"
               style={{ minWidth: 72, minHeight: 72 }}
+              aria-label="Verhoog temperatuur 5 graden"
             >
               +5
             </button>
@@ -237,7 +272,7 @@ export default function HaccpFieldPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full rounded-xl bg-[var(--color-accent-gold)] text-black font-bold text-[16px] flex items-center justify-center gap-2 disabled:opacity-40"
+            className="w-full rounded-xl bg-[var(--color-accent-gold)] text-black font-bold text-[16px] flex items-center justify-center gap-2 disabled:opacity-40 touch-manipulation"
             style={{ minHeight: 72 }}
           >
             <Thermometer className="w-5 h-5" />
@@ -278,6 +313,6 @@ export default function HaccpFieldPage() {
           </Link>
         </div>
       </div>
-    </div>
+    </MobileSafeBottom>
   );
 }

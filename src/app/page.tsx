@@ -493,7 +493,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen text-[var(--text)] selection:bg-[var(--color-accent-gold)]/30"
+      className="mobile-safe-bottom min-h-screen text-[var(--text)] selection:bg-[var(--color-accent-gold)]/30"
       style={{ background: 'var(--color-bg-primary)' }}
     >
       <PersonaQuiz />
@@ -503,6 +503,7 @@ export default function DashboardPage() {
         style={{
           background: 'color-mix(in srgb, var(--color-bg-primary) 80%, transparent)',
           borderBottom: '1px solid var(--color-bg-elevated)',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
         <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">

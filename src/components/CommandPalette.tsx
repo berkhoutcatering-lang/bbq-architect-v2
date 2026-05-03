@@ -164,8 +164,15 @@ export default function CommandPalette() {
                 }
             }
         }
+        // External open trigger (e.g. mobile FAB, AppShell button).
+        // Same pattern as `toggle-mobile-sidebar` in BottomNav.
+        function handleOpenEvent() { setOpen(true); }
         window.addEventListener('keydown', handleKeyDown);
-        return function () { window.removeEventListener('keydown', handleKeyDown); };
+        window.addEventListener('open-command-palette', handleOpenEvent);
+        return function () {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('open-command-palette', handleOpenEvent);
+        };
     }, [router]);
 
     useEffect(function () {

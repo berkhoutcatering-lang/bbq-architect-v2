@@ -314,7 +314,7 @@ export default function Facturen() {
     }).sort(function (a, b) { return (b.datum || '').localeCompare(a.datum || ''); });
 
     return (
-        <>
+        <div className="mobile-safe-bottom">
             <PageHeader
                 title={`Facturen (${filteredFacturen.length}${filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})`}
                 actions={<>
@@ -366,6 +366,6 @@ export default function Facturen() {
                     autoHideMs={15000}
                 />
             )}
-        </>
+        </div>
     );
 }

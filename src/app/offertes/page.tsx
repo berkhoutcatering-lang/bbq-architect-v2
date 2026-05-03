@@ -640,7 +640,7 @@ export default function Offertes() {
     }
 
     return (
-        <div className="hopbites-theme">
+        <div className="hopbites-theme mobile-safe-bottom">
             <PageHeader
                 title={`Offertes (${offertes.length})`}
                 description="BBQ Architect"

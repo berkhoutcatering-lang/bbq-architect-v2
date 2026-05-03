@@ -366,6 +366,26 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   }
 }
 
+/* Mobile master-detail flip: detail-pane wordt full-screen sheet,
+   met BottomNav-clearance zodat de gebruiker terug kan naar nav. */
+@media (max-width: 767px) {
+  .prep-detail {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding: 12px;
+  }
+  /* Wanneer de detail open is, hide de master om te voorkomen dat content
+     onder de fixed-overlay nog scrolt (iOS Safari quirk). */
+  .prep-master-detail:has(.prep-detail--open) .prep-master {
+    display: none;
+  }
+  /* Terug-knop labels alleen tonen op phone — desktop heeft genoeg ruimte
+     om met een X-icoon te volstaan. */
+  .prep-detail-close-label { display: inline; }
+}
+@media (min-width: 768px) {
+  .prep-detail-close-label { display: none; }
+}
+
 /* Class-based cards die door de hele app gebruikt worden — krijgen automatisch
    de lampion-ambiance via background-image (stapelt non-destructief over hun
    bestaande background-color). Box-shadow wordt vervangen voor consistency. */
@@ -866,9 +886,11 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
+  min-height: 56px; /* WCAG 2.2 touch target + comfortabel voor lijst-tap */
   border-bottom: 1px solid rgba(255, 255, 255, .04);
   cursor: pointer;
   transition: transform .2s ease, background .15s;
+  touch-action: manipulation;
 }
 
 .ev-row:hover {
@@ -1114,20 +1136,27 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   transition: all .15s;
 }
 
-/* Mobile: tabs scrollen horizontaal i.p.v. overlappen.
-   Op smal scherm passen 5+ tabs niet naast elkaar — wrap of overlap is rommelig. */
+/* Mobile: tabs scrollen horizontaal i.p.v. overlappen + zijn sticky.
+   Op smal scherm passen 5+ tabs niet naast elkaar — wrap of overlap is rommelig.
+   Sticky zodat ze blijven plakken bij lange lijsten (Wave 0 mobile foundation). */
 @media (max-width: 767px) {
   .tab-bar {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     flex-wrap: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    /* Solid background so content scrolling underneath doesn't bleed through */
+    background: var(--card);
   }
   .tab-bar::-webkit-scrollbar { display: none; }
   .tab-btn {
     flex: 0 0 auto;
     white-space: nowrap;
     padding: 10px 14px;
+    min-height: 44px; /* WCAG 2.2 SC 2.5.8 */
   }
 }
 
@@ -7432,4 +7461,128 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   .dash-hero-eyebrow { font-size: 9px; letter-spacing: .16em; }
   .dhs-chip { font-size: 8.5px; }
   .dhs-text { font-size: 11.5px; }
+}
+
+/* ============================================================================
+   MOBILE FOUNDATION LAYER (Wave 0 — added 2026-05-03)
+   --------------------------------------------------------------------------
+   Utilities used by primitives in src/components/mobile/* and applied per page
+   in Waves 1–4. Phone-only by default (max-width: 767px).
+   ========================================================================== */
+
+/* Single source of truth for mobile edge-padding (page sides).
+   clamp gives us 16px on small phones, up to 28px on tablets without breaking
+   into another media query. */
+:root {
+  --space-mobile-edge: clamp(16px, 4vw, 28px);
+}
+
+/* Suppress horizontal scroll at the document level — any rogue element wider
+   than the viewport will be clipped, not scrolled. Phone only. */
+@media (max-width: 767px) {
+  html, body {
+    overflow-x: hidden;
+  }
+}
+
+/* Bottom-clearance helper (used by <MobileSafeBottom>).
+   On phone: pad the bottom of the page so the BottomNav (60px) + safe-area
+   doesn't cover content. The --mobile-safe-bottom-extra var lets a page add
+   more clearance for a StickyMobileCTA stacking on top of the BottomNav. */
+.mobile-safe-bottom {
+  /* desktop: noop */
+}
+@media (max-width: 767px) {
+  .mobile-safe-bottom {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
+  }
+}
+
+/* Sticky bottom action bar (used by <StickyMobileCTA>).
+   Phone: fixed above the BottomNav with safe-area padding.
+   Desktop: sticky inside the parent container so it docks at the bottom of
+   long forms but doesn't float over unrelated content. */
+.sticky-mobile-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 12px var(--space-mobile-edge);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+@media (max-width: 767px) {
+  .sticky-mobile-cta {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding: 12px var(--space-mobile-edge) calc(12px);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+@media (min-width: 768px) {
+  .sticky-mobile-cta--phone-only { display: none; }
+}
+
+/* No-scroll-x utility — apply on container that should never overflow horizontally. */
+.no-scroll-x { overflow-x: hidden; }
+
+/* Native horizontal scroll-snap (used for KPI strips, chip rows, story-style cards). */
+.scroll-snap-x-mandatory {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.scroll-snap-x-mandatory::-webkit-scrollbar { display: none; }
+.scroll-snap-x-mandatory > * { scroll-snap-align: start; flex-shrink: 0; }
+
+/* Prevent 300ms tap-delay + accidental double-tap zoom on tappable elements. */
+.touch-manipulation { touch-action: manipulation; }
+
+/* Skeleton shimmer animation used by ResponsiveTable + cards. */
+@keyframes mobileSkeletonShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Field-mode hit target — used in HACCP, KDS, prep-counter for thumb-with-gloves usability. */
+.field-target {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+/* Mobile toast positioning: top-center voor leesbaarheid (top-right vereist
+   diagonaal-zicht op klein scherm). Behoudt safe-area-inset-top. */
+@media (max-width: 767px) {
+  .toast-stack {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    align-items: center !important;
+    width: calc(100vw - 2 * var(--space-mobile-edge, 16px)) !important;
+    max-width: 480px !important;
+  }
+}
+
+/* KDS Service Mode kanban board: phone toont 1 kolom per status verticaal,
+   met horizontale scroll-snap zodat user tussen kolommen kan swipen.
+   Tablet+ behoudt 4-kolom-grid. Pre-phone vertical stack (320 breed) is veiliger
+   dan een onleesbare 4×~80px kolommenlay-out. */
+@media (max-width: 767px) {
+  .kds-board-grid {
+    grid-template-columns: 100% !important;
+    gap: 12px !important;
+    /* Maak elke kolom een snap-target zodat user verticaal of via swipe kan scrollen */
+    scroll-snap-type: y proximity;
+  }
+  .kds-board-grid > * {
+    scroll-snap-align: start;
+  }
 }

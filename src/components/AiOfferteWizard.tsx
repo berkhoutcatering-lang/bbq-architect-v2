@@ -169,8 +169,8 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
     if (!open) return null;
 
     return (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 60, overflow: 'auto' }} onClick={onClose}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(780px, 94vw)', background: 'var(--bg, #0a0a0d)', border: '1px solid var(--card-solid, #1a1a1e)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '85vh', marginBottom: 60 }}>
+        <div className="ai-wizard-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 60, overflow: 'auto' }} onClick={onClose}>
+            <div className="ai-wizard-panel" onClick={(e) => e.stopPropagation()} style={{ width: 'min(780px, 94vw)', background: 'var(--bg, #0a0a0d)', border: '1px solid var(--card-solid, #1a1a1e)', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '85vh', marginBottom: 60 }}>
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--card-solid, #1a1a1e)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -179,8 +179,26 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                         </div>
                         <p style={{ fontSize: 11, color: 'var(--muted, #999)', margin: 0, marginTop: 2 }}>Rook stelt menu + prijs samen op basis van jouw {existingGerechten.length} gerechten</p>
                     </div>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted, #999)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Sluit wizard" style={{ background: 'transparent', border: 'none', color: 'var(--muted, #999)', cursor: 'pointer', padding: 10, minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}><X size={18} /></button>
                 </div>
+
+                <style jsx>{`
+                    @media (max-width: 767px) {
+                        :global(.ai-wizard-backdrop) {
+                            padding-top: 0 !important;
+                            align-items: stretch !important;
+                        }
+                        :global(.ai-wizard-panel) {
+                            width: 100vw !important;
+                            max-width: 100vw !important;
+                            max-height: 100vh !important;
+                            min-height: 100vh !important;
+                            border-radius: 0 !important;
+                            margin-bottom: 0 !important;
+                            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+                        }
+                    }
+                `}</style>
 
                 <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
                     {step === 'input' && (
