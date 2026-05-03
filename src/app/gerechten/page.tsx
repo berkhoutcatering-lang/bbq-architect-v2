@@ -535,6 +535,23 @@ export default function Gerechten() {
     const kpiData = computeKpiTiles(gerechten);
     const dietAllergensData = computeDietAllergens(gerechten);
     const signatureDish = pickSignatureDish(gerechten);
+
+    // Count hoe vaak het signature-gerecht voorkomt in opgeslagen menu-templates.
+    // menu_selectie heeft vorm: { gang_slug: [{ gerecht_id, naam }, ...], ... }
+    const signatureInMenusCount = signatureDish
+        ? menuTemplates.reduce(function (acc: number, t: any) {
+            const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
+            const allItems: any[] = (Object.values(sel) as unknown[]).flatMap(function (list) { return Array.isArray(list) ? list : []; });
+            const found = allItems.some(function (i: any) {
+                if (!i) return false;
+                if (i.gerecht_id != null && i.gerecht_id === signatureDish.id) return true;
+                if (i.naam && signatureDish.naam && i.naam === signatureDish.naam) return true;
+                return false;
+            });
+            return acc + (found ? 1 : 0);
+          }, 0)
+        : 0;
+
     const gangPills = gangen.map(function (g: any) {
         const count = gerechten.filter(function (d: any) { return d.gang_slug === g.slug; }).length;
         const icon = pickGlyph('', g.slug);
@@ -544,7 +561,14 @@ export default function Gerechten() {
     return (
         <div className="main-content mobile-safe-bottom">
             <RichKeukenTabs />
-            <GerechtenPageHero onAddGang={newGang} />
+            <GerechtenPageHero
+                onAddGang={view === 'menus' ? undefined : newGang}
+                onAddMenu={view === 'menus' ? newMenuTemplate : undefined}
+                view={view}
+                onViewChange={setView}
+                gerechtenCount={gerechten.length}
+                menusCount={menuTemplates.length}
+            />
 
             {view === 'gerechten' && gerechten.length > 0 && (
                 <>
@@ -563,6 +587,7 @@ export default function Gerechten() {
                             glyph={pickGlyph(signatureDish.naam || '', signatureDish.gang_slug)}
                             verkoop={schatVerkoop(signatureDish)}
                             margePct={schatMarge(signatureDish)}
+                            inMenus={signatureInMenusCount}
                             smokeUur={fmtSmokeTime(signatureDish.target_prep_time)}
                             onClick={function () { setEditing(signatureDish.id); }}
                         />
@@ -581,45 +606,6 @@ export default function Gerechten() {
                 </>
             )}
 
-            {/* Hidden — vervangen door GerechtenPageHero hierboven */}
-            <div style={{ display: 'none' }}>
-            <PageHeader
-                title={view === 'menus' ? 'Menu\u2019s' : 'Gerechten'}
-                description={view === 'menus'
-                    ? 'Stel hier je menu\u2019s samen met de wizard. Gebruik ze later als startpunt voor offertes.'
-                    : 'Overzicht van al je gerechten met ingrediënten en kostprijzen. Koppel gerechten aan gangen voor menu-samenstelling.'}
-                actions={<>
-                    {view === 'menus'
-                        ? <button className="btn btn-brand btn-sm" onClick={newMenuTemplate}><UtensilsCrossed size={14} style={{ marginRight: 6 }} />Nieuw menu</button>
-                        : <button className="btn btn-ghost btn-sm" onClick={newGang}>Gang toevoegen</button>}
-                </>}
-            />
-            </div>
-
-            {/* View-toggle: één plek voor menu-samenstelling. Gerechten = bouwblokken,
-                Menu's = opgeslagen samenstellingen die /offertes hergebruikt. */}
-            <div role="tablist" aria-label="Weergave" style={{ display: 'flex', gap: 6, marginBottom: 14, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                <button
-                    role="tab"
-                    aria-selected={view === 'gerechten'}
-                    onClick={function () { setView('gerechten'); }}
-                    className={'tab-btn' + (view === 'gerechten' ? ' active' : '')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                    <ChefHat size={14} /> Gerechten
-                    <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>({gerechten.length})</span>
-                </button>
-                <button
-                    role="tab"
-                    aria-selected={view === 'menus'}
-                    onClick={function () { setView('menus'); }}
-                    className={'tab-btn' + (view === 'menus' ? ' active' : '')}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                    <UtensilsCrossed size={14} /> Menu&rsquo;s
-                    <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>({menuTemplates.length})</span>
-                </button>
-            </div>
 
             {view === 'menus' && (
                 <PageSection>
@@ -721,23 +707,7 @@ export default function Gerechten() {
                 </div>
             )}
 
-            <div className="tab-bar">
-                {gangen.map(function (g) {
-                    const count = gerechten.filter(function (gr) { return gr.gang_slug === g.slug; }).length;
-                    return (
-                        <button
-                            key={g.slug}
-                            className={'tab-btn' + (activeGang === g.slug ? ' active' : '')}
-                            onClick={function () { setActiveGang(g.slug); setEditing(null); }}
-                        >
-                            {g.naam}
-                            <span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>
-                                ({count})
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
+            {/* Old gang tab-bar removed — vervangen door GangFilterPills bovenaan */}
 
             {currentGang && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
