@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { useOrg } from '@/lib/OrgContext';
@@ -12,6 +12,21 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
+import GerechtenPageHero from './_components/GerechtenPageHero';
+import RichKeukenTabs from './_components/RichKeukenTabs';
+import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
+import SignatureSpotlight from './_components/SignatureSpotlight';
+import DietAllergensOverview from './_components/DietAllergensOverview';
+import GangFilterPills from './_components/GangFilterPills';
+import {
+  computeKpiTiles,
+  computeDietAllergens,
+  pickSignatureDish,
+  pickGlyph,
+  schatVerkoop,
+  schatMarge,
+  fmtSmokeTime,
+} from './_components/stats-helpers';
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
 import KitchenModeStepper from '@/components/KitchenModeStepper';
 import AuditTrailTimeline from '@/components/AuditTrailTimeline';
@@ -516,9 +531,58 @@ export default function Gerechten() {
         return <LoadingState label="Gerechten laden" />;
     }
 
+    // Compute stats voor de hero
+    const kpiData = computeKpiTiles(gerechten);
+    const dietAllergensData = computeDietAllergens(gerechten);
+    const signatureDish = pickSignatureDish(gerechten);
+    const gangPills = gangen.map(function (g: any) {
+        const count = gerechten.filter(function (d: any) { return d.gang_slug === g.slug; }).length;
+        const icon = pickGlyph('', g.slug);
+        return { slug: g.slug as string, label: g.naam as string, icon, count };
+    });
+
     return (
         <div className="main-content mobile-safe-bottom">
-            <KeukenTabs />
+            <RichKeukenTabs />
+            <GerechtenPageHero onAddGang={newGang} />
+
+            {view === 'gerechten' && gerechten.length > 0 && (
+                <>
+                    <GerechtenKpiTiles
+                        totaal={kpiData.totaal}
+                        conceptCount={kpiData.conceptCount}
+                        gemVerkoop={kpiData.gemVerkoop}
+                        gemMargePct={kpiData.gemMargePct}
+                        allergenenGedekt={kpiData.allergenenGedekt}
+                        totaalGerechten={kpiData.totaalGerechten}
+                    />
+                    {signatureDish && (
+                        <SignatureSpotlight
+                            name={signatureDish.naam || 'Onbekend gerecht'}
+                            tagline={signatureDish.beschrijving}
+                            glyph={pickGlyph(signatureDish.naam || '', signatureDish.gang_slug)}
+                            verkoop={schatVerkoop(signatureDish)}
+                            margePct={schatMarge(signatureDish)}
+                            smokeUur={fmtSmokeTime(signatureDish.target_prep_time)}
+                            onClick={function () { setEditing(signatureDish.id); }}
+                        />
+                    )}
+                    <DietAllergensOverview
+                        diet={dietAllergensData.diet}
+                        allergens={dietAllergensData.allergens}
+                    />
+                    {gangPills.length > 0 && (
+                        <GangFilterPills
+                            gangen={gangPills}
+                            active={activeGang}
+                            onSelect={setActiveGang}
+                        />
+                    )}
+                </>
+            )}
+
+            {/* Hidden — vervangen door GerechtenPageHero hierboven */}
+            <div style={{ display: 'none' }}>
             <PageHeader
                 title={view === 'menus' ? 'Menu\u2019s' : 'Gerechten'}
                 description={view === 'menus'
@@ -530,6 +594,7 @@ export default function Gerechten() {
                         : <button className="btn btn-ghost btn-sm" onClick={newGang}>Gang toevoegen</button>}
                 </>}
             />
+            </div>
 
             {/* View-toggle: één plek voor menu-samenstelling. Gerechten = bouwblokken,
                 Menu's = opgeslagen samenstellingen die /offertes hergebruikt. */}
