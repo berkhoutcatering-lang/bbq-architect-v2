@@ -3,11 +3,19 @@
 interface GerechtRow {
   id: number;
   naam?: string;
+  /** Workflow-status (oudere code) — concept | review_nodig | actief | inactief */
   status?: string;
+  /** Database boolean — true = actief in productie. Concept-flag = !actief. */
+  actief?: boolean;
   bron?: string;
   kostprijs_pp?: number;
+  /** Echte DB-veld voor verkoopprijs */
+  verkoopprijs?: number;
+  /** Legacy alias — sommige code-paden noemen het `prijs` */
   prijs?: number;
   extra_prijs_pp?: number;
+  /** Pre-computed marge (0-100) als die in DB staat */
+  marge_pct?: number;
   allergenen?: string[];
   tags?: string[];
   gang_slug?: string;
@@ -16,8 +24,9 @@ interface GerechtRow {
   ingredient_costs?: unknown;
 }
 
-/** Verkoopprijs schatting: prijs > extra > target 65% marge op kostprijs. */
+/** Verkoopprijs lezen: verkoopprijs > prijs > extra > target 65% marge op kostprijs. */
 export function schatVerkoop(g: GerechtRow): number {
+  if (g.verkoopprijs && g.verkoopprijs > 0) return g.verkoopprijs;
   if (g.prijs && g.prijs > 0) return g.prijs;
   if (g.extra_prijs_pp && g.extra_prijs_pp > 0) return g.extra_prijs_pp;
   const k = g.kostprijs_pp || 0;
@@ -25,12 +34,20 @@ export function schatVerkoop(g: GerechtRow): number {
   return Math.round((k / 0.35) * 2) / 2;
 }
 
-/** Brutomarge in 0-100 schaal. */
+/** Brutomarge in 0-100 schaal. Lees pre-computed marge_pct als die er is. */
 export function schatMarge(g: GerechtRow): number {
+  if (g.marge_pct && g.marge_pct > 0) return g.marge_pct;
   const v = schatVerkoop(g);
   const k = g.kostprijs_pp || 0;
   if (v <= 0 || k <= 0) return 0;
   return ((v - k) / v) * 100;
+}
+
+/** Concept = niet-actief volgens DB-boolean. Status-string blijft fallback. */
+export function isConcept(g: GerechtRow): boolean {
+  if (g.status === 'concept') return true;
+  if (g.actief === false) return true;
+  return false;
 }
 
 export interface KpiTilesData {
@@ -44,7 +61,7 @@ export interface KpiTilesData {
 
 export function computeKpiTiles(gerechten: GerechtRow[]): KpiTilesData {
   const totaalGerechten = gerechten.length;
-  const conceptCount = gerechten.filter((g) => g.status === 'concept').length;
+  const conceptCount = gerechten.filter(isConcept).length;
   const verkoopValues = gerechten.map(schatVerkoop).filter((v) => v > 0);
   const margeValues = gerechten.map(schatMarge).filter((m) => m > 0);
   const gemVerkoop =
@@ -137,7 +154,7 @@ export function pickGlyph(name: string, gangSlug?: string): string {
 /** Pak het "signature" gerecht: hoogste marge bij actief, fallback eerste actief, fallback eerste. */
 export function pickSignatureDish(gerechten: GerechtRow[]): GerechtRow | null {
   if (gerechten.length === 0) return null;
-  const actief = gerechten.filter((g) => g.status === 'actief' || !g.status);
+  const actief = gerechten.filter((g) => g.actief !== false && g.status !== 'concept');
   const pool = actief.length > 0 ? actief : gerechten;
   const withMarge = pool.map((g) => ({ g, marge: schatMarge(g) }));
   withMarge.sort((a, b) => b.marge - a.marge);
