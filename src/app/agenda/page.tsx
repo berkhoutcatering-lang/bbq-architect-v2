@@ -8,8 +8,8 @@ import type { Event as DbEvent, PrepTask } from '@/types';
 import {
     PartyPopper, ClipboardList, Flame, Users, HeartHandshake, Truck, UserRound,
     ChevronLeft, ChevronRight, Filter, Grid3x3, Columns3, List as ListIcon,
-    Sparkles, AlertTriangle, TrendingUp, Wand2, X, MapPin, Euro, Clock, Calendar,
-    ArrowRight, Check, RefreshCw,
+    Sparkles, AlertTriangle, X, MapPin, Euro, Clock, Calendar,
+    Check, RefreshCw,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 
@@ -18,22 +18,22 @@ const BRAND = '#FFBF00';
 
 /* ═══════════════════════════════════════════════════════════════════
    AGENDA — gevoed door echte DB events (tabel: events) + prep_tasks.
-   Smoker / Team / Tasting / Delivery / Personal blijven (voorlopig)
-   demo-data tot er DB-tabellen voor zijn — gemarkeerd als "demo".
+   Andere calendar-types (smoker/team/tasting/delivery/personal) blijven
+   gereserveerd in CALENDARS maar tonen pas data zodra die tabellen bestaan.
    ═══════════════════════════════════════════════════════════════════ */
 
 const NL_MONTHS = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
-interface CalendarMeta { id: string; label: string; color: string; Icon: any; synced: boolean; source: string; count: number }
+interface CalendarMeta { id: string; label: string; color: string; Icon: any; synced: boolean; source: string }
 
 const CALENDARS: CalendarMeta[] = [
-    { id: 'events', label: 'Events', color: BRAND, Icon: PartyPopper, synced: true, source: 'lokaal', count: 7 },
-    { id: 'prep', label: 'Prep deadlines', color: GOLD, Icon: ClipboardList, synced: true, source: 'lokaal', count: 14 },
-    { id: 'smoker', label: 'Smoker cycli', color: '#ef6c4d', Icon: Flame, synced: true, source: 'lokaal', count: 5 },
-    { id: 'team', label: 'Team rooster', color: '#10b981', Icon: Users, synced: true, source: 'Google · BBQA Team', count: 18 },
-    { id: 'tasting', label: 'Klant-afspraken', color: '#a78bfa', Icon: HeartHandshake, synced: true, source: 'Google · Sales', count: 6 },
-    { id: 'delivery', label: 'Leveringen', color: '#60a5fa', Icon: Truck, synced: true, source: 'Google · Inkoop', count: 8 },
-    { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: UserRound, synced: true, source: 'Google · martijn@…', count: 4 },
+    { id: 'events', label: 'Events', color: BRAND, Icon: PartyPopper, synced: true, source: 'lokaal' },
+    { id: 'prep', label: 'Prep deadlines', color: GOLD, Icon: ClipboardList, synced: true, source: 'lokaal' },
+    { id: 'smoker', label: 'Smoker cycli', color: '#ef6c4d', Icon: Flame, synced: false, source: 'binnenkort' },
+    { id: 'team', label: 'Team rooster', color: '#10b981', Icon: Users, synced: false, source: 'binnenkort' },
+    { id: 'tasting', label: 'Klant-afspraken', color: '#a78bfa', Icon: HeartHandshake, synced: false, source: 'binnenkort' },
+    { id: 'delivery', label: 'Leveringen', color: '#60a5fa', Icon: Truck, synced: false, source: 'binnenkort' },
+    { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: UserRound, synced: false, source: 'binnenkort' },
 ];
 
 interface AgendaEvent {
@@ -44,97 +44,9 @@ interface AgendaEvent {
 const ev = (id: string, calId: string, day: number, start: number, duration: number, title: string, extras: any = {}): AgendaEvent =>
     ({ id, calId, day, start, duration, title, ...extras });
 
-const EVENTS_DATA: AgendaEvent[] = [
-    ev('e1', 'events', 8, 16, 7, 'Bedrijfsfeest Sentec 90p', { client: 'Sentec BV', guests: 90, type: 'Bedrijfsfeest', venue: 'De Schuur, Diepenheim', revenue: 8100, status: 'afgerond', package: 'Low & Slow All-In', hero: '🥩' }),
-    ev('e2', 'events', 12, 17, 6, 'Diner Familie Berghuis 24p', { client: 'Fam. Berghuis', guests: 24, type: 'Verjaardag', venue: 'Privé locatie Goor', revenue: 1920, status: 'live', package: 'Pulled Pork & Brisket', hero: '🍖', isToday: true }),
-    ev('e3', 'events', 15, 14, 8, 'Bruiloft Joost & Liane 80p', { client: 'J. van Asperen + L. Pol', guests: 80, type: 'Bruiloft', venue: 'Landgoed Singraven', revenue: 9600, status: 'bevestigd', package: 'Premium Wedding BBQ', hero: '💍', prepLeadDays: 4 }),
-    ev('e4', 'events', 21, 12, 9, 'Bruiloft Anouk & Tim 110p', { client: 'A. Brinkman + T. de Wit', guests: 110, type: 'Bruiloft', venue: 'Boerderij De Eik, Markelo', revenue: 13200, status: 'bevestigd', package: 'Hand-in-Hand Premium', hero: '💍', prepLeadDays: 5 }),
-    ev('e5', 'events', 22, 16, 6, 'Bedrijfsfeest TechCorp 80p', { client: 'TechCorp Nederland', guests: 80, type: 'Bedrijfsfeest', venue: 'HQ Hengelo', revenue: 7200, status: 'bevestigd', package: 'Low & Slow All-In', hero: '🏢', prepLeadDays: 3, conflict: { with: 'e4', note: 'Smoker dubbel bezet' } }),
-    ev('e6', 'events', 28, 17, 5, 'Lentediner Rotary Club 45p', { client: 'Rotary Hengelo', guests: 45, type: 'Bedrijfsfeest', venue: 'Watertoren Borne', revenue: 4050, status: 'optie', package: 'Mid Tier BBQ', hero: '🌷', prepLeadDays: 3 }),
-    ev('e7', 'events', 29, 13, 8, 'Bruiloft Fleur & Daan 65p', { client: 'F. Hoekstra + D. Smit', guests: 65, type: 'Bruiloft', venue: 'Kasteel Twickel', revenue: 7800, status: 'bevestigd', package: 'Premium Wedding BBQ', hero: '💍', prepLeadDays: 4 }),
-];
-
-const PREP_DATA: AgendaEvent[] = [
-    ev('p1', 'prep', 11, 8, 1, 'Brisket dry-rub start', { for: 'e3', critical: true }),
-    ev('p2', 'prep', 12, 9, 1, 'Pulled pork bestelling Sligro', { for: 'e3' }),
-    ev('p3', 'prep', 13, 6, 2, 'Smoker brisket low & slow IN', { for: 'e3', critical: true }),
-    ev('p4', 'prep', 14, 7, 1.5, 'Sauces & rubs voorbereiden', { for: 'e3' }),
-    ev('p5', 'prep', 18, 8, 1, 'Brisket rub e4 + e5', { for: 'e4+e5', critical: true }),
-    ev('p6', 'prep', 19, 9, 1, 'Bestelling vlees Sligro', { for: 'e4' }),
-    ev('p7', 'prep', 20, 5, 3, 'Smoker IN brisket e4', { for: 'e4', critical: true }),
-    ev('p8', 'prep', 21, 5, 2.5, 'Smoker IN brisket e5', { for: 'e5', critical: true, conflict: 'p7' }),
-    ev('p9', 'prep', 25, 8, 1, 'Bestelling Rotary + bruiloft', { for: 'e6+e7' }),
-    ev('p10', 'prep', 27, 7, 2, 'Mise en place lentediner', { for: 'e6' }),
-    ev('p11', 'prep', 28, 6, 2, 'Bruiloft setup checklist', { for: 'e7' }),
-];
-
-const SMOKER_DATA: AgendaEvent[] = [
-    ev('s1', 'smoker', 13, 6, 14, 'Brisket Singraven · 18u smoke', { cuts: '24kg brisket', target: '96°C IT', smokerNo: 1, for: 'e3', type: 'low&slow', wood: 'hickory + oak' }),
-    ev('s2', 'smoker', 14, 22, 8, 'Pulled pork Singraven · nacht', { cuts: '32kg PP', target: '93°C IT', smokerNo: 2, for: 'e3', type: 'low&slow', wood: 'apple' }),
-    ev('s3', 'smoker', 20, 5, 14, 'Brisket dubbel · TechCorp + Bruiloft', { cuts: '40kg brisket', target: '96°C IT', smokerNo: 1, for: 'e4+e5', type: 'low&slow', wood: 'hickory', conflictNote: 'Capaciteit kritiek' }),
-    ev('s4', 'smoker', 27, 6, 13, 'Brisket Twickel', { cuts: '20kg brisket', target: '96°C IT', smokerNo: 1, for: 'e7', type: 'low&slow', wood: 'oak' }),
-    ev('s5', 'smoker', 28, 11, 4, 'Spareribs hot smoke Rotary', { cuts: '15kg ribs', target: '88°C IT', smokerNo: 2, for: 'e6', type: 'hot', wood: 'cherry' }),
-];
-
-const TEAM_DATA: AgendaEvent[] = [
-    ev('t1', 'team', 12, 16, 7, 'Service: Martijn + Lotte', { staff: ['MB', 'LV'] }),
-    ev('t2', 'team', 13, 6, 8, 'Smoker shift: Martijn', { staff: ['MB'] }),
-    ev('t3', 'team', 15, 12, 10, 'Bruiloft team — 4 man', { staff: ['MB', 'LV', 'JD', 'KE'] }),
-    ev('t4', 'team', 20, 5, 8, 'Smoker shift: Martijn', { staff: ['MB'] }),
-    ev('t5', 'team', 21, 11, 11, 'Bruiloft team — 5 man', { staff: ['MB', 'LV', 'JD', 'KE', 'TR'] }),
-    ev('t6', 'team', 22, 15, 7, 'TechCorp service — 3 man', { staff: ['MB', 'LV', 'JD'], short: true }),
-    ev('t7', 'team', 28, 16, 6, 'Rotary service', { staff: ['MB', 'LV'] }),
-    ev('t8', 'team', 29, 11, 11, 'Bruiloft team Twickel', { staff: ['MB', 'LV', 'JD', 'KE'] }),
-];
-
-const TASTING_DATA: AgendaEvent[] = [
-    ev('ta1', 'tasting', 12, 14, 1.5, 'Intake: Bruiloft De Vries 2026', { client: 'Fam. de Vries', kind: 'intake' }),
-    ev('ta2', 'tasting', 17, 19, 2, 'Proeverij: Janssen-Smid', { client: 'Janssen-Smid', kind: 'tasting', stage: 'gesloten' }),
-    ev('ta3', 'tasting', 19, 16, 1, 'Site visit Twickel', { client: 'Fleur & Daan', kind: 'visit' }),
-    ev('ta4', 'tasting', 24, 18, 2, 'Proeverij: Lead Goorse Industriedag', { client: 'Goorse Industrie', kind: 'tasting' }),
-    ev('ta5', 'tasting', 26, 14, 1.5, 'Intake: Zomerfeest Domino', { client: 'Domino Hengelo', kind: 'intake' }),
-    ev('ta6', 'tasting', 31, 19, 2, 'Proeverij groep Saxion 2025', { client: 'Saxion Hogeschool', kind: 'tasting' }),
-];
-
-const DELIVERY_DATA: AgendaEvent[] = [
-    ev('d1', 'delivery', 12, 9, 0.5, 'Sligro vlees · €847', { supplier: 'Sligro', amount: 847 }),
-    ev('d2', 'delivery', 14, 8.5, 0.5, 'Sligro brisket + PP · €2.140', { supplier: 'Sligro', amount: 2140, big: true }),
-    ev('d3', 'delivery', 17, 10, 0.5, 'Hop & Bites bier · €420', { supplier: 'Hop & Bites', amount: 420 }),
-    ev('d4', 'delivery', 19, 9, 0.5, 'Sligro premium pakket · €3.200', { supplier: 'Sligro', amount: 3200, big: true }),
-    ev('d5', 'delivery', 21, 8, 0.5, 'Bakker Holtkamp brood', { supplier: 'Bakker', amount: 180 }),
-    ev('d6', 'delivery', 26, 9, 0.5, 'Sligro Rotary + Twickel · €1.840', { supplier: 'Sligro', amount: 1840 }),
-    ev('d7', 'delivery', 28, 8, 0.5, 'Boerderij groente Twickel', { supplier: 'De Maat', amount: 240 }),
-    ev('d8', 'delivery', 31, 9, 0.5, 'Sligro maandbestelling', { supplier: 'Sligro', amount: 920 }),
-];
-
-const PERSONAL_DATA: AgendaEvent[] = [
-    ev('pe1', 'personal', 13, 18, 1.5, 'Avondeten zus', { source: 'Google' }),
-    ev('pe2', 'personal', 16, 10, 2, 'Voetbal Tygo', { source: 'Google', recurring: true }),
-    ev('pe3', 'personal', 23, 10, 2, 'Voetbal Tygo', { source: 'Google', recurring: true }),
-    ev('pe4', 'personal', 30, 19, 2.5, 'Bioscoop Lieke', { source: 'Google' }),
-];
-
-/* DEMO_FALLBACK_EVENTS bundelt alle hardcoded mock-data; wordt alléén
-   getoond als de DB nog leeg is. Zodra de gebruiker echte events heeft
-   draait de Agenda volledig op live data. */
-const DEMO_FALLBACK_EVENTS: AgendaEvent[] = [...EVENTS_DATA, ...PREP_DATA, ...SMOKER_DATA, ...TEAM_DATA, ...TASTING_DATA, ...DELIVERY_DATA, ...PERSONAL_DATA];
-
-const AI_INSIGHTS = [
-    { id: 'ai1', severity: 'critical' as const, Icon: AlertTriangle, title: 'Smoker conflict: 21–22 maart', body: 'Bruiloft Anouk & Tim (110p) en TechCorp (80p) hebben beide brisket nodig. Smoker 1 kan max 30kg in 18u doen — tekort van 12kg.', suggestion: 'Verplaats TechCorp brisket naar Smoker 2 of overweeg pulled pork', action: 'Bekijk schedule' },
-    { id: 'ai2', severity: 'opportunity' as const, Icon: Sparkles, title: '3 lege slots voor nieuwe leads', body: 'Wo 19/3 hele dag, vr 21/3 ochtend, za 5/4 hele dag — ideaal voor 60-80p events.', suggestion: 'Stuur prospectief mailtje naar 4 warme leads in CRM', action: 'Open lead-voorstel' },
-    { id: 'ai3', severity: 'info' as const, Icon: TrendingUp, title: 'Omzet maart: €51.870', body: '€47.820 bevestigd · €4.050 in optie · 14% boven budget. April pipeline staat op €38k.', suggestion: 'Zet april kortings-campagne live', action: 'Open rapport' },
-    { id: 'ai4', severity: 'opportunity' as const, Icon: Wand2, title: 'Smoker schedule geoptimaliseerd', body: 'Door brisket e3 op 13/3 06:00 ipv 14/3 te starten win je 8u en kan PP er overheen.', suggestion: 'Pas auto-aan', action: 'Toepassen' },
-    { id: 'ai5', severity: 'info' as const, Icon: ClipboardList, title: '14 prep-deadlines auto-gepland', body: 'Vanaf event-datums teruggerekend met je standaard lead-times. Allemaal in agenda gezet.', suggestion: 'Bekijk en pas aan', action: 'Open prep planning' },
-];
-
-const UPCOMING = [
-    { day: 12, name: 'Diner Berghuis', guests: 24, time: '17:00', revenue: 1920, status: 'live', emoji: '🍖' },
-    { day: 15, name: 'Bruiloft Singraven', guests: 80, time: '14:00', revenue: 9600, status: 'bevestigd', emoji: '💍' },
-    { day: 21, name: 'Bruiloft Markelo', guests: 110, time: '12:00', revenue: 13200, status: 'bevestigd', emoji: '💍' },
-    { day: 22, name: 'TechCorp', guests: 80, time: '16:00', revenue: 7200, status: 'bevestigd', emoji: '🏢', warning: true },
-    { day: 28, name: 'Rotary Lentediner', guests: 45, time: '17:00', revenue: 4050, status: 'optie', emoji: '🌷' },
-    { day: 29, name: 'Bruiloft Twickel', guests: 65, time: '13:00', revenue: 7800, status: 'bevestigd', emoji: '💍' },
-];
+/* Demo-fallback is bewust verwijderd (2026-05-08). De agenda draait altijd
+   op live DB-data — events + prep_tasks van de huidige org. Lege staten
+   krijgen een eerlijke "geen events nog" UI i.p.v. fake data uit maart 2025. */
 
 /* ═══════════════════════════════════════════════════════════════════
    ATOMS
@@ -155,7 +67,7 @@ const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL');
    ═══════════════════════════════════════════════════════════════════ */
 interface AgendaKpis {
     upcoming30d: number; revenuePipeline: number; revenuePipelineConfirmed: number; conflicts: number;
-    freeWeekendsLeft: number; usingDemoData: boolean;
+    freeWeekendsLeft: number; isEmpty: boolean;
 }
 function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => void }) {
     return (
@@ -168,13 +80,13 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
                 <div style={{ minWidth: 0 }}>
                     <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Agenda</h1>
                     <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        {kpis.usingDemoData
-                            ? 'Demo-modus — voeg een echt event toe in /events om je live agenda te zien'
+                        {kpis.isEmpty
+                            ? 'Nog geen events — maak er een aan via /events om je agenda op te bouwen'
                             : 'Live agenda · gevoed door je events + prep-taken'}
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <SyncBadge live={!kpis.usingDemoData} />
+                    <SyncBadge live={!kpis.isEmpty} />
                     <button onClick={onAiClick} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 8,
                         background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#0a0a0c',
@@ -220,7 +132,7 @@ function SyncBadge({ live }: { live: boolean }) {
             border: `1px solid ${bd}`, fontSize: 11, color,
         }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, animation: live ? 'sync-pulse 2s infinite' : 'none' }} />
-            <strong>{live ? 'Live data' : 'Demo data'}</strong>
+            <strong>{live ? 'Live data' : 'Leeg'}</strong>
         </div>
     );
 }
@@ -292,13 +204,14 @@ const viewTabStyle = (active: boolean): React.CSSProperties => ({
 /* ═══════════════════════════════════════════════════════════════════
    CALENDAR LEGEND
    ═══════════════════════════════════════════════════════════════════ */
-function CalendarLegend({ active, onToggle }: { active: string[]; onToggle: (id: string) => void }) {
+function CalendarLegend({ active, onToggle, counts }: { active: string[]; onToggle: (id: string) => void; counts: Record<string, number> }) {
     return (
         <MetalCard>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Agenda&rsquo;s</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {CALENDARS.map(c => {
                     const isOn = active.includes(c.id);
+                    const count = counts[c.id] || 0;
                     return (
                         <div key={c.id} onClick={() => onToggle(c.id)} style={{
                             display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
@@ -310,7 +223,7 @@ function CalendarLegend({ active, onToggle }: { active: string[]; onToggle: (id:
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
                                 <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {c.source} · {c.count}
+                                    {c.source} · {count}
                                 </div>
                             </div>
                             {c.synced && <RefreshCw size={10} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />}
@@ -437,63 +350,34 @@ function EventChip({ event, onClick }: { event: AgendaEvent; onClick: () => void
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   SMOKER SCHEDULE STRIP
-   ═══════════════════════════════════════════════════════════════════ */
-function SmokerSchedule({ smokes }: { smokes: AgendaEvent[] }) {
-    const startDay = 13;
-    const days = 18;
-    /* SmokerSchedule is alleen demo-data; vandaag-highlight match op kalenderdag. */
-    const todayDay = new Date().getDate();
-    return (
-        <MetalCard>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <Flame size={14} style={{ color: '#ef6c4d' }} />
-                <Eyebrow>Smoker schedule · komende 18 dagen</Eyebrow>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <SmokerLane no={1} smokes={smokes.filter(s => s.smokerNo === 1)} startDay={startDay} days={days} />
-                <SmokerLane no={2} smokes={smokes.filter(s => s.smokerNo === 2)} startDay={startDay} days={days} />
-            </div>
-            <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '32px ' + Array.from({ length: days }, () => '1fr').join(' '), gap: 1, fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>
-                <div />
-                {Array.from({ length: days }, (_, i) => (
-                    <div key={i} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: i + startDay === todayDay ? 700 : 400, color: i + startDay === todayDay ? BRAND : 'var(--muted)' }}>
-                        {i + startDay}
-                    </div>
-                ))}
-            </div>
-        </MetalCard>
-    );
-}
-
-function SmokerLane({ no, smokes, startDay, days }: { no: number; smokes: AgendaEvent[]; startDay: number; days: number }) {
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: '32px ' + Array.from({ length: days }, () => '1fr').join(' '), gap: 1, alignItems: 'center' }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textAlign: 'center' }}>S{no}</div>
-            {Array.from({ length: days }, (_, i) => {
-                const day = i + startDay;
-                const smoke = smokes.find(s => s.day === day);
-                if (!smoke) return <div key={i} style={{ height: 18, background: 'rgba(255,255,255,.02)', borderRadius: 2 }} />;
-                return (
-                    <div key={i} title={smoke.title} style={{
-                        height: 18, borderRadius: 3, background: smoke.type === 'low&slow' ? 'linear-gradient(90deg, #ef6c4d, #c4a35a)' : '#ef6c4d',
-                        position: 'relative', cursor: 'pointer',
-                        boxShadow: smoke.conflictNote ? '0 0 0 1px var(--red)' : 'none',
-                    }}>
-                        <div style={{ position: 'absolute', inset: 0, fontSize: 8, color: '#000', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                            {smoke.type === 'low&slow' ? '🔥' : '🌶️'}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
    UPCOMING LIST
    ═══════════════════════════════════════════════════════════════════ */
-function UpcomingList({ items, onSelect }: { items: typeof UPCOMING; onSelect: (it: typeof UPCOMING[0]) => void }) {
+interface UpcomingItem {
+    day: number;
+    name: string;
+    guests: number;
+    time: string;
+    revenue: number;
+    status: string;
+    emoji: string;
+    warning?: boolean;
+    dbId?: number;
+    dbDate?: string;
+}
+function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (it: UpcomingItem) => void }) {
+    if (items.length === 0) {
+        return (
+            <MetalCard>
+                <Eyebrow style={{ marginBottom: 10 }}>Komende events</Eyebrow>
+                <div style={{ padding: '20px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                    Nog geen events ingepland.
+                </div>
+                <a href="/events" className="btn btn-brand" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
+                    Maak je eerste event
+                </a>
+            </MetalCard>
+        );
+    }
     return (
         <MetalCard>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -523,63 +407,11 @@ function UpcomingList({ items, onSelect }: { items: typeof UPCOMING; onSelect: (
                             fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: '.08em',
                             background: it.status === 'live' ? 'rgba(34,197,94,.15)' : it.status === 'optie' ? `${BRAND}1f` : `${GOLD}26`,
                             color: it.status === 'live' ? 'var(--green)' : it.status === 'optie' ? BRAND : GOLD,
-                        }}>{(it.status as string).toUpperCase()}</span>
+                        }}>{it.status.toUpperCase()}</span>
                     </div>
                 ))}
             </div>
         </MetalCard>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   AI INSIGHTS PANEL
-   ═══════════════════════════════════════════════════════════════════ */
-function AIInsightsPanel() {
-    return (
-        <MetalCard style={{ position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Sparkles size={14} style={{ color: GOLD }} />
-                    <Eyebrow>AI insights</Eyebrow>
-                </div>
-                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: `${GOLD}26`, color: GOLD, fontWeight: 700, letterSpacing: '.1em' }}>{AI_INSIGHTS.length} TIPS</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {AI_INSIGHTS.map(insight => <AIInsightCard key={insight.id} insight={insight} />)}
-            </div>
-        </MetalCard>
-    );
-}
-
-function AIInsightCard({ insight }: { insight: typeof AI_INSIGHTS[0] }) {
-    const colors = {
-        critical: { bg: 'rgba(239,68,68,.06)', border: 'rgba(239,68,68,.25)', icon: 'var(--red)', label: 'Kritisch' },
-        opportunity: { bg: `${BRAND}0d`, border: `${BRAND}33`, icon: BRAND, label: 'Kans' },
-        info: { bg: `${GOLD}0a`, border: `${GOLD}26`, icon: GOLD, label: 'Info' },
-    };
-    const c = colors[insight.severity];
-    return (
-        <div style={{ padding: 12, borderRadius: 10, background: c.bg, border: `1px solid ${c.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(0,0,0,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <insight.Icon size={13} style={{ color: c.icon }} />
-                </div>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.icon }} />
-                <div style={{ fontSize: 11, color: c.icon, fontWeight: 600 }}>{c.label}</div>
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{insight.title}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 8 }}>{insight.body}</div>
-            <div style={{ fontSize: 11, color: c.icon, fontStyle: 'italic', marginBottom: 10 }}>→ {insight.suggestion}</div>
-            <button style={{
-                width: '100%', padding: '7px 10px', borderRadius: 6,
-                background: 'rgba(0,0,0,.3)', border: `1px solid ${c.border}`,
-                color: c.icon, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}>
-                {insight.action} <ArrowRight size={11} />
-            </button>
-        </div>
     );
 }
 
@@ -608,7 +440,7 @@ function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onCl
                             </div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, letterSpacing: '-.01em' }}>{event.title}</div>
                             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                                {String(Math.floor(event.start)).padStart(2, '0')}:{event.start % 1 ? '30' : '00'} · {event.duration}u · maart {event.day}, 2025
+                                {String(Math.floor(event.start)).padStart(2, '0')}:{event.start % 1 ? '30' : '00'} · {event.duration}u{event.dbDate ? ' · ' + new Date(event.dbDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                             </div>
                         </div>
                         <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -780,23 +612,27 @@ export default function Agenda() {
         return list;
     }, [prepTasks, eventDateMap, monthPrefix]);
 
-    /* Demo-fallback: alleen tonen als er nog géén echte events zijn. */
-    const usingDemoData = dbEvents.length === 0;
+    /* Alle events in zichtbare maand: events + prep-taken, allemaal live uit DB. */
     const allEvents: AgendaEvent[] = useMemo(() => {
-        if (usingDemoData) return DEMO_FALLBACK_EVENTS;
         return [...dbAgendaEvents, ...dbPrepEvents];
-    }, [usingDemoData, dbAgendaEvents, dbPrepEvents]);
+    }, [dbAgendaEvents, dbPrepEvents]);
 
-    /* KPIs uit echte data. */
+    /* Counts per calendar voor de legend — dynamisch uit live data deze maand. */
+    const calendarCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const cal of CALENDARS) counts[cal.id] = 0;
+        for (const e of allEvents) counts[e.calId] = (counts[e.calId] || 0) + 1;
+        return counts;
+    }, [allEvents]);
+
+    const isEmpty = dbEvents.length === 0;
+
+    /* Conflict-detectie altijd over live DB events. */
     const conflicts = useMemo(() => {
-        if (usingDemoData) return [];
         return detectAllConflicts(dbEvents).conflicts;
-    }, [dbEvents, usingDemoData]);
+    }, [dbEvents]);
 
     const kpis: AgendaKpis = useMemo(() => {
-        if (usingDemoData) {
-            return { upcoming30d: 7, revenuePipeline: 51870, revenuePipelineConfirmed: 47820, conflicts: 1, freeWeekendsLeft: 2, usingDemoData: true };
-        }
         const now = new Date();
         const horizon = new Date(); horizon.setDate(horizon.getDate() + 30);
         const horizonIso = horizon.toISOString().slice(0, 10);
@@ -825,13 +661,12 @@ export default function Agenda() {
             revenuePipelineConfirmed: pipelineConfirmed,
             conflicts: conflicts.length,
             freeWeekendsLeft: Math.floor(freeWeekends / 2), /* zaterdag+zondag = 1 weekend */
-            usingDemoData: false,
+            isEmpty,
         };
-    }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, usingDemoData]);
+    }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, isEmpty]);
 
-    /* UPCOMING-rail uit live data; demo-fallback bij lege DB. */
-    const upcomingList = useMemo(() => {
-        if (usingDemoData) return UPCOMING;
+    /* UPCOMING-rail uit live data — eerstvolgende 8 events. */
+    const upcomingList: UpcomingItem[] = useMemo(() => {
         const todayIso = new Date().toISOString().slice(0, 10);
         return dbEvents
             .filter(e => e.date >= todayIso)
@@ -848,7 +683,7 @@ export default function Agenda() {
                 dbId: e.id,
                 dbDate: e.date,
             }));
-    }, [dbEvents, usingDemoData]);
+    }, [dbEvents]);
 
     function shiftMonth(delta: number) {
         let m = viewMonth + delta;
@@ -864,11 +699,11 @@ export default function Agenda() {
                 id="agenda"
                 accent="#FFBF00"
                 icon={Calendar}
-                intro="Hier zie je in één oogopslag wat er in je week en maand staat — events, prep-deadlines en smoker-sessies door elkaar."
+                intro="Hier zie je in één oogopslag wat er in je maand staat — events en prep-deadlines naast elkaar."
                 actions={[
-                    { lead: 'Wissel tussen maand, week en lijst', text: 'om grote planning of dag-detail te vergelijken.' },
-                    { lead: 'Klik op een dag of event', text: 'om details te zien en direct door te springen naar de event-hub.' },
-                    { lead: 'AI Insights rechtsboven', text: 'spot conflicten, vrije weekenden en omzet-patronen die je anders mist.' },
+                    { lead: 'Klik op een event', text: 'om details te zien en direct door te springen naar de event-hub.' },
+                    { lead: 'Conflicten rechts in beeld', text: 'tonen waar dubbele prep, krappe smoker-bezetting of overlap zit.' },
+                    { lead: 'Filter agenda’s links', text: 'om events, prep en straks ook smoker/team apart te bekijken.' },
                 ]}
             />
             <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
@@ -886,7 +721,7 @@ export default function Agenda() {
 
             <div className="agenda-grid">
                 <div>
-                    <CalendarLegend active={activeCals} onToggle={toggleCal} />
+                    <CalendarLegend active={activeCals} onToggle={toggleCal} counts={calendarCounts} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -904,22 +739,17 @@ export default function Agenda() {
                             </div>
                         </MetalCard>
                     )}
-                    {usingDemoData && <SmokerSchedule smokes={SMOKER_DATA} />}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     <span id="ai-rail-anchor" />
-                    <UpcomingList items={upcomingList as any} onSelect={(it: any) => {
-                        if (usingDemoData) {
-                            const ev = EVENTS_DATA.find(e => e.day === it.day);
-                            if (ev) setSelectedEvent(ev);
-                        } else if (it.dbId) {
+                    <UpcomingList items={upcomingList} onSelect={(it) => {
+                        if (it.dbId) {
                             const ev = dbAgendaEvents.find(e => e.dbId === it.dbId);
                             if (ev) setSelectedEvent(ev);
                         }
                     }} />
-                    {usingDemoData && <AIInsightsPanel />}
-                    {!usingDemoData && conflicts.length > 0 && (
+                    {conflicts.length > 0 && (
                         <MetalCard>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                                 <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
