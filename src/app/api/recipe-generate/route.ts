@@ -10,6 +10,17 @@ export const maxDuration = 120;
 
 type GenerateMode = 'recipe' | 'menu' | 'enrich' | 'scale';
 
+/** /bedenker-flavour van 'recipe' mode: open / voorraad-driven / klant-input. */
+type RecipeFlavour = 'vrij' | 'voorraad' | 'klant';
+
+interface RecipeFlavourContext {
+    voorraad?: string;
+    dieet?: string[];
+    gasten?: number;
+    budget_pp?: number;
+    context?: string;
+}
+
 type ExistingDish = {
     naam: string;
     categorie?: string;
@@ -81,13 +92,33 @@ const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met
   ]
 }`;
 
+function buildFlavourContext(flavour: RecipeFlavour, ctx: RecipeFlavourContext): string {
+    if (flavour === 'voorraad' && ctx.voorraad?.trim()) {
+        return `\n\n## VOORRAAD-MODE — gebruik DEZE restjes/ingrediënten als basis:\n"${ctx.voorraad.trim()}"\n\nDoel: zero-waste, deze ingrediënten moeten DRAGEN (niet als bijspeler). Vul aan met max 5 nieuwe ingrediënten uit standaard Sligro/Makro-assortiment. Geef in 'tags' het label "zero-waste" mee.`;
+    }
+    if (flavour === 'klant') {
+        const lines: string[] = [];
+        if (ctx.gasten) lines.push(`Aantal gasten: ${ctx.gasten}`);
+        if (ctx.budget_pp) lines.push(`Budget: max €${ctx.budget_pp} kostprijs p.p. (BLIJF onder dit cijfer in 'geschatte_kostprijs_pp').`);
+        if (ctx.dieet && ctx.dieet.length > 0) lines.push(`Dieet-restricties (HARD, geen excuses): ${ctx.dieet.join(', ')}`);
+        if (ctx.context?.trim()) lines.push(`Context: ${ctx.context.trim()}`);
+        if (lines.length === 0) return '';
+        return `\n\n## KLANT-MODE — pas het gerecht aan op deze klant-input:\n${lines.map((l) => `- ${l}`).join('\n')}\n\nDoel: één gerecht dat ALLE bovenstaande restricties respecteert. Bij dieet-restrictie: vermeld in 'tags' welke dieet-claims kloppen.`;
+    }
+    return '';
+}
+
 function buildUserMessage(mode: GenerateMode, userPrompt: string, existing: ExistingDish[], options: any): string {
     const stijlContext = existing.length > 0
         ? `\n\n## JOUW BESTAANDE REPERTOIRE (blijf in deze stijl):\n${existing.slice(0, 40).map(d => `- ${d.naam}${d.categorie ? ` (${d.categorie})` : ''}${d.gang ? ` · ${d.gang}` : ''}${d.tags?.length ? ` [${d.tags.join(', ')}]` : ''}`).join('\n')}`
         : '';
 
     if (mode === 'recipe') {
-        return `Bedenk EEN recept op basis van deze vraag:\n\n"${userPrompt}"${stijlContext}\n\nPorties standaard ${options?.porties || 10}. ${RECIPE_SCHEMA_PROMPT}`;
+        const flavour: RecipeFlavour = (options?.flavour as RecipeFlavour) || 'vrij';
+        const flavourCtx: RecipeFlavourContext = options?.flavourContext || {};
+        const flavourBlock = buildFlavourContext(flavour, flavourCtx);
+        const portiesDefault = flavourCtx.gasten || options?.porties || 10;
+        return `Bedenk EEN recept op basis van deze vraag:\n\n"${userPrompt}"${flavourBlock}${stijlContext}\n\nPorties standaard ${portiesDefault}. ${RECIPE_SCHEMA_PROMPT}`;
     }
     if (mode === 'menu') {
         return `Stel een VOLLEDIG MENU samen op basis van deze vraag:\n\n"${userPrompt}"\n\nAantal gasten: ${options?.gasten || 20}. Aantal gangen: ${options?.gangen || '3-4 (voorgerecht, hoofd + bijgerecht, dessert)'}.${stijlContext}\n\n${MENU_SCHEMA_PROMPT}`;

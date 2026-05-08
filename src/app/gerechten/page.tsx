@@ -30,6 +30,7 @@ import {
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
 import KitchenModeStepper from '@/components/KitchenModeStepper';
 import AuditTrailTimeline from '@/components/AuditTrailTimeline';
+import PageGuideNote from '@/components/PageGuideNote';
 import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -561,7 +562,19 @@ export default function Gerechten() {
     return (
         <div className="main-content mobile-safe-bottom">
             <RichKeukenTabs />
+            <PageGuideNote
+                id="gerechten"
+                accent="#FFBF00"
+                icon={ChefHat}
+                intro="Hier staat je hele receptenbibliotheek — gangen, gerechten en complete menu's die je later in offertes hergebruikt."
+                actions={[
+                    { lead: 'Klik op een gerecht', text: 'om receptuur, allergenen en kostprijs te bewerken.' },
+                    { lead: 'Wissel naar Menu’s', text: 'om kant-en-klare menu-templates te bouwen die de wizard later voorstelt.' },
+                    { lead: 'Mist er een ingrediënt of allergen?', text: 'AI vult dat in zodra je op Verrijk klikt — jij blijft eindredacteur.' },
+                ]}
+            />
             <GerechtenPageHero
+                onAddGerecht={view === 'gerechten' ? newGerecht : undefined}
                 onAddGang={view === 'menus' ? undefined : newGang}
                 onAddMenu={view === 'menus' ? newMenuTemplate : undefined}
                 view={view}

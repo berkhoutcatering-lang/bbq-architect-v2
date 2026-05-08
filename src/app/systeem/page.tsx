@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Settings, Users, Inbox, Globe, HelpCircle, Building2, ArrowRight } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import PageHeader from '@/components/PageHeader';
 import SysteemTabs from '@/components/SysteemTabs';
 
@@ -57,6 +58,18 @@ export default function SysteemHub() {
       <PageHeader
         title="Systeem"
         description="Instellingen, gebruikers, mailbox, website en hulp — het bouwbord van de app."
+      />
+
+      <PageGuideNote
+        id="systeem"
+        accent="#64748b"
+        icon={Settings}
+        intro="Het bouwbord van de app — alles wat je 1× instelt en daarna nooit meer aanraakt staat hier."
+        actions={[
+          { lead: 'Instellingen', text: 'voor je bedrijfsgegevens, logo en huisstijl die overal terugkomen op offertes en facturen.' },
+          { lead: 'Integraties', text: 'om Moneybird, Mollie en Google Calendar te koppelen — eenmalige autorisatie.' },
+          { lead: 'Help Center', text: 'als je vastloopt — daar staan korte uitleg-artikelen per hub.' },
+        ]}
       />
 
       <div

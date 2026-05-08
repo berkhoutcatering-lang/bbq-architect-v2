@@ -4,10 +4,8 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import PageHeader from '@/components/PageHeader';
-import KeukenTabs from '@/components/KeukenTabs';
-import PageSection from '@/components/PageSection';
-import PageHint from '@/components/PageHint';
+import RichKeukenTabs from '@/components/RichKeukenTabs';
+import PageGuideNote from '@/components/PageGuideNote';
 import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, UtensilsCrossed } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
 
@@ -15,6 +13,10 @@ import GerechtKaart, { GANGEN, type GerechtData, type GangConfig, getGang } from
 import GerechtDetailsModal from './GerechtDetailsModal';
 import { MapStation, GangPickerModal } from './MapStation';
 import { BCGMatrix, QuadrantCards, type DishAnalysis, calcDishFoodcost, countDishPopularity, median } from './BCGMatrix';
+import MargesBackground from './_components/MargesBackground';
+import MargesPageHero from './_components/MargesPageHero';
+import MargesKpiTiles from './_components/MargesKpiTiles';
+import WinnerSpotlight from './_components/WinnerSpotlight';
 
 export default function MenuEngineering() {
   const showConfirm = useConfirm();
@@ -258,18 +260,50 @@ export default function MenuEngineering() {
     return count;
   }, [mapData]);
 
+  /** Gemiddelde verkoopprijs p.p. — berekend uit geaccepteerde offertes.
+   *  Fallback 45 als er nog geen offertes zijn. */
+  const avgVerkoopprijs = useMemo(function () {
+    const prices = offertesData
+      .filter(function (o: any) { return o.basis_prijs_pp && o.basis_prijs_pp > 0; })
+      .map(function (o: any) { return Number(o.basis_prijs_pp); });
+    return prices.length > 0
+      ? prices.reduce(function (s, p) { return s + p; }, 0) / prices.length
+      : 45;
+  }, [offertesData]);
+
   const stats = useMemo(function () {
     const metKostprijs = gerechten.filter(function (g) { return g.kostprijs_pp && g.kostprijs_pp > 0; });
+    const vp = avgVerkoopprijs;
     const gemMarge = metKostprijs.length > 0
-      ? metKostprijs.reduce(function (s, g) { return s + (1 - (g.kostprijs_pp || 0) / 45); }, 0) / metKostprijs.length * 100
+      ? metKostprijs.reduce(function (s, g) { return s + (1 - (g.kostprijs_pp || 0) / vp); }, 0) / metKostprijs.length * 100
       : 0;
     return {
       totaal: gerechten.length,
       actief: gerechten.filter(function (g) { return g.actief; }).length,
-      gemMarge: gemMarge.toFixed(0),
+      gemMarge: Math.round(gemMarge),
       metKostprijs: metKostprijs.length,
     };
-  }, [gerechten]);
+  }, [gerechten, avgVerkoopprijs]);
+
+  /** Winner = gerecht met hoogste marge (geprefereerd actief, met kostprijs).
+   *  Fallback: meest-recent toegevoegd. */
+  const winner = useMemo(function () {
+    const candidates = gerechten.filter(function (g) {
+      return g.actief && g.kostprijs_pp && g.kostprijs_pp > 0;
+    });
+    if (candidates.length === 0) return null;
+    const vp = avgVerkoopprijs;
+    let best = candidates[0];
+    let bestMarge = 0;
+    candidates.forEach(function (g) {
+      const marge = ((vp - (g.kostprijs_pp || 0)) / vp) * 100;
+      if (marge > bestMarge) {
+        bestMarge = marge;
+        best = g;
+      }
+    });
+    return { dish: best, marge: bestMarge };
+  }, [gerechten, avgVerkoopprijs]);
 
   const gangOptions = useMemo(function () {
     const slugs = Array.from(new Set(gerechten.map(function (g) { return g.gang_slug; }).filter(Boolean)));
@@ -348,10 +382,10 @@ export default function MenuEngineering() {
     );
   }
 
-  const GOLD = '#c4a35a';
   return (
     <RequireTier feature="menu_engineering">
-    <div className="mobile-safe-bottom" style={{ paddingBottom: 40 }}>
+    <div className="main-content mobile-safe-bottom" style={{ maxWidth: 1500, position: 'relative', zIndex: 1, paddingBottom: 40 }}>
+      <MargesBackground />
 
       {toast && (
         <div style={{
@@ -364,49 +398,46 @@ export default function MenuEngineering() {
         </div>
       )}
 
-      <KeukenTabs />
+      <RichKeukenTabs />
 
-      {/* Header — eén primaire CTA: nieuw gerecht. Menu samenstellen verhuist
-          naar inline-callout (subtiele deeplink) i.p.v. concurrerende goud-knop. */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 32, fontWeight: 300, color: 'var(--text)', margin: 0, letterSpacing: '-0.01em' }}>Marges &amp; analyse</h1>
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, marginBottom: 0 }}>{stats.totaal} gerechten geanalyseerd op marge en populariteit</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <a href="/gerechten?view=menus"
-            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-            <UtensilsCrossed size={14} /> Stel menu samen
-          </a>
-          <a href="/gerechten"
-            style={{ padding: '10px 18px', borderRadius: 10, background: GOLD, color: 'var(--brand-background)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', border: 'none' }}>
-            <Plus size={14} /> Nieuw gerecht
-          </a>
-        </div>
-      </div>
+      <PageGuideNote
+        id="marges"
+        accent="#22c55e"
+        icon={BarChart3}
+        intro="Hier zie je per gerecht en per gang welke verdiener is en welke geld kost — gebaseerd op je echte verkoop- en kostprijsdata."
+        actions={[
+          { lead: 'Bekijk de BCG-matrix', text: 'om te zien welke gerechten sterren zijn (hoge marge + populair) en welke honden (lage marge + onpopulair).' },
+          { lead: 'Filter op gang of zoek', text: 'om snel een gerecht te vinden waarvan je de marge wilt aanscherpen.' },
+          { lead: 'Te lage marge?', text: 'Open het gerecht en pas verkoopprijs of receptuur aan — de impact zie je hier direct terug.' },
+        ]}
+      />
+
+      <MargesPageHero totaalGerechten={stats.totaal} metKostprijs={stats.metKostprijs} />
+
+      <MargesKpiTiles
+        totaalGerechten={stats.totaal}
+        metKostprijs={stats.metKostprijs}
+        gemMarge={stats.gemMarge}
+        bcgStars={bcgStats?.stars || 0}
+        bcgDogs={bcgStats?.dogs || 0}
+      />
+
+      {winner && (
+        <WinnerSpotlight
+          naam={winner.dish.naam}
+          beschrijving={(winner.dish as any).beschrijving}
+          glyph={pickGlyphFromName(winner.dish.naam)}
+          categorie={winner.dish.gang_slug}
+          margePct={winner.marge}
+          kostprijsPp={winner.dish.kostprijs_pp || undefined}
+          href={`/gerechten`}
+        />
+      )}
 
       {gerechten.length === 0 && <EmptyState page="/marges" />}
 
-      {/* STATS — responsive: 4 kolom desktop, 2 kolom mobile */}
-      <div className="me-stats-grid">
-        {[
-          { label: 'Totaal gerechten', value: stats.totaal, sub: `${stats.actief} actief` },
-          { label: 'Met kostprijs', value: stats.metKostprijs, sub: 'berekend' },
-          { label: 'Gem. marge', value: stats.gemMarge + '%', sub: 'op €45 menu' },
-          { label: 'BCG-analyse', value: bcgStats?.stars || 0, sub: `${bcgStats?.stars || 0} stars · ${bcgStats?.dogs || 0} dogs` },
-        ].map(function (s) {
-          return (
-            <div key={s.label} style={{ padding: 14, borderRadius: 10, background: 'var(--card)', border: '1px solid var(--card-solid)' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{s.sub}</div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* TOOLBAR */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input
@@ -414,36 +445,102 @@ export default function MenuEngineering() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Zoek gerechten..."
-            style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', padding: '10px 14px 10px 36px', borderRadius: 10, border: '1px solid var(--border-strong)', background: 'rgba(10,10,12,.5)', color: 'var(--text)', fontSize: 13, outline: 'none' }}
           />
         </div>
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <button onClick={() => setGangFilter('alle')} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: gangFilter === 'alle' ? '1px solid #fff' : '1px solid var(--card-solid)', background: gangFilter === 'alle' ? '#fff' : 'var(--card)', color: gangFilter === 'alle' ? 'var(--brand-background)' : 'var(--text)' }}>
-            Alle
-          </button>
-          {GANGEN.map(function (g) {
-            const active = gangFilter === g.slug;
-            return (
-              <button key={g.slug} onClick={() => setGangFilter(active ? 'alle' : g.slug)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: active ? '1px solid #fff' : '1px solid var(--card-solid)', background: active ? '#fff' : 'var(--card)', color: active ? 'var(--brand-background)' : 'var(--text)' }}>
-                {g.icon} {g.label}
-              </button>
-            );
-          })}
-        </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => setBcgDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <BarChart3 size={14} /> Winnaars & Verliezers
+          <button onClick={() => setBcgDrawerOpen(true)} className="marges-action-btn" style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid color-mix(in oklab, #22c55e 30%, var(--border))', background: 'linear-gradient(135deg, rgba(34,197,94,.10), rgba(34,197,94,.02))', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
+            <BarChart3 size={14} color="#22c55e" /> Winnaars & Verliezers
           </button>
-          <button onClick={() => setMapDrawerOpen(true)} style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setMapDrawerOpen(true)} className="marges-action-btn" style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-strong)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
             <LayoutGrid size={14} /> Menukaart indelen
           </button>
           <button
             onClick={() => { setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds([]); }}
-            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--card-solid)', background: selectionMode ? '#fff' : 'var(--card)', color: selectionMode ? 'var(--brand-background)' : 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            className="marges-action-btn"
+            style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-strong)', background: selectionMode ? '#fff' : 'var(--card)', color: selectionMode ? 'var(--brand-background)' : 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit' }}>
             {selectionMode ? <CheckCheck size={14} /> : <CheckSquare size={14} />}
             Selecteer
           </button>
         </div>
+      </div>
+
+      {/* RICH GANG-FILTER PILLS */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(() => {
+          const totalCount = gerechten.length;
+          const allActive = gangFilter === 'alle';
+          return (
+            <button
+              onClick={() => setGangFilter('alle')}
+              className={allActive ? 'marges-pill marges-pill-active' : 'marges-pill'}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 999,
+                fontSize: 12.5,
+                fontWeight: allActive ? 700 : 600,
+                cursor: 'pointer',
+                border: '1px solid ' + (allActive ? 'rgba(34,197,94,.5)' : 'var(--border)'),
+                background: allActive
+                  ? 'linear-gradient(135deg, rgba(34,197,94,.18), rgba(34,197,94,.04))'
+                  : 'rgba(255,255,255,.02)',
+                color: allActive ? '#86efac' : 'var(--text)',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: allActive ? '0 0 16px rgba(34,197,94,.25)' : 'none',
+                transition: 'all .15s',
+              }}
+            >
+              Alle
+              <span style={{ fontSize: 10.5, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{totalCount}</span>
+            </button>
+          );
+        })()}
+        {GANGEN.map(function (g) {
+          const active = gangFilter === g.slug;
+          const count = gerechten.filter(function (x) { return x.gang_slug === g.slug; }).length;
+          if (count === 0) return null;
+          return (
+            <button
+              key={g.slug}
+              onClick={() => setGangFilter(active ? 'alle' : g.slug)}
+              className={active ? 'marges-pill marges-pill-active' : 'marges-pill'}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 999,
+                fontSize: 12.5,
+                fontWeight: active ? 700 : 600,
+                cursor: 'pointer',
+                border: '1px solid ' + (active ? 'rgba(34,197,94,.5)' : 'var(--border)'),
+                background: active
+                  ? 'linear-gradient(135deg, rgba(34,197,94,.18), rgba(34,197,94,.04))'
+                  : 'rgba(255,255,255,.02)',
+                color: active ? '#86efac' : 'var(--text)',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: active ? '0 0 16px rgba(34,197,94,.25)' : 'none',
+                transition: 'all .15s',
+              }}
+            >
+              <span>{g.icon}</span> {g.label}
+              <span style={{ fontSize: 10.5, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+            </button>
+          );
+        })}
+        <style jsx>{`
+          :global(.marges-pill:hover:not(.marges-pill-active)) {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-color: var(--border-strong) !important;
+          }
+          :global(.marges-action-btn:hover) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+          }
+        `}</style>
       </div>
 
       {/* Selection bar */}
@@ -503,7 +600,7 @@ export default function MenuEngineering() {
                 <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>{alleMapGerechten} gerechten ingedeeld · {gerechten.length - alleMapGerechten} in pool</p>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={aiAutoSort} style={{ padding: '8px 14px', borderRadius: 8, background: GOLD, color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={aiAutoSort} style={{ padding: '8px 14px', borderRadius: 8, background: '#c4a35a', color: 'var(--brand-background)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <Sparkles size={13} /> AI auto-sort
                 </button>
                 <button onClick={() => { const m: Record<string, GerechtData[]> = {}; GANGEN.forEach(g => { m[g.slug] = []; }); setMapData(m); }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--card-solid)', background: 'var(--card)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Reset</button>
@@ -571,6 +668,29 @@ export default function MenuEngineering() {
 /* AiMenuComposer + MenuPreviewDrawer verplaatst — alle menu-samenstelling
    leeft nu op /gerechten?view=menus zodat er één plek is. Deze pagina is
    voortaan zuiver analyse: BCG, foodcost, marges. */
+
+/** Smart emoji-uit-naam voor de WinnerSpotlight glyph. Light versie van de
+ *  GLYPH_KEYWORDS in /bedenker. */
+function pickGlyphFromName(name: string): string {
+  const n = (name || '').toLowerCase();
+  if (/brisket|beef|steak/.test(n)) return '🥩';
+  if (/pulled.?pork|varken|porchetta/.test(n)) return '🐖';
+  if (/ribs?/.test(n)) return '🍖';
+  if (/kip|chicken|bonbon/.test(n)) return '🍗';
+  if (/vis|salmon|tonijn|fish/.test(n)) return '🐟';
+  if (/garnaal|shrimp/.test(n)) return '🦐';
+  if (/tofu|tempeh|seitan|vegan/.test(n)) return '🌱';
+  if (/salade|salad|slaw/.test(n)) return '🥗';
+  if (/champignon|paddenstoel/.test(n)) return '🍄';
+  if (/chocola|brownie|fudge/.test(n)) return '🍫';
+  if (/ijs|sorbet/.test(n)) return '🍨';
+  if (/cheese|kaas|mac/.test(n)) return '🧀';
+  if (/cornbread|brood|bread/.test(n)) return '🍞';
+  if (/aardappel|potato|frites/.test(n)) return '🥔';
+  if (/borrel|spies|skewer/.test(n)) return '🍢';
+  if (/dessert|taart|cake/.test(n)) return '🍰';
+  return '🏆';
+}
 
 
 /* ═══════════════════════════════════════════════════════════════════

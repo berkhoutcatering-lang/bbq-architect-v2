@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { BarChart3, Clock, Users, Package, ShoppingCart, Car } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import PageHeader from '@/components/PageHeader';
 import HubCard from '@/components/HubCard';
 import { useSupabase } from '@/lib/useSupabase';
@@ -106,6 +107,18 @@ export default function AdministratieHub() {
       <PageHeader
         title="Administratie"
         description="Alles wat papierwerk is — financiën, uren, klanten, voorraad en inkoop op één plek."
+      />
+
+      <PageGuideNote
+        id="administratie"
+        accent="#f59e0b"
+        icon={BarChart3}
+        intro="Het verzamelpunt voor alles wat administratief is — kies hieronder de hub die je nodig hebt."
+        actions={[
+          { lead: 'Financiën', text: 'voor je live P&V, BTW en top-klanten — gevoed door je events en facturen.' },
+          { lead: 'Uren, Klanten, Voorraad, Inkoop', text: 'zijn aparte hubs — klik een tegel om te openen.' },
+          { lead: 'Rittenregistratie', text: 'is sluitend volgens Belastingdienst (€0,23/km) — handig voor je boekhouder.' },
+        ]}
       />
 
       <div

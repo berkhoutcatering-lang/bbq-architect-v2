@@ -13,7 +13,8 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
-import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2, Users } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import MetallicCard from '@/components/MetallicCard';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -312,7 +313,17 @@ function Klanten() {
                 title={`Klanten (${filtered.length}${filtered.length !== klanten.length ? ' / ' + klanten.length : ''})`}
                 actions={<button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>}
             />
-            <PageHint id="klanten" title="Klanten" description="Beheer je klantenbestand. Klik op een klant om details te bekijken of koppel direct aan events en offertes." />
+            <PageGuideNote
+                id="klanten"
+                accent="#3b82f6"
+                icon={Users}
+                intro="Je hele klantenbestand op één plek — particulier, zakelijk, festival en horeca naast elkaar."
+                actions={[
+                    { lead: 'Klik op een klant', text: 'om historie, contactgegevens en gekoppelde events en offertes te zien.' },
+                    { lead: 'Filter op type', text: '(Particulier, Zakelijk, Festival, Horeca) of zoek op naam, plaats of e-mail.' },
+                    { lead: 'Top-klanten zie je in /financien', text: '— hier beheer je alleen de gegevens en relatie-historie.' },
+                ]}
+            />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                     value={searchQuery}

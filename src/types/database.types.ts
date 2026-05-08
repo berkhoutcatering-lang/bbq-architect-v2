@@ -194,6 +194,22 @@ export interface PrepTask {
   created_at: string;
 }
 
+/** Persoonlijke agenda-items — losse afspraken niet aan een event/klant gekoppeld.
+   Privé per gebruiker (user_id RLS); andere team-leden zien ze niet. */
+export interface AgendaPersonal {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  title: string;
+  date: string;          /* YYYY-MM-DD */
+  start_time: string;    /* HH:MM:SS */
+  end_time: string | null;
+  notes: string | null;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RtrItem {
   id: number;
   text: string;

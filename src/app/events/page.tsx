@@ -6,6 +6,8 @@ import { useToast } from '@/components/Toast';
 import { today } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import EventsTimeline from '@/components/redesign/EventsTimeline';
+import PageGuideNote from '@/components/PageGuideNote';
+import { PartyPopper } from 'lucide-react';
 import type { Event as DbEvent, Offerte } from '@/types';
 
 export default function Events() {
@@ -44,12 +46,25 @@ export default function Events() {
     const sorted = events.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
 
     return (
-        <EventsTimeline
-            events={sorted}
-            offertes={offertes}
-            prepTasks={prepTasks}
-            onOpen={function (ev) { router.push(`/events/${ev.id}/hub`); }}
-            onNew={newEvent}
-        />
+        <div className="main-content">
+            <PageGuideNote
+                id="events"
+                accent="#ec4899"
+                icon={PartyPopper}
+                intro="Hier maak je nieuwe events aan en zie je alle lopende — van offerte-aanvraag tot service en reflectie."
+                actions={[
+                    { lead: 'Nieuw event', text: 'rechtsboven start een leeg event en springt meteen naar de event-hub waar je alles invult.' },
+                    { lead: 'Klik op een event', text: 'om naar zijn hub te gaan — daar leven klantgesprek, prep, HACCP, service en reflectie.' },
+                    { lead: 'Status-kleuren in de timeline', text: 'tonen direct welke events bevestigd zijn en welke nog wachten op actie.' },
+                ]}
+            />
+            <EventsTimeline
+                events={sorted}
+                offertes={offertes}
+                prepTasks={prepTasks}
+                onOpen={function (ev) { router.push(`/events/${ev.id}/hub`); }}
+                onNew={newEvent}
+            />
+        </div>
     );
 }

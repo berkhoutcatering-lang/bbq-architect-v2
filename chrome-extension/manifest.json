@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "BBQ Architect — Catalogus Scanner",
+  "version": "0.2.0",
+  "description": "Scan leveranciers-portals (Sligro, Makro, Baktotaal, Vuur & Rook, ...) en stuur producten + prijzen direct naar je BBQ Architect-account.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.sligro.nl/*",
+    "https://*.makro.nl/*",
+    "https://*.baktotaal.nl/*",
+    "https://vuurenrook.nl/*",
+    "https://*.vuurenrook.nl/*",
+    "https://*.hanos.nl/*",
+    "https://*.bidfood.nl/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BBQ Architect — Scan"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

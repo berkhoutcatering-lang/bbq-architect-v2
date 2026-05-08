@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>BBQ Architect — Scan</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="popup">
+    <header>
+        <div class="brand">
+            <span class="logo">●</span>
+            <strong>BBQ Architect</strong>
+            <span class="version">v0.2.0</span>
+        </div>
+        <button id="btn-options" class="icon-btn" title="Instellingen">⚙</button>
+    </header>
+
+    <main id="main">
+        <div id="version-warning" class="card hidden" style="background:rgba(229,115,115,.15);border:1px solid var(--red);">
+            <div class="empty-icon">⚠️</div>
+            <div class="empty-title">Achterhaalde achtergrond</div>
+            <div class="empty-desc">Chrome cached nog v<span id="bg-ver">?</span> ipv v<span id="popup-ver">0.2.0</span>. Sluit Chrome volledig (Cmd+Q) en open opnieuw, dan herinstall extensie via Load unpacked.</div>
+        </div>
+
+        <div id="connection" class="card hidden">
+            <div class="muted small">Verbonden met</div>
+            <div id="connection-name" class="connection-name">…</div>
+        </div>
+
+        <div id="not-connected" class="card hidden">
+            <div class="empty-icon">🔑</div>
+            <div class="empty-title">Nog geen API-key</div>
+            <div class="empty-desc">Open BBQ Architect → Leveranciers → Extensie verbinden, en plak de key in de instellingen.</div>
+            <button id="btn-open-options" class="btn primary block">Open instellingen</button>
+        </div>
+
+        <div id="page-info" class="card hidden">
+            <div class="muted small">Huidige pagina</div>
+            <div id="page-host" class="page-host">…</div>
+            <div id="adapter-badge" class="adapter-badge"></div>
+        </div>
+
+        <div id="leverancier-pick" class="card hidden">
+            <label class="label">Welke leverancier scannen we nu?</label>
+            <select id="leverancier-select"></select>
+            <div class="hint" id="leverancier-hint"></div>
+        </div>
+
+        <div id="actions" class="card hidden">
+            <button id="btn-scan-page" class="btn primary block">Scan deze pagina</button>
+            <button id="btn-auto-walk" class="btn ghost block">Auto-walk paginering</button>
+            <button id="btn-deep-crawl" class="btn ghost block">🌐 Doorzoek hele site</button>
+
+            <div style="margin-top:10px;">
+                <label class="label" style="font-size:9px;margin-bottom:4px;">Tempo</label>
+                <select id="sel-tempo">
+                    <option value="normal">⚡ Normaal — 1.5s/pag (snel)</option>
+                    <option value="cautious">🐢 Voorzichtig — 5s/pag (Vuur & Rook, Baktotaal)</option>
+                    <option value="stealth" selected>🥷 Stealth — 12-18s/pag (Sligro, Makro, anti-bot)</option>
+                </select>
+            </div>
+
+            <label class="row" style="margin-top:8px;font-size:11px;">
+                <input type="checkbox" id="chk-force-ai" checked />
+                <span>Forceer AI-detect (~€0.01/pag, werkt overal)</span>
+            </label>
+        </div>
+
+        <div id="progress" class="card hidden">
+            <div class="progress-header">
+                <span id="progress-status">Bezig…</span>
+                <button id="btn-cancel" class="link-btn">Annuleer</button>
+            </div>
+            <div class="progress-stats">
+                <div class="stat"><span id="stat-pages">0</span><label>pagina's</label></div>
+                <div class="stat"><span id="stat-products">0</span><label>producten</label></div>
+                <div class="stat"><span id="stat-elapsed">0s</span><label>tijd</label></div>
+            </div>
+            <div id="progress-current" class="muted small"></div>
+            <div id="progress-errors" class="errors"></div>
+        </div>
+
+        <div id="done" class="card hidden">
+            <div class="empty-icon">✅</div>
+            <div class="empty-title" id="done-title">Klaar</div>
+            <div class="empty-desc" id="done-desc"></div>
+            <a id="link-review" class="btn primary block" target="_blank">Open review-queue</a>
+            <button id="btn-done-close" class="btn ghost block">Sluit</button>
+        </div>
+
+        <div id="error-msg" class="error-msg hidden"></div>
+    </main>
+
+    <script src="api.js"></script>
+    <script src="adapters.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

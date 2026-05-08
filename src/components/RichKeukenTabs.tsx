@@ -47,9 +47,9 @@ export default function RichKeukenTabs() {
               padding: '16px 20px',
               borderRadius: 14,
               background: isActive
-                ? `linear-gradient(135deg, color-mix(in oklab, ${t.color} 14%, transparent), transparent 70%)`
+                ? `linear-gradient(135deg, color-mix(in oklab, ${t.color} 7%, var(--card)), var(--card) 70%)`
                 : 'var(--card)',
-              border: '1px solid ' + (isActive ? `color-mix(in oklab, ${t.color} 38%, transparent)` : 'var(--border)'),
+              border: '1px solid ' + (isActive ? `color-mix(in oklab, ${t.color} 22%, var(--border))` : 'var(--border)'),
               textDecoration: 'none',
               color: 'var(--text)',
               transition: 'transform .15s, box-shadow .15s, border-color .15s',
@@ -64,7 +64,7 @@ export default function RichKeukenTabs() {
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  background: `radial-gradient(circle at 0% 0%, ${t.color}1f, transparent 60%)`,
+                  background: `radial-gradient(circle at 0% 0%, ${t.color}10, transparent 55%)`,
                   pointerEvents: 'none',
                 }}
               />
@@ -83,7 +83,7 @@ export default function RichKeukenTabs() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
-                boxShadow: isActive ? `0 4px 16px ${t.color}55` : 'none',
+                boxShadow: isActive ? `0 2px 8px ${t.color}30` : 'none',
               }}
             >
               <Icon size={18} color={isActive ? '#0a0a0c' : t.color} />
@@ -94,7 +94,7 @@ export default function RichKeukenTabs() {
                   fontSize: 9,
                   letterSpacing: '.22em',
                   textTransform: 'uppercase',
-                  color: isActive ? t.color : 'var(--muted)',
+                  color: 'var(--muted)',
                   fontWeight: 700,
                   marginBottom: 2,
                 }}

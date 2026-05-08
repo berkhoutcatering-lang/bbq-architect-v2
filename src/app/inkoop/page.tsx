@@ -12,7 +12,8 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
-import { Camera, FileText, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X } from 'lucide-react';
+import { Camera, FileText, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X, ShoppingCart } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -238,12 +239,20 @@ export default function Inkoop() {
         <div className="artisan-page inkoop-page">
             <PageHeader title="Inkoop & Logistiek" description="Beheer leveranciers, boodschappen en bonnen" />
 
-            <PageHint id="inkoop" title="Inkoop" description="Beheer inkooporders en leveranciers. Scan bonnen voor automatische verwerking." />
+            <PageGuideNote
+                id="inkoop"
+                accent="#6366f1"
+                icon={ShoppingCart}
+                intro="Beheer je leveranciers en scan bonnen na een inkooprit — alles komt automatisch in voorraad terecht."
+                actions={[
+                    { lead: 'Leveranciers', text: '— voeg je vaste toeleveranciers toe met contactgegevens en prijzen.' },
+                    { lead: 'Scan een bon', text: 'na een ritje naar de Makro en de regels worden automatisch in voorraad bijgeschreven.' },
+                    { lead: 'Archief', text: '— alle gescande bonnen terugvinden, ook voor de boekhouding.' },
+                ]}
+            />
 
             <div className="tab-bar mb-24">
                 <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={() => setTab('leveranciers')}>LEVERANCIERS</button>
-                <button className={'tab-btn' + (tab === 'inkooplijsten' ? ' active' : '')} onClick={() => setTab('inkooplijsten')}>LIJSTEN</button>
-                <button className={'tab-btn' + (tab === 'boodschappen' ? ' active' : '')} onClick={() => setTab('boodschappen')}>BOODSCHAPPEN</button>
                 <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={() => setTab('bonnen')}>BON-SCANNER</button>
                 <button className={'tab-btn' + (tab === 'archief' ? ' active' : '')} onClick={() => setTab('archief')}>ARCHIEF</button>
             </div>

@@ -15,6 +15,7 @@ type View = 'gerechten' | 'menus';
 
 interface Props {
   onImport?: () => void;
+  onAddGerecht?: () => void;
   onAddGang?: () => void;
   onAddMenu?: () => void;
   view?: View;
@@ -25,6 +26,7 @@ interface Props {
 
 export default function GerechtenPageHero({
   onImport,
+  onAddGerecht,
   onAddGang,
   onAddMenu,
   view = 'gerechten',
@@ -34,10 +36,13 @@ export default function GerechtenPageHero({
 }: Props) {
   const actions: ActionDef[] = [
     { label: 'Importeren', icon: Upload, onClick: onImport, variant: 'ghost' },
-    { label: 'Vraag de Bedenker', icon: Sparkles, href: '/bedenker', variant: 'ghost' },
+    { label: 'Bedenker', icon: Sparkles, href: '/bedenker', variant: 'ghost' },
   ];
-  if (onAddGang) {
-    actions.push({ label: 'Gang toevoegen', icon: Plus, onClick: onAddGang, variant: 'brand' });
+  if (onAddGerecht && view === 'gerechten') {
+    actions.push({ label: 'Gerecht toevoegen', icon: Plus, onClick: onAddGerecht, variant: 'brand' });
+  }
+  if (onAddGang && view === 'gerechten') {
+    actions.push({ label: 'Gang toevoegen', icon: Plus, onClick: onAddGang, variant: 'ghost' });
   }
   if (onAddMenu) {
     actions.push({ label: 'Nieuw menu', icon: Plus, onClick: onAddMenu, variant: 'brand' });
@@ -65,17 +70,16 @@ export default function GerechtenPageHero({
               fontSize: 10,
               letterSpacing: '.22em',
               textTransform: 'uppercase',
-              color: 'var(--brand-gold)',
+              color: 'var(--muted)',
               fontWeight: 700,
             }}
           >
             <span
               style={{
-                width: 6,
-                height: 6,
+                width: 5,
+                height: 5,
                 borderRadius: '50%',
-                background: 'var(--brand-gold)',
-                boxShadow: '0 0 6px var(--brand-gold)',
+                background: 'var(--brand)',
               }}
             />
             <span>Receptuur · Bibliotheek</span>
@@ -94,9 +98,7 @@ export default function GerechtenPageHero({
               style={{
                 fontStyle: 'normal',
                 fontWeight: 500,
-                background: 'linear-gradient(90deg, var(--brand) 0%, #c4a35a 70%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: 'var(--brand)',
               }}
             >
               &amp; Menu&apos;s

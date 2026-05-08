@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { ScanLine, Image as ImageIcon, Receipt } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import PageGuideNote from '@/components/PageGuideNote';
 import HubCard from '@/components/HubCard';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt } from '@/lib/utils';
@@ -56,6 +57,18 @@ export default function FactuurLezerHub() {
       <PageHeader
         title="Factuur-lezer"
         description="Bon of factuur binnen? Hier komt alles op één plek — scannen, archiveren, prijsanalyse."
+      />
+
+      <PageGuideNote
+        id="factuur-lezer"
+        accent="#06b6d4"
+        icon={ScanLine}
+        intro="Alle inkomende papieren komen hier binnen — bonnen, facturen en prijslijsten in één werkstroom."
+        actions={[
+          { lead: 'Bon of factuur scannen', text: 'upload een PDF of foto, AI extracteert de regels en koppelt aan voorraad.' },
+          { lead: 'Open Archief', text: 'om alles wat je eerder hebt ingelezen terug te vinden — gefilterd op leverancier of datum.' },
+          { lead: 'Prijslijsten van leveranciers', text: 'voer je hier ook in — zo houd je een actueel beeld van inkoopprijzen per kilo.' },
+        ]}
       />
 
       <div

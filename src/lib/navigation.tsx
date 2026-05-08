@@ -3,7 +3,8 @@ import {
     ChefHat, Calendar, PartyPopper, BarChart3,
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
-    HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car
+    HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
+    Receipt, TrendingUp,
 } from "lucide-react";
 
 export interface NavChild {
@@ -25,71 +26,73 @@ export interface NavSection {
     hubHref?: string;
 }
 
-/* IA 2026-05-02 — task-frequency sidebar.
-   Top-level = wat je dagelijks snel nodig hebt:
-   Vandaag (apart, in Sidebar.tsx) → Agenda → Events → Recepten → Factuur-lezer → Administratie → Systeem.
-
-   Niet meer in sidebar (alleen via ⌘K of via context van een event):
-   - HACCP, Klantgesprek, Prep-counter, Service, Reflectie → leven onder een event
-   - Materieel, AI-chat, Logistiek, Price-intelligence → ⌘K-pad
-   - Foto-archief → verhuist naar Factuur-lezer als bonnen-archief */
+/* IA 2026-05-08 — 7-hub sidebar.
+   Vandaag is hardcoded bovenaan in Sidebar.tsx.
+   Hier: Plannen · Verkoop · Keuken · Voorraad · Geld · Systeem (6 secties = 7 hubs totaal).
+   Elke hub heeft sub-items als children die zichtbaar worden in de sidebar-rail.
+   Hub-pages zelf (plannen, gerechten, voorraad, financien) dragen een horizontale tab-bar. */
 export const navSections: NavSection[] = [
     {
-        title: "Agenda",
+        title: "Plannen",
         icon: <Calendar size={18} />,
-        type: "single",
-        slug: "agenda",
-        description: "Week- en maandweergave van al je events.",
+        type: "folder",
+        slug: "plannen",
+        description: "Agenda en events — van aanvraag tot uitvoering.",
         hubHref: "/agenda",
-        children: [],
+        children: [
+            { label: "Agenda", icon: <Calendar size={16} />, href: "/agenda", description: "Week- en maandweergave van al je events" },
+            { label: "Events", icon: <PartyPopper size={16} />, href: "/events", description: "Events aanmaken, plannen en runnen" },
+        ],
     },
     {
-        title: "Events",
-        icon: <PartyPopper size={18} />,
-        type: "single",
-        slug: "events",
-        description: "Events aanmaken, plannen en runnen — klantgesprek, prep, HACCP en service leven hier binnenin.",
-        hubHref: "/events",
-        children: [],
+        title: "Verkoop",
+        icon: <Receipt size={18} />,
+        type: "folder",
+        slug: "verkoop",
+        description: "Offertes, klanten en facturen.",
+        hubHref: "/offertes",
+        children: [
+            { label: "Offertes", icon: <Receipt size={16} />, href: "/offertes", description: "Offertes opstellen en versturen" },
+            { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
+        ],
     },
     {
-        title: "Recepten",
+        title: "Keuken",
         icon: <ChefHat size={18} />,
         type: "folder",
-        slug: "recepten",
+        slug: "keuken",
         description: "Gerechten, AI-bedenker en marge-analyse.",
         hubHref: "/gerechten",
         children: [
             { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Vaste gerechten met receptuur en menu-templates" },
             { label: "Bedenker", icon: <Sparkles size={16} />, href: "/bedenker", description: "AI-speeltuin om concepten te brainstormen" },
-            { label: "Marges", icon: <BarChart3 size={16} />, href: "/marges", description: "BCG-analyse: marges en populariteit per gerecht" },
+            { label: "Marges", icon: <TrendingUp size={16} />, href: "/marges", description: "BCG-analyse: marges en populariteit per gerecht" },
         ],
     },
     {
-        title: "Factuur-lezer",
-        icon: <ScanLine size={18} />,
+        title: "Voorraad",
+        icon: <Package size={18} />,
         type: "folder",
-        slug: "factuur-lezer",
-        description: "Scan een bon of factuur — alle inkomende papieren komen op één plek.",
-        hubHref: "/factuur-lezer",
+        slug: "voorraad",
+        description: "Voorraad, inkoop en leveranciers.",
+        hubHref: "/voorraad",
         children: [
-            { label: "Scannen", icon: <ScanLine size={16} />, href: "/factuur-lezer", description: "Upload bon of factuur, AI extracteert de regels" },
-            { label: "Archief", icon: <ImageIcon size={16} />, href: "/foto-archief", description: "Alle gescande bonnen, facturen en foto's terugvinden" },
+            { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
+            { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bon-scanner" },
+            { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
         ],
     },
     {
-        title: "Administratie",
+        title: "Geld",
         icon: <BarChart3 size={18} />,
         type: "folder",
-        slug: "administratie",
-        description: "Financiën, uren, klanten, voorraad — alles wat papierwerk is.",
-        hubHref: "/administratie",
+        slug: "geld",
+        description: "Financiën, uren, bonnen en kilometeradministratie.",
+        hubHref: "/financien",
         children: [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
-            { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
-            { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
-            { label: "Inkooplijsten", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en leveranciers" },
+            { label: "Bonnen & Facturen", icon: <ScanLine size={16} />, href: "/factuur-lezer", description: "Scan bonnen en facturen — AI extracteert de regels" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
     },
@@ -107,6 +110,7 @@ export const navSections: NavSection[] = [
             { label: "Integraties", icon: <Settings size={16} />, href: "/instellingen/integraties", description: "Moneybird, Mollie, Google Calendar" },
             { label: "Mailbox", icon: <Inbox size={16} />, href: "/mailbox", description: "E-mail en templates" },
             { label: "Website", icon: <Globe size={16} />, href: "/website", description: "Publieke site beheren" },
+            { label: "Foto-archief", icon: <ImageIcon size={16} />, href: "/foto-archief", description: "Alle gescande bonnen, facturen en foto's terugvinden" },
             { label: "Help Center", icon: <HelpCircle size={16} />, href: "/hulp", description: "Artikelen, FAQ, support" },
             { label: "Platform Beheer", icon: <Building2 size={16} />, href: "/admin", description: "Organisaties en klanten (admins)" },
         ],

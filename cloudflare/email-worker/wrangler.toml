@@ -1,0 +1,11 @@
+name = "bbqarchitect-email-router"
+main = "src/worker.ts"
+compatibility_date = "2026-04-01"
+
+# Email-trigger op je Cloudflare-zone (in.bbqarchitect.app).
+# Catch-all matched alles op de zone; we routeren op subaddressing in de Worker zelf.
+[[triggers.email]]
+destination = "*@in.bbqarchitect.app"
+
+# Secrets via:  wrangler secret put EMAIL_INBOUND_SECRET
+#               wrangler secret put APP_URL
