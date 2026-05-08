@@ -7,7 +7,7 @@ import { detectAllConflicts } from '@/lib/conflictDetection';
 import type { Event as DbEvent, PrepTask } from '@/types';
 import type { AgendaPersonal } from '@/types/database.types';
 import {
-    PartyPopper, ClipboardList, Flame, Users, HeartHandshake, Truck, UserRound,
+    PartyPopper, ClipboardList, Users, Truck,
     ChevronLeft, ChevronRight, Filter, Grid3x3, Columns3, List as ListIcon,
     Sparkles, AlertTriangle, X, MapPin, Euro, Clock, Calendar,
     Check, RefreshCw, Plus, Pencil,
@@ -20,9 +20,8 @@ const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
 
 /* ═══════════════════════════════════════════════════════════════════
-   AGENDA — gevoed door echte DB events (tabel: events) + prep_tasks.
-   Andere calendar-types (smoker/team/tasting/delivery/personal) blijven
-   gereserveerd in CALENDARS maar tonen pas data zodra die tabellen bestaan.
+   AGENDA — gevoed door echte DB events (tabel: events) + prep_tasks +
+   agenda_personal. Alleen kalender-types met live data zijn zichtbaar.
    ═══════════════════════════════════════════════════════════════════ */
 
 const NL_MONTHS = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
@@ -32,11 +31,7 @@ interface CalendarMeta { id: string; label: string; color: string; Icon: any; sy
 const CALENDARS: CalendarMeta[] = [
     { id: 'events', label: 'Events', color: BRAND, Icon: PartyPopper, synced: true, source: 'lokaal' },
     { id: 'prep', label: 'Prep deadlines', color: GOLD, Icon: ClipboardList, synced: true, source: 'lokaal' },
-    { id: 'smoker', label: 'Smoker cycli', color: '#ef6c4d', Icon: Flame, synced: false, source: 'binnenkort' },
-    { id: 'team', label: 'Team rooster', color: '#10b981', Icon: Users, synced: false, source: 'binnenkort' },
-    { id: 'tasting', label: 'Klant-afspraken', color: '#a78bfa', Icon: HeartHandshake, synced: false, source: 'binnenkort' },
-    { id: 'delivery', label: 'Leveringen', color: '#60a5fa', Icon: Truck, synced: false, source: 'binnenkort' },
-    { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: UserRound, synced: false, source: 'binnenkort' },
+    { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: Clock, synced: true, source: 'lokaal' },
 ];
 
 interface AgendaEvent {
@@ -70,7 +65,7 @@ const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL');
    ═══════════════════════════════════════════════════════════════════ */
 interface AgendaKpis {
     upcoming30d: number; revenuePipeline: number; revenuePipelineConfirmed: number; conflicts: number;
-    freeWeekendsLeft: number; isEmpty: boolean;
+    freeWeekendsLeft: number; prepTasksOpen: number; isEmpty: boolean;
 }
 function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => void }) {
     return (
@@ -103,7 +98,7 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
             <div className="agenda-kpi-grid">
                 <KpiTile Icon={PartyPopper} color={BRAND} label="Komende 30d" value={kpis.upcoming30d.toString()} sub="events bevestigd" />
                 <KpiTile Icon={Euro} color={GOLD} label="Omzet pipeline" value={fmtEur(kpis.revenuePipeline)} sub={`${fmtEur(kpis.revenuePipelineConfirmed)} bevestigd`} />
-                <KpiTile Icon={Flame} color="#ef6c4d" label="Smoker bezet" value="—" sub="koppel data" />
+                <KpiTile Icon={ClipboardList} color="#60a5fa" label="Prep open" value={kpis.prepTasksOpen.toString()} sub={kpis.prepTasksOpen === 0 ? 'alles klaar' : 'nog te doen'} />
                 <KpiTile Icon={Calendar} color="#10b981" label="Vrije weekends" value={kpis.freeWeekendsLeft.toString()} sub="deze maand" />
                 <KpiTile Icon={AlertTriangle} color="var(--red)" label="Conflicten" value={kpis.conflicts.toString()} sub={kpis.conflicts > 0 ? 'vraagt actie' : 'geen issues'} />
             </div>
@@ -745,9 +740,10 @@ export default function Agenda() {
             revenuePipelineConfirmed: pipelineConfirmed,
             conflicts: conflicts.length,
             freeWeekendsLeft: Math.floor(freeWeekends / 2), /* zaterdag+zondag = 1 weekend */
+            prepTasksOpen: prepTasks.filter(p => !p.done).length,
             isEmpty,
         };
-    }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, isEmpty]);
+    }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, isEmpty, prepTasks]);
 
     /* UPCOMING-rail uit live data — eerstvolgende 8 events. */
     const upcomingList: UpcomingItem[] = useMemo(() => {
@@ -786,8 +782,8 @@ export default function Agenda() {
                 intro="Hier zie je in één oogopslag wat er in je maand staat — events en prep-deadlines naast elkaar."
                 actions={[
                     { lead: 'Klik op een event', text: 'om details te zien en direct door te springen naar de event-hub.' },
-                    { lead: 'Conflicten rechts in beeld', text: 'tonen waar dubbele prep, krappe smoker-bezetting of overlap zit.' },
-                    { lead: 'Filter agenda’s links', text: 'om events, prep en straks ook smoker/team apart te bekijken.' },
+                    { lead: 'Conflicten rechts in beeld', text: 'tonen waar dubbele prep-deadlines of event-overlap zit.' },
+                    { lead: "Filter agenda's links", text: 'om events, prep en persoonlijke afspraken apart te bekijken.' },
                 ]}
             />
             <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />

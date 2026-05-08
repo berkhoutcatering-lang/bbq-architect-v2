@@ -15,11 +15,20 @@ const MONEYBIRD_TOKEN = process.env.MONEYBIRD_TOKEN || '';
 const MONEYBIRD_ADMINISTRATION_ID = process.env.MONEYBIRD_ADMINISTRATION_ID || '';
 const MONEYBIRD_BASE = 'https://moneybird.com/api/v2';
 
+// BTW tax_rate_ids — ophalen via GET /tax_rates.json in je Moneybird-administratie
+const MONEYBIRD_TAX_RATE_21 = process.env.MONEYBIRD_TAX_RATE_21 || '';
+const MONEYBIRD_TAX_RATE_9 = process.env.MONEYBIRD_TAX_RATE_9 || '';
+const MONEYBIRD_TAX_RATE_0 = process.env.MONEYBIRD_TAX_RATE_0 || '';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 function isConfigured(): boolean {
   return !!(MONEYBIRD_TOKEN && MONEYBIRD_ADMINISTRATION_ID);
+}
+
+function areTaxRatesConfigured(): boolean {
+  return !!(MONEYBIRD_TAX_RATE_21 && MONEYBIRD_TAX_RATE_9 && MONEYBIRD_TAX_RATE_0);
 }
 
 function getSupabase() {
@@ -113,14 +122,13 @@ function factuurToMoneybirdInvoice(factuur: any, contactId: string): Record<stri
 }
 
 // ── BTW percentage naar Moneybird tax_rate_id ──
+// IDs ophalen via GET /tax_rates.json in Moneybird en instellen als env vars
 function btwToMoneybirdTaxRate(percentage: number): string {
-  // TODO: Haal de juiste tax_rate_ids op via GET /tax_rates.json
-  // en pas deze mapping aan op je administratie
   switch (percentage) {
-    case 21: return 'TODO_TAX_RATE_21';
-    case 9:  return 'TODO_TAX_RATE_9';
-    case 0:  return 'TODO_TAX_RATE_0';
-    default: return 'TODO_TAX_RATE_21';
+    case 21: return MONEYBIRD_TAX_RATE_21;
+    case 9:  return MONEYBIRD_TAX_RATE_9;
+    case 0:  return MONEYBIRD_TAX_RATE_0;
+    default: return MONEYBIRD_TAX_RATE_21;
   }
 }
 
@@ -133,6 +141,12 @@ export async function POST(req: NextRequest) {
     if (!isConfigured()) {
       return NextResponse.json(
         { error: 'Moneybird niet geconfigureerd \u2014 voeg MONEYBIRD_TOKEN en MONEYBIRD_ADMINISTRATION_ID toe in .env' },
+        { status: 501 }
+      );
+    }
+    if (!areTaxRatesConfigured()) {
+      return NextResponse.json(
+        { error: 'Moneybird BTW-tarieven niet geconfigureerd \u2014 voeg MONEYBIRD_TAX_RATE_21, MONEYBIRD_TAX_RATE_9 en MONEYBIRD_TAX_RATE_0 toe in .env (ophalen via GET /tax_rates.json in Moneybird)' },
         { status: 501 }
       );
     }

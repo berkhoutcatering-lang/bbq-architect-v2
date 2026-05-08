@@ -12,7 +12,7 @@ export default function VoorwaardenPage() {
 
       <h2>1. Begrippen</h2>
       <ul>
-        <li><strong>Aanbieder:</strong> Berkhout Catering, ingeschreven bij de KvK onder nummer [TODO], gevestigd te [TODO Adres].</li>
+        <li><strong>Aanbieder:</strong> Berkhout Catering, ingeschreven bij de KvK onder nummer {process.env.NEXT_PUBLIC_KVK_NUMBER ?? '—'}, gevestigd te {process.env.NEXT_PUBLIC_COMPANY_ADDRESS ?? '—'}.</li>
         <li><strong>Klant:</strong> de natuurlijke persoon of rechtspersoon die een abonnement op de Dienst afsluit.</li>
         <li><strong>Dienst:</strong> de SaaS-applicatie BBQ Architect inclusief alle modules, AI-functies en integraties.</li>
         <li><strong>Tier:</strong> abonnementsniveau (Starter, Pro of Enterprise) zoals gepubliceerd op /pricing.</li>

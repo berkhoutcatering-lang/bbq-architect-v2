@@ -7,31 +7,8 @@
 //   import { emitWebhook, WebhookEventType } from '@/lib/webhooks';
 //   await emitWebhook('factuur.created', { factuurId: 123, nummer: 'F2026-001' });
 //
-// Webhooks worden opgeslagen in Supabase (tabel: webhooks + webhook_logs).
-// TODO: Maak de Supabase tabellen aan:
-//
-//   CREATE TABLE webhooks (
-//     id SERIAL PRIMARY KEY,
-//     url TEXT NOT NULL,
-//     events TEXT[] NOT NULL DEFAULT '{}',
-//     secret TEXT,
-//     active BOOLEAN DEFAULT true,
-//     description TEXT,
-//     created_at TIMESTAMPTZ DEFAULT now()
-//   );
-//
-//   CREATE TABLE webhook_logs (
-//     id SERIAL PRIMARY KEY,
-//     webhook_id INT REFERENCES webhooks(id) ON DELETE CASCADE,
-//     event TEXT NOT NULL,
-//     payload JSONB,
-//     status_code INT,
-//     response_body TEXT,
-//     success BOOLEAN DEFAULT false,
-//     attempt INT DEFAULT 1,
-//     error TEXT,
-//     created_at TIMESTAMPTZ DEFAULT now()
-//   );
+// Webhooks worden opgeslagen in Supabase (tabel: org_webhooks + org_webhook_logs).
+// Migratie: supabase/migrations/030_webhooks_and_integration_tokens.sql
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -167,7 +144,7 @@ async function saveLog(log: WebhookLogEntry) {
   if (!sb) return;
 
   try {
-    await sb.from('webhook_logs').insert(log);
+    await sb.from('org_webhook_logs').insert(log);
   } catch (e: any) {
     console.error('[WEBHOOK] Log opslaan mislukt:', e.message);
   }
@@ -179,7 +156,7 @@ export async function getWebhooksForEvent(event: WebhookEventType): Promise<Webh
   if (!sb) return [];
 
   const { data, error } = await sb
-    .from('webhooks')
+    .from('org_webhooks')
     .select('*')
     .eq('active', true)
     .contains('events', [event]);
@@ -239,7 +216,7 @@ export async function listWebhooks(): Promise<WebhookRegistration[]> {
   if (!sb) return [];
 
   const { data, error } = await sb
-    .from('webhooks')
+    .from('org_webhooks')
     .select('*')
     .order('created_at', { ascending: false });
 
@@ -256,7 +233,7 @@ export async function registerWebhook(
   if (!sb) throw new Error('Geen database verbinding');
 
   const { data, error } = await sb
-    .from('webhooks')
+    .from('org_webhooks')
     .insert({
       url,
       events,
@@ -275,7 +252,7 @@ export async function removeWebhook(id: number): Promise<void> {
   const sb = getSupabase();
   if (!sb) throw new Error('Geen database verbinding');
 
-  const { error } = await sb.from('webhooks').delete().eq('id', id);
+  const { error } = await sb.from('org_webhooks').delete().eq('id', id);
   if (error) throw new Error('Webhook verwijderen mislukt: ' + error.message);
 }
 
@@ -284,7 +261,7 @@ export async function getWebhookLogs(webhookId?: number, limit: number = 50): Pr
   if (!sb) return [];
 
   let query = sb
-    .from('webhook_logs')
+    .from('org_webhook_logs')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);

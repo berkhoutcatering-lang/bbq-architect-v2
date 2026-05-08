@@ -15,8 +15,8 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { RequireTier } from '@/components/PaywallPrompt';
 import {
-    Plus, Store, Check, AlertTriangle, Loader2, Trash2, RefreshCw, X, Edit3,
-    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, Copy, ExternalLink, Chrome,
+    Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X,
+    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome,
 } from 'lucide-react';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
@@ -692,7 +692,3 @@ function ghostBtn(): React.CSSProperties {
     };
 }
 
-/* small helper unused export removed */
-export const __placeholder = Copy;
-export const __ph2 = Edit3;
-export const __ph3 = Check;

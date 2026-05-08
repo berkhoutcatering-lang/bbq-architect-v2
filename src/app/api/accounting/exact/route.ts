@@ -16,16 +16,26 @@ import { createClient } from '@supabase/supabase-js';
 
 const EXACT_CLIENT_ID = process.env.EXACT_CLIENT_ID || '';
 const EXACT_CLIENT_SECRET = process.env.EXACT_CLIENT_SECRET || '';
-const EXACT_REFRESH_TOKEN = process.env.EXACT_REFRESH_TOKEN || '';
 const EXACT_DIVISION = process.env.EXACT_DIVISION || '';
 const EXACT_BASE_URL = 'https://start.exactonline.nl/api/v1';
 const EXACT_TOKEN_URL = 'https://start.exactonline.nl/api/oauth2/token';
 
+// GL account + journal env vars (set once per Exact-administratie via .env)
+const EXACT_GL_ACCOUNT_GUID = process.env.EXACT_GL_ACCOUNT_GUID || '';
+const EXACT_JOURNAL_CODE = process.env.EXACT_JOURNAL_CODE || '';
+const EXACT_PAYMENT_TERMS_CODE = process.env.EXACT_PAYMENT_TERMS_CODE || '';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 function isConfigured(): boolean {
-  return !!(EXACT_CLIENT_ID && EXACT_CLIENT_SECRET && EXACT_REFRESH_TOKEN && EXACT_DIVISION);
+  return !!(EXACT_CLIENT_ID && EXACT_CLIENT_SECRET && EXACT_DIVISION &&
+    (process.env.EXACT_REFRESH_TOKEN || supabaseServiceKey));
+}
+
+function isFullyConfigured(): boolean {
+  return isConfigured() && !!(EXACT_GL_ACCOUNT_GUID && EXACT_JOURNAL_CODE && EXACT_PAYMENT_TERMS_CODE);
 }
 
 function getSupabase() {
@@ -33,15 +43,48 @@ function getSupabase() {
   return createClient(supabaseUrl, supabaseKey);
 }
 
-// ── OAuth: Ververs access token ──
+function getServiceSupabase() {
+  if (!supabaseUrl || !supabaseServiceKey) return null;
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// Read persisted refresh token from DB (overrides env var after first rotation)
+async function getStoredRefreshToken(): Promise<string> {
+  const sb = getServiceSupabase();
+  if (sb) {
+    const { data } = await sb
+      .from('integration_tokens')
+      .select('token_value')
+      .eq('integration_key', 'exact_refresh_token')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.token_value) return data.token_value;
+  }
+  return process.env.EXACT_REFRESH_TOKEN || '';
+}
+
+async function persistRefreshToken(newToken: string) {
+  const sb = getServiceSupabase();
+  if (!sb || !newToken) return;
+  await sb.from('integration_tokens').upsert(
+    { integration_key: 'exact_refresh_token', token_value: newToken, updated_at: new Date().toISOString() },
+    { onConflict: 'integration_key' }
+  );
+}
+
+// ── OAuth: Ververs access token + persisteer geroteerd refresh_token ──
 async function getAccessToken(): Promise<string> {
+  const refreshToken = await getStoredRefreshToken();
+  if (!refreshToken) throw new Error('EXACT_REFRESH_TOKEN niet geconfigureerd');
+
   const res = await fetch(EXACT_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: EXACT_CLIENT_ID,
       client_secret: EXACT_CLIENT_SECRET,
-      refresh_token: EXACT_REFRESH_TOKEN,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   });
@@ -52,8 +95,10 @@ async function getAccessToken(): Promise<string> {
   }
 
   const data = await res.json();
-  // TODO: Sla het nieuwe refresh_token op (Exact roteert tokens)
-  // data.refresh_token zou opgeslagen moeten worden voor het volgende verzoek
+  // Exact roteert de refresh_token — sla het nieuwe token op zodat de volgende call werkt
+  if (data.refresh_token) {
+    await persistRefreshToken(data.refresh_token);
+  }
   return data.access_token;
 }
 
@@ -80,9 +125,7 @@ function factuurToExactSalesEntry(factuur: any): Record<string, any> {
     const btwPercentage = item.btw || 21;
 
     return {
-      // TODO: Configureer de juiste grootboekrekeningen
-      // Standaard: 8000 = Omzet catering
-      GLAccount: 'TODO_OMZET_GROOTBOEK_GUID',
+      GLAccount: EXACT_GL_ACCOUNT_GUID,
       Description: item.omschrijving || item.desc || `Regel ${idx + 1}`,
       AmountFC: subtotaal,
       VATCode: btwPercentageToExactVATCode(btwPercentage),
@@ -92,15 +135,11 @@ function factuurToExactSalesEntry(factuur: any): Record<string, any> {
   });
 
   return {
-    // TODO: Koppel aan Exact relatie (Account GUID)
-    // Customer: 'EXACT_ACCOUNT_GUID',
     Description: `Factuur ${factuur.nummer} - ${factuur.client_naam}`,
     EntryDate: formatExactDate(factuur.datum),
     DueDate: formatExactDate(factuur.vervaldatum),
-    // TODO: Configureer het juiste dagboek (Journal)
-    // Standaard: verkoopboek
-    Journal: 'TODO_VERKOOP_DAGBOEK_CODE',
-    PaymentCondition: 'TODO_BETAALCONDITIE_CODE',
+    Journal: EXACT_JOURNAL_CODE,
+    PaymentCondition: EXACT_PAYMENT_TERMS_CODE,
     PaymentReference: factuur.nummer,
     YourRef: factuur.nummer,
     SalesEntryLines: salesEntryLines,
@@ -167,6 +206,12 @@ export async function POST(req: NextRequest) {
     if (!isConfigured()) {
       return NextResponse.json(
         { error: 'Exact Online niet geconfigureerd \u2014 voeg EXACT_CLIENT_ID, EXACT_CLIENT_SECRET, EXACT_REFRESH_TOKEN en EXACT_DIVISION toe in .env' },
+        { status: 501 }
+      );
+    }
+    if (!isFullyConfigured()) {
+      return NextResponse.json(
+        { error: 'Exact Online GL-configuratie ontbreekt \u2014 voeg EXACT_GL_ACCOUNT_GUID, EXACT_JOURNAL_CODE en EXACT_PAYMENT_TERMS_CODE toe in .env' },
         { status: 501 }
       );
     }
