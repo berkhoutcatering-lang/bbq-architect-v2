@@ -51,6 +51,13 @@ export default function PageGuideNote({
     try {
       const v = localStorage.getItem(`bbq_guide_${id}_collapsed`);
       if (v === '1') setCollapsed(true);
+      else if (v === '0') setCollapsed(false);
+      else if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+        /* Eerste bezoek op mobile: standaard ingeklapt zodat de pagina-content
+           direct zichtbaar is. Klik op kaart-header klapt 'm uit en bewaart
+           die voorkeur. */
+        setCollapsed(true);
+      }
     } catch {
       /* noop */
     }

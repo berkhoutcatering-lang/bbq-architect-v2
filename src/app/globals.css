@@ -6848,6 +6848,29 @@ textarea:focus-visible,
     grid-template-columns: 1fr;
     gap: 12px;
   }
+  /* CSS Grid items hebben default min-width: auto — die expandt tot content-size.
+     De kalender heeft min-width:600 (horizontale swipe) wat anders ALLE kolommen
+     naar 600px zou trekken en horizontale page-overflow geeft. min-width:0 dwingt
+     ze om binnen 1fr te krimpen. */
+  .agenda-grid > * { min-width: 0; }
+  /* Op mobiel: kalender eerst (kerntaak), dan komende events, dan legend onderaan
+     omdat de filter-toggles secundair zijn op klein scherm. */
+  .agenda-grid > :nth-child(1) { order: 3; }
+  .agenda-grid > :nth-child(2) { order: 1; }
+  .agenda-grid > :nth-child(3) { order: 2; }
+
+  /* CalendarLegend op mobile = compacte horizontale chips i.p.v. vertikale lijst.
+     Sub-tekst (source · count) verbergen, alleen kleur + label + getal-bolletje. */
+  .agenda-legend__items {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+  .agenda-legend__item { padding: 6px 10px !important; }
+  .agenda-legend__sub { display: none !important; }
+  .agenda-legend__count-mobile { display: inline !important; }
+  .agenda-legend__title { font-size: 11px !important; letter-spacing: .15em; text-transform: uppercase; color: var(--muted) !important; margin-bottom: 8px !important; }
 }
 
 /* Agenda KPI strip — 5 kolom desktop, 2 kolom mobile */

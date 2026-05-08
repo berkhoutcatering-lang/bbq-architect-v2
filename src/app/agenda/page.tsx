@@ -214,26 +214,27 @@ const viewTabStyle = (active: boolean): React.CSSProperties => ({
    ═══════════════════════════════════════════════════════════════════ */
 function CalendarLegend({ active, onToggle, counts }: { active: string[]; onToggle: (id: string) => void; counts: Record<string, number> }) {
     return (
-        <MetalCard>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Agenda&rsquo;s</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <MetalCard className="agenda-legend">
+            <div className="agenda-legend__title" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Agenda&rsquo;s</div>
+            <div className="agenda-legend__items">
                 {CALENDARS.map(c => {
                     const isOn = active.includes(c.id);
                     const count = counts[c.id] || 0;
                     return (
-                        <div key={c.id} onClick={() => onToggle(c.id)} style={{
+                        <div key={c.id} onClick={() => onToggle(c.id)} className="agenda-legend__item" style={{
                             display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
                             background: isOn ? `${c.color}10` : 'transparent', opacity: isOn ? 1 : 0.5,
                             border: `1px solid ${isOn ? `${c.color}33` : 'transparent'}`,
                         }}>
                             <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
                             <c.Icon size={13} style={{ color: c.color, flexShrink: 0 }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ flex: 1, minWidth: 0 }} className="agenda-legend__label">
                                 <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div className="agenda-legend__sub" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {c.source} · {count}
                                 </div>
                             </div>
+                            <span className="agenda-legend__count-mobile" style={{ display: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{count}</span>
                             {c.synced && <RefreshCw size={10} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />}
                         </div>
                     );
