@@ -3,7 +3,8 @@
 import { useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Route, Plus, Download } from 'lucide-react';
+import { Route, Plus, Download, Car } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import PageHeader from '@/components/PageHeader';
 import Button from '@/components/Button';
 import { useSupabase } from '@/lib/useSupabase';
@@ -88,6 +89,17 @@ export default function RittenregistratieClient() {
 
   return (
     <div className="main-content">
+      <PageGuideNote
+        id="rittenregistratie"
+        accent="#64748b"
+        icon={Car}
+        intro="Sluitende kilometeradministratie voor de Belastingdienst — €0,23 per zakelijke kilometer (2026)."
+        actions={[
+          { lead: 'Voeg een rit toe', text: 'na elk event — datum, start, eind, doel en aantal kilometers.' },
+          { lead: 'Download de jaaroverzicht-CSV', text: '— die kun je 1-op-1 aan je boekhouder geven of zelf in je aangifte zetten.' },
+          { lead: 'Tip', text: 'koppel de rit aan een event-ID, dan zie je in /financien direct de totale event-kosten incl. transport.' },
+        ]}
+      />
       <PageHeader
         title="Rittenregistratie"
         description="Sluitende kilometeradministratie voor de Belastingdienst — €0,23 per zakelijke kilometer 2026."

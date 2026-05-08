@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>BBQ Architect — Instellingen</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="options">
+    <div class="options-shell">
+        <header>
+            <div class="brand">
+                <span class="logo">●</span>
+                <strong>BBQ Architect — Extensie</strong>
+            </div>
+        </header>
+
+        <main>
+            <section class="card">
+                <h2>BBQ Architect URL</h2>
+                <p class="muted small">Het adres van jouw BBQ Architect-app. Voor productie meestal <code>https://app.bbqarchitect.app</code>.</p>
+                <input id="api-url" type="url" placeholder="https://app.bbqarchitect.app">
+            </section>
+
+            <section class="card">
+                <h2>API-key</h2>
+                <p class="muted small">Genereer een key in BBQ Architect → Leveranciers → "Extensie verbinden".</p>
+                <input id="api-key" type="text" placeholder="ext_...">
+                <button id="btn-test" class="btn primary block">Verbinden + testen</button>
+                <div id="test-result" class="muted small"></div>
+            </section>
+
+            <section class="card">
+                <h2>Geavanceerd</h2>
+                <label class="row">
+                    <span>Vertraging tussen pagina-loads (ms)</span>
+                    <input id="page-delay" type="number" min="500" max="10000" step="100" value="1500">
+                </label>
+                <label class="row">
+                    <span>Max pagina's per auto-walk</span>
+                    <input id="max-pages" type="number" min="5" max="100" step="5" value="50">
+                </label>
+                <p class="muted small">Hoger tempo = sneller maar verhoogt risico op anti-bot blokkade.</p>
+            </section>
+
+            <button id="btn-save" class="btn primary block">Bewaren</button>
+            <div id="save-result" class="muted small center"></div>
+        </main>
+    </div>
+
+    <script src="api.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>

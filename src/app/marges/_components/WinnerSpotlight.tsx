@@ -1,7 +1,6 @@
 'use client';
 
 import { Trophy, ArrowUpRight } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 
 interface Props {
   naam: string;
@@ -14,51 +13,6 @@ interface Props {
   href?: string;
 }
 
-/** Hook for 3D mouse-tilt op de card */
-function useTilt() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let raf = 0;
-    let targetX = 0;
-    let targetY = 0;
-    let curX = 0;
-    let curY = 0;
-    function update() {
-      curX += (targetX - curX) * 0.12;
-      curY += (targetY - curY) * 0.12;
-      if (el) el.style.transform = `perspective(1200px) rotateX(${curY}deg) rotateY(${curX}deg)`;
-      if (Math.abs(targetX - curX) > 0.01 || Math.abs(targetY - curY) > 0.01) {
-        raf = requestAnimationFrame(update);
-      }
-    }
-    function onMove(e: MouseEvent) {
-      const rect = el!.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      targetX = ((cx - rect.width / 2) / rect.width) * 6;
-      targetY = -((cy - rect.height / 2) / rect.height) * 4;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(update);
-    }
-    function onLeave() {
-      targetX = 0;
-      targetY = 0;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(update);
-    }
-    el.addEventListener('mousemove', onMove);
-    el.addEventListener('mouseleave', onLeave);
-    return () => {
-      el.removeEventListener('mousemove', onMove);
-      el.removeEventListener('mouseleave', onLeave);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-  return ref;
-}
-
 export default function WinnerSpotlight({
   naam,
   beschrijving,
@@ -69,19 +23,14 @@ export default function WinnerSpotlight({
   popularity,
   href,
 }: Props) {
-  const tiltRef = useTilt();
-
   const inner = (
     <div
-      ref={tiltRef}
       className="winner-spotlight-card"
       style={{
-        transformStyle: 'preserve-3d',
         position: 'relative',
         borderRadius: 16,
-        background:
-          'linear-gradient(135deg, rgba(34,197,94,.14) 0%, rgba(255,191,0,.06) 50%, rgba(0,0,0,.2) 100%)',
-        border: '1px solid color-mix(in oklab, #22c55e 30%, transparent)',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
         marginBottom: 22,
         padding: '22px 26px',
@@ -92,35 +41,9 @@ export default function WinnerSpotlight({
         cursor: href ? 'pointer' : 'default',
         textDecoration: 'none',
         color: 'var(--text)',
-        boxShadow:
-          '0 1px 0 rgba(34,197,94,0.18) inset, 0 8px 24px rgba(0,0,0,.4), 0 0 60px rgba(34,197,94,.08)',
-        transition: 'transform .15s, box-shadow .15s',
+        transition: 'border-color .15s',
       }}
     >
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'repeating-linear-gradient(45deg, rgba(0,0,0,.0) 0 6px, rgba(0,0,0,.05) 6px 7px)',
-          pointerEvents: 'none',
-          opacity: 0.35,
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: '-30%',
-          right: '-10%',
-          width: 260,
-          height: 260,
-          background: 'radial-gradient(circle, rgba(34,197,94,.22) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
       <div style={{ position: 'relative', minWidth: 0 }}>
         <div
           style={{
@@ -131,11 +54,11 @@ export default function WinnerSpotlight({
             fontSize: 10,
             letterSpacing: '.22em',
             textTransform: 'uppercase',
-            color: '#86efac',
+            color: 'var(--muted)',
             fontWeight: 700,
           }}
         >
-          <Trophy size={12} fill="currentColor" />
+          <Trophy size={12} color="#22c55e" fill="currentColor" />
           <span>Top-marge gerecht · winner</span>
         </div>
         <h2
@@ -191,7 +114,7 @@ export default function WinnerSpotlight({
               alignItems: 'center',
               gap: 6,
               fontSize: 11,
-              color: '#86efac',
+              color: 'var(--muted)',
               fontWeight: 600,
               letterSpacing: '.1em',
               textTransform: 'uppercase',
@@ -205,8 +128,8 @@ export default function WinnerSpotlight({
       <div
         style={{
           position: 'relative',
-          width: 160,
-          height: 160,
+          width: 120,
+          height: 120,
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
@@ -216,47 +139,22 @@ export default function WinnerSpotlight({
       >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'radial-gradient(circle, rgba(34,197,94,.26) 0%, transparent 65%)',
+            fontSize: 80,
+            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
           }}
-        />
-        <div
-          style={{
-            fontSize: 110,
-            filter: 'drop-shadow(0 12px 32px rgba(34,197,94,.5))',
-            position: 'relative',
-            transform: 'translateZ(40px)',
-            transition: 'transform .3s cubic-bezier(.2,.8,.2,1)',
-            animation: 'winner-glyph-float 5s ease-in-out infinite',
-          }}
-          className="winner-glyph"
         >
           {glyph}
         </div>
       </div>
 
       <style jsx>{`
-        @keyframes winner-glyph-float {
-          0%,
-          100% {
-            transform: translateZ(40px) translateY(0) rotate(-2deg);
-          }
-          50% {
-            transform: translateZ(50px) translateY(-8px) rotate(2deg);
-          }
-        }
-        :global(.winner-spotlight-card:hover .winner-glyph) {
-          animation-play-state: paused;
-          transform: translateZ(70px) scale(1.12) rotate(-4deg);
-        }
         @media (max-width: 800px) {
           :global(.winner-spotlight-card) {
             grid-template-columns: 1fr !important;
           }
           :global(.winner-glyph-wrap) {
             width: 100% !important;
-            height: 120px !important;
+            height: 100px !important;
           }
         }
       `}</style>

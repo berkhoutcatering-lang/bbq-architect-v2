@@ -18,6 +18,7 @@ import {
     Euro, Flame, LineChart, Lock, Percent, PieChart as PieChartIcon, Receipt as ReceiptIcon,
     Star, Truck, UserCog, Users,
 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
 
@@ -272,6 +273,17 @@ function FinancienInner() {
                     <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{selectedYear}</span>
                     <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost btn-sm" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
                 </> : undefined}
+            />
+
+            <PageGuideNote
+                id="financien"
+                accent="#10b981"
+                intro="Live winst-en-verliesrekening uit je echte events — geen Excel-werk meer aan het eind van het kwartaal."
+                actions={[
+                    { lead: 'Wissel jaar via de pijltjes', text: 'om historische omzet en kosten te vergelijken.' },
+                    { lead: 'Wissel tabbladen', text: '— Dashboard voor de grote lijn, Uitgaven en BTW voor de boekhouder-details.' },
+                    { lead: 'Top-klanten en marge-mix', text: 'tonen welke evenementen écht renderen — niet alleen de grootste in omzet.' },
+                ]}
             />
 
             <div className="tab-bar">

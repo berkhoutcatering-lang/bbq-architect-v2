@@ -29,9 +29,8 @@ export default function SignatureSpotlight({
       style={{
         position: 'relative',
         borderRadius: 16,
-        background:
-          'linear-gradient(135deg, rgba(255,191,0,.10) 0%, rgba(196,163,90,.06) 50%, rgba(0,0,0,.2) 100%)',
-        border: '1px solid color-mix(in oklab, var(--brand) 28%, transparent)',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
         marginBottom: 22,
         padding: '22px 26px',
@@ -40,39 +39,10 @@ export default function SignatureSpotlight({
         gap: 20,
         alignItems: 'center',
         cursor: onClick ? 'pointer' : 'default',
-        boxShadow:
-          '0 1px 0 rgba(255,191,0,0.14) inset, 0 8px 24px rgba(0,0,0,.4), 0 0 60px rgba(255,191,0,.08)',
-        transition: 'transform .15s, box-shadow .15s',
+        transition: 'border-color .15s',
       }}
       className="signature-card"
     >
-      {/* Smoke / grain overlay */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'repeating-linear-gradient(45deg, rgba(0,0,0,.0) 0 6px, rgba(0,0,0,.05) 6px 7px)',
-          pointerEvents: 'none',
-          opacity: 0.4,
-        }}
-      />
-      {/* Aura */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: '-30%',
-          right: '-10%',
-          width: 260,
-          height: 260,
-          background:
-            'radial-gradient(circle, rgba(255,191,0,.18) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
       <div style={{ position: 'relative', minWidth: 0 }}>
         <div
           style={{
@@ -83,11 +53,11 @@ export default function SignatureSpotlight({
             fontSize: 10,
             letterSpacing: '.22em',
             textTransform: 'uppercase',
-            color: 'var(--brand)',
+            color: 'var(--muted)',
             fontWeight: 700,
           }}
         >
-          <Star size={12} fill="currentColor" />
+          <Star size={12} color="var(--brand)" fill="currentColor" />
           <span>Signature · meest gekozen</span>
         </div>
         <h2
@@ -135,12 +105,11 @@ export default function SignatureSpotlight({
         </div>
       </div>
 
-      {/* Glyph illustration */}
       <div
         style={{
           position: 'relative',
-          width: 180,
-          height: 180,
+          width: 120,
+          height: 120,
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
@@ -150,41 +119,21 @@ export default function SignatureSpotlight({
       >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(circle, rgba(255,191,0,.22) 0%, transparent 65%)',
+            fontSize: 80,
+            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
           }}
-        />
-        <div
-          style={{
-            fontSize: 110,
-            filter: 'drop-shadow(0 12px 32px rgba(255,191,0,.4))',
-            transform: 'translateZ(0)',
-            position: 'relative',
-            transition: 'transform .3s cubic-bezier(.2,.8,.2,1)',
-          }}
-          className="signature-glyph"
         >
           {glyph}
         </div>
       </div>
       <style jsx>{`
-        :global(.signature-card:hover) {
-          transform: translateY(-2px);
-          box-shadow: 0 1px 0 rgba(255, 191, 0, 0.2) inset, 0 14px 32px rgba(0, 0, 0, 0.5),
-            0 0 80px rgba(255, 191, 0, 0.14);
-        }
-        :global(.signature-card:hover .signature-glyph) {
-          transform: translateZ(0) scale(1.08) rotate(-3deg);
-        }
         @media (max-width: 800px) {
           :global(.signature-card) {
             grid-template-columns: 1fr !important;
           }
           :global(.signature-glyph-wrap) {
             width: 100% !important;
-            height: 140px !important;
+            height: 100px !important;
           }
           :global(.signature-stats) {
             grid-template-columns: repeat(2, auto) !important;

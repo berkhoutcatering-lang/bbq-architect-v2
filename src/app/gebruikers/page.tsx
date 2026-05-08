@@ -6,7 +6,8 @@ import MetallicCard from '@/components/MetallicCard';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
-import { Flame, UserPlus, ArrowLeft, Mail, Shield, ShieldCheck, ChefHat, LogOut } from 'lucide-react';
+import { Flame, UserPlus, ArrowLeft, Mail, Shield, ShieldCheck, ChefHat, LogOut, Users } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 
 const ROLLEN = ['Admin', 'Pitmaster', 'Medewerker'] as const;
 
@@ -81,6 +82,17 @@ export default function Gebruikers() {
 
     return (
         <>
+            <PageGuideNote
+                id="gebruikers"
+                accent="#a78bfa"
+                icon={Users}
+                intro="Wie heeft toegang tot deze BBQ Architect-omgeving? Hier nodig je teamleden uit en geef je ze de juiste rol."
+                actions={[
+                    { lead: 'Klik Uitnodigen', text: 'om een teamlid via e-mail toegang te geven — alleen admins kunnen dit.' },
+                    { lead: 'Roles bepalen wat iemand mag', text: '— een chef ziet niet je financiën, een admin wel.' },
+                    { lead: 'Verwijder iemand zodra hij weggaat', text: '— anders blijft de toegang actief en telt het mee voor je abonnement.' },
+                ]}
+            />
             <PageHeader
                 title={'Teamleden (' + members.length + ' ' + (members.length === 1 ? 'lid' : 'leden') + ')'}
                 description={organization ? 'Beheer het team van ' + organization.name : 'Beheer wie toegang heeft tot BBQ Architect'}

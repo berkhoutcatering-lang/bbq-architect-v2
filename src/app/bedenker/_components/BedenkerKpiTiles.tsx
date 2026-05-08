@@ -31,21 +31,28 @@ export default function BedenkerKpiTiles({
   const sparkInspiraties = [3, 5, 4, 6, 8, 7, 9, 8, 10];
   const sparkConfidence = [0.62, 0.7, 0.74, 0.71, 0.78, 0.82, 0.85, 0.84, gemConfidence || 0.85];
 
+  // Bedenker = brainstorm-pagina. Alleen "Bewaard in /gerechten" (de
+  // succes-metric) krijgt de paarse accent — andere tiles in neutrale
+  // kleur zodat je oog naar de echte voortgang gaat.
+  const NEUTRAL = 'var(--muted)';
+  const ACCENT = '#a78bfa';
   const tiles = [
     {
       label: 'Concepten bedacht',
       value: Math.round(aniBedacht).toString(),
       sub: 'jouw geschiedenis',
       Icon: Brain,
-      color: '#a78bfa',
-      spark: sparkBedacht,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
     {
       label: 'Bewaard in /gerechten',
       value: Math.round(aniBewaard).toString(),
       sub: conceptenBedacht > 0 ? `${successRate}% succesratio` : 'klaar voor activeren',
       Icon: BookmarkCheck,
-      color: '#22c55e',
+      color: ACCENT,
+      valueColor: ACCENT,
       spark: sparkBewaard,
     },
     {
@@ -53,16 +60,18 @@ export default function BedenkerKpiTiles({
       value: Math.round(aniInspiraties).toString(),
       sub: 'unieke recepten als bron',
       Icon: GitBranch,
-      color: 'var(--brand)',
-      spark: sparkInspiraties,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
     {
       label: 'Gem. AI-confidence',
       value: gemConfidence > 0 ? `${Math.round(aniConfidence)}%` : '—',
       sub: gemConfidence > 0.85 ? 'sterk gegrond' : gemConfidence > 0.7 ? 'redelijk' : 'experimenteel',
       Icon: Zap,
-      color: '#fbbf24',
-      spark: sparkConfidence,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
   ];
 
@@ -76,8 +85,9 @@ export default function BedenkerKpiTiles({
       }}
       className="bedenker-kpi-tiles"
     >
-      {tiles.map((t, i) => {
+      {tiles.map((t) => {
         const Icon = t.Icon;
+        const isAccent = t.color === ACCENT;
         return (
           <div
             key={t.label}
@@ -85,27 +95,28 @@ export default function BedenkerKpiTiles({
             style={{
               position: 'relative',
               background: 'var(--card)',
-              border: `1px solid color-mix(in oklab, ${t.color} 22%, var(--border))`,
+              border: isAccent
+                ? `1px solid color-mix(in oklab, ${ACCENT} 28%, var(--border))`
+                : '1px solid var(--border)',
               borderRadius: 14,
               padding: '16px 18px 14px',
               overflow: 'hidden',
-              ['--tile-color' as string]: t.color,
-              animationDelay: `${i * 80}ms`,
             }}
           >
-            {/* Subtle glow corner */}
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                top: -30,
-                right: -30,
-                width: 100,
-                height: 100,
-                background: `radial-gradient(circle, ${t.color}22 0%, transparent 70%)`,
-                pointerEvents: 'none',
-              }}
-            />
+            {isAccent && (
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: -30,
+                  right: -30,
+                  width: 100,
+                  height: 100,
+                  background: `radial-gradient(circle, ${ACCENT}14 0%, transparent 70%)`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
             <div
               style={{
                 position: 'relative',
@@ -126,14 +137,14 @@ export default function BedenkerKpiTiles({
               >
                 {t.label}
               </div>
-              <Icon size={13} color={t.color} style={{ opacity: 0.7 }} />
+              <Icon size={13} color={isAccent ? ACCENT : 'var(--muted)'} style={{ opacity: 0.7 }} />
             </div>
             <div
               style={{
                 position: 'relative',
                 fontSize: 28,
                 fontWeight: 500,
-                color: t.color,
+                color: t.valueColor,
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1.05,
               }}
@@ -144,26 +155,11 @@ export default function BedenkerKpiTiles({
               {t.sub}
             </div>
 
-            {/* Sparkline */}
-            <Sparkline data={t.spark} color={t.color} />
+            {t.spark && <Sparkline data={t.spark} color={ACCENT} />}
           </div>
         );
       })}
       <style jsx>{`
-        :global(.bedenker-kpi-tile) {
-          animation: bedenker-tile-pulse 6s ease-in-out infinite;
-          will-change: box-shadow;
-        }
-        @keyframes bedenker-tile-pulse {
-          0%,
-          100% {
-            box-shadow: 0 0 0 0 transparent, 0 4px 14px rgba(0, 0, 0, 0.2);
-          }
-          50% {
-            box-shadow: 0 0 24px color-mix(in oklab, var(--tile-color) 22%, transparent),
-              0 4px 14px rgba(0, 0, 0, 0.25);
-          }
-        }
         @media (max-width: 900px) {
           :global(.bedenker-kpi-tiles) {
             grid-template-columns: repeat(2, 1fr) !important;

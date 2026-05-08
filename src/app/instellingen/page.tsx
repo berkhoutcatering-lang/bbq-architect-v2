@@ -7,7 +7,8 @@ import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
 import PageHeader from '@/components/PageHeader';
-import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save } from 'lucide-react';
+import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 
 export default function Instellingen() {
     const { settings, loading, save } = useSettings();
@@ -99,6 +100,18 @@ export default function Instellingen() {
     return (
         <>
             <PageHeader title="Instellingen" description="Beheer bedrijfsgegevens, huisstijl en systeeminstellingen" />
+
+            <PageGuideNote
+                id="instellingen"
+                accent="#64748b"
+                icon={Settings}
+                intro="De basis-instellingen die overal in de app terugkomen — vul één keer goed in en je bent klaar."
+                actions={[
+                    { lead: 'Bedrijfsgegevens', text: 'verschijnen op offertes, facturen en het klantenportaal — KvK en BTW horen hier ook.' },
+                    { lead: 'Huisstijl en logo', text: 'bepalen hoe je offerte er voor de klant uitziet — upload één PNG en je bent door.' },
+                    { lead: 'Vergeet niet op Opslaan te drukken', text: '— wijzigingen worden niet automatisch bewaard.' },
+                ]}
+            />
 
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div className="panel-head"><h3><Building2 size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Bedrijfsgegevens</h3></div>

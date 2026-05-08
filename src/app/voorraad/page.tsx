@@ -16,6 +16,7 @@ import {
     ChefHat, CalendarClock, Activity, Store, LineChart, Mail, Copy,
     Download, Zap, Edit3, ScanLine, Carrot, Croissant, ListChecks,
 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 
@@ -319,9 +320,24 @@ export default function Voorraad() {
     function saveItem() {
         if (!editForm.naam?.trim()) { showToast('Vul een naam in', 'error'); return; }
         if (editing === 'new') {
+            /* Client-side dedup-check: voorkom dat user dubbel toevoegt.
+               DB heeft sinds migration 028 ook een UNIQUE-index als laatste vangnet. */
+            const naamNorm = (editForm.naam as string).trim().toLowerCase();
+            const dupe = inventory.find(i => (i.naam || '').trim().toLowerCase() === naamNorm);
+            if (dupe) {
+                showToast(`"${dupe.naam}" bestaat al in voorraad — bewerk dat item ipv nieuw toe te voegen`, 'error');
+                return;
+            }
             insert(editForm).then(() => {
                 showToast('Item toegevoegd aan voorraad', 'success');
                 setEditing(null); setEditForm(null);
+            }).catch((e: any) => {
+                /* Vangnet voor DB-unique-violation (race-condition) */
+                if (String(e?.message || '').includes('ux_inventory_naam_org')) {
+                    showToast('Bestaat al — kon niet toevoegen', 'error');
+                } else {
+                    showToast('Toevoegen mislukt: ' + (e?.message || 'onbekend'), 'error');
+                }
             });
         } else {
             const { id, created_at, ...rest } = editForm;
@@ -493,6 +509,18 @@ export default function Voorraad() {
         <RequireTier feature="voorraad">
             <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
 
+                <PageGuideNote
+                    id="voorraad"
+                    accent="#84cc16"
+                    icon={Package}
+                    intro="Real-time voorraadstand: wat heb je liggen, wat staat onder par-level, en wat moet binnen 3 dagen op?"
+                    actions={[
+                        { lead: 'Tellen of Scannen', text: 'om snel te updaten — handmatig of met je telefooncamera.' },
+                        { lead: 'AI Advies rechtsboven', text: 'stelt bestelhoeveelheden voor op basis van je geplande events.' },
+                        { lead: 'Klik op een item', text: 'voor details, alternatieve leveranciers en prijshistorie per kilo.' },
+                    ]}
+                />
+                <div style={{ height: 18 }} />
                 <HeroHeader
                     totalItems={totalItems}
                     lowStockCount={lowStock.length}

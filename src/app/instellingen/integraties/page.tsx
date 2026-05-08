@@ -6,6 +6,8 @@ import {
   Calendar, Receipt, CreditCard, Webhook, ExternalLink, CheckCircle2,
   XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap,
 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
+import { Settings as SettingsIcon } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 
 // ── Integratie definitie ──
@@ -206,6 +208,17 @@ export default function IntegratiesPage() {
 
   return (
     <>
+      <PageGuideNote
+        id="integraties"
+        accent="#6366f1"
+        icon={SettingsIcon}
+        intro="Koppel BBQ Architect aan de tools die je toch al gebruikt — eenmalig autoriseren, daarna loopt het op de achtergrond."
+        actions={[
+          { lead: 'Klik een integratie open', text: 'om te zien hoe je hem koppelt — meestal 1 knop en een redirect terug.' },
+          { lead: 'De groene puntjes', text: 'naast elke integratie laten zien of de koppeling actief en gezond is.' },
+          { lead: 'Webhooks bovenin', text: 'gebruiken developers om eigen automatiseringen te maken — Lars hoeft hier niets mee.' },
+        ]}
+      />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">

@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, AlertCircle, Loader2, HelpCircle,
   Rocket, FileText, Receipt, Users, ShieldCheck, Settings, Keyboard, Plug
 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 
 interface Article {
   id: number;
@@ -155,6 +156,18 @@ export default function HelpCenter() {
         <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Help Center</h1>
         <p style={{ fontSize: 14, color: 'var(--muted)' }}>Vind antwoorden of neem contact op</p>
       </div>
+
+      <PageGuideNote
+        id="hulp"
+        accent="#f59e0b"
+        icon={HelpCircle}
+        intro="Loop je vast? Hier vind je korte uitleg-artikelen per hub, en als dat niet helpt: direct contact."
+        actions={[
+          { lead: 'Zoek in artikelen', text: 'op een woord uit je probleem — werkt sneller dan door categorieën klikken.' },
+          { lead: 'Klik op een artikel', text: 'voor stap-voor-stap uitleg met screenshots — geschreven in mensentaal.' },
+          { lead: 'Geen antwoord gevonden?', text: 'Tab Contact onderin — wij reageren binnen 1 werkdag, vaak sneller.' },
+        ]}
+      />
 
       {/* Search */}
       <div style={{ position: 'relative', marginBottom: 24 }}>

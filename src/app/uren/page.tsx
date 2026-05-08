@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import type { TimeLog } from '@/types';
 import { BarChart3, CalendarDays, Circle, Clock, History, LineChart, Play, Square, Target, Trash2 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 export default function Uren() {
@@ -99,6 +100,18 @@ export default function Uren() {
         <RequireTier feature="crew_uren">
         <div className="mobile-safe-bottom" style={{ animation: 'fadeIn 0.4s ease-out' }}>
             <PageHeader title="Workforce & Uren" />
+
+            <PageGuideNote
+                id="uren"
+                accent="#8b5cf6"
+                icon={Clock}
+                intro="Klok jezelf en je crew in — handmatig of met de stop-klok — en zie direct hoeveel uur je per event maakt."
+                actions={[
+                    { lead: 'Druk de groene knop om te starten', text: '— de timer loopt door tot je stopt, ook als je uitlogt.' },
+                    { lead: 'Koppel uren aan een event', text: 'om straks in Financiën je werkelijke loonkosten per event te zien.' },
+                    { lead: 'De maandgrafiek onderin', text: 'laat per crew-lid zien wie te veel of te weinig draait — handig voor planning.' },
+                ]}
+            />
 
             <div className="uren-punch-section mb-24" style={{ textAlign: 'center', padding: '32px 16px', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--border)' }}>
                 {activeLog ? (

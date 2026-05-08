@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { Sparkles, ArrowUpRight } from 'lucide-react';
-import { useTilt } from './wow-hooks';
 
 interface Props {
   name: string;
@@ -27,17 +26,14 @@ export default function LatestConceptSpotlight({
   margePct,
   href,
 }: Props) {
-  const tiltRef = useTilt();
   const inner = (
     <div
-      ref={tiltRef}
+      className="latest-concept-card"
       style={{
-        transformStyle: 'preserve-3d',
         position: 'relative',
         borderRadius: 16,
-        background:
-          'linear-gradient(135deg, rgba(167,139,250,.12) 0%, rgba(255,191,0,.06) 50%, rgba(0,0,0,.2) 100%)',
-        border: '1px solid color-mix(in oklab, #a78bfa 28%, transparent)',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
         marginBottom: 22,
         padding: '22px 26px',
@@ -48,36 +44,9 @@ export default function LatestConceptSpotlight({
         cursor: href ? 'pointer' : 'default',
         textDecoration: 'none',
         color: 'var(--text)',
-        boxShadow:
-          '0 1px 0 rgba(167,139,250,0.18) inset, 0 8px 24px rgba(0,0,0,.4), 0 0 60px rgba(167,139,250,.08)',
-        transition: 'transform .15s, box-shadow .15s',
+        transition: 'border-color .15s',
       }}
-      className="latest-concept-card"
     >
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'repeating-linear-gradient(45deg, rgba(0,0,0,.0) 0 6px, rgba(0,0,0,.05) 6px 7px)',
-          pointerEvents: 'none',
-          opacity: 0.4,
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: '-30%',
-          right: '-10%',
-          width: 260,
-          height: 260,
-          background: 'radial-gradient(circle, rgba(167,139,250,.20) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }}
-      />
-
       <div style={{ position: 'relative', minWidth: 0 }}>
         <div
           style={{
@@ -88,11 +57,11 @@ export default function LatestConceptSpotlight({
             fontSize: 10,
             letterSpacing: '.22em',
             textTransform: 'uppercase',
-            color: '#c4b5fd',
+            color: 'var(--muted)',
             fontWeight: 700,
           }}
         >
-          <Sparkles size={12} fill="currentColor" />
+          <Sparkles size={12} color="#a78bfa" fill="currentColor" />
           <span>Recent toegevoegd · uit jouw bibliotheek</span>
         </div>
         <h2
@@ -150,7 +119,7 @@ export default function LatestConceptSpotlight({
               alignItems: 'center',
               gap: 6,
               fontSize: 11,
-              color: '#c4b5fd',
+              color: 'var(--muted)',
               fontWeight: 600,
               letterSpacing: '.1em',
               textTransform: 'uppercase',
@@ -164,8 +133,8 @@ export default function LatestConceptSpotlight({
       <div
         style={{
           position: 'relative',
-          width: 160,
-          height: 160,
+          width: 120,
+          height: 120,
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
@@ -175,47 +144,21 @@ export default function LatestConceptSpotlight({
       >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(circle, rgba(167,139,250,.24) 0%, transparent 65%)',
+            fontSize: 80,
+            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
           }}
-        />
-        <div
-          style={{
-            fontSize: 110,
-            filter: 'drop-shadow(0 12px 32px rgba(167,139,250,.5))',
-            position: 'relative',
-            transform: 'translateZ(40px)',
-            transition: 'transform .3s cubic-bezier(.2,.8,.2,1)',
-            animation: 'latest-glyph-float 5s ease-in-out infinite',
-          }}
-          className="latest-concept-glyph"
         >
           {glyph}
         </div>
       </div>
       <style jsx>{`
-        @keyframes latest-glyph-float {
-          0%,
-          100% {
-            transform: translateZ(40px) translateY(0) rotate(-2deg);
-          }
-          50% {
-            transform: translateZ(50px) translateY(-8px) rotate(2deg);
-          }
-        }
-        :global(.latest-concept-card:hover .latest-concept-glyph) {
-          animation-play-state: paused;
-          transform: translateZ(70px) scale(1.12) rotate(-4deg);
-        }
         @media (max-width: 800px) {
           :global(.latest-concept-card) {
             grid-template-columns: 1fr !important;
           }
           :global(.latest-concept-glyph-wrap) {
             width: 100% !important;
-            height: 120px !important;
+            height: 100px !important;
           }
         }
       `}</style>

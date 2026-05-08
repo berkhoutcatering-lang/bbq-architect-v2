@@ -9,7 +9,8 @@ import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
 import { sendEmail, wrapHtml } from '@/lib/emailHelper';
-import { Flame, Send, ArrowLeft, Plus, Pencil, Trash2, Search, Mail, FileText, X } from 'lucide-react';
+import { Flame, Send, ArrowLeft, Plus, Pencil, Trash2, Search, Mail, FileText, X, Inbox } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import type { Email, EmailTemplate, Klant } from '@/types';
 
 type Tab = 'verzonden' | 'nieuw' | 'templates';
@@ -229,7 +230,17 @@ export default function Mailbox() {
                 ) : undefined}
             />
 
-            <PageHint id="mailbox" title="Mailbox" description="Verstuur e-mails naar klanten, bekijk je verzendhistorie en beheer e-mail templates." />
+            <PageGuideNote
+                id="mailbox"
+                accent="#0ea5e9"
+                icon={Inbox}
+                intro="Klant-mails versturen vanuit BBQ Architect zelf — met templates die je niet elke keer opnieuw hoeft te schrijven."
+                actions={[
+                    { lead: 'Klik Nieuwe e-mail', text: 'om een mail te schrijven — kies een template of begin blanco.' },
+                    { lead: 'Verzendhistorie', text: 'laat zien wat er naar wie is gegaan en wanneer — handig als een klant zegt iets niet ontvangen te hebben.' },
+                    { lead: 'Templates beheer je apart', text: '— pas ze aan met variabelen zoals {{naam}} en {{datum}} en gebruik ze overal.' },
+                ]}
+            />
 
             <div className="tab-bar" style={{ marginBottom: 16 }}>
                 <button className={'tab-btn' + (tab === 'verzonden' ? ' active' : '')} onClick={function () { setTab('verzonden'); setSelectedEmail(null); }}>

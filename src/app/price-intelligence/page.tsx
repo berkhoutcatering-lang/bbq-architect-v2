@@ -17,13 +17,14 @@ import {
     Info, HelpCircle, Plus, FileText, TrendingUp, TrendingDown,
     Store, Euro, CloudUpload, ArrowLeft, Save, FolderOpen, Zap, Lightbulb,
     ExternalLink, Download, Archive, BarChart3, Calendar, Filter, Wallet,
-    ListOrdered, FileUp,
+    ListOrdered, FileUp, Inbox,
 } from 'lucide-react';
+import FolderInbox from './_components/FolderInbox';
 
 const GOLD = '#c4a35a';
-const FOLDER_KEY = 'pi_folder_v2';
+const FOLDER_KEY = 'pi_folder_v3';   // bumped: nieuwe 'inbox' optie
 
-type Folder = 'invoices' | 'receipts' | 'books' | 'pricelists';
+type Folder = 'inbox' | 'invoices' | 'receipts' | 'books' | 'pricelists';
 
 /* ═══════════════════════════════════════════════════════════════════
    ATOMS
@@ -403,6 +404,7 @@ function ErrorBanner({ error, onRetry, onDismiss }: { error: string; onRetry?: (
    ═══════════════════════════════════════════════════════════════════ */
 
 const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
+    { id: 'inbox', label: 'Inbox', hint: 'Email-prijslijsten', Icon: Inbox },
     { id: 'invoices', label: 'AI Factuur Lezen', hint: 'Scan & extract', Icon: FileScan },
     { id: 'receipts', label: 'Bonnen', hint: 'Kassabonnen · foto', Icon: Receipt },
     { id: 'pricelists', label: 'Prijslijst Bulk', hint: '60+ PDFs → DB', Icon: ListOrdered },
@@ -454,9 +456,10 @@ function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder
 
 export default function PriceIntelligence() {
     const [folder, setFolder] = useState<Folder>(() => {
-        if (typeof window === 'undefined') return 'books';
+        if (typeof window === 'undefined') return 'inbox';
         const stored = localStorage.getItem(FOLDER_KEY);
-        return stored === 'invoices' || stored === 'receipts' || stored === 'books' || stored === 'pricelists' ? stored : 'books';
+        const valid: Folder[] = ['inbox', 'invoices', 'receipts', 'pricelists', 'books'];
+        return (valid as string[]).includes(stored ?? '') ? (stored as Folder) : 'inbox';
     });
 
     function changeFolder(f: Folder) {
@@ -490,6 +493,7 @@ export default function PriceIntelligence() {
                 background: 'var(--bg)', border: '1px solid var(--border)', borderTop: 'none',
                 borderRadius: '0 0 14px 14px', padding: 22, animation: 'fadeInUp .3s ease both',
             }}>
+                {folder === 'inbox' && <FolderInbox />}
                 {folder === 'invoices' && <FolderInvoices />}
                 {folder === 'receipts' && <FolderReceipts />}
                 {folder === 'pricelists' && <FolderPricelists />}

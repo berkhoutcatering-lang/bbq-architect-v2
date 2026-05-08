@@ -61,29 +61,37 @@ export default function MargesKpiTiles({
   ];
   const sparkStars = [0, 0, 1, 1, 2, 2, bcgStars];
 
+  // Marges = analyse-pagina. Alleen Gem. marge (de hero-metric) krijgt
+  // de groene accent — andere tiles in neutrale kleur zodat je oog
+  // direct naar wat ertoe doet wordt geleid.
+  const NEUTRAL = 'var(--muted)';
+  const ACCENT = '#22c55e';
   const tiles = [
     {
       label: 'Totaal gerechten',
       value: Math.round(aniTotaal).toString(),
       sub: 'in je bibliotheek',
       Icon: Layers,
-      color: '#FFBF00',
-      spark: sparkTotaal,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
     {
       label: 'Met kostprijs',
       value: Math.round(aniMet).toString(),
       sub: totaalGerechten > 0 ? `${Math.round((metKostprijs / totaalGerechten) * 100)}% berekend` : 'klaar voor analyse',
       Icon: Calculator,
-      color: '#a78bfa',
-      spark: sparkMet,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
     {
       label: 'Gem. marge',
       value: gemMarge > 0 ? `${Math.round(aniMarge)}%` : '—',
       sub: 'op €45 menu',
       Icon: TrendingUp,
-      color: '#22c55e',
+      color: ACCENT,
+      valueColor: ACCENT,
       spark: sparkMarge,
     },
     {
@@ -91,8 +99,9 @@ export default function MargesKpiTiles({
       value: Math.round(aniStars).toString(),
       sub: `${bcgStars} stars · ${bcgDogs} dogs`,
       Icon: Star,
-      color: '#fbbf24',
-      spark: sparkStars,
+      color: NEUTRAL,
+      valueColor: 'var(--text)',
+      spark: null,
     },
   ];
 
@@ -106,8 +115,9 @@ export default function MargesKpiTiles({
       }}
       className="marges-kpi-tiles"
     >
-      {tiles.map((t, i) => {
+      {tiles.map((t) => {
         const Icon = t.Icon;
+        const isAccent = t.color === ACCENT;
         return (
           <div
             key={t.label}
@@ -115,26 +125,28 @@ export default function MargesKpiTiles({
             style={{
               position: 'relative',
               background: 'var(--card)',
-              border: `1px solid color-mix(in oklab, ${t.color} 22%, var(--border))`,
+              border: isAccent
+                ? `1px solid color-mix(in oklab, ${ACCENT} 28%, var(--border))`
+                : '1px solid var(--border)',
               borderRadius: 14,
               padding: '16px 18px 14px',
               overflow: 'hidden',
-              ['--tile-color' as string]: t.color,
-              animationDelay: `${i * 80}ms`,
             }}
           >
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                top: -30,
-                right: -30,
-                width: 100,
-                height: 100,
-                background: `radial-gradient(circle, ${t.color}22 0%, transparent 70%)`,
-                pointerEvents: 'none',
-              }}
-            />
+            {isAccent && (
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: -30,
+                  right: -30,
+                  width: 100,
+                  height: 100,
+                  background: `radial-gradient(circle, ${ACCENT}14 0%, transparent 70%)`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
             <div
               style={{
                 position: 'relative',
@@ -155,14 +167,14 @@ export default function MargesKpiTiles({
               >
                 {t.label}
               </div>
-              <Icon size={13} color={t.color} style={{ opacity: 0.7 }} />
+              <Icon size={13} color={isAccent ? ACCENT : 'var(--muted)'} style={{ opacity: 0.7 }} />
             </div>
             <div
               style={{
                 position: 'relative',
                 fontSize: 28,
                 fontWeight: 500,
-                color: t.color,
+                color: t.valueColor,
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1.05,
               }}
@@ -173,25 +185,11 @@ export default function MargesKpiTiles({
               {t.sub}
             </div>
 
-            <Sparkline data={t.spark} color={t.color} />
+            {t.spark && <Sparkline data={t.spark} color={ACCENT} />}
           </div>
         );
       })}
       <style jsx>{`
-        :global(.marges-kpi-tile) {
-          animation: marges-tile-pulse 6s ease-in-out infinite;
-          will-change: box-shadow;
-        }
-        @keyframes marges-tile-pulse {
-          0%,
-          100% {
-            box-shadow: 0 0 0 0 transparent, 0 4px 14px rgba(0, 0, 0, 0.2);
-          }
-          50% {
-            box-shadow: 0 0 24px color-mix(in oklab, var(--tile-color) 22%, transparent),
-              0 4px 14px rgba(0, 0, 0, 0.25);
-          }
-        }
         @media (max-width: 900px) {
           :global(.marges-kpi-tiles) {
             grid-template-columns: repeat(2, 1fr) !important;

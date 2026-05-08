@@ -1,0 +1,124 @@
+/**
+ * API-wrapper rond BBQ Architect endpoints.
+ * Gebruikt chrome.storage voor base URL + API key.
+ */
+
+const STORAGE_KEYS = {
+    apiUrl: 'bbq_api_url',
+    apiKey: 'bbq_api_key',
+    organization: 'bbq_organization',
+    user: 'bbq_user',
+};
+
+const DEFAULT_API_URL = 'http://localhost:56222';   // dev; override in options
+
+async function getStored(keys) {
+    return new Promise(resolve => chrome.storage.local.get(keys, resolve));
+}
+async function setStored(obj) {
+    return new Promise(resolve => chrome.storage.local.set(obj, resolve));
+}
+
+async function getConfig() {
+    const data = await getStored([STORAGE_KEYS.apiUrl, STORAGE_KEYS.apiKey]);
+    return {
+        apiUrl: data[STORAGE_KEYS.apiUrl] || DEFAULT_API_URL,
+        apiKey: data[STORAGE_KEYS.apiKey] || null,
+    };
+}
+
+/* Fetch met AbortController + timeout. Default 30s, AI-detect mag langer (60s). */
+async function apiFetch(path, init = {}, timeoutMs = 30000) {
+    const { apiUrl, apiKey } = await getConfig();
+    if (!apiKey) throw new Error('Geen API-key — open de extensie-instellingen');
+    const url = apiUrl.replace(/\/+$/, '') + path;
+    const headers = Object.assign({
+        'content-type': 'application/json',
+        'x-extension-key': apiKey,
+    }, init.headers || {});
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const r = await fetch(url, { ...init, headers, signal: controller.signal });
+        clearTimeout(timer);
+        if (!r.ok) {
+            let detail = '';
+            try { detail = (await r.json())?.error || ''; } catch { /* ignore */ }
+            throw new Error(`${r.status}: ${detail || r.statusText}`);
+        }
+        return r.json();
+    } catch (e) {
+        clearTimeout(timer);
+        if (e.name === 'AbortError') {
+            throw new Error(`Timeout na ${Math.round(timeoutMs / 1000)}s op ${path}`);
+        }
+        throw e;
+    }
+}
+
+/* ─── Public API ─── */
+
+const BBQ = {
+    STORAGE_KEYS,
+    DEFAULT_API_URL,
+    getStored,
+    setStored,
+    getConfig,
+    apiFetch,
+
+    async testConnection() {
+        return apiFetch('/api/extension/auth', { method: 'GET' });
+    },
+
+    async listLeveranciers() {
+        const { apiUrl, apiKey } = await getConfig();
+        /* deze endpoint vereist user-cookie; voor extensie hebben we een
+           extension-aware variant nodig. Voor v1 cachen we leveranciers
+           bij elke testConnection — de UI geeft user instructie te kiezen
+           in de wizard van /leveranciers. */
+        const r = await fetch(apiUrl + '/api/leveranciers', {
+            headers: { 'x-extension-key': apiKey },
+        });
+        if (!r.ok) throw new Error('Kon leveranciers niet ophalen');
+        return r.json();
+    },
+
+    async startSync({ leverancierId, mode, portalUrl }) {
+        return apiFetch('/api/extension/sync/start', {
+            method: 'POST',
+            body: JSON.stringify({ leverancierId, mode, portalUrl }),
+        });
+    },
+
+    async finishSync({ syncRunId, status, errorText }) {
+        return apiFetch(`/api/extension/sync/${syncRunId}/finish`, {
+            method: 'POST',
+            body: JSON.stringify({ status, errorText }),
+        });
+    },
+
+    async sendBatch({ syncRunId, leverancierId, pageUrl, pagesScanned, producten }) {
+        return apiFetch('/api/extension/products/batch', {
+            method: 'POST',
+            body: JSON.stringify({ syncRunId, leverancierId, pageUrl, pagesScanned, producten }),
+        });
+    },
+
+    async aiDetect({ html, imageBase64, mimeType, pageUrl, scope, scopeKeywords }) {
+        const base = imageBase64
+            ? { mode: 'image', imageBase64, mimeType, pageUrl }
+            : { mode: 'html', html, pageUrl };
+        const body = { ...base };
+        if (scope) body.scope = scope;
+        if (Array.isArray(scopeKeywords) && scopeKeywords.length) body.scopeKeywords = scopeKeywords;
+        /* AI-detect mag tot 60s nemen (Haiku op zware HTML). Daarna timeout. */
+        return apiFetch('/api/extension/ai-detect', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        }, 60000);
+    },
+};
+
+if (typeof window !== 'undefined') window.BBQ = BBQ;
+if (typeof self !== 'undefined') self.BBQ = BBQ;

@@ -8,6 +8,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
+import PageGuideNote from '@/components/PageGuideNote';
 import { Camera, Check, CheckSquare, ChevronLeft, ChevronRight, CloudUpload, FolderOpen, ImageIcon, Images, Inbox, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -217,7 +218,17 @@ export default function FotoArchief() {
         <>
             <PageHeader title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel" />
 
-            <PageHint id="foto-archief" title="Foto Archief" description="Upload en organiseer foto's van events, gerechten en materieel. Sleep bestanden direct op de pagina." />
+            <PageGuideNote
+                id="foto-archief"
+                accent="#0891b2"
+                icon={Images}
+                intro="Alle foto's van events, gerechten en materieel verzameld op één plek — gecategoriseerd en doorzoekbaar."
+                actions={[
+                    { lead: 'Sleep foto’s direct op de pagina', text: 'om snel te uploaden — geen knop zoeken nodig.' },
+                    { lead: 'Filter op categorie', text: '— Food, Gear, Sfeer of Admin — om snel het juiste beeld terug te vinden.' },
+                    { lead: 'Klik op een foto', text: 'om beschrijving en tags aan te passen of te downloaden voor je website of social.' },
+                ]}
+            />
 
             <div
                 onDrop={handleDrop}

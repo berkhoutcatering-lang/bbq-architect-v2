@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import PageHint from '@/components/PageHint';
 import EmptyState from '@/components/EmptyState';
 import { AlertTriangle, Camera, CloudUpload, Contact, Eye, EyeOff, Globe, HelpCircle, ImageIcon, Images, Info, Lock, Pencil, Plus, RotateCw, Save, Trash2, UtensilsCrossed } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import type { WebsiteFaq, WebsiteGallery, WebsiteGang, WebsiteGerecht, WebsiteHero } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -107,7 +108,17 @@ export default function WebsiteBeheer() {
     return (
         <RequireTier feature="website_builder">
         <div className="p-6 max-w-6xl mx-auto">
-            <PageHint id="website" title="Website Beheer" description="Beheer de content van hopbites.nl. Wijzigingen worden direct in Supabase opgeslagen." />
+            <PageGuideNote
+                id="website"
+                accent="#22c55e"
+                icon={Globe}
+                intro="De content van je publieke website (hopbites.nl) regel je hier — wijzigingen zijn binnen 60 seconden live."
+                actions={[
+                    { lead: 'Wissel tabbladen', text: '— Hero, Menu, Galerij, FAQ — om de juiste sectie van je website te bewerken.' },
+                    { lead: 'Upload foto’s rechtstreeks', text: '— ze worden geoptimaliseerd voordat ze online verschijnen.' },
+                    { lead: 'Vergeet niet op Opslaan', text: '— wijzigingen staan in concept tot je ze publiceert.' },
+                ]}
+            />
 
             {/* Header */}
             <div className="mb-8">
