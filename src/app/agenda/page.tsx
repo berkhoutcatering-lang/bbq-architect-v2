@@ -5,13 +5,16 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import { detectAllConflicts } from '@/lib/conflictDetection';
 import type { Event as DbEvent, PrepTask } from '@/types';
+import type { AgendaPersonal } from '@/types/database.types';
 import {
     PartyPopper, ClipboardList, Flame, Users, HeartHandshake, Truck, UserRound,
     ChevronLeft, ChevronRight, Filter, Grid3x3, Columns3, List as ListIcon,
     Sparkles, AlertTriangle, X, MapPin, Euro, Clock, Calendar,
-    Check, RefreshCw,
+    Check, RefreshCw, Plus, Pencil,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import { useAgendaPersonal } from './_components/useAgendaPersonal';
+import PersonalEventModal from './_components/PersonalEventModal';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -147,22 +150,27 @@ interface MonthNavProps {
     onPrev: () => void;
     onNext: () => void;
     onToday: () => void;
+    onAddPersonal: () => void;
 }
-function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday }: MonthNavProps) {
+function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday, onAddPersonal }: MonthNavProps) {
     return (
         <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '14px 16px', background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)', borderRadius: 12,
+            flexWrap: 'wrap', gap: 12,
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <button onClick={onPrev} style={navBtnStyle()} aria-label="Vorige maand"><ChevronLeft size={16} /></button>
-                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em', minWidth: 180 }}>{monthLabel}</div>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 28, fontWeight: 300, letterSpacing: '-.01em', minWidth: 160 }}>{monthLabel}</div>
                 <button onClick={onNext} style={navBtnStyle()} aria-label="Volgende maand"><ChevronRight size={16} /></button>
                 <button onClick={onToday} style={navPillStyle(BRAND)}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: BRAND }} /> Vandaag
                 </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={onAddPersonal} style={navPillStyle('#a78bfa')}>
+                    <Plus size={11} /> Afspraak
+                </button>
                 <div style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
                     <button onClick={() => setView('month')} style={viewTabStyle(view === 'month')}><Grid3x3 size={11} /> Maand</button>
                     <button disabled title="Binnenkort beschikbaar" style={{ ...viewTabStyle(false), opacity: 0.35, cursor: 'not-allowed' }}><Columns3 size={11} /> Week</button>
@@ -242,8 +250,8 @@ const WEEKDAYS_NL = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 function daysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
 function dowMon0(date: Date) { return (date.getDay() + 6) % 7; }
 
-function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
-    year: number; month: number; activeCals: string[]; events: AgendaEvent[]; onSelectEvent: (e: AgendaEvent) => void;
+function MonthGrid({ year, month, activeCals, events, onSelectEvent, onQuickAddDay }: {
+    year: number; month: number; activeCals: string[]; events: AgendaEvent[]; onSelectEvent: (e: AgendaEvent) => void; onQuickAddDay?: (isoDate: string) => void;
 }) {
     /* "Vandaag" alleen highlighten als de zichtbare maand daadwerkelijk de
        huidige maand is — anders staat hij verkeerd in een ander tijdvak. */
@@ -289,6 +297,10 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
                                 events={cell.day ? eventsByDay[cell.day] || [] : []}
                                 isLastCol={cIdx === 6}
                                 onSelectEvent={onSelectEvent}
+                                onQuickAdd={onQuickAddDay && cell.day ? () => {
+                                    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
+                                    onQuickAddDay(iso);
+                                } : undefined}
                             />
                         ))}
                     </div>
@@ -299,18 +311,23 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent }: {
     );
 }
 
-function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent }: {
-    day: number | null; isWeekend: boolean; isToday: boolean; events: AgendaEvent[]; isLastCol: boolean; onSelectEvent: (e: AgendaEvent) => void;
+function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, onQuickAdd }: {
+    day: number | null; isWeekend: boolean; isToday: boolean; events: AgendaEvent[]; isLastCol: boolean; onSelectEvent: (e: AgendaEvent) => void; onQuickAdd?: () => void;
 }) {
     if (!day) return <div style={{ minHeight: 110, borderRight: isLastCol ? 'none' : '1px solid var(--border)', background: 'rgba(0,0,0,.15)' }} />;
     const visible = events.slice(0, 3);
     const more = events.length - visible.length;
     return (
-        <div style={{
-            minHeight: 110, padding: 8, borderRight: isLastCol ? 'none' : '1px solid var(--border)',
-            background: isToday ? `${BRAND}0a` : isWeekend ? 'rgba(0,0,0,.1)' : 'transparent',
-            position: 'relative',
-        }}>
+        <div
+            onClick={onQuickAdd}
+            style={{
+                minHeight: 110, padding: 8, borderRight: isLastCol ? 'none' : '1px solid var(--border)',
+                background: isToday ? `${BRAND}0a` : isWeekend ? 'rgba(0,0,0,.1)' : 'transparent',
+                position: 'relative',
+                cursor: onQuickAdd ? 'pointer' : 'default',
+            }}
+            title={onQuickAdd ? 'Klik om afspraak toe te voegen' : undefined}
+        >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{
                     fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? BRAND : 'var(--text)',
@@ -330,17 +347,19 @@ function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent }: 
 
 function EventChip({ event, onClick }: { event: AgendaEvent; onClick: () => void }) {
     const cal = calById(event.calId);
+    /* Personal items mogen eigen kleur kiezen; voor andere calendars de cal-default. */
+    const accentColor: string = (event.isPersonal && event.color) ? event.color as string : cal.color;
     const critical = event.critical || event.conflict || event.warning;
     return (
         <div onClick={(e) => { e.stopPropagation(); onClick(); }} style={{
             padding: '3px 6px', borderRadius: 4, fontSize: 10, lineHeight: 1.3,
-            background: `${cal.color}1f`, color: 'var(--text)',
-            borderLeft: `3px solid ${cal.color}`,
+            background: `${accentColor}1f`, color: 'var(--text)',
+            borderLeft: `3px solid ${accentColor}`,
             cursor: 'pointer',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             position: 'relative',
         }}>
-            <span style={{ fontVariantNumeric: 'tabular-nums', color: cal.color, fontWeight: 600, marginRight: 4 }}>
+            <span style={{ fontVariantNumeric: 'tabular-nums', color: accentColor, fontWeight: 600, marginRight: 4 }}>
                 {String(Math.floor(event.start)).padStart(2, '0')}:{event.start % 1 ? '30' : '00'}
             </span>
             {event.title}
@@ -418,10 +437,11 @@ function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (i
 /* ═══════════════════════════════════════════════════════════════════
    EVENT DETAIL DRAWER
    ═══════════════════════════════════════════════════════════════════ */
-function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onClose: () => void }) {
+function EventDetailDrawer({ event, onClose, onEditPersonal }: { event: AgendaEvent | null; onClose: () => void; onEditPersonal?: (personalId: string) => void }) {
     const isPhone = useIsPhone();
     if (!event) return null;
     const cal = calById(event.calId);
+    const isPersonal = !!event.isPersonal;
     const asideStyle: React.CSSProperties = isPhone
         ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: 'auto', maxHeight: '90dvh', width: '100%', background: 'var(--color-bg-elevated)', borderTop: '1px solid var(--border)', borderRadius: '20px 20px 0 0', zIndex: 9999, boxShadow: '0 -20px 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }
         : { position: 'fixed', right: 0, top: 0, height: '100vh', width: 580, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflowY: 'auto' };
@@ -475,27 +495,43 @@ function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onCl
                         </div>
                     )}
 
-                    <div style={{ marginTop: 14, padding: 14, borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}26` }}>
-                        <Eyebrow style={{ marginBottom: 8 }}>Gerelateerd</Eyebrow>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <a href="/prep-counter" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
-                                <ClipboardList size={14} style={{ color: GOLD }} />
-                                Open prep planning
-                            </a>
-                            {/* Service-deeplink: ga naar Event Hub van dit event — daar start je Service Mode (KDS) */}
-                            <a
-                                href={event.id ? `/events/${event.id}/hub` : '/events'}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}
-                            >
-                                <PartyPopper size={14} style={{ color: GOLD }} />
-                                Open Event Hub →
-                            </a>
-                            <a href="/voorraad" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
-                                <Check size={14} style={{ color: GOLD }} />
-                                Check voorraad-status
-                            </a>
+                    {isPersonal && event.notes && (
+                        <div style={{ padding: 12, borderRadius: 10, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)' }}>
+                            <Eyebrow style={{ marginBottom: 6 }}>Notitie</Eyebrow>
+                            <div style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{event.notes}</div>
                         </div>
-                    </div>
+                    )}
+
+                    {isPersonal && onEditPersonal ? (
+                        <button
+                            onClick={() => event.personalId && onEditPersonal(event.personalId)}
+                            className="btn btn-brand"
+                            style={{ marginTop: 6, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                            <Pencil size={14} /> Bewerken / verwijderen
+                        </button>
+                    ) : !isPersonal && (
+                        <div style={{ marginTop: 14, padding: 14, borderRadius: 10, background: `${GOLD}0d`, border: `1px solid ${GOLD}26` }}>
+                            <Eyebrow style={{ marginBottom: 8 }}>Gerelateerd</Eyebrow>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <a href="/prep-counter" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
+                                    <ClipboardList size={14} style={{ color: GOLD }} />
+                                    Open prep planning
+                                </a>
+                                <a
+                                    href={event.id ? `/events/${event.id}/hub` : '/events'}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}
+                                >
+                                    <PartyPopper size={14} style={{ color: GOLD }} />
+                                    Open Event Hub →
+                                </a>
+                                <a href="/voorraad" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text)', textDecoration: 'none' }}>
+                                    <Check size={14} style={{ color: GOLD }} />
+                                    Check voorraad-status
+                                </a>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </aside>
         </>
@@ -556,6 +592,33 @@ function mapDbEventToAgendaEvent(e: DbEvent): AgendaEvent {
     );
 }
 
+/* Map persoonlijke afspraak naar AgendaEvent. parseTimeToHours pakt HH:MM(:SS). */
+function mapPersonalToAgendaEvent(p: AgendaPersonal): AgendaEvent {
+    const [, , dd] = (p.date || '').split('-');
+    const day = parseInt(dd || '1', 10);
+    const start = parseTimeToHours(p.start_time, 9);
+    const end = p.end_time ? parseTimeToHours(p.end_time, start + 1) : start + 1;
+    const duration = Math.max(0.25, end - start);
+    return ev(
+        'pers_' + p.id,
+        'personal',
+        day,
+        start,
+        duration,
+        p.title,
+        {
+            personalId: p.id,
+            isPersonal: true,
+            kind: 'persoonlijk',
+            notes: p.notes || undefined,
+            color: p.color || undefined,
+            dbDate: p.date,
+            startTime: p.start_time,
+            endTime: p.end_time,
+        }
+    );
+}
+
 /* Map prep_tasks naar het AgendaEvent prep-shape, tenzij geen event_id of geen text. */
 function mapPrepTaskToAgendaEvent(p: PrepTask, eventDateMap: Record<number, string>): AgendaEvent | null {
     const eventDate = eventDateMap[p.event_id];
@@ -589,6 +652,19 @@ export default function Agenda() {
 
     const { data: dbEvents } = useSupabase<DbEvent>('events', []);
     const { data: prepTasks } = useSupabase<PrepTask>('prep_tasks', []);
+    const { rows: personalRows, insert: insertPersonal, update: updatePersonal, remove: removePersonal } = useAgendaPersonal();
+
+    /* Modal-state voor persoonlijke afspraken — open met datum (klik op lege dag-cel),
+       met editing-row (klik op bestaande afspraak), of zonder beide (knop in MonthNav). */
+    const [personalModalOpen, setPersonalModalOpen] = useState(false);
+    const [personalModalDate, setPersonalModalDate] = useState<string | undefined>(undefined);
+    const [personalModalEditing, setPersonalModalEditing] = useState<AgendaPersonal | null>(null);
+
+    const openPersonalModal = (opts?: { date?: string; editing?: AgendaPersonal | null }) => {
+        setPersonalModalDate(opts?.date);
+        setPersonalModalEditing(opts?.editing || null);
+        setPersonalModalOpen(true);
+    };
 
     const toggleCal = (id: string) => setActiveCals(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -612,10 +688,17 @@ export default function Agenda() {
         return list;
     }, [prepTasks, eventDateMap, monthPrefix]);
 
-    /* Alle events in zichtbare maand: events + prep-taken, allemaal live uit DB. */
+    /* Persoonlijke items deze maand → AgendaEvent shape. */
+    const monthPersonalEvents = useMemo(() => {
+        return personalRows
+            .filter(p => (p.date || '').startsWith(monthPrefix))
+            .map(mapPersonalToAgendaEvent);
+    }, [personalRows, monthPrefix]);
+
+    /* Alle events in zichtbare maand: events + prep-taken + persoonlijke afspraken. */
     const allEvents: AgendaEvent[] = useMemo(() => {
-        return [...dbAgendaEvents, ...dbPrepEvents];
-    }, [dbAgendaEvents, dbPrepEvents]);
+        return [...dbAgendaEvents, ...dbPrepEvents, ...monthPersonalEvents];
+    }, [dbAgendaEvents, dbPrepEvents, monthPersonalEvents]);
 
     /* Counts per calendar voor de legend — dynamisch uit live data deze maand. */
     const calendarCounts = useMemo(() => {
@@ -625,7 +708,7 @@ export default function Agenda() {
         return counts;
     }, [allEvents]);
 
-    const isEmpty = dbEvents.length === 0;
+    const isEmpty = dbEvents.length === 0 && personalRows.length === 0;
 
     /* Conflict-detectie altijd over live DB events. */
     const conflicts = useMemo(() => {
@@ -716,6 +799,7 @@ export default function Agenda() {
                 onPrev={() => shiftMonth(-1)}
                 onNext={() => shiftMonth(1)}
                 onToday={() => { const now = new Date(); setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }}
+                onAddPersonal={() => openPersonalModal()}
             />
             <div style={{ height: 18 }} />
 
@@ -726,7 +810,14 @@ export default function Agenda() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     {view === 'month' && (
-                        <MonthGrid year={viewYear} month={viewMonth} activeCals={activeCals} events={allEvents} onSelectEvent={setSelectedEvent} />
+                        <MonthGrid
+                            year={viewYear}
+                            month={viewMonth}
+                            activeCals={activeCals}
+                            events={allEvents}
+                            onSelectEvent={setSelectedEvent}
+                            onQuickAddDay={(iso) => openPersonalModal({ date: iso })}
+                        />
                     )}
                     {view !== 'month' && (
                         <MetalCard style={{ padding: 60, textAlign: 'center' }}>
@@ -765,7 +856,33 @@ export default function Agenda() {
                 </div>
             </div>
 
-            <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+            <EventDetailDrawer
+                event={selectedEvent}
+                onClose={() => setSelectedEvent(null)}
+                onEditPersonal={(personalId) => {
+                    const row = personalRows.find(p => p.id === personalId);
+                    if (!row) return;
+                    setSelectedEvent(null);
+                    openPersonalModal({ editing: row });
+                }}
+            />
+
+            <PersonalEventModal
+                open={personalModalOpen}
+                initialDate={personalModalDate}
+                editing={personalModalEditing}
+                onClose={() => { setPersonalModalOpen(false); setPersonalModalEditing(null); }}
+                onSave={async (args) => {
+                    if (personalModalEditing) {
+                        await updatePersonal(personalModalEditing.id, args);
+                    } else {
+                        await insertPersonal(args);
+                    }
+                }}
+                onDelete={personalModalEditing ? async () => {
+                    if (personalModalEditing) await removePersonal(personalModalEditing.id);
+                } : undefined}
+            />
         </div>
     );
 }
