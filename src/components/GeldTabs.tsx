@@ -1,13 +1,15 @@
 'use client';
 
-import { BarChart3, Clock } from 'lucide-react';
+import { BarChart3, Clock, ScanLine, Car } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
 const TABS: HubTab[] = [
   { href: '/financien', label: 'Financiën', icon: BarChart3 },
   { href: '/uren', label: 'Uren', icon: Clock },
+  { href: '/factuur-lezer', label: 'Bonnen & Facturen', icon: ScanLine },
+  { href: '/administratie/rittenregistratie', label: 'Ritten', icon: Car },
 ];
 
 export default function GeldTabs() {
-  return <HubTabs tabs={TABS} ariaLabel="Geld & Boekhouding modules" />;
+  return <HubTabs tabs={TABS} ariaLabel="Geld modules" />;
 }

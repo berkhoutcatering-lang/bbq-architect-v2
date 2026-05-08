@@ -2,6 +2,7 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
+import { useIsPhone } from '@/hooks/useIsMobile';
 import { detectAllConflicts } from '@/lib/conflictDetection';
 import type { Event as DbEvent, PrepTask } from '@/types';
 import {
@@ -10,6 +11,7 @@ import {
     Sparkles, AlertTriangle, TrendingUp, Wand2, X, MapPin, Euro, Clock, Calendar,
     ArrowRight, Check, RefreshCw,
 } from 'lucide-react';
+import PageGuideNote from '@/components/PageGuideNote';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -251,8 +253,8 @@ function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday }: MonthN
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
                     <button onClick={() => setView('month')} style={viewTabStyle(view === 'month')}><Grid3x3 size={11} /> Maand</button>
-                    <button onClick={() => setView('week')} style={viewTabStyle(view === 'week')}><Columns3 size={11} /> Week</button>
-                    <button onClick={() => setView('list')} style={viewTabStyle(view === 'list')}><ListIcon size={11} /> Lijst</button>
+                    <button disabled title="Binnenkort beschikbaar" style={{ ...viewTabStyle(false), opacity: 0.35, cursor: 'not-allowed' }}><Columns3 size={11} /> Week</button>
+                    <button disabled title="Binnenkort beschikbaar" style={{ ...viewTabStyle(false), opacity: 0.35, cursor: 'not-allowed' }}><ListIcon size={11} /> Lijst</button>
                 </div>
                 <button style={navPillStyle()}>
                     <Filter size={11} /> Filter
@@ -585,12 +587,16 @@ function AIInsightCard({ insight }: { insight: typeof AI_INSIGHTS[0] }) {
    EVENT DETAIL DRAWER
    ═══════════════════════════════════════════════════════════════════ */
 function EventDetailDrawer({ event, onClose }: { event: AgendaEvent | null; onClose: () => void }) {
+    const isPhone = useIsPhone();
     if (!event) return null;
     const cal = calById(event.calId);
+    const asideStyle: React.CSSProperties = isPhone
+        ? { position: 'fixed', bottom: 0, left: 0, right: 0, height: 'auto', maxHeight: '90dvh', width: '100%', background: 'var(--color-bg-elevated)', borderTop: '1px solid var(--border)', borderRadius: '20px 20px 0 0', zIndex: 9999, boxShadow: '0 -20px 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }
+        : { position: 'fixed', right: 0, top: 0, height: '100vh', width: 580, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflowY: 'auto' };
     return (
         <>
             <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', zIndex: 9998 }} />
-            <aside style={{ position: 'fixed', right: 0, top: 0, height: '100vh', width: 580, maxWidth: '100vw', background: 'var(--color-bg-elevated)', borderLeft: '1px solid var(--border)', zIndex: 9999, boxShadow: '-20px 0 40px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+            <aside style={asideStyle}>
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', background: `linear-gradient(180deg, ${cal.color}15, transparent)`, position: 'relative' }}>
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${cal.color}, transparent)` }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -854,6 +860,17 @@ export default function Agenda() {
 
     return (
         <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1600, margin: '0 auto' }}>
+            <PageGuideNote
+                id="agenda"
+                accent="#FFBF00"
+                icon={Calendar}
+                intro="Hier zie je in één oogopslag wat er in je week en maand staat — events, prep-deadlines en smoker-sessies door elkaar."
+                actions={[
+                    { lead: 'Wissel tussen maand, week en lijst', text: 'om grote planning of dag-detail te vergelijken.' },
+                    { lead: 'Klik op een dag of event', text: 'om details te zien en direct door te springen naar de event-hub.' },
+                    { lead: 'AI Insights rechtsboven', text: 'spot conflicten, vrije weekenden en omzet-patronen die je anders mist.' },
+                ]}
+            />
             <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
 
             <div style={{ height: 18 }} />

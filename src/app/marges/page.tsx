@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import RichKeukenTabs from '@/components/RichKeukenTabs';
+import PageGuideNote from '@/components/PageGuideNote';
 import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, UtensilsCrossed } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
 
@@ -259,10 +260,22 @@ export default function MenuEngineering() {
     return count;
   }, [mapData]);
 
+  /** Gemiddelde verkoopprijs p.p. — berekend uit geaccepteerde offertes.
+   *  Fallback 45 als er nog geen offertes zijn. */
+  const avgVerkoopprijs = useMemo(function () {
+    const prices = offertesData
+      .filter(function (o: any) { return o.basis_prijs_pp && o.basis_prijs_pp > 0; })
+      .map(function (o: any) { return Number(o.basis_prijs_pp); });
+    return prices.length > 0
+      ? prices.reduce(function (s, p) { return s + p; }, 0) / prices.length
+      : 45;
+  }, [offertesData]);
+
   const stats = useMemo(function () {
     const metKostprijs = gerechten.filter(function (g) { return g.kostprijs_pp && g.kostprijs_pp > 0; });
+    const vp = avgVerkoopprijs;
     const gemMarge = metKostprijs.length > 0
-      ? metKostprijs.reduce(function (s, g) { return s + (1 - (g.kostprijs_pp || 0) / 45); }, 0) / metKostprijs.length * 100
+      ? metKostprijs.reduce(function (s, g) { return s + (1 - (g.kostprijs_pp || 0) / vp); }, 0) / metKostprijs.length * 100
       : 0;
     return {
       totaal: gerechten.length,
@@ -270,7 +283,7 @@ export default function MenuEngineering() {
       gemMarge: Math.round(gemMarge),
       metKostprijs: metKostprijs.length,
     };
-  }, [gerechten]);
+  }, [gerechten, avgVerkoopprijs]);
 
   /** Winner = gerecht met hoogste marge (geprefereerd actief, met kostprijs).
    *  Fallback: meest-recent toegevoegd. */
@@ -279,17 +292,18 @@ export default function MenuEngineering() {
       return g.actief && g.kostprijs_pp && g.kostprijs_pp > 0;
     });
     if (candidates.length === 0) return null;
+    const vp = avgVerkoopprijs;
     let best = candidates[0];
     let bestMarge = 0;
     candidates.forEach(function (g) {
-      const marge = ((45 - (g.kostprijs_pp || 0)) / 45) * 100;
+      const marge = ((vp - (g.kostprijs_pp || 0)) / vp) * 100;
       if (marge > bestMarge) {
         bestMarge = marge;
         best = g;
       }
     });
     return { dish: best, marge: bestMarge };
-  }, [gerechten]);
+  }, [gerechten, avgVerkoopprijs]);
 
   const gangOptions = useMemo(function () {
     const slugs = Array.from(new Set(gerechten.map(function (g) { return g.gang_slug; }).filter(Boolean)));
@@ -385,6 +399,18 @@ export default function MenuEngineering() {
       )}
 
       <RichKeukenTabs />
+
+      <PageGuideNote
+        id="marges"
+        accent="#22c55e"
+        icon={BarChart3}
+        intro="Hier zie je per gerecht en per gang welke verdiener is en welke geld kost — gebaseerd op je echte verkoop- en kostprijsdata."
+        actions={[
+          { lead: 'Bekijk de BCG-matrix', text: 'om te zien welke gerechten sterren zijn (hoge marge + populair) en welke honden (lage marge + onpopulair).' },
+          { lead: 'Filter op gang of zoek', text: 'om snel een gerecht te vinden waarvan je de marge wilt aanscherpen.' },
+          { lead: 'Te lage marge?', text: 'Open het gerecht en pas verkoopprijs of receptuur aan — de impact zie je hier direct terug.' },
+        ]}
+      />
 
       <MargesPageHero totaalGerechten={stats.totaal} metKostprijs={stats.metKostprijs} />
 

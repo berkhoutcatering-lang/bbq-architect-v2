@@ -5,9 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard,
-    ShieldCheck,
-    Package,
-    ClipboardList,
+    PartyPopper,
+    ChefHat,
+    BarChart3,
     MoreHorizontal,
 } from "lucide-react";
 
@@ -27,22 +27,22 @@ const tabs: Tab[] = [
         match: (p) => p === "/",
     },
     {
-        label: "HACCP",
-        icon: <ShieldCheck size={22} />,
-        href: "/haccp",
-        match: (p) => p === "/haccp" || p.startsWith("/haccp/"),
+        label: "Events",
+        icon: <PartyPopper size={22} />,
+        href: "/events",
+        match: (p) => p === "/events" || p.startsWith("/events/"),
     },
     {
-        label: "Voorraad",
-        icon: <Package size={22} />,
-        href: "/voorraad",
-        match: (p) => p === "/voorraad" || p.startsWith("/voorraad/"),
+        label: "Keuken",
+        icon: <ChefHat size={22} />,
+        href: "/gerechten",
+        match: (p) => p === "/gerechten" || p.startsWith("/gerechten/") || p === "/bedenker" || p === "/marges",
     },
     {
-        label: "Prep",
-        icon: <ClipboardList size={22} />,
-        href: "/prep-counter",
-        match: (p) => p === "/prep-counter" || p.startsWith("/prep-counter/"),
+        label: "Geld",
+        icon: <BarChart3 size={22} />,
+        href: "/financien",
+        match: (p) => p === "/financien" || p.startsWith("/financien/") || p === "/uren" || p === "/klanten",
     },
     {
         label: "Meer",

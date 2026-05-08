@@ -67,6 +67,7 @@ interface Props {
   value: string;
   onChange: (v: string) => void;
   onGenerate: () => void;
+  canGenerate?: boolean;
   busy: boolean;
   defaultPortions?: number;
   mode: BedenkMode;
@@ -79,6 +80,7 @@ export default function PromptHero({
   value,
   onChange,
   onGenerate,
+  canGenerate,
   busy,
   defaultPortions = 80,
   mode,
@@ -86,6 +88,7 @@ export default function PromptHero({
   modeContext,
   onModeContextChange,
 }: Props) {
+  const isDisabled = busy || (canGenerate !== undefined ? !canGenerate : !value.trim());
   const ta = useRef<HTMLTextAreaElement | null>(null);
 
   return (
@@ -264,11 +267,11 @@ export default function PromptHero({
           </div>
           <button
             onClick={onGenerate}
-            disabled={busy || !value.trim()}
+            disabled={isDisabled}
             className="btn btn-brand"
             style={{
-              opacity: busy || !value.trim() ? 0.5 : 1,
-              cursor: busy || !value.trim() ? 'not-allowed' : 'pointer',
+              opacity: isDisabled ? 0.5 : 1,
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,

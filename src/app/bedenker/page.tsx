@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Filter, Lightbulb, ThumbsDown } from 'lucide-react';
+import { RefreshCw, Filter, Lightbulb, ThumbsDown, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import RichKeukenTabs from '@/components/RichKeukenTabs';
+import PageGuideNote from '@/components/PageGuideNote';
 
 import PromptHero from './_components/PromptHero';
 import HowItWorksStrip from './_components/HowItWorksStrip';
@@ -235,9 +236,8 @@ export default function BedenkerPage() {
     }
   }
 
-  /** Bouw de effectieve prompt — voor klant-mode voegt deze automatisch
-   *  klant-context toe als die expliciet is. Voor voorraad-mode gebruikt
-   *  hij de voorraad-input als impliciete prompt-leader. */
+  /** Bouw de effectieve prompt — voor klant- en voorraad-mode voegt deze
+   *  automatisch de context toe als die expliciet is ingevuld. */
   function buildEffectivePrompt(): string {
     if (mode === 'voorraad') {
       const voorraad = (modeContext.voorraad || '').trim();
@@ -247,7 +247,31 @@ export default function BedenkerPage() {
       if (!voorraad) return userText;
       return `${userText} — uit deze restjes: ${voorraad}`;
     }
+    if (mode === 'klant') {
+      const userText = prompt.trim();
+      const parts: string[] = [];
+      if (modeContext.gasten) parts.push(`${modeContext.gasten} gasten`);
+      if (modeContext.budget_pp) parts.push(`budget €${modeContext.budget_pp} p.p.`);
+      if (modeContext.dieet?.length) parts.push(`dieet: ${modeContext.dieet.join(', ')}`);
+      if (modeContext.context) parts.push(modeContext.context);
+      const klantCtx = parts.join(' · ');
+      if (!userText && !klantCtx) return '';
+      if (!userText) return `Bedenk een BBQ-gerecht voor deze klant: ${klantCtx}`;
+      if (!klantCtx) return userText;
+      return `${userText} — voor klant: ${klantCtx}`;
+    }
     return prompt;
+  }
+
+  /** Controleer of generatie mogelijk is, ook als alleen context-velden zijn ingevuld. */
+  function canGenerate(): boolean {
+    if (mode === 'klant') {
+      return !!(prompt.trim() || modeContext.gasten || modeContext.budget_pp || modeContext.context);
+    }
+    if (mode === 'voorraad') {
+      return !!(prompt.trim() || (modeContext.voorraad || '').trim());
+    }
+    return !!prompt.trim();
   }
 
   async function bedenk() {
@@ -439,6 +463,17 @@ export default function BedenkerPage() {
     <div className="main-content mobile-safe-bottom" style={{ maxWidth: 1500, position: 'relative', zIndex: 1 }}>
       <StudioBackground />
       <RichKeukenTabs />
+      <PageGuideNote
+        id="bedenker"
+        accent="#a78bfa"
+        icon={Sparkles}
+        intro="AI-brainstormstudio: laat de bedenker nieuwe gerechten verzinnen — vrij, op basis van voorraad, of voor een specifieke klant."
+        actions={[
+          { lead: 'Kies een mode bovenin', text: '— Vrij voor verrassingen, Voorraad om restjes weg te werken, Klant voor een gerichte event-vraag.' },
+          { lead: 'Sleep een concept naar de tray', text: 'om er later van te maken wat je wilt — opslaan als gerecht of door de wizard halen.' },
+          { lead: 'Niets is opgeslagen tot jij dat wilt.', text: 'Concepten zijn brainstorm — pas als je Maak gerecht klikt landt het in de bibliotheek.' },
+        ]}
+      />
       <BedenkerPageHero onVerrasMe={verrasMe} busy={busy} />
 
       <BedenkerKpiTiles
@@ -467,6 +502,7 @@ export default function BedenkerPage() {
         value={prompt}
         onChange={setPrompt}
         onGenerate={bedenk}
+        canGenerate={canGenerate()}
         busy={busy}
         mode={mode}
         onModeChange={(m) => {

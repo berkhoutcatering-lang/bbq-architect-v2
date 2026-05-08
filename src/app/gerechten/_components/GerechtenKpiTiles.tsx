@@ -46,7 +46,7 @@ export default function GerechtenKpiTiles({
       value: `${allergenenGedekt}/${totaalGerechten}`,
       sub: 'in receptuur gemerkt',
       Icon: ShieldAlert,
-      tone: 'gold' as const,
+      tone: 'default' as const,
     },
   ];
 
@@ -67,7 +67,7 @@ export default function GerechtenKpiTiles({
       {tiles.map((t) => {
         const Icon = t.Icon;
         const valueColor =
-          t.tone === 'green' ? 'var(--green)' : t.tone === 'gold' ? 'var(--brand)' : 'var(--text)';
+          t.tone === 'green' ? 'var(--green)' : 'var(--text)';
         return (
           <div key={t.label} style={{ background: 'var(--card)', padding: '18px 20px' }}>
             <div
