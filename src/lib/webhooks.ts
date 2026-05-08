@@ -33,7 +33,7 @@
 //     created_at TIMESTAMPTZ DEFAULT now()
 //   );
 
-import { createClient } from '@supabase/supabase-js';
+import { createServiceSupabase } from '@/lib/supabase-server';
 
 // ── Event Types ──
 export type WebhookEventType =
@@ -81,10 +81,11 @@ const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000; // 1 seconde, exponential backoff: 1s, 2s, 4s
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  if (!url || !key) return null;
-  return createClient(url, key);
+  try {
+    return createServiceSupabase();
+  } catch {
+    return null;
+  }
 }
 
 // ── HMAC Signing voor webhook payloads ──

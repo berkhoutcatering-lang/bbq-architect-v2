@@ -8,12 +8,34 @@ import {
   WEBHOOK_EVENT_TYPES,
   type WebhookEventType,
 } from '@/lib/webhooks';
+import { createServerSupabase } from '@/lib/supabase-server';
+
+async function requirePlatformAdmin() {
+  const supabase = await createServerSupabase();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.email) {
+    return { ok: false as const, response: NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 }) };
+  }
+
+  const adminEmails = (process.env.PLATFORM_ADMIN_EMAILS || '')
+    .split(',')
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+  if (adminEmails.length === 0 || !adminEmails.includes(user.email.toLowerCase())) {
+    return { ok: false as const, response: NextResponse.json({ error: 'Geen toegang' }, { status: 403 }) };
+  }
+
+  return { ok: true as const };
+}
 
 // ── GET: Lijst van geregistreerde webhooks + optioneel logs ──
 // ?logs=true          - voeg recente logs toe
 // ?webhookId=123      - filter logs op specifiek webhook
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requirePlatformAdmin();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(req.url);
     const includeLogs = searchParams.get('logs') === 'true';
     const webhookId = searchParams.get('webhookId');
@@ -51,6 +73,9 @@ export async function GET(req: NextRequest) {
 // }
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requirePlatformAdmin();
+    if (!auth.ok) return auth.response;
+
     const body = await req.json();
     const { url, events, secret, description } = body;
 
@@ -105,6 +130,9 @@ export async function POST(req: NextRequest) {
 // Body: { id: 123 }
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requirePlatformAdmin();
+    if (!auth.ok) return auth.response;
+
     const body = await req.json();
     const { id } = body;
 

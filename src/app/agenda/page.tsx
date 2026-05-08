@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useSupabase } from '@/lib/useSupabase';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import { detectAllConflicts } from '@/lib/conflictDetection';
@@ -392,9 +393,9 @@ function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (i
                 <div style={{ padding: '20px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
                     Nog geen events ingepland.
                 </div>
-                <a href="/events" className="btn btn-brand" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
+                <Link href="/events" className="btn btn-brand" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
                     Maak je eerste event
-                </a>
+                </Link>
             </MetalCard>
         );
     }

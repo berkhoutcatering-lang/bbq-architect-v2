@@ -13,11 +13,17 @@ export async function POST(req: NextRequest) {
         if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
         const body = await req.json();
-        const { offerteId, signedBy, signatureUrl } = body;
+        const { offerteId, publicToken, signedBy, signatureUrl } = body;
         if (!offerteId) return NextResponse.json({ error: 'Geen offerte ID' }, { status: 400 });
+        if (!publicToken || typeof publicToken !== 'string') return NextResponse.json({ error: 'Geen publieke token' }, { status: 400 });
 
         // 1. Fetch offerte
-        const { data: offerte, error: fetchErr } = await sb.from('offertes').select('*').eq('id', offerteId).single();
+        const { data: offerte, error: fetchErr } = await sb
+            .from('offertes')
+            .select('*')
+            .eq('id', offerteId)
+            .eq('public_token', publicToken)
+            .single();
         if (fetchErr || !offerte) return NextResponse.json({ error: 'Offerte niet gevonden' }, { status: 404 });
 
         // Already accepted? Skip workflow but return success
@@ -31,7 +37,7 @@ export async function POST(req: NextRequest) {
         if (signatureUrl) updatePayload.signature_url = signatureUrl;
         updatePayload.signed_at = new Date().toISOString();
 
-        const { error: updateErr } = await sb.from('offertes').update(updatePayload).eq('id', offerteId);
+        const { error: updateErr } = await sb.from('offertes').update(updatePayload).eq('id', offerteId).eq('public_token', publicToken);
         if (updateErr) return NextResponse.json({ error: 'Status update mislukt: ' + updateErr.message }, { status: 500 });
 
         // 3. Parse items safely

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
         const orgId = memberData?.[0]?.organization_id;
         if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 400 });
 
-        const { data, error } = await supabase.rpc('sync_avg_daily', { p_org_id: orgId });
+        const serviceSupabase = createServiceSupabase();
+        const { data, error } = await serviceSupabase.rpc('sync_avg_daily', { p_org_id: orgId });
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
         return NextResponse.json({ success: true, rows_updated: data || 0 });

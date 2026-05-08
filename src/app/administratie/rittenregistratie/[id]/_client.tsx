@@ -650,7 +650,7 @@ export default function RitDetailClient({ id }: Props) {
                   }}
                 >
                   <div>
-                    <span style={{ color: 'var(--muted)' }}>// {fmtDateR(datum)} · r-{rit.id}</span>
+                    <span style={{ color: 'var(--muted)' }}>{`// ${fmtDateR(datum)} · r-${rit.id}`}</span>
                   </div>
                   <div>
                     4720 Reiskosten ........... <span style={{ color: '#fbbf24' }}>{fmtEur(aftrekEur)}</span>
@@ -659,7 +659,7 @@ export default function RitDetailClient({ id }: Props) {
                     1300 Tussenrekening kas ... <span style={{ color: '#fbbf24' }}>−{fmtEur(aftrekEur)}</span>
                   </div>
                   <div style={{ color: 'var(--muted)', marginTop: 4 }}>
-                    // {rit.vertrek_adres.split(',')[0]} → {rit.aankomst_adres.split(',')[0]}, {fmtKm(km)}
+                    {`// ${rit.vertrek_adres.split(',')[0]} → ${rit.aankomst_adres.split(',')[0]}, ${fmtKm(km)}`}
                   </div>
                 </div>
 

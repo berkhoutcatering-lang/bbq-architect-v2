@@ -36,8 +36,8 @@ async function main() {
     password_hibp_enabled: true,
     // Ook meteen een redelijke minimum-password-lengte afdwingen
     password_min_length: 8,
-    // Lowercase + digits verplichten (strongest option behalve symbols)
-    password_required_characters: 'lower_upper_letters_digits',
+    // Management API expects character groups, not config.toml enum labels.
+    password_required_characters: 'abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789',
   };
 
   console.log(`[setup] PATCH ${ENDPOINT}`);
@@ -58,7 +58,7 @@ async function main() {
     console.error(`[setup] FOUT HTTP ${res.status}: ${body}`);
     if (res.status === 401) {
       console.error('Token ongeldig of geen toegang tot dit project.');
-    } else if (res.status === 403 || /plan/i.test(body)) {
+    } else if (res.status === 402 || res.status === 403 || /plan/i.test(body)) {
       console.error('Leaked-password-protection vereist Pro Plan. Zie https://supabase.com/pricing');
     }
     process.exit(1);

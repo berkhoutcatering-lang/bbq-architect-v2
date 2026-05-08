@@ -1128,11 +1128,11 @@ async function handleGetDashboardSummary(sb: SupabaseClient): Promise<Record<str
 }
 
 async function handleFilterSystemData(sb: SupabaseClient, params: Record<string, any>): Promise<Record<string, any>> {
-    const module = params.module;
+    const moduleName = params.module;
     const criteria = params.criteria;
     let items: any[] = [];
 
-    if (module === 'gerechten' || module === 'recepten') {
+    if (moduleName === 'gerechten' || moduleName === 'recepten') {
         /* recepten samengevouwen onder gerechten 2026-05-01 — beide aliasen
            gaan naar dezelfde tabel. */
         const { data } = await sb.from('gerechten').select('id,naam,gang_slug,beschrijving,ingredienten,tags');
@@ -1140,7 +1140,7 @@ async function handleFilterSystemData(sb: SupabaseClient, params: Record<string,
     }
 
     return {
-        module,
+        module: moduleName,
         criteria,
         actie: params.actie || 'deactiveer',
         kandidaten: items.slice(0, 20),

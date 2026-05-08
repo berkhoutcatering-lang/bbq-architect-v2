@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabaseAnon } from '@/lib/supabase';
 import SignaturePad from '@/components/SignaturePad';
 
 function formatEuro(n: number) { return '€' + n.toFixed(2).replace('.', ','); }
@@ -41,23 +40,20 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     useEffect(function () {
         async function load() {
             const { id: offerId } = await params;
-            if (!offerId || !supabaseAnon) { setError('Offerte niet gevonden.'); setLoading(false); return; }
+            if (!offerId) { setError('Offerte niet gevonden.'); setLoading(false); return; }
 
-            const { data, error: fetchErr } = await supabaseAnon.from('offertes').select('*').eq('id', offerId).single();
-            if (fetchErr || !data) {
+            const res = await fetch('/api/public-offerte/' + encodeURIComponent(offerId), { cache: 'no-store' });
+            const result = await res.json();
+            if (!res.ok || !result.offer) {
                 setError('Offerte niet gevonden of verlopen.');
                 setLoading(false);
                 return;
             }
+            const data = result.offer;
             setOffer(data);
+            setSettings(result.settings ?? null);
             if (['geaccepteerd', 'akkoord', 'betaald', 'goedgekeurd', 'definitief'].includes(data.status)) {
                 setAccepted(true);
-            }
-
-            // Fetch company settings for this org
-            if (data.organization_id) {
-                const { data: s } = await supabaseAnon.from('settings').select('bedrijfsnaam, ondertitel, email, telefoon, adres, website, betaalvoorwaarden, logo_url, brand_primary').eq('organization_id', data.organization_id).single();
-                if (s) setSettings(s);
             }
 
             setLoading(false);
@@ -75,6 +71,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     offerteId: offer.id,
+                    publicToken: offer.public_token,
                     signedBy: signerName.trim(),
                     signatureUrl: signatureData,
                 }),

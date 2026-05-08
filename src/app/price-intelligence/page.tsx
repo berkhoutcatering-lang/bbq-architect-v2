@@ -3472,9 +3472,6 @@ function FolderBooks() {
         showToast(`${rows.length} regels geëxporteerd`, 'success');
     }
 
-    if (csvOpen) return <CSVImport onClose={() => setCsvOpen(false)} />;
-    if (archiveOpen) return <SupplierArchive invoices={invoices || []} bonnen={bonnen || []} onClose={() => setArchiveOpen(false)} />;
-
     const totaalInkoop = totalSpend + totalReceipts;
     // "Deze maand": als er geen data is, pak de laatste maand mét data
     const lastMonthWithData = monthlyTrend.slice().reverse().find(m => m.total > 0);
@@ -3487,6 +3484,9 @@ function FolderBooks() {
 
     const aiTips = useMemo(() => buildAiTips(bySupplier as BookSupplier[], invoices || []), [bySupplier, invoices]);
     const aiSaving = aiTips.reduce((s, t) => s + t.saving, 0);
+
+    if (csvOpen) return <CSVImport onClose={() => setCsvOpen(false)} />;
+    if (archiveOpen) return <SupplierArchive invoices={invoices || []} bonnen={bonnen || []} onClose={() => setArchiveOpen(false)} />;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
