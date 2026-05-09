@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, X, PartyPopper, ScanLine } from 'lucide-react';
+import { Plus, X, PartyPopper, ScanLine, Bot } from 'lucide-react';
 
 /**
  * Floating Action Button — desktop+tablet alleen.
@@ -75,6 +75,32 @@ export default function FAB() {
             <PartyPopper size={16} style={{ color: 'var(--brand)' }} />
             Nieuw event
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent('open-chat'));
+            }}
+            style={{
+              pointerEvents: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 16px',
+              borderRadius: 999,
+              background: 'var(--card-solid)',
+              border: '1px solid var(--border-strong)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              color: 'var(--text)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              animation: 'fabFadeIn 0.15s ease',
+            }}
+          >
+            <Bot size={16} style={{ color: 'var(--brand)' }} />
+            Vraag Rook
+          </button>
         </>
       )}
       <button
