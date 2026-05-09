@@ -7,7 +7,7 @@
 
 importScripts('api.js', 'adapters.js');
 
-const BG_VERSION = '0.3.0';   // bump bij elke release; popup checkt mismatch
+const BG_VERSION = '0.3.1';   // bump bij elke release; popup checkt mismatch
 const SYNC_STATE_KEY = 'bbq_sync_state';
 const BATCH_SIZE = 50;
 const PAGE_DELAY_MS_DEFAULT = 1500;
@@ -73,21 +73,26 @@ async function getActiveTab() {
 }
 
 /** captureVisibleTab → { base64, mimeType } | null.
- *  Vereist activeTab permissie (al in manifest). PNG voor max kwaliteit op productlabels. */
-async function captureScreenshot() {
+ *  Vereist activeTab permissie (al in manifest). PNG voor max kwaliteit op productlabels.
+ *  windowId is verplicht vanaf service-worker context — `null` werkt wel in popup-context
+ *  maar geeft "no current window"-error vanuit MV3 service worker. */
+async function captureScreenshot(windowId) {
     return new Promise(resolve => {
         try {
-            chrome.tabs.captureVisibleTab(null, { format: 'png' }, dataUrl => {
-                if (chrome.runtime.lastError || !dataUrl) {
+            chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, dataUrl => {
+                if (chrome.runtime.lastError) {
+                    console.warn('[BBQ scraper] captureVisibleTab error:', chrome.runtime.lastError.message);
                     resolve(null);
                     return;
                 }
+                if (!dataUrl) { resolve(null); return; }
                 /* dataUrl: "data:image/png;base64,XXX" */
                 const m = String(dataUrl).match(/^data:(image\/[a-z]+);base64,(.+)$/);
                 if (!m) { resolve(null); return; }
                 resolve({ mimeType: m[1], base64: m[2] });
             });
         } catch (e) {
+            console.warn('[BBQ scraper] captureScreenshot threw:', e?.message || e);
             resolve(null);
         }
     });
@@ -95,23 +100,29 @@ async function captureScreenshot() {
 
 /** Multi-screenshot: scroll door de pagina + capture op meerdere posities.
  *  Returns array van {base64, mimeType, scrollY}, max `maxShots`.
- *  Cap op 4 voor scan-page (~€0.04), op 6 voor deep-crawl-pagina's.
- *  Wacht 700ms per scroll-step voor lazy-load + AJAX. Cancel-aware. */
-async function captureMultiScreenshot(tabId, syncRunId, maxShots = 3) {
+ *  Cap op 3 voor scan-page (~€0.03 met Haiku vision).
+ *  Wacht 750ms per scroll-step voor lazy-load + AJAX. Cancel-aware.
+ *  windowId verplicht voor captureVisibleTab vanuit service worker. */
+async function captureMultiScreenshot(tabId, windowId, syncRunId, maxShots = 3) {
     const shots = [];
 
     /* Scroll naar top + capture eerste shot */
     await tabSend(tabId, { type: 'BBQ_SCROLL_TO', y: 0 }, 3000);
-    await cancellableSleep(500, syncRunId);
+    await cancellableSleep(600, syncRunId);
     if (isCancelled(syncRunId)) return shots;
-    const first = await captureScreenshot();
+    const first = await captureScreenshot(windowId);
     if (first) shots.push({ ...first, scrollY: 0 });
+    console.log('[BBQ scraper] screenshot 1/' + maxShots + ':', first ? 'ok (' + Math.round(first.base64.length / 1024) + 'KB)' : 'FAILED');
 
     /* Pagina-dimensies opvragen */
     const dim = await tabSend(tabId, { type: 'BBQ_GET_DIMENSIONS' }, 3000);
-    if (!dim?.ok || !dim.scrollHeight) return shots;
+    if (!dim?.ok || !dim.scrollHeight) {
+        console.warn('[BBQ scraper] geen page-dimensies — content.js mogelijk oude versie. 1 shot genoeg?');
+        return shots;
+    }
     const viewportH = dim.viewportHeight || 800;
     const scrollH = dim.scrollHeight;
+    console.log('[BBQ scraper] page-dim: viewport=' + viewportH + ' scrollHeight=' + scrollH);
 
     /* Pagina past al in 1 viewport → 1 shot is genoeg */
     if (scrollH <= viewportH * 1.4) return shots;
@@ -125,8 +136,9 @@ async function captureMultiScreenshot(tabId, syncRunId, maxShots = 3) {
         await tabSend(tabId, { type: 'BBQ_SCROLL_TO', y: targetY }, 3000);
         /* Wacht voor lazy-load + AJAX */
         if (!await cancellableSleep(750, syncRunId)) break;
-        const shot = await captureScreenshot();
+        const shot = await captureScreenshot(windowId);
         if (shot) shots.push({ ...shot, scrollY: targetY });
+        console.log('[BBQ scraper] screenshot ' + (i + 1) + '/' + maxShots + ' @ y=' + targetY + ':', shot ? 'ok' : 'FAILED');
         /* Chrome rate-limit op captureVisibleTab is 2/sec; extra buffer voor zekerheid */
         if (!await cancellableSleep(550, syncRunId)) break;
     }
@@ -505,9 +517,12 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
     let producten = [];
     let aiResult = null;
     try {
-        /* STAP 1 — Humanize altijd vóór scan: scroll + lazy-load triggers + click "Toon meer".
-           Zonder dit ziet vision alleen 1ste viewport. Met dit zien we wat de gebruiker ook ziet. */
-        await humanizePage(tab.id, tempo || 'normal', syncRunId);
+        /* STAP 1 — ALTIJD humanize: triggert scroll, lazy-load, "Toon meer"-knoppen.
+           Direct via BBQ_HUMAN_SCROLL i.p.v. via humanizePage(tempo) — die laatste skip't
+           bij tempo='normal' (scroll:false). Voor SPA's als Makro is scrollen verplicht
+           anders zien we alleen 1ste viewport. */
+        console.log('[BBQ scraper] STAP 1 — humanize page (scroll + load-more)');
+        await tabSend(tab.id, { type: 'BBQ_HUMAN_SCROLL' }, 25000);
         if (isCancelled(syncRunId)) {
             await BBQ.finishSync({ syncRunId, status: 'cancelled' });
             await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
@@ -515,23 +530,29 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
         }
 
         /* STAP 2 — Adapter (snel pad voor bekende portalen) */
+        console.log('[BBQ scraper] STAP 2 — adapter scan');
         const adapter = BBQ_detectAdapter(new URL(tab.url).hostname);
         if (adapter && !useAi) {
             const r = await tabSend(tab.id, { type: 'BBQ_EXTRACT_ADAPTER', adapter }, 5000);
             if (r?.ok && Array.isArray(r.producten)) {
                 diag.adapter = r.producten.length;
+                console.log('[BBQ scraper] adapter (' + adapter.naam + '): ' + r.producten.length + ' producten');
                 if (r.producten.length > 0) {
                     diag.methods.push('adapter');
                     producten = r.producten;
                 }
             }
+        } else {
+            console.log('[BBQ scraper] adapter overgeslagen — geen adapter of useAi=true');
         }
 
         /* STAP 3 — Vision-mode: ALTIJD proberen tenzij adapter al >20 producten gaf
            (in dat geval is adapter goed genoeg; vision zou alleen kosten toevoegen) */
         if (!isCancelled(syncRunId) && producten.length < 20) {
-            const shots = await captureMultiScreenshot(tab.id, syncRunId, 3);
+            console.log('[BBQ scraper] STAP 3 — vision capture (max 3 shots)');
+            const shots = await captureMultiScreenshot(tab.id, tab.windowId, syncRunId, 3);
             diag.screenshots = shots.length;
+            console.log('[BBQ scraper] captured ' + shots.length + ' screenshots, calling Claude vision...');
             if (shots.length > 0 && !isCancelled(syncRunId)) {
                 try {
                     aiResult = await BBQ.aiDetect({
@@ -540,6 +561,7 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                     });
                     const visionList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
                     diag.vision = visionList.length;
+                    console.log('[BBQ scraper] vision returned: ' + visionList.length + ' producten');
                     if (visionList.length > producten.length) {
                         diag.methods.push('vision');
                         producten = visionList;
@@ -547,27 +569,37 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                 } catch (e) {
                     /* Vision faal — log en ga door naar HTML-fallback */
                     diag.visionError = String(e?.message || e).slice(0, 120);
+                    console.warn('[BBQ scraper] vision call failed:', e?.message || e);
                 }
+            } else if (shots.length === 0) {
+                diag.visionError = 'geen screenshots — captureVisibleTab faalde (windowId issue?)';
+                console.warn('[BBQ scraper] 0 screenshots — vision overgeslagen');
             }
+        } else {
+            console.log('[BBQ scraper] vision overgeslagen — adapter al ' + producten.length + ' producten');
         }
 
         /* STAP 4 — HTML-mode allerlaatst (vaak slecht op SPA's maar kost geen extra image-tokens) */
         if (!isCancelled(syncRunId) && producten.length === 0) {
+            console.log('[BBQ scraper] STAP 4 — HTML fallback');
             const html = await tabSend(tab.id, { type: 'BBQ_GET_HTML' }, 8000);
             if (html?.ok && html.html) {
                 try {
                     aiResult = await BBQ.aiDetect({ html: html.html, pageUrl: tab.url, scope, scopeKeywords });
                     const htmlList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
                     diag.html = htmlList.length;
+                    console.log('[BBQ scraper] html returned: ' + htmlList.length + ' producten');
                     if (htmlList.length > 0) {
                         diag.methods.push('html');
                         producten = htmlList;
                     }
                 } catch (e) {
                     diag.htmlError = String(e?.message || e).slice(0, 120);
+                    console.warn('[BBQ scraper] html call failed:', e?.message || e);
                 }
             }
         }
+        console.log('[BBQ scraper] FINAL diagnostic:', JSON.stringify(diag), '→', producten.length, 'producten');
 
         /* SUCCESS — producten gevonden, batches sturen */
         if (producten.length > 0) {
