@@ -7,7 +7,7 @@
 
 importScripts('api.js', 'adapters.js');
 
-const BG_VERSION = '0.3.1';   // bump bij elke release; popup checkt mismatch
+const BG_VERSION = '0.3.2';   // bump bij elke release; popup checkt mismatch
 const SYNC_STATE_KEY = 'bbq_sync_state';
 const BATCH_SIZE = 50;
 const PAGE_DELAY_MS_DEFAULT = 1500;
@@ -68,7 +68,10 @@ async function clearSyncState() {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function getActiveTab() {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    /* `lastFocusedWindow` werkt betrouwbaar vanuit MV3 service worker.
+       `currentWindow` is ambiguïs vanuit een SW-context (geen window-binding)
+       en kan op sommige Chrome-versies een lege array geven. */
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     return tabs[0] || null;
 }
 

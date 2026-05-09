@@ -10,7 +10,7 @@
         <div class="brand">
             <span class="logo">●</span>
             <strong>BBQ Architect</strong>
-            <span class="version">v0.3.1</span>
+            <span class="version">v0.3.2</span>
         </div>
         <button id="btn-options" class="icon-btn" title="Instellingen">⚙</button>
     </header>
@@ -44,6 +44,12 @@
             <label class="label">Welke leverancier scannen we nu?</label>
             <select id="leverancier-select"></select>
             <div class="hint" id="leverancier-hint"></div>
+        </div>
+
+        <div id="lev-error" class="card hidden" style="background:rgba(229,115,115,.15);border:1px solid var(--red);">
+            <div class="empty-title" style="font-size:12px;">Leveranciers niet geladen</div>
+            <div class="empty-desc" id="lev-error-msg" style="margin-bottom:8px;"></div>
+            <button id="btn-lev-retry" class="btn ghost block">Opnieuw proberen</button>
         </div>
 
         <div id="actions" class="card hidden">
