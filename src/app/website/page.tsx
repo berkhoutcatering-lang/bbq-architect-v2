@@ -17,7 +17,7 @@ interface WSettings { id: number; email: string; telefoon: string; adres: string
 type Tab = 'afbeeldingen' | 'faq' | 'galerij' | 'menu' | 'footer';
 
 const BUCKET = 'website-images';
-const STORAGE_URL = 'https://oheilybckvtsczmbczot.supabase.co/storage/v1/object/public/' + BUCKET + '/';
+const STORAGE_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
 
 /* ── Shared styles ── */
 const S = {

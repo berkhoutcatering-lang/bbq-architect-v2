@@ -5,14 +5,7 @@
  * offerte leidt in <60 minuten.
  *
  * Target: 70% activation-rate (= eerste offerte verstuurd binnen 60 min na signup).
- *
- * ⚠️ SCAFFOLD: UI werkt end-to-end, maar persistence is TODO.
- *   - Bedrijfsprofiel schrijft nog niet naar `organizations` tabel
- *   - Demo-data import is stub (geen SQL inserts)
- *   - AI-offerte-stap linkt naar bestaande `/offertes` (AiOfferteWizard)
- *   - Completion-flag wordt nog niet in DB opgeslagen
- *
- * Wiring-stappen voor Sam: zie docs/implementation-notes.md §Onboarding.
+ * Persistence: organizations.kvk_number/btw_number/address/onboarding_completed (030 migratie).
  */
 
 import { useState } from 'react';

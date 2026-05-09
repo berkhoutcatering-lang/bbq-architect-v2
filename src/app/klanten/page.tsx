@@ -108,7 +108,6 @@ function Klanten() {
                 setFollowUpActions([
                     { icon: '\ud83d\udcc4', label: 'Offerte opstellen', href: '/offertes' },
                     { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },
-                    { icon: '\ud83d\udce7', label: 'Welkomstmail versturen', onClick: function() { showToast('Mail functie komt binnenkort', 'info'); } },
                 ]);
                 setFollowUpTitle('Klant aangemaakt!');
                 setEditing(null); setForm(null);

@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       </p>
 
       <h2>1. Verwerkingsverantwoordelijke</h2>
-      <p>Berkhout Catering, KvK [TODO], adres [TODO]. Vragen via <a href="mailto:privacy@bbqarchitect.nl" className="text-[var(--color-accent-gold)]">privacy@bbqarchitect.nl</a>.</p>
+      <p>Berkhout Catering, KvK {process.env.NEXT_PUBLIC_KVK_NUMBER ?? '—'}, {process.env.NEXT_PUBLIC_COMPANY_ADDRESS ?? '—'}. Vragen via <a href="mailto:privacy@bbqarchitect.nl" className="text-[var(--color-accent-gold)]">privacy@bbqarchitect.nl</a>.</p>
 
       <h2>2. Welke gegevens verwerken we?</h2>
       <ul>

@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 //   6. Optioneel: stel MOLLIE_REDIRECT_URL in voor na betaling
 
 const MOLLIE_API_KEY = process.env.MOLLIE_API_KEY || '';
-const MOLLIE_REDIRECT_URL = process.env.MOLLIE_REDIRECT_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const MOLLIE_REDIRECT_URL = process.env.MOLLIE_REDIRECT_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.bbqarchitect.nl';
 const MOLLIE_WEBHOOK_URL = process.env.MOLLIE_WEBHOOK_URL || '';
 const MOLLIE_BASE = 'https://api.mollie.com/v2';
 
