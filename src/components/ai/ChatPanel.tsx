@@ -73,6 +73,13 @@ export default function ChatPanel() {
         }
     }, [messages]);
 
+    // Luister naar FAB-trigger zodat geen tweede floating knop nodig is
+    useEffect(function () {
+        const handler = () => setOpen(true);
+        window.addEventListener('open-chat', handler);
+        return () => window.removeEventListener('open-chat', handler);
+    }, []);
+
     const send = useCallback(
         async function () {
             const text = input.trim();
@@ -186,32 +193,6 @@ export default function ChatPanel() {
 
     return (
         <>
-            {/* Floating trigger — alleen tonen als drawer dicht is */}
-            {!open && (
-                <button
-                    type="button"
-                    onClick={() => setOpen(true)}
-                    aria-label="Open Rook AI assistent"
-                    className="btn btn-brand"
-                    style={{
-                        position: 'fixed',
-                        bottom: 24,
-                        right: 24,
-                        zIndex: 50,
-                        borderRadius: 'var(--radius-full)',
-                        padding: '12px 18px',
-                        boxShadow: 'var(--lift-shadow)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        minHeight: 48,
-                    }}
-                >
-                    <Bot size={18} aria-hidden="true" />
-                    Vraag Rook
-                </button>
-            )}
-
             {/* Drawer — phone: full-screen incl. safe-area, tablet+: side-drawer */}
             {open && (
                 <aside
