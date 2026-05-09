@@ -7,10 +7,10 @@ const els = {};
  'done','done-title','done-desc','link-review','btn-done-close','btn-options',
  'btn-open-options','btn-scan-page','btn-auto-walk','btn-deep-crawl','btn-cancel','error-msg','main',
  'chk-force-ai','sel-tempo','version-warning','bg-ver','popup-ver',
- 'lev-error','lev-error-msg','btn-lev-retry']
+ 'lev-error','lev-error-msg','btn-lev-retry','btn-done-rescan']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.3.2';
+const POPUP_VERSION = '0.3.3';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
@@ -80,9 +80,18 @@ async function init() {
     /* Step 4: load leveranciers — met retry-knop bij faal i.p.v. dood-eind */
     await loadLeveranciers();
 
-    /* Step 5: check existing sync state */
+    /* Step 5: check existing sync state — maar negeer stale done-state ouder dan 10 min.
+       Zonder dit toont popup een oude "Klaar" van uren geleden i.p.v. de actions card. */
     chrome.runtime.sendMessage({ type: 'BBQ_GET_STATE' }, response => {
-        if (response?.state) renderState(response.state);
+        const s = response?.state;
+        if (!s) return;
+        const STALE_MS = 10 * 60 * 1000;
+        const tooOld = s.done && s.startedAt && (Date.now() - s.startedAt > STALE_MS);
+        if (tooOld) {
+            chrome.runtime.sendMessage({ type: 'BBQ_CLEAR_STATE' }, () => { /* state weg, popup blijft op actions */ });
+            return;
+        }
+        renderState(s);
     });
 }
 
@@ -151,9 +160,13 @@ function renderState(state) {
     if (state.running) {
         hide('actions'); hide('done');
         show('progress');
-        const modeLabel =
-            state.mode === 'deep-crawl' ? `Deep-crawl bezig${state.tempo ? ` (${state.tempo})` : ''}…` :
-            state.mode === 'full' ? 'Auto-walk bezig…' : 'Pagina scan bezig…';
+        /* Phase wint van mode-label als gezet — Sam ziet exact "Screenshots maken (2/3)…"
+           i.p.v. generiek "Pagina scan bezig…" */
+        const modeLabel = state.phase
+            ? state.phase
+            : state.mode === 'deep-crawl' ? `Deep-crawl bezig${state.tempo ? ` (${state.tempo})` : ''}…`
+            : state.mode === 'full' ? 'Auto-walk bezig…'
+            : 'Pagina scan bezig…';
         setText('progress-status', modeLabel);
         setText('stat-pages', state.pagesScanned || 0);
         setText('stat-products', state.productsSeen || 0);
@@ -265,6 +278,18 @@ els['btn-done-close'].addEventListener('click', () => {
 
 /* Retry-knop voor leverancier-load (verschijnt bij API-fout) */
 els['btn-lev-retry']?.addEventListener('click', () => loadLeveranciers());
+
+/* "Scan opnieuw" op het Klaar-scherm: clear stale state + run nieuwe scan
+   met dezelfde leverancier en opties. Voorkomt dat user éérst Sluit moet klikken. */
+els['btn-done-rescan']?.addEventListener('click', () => {
+    if (!activeLevId) { flashError('Kies eerst een leverancier'); return; }
+    chrome.runtime.sendMessage({ type: 'BBQ_CLEAR_STATE' }, () => {
+        hide('done');
+        chrome.runtime.sendMessage({ type: 'BBQ_SCAN_PAGE', options: readScanOptions() }, response => {
+            if (!response?.ok) flashError(response?.error || 'Scan faal');
+        });
+    });
+});
 
 /* Live state updates */
 chrome.runtime.onMessage.addListener(msg => {

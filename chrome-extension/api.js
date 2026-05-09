@@ -27,7 +27,8 @@ async function getConfig() {
     };
 }
 
-/* Fetch met AbortController + timeout. Default 30s, AI-detect mag langer (60s). */
+/* Fetch met AbortController + timeout. Default 30s, AI-detect mag langer (60s).
+ * Combineert eigen timeout-controller met optionele caller-signal (voor cancel-mid-request). */
 async function apiFetch(path, init = {}, timeoutMs = 30000) {
     const { apiUrl, apiKey } = await getConfig();
     if (!apiKey) throw new Error('Geen API-key — open de extensie-instellingen');
@@ -37,10 +38,22 @@ async function apiFetch(path, init = {}, timeoutMs = 30000) {
         'x-extension-key': apiKey,
     }, init.headers || {});
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    /* Composed signal: aborts on either timeout OR caller-cancel */
+    const composed = new AbortController();
+    let cancelledByUser = false;
+    if (init.signal) {
+        if (init.signal.aborted) { cancelledByUser = true; composed.abort(); }
+        else init.signal.addEventListener('abort', () => { cancelledByUser = true; composed.abort(); }, { once: true });
+    }
+    const timer = setTimeout(() => composed.abort(), timeoutMs);
+
+    /* Strip caller-signal from init — we forward our composed signal instead */
+    const fetchInit = { ...init, headers, signal: composed.signal };
+    delete fetchInit.signal;
+    fetchInit.signal = composed.signal;
+
     try {
-        const r = await fetch(url, { ...init, headers, signal: controller.signal });
+        const r = await fetch(url, fetchInit);
         clearTimeout(timer);
         if (!r.ok) {
             let detail = '';
@@ -51,6 +64,11 @@ async function apiFetch(path, init = {}, timeoutMs = 30000) {
     } catch (e) {
         clearTimeout(timer);
         if (e.name === 'AbortError') {
+            if (cancelledByUser) {
+                const err = new Error('cancelled');
+                err.name = 'AbortError';
+                throw err;
+            }
             throw new Error(`Timeout na ${Math.round(timeoutMs / 1000)}s op ${path}`);
         }
         throw e;
@@ -98,7 +116,7 @@ const BBQ = {
         });
     },
 
-    async aiDetect({ html, imageBase64, mimeType, images, pageUrl, scope, scopeKeywords }) {
+    async aiDetect({ html, imageBase64, mimeType, images, pageUrl, scope, scopeKeywords, signal }) {
         let base;
         if (Array.isArray(images) && images.length > 0) {
             base = { mode: 'image', images, pageUrl };
@@ -110,10 +128,12 @@ const BBQ = {
         const body = { ...base };
         if (scope) body.scope = scope;
         if (Array.isArray(scopeKeywords) && scopeKeywords.length) body.scopeKeywords = scopeKeywords;
-        /* AI-detect mag tot 60s nemen (Haiku op zware HTML/vision). Daarna timeout. */
+        /* AI-detect mag tot 60s nemen (Haiku op zware HTML/vision). Caller kan signal
+           meegeven om de in-flight fetch te cancellen via AbortController. */
         return apiFetch('/api/extension/ai-detect', {
             method: 'POST',
             body: JSON.stringify(body),
+            signal,
         }, 60000);
     },
 };

@@ -7,24 +7,35 @@
 
 importScripts('api.js', 'adapters.js');
 
-const BG_VERSION = '0.3.2';   // bump bij elke release; popup checkt mismatch
+const BG_VERSION = '0.3.3';   // bump bij elke release; popup checkt mismatch
 const SYNC_STATE_KEY = 'bbq_sync_state';
 const BATCH_SIZE = 50;
 const PAGE_DELAY_MS_DEFAULT = 1500;
 
 /* Module-level cancel-flag. Wint áltijd over persisted state — zo kan een
    loop-iteration die net z'n state overschrijft de cancel niet "vergeten".
-   Reset bij start van elke nieuwe scan. */
+   Reset bij start van elke nieuwe scan.
+   Plus: AbortController dat in-flight fetches (Claude vision-call van 5-15s)
+   direct afkapt. Zonder dit moet de gebruiker wachten tot de call returns. */
 let _cancelFlag = { active: false, syncRunId: null };
+let _scanController = null;
 
 function requestCancel(syncRunId) {
     _cancelFlag = { active: true, syncRunId: syncRunId || _cancelFlag.syncRunId };
+    if (_scanController) {
+        try { _scanController.abort(); } catch { /* ignore */ }
+    }
 }
 function isCancelled(syncRunId) {
     return _cancelFlag.active && (!_cancelFlag.syncRunId || _cancelFlag.syncRunId === syncRunId);
 }
 function resetCancel(syncRunId) {
     _cancelFlag = { active: false, syncRunId };
+    /* Fresh controller per scan — abort() heeft alleen effect op huidige in-flight requests */
+    _scanController = new AbortController();
+}
+function getScanSignal() {
+    return _scanController ? _scanController.signal : undefined;
 }
 
 /** Interruptible sleep — ja-of-nee retourneert false als gecancelt tijdens wachten. */
@@ -106,7 +117,7 @@ async function captureScreenshot(windowId) {
  *  Cap op 3 voor scan-page (~€0.03 met Haiku vision).
  *  Wacht 750ms per scroll-step voor lazy-load + AJAX. Cancel-aware.
  *  windowId verplicht voor captureVisibleTab vanuit service worker. */
-async function captureMultiScreenshot(tabId, windowId, syncRunId, maxShots = 3) {
+async function captureMultiScreenshot(tabId, windowId, syncRunId, maxShots = 3, setPhase) {
     const shots = [];
 
     /* Scroll naar top + capture eerste shot */
@@ -135,6 +146,7 @@ async function captureMultiScreenshot(tabId, windowId, syncRunId, maxShots = 3) 
     const totalScroll = scrollH - viewportH;
     for (let i = 1; i <= remainingShots; i++) {
         if (isCancelled(syncRunId)) break;
+        if (setPhase) await setPhase(`Screenshots maken (${i + 1}/${maxShots})…`);
         const targetY = Math.floor(totalScroll * (i / remainingShots));
         await tabSend(tabId, { type: 'BBQ_SCROLL_TO', y: targetY }, 3000);
         /* Wacht voor lazy-load + AJAX */
@@ -510,11 +522,18 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
     /* Diagnostic per scan-stap zodat Sam ziet WAT gewerkt heeft */
     const diag = { adapter: 0, vision: 0, html: 0, screenshots: 0, methods: [] };
 
+    /* Helper: update phase-text in popup zonder de hele state te overschrijven.
+       Sam ziet zo live waar de scan is: "Pagina scrollen…" → "Screenshot 2/3…" → "Claude analyseert…" */
+    const setPhase = async (phase) => {
+        const cur = (await getSyncState()) || {};
+        await setSyncState({ ...cur, phase });
+    };
+
     await setSyncState({
         running: true, mode: 'single-page', leverancierId,
         syncRunId, startedAt: Date.now(),
         pagesScanned: 0, productsSeen: 0, errors: [],
-        currentUrl: tab.url, diagnostic: diag,
+        currentUrl: tab.url, diagnostic: diag, phase: 'Starten…',
     });
 
     let producten = [];
@@ -525,6 +544,7 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
            bij tempo='normal' (scroll:false). Voor SPA's als Makro is scrollen verplicht
            anders zien we alleen 1ste viewport. */
         console.log('[BBQ scraper] STAP 1 — humanize page (scroll + load-more)');
+        await setPhase('Pagina scrollen om alles te laden…');
         await tabSend(tab.id, { type: 'BBQ_HUMAN_SCROLL' }, 25000);
         if (isCancelled(syncRunId)) {
             await BBQ.finishSync({ syncRunId, status: 'cancelled' });
@@ -534,6 +554,7 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
 
         /* STAP 2 — Adapter (snel pad voor bekende portalen) */
         console.log('[BBQ scraper] STAP 2 — adapter scan');
+        await setPhase('Snel-pad proberen…');
         const adapter = BBQ_detectAdapter(new URL(tab.url).hostname);
         if (adapter && !useAi) {
             const r = await tabSend(tab.id, { type: 'BBQ_EXTRACT_ADAPTER', adapter }, 5000);
@@ -553,15 +574,19 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
            (in dat geval is adapter goed genoeg; vision zou alleen kosten toevoegen) */
         if (!isCancelled(syncRunId) && producten.length < 20) {
             console.log('[BBQ scraper] STAP 3 — vision capture (max 3 shots)');
-            const shots = await captureMultiScreenshot(tab.id, tab.windowId, syncRunId, 3);
+            await setPhase('Screenshots maken (1/3)…');
+            const shots = await captureMultiScreenshot(tab.id, tab.windowId, syncRunId, 3, setPhase);
             diag.screenshots = shots.length;
             console.log('[BBQ scraper] captured ' + shots.length + ' screenshots, calling Claude vision...');
             if (shots.length > 0 && !isCancelled(syncRunId)) {
                 try {
+                    await setPhase(`Claude analyseert ${shots.length} screenshot${shots.length > 1 ? 's' : ''}…`);
                     aiResult = await BBQ.aiDetect({
                         images: shots.map(s => ({ base64: s.base64, mimeType: s.mimeType })),
                         pageUrl: tab.url, scope, scopeKeywords,
+                        signal: getScanSignal(),  /* kan AbortError gooien bij cancel */
                     });
+                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
                     const visionList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
                     diag.vision = visionList.length;
                     console.log('[BBQ scraper] vision returned: ' + visionList.length + ' producten');
@@ -570,7 +595,12 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                         producten = visionList;
                     }
                 } catch (e) {
-                    /* Vision faal — log en ga door naar HTML-fallback */
+                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
+                        /* User-cancel — netjes afsluiten zonder fallback */
+                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
+                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
+                        return { ok: true, cancelled: true, productsSeen: 0 };
+                    }
                     diag.visionError = String(e?.message || e).slice(0, 120);
                     console.warn('[BBQ scraper] vision call failed:', e?.message || e);
                 }
@@ -585,10 +615,15 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
         /* STAP 4 — HTML-mode allerlaatst (vaak slecht op SPA's maar kost geen extra image-tokens) */
         if (!isCancelled(syncRunId) && producten.length === 0) {
             console.log('[BBQ scraper] STAP 4 — HTML fallback');
+            await setPhase('HTML-fallback proberen…');
             const html = await tabSend(tab.id, { type: 'BBQ_GET_HTML' }, 8000);
             if (html?.ok && html.html) {
                 try {
-                    aiResult = await BBQ.aiDetect({ html: html.html, pageUrl: tab.url, scope, scopeKeywords });
+                    aiResult = await BBQ.aiDetect({
+                        html: html.html, pageUrl: tab.url, scope, scopeKeywords,
+                        signal: getScanSignal(),
+                    });
+                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
                     const htmlList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
                     diag.html = htmlList.length;
                     console.log('[BBQ scraper] html returned: ' + htmlList.length + ' producten');
@@ -597,12 +632,18 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                         producten = htmlList;
                     }
                 } catch (e) {
+                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
+                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
+                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
+                        return { ok: true, cancelled: true, productsSeen: 0 };
+                    }
                     diag.htmlError = String(e?.message || e).slice(0, 120);
                     console.warn('[BBQ scraper] html call failed:', e?.message || e);
                 }
             }
         }
         console.log('[BBQ scraper] FINAL diagnostic:', JSON.stringify(diag), '→', producten.length, 'producten');
+        await setPhase('Verwerken…');
 
         /* SUCCESS — producten gevonden, batches sturen */
         if (producten.length > 0) {
