@@ -6,10 +6,11 @@ const els = {};
  'stat-pages','stat-products','stat-elapsed','progress-current','progress-errors',
  'done','done-title','done-desc','link-review','btn-done-close','btn-options',
  'btn-open-options','btn-scan-page','btn-auto-walk','btn-deep-crawl','btn-cancel','error-msg','main',
- 'chk-force-ai','sel-tempo','version-warning','bg-ver','popup-ver']
+ 'chk-force-ai','sel-tempo','version-warning','bg-ver','popup-ver',
+ 'lev-error','lev-error-msg','btn-lev-retry']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.3.1';
+const POPUP_VERSION = '0.3.2';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
@@ -76,17 +77,33 @@ async function init() {
         } catch { /* invalid URL */ }
     }
 
-    /* Step 4: load leveranciers */
+    /* Step 4: load leveranciers — met retry-knop bij faal i.p.v. dood-eind */
+    await loadLeveranciers();
+
+    /* Step 5: check existing sync state */
+    chrome.runtime.sendMessage({ type: 'BBQ_GET_STATE' }, response => {
+        if (response?.state) renderState(response.state);
+    });
+}
+
+async function loadLeveranciers() {
+    /* Toon "laden..." in dropdown direct, dan API-call. Bij fout: retry-knop. */
+    const sel = els['leverancier-select'];
+    sel.innerHTML = '<option value="">Leveranciers laden…</option>';
+    sel.disabled = true;
+    show('leverancier-pick');
+    hide('lev-error');
+
     try {
         const r = await BBQ.listLeveranciers();
         leveranciers = (r.data || []).filter(l =>
             !l.import_method || l.import_method === 'extension'
         );
-        const sel = els['leverancier-select'];
         sel.innerHTML = '';
         if (leveranciers.length === 0) {
             sel.innerHTML = '<option value="">Geen leveranciers — voeg eerst een toe in BBQ Architect</option>';
             sel.disabled = true;
+            hide('actions');
         } else {
             sel.disabled = false;
             leveranciers.forEach(l => {
@@ -96,7 +113,7 @@ async function init() {
                 sel.appendChild(opt);
             });
             /* Auto-select op portal_hint match */
-            const host = (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.url || '';
+            const host = (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.url || '';
             const hostStr = (() => { try { return new URL(host).hostname; } catch { return ''; } })();
             const adapter = BBQ_detectAdapter(hostStr);
             if (adapter) {
@@ -105,17 +122,15 @@ async function init() {
             }
             activeLevId = Number(sel.value);
             updateLeverancierHint();
+            show('actions');
         }
-        show('leverancier-pick');
-        if (leveranciers.length > 0) show('actions');
     } catch (e) {
-        flashError('Kon leveranciers niet ophalen: ' + e.message);
+        sel.innerHTML = '<option value="">— niet geladen —</option>';
+        sel.disabled = true;
+        hide('actions');
+        if (els['lev-error-msg']) els['lev-error-msg'].innerText = String(e.message || e).slice(0, 200);
+        show('lev-error');
     }
-
-    /* Step 5: check existing sync state */
-    chrome.runtime.sendMessage({ type: 'BBQ_GET_STATE' }, response => {
-        if (response?.state) renderState(response.state);
-    });
 }
 
 function updateLeverancierHint() {
@@ -247,6 +262,9 @@ els['btn-cancel'].addEventListener('click', () => {
 els['btn-done-close'].addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'BBQ_CLEAR_STATE' }, () => window.close());
 });
+
+/* Retry-knop voor leverancier-load (verschijnt bij API-fout) */
+els['btn-lev-retry']?.addEventListener('click', () => loadLeveranciers());
 
 /* Live state updates */
 chrome.runtime.onMessage.addListener(msg => {
