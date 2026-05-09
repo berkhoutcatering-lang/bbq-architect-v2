@@ -197,6 +197,23 @@
                 sendResponse({ ok: true });
                 return true;
             }
+            if (msg.type === 'BBQ_GET_DIMENSIONS') {
+                sendResponse({
+                    ok: true,
+                    scrollHeight: document.documentElement.scrollHeight,
+                    viewportHeight: window.innerHeight,
+                    viewportWidth: window.innerWidth,
+                    scrollY: window.scrollY,
+                    devicePixelRatio: window.devicePixelRatio || 1,
+                });
+                return true;
+            }
+            if (msg.type === 'BBQ_SCROLL_TO') {
+                const y = Math.max(0, Math.floor(msg.y || 0));
+                window.scrollTo({ top: y, behavior: 'auto' });
+                sendResponse({ ok: true, scrollY: window.scrollY });
+                return true;
+            }
         } catch (e) {
             sendResponse({ ok: false, error: String(e?.message || e) });
             return true;

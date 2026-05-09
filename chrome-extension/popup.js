@@ -9,7 +9,7 @@ const els = {};
  'chk-force-ai','sel-tempo','version-warning','bg-ver','popup-ver']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.2.0';
+const POPUP_VERSION = '0.3.0';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
@@ -166,7 +166,20 @@ function renderState(state) {
             : state.cancelled
                 ? `${state.productsSeen || 0} producten gescand voor onderbreking. Wat al binnen is staat in review-queue.`
                 : `${state.productsSeen || 0} producten in ${state.pagesScanned || 0} pagina's gescand. Bekijk de review-queue om akkoord te geven.`;
-        setText('done-desc', state.hint ? `${baseMsg}\n\n💡 ${state.hint}` : baseMsg);
+        /* Diagnostiek-regel: laat Sam zien WELKE methode wat opleverde —
+           cruciaal voor debugging als productsSeen=0. */
+        let diagLine = '';
+        if (state.diagnostic) {
+            const d = state.diagnostic;
+            const parts = [];
+            if (d.adapter !== undefined) parts.push(`adapter ${d.adapter}`);
+            if (d.screenshots > 0) parts.push(`vision ${d.screenshots}× → ${d.vision}`);
+            else if (d.vision !== undefined) parts.push(`vision ${d.vision}`);
+            if (d.html !== undefined) parts.push(`html ${d.html}`);
+            if (parts.length) diagLine = `\n\n🔬 ${parts.join(' · ')}`;
+        }
+        const fullMsg = state.hint ? `${baseMsg}\n\n💡 ${state.hint}${diagLine}` : `${baseMsg}${diagLine}`;
+        setText('done-desc', fullMsg);
         BBQ.getConfig().then(cfg => {
             els['link-review'].href = cfg.apiUrl.replace(/\/+$/, '') + '/leveranciers';
         });

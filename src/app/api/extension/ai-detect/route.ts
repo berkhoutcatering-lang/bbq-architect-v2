@@ -144,16 +144,30 @@ export async function POST(req: NextRequest) {
 
     let userBlocks: Anthropic.Messages.ContentBlockParam[];
     if (mode === 'image') {
-        const imageBase64: string = body?.imageBase64 || '';
-        const mimeType: string = body?.mimeType || 'image/png';
-        if (!imageBase64) return NextResponse.json({ error: 'imageBase64 verplicht' }, { status: 400, headers: corsHeaders() });
-        userBlocks = [
-            {
+        /* Accept either `images: [{base64, mimeType}, ...]` (multi-screenshot) of legacy single `imageBase64`. */
+        const imagesParam: Array<{ base64?: string; mimeType?: string }> | undefined = Array.isArray(body?.images) ? body.images : undefined;
+        const imagesList: Array<{ base64: string; mimeType: string }> = [];
+        if (imagesParam && imagesParam.length > 0) {
+            for (const img of imagesParam.slice(0, 6)) {
+                if (img && typeof img.base64 === 'string' && img.base64.length > 100) {
+                    imagesList.push({ base64: img.base64, mimeType: img.mimeType || 'image/png' });
+                }
+            }
+        } else if (typeof body?.imageBase64 === 'string' && body.imageBase64.length > 100) {
+            imagesList.push({ base64: body.imageBase64, mimeType: body?.mimeType || 'image/png' });
+        }
+        if (imagesList.length === 0) return NextResponse.json({ error: 'images of imageBase64 verplicht' }, { status: 400, headers: corsHeaders() });
+        userBlocks = [];
+        for (const img of imagesList) {
+            userBlocks.push({
                 type: 'image',
-                source: { type: 'base64', media_type: mimeType as any, data: imageBase64 },
-            },
-            { type: 'text', text: `Page URL: ${pageUrl}\n\nDetect products + give next-page-link.` },
-        ];
+                source: { type: 'base64', media_type: img.mimeType as any, data: img.base64 },
+            });
+        }
+        const captionExtra = imagesList.length > 1
+            ? ` De ${imagesList.length} screenshots tonen verschillende delen van dezelfde pagina (top → bodem). Combineer ze tot ÉÉN dedup'te lijst — zelfde product 2× = 1× in output.`
+            : '';
+        userBlocks.push({ type: 'text', text: `Page URL: ${pageUrl}\n\nDetect products + give next-page-link.${captionExtra}` });
     } else {
         const html: string = typeof body?.html === 'string' ? body.html : '';
         if (!html || html.length < 200) return NextResponse.json({ error: 'html verplicht (>200 chars)' }, { status: 400, headers: corsHeaders() });

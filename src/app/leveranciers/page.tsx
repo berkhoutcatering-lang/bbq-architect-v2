@@ -198,6 +198,16 @@ export default function LeveranciersPage() {
 
 /* ════════════════ LIST ════════════════ */
 
+function safeHostname(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+        const h = new URL(url).hostname;
+        return h || null;
+    } catch {
+        return null;
+    }
+}
+
 function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leverancier; onArchive: () => void; onRefresh: () => void; onReview: () => void }) {
     const isRunning = lev.last_sync_status === 'running';
     const isFailed = lev.last_sync_status === 'failed';
@@ -212,6 +222,7 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
         lev.import_method === 'email_in' ? 'Email-in' :
         lev.import_method === 'csv' ? 'CSV upload' :
         lev.import_method === 'manual' ? 'Handmatig' : 'Niet ingesteld';
+    const portalHost = safeHostname(lev.portal_url);
 
     return (
         <div style={{
@@ -224,9 +235,19 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                 width: 44, height: 44, borderRadius: 12,
                 background: `${GOLD}1A`, border: `1px solid ${GOLD}44`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: GOLD,
-                flexShrink: 0,
+                flexShrink: 0, overflow: 'hidden',
             }}>
-                <Store size={20} />
+                {portalHost ? (
+                    <img
+                        src={`https://www.google.com/s2/favicons?domain=${portalHost}&sz=64`}
+                        width={28} height={28}
+                        style={{ borderRadius: 4 }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        alt=""
+                    />
+                ) : (
+                    <Store size={20} />
+                )}
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -358,19 +379,58 @@ function SkeletonList() {
 
 /* ════════════════ ADD WIZARD ════════════════ */
 
+interface DetectedInfo {
+    naam: string;
+    portal_hint: string | null;
+    portal_url: string;
+    scope_filter: 'alles' | 'food_drinks';
+    import_method_suggestion: 'extension' | 'email_in' | 'csv' | 'manual';
+    favicon_url: string | null;
+    known: boolean;
+    notes: string | null;
+}
+
 function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const showToast = useToast();
-    const [step, setStep] = useState<1 | 2>(1);
+    const [url, setUrl] = useState('');
+    const [detecting, setDetecting] = useState(false);
+    const [detected, setDetected] = useState<DetectedInfo | null>(null);
     const [naam, setNaam] = useState('');
-    const [type, setType] = useState('Groothandel');
-    const [portalHint, setPortalHint] = useState<string | null>(null);
     const [scopeFilter, setScopeFilter] = useState<'alles' | 'food_drinks' | 'custom'>('food_drinks');
     const [scopeKeywords, setScopeKeywords] = useState('');
+    const [portalHint, setPortalHint] = useState<string | null>(null);
+    const [portalUrl, setPortalUrl] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
+    async function detect(targetUrl: string) {
+        const trimmed = targetUrl.trim();
+        if (!trimmed) return;
+        setDetecting(true);
+        setDetected(null);
+        try {
+            const r = await fetch('/api/leveranciers/detect', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ url: trimmed }),
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d?.error || 'Detectie mislukt');
+            setDetected(d);
+            setNaam(d.naam || '');
+            setScopeFilter(d.scope_filter || 'food_drinks');
+            setPortalHint(d.portal_hint || null);
+            setPortalUrl(d.portal_url || trimmed);
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        } finally {
+            setDetecting(false);
+        }
+    }
+
     function pickKnownPortal(p: typeof KNOWN_PORTALS[number]) {
-        setNaam(p.naam);
-        setPortalHint(p.hint);
+        const targetUrl = p.url;
+        setUrl(targetUrl);
+        detect(targetUrl);
     }
 
     async function createLeverancier(method: 'extension' | 'email_in' | 'csv' | 'manual') {
@@ -380,7 +440,6 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         }
         setSubmitting(true);
         try {
-            const portal = KNOWN_PORTALS.find(p => p.hint === portalHint);
             const keywords = scopeFilter === 'custom'
                 ? scopeKeywords.split(',').map(s => s.trim()).filter(s => s.length > 0).slice(0, 30)
                 : null;
@@ -389,10 +448,9 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
                     naam: naam.trim(),
-                    type,
                     import_method: method,
                     portal_hint: portalHint,
-                    portal_url: portal?.url || null,
+                    portal_url: portalUrl || null,
                     scope_filter: scopeFilter,
                     scope_keywords: keywords,
                 }),
@@ -408,6 +466,10 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         }
     }
 
+    const canDetect = url.trim().length > 4 && !detecting;
+    const hasResult = !!detected;
+    const suggestedMethod = detected?.import_method_suggestion || 'extension';
+
     return (
         <div onClick={onClose} style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 100,
@@ -418,6 +480,7 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                 width: '100%', maxWidth: 640, maxHeight: '90vh', overflow: 'auto',
                 background: 'var(--bg)', border: `1px solid ${GOLD}44`, borderRadius: 14,
             }}>
+                {/* Header */}
                 <div style={{
                     padding: '18px 22px', borderBottom: '1px solid var(--border)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -425,7 +488,7 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 700 }}>Leverancier toevoegen</div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                            Stap {step} van 2 — {step === 1 ? 'wie is het?' : 'hoe halen we de catalogus binnen?'}
+                            Plak de website-URL — AI detecteert de rest
                         </div>
                     </div>
                     <button onClick={onClose} style={{
@@ -437,176 +500,220 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                     </button>
                 </div>
 
-                {step === 1 ? (
-                    <div style={{ padding: 22 }}>
+                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+                    {/* URL input + detect button */}
+                    <div>
                         <label style={{ display: 'block', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>
-                            Naam
+                            Website-URL van de leverancier
                         </label>
-                        <input
-                            autoFocus
-                            value={naam}
-                            onChange={e => { setNaam(e.target.value); setPortalHint(null); }}
-                            placeholder="Bijv. Sligro, Bakker Jansen, Vuur & Rook…"
-                            style={{
-                                width: '100%', padding: '12px 14px', borderRadius: 10,
-                                background: 'var(--card)', border: '1px solid var(--border)',
-                                color: 'var(--text)', fontSize: 14,
-                            }}
-                        />
-
-                        <label style={{ display: 'block', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginTop: 16, marginBottom: 6 }}>
-                            Type
-                        </label>
-                        <select
-                            value={type}
-                            onChange={e => setType(e.target.value)}
-                            style={{
-                                width: '100%', padding: '12px 14px', borderRadius: 10,
-                                background: 'var(--card)', border: '1px solid var(--border)',
-                                color: 'var(--text)', fontSize: 14,
-                            }}
-                        >
-                            <option>Groothandel</option>
-                            <option>Slager</option>
-                            <option>Bakker</option>
-                            <option>Supermarkt</option>
-                            <option>Speciaalzaak</option>
-                            <option>Overig</option>
-                        </select>
-
-                        <div style={{ marginTop: 22 }}>
-                            <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>
-                                Of kies een bekend portaal
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-                                {KNOWN_PORTALS.map(p => (
-                                    <button
-                                        key={p.hint}
-                                        onClick={() => pickKnownPortal(p)}
-                                        style={{
-                                            padding: '10px 12px', borderRadius: 10,
-                                            background: portalHint === p.hint ? `${GOLD}1A` : 'var(--card)',
-                                            border: `1px solid ${portalHint === p.hint ? `${GOLD}66` : 'var(--border)'}`,
-                                            cursor: 'pointer', textAlign: 'left',
-                                            display: 'flex', alignItems: 'center', gap: 8,
-                                        }}
-                                    >
-                                        <Globe size={14} style={{ color: portalHint === p.hint ? GOLD : 'var(--muted)' }} />
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{p.naam}</span>
-                                    </button>
-                                ))}
-                            </div>
-                            {portalHint && (
-                                <div style={{ marginTop: 10, fontSize: 12, color: GOLD, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Sparkles size={12} /> We hebben een snel pad voor dit portaal — kies straks "Lees uit online portaal".
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={{ marginTop: 22, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                            <button onClick={onClose} style={ghostBtn()}>Annuleer</button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input
+                                autoFocus
+                                value={url}
+                                onChange={e => { setUrl(e.target.value); setDetected(null); }}
+                                onKeyDown={e => { if (e.key === 'Enter' && canDetect) detect(url); }}
+                                placeholder="https://www.makro.nl"
+                                style={{
+                                    flex: 1, padding: '11px 14px', borderRadius: 10,
+                                    background: 'var(--card)', border: '1px solid var(--border)',
+                                    color: 'var(--text)', fontSize: 14,
+                                }}
+                            />
                             <button
-                                onClick={() => setStep(2)}
-                                disabled={naam.trim().length < 2}
-                                style={primaryBtn(naam.trim().length < 2)}
+                                onClick={() => detect(url)}
+                                disabled={!canDetect}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '11px 16px', borderRadius: 10, flexShrink: 0,
+                                    background: canDetect ? GOLD : 'var(--card)',
+                                    color: canDetect ? '#0a0a0c' : 'var(--muted)',
+                                    border: `1px solid ${canDetect ? GOLD : 'var(--border)'}`,
+                                    cursor: canDetect ? 'pointer' : 'not-allowed',
+                                    fontWeight: 700, fontSize: 13, transition: 'all .15s',
+                                }}
                             >
-                                Volgende <ChevronRight size={14} />
+                                {detecting
+                                    ? <><Loader2 size={14} className="animate-spin" /> Detecteren…</>
+                                    : <><Sparkles size={14} /> AI detecteert</>
+                                }
                             </button>
                         </div>
                     </div>
-                ) : (
-                    <div style={{ padding: 22 }}>
-                        <div style={{ fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>
-                            <strong>{naam}</strong> — kies een import-methode:
-                        </div>
 
-                        {/* Scope-filter — alleen relevant voor extensie/email/csv (skip manual) */}
-                        <div style={{
-                            background: 'var(--card)', border: '1px solid var(--border)',
-                            borderRadius: 10, padding: 12, marginBottom: 14,
-                        }}>
-                            <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>
-                                Wat scrapen we van deze leverancier?
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <ScopeOption
-                                    value="food_drinks"
-                                    active={scopeFilter === 'food_drinks'}
-                                    onClick={() => setScopeFilter('food_drinks')}
-                                    title="Alleen food & drinks"
-                                    hint="Skip schoonmaak/kantoor/gadgets/non-keuken — aanbevolen voor Sligro, Makro"
-                                />
-                                <ScopeOption
-                                    value="alles"
-                                    active={scopeFilter === 'alles'}
-                                    onClick={() => setScopeFilter('alles')}
-                                    title="Alles"
-                                    hint="Élk product op de site — voor BBQ-shops als Vuur & Rook"
-                                />
-                                <ScopeOption
-                                    value="custom"
-                                    active={scopeFilter === 'custom'}
-                                    onClick={() => setScopeFilter('custom')}
-                                    title="Custom keywords"
-                                    hint="Alleen producten waarvan naam matched met jouw lijst"
-                                />
-                                {scopeFilter === 'custom' && (
-                                    <input
-                                        value={scopeKeywords}
-                                        onChange={e => setScopeKeywords(e.target.value)}
-                                        placeholder="vlees, vis, zuivel, kaas, brood, saus, kruiden, …"
+                    {/* Bekende portalen quickpick */}
+                    <div>
+                        <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>
+                            Snelkeuze bekende portalen
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 7 }}>
+                            {KNOWN_PORTALS.map(p => {
+                                const isActive = detected?.portal_hint === p.hint;
+                                return (
+                                    <button
+                                        key={p.hint}
+                                        onClick={() => pickKnownPortal(p)}
+                                        disabled={detecting}
                                         style={{
-                                            marginTop: 6, padding: '8px 10px', borderRadius: 8,
-                                            background: 'var(--bg)', border: '1px solid var(--border)',
-                                            color: 'var(--text)', fontSize: 12, width: '100%',
+                                            padding: '9px 11px', borderRadius: 10,
+                                            background: isActive ? `${GOLD}1A` : 'var(--card)',
+                                            border: `1px solid ${isActive ? `${GOLD}66` : 'var(--border)'}`,
+                                            cursor: detecting ? 'wait' : 'pointer', textAlign: 'left',
+                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            transition: 'all .12s',
                                         }}
-                                    />
-                                )}
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <MethodCard
-                                icon={Globe}
-                                title="Lees uit online portaal"
-                                tagline={portalHint ? 'Snel pad — wij kennen dit portaal' : 'Werkt voor élk portaal waar je inlogt'}
-                                hint="Vereist Chrome-extensie (eenmalig installeren). Jij logt in zoals altijd → 1 klik scan."
-                                accent={!!portalHint}
-                                onClick={() => createLeverancier('extension')}
-                                disabled={submitting}
-                            />
-                            <MethodCard
-                                icon={Mail}
-                                title="Stuur prijslijst-mails hierheen"
-                                tagline="Voor leveranciers die mailen"
-                                hint="Forward naar pl-{org}@in.bbqarchitect.app of zet een filter."
-                                onClick={() => createLeverancier('email_in')}
-                                disabled={submitting}
-                            />
-                            <MethodCard
-                                icon={Upload}
-                                title="Ik heb een CSV / Excel"
-                                tagline="Eenmalige import"
-                                hint="Drag-drop in /price-intelligence → tab Pricelists."
-                                onClick={() => createLeverancier('csv')}
-                                disabled={submitting}
-                            />
-                            <MethodCard
-                                icon={PenTool}
-                                title="Begin leeg, vul handmatig"
-                                tagline="Voor lokale leveranciers met weinig items"
-                                hint="Lege start — typ producten in voorraad."
-                                onClick={() => createLeverancier('manual')}
-                                disabled={submitting}
-                            />
-                        </div>
-
-                        <div style={{ marginTop: 22, display: 'flex', justifyContent: 'space-between' }}>
-                            <button onClick={() => setStep(1)} style={ghostBtn()}>← Terug</button>
-                            {submitting && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: GOLD, fontSize: 13 }}><Loader2 size={14} className="animate-spin" /> Bezig…</span>}
+                                    >
+                                        <img
+                                            src={`https://www.google.com/s2/favicons?domain=${new URL(p.url).hostname}&sz=32`}
+                                            width={16} height={16} style={{ borderRadius: 3 }} alt=""
+                                        />
+                                        <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? GOLD : 'var(--text)' }}>{p.naam}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
-                )}
+
+                    {/* Detectie-resultaat */}
+                    {hasResult && (
+                        <div style={{
+                            background: `${GOLD}08`, border: `1px solid ${GOLD}33`,
+                            borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
+                        }}>
+                            {/* Naam + favicon */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                {detected!.favicon_url && (
+                                    <img src={detected!.favicon_url} width={36} height={36}
+                                        style={{ borderRadius: 8, border: '1px solid var(--border)', flexShrink: 0 }}
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        alt=""
+                                    />
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <input
+                                        value={naam}
+                                        onChange={e => setNaam(e.target.value)}
+                                        style={{
+                                            width: '100%', padding: '8px 12px', borderRadius: 8,
+                                            background: 'var(--card)', border: '1px solid var(--border)',
+                                            color: 'var(--text)', fontSize: 15, fontWeight: 700,
+                                        }}
+                                        placeholder="Naam leverancier"
+                                    />
+                                </div>
+                                {detected!.known && (
+                                    <span style={{
+                                        padding: '4px 9px', borderRadius: 6, flexShrink: 0,
+                                        background: `${GOLD}26`, color: GOLD,
+                                        fontSize: 10, fontWeight: 700, letterSpacing: '.08em',
+                                    }}>
+                                        SNEL PAD
+                                    </span>
+                                )}
+                            </div>
+
+                            {detected!.notes && (
+                                <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <AlertTriangle size={12} /> {detected!.notes}
+                                </div>
+                            )}
+
+                            {/* Scope */}
+                            <div>
+                                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>
+                                    Wat halen we op?
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <ScopeOption
+                                        value="food_drinks" active={scopeFilter === 'food_drinks'}
+                                        onClick={() => setScopeFilter('food_drinks')}
+                                        title="Alleen food & drinks"
+                                        hint="Skip schoonmaak/kantoor/gadgets — aanbevolen voor Sligro, Makro"
+                                    />
+                                    <ScopeOption
+                                        value="alles" active={scopeFilter === 'alles'}
+                                        onClick={() => setScopeFilter('alles')}
+                                        title="Alles"
+                                        hint="Élk product op de site — voor BBQ-shops als Vuur & Rook"
+                                    />
+                                    <ScopeOption
+                                        value="custom" active={scopeFilter === 'custom'}
+                                        onClick={() => setScopeFilter('custom')}
+                                        title="Custom keywords"
+                                        hint="Alleen producten waarvan naam matched met jouw lijst"
+                                    />
+                                    {scopeFilter === 'custom' && (
+                                        <input
+                                            value={scopeKeywords}
+                                            onChange={e => setScopeKeywords(e.target.value)}
+                                            placeholder="vlees, vis, zuivel, kaas, brood, saus, kruiden, …"
+                                            style={{
+                                                marginTop: 6, padding: '8px 10px', borderRadius: 8,
+                                                background: 'var(--bg)', border: '1px solid var(--border)',
+                                                color: 'var(--text)', fontSize: 12, width: '100%',
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Import-methode keuze */}
+                            <div>
+                                <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>
+                                    Hoe halen we de catalogus binnen?
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <MethodCard
+                                        icon={Globe}
+                                        title="Lees uit online portaal"
+                                        tagline={detected!.known ? 'Snel pad — wij kennen dit portaal' : 'Werkt voor élk portaal waar je inlogt'}
+                                        hint="Vereist Chrome-extensie (eenmalig installeren). Jij logt in zoals altijd → 1 klik scan."
+                                        accent={suggestedMethod === 'extension'}
+                                        onClick={() => createLeverancier('extension')}
+                                        disabled={submitting}
+                                    />
+                                    <MethodCard
+                                        icon={Mail}
+                                        title="Stuur prijslijst-mails hierheen"
+                                        tagline="Voor leveranciers die mailen"
+                                        hint="Forward naar pl-{org}@in.bbqarchitect.app of zet een filter."
+                                        accent={suggestedMethod === 'email_in'}
+                                        onClick={() => createLeverancier('email_in')}
+                                        disabled={submitting}
+                                    />
+                                    <MethodCard
+                                        icon={Upload}
+                                        title="Ik heb een CSV / Excel"
+                                        tagline="Eenmalige import"
+                                        hint="Drag-drop in /price-intelligence → tab Pricelists."
+                                        onClick={() => createLeverancier('csv')}
+                                        disabled={submitting}
+                                    />
+                                    <MethodCard
+                                        icon={PenTool}
+                                        title="Begin leeg, vul handmatig"
+                                        tagline="Voor lokale leveranciers met weinig items"
+                                        hint="Lege start — typ producten in voorraad."
+                                        onClick={() => createLeverancier('manual')}
+                                        disabled={submitting}
+                                    />
+                                </div>
+                            </div>
+
+                            {submitting && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: GOLD, fontSize: 13 }}>
+                                    <Loader2 size={14} className="animate-spin" /> Bezig…
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!hasResult && !detecting && (
+                        <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
+                            Plak een URL of kies een portaal hierboven — AI detecteert naam, scope en de beste import-methode.
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

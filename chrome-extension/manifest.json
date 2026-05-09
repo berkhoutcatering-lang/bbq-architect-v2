@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BBQ Architect — Catalogus Scanner",
-  "version": "0.2.0",
-  "description": "Scan leveranciers-portals (Sligro, Makro, Baktotaal, Vuur & Rook, ...) en stuur producten + prijzen direct naar je BBQ Architect-account.",
+  "version": "0.3.0",
+  "description": "Scan leveranciers-portals met vision-AI (Haiku 4.5) — werkt op SPA's, lazy-load en rommelige layouts. Stuurt producten + prijzen direct naar je BBQ Architect-account.",
   "permissions": [
     "storage",
     "activeTab",
