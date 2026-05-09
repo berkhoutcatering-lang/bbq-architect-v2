@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BBQ Architect — Catalogus Scanner",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Scan leveranciers-portals met vision-AI (Haiku 4.5) — werkt op SPA's, lazy-load en rommelige layouts. Stuurt producten + prijzen direct naar je BBQ Architect-account.",
   "permissions": [
     "storage",
