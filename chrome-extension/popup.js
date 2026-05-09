@@ -9,7 +9,7 @@ const els = {};
  'chk-force-ai','sel-tempo','version-warning','bg-ver','popup-ver']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.3.0';
+const POPUP_VERSION = '0.3.1';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
