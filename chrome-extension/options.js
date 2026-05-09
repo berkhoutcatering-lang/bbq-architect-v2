@@ -15,8 +15,27 @@ async function load() {
     $('max-pages').value = data['bbq_max_pages'] || 50;
 }
 
+/** Normaliseer URL naar origin-only.
+ *  User plakt vaak `https://app.example.com/leveranciers` — extensie hangt
+ *  daar `/api/extension/auth` achter wat een 404 op de Next.js-pagina geeft.
+ *  Deze stript pad/query/hash zodat alleen `https://app.example.com` overblijft. */
+function normalizeApiUrl(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    /* Forceer protocol als gebruiker `app.example.com` typt */
+    const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
+    try {
+        const u = new URL(withProto);
+        return u.origin;
+    } catch {
+        return trimmed;
+    }
+}
+
 async function save(showFeedback = true) {
-    const apiUrl = $('api-url').value.trim();
+    const apiUrl = normalizeApiUrl($('api-url').value);
+    /* Direct in het input-veld terugzetten zodat user ziet wat opgeslagen is */
+    $('api-url').value = apiUrl;
     const apiKey = $('api-key').value.trim();
     const pageDelay = Number($('page-delay').value) || 1500;
     const maxPages = Number($('max-pages').value) || 50;

@@ -72,16 +72,9 @@ const BBQ = {
     },
 
     async listLeveranciers() {
-        const { apiUrl, apiKey } = await getConfig();
-        /* deze endpoint vereist user-cookie; voor extensie hebben we een
-           extension-aware variant nodig. Voor v1 cachen we leveranciers
-           bij elke testConnection — de UI geeft user instructie te kiezen
-           in de wizard van /leveranciers. */
-        const r = await fetch(apiUrl + '/api/leveranciers', {
-            headers: { 'x-extension-key': apiKey },
-        });
-        if (!r.ok) throw new Error('Kon leveranciers niet ophalen');
-        return r.json();
+        /* Extension-aware endpoint: auth via x-extension-key header
+           i.p.v. Supabase session-cookie. Returnt {data: Leverancier[]}. */
+        return apiFetch('/api/extension/leveranciers', { method: 'GET' });
     },
 
     async startSync({ leverancierId, mode, portalUrl }) {
@@ -105,14 +98,19 @@ const BBQ = {
         });
     },
 
-    async aiDetect({ html, imageBase64, mimeType, pageUrl, scope, scopeKeywords }) {
-        const base = imageBase64
-            ? { mode: 'image', imageBase64, mimeType, pageUrl }
-            : { mode: 'html', html, pageUrl };
+    async aiDetect({ html, imageBase64, mimeType, images, pageUrl, scope, scopeKeywords }) {
+        let base;
+        if (Array.isArray(images) && images.length > 0) {
+            base = { mode: 'image', images, pageUrl };
+        } else if (imageBase64) {
+            base = { mode: 'image', imageBase64, mimeType, pageUrl };
+        } else {
+            base = { mode: 'html', html, pageUrl };
+        }
         const body = { ...base };
         if (scope) body.scope = scope;
         if (Array.isArray(scopeKeywords) && scopeKeywords.length) body.scopeKeywords = scopeKeywords;
-        /* AI-detect mag tot 60s nemen (Haiku op zware HTML). Daarna timeout. */
+        /* AI-detect mag tot 60s nemen (Haiku op zware HTML/vision). Daarna timeout. */
         return apiFetch('/api/extension/ai-detect', {
             method: 'POST',
             body: JSON.stringify(body),
