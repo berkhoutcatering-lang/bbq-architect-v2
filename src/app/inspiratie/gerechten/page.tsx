@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
     ChefHat, ArrowLeft, Loader2, Search, Star, Sparkles,
-    Plus, Trash2, X, Boxes,
+    Plus, Trash2, X, Boxes, TrendingUp, ArrowUp, ArrowDown, Replace, LogOut, Lightbulb,
 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -277,6 +277,9 @@ function GerechtDetailDrawer({
     const [showAddForm, setShowAddForm] = useState(false);
     const [adding, setAdding] = useState(false);
     const [removingComponentId, setRemovingComponentId] = useState<number | null>(null);
+    const [showCostEng, setShowCostEng] = useState(false);
+    const [costEngBusy, setCostEngBusy] = useState(false);
+    const [costEngResult, setCostEngResult] = useState<any>(null);
 
     const [formComponentId, setFormComponentId] = useState<string>('');
     const [formQty, setFormQty] = useState<string>('');
@@ -336,6 +339,32 @@ function GerechtDetailDrawer({
             toast(e.message || 'Toevoegen mislukt', 'error');
         } finally {
             setAdding(false);
+        }
+    }
+
+    async function handleCostEngineering() {
+        if (items.length === 0) {
+            toast('Koppel eerst components voordat AI marge kan analyseren', 'error');
+            return;
+        }
+        setShowCostEng(true);
+        setCostEngBusy(true);
+        setCostEngResult(null);
+        try {
+            const res = await fetch('/api/ai/cost-engineering', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gerecht_id: gerecht.id }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'AI-call mislukt');
+            setCostEngResult(body);
+        } catch (e: any) {
+            toast(e.message || 'AI-call mislukt', 'error');
+            setShowCostEng(false);
+        } finally {
+            setCostEngBusy(false);
         }
     }
 
@@ -519,10 +548,162 @@ function GerechtDetailDrawer({
                     </ul>
                 )}
 
-                <div className="mt-6 text-[11px] text-muted-foreground">
+                {items.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={handleCostEngineering}
+                        disabled={costEngBusy}
+                        className="mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
+                    >
+                        {costEngBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        {costEngBusy ? 'AI analyseert marge...' : 'AI: optimaliseer marge'}
+                    </button>
+                )}
+
+                <div className="mt-4 text-[11px] text-muted-foreground">
                     Wijzig de kostprijs van een component in de <Link className="text-primary hover:underline" href="/inspiratie/componenten">Componenten</Link>-pagina
                     → trigger updatet automatisch de kost van dit gerecht.
                 </div>
+            </div>
+
+            {showCostEng && (
+                <CostEngineeringPanel
+                    busy={costEngBusy}
+                    result={costEngResult}
+                    onClose={() => { setShowCostEng(false); setCostEngResult(null); }}
+                />
+            )}
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Cost-Engineering panel: AI-suggesties om marge te verhogen
+   ────────────────────────────────────────────────────────────────────────── */
+
+function CostEngineeringPanel({
+    busy, result, onClose,
+}: {
+    busy: boolean;
+    result: any;
+    onClose: () => void;
+}) {
+    const analysis = result?.analysis;
+    const ctx = result?.context;
+    const suggestions = (analysis?.suggestions ?? []) as Array<{
+        action: string;
+        title: string;
+        description: string;
+        estimated_impact_cents: number | null;
+        target_component_name: string | null;
+        estimated_new_margin_pct: number | null;
+    }>;
+
+    function actionIcon(action: string) {
+        switch (action) {
+            case 'increase_price': return <ArrowUp size={14} />;
+            case 'swap_component': return <Replace size={14} />;
+            case 'reduce_quantity': return <ArrowDown size={14} />;
+            case 'remove_from_wizard': return <LogOut size={14} />;
+            case 'promote_alternative': return <Lightbulb size={14} />;
+            default: return <Sparkles size={14} />;
+        }
+    }
+
+    function verdictColor(v: string | undefined) {
+        if (v === 'Star') return 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300';
+        if (v === 'Plowhorse') return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300';
+        if (v === 'Puzzle') return 'text-sky-600 bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300';
+        if (v === 'Dog') return 'text-rose-600 bg-rose-100 dark:bg-rose-900/30 dark:text-rose-300';
+        return 'text-muted-foreground bg-muted';
+    }
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-stretch"
+            onClick={onClose}
+        >
+            <div
+                className="h-full w-full max-w-lg overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <div className="flex items-center gap-1.5 text-xs text-primary">
+                            <TrendingUp size={12} /> Cost Engineering
+                        </div>
+                        <h2 className="text-xl font-semibold">Marge-suggesties</h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {busy && (
+                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                        <Loader2 size={20} className="mr-2 animate-spin" /> AI analyseert je gerecht...
+                    </div>
+                )}
+
+                {!busy && analysis && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
+                            <div>
+                                <div className="text-xs text-muted-foreground">{ctx?.gerecht_name}</div>
+                                <div className="text-sm">
+                                    Huidige marge: <strong>{(analysis.current_margin_pct ?? 0).toFixed(1)}%</strong>
+                                </div>
+                            </div>
+                            {analysis.verdict && (
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${verdictColor(analysis.verdict)}`}>
+                                    {analysis.verdict}
+                                </span>
+                            )}
+                        </div>
+
+                        {suggestions.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                                AI heeft geen concrete suggesties — marge is wellicht al optimaal.
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {suggestions.map((s, i) => (
+                                    <div key={i} className="rounded-xl border border-border bg-card p-3">
+                                        <div className="flex items-start gap-2">
+                                            <div className="mt-0.5 shrink-0 rounded-md bg-primary/10 p-1.5 text-primary">
+                                                {actionIcon(s.action)}
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="text-sm font-medium">{s.title}</div>
+                                                    {s.estimated_new_margin_pct != null && (
+                                                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                                            → {s.estimated_new_margin_pct.toFixed(0)}%
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">{s.description}</p>
+                                                {s.target_component_name && (
+                                                    <div className="text-[11px] text-muted-foreground">
+                                                        <Boxes size={10} className="mr-1 inline" />
+                                                        {s.target_component_name}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+                            <Sparkles size={11} className="mr-1 inline text-primary" />
+                            Advies — geen automatische wijzigingen. Pas zelf aan in de drawer of in de Componenten-pagina.
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
