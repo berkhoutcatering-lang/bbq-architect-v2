@@ -101,9 +101,13 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
            legacy `actief`-vlag). */
         supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
             const rows = ((res.data as DishRow[]) || []).filter(g => {
-                const status = (g as unknown as Record<string, unknown>).status;
+                const r = g as unknown as Record<string, unknown>;
+                /* Inspiratie Bibliotheek v5: respect is_in_wizard. Defensive `!== false`
+                   zodat oude omgevingen (zonder de kolom) niet plots leeg lopen. */
+                if (r.is_in_wizard === false) return false;
+                const status = r.status;
                 if (typeof status === 'string') return status === 'actief';
-                return (g as unknown as Record<string, unknown>).actief !== false;
+                return r.actief !== false;
             });
             setGerechten(rows);
         });
@@ -132,9 +136,13 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
         /* Initial load gebruikt dezelfde status-filter als refreshGerechten. */
         supabase.from('gerechten').select('*').order('volgorde').then(function (res) {
             const rows = ((res.data as DishRow[]) || []).filter(g => {
-                const status = (g as unknown as Record<string, unknown>).status;
+                const r = g as unknown as Record<string, unknown>;
+                /* Inspiratie Bibliotheek v5: respect is_in_wizard. Defensive `!== false`
+                   zodat oude omgevingen (zonder de kolom) niet plots leeg lopen. */
+                if (r.is_in_wizard === false) return false;
+                const status = r.status;
                 if (typeof status === 'string') return status === 'actief';
-                return (g as unknown as Record<string, unknown>).actief !== false;
+                return r.actief !== false;
             });
             setGerechten(rows);
         });

@@ -112,7 +112,7 @@ export default function ComponentenPage() {
             if (!res.ok) throw new Error(body.error || 'Laden mislukt');
             setComponents(body.components ?? []);
         } catch (e: any) {
-            toast.error(e.message || 'Laden mislukt');
+            toast(e.message || 'Laden mislukt', 'error');
         } finally {
             setLoading(false);
         }
@@ -136,11 +136,11 @@ export default function ComponentenPage() {
     async function handleCreate(e: React.FormEvent) {
         e.preventDefault();
         const name = form.name.trim();
-        if (!name) { toast.error('Naam verplicht'); return; }
+        if (!name) { toast('Naam verplicht', 'error'); return; }
         const baseQty = Number(form.base_quantity);
-        if (!Number.isFinite(baseQty) || baseQty <= 0) { toast.error('Basis-hoeveelheid > 0'); return; }
+        if (!Number.isFinite(baseQty) || baseQty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
         const costEuros = Number(form.base_cost_euros);
-        if (!Number.isFinite(costEuros) || costEuros < 0) { toast.error('Kostprijs ongeldig'); return; }
+        if (!Number.isFinite(costEuros) || costEuros < 0) { toast('Kostprijs ongeldig', 'error'); return; }
         const baseCostCents = Math.round(costEuros * 100);
         const tags = form.flavor_tags
             .split(',').map(t => t.trim()).filter(t => t.length > 0);
@@ -163,12 +163,12 @@ export default function ComponentenPage() {
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Aanmaken mislukt');
-            toast.success(`Component "${name}" toegevoegd`);
+            toast(`Component "${name}" toegevoegd`, 'success');
             setForm(EMPTY_FORM);
             setShowForm(false);
             await loadComponents();
         } catch (e: any) {
-            toast.error(e.message || 'Aanmaken mislukt');
+            toast(e.message || 'Aanmaken mislukt', 'error');
         } finally {
             setCreating(false);
         }
@@ -177,7 +177,7 @@ export default function ComponentenPage() {
     async function handleGenerate(e: React.FormEvent) {
         e.preventDefault();
         const prompt = aiPrompt.trim();
-        if (!prompt) { toast.error('Vul een prompt in'); return; }
+        if (!prompt) { toast('Vul een prompt in', 'error'); return; }
         setAiBusy(true);
         setAiProposal(null);
         try {
@@ -195,7 +195,7 @@ export default function ComponentenPage() {
             setConfirmedAllergens(new Set((proposal.allergens ?? []).map(a => a.allergen_code)));
             setConfirmedHaccp(new Set((proposal.haccp_points ?? []).map((_, i) => i)));
         } catch (e: any) {
-            toast.error(e.message || 'AI-call mislukt');
+            toast(e.message || 'AI-call mislukt', 'error');
         } finally {
             setAiBusy(false);
         }
@@ -239,16 +239,16 @@ export default function ComponentenPage() {
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
-            toast.success(`"${aiProposal.name}" toegevoegd uit AI-voorstel`);
+            toast(`"${aiProposal.name}" toegevoegd uit AI-voorstel`, 'success');
             if (body.warnings) {
-                toast.error(`Wel met waarschuwingen: ${body.warnings.join(', ')}`);
+                toast(`Wel met waarschuwingen: ${body.warnings.join(', ', 'error')}`);
             }
             setAiProposal(null);
             setAiPrompt('');
             setShowAi(false);
             await loadComponents();
         } catch (e: any) {
-            toast.error(e.message || 'Opslaan mislukt');
+            toast(e.message || 'Opslaan mislukt', 'error');
         } finally {
             setAiAccepting(false);
         }
@@ -286,10 +286,10 @@ export default function ComponentenPage() {
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(body.error || 'Verwijderen mislukt');
-            toast.success(`"${c.name}" verwijderd`);
+            toast(`"${c.name}" verwijderd`, 'success');
             await loadComponents();
         } catch (e: any) {
-            toast.error(e.message || 'Verwijderen mislukt');
+            toast(e.message || 'Verwijderen mislukt', 'error');
         } finally {
             setDeletingId(null);
         }

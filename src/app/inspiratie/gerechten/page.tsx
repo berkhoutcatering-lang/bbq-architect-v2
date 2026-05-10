@@ -87,7 +87,7 @@ export default function GerechtenInspiratiePage() {
             if (!res.ok) throw new Error(body.error || 'Laden mislukt');
             setGerechten(body.gerechten ?? []);
         } catch (e: any) {
-            toast.error(e.message || 'Laden mislukt');
+            toast(e.message || 'Laden mislukt', 'error');
         } finally {
             setLoading(false);
         }
@@ -118,9 +118,9 @@ export default function GerechtenInspiratiePage() {
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Toggle mislukt');
             setGerechten(prev => prev.map(x => x.id === g.id ? { ...x, is_in_wizard: !x.is_in_wizard } : x));
-            toast.success(g.is_in_wizard ? `"${g.naam}" uit wizard` : `"${g.naam}" in wizard`);
+            toast(g.is_in_wizard ? `"${g.naam}" uit wizard` : `"${g.naam}" in wizard`, 'success');
         } catch (e: any) {
-            toast.error(e.message || 'Toggle mislukt');
+            toast(e.message || 'Toggle mislukt', 'error');
         } finally {
             setTogglingId(null);
         }
@@ -292,7 +292,7 @@ function GerechtDetailDrawer({
             setItems(itemsRes.items ?? []);
             setAvailableComponents((compsRes.components ?? []) as ComponentRow[]);
         } catch (e: any) {
-            toast.error(e.message || 'Laden mislukt');
+            toast(e.message || 'Laden mislukt', 'error');
         } finally {
             setLoading(false);
         }
@@ -314,8 +314,8 @@ function GerechtDetailDrawer({
         e.preventDefault();
         const componentId = Number(formComponentId);
         const quantityUsed = Number(formQty);
-        if (!componentId) { toast.error('Kies een component'); return; }
-        if (!Number.isFinite(quantityUsed) || quantityUsed <= 0) { toast.error('Hoeveelheid > 0'); return; }
+        if (!componentId) { toast('Kies een component', 'error'); return; }
+        if (!Number.isFinite(quantityUsed) || quantityUsed <= 0) { toast('Hoeveelheid > 0', 'error'); return; }
         setAdding(true);
         try {
             const res = await fetch(`/api/gerechten/${gerecht.id}/components`, {
@@ -326,14 +326,14 @@ function GerechtDetailDrawer({
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Toevoegen mislukt');
-            toast.success('Component toegevoegd');
+            toast('Component toegevoegd', 'success');
             setFormComponentId('');
             setFormQty('');
             setShowAddForm(false);
             await loadDrawer();
             onChanged();
         } catch (e: any) {
-            toast.error(e.message || 'Toevoegen mislukt');
+            toast(e.message || 'Toevoegen mislukt', 'error');
         } finally {
             setAdding(false);
         }
@@ -355,11 +355,11 @@ function GerechtDetailDrawer({
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(body.error || 'Verwijderen mislukt');
-            toast.success('Component losgekoppeld');
+            toast('Component losgekoppeld', 'success');
             await loadDrawer();
             onChanged();
         } catch (e: any) {
-            toast.error(e.message || 'Verwijderen mislukt');
+            toast(e.message || 'Verwijderen mislukt', 'error');
         } finally {
             setRemovingComponentId(null);
         }
