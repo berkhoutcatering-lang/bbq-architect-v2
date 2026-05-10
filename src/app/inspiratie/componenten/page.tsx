@@ -5,11 +5,32 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
     Boxes, ArrowLeft, Plus, X, Trash2, Sparkles,
-    Package, ShoppingBag, Loader2, Search,
+    Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+
+interface AiProposal {
+    name: string;
+    description?: string;
+    type: ComponentType;
+    base_quantity: number;
+    base_unit: string;
+    base_cost_cents: number;
+    ingredients?: Array<{ name: string; qty: number; unit: string }>;
+    preparation_steps?: string[];
+    flavor_tags?: string[];
+    allergens?: Array<{ allergen_code: string; ai_suggested?: boolean }>;
+    haccp_points?: Array<{ type: string; threshold_value?: number | null; threshold_unit?: string | null; note?: string | null; ai_suggested?: boolean }>;
+    ai_suggested?: boolean;
+}
+
+const ALLERGEN_LABELS: Record<string, string> = {
+    G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
+    Sd: 'sesam', M: 'mosterd', W: 'weekdieren', Sl: 'selderij',
+    Lp: 'lupine', Sf: 'sulfiet', Sc: 'schaaldieren', P: 'pinda',
+};
 
 type ComponentType = 'prepared' | 'bought_in';
 
@@ -71,6 +92,17 @@ export default function ComponentenPage() {
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+    /* AI-genereer state */
+    const [showAi, setShowAi] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiType, setAiType] = useState<ComponentType>('prepared');
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiProposal, setAiProposal] = useState<AiProposal | null>(null);
+    const [aiAccepting, setAiAccepting] = useState(false);
+    /* Bevestigde flags per allergen-code / haccp-index — default alles aan na AI-output */
+    const [confirmedAllergens, setConfirmedAllergens] = useState<Set<string>>(new Set());
+    const [confirmedHaccp, setConfirmedHaccp] = useState<Set<number>>(new Set());
 
     async function loadComponents() {
         setLoading(true);
@@ -140,6 +172,102 @@ export default function ComponentenPage() {
         } finally {
             setCreating(false);
         }
+    }
+
+    async function handleGenerate(e: React.FormEvent) {
+        e.preventDefault();
+        const prompt = aiPrompt.trim();
+        if (!prompt) { toast.error('Vul een prompt in'); return; }
+        setAiBusy(true);
+        setAiProposal(null);
+        try {
+            const res = await fetch('/api/ai/component-generate', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, type: aiType }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'AI-call mislukt');
+            const proposal = body.proposal as AiProposal;
+            setAiProposal(proposal);
+            // Default: alle AI-suggesties bevestigd (mens kan uitzetten wat niet klopt)
+            setConfirmedAllergens(new Set((proposal.allergens ?? []).map(a => a.allergen_code)));
+            setConfirmedHaccp(new Set((proposal.haccp_points ?? []).map((_, i) => i)));
+        } catch (e: any) {
+            toast.error(e.message || 'AI-call mislukt');
+        } finally {
+            setAiBusy(false);
+        }
+    }
+
+    async function handleAcceptProposal() {
+        if (!aiProposal) return;
+        setAiAccepting(true);
+        try {
+            const allergens = (aiProposal.allergens ?? [])
+                .filter(a => confirmedAllergens.has(a.allergen_code))
+                .map(a => ({ allergen_code: a.allergen_code, ai_suggested: true }));
+            const haccp_points = (aiProposal.haccp_points ?? [])
+                .filter((_, i) => confirmedHaccp.has(i))
+                .map(h => ({
+                    type: h.type,
+                    threshold_value: h.threshold_value,
+                    threshold_unit: h.threshold_unit,
+                    note: h.note,
+                    ai_suggested: true,
+                }));
+
+            const res = await fetch('/api/components', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: aiProposal.name,
+                    description: aiProposal.description ?? null,
+                    type: aiProposal.type,
+                    base_quantity: aiProposal.base_quantity,
+                    base_unit: aiProposal.base_unit,
+                    base_cost_cents: aiProposal.base_cost_cents,
+                    ingredients: aiProposal.ingredients ?? null,
+                    preparation_steps: aiProposal.preparation_steps ?? null,
+                    flavor_tags: aiProposal.flavor_tags ?? [],
+                    ai_suggested: true,
+                    allergens,
+                    haccp_points,
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            toast.success(`"${aiProposal.name}" toegevoegd uit AI-voorstel`);
+            if (body.warnings) {
+                toast.error(`Wel met waarschuwingen: ${body.warnings.join(', ')}`);
+            }
+            setAiProposal(null);
+            setAiPrompt('');
+            setShowAi(false);
+            await loadComponents();
+        } catch (e: any) {
+            toast.error(e.message || 'Opslaan mislukt');
+        } finally {
+            setAiAccepting(false);
+        }
+    }
+
+    function toggleAllergen(code: string) {
+        setConfirmedAllergens(prev => {
+            const next = new Set(prev);
+            if (next.has(code)) next.delete(code); else next.add(code);
+            return next;
+        });
+    }
+
+    function toggleHaccp(idx: number) {
+        setConfirmedHaccp(prev => {
+            const next = new Set(prev);
+            if (next.has(idx)) next.delete(idx); else next.add(idx);
+            return next;
+        });
     }
 
     async function handleDelete(c: ComponentRow) {
@@ -221,7 +349,14 @@ export default function ComponentenPage() {
                     </div>
                     <button
                         type="button"
-                        onClick={() => setShowForm(v => !v)}
+                        onClick={() => { setShowAi(v => !v); setShowForm(false); }}
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/50 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
+                    >
+                        <Sparkles size={14} /> AI Genereer
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setShowForm(v => !v); setShowAi(false); }}
                         className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
                     >
                         {showForm ? <X size={14} /> : <Plus size={14} />}
@@ -229,6 +364,210 @@ export default function ComponentenPage() {
                     </button>
                 </div>
             </div>
+
+            {/* AI Genereer-strook */}
+            {showAi && (
+                <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                            <Sparkles size={16} /> AI als Creative Chef
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setShowAi(false); setAiProposal(null); setAiPrompt(''); }}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Sluit AI-strook"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+
+                    {!aiProposal && (
+                        <form onSubmit={handleGenerate} className="space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                                Beschrijf wat je wil — naam, ingrediënt, smaak. AI maakt een compleet voorstel met
+                                ingrediënten, kostprijs, allergenen en HACCP-punten. Jij bevestigt wat klopt.
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setAiType('prepared')}
+                                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${aiType === 'prepared' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
+                                >
+                                    <Package size={12} /> Zelf-bereid
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAiType('bought_in')}
+                                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${aiType === 'bought_in' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
+                                >
+                                    <ShoppingBag size={12} /> Inkoop
+                                </button>
+                            </div>
+                            <textarea
+                                value={aiPrompt}
+                                onChange={(e) => setAiPrompt(e.target.value)}
+                                rows={2}
+                                maxLength={500}
+                                placeholder="bv. 'bacon crumble met chili voor op sliders' of 'gepekelde komkommer-lintjes voor amuse'"
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                                required
+                            />
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted-foreground">{aiPrompt.length} / 500</span>
+                                <button
+                                    type="submit"
+                                    disabled={aiBusy}
+                                    className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                                >
+                                    {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                    {aiBusy ? 'AI denkt na...' : 'Genereer'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {aiProposal && (
+                        <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-primary">
+                                <Sparkles size={11} /> AI-voorstel — bevestig wat klopt
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold">{aiProposal.name}</h3>
+                                {aiProposal.description && (
+                                    <p className="mt-1 text-sm text-muted-foreground">{aiProposal.description}</p>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Type</div>
+                                    <div className="font-medium">{aiProposal.type === 'prepared' ? 'Zelf-bereid' : 'Inkoop'}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Basis</div>
+                                    <div className="font-medium">{aiProposal.base_quantity} {aiProposal.base_unit}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Kostprijs</div>
+                                    <div className="font-medium">{formatEuro(aiProposal.base_cost_cents)}</div>
+                                </div>
+                            </div>
+
+                            {aiProposal.ingredients && aiProposal.ingredients.length > 0 && (
+                                <div>
+                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Ingrediënten</div>
+                                    <ul className="space-y-0.5 text-sm">
+                                        {aiProposal.ingredients.map((ing, i) => (
+                                            <li key={i} className="flex justify-between">
+                                                <span>{ing.name}</span>
+                                                <span className="text-muted-foreground">{ing.qty} {ing.unit}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {aiProposal.preparation_steps && aiProposal.preparation_steps.length > 0 && (
+                                <div>
+                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Bereiding</div>
+                                    <ol className="list-decimal space-y-0.5 pl-5 text-sm">
+                                        {aiProposal.preparation_steps.map((s, i) => <li key={i}>{s}</li>)}
+                                    </ol>
+                                </div>
+                            )}
+
+                            {aiProposal.flavor_tags && aiProposal.flavor_tags.length > 0 && (
+                                <div>
+                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Smaakprofiel</div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {aiProposal.flavor_tags.map(t => (
+                                            <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{t}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {aiProposal.allergens && aiProposal.allergens.length > 0 && (
+                                <div>
+                                    <div className="mb-1 text-xs font-medium text-muted-foreground">
+                                        Allergenen — klik om af te vinken als ze niet kloppen
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {aiProposal.allergens.map(a => {
+                                            const on = confirmedAllergens.has(a.allergen_code);
+                                            return (
+                                                <button
+                                                    key={a.allergen_code}
+                                                    type="button"
+                                                    onClick={() => toggleAllergen(a.allergen_code)}
+                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground line-through'}`}
+                                                >
+                                                    {on && <Check size={11} />}
+                                                    {ALLERGEN_LABELS[a.allergen_code] ?? a.allergen_code}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {aiProposal.haccp_points && aiProposal.haccp_points.length > 0 && (
+                                <div>
+                                    <div className="mb-1 text-xs font-medium text-muted-foreground">
+                                        HACCP-punten — klik om af te vinken als ze niet kloppen
+                                    </div>
+                                    <div className="space-y-1">
+                                        {aiProposal.haccp_points.map((h, i) => {
+                                            const on = confirmedHaccp.has(i);
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => toggleHaccp(i)}
+                                                    className={`flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left text-xs transition ${on ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/50 text-muted-foreground line-through'}`}
+                                                >
+                                                    <ThermometerSun size={14} className="mt-0.5 shrink-0" />
+                                                    <div className="flex-1">
+                                                        <div className="font-medium">
+                                                            {h.type}
+                                                            {h.threshold_value != null && (
+                                                                <span> — {h.threshold_value} {h.threshold_unit ?? ''}</span>
+                                                            )}
+                                                        </div>
+                                                        {h.note && <div className="text-[11px] opacity-80">{h.note}</div>}
+                                                    </div>
+                                                    {on && <Check size={12} className="mt-0.5 text-primary" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-2 border-t border-border pt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setAiProposal(null)}
+                                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                                >
+                                    Opnieuw genereren
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleAcceptProposal}
+                                    disabled={aiAccepting}
+                                    className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                                >
+                                    {aiAccepting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                    {aiAccepting ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Inline create form */}
             {showForm && (
@@ -433,8 +772,9 @@ export default function ComponentenPage() {
 
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
                 <Sparkles size={14} className="mr-1 inline text-primary" />
-                PR4 brengt AI: <em>genereer component</em>, <em>categoriseer ongetagde</em>,
-                en <em>combineer naar gerecht</em>. Voor nu handmatig — kostprijs en types worden in PR3 al door auto-cost-propagatie correct doorgerekend op gerechten zodra je componenten koppelt.
+                AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
+                voorstel te krijgen (incl. allergeen- en HACCP-suggesties). Niets wordt opgeslagen tot je
+                op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
             </div>
         </div>
     );
