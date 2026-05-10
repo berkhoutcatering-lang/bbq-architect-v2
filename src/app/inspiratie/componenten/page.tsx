@@ -26,6 +26,35 @@ interface AiProposal {
     ai_suggested?: boolean;
 }
 
+interface AllergenRow {
+    component_id: number;
+    allergen_code: string;
+    ai_suggested: boolean;
+    confirmed_at: string | null;
+}
+
+interface HaccpRow {
+    id?: number;
+    component_id?: number;
+    type: string;
+    threshold_value: number | null;
+    threshold_unit: string | null;
+    note: string | null;
+    ai_suggested: boolean;
+}
+
+const ALLERGEN_CODES = ['G', 'L', 'N', 'V', 'E', 'S', 'Sd', 'M', 'W', 'Sl', 'Lp', 'Sf', 'Sc', 'P'];
+
+const HACCP_TYPES = [
+    { value: 'kerntemp', label: 'Kerntemperatuur', defaultUnit: 'celsius' },
+    { value: 'koeltemp', label: 'Koeltemperatuur', defaultUnit: 'celsius' },
+    { value: 'tijd_uit_koeling', label: 'Tijd uit koeling', defaultUnit: 'minutes' },
+    { value: 'handhygiene', label: 'Handhygiëne', defaultUnit: '' },
+    { value: 'kruisbesmetting', label: 'Kruisbesmetting', defaultUnit: '' },
+    { value: 'oppervlakte_reiniging', label: 'Oppervlakte reiniging', defaultUnit: '' },
+    { value: 'overig', label: 'Overig', defaultUnit: '' },
+];
+
 const ALLERGEN_LABELS: Record<string, string> = {
     G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
     Sd: 'sesam', M: 'mosterd', W: 'weekdieren', Sl: 'selderij',
@@ -88,6 +117,7 @@ export default function ComponentenPage() {
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [selectedComponentId, setSelectedComponentId] = useState<number | null>(null);
     const [typeFilter, setTypeFilter] = useState<'all' | ComponentType>('all');
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -724,7 +754,12 @@ export default function ComponentenPage() {
             ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map(c => (
-                        <div key={c.id} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/50 hover:shadow-md">
+                        <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setSelectedComponentId(c.id)}
+                            className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/50 hover:shadow-md"
+                        >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     {c.type === 'prepared'
@@ -736,15 +771,16 @@ export default function ComponentenPage() {
                                         </span>
                                     )}
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(c)}
-                                    disabled={deletingId === c.id}
+                                <span
+                                    role="button"
+                                    tabIndex={0}
                                     aria-label={`Verwijder ${c.name}`}
-                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); handleDelete(c); } }}
+                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                                 >
                                     {deletingId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                </button>
+                                </span>
                             </div>
 
                             <h3 className="mt-2 font-semibold leading-tight">{c.name}</h3>
@@ -765,9 +801,17 @@ export default function ComponentenPage() {
                                     ))}
                                 </div>
                             )}
-                        </div>
+                        </button>
                     ))}
                 </div>
+            )}
+
+            {selectedComponentId !== null && (
+                <ComponentEditDrawer
+                    componentId={selectedComponentId}
+                    onClose={() => setSelectedComponentId(null)}
+                    onSaved={() => { setSelectedComponentId(null); loadComponents(); }}
+                />
             )}
 
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
@@ -775,6 +819,258 @@ export default function ComponentenPage() {
                 AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
                 voorstel te krijgen (incl. allergeen- en HACCP-suggesties). Niets wordt opgeslagen tot je
                 op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Edit-drawer: alle component-velden + allergens-grid + HACCP-rijen-editor
+   ────────────────────────────────────────────────────────────────────────── */
+
+function ComponentEditDrawer({
+    componentId, onClose, onSaved,
+}: {
+    componentId: number;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const toast = useToast();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [comp, setComp] = useState<ComponentRow | null>(null);
+
+    // Form state
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [baseQty, setBaseQty] = useState('');
+    const [baseUnit, setBaseUnit] = useState('g');
+    const [costEuros, setCostEuros] = useState('');
+    const [flavorTags, setFlavorTags] = useState('');
+    const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
+    const [haccpRows, setHaccpRows] = useState<HaccpRow[]>([]);
+
+    async function loadDetail() {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/components/${componentId}`, { credentials: 'include' });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Laden mislukt');
+            const c = body.component as ComponentRow;
+            setComp(c);
+            setName(c.name);
+            setDescription(c.description ?? '');
+            setBaseQty(String(c.base_quantity));
+            setBaseUnit(c.base_unit);
+            setCostEuros((c.base_cost_cents / 100).toFixed(2));
+            setFlavorTags((c.flavor_tags ?? []).join(', '));
+            setAllergenCodes(new Set((body.allergens as AllergenRow[] ?? []).map(a => a.allergen_code)));
+            setHaccpRows((body.haccp_points as HaccpRow[] ?? []).map(h => ({
+                id: h.id, type: h.type, threshold_value: h.threshold_value,
+                threshold_unit: h.threshold_unit, note: h.note, ai_suggested: h.ai_suggested,
+            })));
+        } catch (e: any) {
+            toast(e.message || 'Laden mislukt', 'error');
+            onClose();
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => { loadDetail(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [componentId]);
+
+    function toggleAllergen(code: string) {
+        setAllergenCodes(prev => {
+            const next = new Set(prev);
+            if (next.has(code)) next.delete(code); else next.add(code);
+            return next;
+        });
+    }
+
+    function addHaccpRow() {
+        setHaccpRows(prev => [...prev, { type: 'kerntemp', threshold_value: null, threshold_unit: 'celsius', note: null, ai_suggested: false }]);
+    }
+
+    function updateHaccpRow(idx: number, patch: Partial<HaccpRow>) {
+        setHaccpRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r));
+    }
+
+    function removeHaccpRow(idx: number) {
+        setHaccpRows(prev => prev.filter((_, i) => i !== idx));
+    }
+
+    async function handleSave() {
+        if (!name.trim()) { toast('Naam verplicht', 'error'); return; }
+        const qty = Number(baseQty);
+        if (!Number.isFinite(qty) || qty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
+        const cost = Number(costEuros);
+        if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig', 'error'); return; }
+        const baseCostCents = Math.round(cost * 100);
+        const tags = flavorTags.split(',').map(t => t.trim()).filter(Boolean);
+
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/components/${componentId}`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    description: description.trim() || null,
+                    base_quantity: qty,
+                    base_unit: baseUnit,
+                    base_cost_cents: baseCostCents,
+                    flavor_tags: tags,
+                    allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: false })),
+                    haccp_points: haccpRows.filter(r => r.type),
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            toast('Component bijgewerkt — wijzigingen propageren naar alle gerechten', 'success');
+            if (body.warnings) toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
+            onSaved();
+        } catch (e: any) {
+            toast(e.message || 'Opslaan mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="comp-drawer-title"
+            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
+            onClick={onClose}
+        >
+            <div
+                className="h-full w-full max-w-lg overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <div className="text-xs text-muted-foreground">Component bewerken</div>
+                        <h2 id="comp-drawer-title" className="text-xl font-semibold">{comp?.name ?? 'Laden...'}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {loading ? (
+                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                        <Loader2 size={16} className="mr-2 animate-spin" /> Laden...
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        {/* Basis-info */}
+                        <section className="space-y-3">
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Naam</span>
+                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                            </label>
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Beschrijving</span>
+                                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <label className="block text-xs">
+                                    <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
+                                    <input type="number" step="0.001" min="0.001" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                                </label>
+                                <label className="block text-xs">
+                                    <span className="mb-1 block text-muted-foreground">Eenheid</span>
+                                    <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm">
+                                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </label>
+                                <label className="block text-xs">
+                                    <span className="mb-1 block text-muted-foreground">Kostprijs (€)</span>
+                                    <input type="number" step="0.01" min="0" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                                </label>
+                            </div>
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
+                                <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, ..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                            </label>
+                        </section>
+
+                        {/* Allergenen */}
+                        <section>
+                            <div className="mb-2 text-xs font-medium text-muted-foreground">Allergenen — klik om aan/uit te zetten</div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {ALLERGEN_CODES.map(code => {
+                                    const on = allergenCodes.has(code);
+                                    return (
+                                        <button
+                                            key={code}
+                                            type="button"
+                                            onClick={() => toggleAllergen(code)}
+                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                            title={ALLERGEN_LABELS[code]}
+                                        >
+                                            {on && <Check size={11} />}
+                                            {ALLERGEN_LABELS[code] ?? code}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        {/* HACCP-punten */}
+                        <section>
+                            <div className="mb-2 flex items-center justify-between">
+                                <span className="text-xs font-medium text-muted-foreground">HACCP-punten</span>
+                                <button type="button" onClick={addHaccpRow} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
+                                    <Plus size={11} /> Toevoegen
+                                </button>
+                            </div>
+                            {haccpRows.length === 0 ? (
+                                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
+                                    Nog geen HACCP-punten.
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {haccpRows.map((h, idx) => (
+                                        <div key={idx} className="rounded-md border border-border bg-card p-2 text-xs">
+                                            <div className="flex items-start gap-2">
+                                                <ThermometerSun size={14} className="mt-1 shrink-0 text-muted-foreground" />
+                                                <div className="flex-1 space-y-1">
+                                                    <select value={h.type} onChange={(e) => {
+                                                        const t = HACCP_TYPES.find(x => x.value === e.target.value);
+                                                        updateHaccpRow(idx, { type: e.target.value, threshold_unit: t?.defaultUnit || h.threshold_unit });
+                                                    }} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs">
+                                                        {HACCP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                                    </select>
+                                                    <div className="grid grid-cols-2 gap-1">
+                                                        <input type="number" placeholder="waarde" value={h.threshold_value ?? ''} onChange={(e) => updateHaccpRow(idx, { threshold_value: e.target.value === '' ? null : Number(e.target.value) })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                                        <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateHaccpRow(idx, { threshold_unit: e.target.value || null })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                                    </div>
+                                                    <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateHaccpRow(idx, { note: e.target.value || null })} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                                </div>
+                                                <button type="button" onClick={() => removeHaccpRow(idx)} aria-label="Verwijder HACCP-rij" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+
+                        <div className="flex justify-end gap-2 border-t border-border pt-4">
+                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
+                                Annuleer
+                            </button>
+                            <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                {saving ? 'Opslaan...' : 'Opslaan'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
