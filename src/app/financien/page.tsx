@@ -132,8 +132,13 @@ function FinancienInner() {
             const hours = Math.max(0, (end.getTime() - start.getTime()) / 3600000);
             const mStr = String(start.getMonth() + 1).padStart(2, '0');
             if (monthsMap[mStr]) {
+                // Gebruik per-log uurtarief_snapshot (team-uren systeem). Bestaande
+                // logs zonder snapshot vallen terug op LABOR_COST_PER_HOUR default.
+                const rate = typeof log.uurtarief_snapshot === 'number' && log.uurtarief_snapshot > 0
+                    ? log.uurtarief_snapshot
+                    : LABOR_COST_PER_HOUR;
                 monthsMap[mStr].laborHours += hours;
-                monthsMap[mStr].laborCost += (hours * LABOR_COST_PER_HOUR);
+                monthsMap[mStr].laborCost += (hours * rate);
             }
         });
 

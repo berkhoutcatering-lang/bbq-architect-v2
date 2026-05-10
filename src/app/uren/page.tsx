@@ -1,286 +1,215 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useEffect, useMemo, useState } from 'react';
+import { Clock } from 'lucide-react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
-import { useConfirm } from '@/components/ConfirmDialog';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
-import { MAANDEN_KORT } from '@/lib/utils';
-import EmptyState from '@/components/EmptyState';
+import { useAuth } from '@/lib/AuthContext';
+import { usePersoneel } from '@/lib/usePersoneel';
 import PageHeader from '@/components/PageHeader';
-import type { TimeLog } from '@/types';
-import { BarChart3, CalendarDays, Circle, Clock, History, LineChart, Play, Square, Target, Trash2 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { RequireTier } from '@/components/PaywallPrompt';
+import PunchPanel from '@/components/uren/PunchPanel';
+import LiveRow from '@/components/uren/LiveRow';
+import CrewBlock from '@/components/uren/CrewBlock';
+import MonthBlock from '@/components/uren/MonthBlock';
+import AuditBlock from '@/components/uren/AuditBlock';
+import type { DbEvent, TimeLog } from '@/types';
+import { shiftDurationMs } from '@/lib/uren-format';
 
-export default function Uren() {
-    const { data: logs, insert, update, remove } = useSupabase<TimeLog>('time_logs', []);
-    const showToast = useToast();
-    const showConfirm = useConfirm();
-    const [now, setNow] = useState(new Date());
-    const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(new Date()));
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+export default function UrenPage() {
+  const { user } = useAuth();
+  const { data: timeLogs, insert, update } = useSupabase<TimeLog>('time_logs', []);
+  const { data: events } = useSupabase<DbEvent>('events', []);
+  const { data: personeel } = usePersoneel();
+  const showToast = useToast();
 
-    const IBA_JAARNORM = 1225;
+  const [month, setMonth] = useState(function () {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  });
 
-    useEffect(function () {
-        const interval = setInterval(function () { setNow(new Date()); }, 1000);
-        return function () { clearInterval(interval); };
-    }, []);
+  const me = useMemo(function () {
+    if (!user) return null;
+    return personeel.find(function (p) { return p.user_id === user.id; }) || null;
+  }, [personeel, user]);
 
-    function getWeekNumber(d: Date): number {
-        const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-        date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-        const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-        return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-    }
+  const liveLogs = useMemo(function () {
+    return timeLogs.filter(function (l) { return !l.end_time; });
+  }, [timeLogs]);
 
-    const activeLog = (logs || []).find(function (l: any) { return l.status === 'active'; });
+  const myActiveLog = useMemo(function () {
+    if (!me) return undefined;
+    return liveLogs.find(function (l) { return l.personeel_id === me.id; });
+  }, [liveLogs, me]);
 
-    function calcHours(log: any): number {
-        const start = new Date(log.start_time);
-        const end = log.end_time ? new Date(log.end_time) : now;
-        return Math.max(0, (end.getTime() - start.getTime()) / 3600000);
-    }
-
-    function fmtDuration(hours: number): string {
-        const h = Math.floor(hours);
-        const m = Math.floor((hours - h) * 60);
-        return h + 'u ' + (m < 10 ? '0' : '') + m + 'm';
-    }
-
-    function fmtTime(dateStr: string): string {
-        if (!dateStr) return '\u2014';
-        const d = new Date(dateStr);
-        return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
-    }
-
-    function punchIn() {
-        insert({ start_time: new Date().toISOString(), status: 'active', locatie: '', notitie: '' } as any)
-            .then(function () { showToast('\u23f1\ufe0f Ingeklokt!', 'success'); });
-    }
-
-    function punchOut() {
-        if (!activeLog) return;
-        const hours = calcHours(activeLog);
-        update(activeLog.id, { end_time: new Date().toISOString(), status: 'completed' } as any)
-            .then(function () { showToast('\u2705 Uitgeklokt \u2014 ' + fmtDuration(hours) + ' gewerkt', 'success'); });
-    }
-
-    const completedLogs = (logs || []).filter(function (l: any) { return l.status === 'completed' || l.status === 'signed'; });
-    const yearLogs = completedLogs.filter(function (l: any) { return new Date(l.start_time).getFullYear() === selectedYear; });
-
-    let totalYearHours = 0;
-    yearLogs.forEach(function (l: any) { totalYearHours += calcHours(l); });
-
-    const weekData: { label: string; week: number; hours: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-        let w = selectedWeek - i;
-        let y = selectedYear;
-        if (w <= 0) { w += 52; y -= 1; }
-        const wLogs = completedLogs.filter(function (l: any) {
-            const d = new Date(l.start_time);
-            return getWeekNumber(d) === w && d.getFullYear() === y;
-        });
-        let wHrs = 0;
-        wLogs.forEach(function (l: any) { wHrs += calcHours(l); });
-        weekData.push({ label: 'W' + w, week: w, hours: Math.round(wHrs * 10) / 10 });
-    }
-
-    const monthlyHours = new Array(12).fill(0);
-    yearLogs.forEach(function (l: any) {
-        const m = new Date(l.start_time).getMonth();
-        monthlyHours[m] += calcHours(l);
+  const activeLogsByPersoneelId = useMemo(function () {
+    const map: Record<string, TimeLog | undefined> = {};
+    liveLogs.forEach(function (l) {
+      if (l.personeel_id) map[l.personeel_id] = l;
     });
-    const monthlyChartData = MAANDEN_KORT.map(function (naam: string, i: number) {
-        return { naam: naam, uren: Math.round(monthlyHours[i]) };
+    return map;
+  }, [liveLogs]);
+
+  const myYearTotalHours = useMemo(function () {
+    if (!me) return 0;
+    const year = new Date().getFullYear();
+    let total = 0;
+    timeLogs.forEach(function (l) {
+      if (l.personeel_id !== me.id) return;
+      if (!l.end_time) return;
+      if (new Date(l.start_time).getFullYear() !== year) return;
+      total += shiftDurationMs(l.start_time, l.end_time) / 3_600_000;
     });
+    return total;
+  }, [timeLogs, me]);
 
-    return (
-        <RequireTier feature="crew_uren">
-        <div className="mobile-safe-bottom" style={{ animation: 'fadeIn 0.4s ease-out' }}>
-            <PageHeader title="Workforce & Uren" />
+  function punchInForPerson(personeelId: string, eventId: number | null) {
+    const p = personeel.find(function (x) { return x.id === personeelId; });
+    if (!p) {
+      showToast('Crew-lid niet gevonden', 'error');
+      return Promise.resolve();
+    }
+    if (activeLogsByPersoneelId[personeelId]) {
+      showToast(p.naam + ' is al ingeklokt', 'warning');
+      return Promise.resolve();
+    }
+    return insert({
+      start_time: new Date().toISOString(),
+      end_time: null,
+      status: 'active',
+      locatie: '',
+      notitie: '',
+      personeel_id: personeelId,
+      event_id: eventId,
+      uurtarief_snapshot: p.uurtarief,
+      clocked_in_by: user?.id || null,
+    } as Partial<TimeLog>).then(function () {
+      showToast(p.naam + ' ingeklokt', 'success');
+    }).catch(function (e: unknown) {
+      const msg = (e as { message?: string })?.message || '';
+      if (msg.includes('ux_time_logs_active_per_person')) {
+        showToast(p.naam + ' is al ingeklokt', 'warning');
+      } else {
+        showToast('Inklokken mislukt: ' + (msg || 'onbekende fout'), 'error');
+      }
+    });
+  }
 
-            <PageGuideNote
-                id="uren"
-                accent="#8b5cf6"
-                icon={Clock}
-                intro="Klok jezelf en je crew in — handmatig of met de stop-klok — en zie direct hoeveel uur je per event maakt."
-                actions={[
-                    { lead: 'Druk de groene knop om te starten', text: '— de timer loopt door tot je stopt, ook als je uitlogt.' },
-                    { lead: 'Koppel uren aan een event', text: 'om straks in Financiën je werkelijke loonkosten per event te zien.' },
-                    { lead: 'De maandgrafiek onderin', text: 'laat per crew-lid zien wie te veel of te weinig draait — handig voor planning.' },
-                ]}
-            />
+  function punchOutById(logId: number) {
+    const log = timeLogs.find(function (l) { return l.id === logId; });
+    if (!log) return Promise.resolve();
+    const p = personeel.find(function (x) { return x.id === log.personeel_id; });
+    return update(logId, {
+      end_time: new Date().toISOString(),
+      status: 'completed',
+    } as Partial<TimeLog>).then(function () {
+      const dur = shiftDurationMs(log.start_time, new Date().toISOString());
+      const hrs = (dur / 3_600_000).toFixed(1);
+      showToast((p?.naam || 'Crew') + ' uitgeklokt — ' + hrs + 'u', 'success');
+    }).catch(function (e: unknown) {
+      showToast('Uitklokken mislukt: ' + ((e as Error)?.message || 'onbekende fout'), 'error');
+    });
+  }
 
-            <div className="uren-punch-section mb-24" style={{ textAlign: 'center', padding: '32px 16px', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--border)' }}>
-                {activeLog ? (
-                    <>
-                        <div style={{ fontSize: 12, color: 'var(--brand)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
-                            <Circle size={8} className="mr-1.5" style={{ animation: 'pulse 1.5s infinite' }} /> AAN HET WERK
-                        </div>
-                        <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--text)', marginBottom: 8 }}>{fmtDuration(calcHours(activeLog))}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 24 }}>Ingeklokt om {fmtTime(activeLog.start_time)}</div>
-                        <button className="btn btn-red btn-lg" onClick={punchOut} style={{ padding: '12px 32px' }}>
-                            <Square size={14} /> Punch Out
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 20 }}>NIET INGEKLOKT</div>
-                        <button className="btn btn-brand btn-lg" onClick={punchIn} style={{ padding: '12px 40px' }}>
-                            <Play size={14} /> Punch In
-                        </button>
-                    </>
-                )}
-            </div>
+  function handleMyPunchIn(eventId: number | null) {
+    if (!me) return Promise.resolve();
+    return punchInForPerson(me.id, eventId);
+  }
 
-            <div className="stat-grid mb-24">
-                <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}><CalendarDays size={14} /></div>
-                    <div className="stat-val">{fmtDuration(weekData[11].hours)}</div>
-                    <div className="stat-label">Deze Week</div>
-                </div>
-                <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><LineChart size={14} /></div>
-                    <div className="stat-val">{fmtDuration(totalYearHours)}</div>
-                    <div className="stat-label">Totaal {selectedYear}</div>
-                </div>
-                <div className="stat-card uren-glass">
-                    <div className="stat-icon" style={{ background: 'rgba(167,139,250,.12)', color: 'var(--purple)' }}><Target size={14} /></div>
-                    <div className="stat-val">{Math.max(0, IBA_JAARNORM - Math.round(totalYearHours))}u</div>
-                    <div className="stat-label">IBA Resterend</div>
-                </div>
-            </div>
+  function handleMyPunchOut() {
+    if (!myActiveLog) return Promise.resolve();
+    return punchOutById(myActiveLog.id);
+  }
 
-            <div className="analytics-grid mb-24">
-                <div className="panel inv-glass">
-                    <div className="panel-head">
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BarChart3 size={12} style={{ color: 'var(--brand)' }} /> Laatste 12 Weken
-                        </h3>
-                    </div>
-                    <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
-                            <BarChart data={weekData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="25%">
-                                <XAxis dataKey="label" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                                <Tooltip formatter={function (v: any) { return [v + ' uur', 'Gewerkt']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(255,191,0,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(255,191,0,.06)' }} />
-                                <Bar dataKey="hours" radius={[3, 3, 0, 0]}>
-                                    {weekData.map(function (d, i) { return <Cell key={i} fill={d.week === selectedWeek ? 'var(--brand)' : 'rgba(255,191,0,.25)'} />; })}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-                <div className="panel inv-glass">
-                    <div className="panel-head">
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <LineChart size={12} style={{ color: 'var(--purple)' }} /> Uren per Maand
-                        </h3>
-                    </div>
-                    <div style={{ height: 180, marginTop: 16 }}>
-                        <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
-                            <BarChart data={monthlyChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barCategoryGap="30%">
-                                <XAxis dataKey="naam" tick={{ fill: 'var(--zinc)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fill: 'var(--zinc)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                                <Tooltip formatter={function (v: any) { return [v + ' uur', 'Totaal']; }} contentStyle={{ background: '#18181b', border: '1px solid rgba(167,139,250,.15)', borderRadius: 8, fontSize: 11 }} cursor={{ fill: 'rgba(167,139,250,.06)' }} />
-                                <Bar dataKey="uren" fill="var(--purple)" radius={[3, 3, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
+  // Print-modus: voeg print-CSS toe
+  useEffect(function () {
+    const styleId = 'uren-print-styles';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @media print {
+        body * { visibility: hidden; }
+        .uren-print-area, .uren-print-area * { visibility: visible; }
+        .uren-print-area { position: absolute; inset: 0; padding: 24px; background: white; color: black; }
+        .uren-print-area .panel { background: white !important; border: 1px solid #ddd !important; }
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+      }
+      .print-only { display: none; }
+    `;
+    document.head.appendChild(style);
+    return function () {
+      const el = document.getElementById(styleId);
+      if (el) el.remove();
+    };
+  }, []);
 
-            <div className="panel inv-glass">
-                <div className="panel-head"><h3>IBA Progressie</h3></div>
-                <div style={{ padding: 20 }}>
-                    <div style={{ height: 12, borderRadius: 6, background: 'var(--border)', overflow: 'hidden' }}>
-                        <div style={{ width: Math.min(100, (totalYearHours / IBA_JAARNORM) * 100) + '%', height: '100%', background: 'linear-gradient(90deg, var(--brand), #fbbf24)', borderRadius: 6 }}></div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 12, fontWeight: 700 }}>
-                        <span style={{ color: 'var(--muted)' }}>0u</span>
-                        <span style={{ color: 'var(--brand)' }}>{Math.round(totalYearHours)}u gewerkt</span>
-                        <span style={{ color: 'var(--muted)' }}>{IBA_JAARNORM}u norm</span>
-                    </div>
-                </div>
-            </div>
+  return (
+    <RequireTier feature="crew_uren">
+      <div className="mobile-safe-bottom" style={{ animation: 'fadeIn .4s ease-out' }}>
+        <PageHeader title="Workforce & Uren" />
 
-            <div className="panel inv-glass" style={{ marginTop: 24 }}>
-                <div className="panel-head">
-                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <History size={12} style={{ color: 'var(--brand)' }} /> Recente Registraties
-                    </h3>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="tbl">
-                        <thead>
-                            <tr>
-                                <th>Datum</th>
-                                <th>In</th>
-                                <th>Uit</th>
-                                <th>Uren</th>
-                                <th>Status</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {completedLogs
-                                .slice()
-                                .sort(function (a: any, b: any) { return new Date(b.start_time).getTime() - new Date(a.start_time).getTime(); })
-                                .slice(0, 10)
-                                .map(function (log: any) {
-                                    const d = new Date(log.start_time);
-                                    const dd = (d.getDate() < 10 ? '0' : '') + d.getDate() + '-' + ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
-                                    return (
-                                        <tr key={log.id}>
-                                            <td>{dd}</td>
-                                            <td>{fmtTime(log.start_time)}</td>
-                                            <td>{fmtTime(log.end_time)}</td>
-                                            <td>{fmtDuration(calcHours(log))}</td>
-                                            <td>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '4px 8px',
-                                                    borderRadius: 6,
-                                                    fontSize: 12,
-                                                    fontWeight: 700,
-                                                    background: log.status === 'signed' ? 'rgba(59,130,246,.15)' : 'rgba(34,197,94,.15)',
-                                                    color: log.status === 'signed' ? 'var(--blue)' : 'var(--green)'
-                                                }}>
-                                                    {log.status === 'signed' ? 'Getekend' : 'Voltooid'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button
-                                                    className="btn btn-ghost btn-sm"
-                                                    style={{ color: 'var(--red)', padding: '4px 8px' }}
-                                                    onClick={function () {
-                                                        showConfirm('Registratie verwijderen? Dit kan niet ongedaan worden.', function () {
-                                                            remove(log.id).then(function () {
-                                                                showToast('Registratie verwijderd', 'success');
-                                                            });
-                                                        });
-                                                    }}
-                                                >
-                                                    <Trash2 size={11} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            {completedLogs.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} style={{ padding: 0 }}>
-                                        <EmptyState page="/uren" onAction={punchIn} />
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <PageGuideNote
+          id="uren"
+          accent="#c4a35a"
+          icon={Clock}
+          intro="Klok jezelf en je team in — handmatig of met de stop-klok — en zie direct wie waar wat doet."
+          actions={[
+            { lead: 'Druk de groene knop om te starten', text: '— de timer loopt door tot je stopt, ook als je uitlogt.' },
+            { lead: 'Klok crew vanuit het Crew-blok', text: 'als manager kun je iedereen in/uitklokken vanaf één scherm.' },
+            { lead: 'Maand-overzicht onderaan', text: 'toont loonkost per crew-lid en is printbaar als PDF voor je loonadministratie.' },
+          ]}
+        />
+
+        {/* Punch panel: jouw eigen klok */}
+        <div style={{ marginBottom: 16 }}>
+          <PunchPanel
+            me={me}
+            myActiveLog={myActiveLog}
+            events={events}
+            myYearTotalHours={myYearTotalHours}
+            onPunchIn={handleMyPunchIn}
+            onPunchOut={handleMyPunchOut}
+          />
         </div>
-        </RequireTier>
-    );
+
+        {/* 2-cols: live + crew */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 16,
+          marginBottom: 16,
+        }}>
+          <LiveRow
+            liveLogs={liveLogs}
+            personeel={personeel}
+            events={events}
+            onStop={punchOutById}
+          />
+          <CrewBlock
+            personeel={personeel}
+            activeLogsByPersoneelId={activeLogsByPersoneelId}
+            events={events}
+            onPunchIn={punchInForPerson}
+            onPunchOut={punchOutById}
+          />
+        </div>
+
+        {/* Maand-overzicht (printbaar) */}
+        <div style={{ marginBottom: 16 }}>
+          <MonthBlock
+            month={month}
+            setMonth={setMonth}
+            logs={timeLogs}
+            personeel={personeel}
+          />
+        </div>
+
+        {/* Activiteit-feed */}
+        <AuditBlock />
+      </div>
+    </RequireTier>
+  );
 }
