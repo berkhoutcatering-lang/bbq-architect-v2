@@ -33,10 +33,16 @@ const tabs: Tab[] = [
         match: (p) => p === "/events" || p.startsWith("/events/"),
     },
     {
-        label: "Keuken",
+        label: "Inspiratie",
         icon: <ChefHat size={22} />,
-        href: "/gerechten",
-        match: (p) => p === "/gerechten" || p.startsWith("/gerechten/") || p === "/bedenker" || p === "/marges",
+        href: "/inspiratie",
+        match: (p) =>
+            p === "/inspiratie" ||
+            p.startsWith("/inspiratie/") ||
+            p === "/gerechten" ||
+            p.startsWith("/gerechten/") ||
+            p === "/bedenker" ||
+            p === "/marges",
     },
     {
         label: "Geld",

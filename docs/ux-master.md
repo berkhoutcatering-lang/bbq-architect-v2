@@ -72,7 +72,8 @@ Vastgelegd in `~/.claude/projects/-Users-mathi-Documents-GitHub-bbq-architect-v2
 🏠 Vandaag         → /                  (control-tower, Vandaag-laag)
 📅 Plannen & Events → /agenda           (tabs: Agenda · Events · Klantgesprek · Prep · Service · HACCP)
 🛒 Verkoop & Klanten → /offertes        (tabs: Offertes · Facturen · Klanten)
-🍳 Menu & Recepten → /gerechten         (tabs: Gerechten · Menu-analyse · Recepten · AI Pitmaster)
+📚 Inspiratie Bibliotheek → /inspiratie  (sub-pages: Componenten · Gerechten) — v5 2026-05-10
+                                          (was: 🍳 Menu & Recepten → /gerechten met tabs Gerechten · Bedenker · Marges)
 💰 Geld & Boekhouding → /financien      (tabs: Financiën · Uren) + interne 5-tabs binnen Financiën
 📦 Voorraad & Beheer → /voorraad        (tabs: Voorraad · Inkoop · Logistiek · Materieel · Prijzen)
 ⚙️ Instellingen & Hulp → /sectie/systeem (tabs: Instellingen · Gebruikers · Mailbox · Website · Foto-archief · Hulp · Admin)
