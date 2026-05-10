@@ -366,6 +366,47 @@ export interface TimeLog {
   locatie: string;
   notitie: string;
   created_at: string;
+  organization_id?: string | null;
+  personeel_id: string | null;
+  event_id: number | null;
+  uurtarief_snapshot: number | null;
+  clocked_in_by: string | null;
+}
+
+export type PersoneelFunctie = 'Pitmaster' | 'Sous-chef' | 'Grill' | 'Service' | 'Bar' | 'Crew';
+export type PersoneelContract = 'vast' | 'oproep' | 'freelance' | 'stagiair';
+
+export interface Personeel {
+  id: string;
+  organization_id: string;
+  user_id: string | null;
+  naam: string;
+  email: string | null;
+  telefoon: string | null;
+  functie: PersoneelFunctie;
+  uurtarief: number;
+  contract_type: PersoneelContract;
+  actief: boolean;
+  notitie: string | null;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  organization_id: string | null;
+  record_table: 'gerechten' | 'offertes' | 'facturen' | 'menu_templates' | 'time_logs';
+  record_id: number;
+  action: 'insert' | 'update' | 'delete';
+  user_id: string | null;
+  changed_at: string;
+  changes: Record<string, unknown>;
+  metadata: {
+    event_kind?: 'punch_in' | 'punch_out' | 'manual_edit' | 'delete';
+    personeel_naam?: string | null;
+    event_naam?: string | null;
+    actor_naam?: string | null;
+    duration_ms?: number | null;
+  };
 }
 
 export interface Bon {

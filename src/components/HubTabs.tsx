@@ -23,10 +23,14 @@ interface Props {
 export default function HubTabs({ tabs, ariaLabel }: Props) {
   const pathname = usePathname();
 
+  const activeHref = tabs
+    .filter(t => pathname === t.href || (t.href !== '/' && pathname?.startsWith(t.href + '/')))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <div className="tab-bar" role="tablist" aria-label={ariaLabel} style={{ marginBottom: 'var(--space-4)' }}>
       {tabs.map(t => {
-        const isActive = pathname === t.href || (t.href !== '/' && pathname?.startsWith(t.href));
+        const isActive = t.href === activeHref;
         const Icon = t.icon;
         return (
           <Link
