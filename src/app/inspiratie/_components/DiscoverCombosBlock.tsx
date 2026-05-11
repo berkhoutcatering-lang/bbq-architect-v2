@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Loader2, Boxes, RefreshCw, ChefHat, Flame } from 'lucide-react';
+import { Sparkles, Loader2, Boxes, RefreshCw, ChefHat } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 
@@ -25,23 +25,14 @@ function formatEuro(cents: number): string {
     return `€${(cents / 100).toFixed(2)}`;
 }
 
-const PITMASTER_LINES = [
-    'De pitmaster scharrelt door je smaakbank…',
-    'Even kijken wat er rookt…',
-    'Combinaties proeven in het hoofd…',
-    'AI staat naast de smoker…',
-];
-
 export default function DiscoverCombosBlock() {
     const toast = useToast();
     const [busy, setBusy] = useState(false);
     const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
     const [ranAt, setRanAt] = useState<Date | null>(null);
-    const [pitline, setPitline] = useState(PITMASTER_LINES[0]);
 
     async function handleDiscover() {
         setBusy(true);
-        setPitline(PITMASTER_LINES[Math.floor(Math.random() * PITMASTER_LINES.length)]);
         try {
             const res = await fetch('/api/ai/discover-combinations', {
                 method: 'POST',
@@ -52,7 +43,7 @@ export default function DiscoverCombosBlock() {
             if (!res.ok) throw new Error(body.error || 'AI-call mislukt');
             const arr = body.suggestions as Suggestion[];
             if (!arr || arr.length === 0) {
-                toast('AI vond geen nieuwe combos — voeg eerst meer bouwstenen toe', 'error');
+                toast('AI vond geen nieuwe combinaties — voeg eerst meer componenten toe', 'error');
                 return;
             }
             setSuggestions(arr);
@@ -69,22 +60,18 @@ export default function DiscoverCombosBlock() {
             className="overflow-hidden rounded-2xl border border-[var(--border)]"
             style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
         >
-            {/* Lead */}
             <div className="flex items-start gap-4 p-5 sm:p-6">
-                <div
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl shadow-lg ring-1 ring-[#FFBF00]/30"
-                    style={{ background: 'linear-gradient(135deg, #FFBF00 0%, #FF6B35 100%)' }}
-                >
-                    🧠
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)]/10 text-[var(--brand)] ring-1 ring-[var(--brand)]/20">
+                    <Sparkles size={16} strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="text-[13px] leading-relaxed text-[var(--muted-light)]">
-                        Klik op de knop en AI scant je hele bouwstenen-bibliotheek. Geen herhaling van wat
-                        je al hebt — alleen <span style={{ color: 'var(--text)' }}>nieuwe combinaties</span> met smaak-onderbouwing en kostprijs.
+                        Klik om de AI je componenten-bibliotheek + bestaande gerechten te laten scannen.
+                        Read-only voorstel — jij beslist of je ermee verder gaat.
                     </p>
                     {!suggestions && !busy && (
                         <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-                            Werkt het beste met ≥3 bouwstenen in je bibliotheek.
+                            Werkt beter naarmate je bibliotheek groeit (minimaal 3 componenten).
                         </p>
                     )}
                 </div>
@@ -92,32 +79,20 @@ export default function DiscoverCombosBlock() {
                     type="button"
                     onClick={handleDiscover}
                     disabled={busy}
-                    className="group inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold text-black shadow-lg shadow-[#FF6B35]/30 transition-all hover:scale-105 hover:shadow-[#FF6B35]/50 disabled:opacity-60"
-                    style={{ background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' }}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 py-2 text-[12px] font-semibold text-black transition hover:opacity-90 disabled:opacity-50"
                 >
                     {busy
-                        ? <><Loader2 size={14} className="animate-spin" /> Bezig…</>
+                        ? <><Loader2 size={13} className="animate-spin" /> AI scant…</>
                         : suggestions
-                            ? <><RefreshCw size={14} className="transition-transform group-hover:rotate-180" /> Opnieuw</>
-                            : <><Flame size={14} className="animate-pulse" /> Vind combos</>}
+                            ? <><RefreshCw size={13} /> Opnieuw</>
+                            : <><Sparkles size={13} /> Vind combinaties</>}
                 </button>
             </div>
 
-            {/* Pitmaster denkt-na strook */}
-            {busy && (
-                <div className="border-t border-[var(--border)] bg-black/40 px-6 py-4 text-center">
-                    <div className="inline-flex items-center gap-2 text-[12px] italic text-[#FFA552]">
-                        <Flame size={12} className="animate-pulse" />
-                        {pitline}
-                    </div>
-                </div>
-            )}
-
-            {/* Suggesties */}
             {suggestions && suggestions.length > 0 && !busy && (
-                <div className="border-t border-[var(--border)] bg-black/30 p-5 sm:p-6">
-                    <div className="mb-4 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
-                        <span className="text-[#FFA552]">🔥 {suggestions.length} verse ideeën</span>
+                <div className="border-t border-[var(--border)] bg-[var(--bg)] p-5 sm:p-6">
+                    <div className="mb-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        <span>{suggestions.length} voorstellen</span>
                         {ranAt && <span>{ranAt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>}
                     </div>
 
@@ -125,12 +100,11 @@ export default function DiscoverCombosBlock() {
                         {suggestions.map((s, i) => (
                             <article
                                 key={i}
-                                className="overflow-hidden rounded-xl border border-[var(--border)] p-5 transition-all hover:border-[#FF6B35]/40"
-                                style={{ background: 'linear-gradient(135deg, var(--card-solid) 0%, #16161a 100%)' }}
+                                className="rounded-xl border border-[var(--border)] bg-[var(--card-solid)] p-5"
                             >
                                 <header className="mb-3 flex items-start justify-between gap-4">
                                     <div className="min-w-0 flex-1">
-                                        <h4 className="text-lg font-bold leading-tight" style={{ color: 'var(--text)' }}>
+                                        <h4 className="text-base font-semibold leading-tight" style={{ color: 'var(--text)' }}>
                                             {s.name}
                                         </h4>
                                         {s.description && (
@@ -139,22 +113,22 @@ export default function DiscoverCombosBlock() {
                                             </p>
                                         )}
                                     </div>
-                                    <div className="shrink-0 rounded-lg border border-[#FFBF00]/30 bg-[#FFBF00]/10 px-2.5 py-1.5 text-right">
-                                        <div className="text-[9px] font-bold uppercase tracking-wider text-[#FFA552]">
-                                            Kost
+                                    <div className="shrink-0 text-right">
+                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                                            Kostprijs
                                         </div>
-                                        <div className="font-mono text-[15px] font-bold tabular-nums text-[#FFBF00]">
+                                        <div className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
                                             {formatEuro(s.total_cost_cents)}
                                         </div>
                                     </div>
                                 </header>
 
                                 {s.components.length > 0 && (
-                                    <div className="rounded-lg border border-[var(--border)] bg-black/30 p-3">
-                                        <div className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#FFA552]">
-                                            <Boxes size={10} /> {s.components.length} bouwstenen
+                                    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+                                        <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                            <Boxes size={10} /> Componenten · {s.components.length}
                                         </div>
-                                        <ul className="space-y-1 text-[12px]">
+                                        <ul className="space-y-0.5 text-[12px]">
                                             {s.components.map(c => (
                                                 <li key={c.component_id} className="flex items-baseline justify-between gap-3">
                                                     <span style={{ color: 'var(--text)' }}>{c.name}</span>
@@ -168,12 +142,9 @@ export default function DiscoverCombosBlock() {
                                 )}
 
                                 {s.why_this_combo && (
-                                    <div className="mt-3 flex gap-2 rounded-lg border-l-4 border-[#FF6B35] bg-[#FF6B35]/5 p-3">
-                                        <Sparkles size={12} className="mt-0.5 shrink-0 text-[#FFA552]" />
-                                        <p className="text-[11px] leading-relaxed text-[var(--muted-light)]">
-                                            {s.why_this_combo}
-                                        </p>
-                                    </div>
+                                    <p className="mt-3 border-l-2 border-[var(--brand)]/40 pl-3 text-[11px] italic leading-relaxed text-[var(--muted-light)]">
+                                        {s.why_this_combo}
+                                    </p>
                                 )}
                             </article>
                         ))}
@@ -181,9 +152,9 @@ export default function DiscoverCombosBlock() {
 
                     <Link
                         href="/inspiratie/gerechten"
-                        className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-semibold text-[#FFA552] no-underline transition hover:border-[#FF6B35]/30 hover:bg-[#FF6B35]/5"
+                        className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-[var(--brand)] hover:underline"
                     >
-                        <ChefHat size={12} /> Bouw een gerecht op basis van een idee →
+                        <ChefHat size={11} /> Bouw een gerecht op basis van een idee
                     </Link>
                 </div>
             )}
