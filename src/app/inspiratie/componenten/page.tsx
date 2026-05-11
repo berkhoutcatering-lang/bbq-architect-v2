@@ -11,6 +11,7 @@ import {
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import '@/components/redesign/redesign.css';
 
 interface AiProposal {
     name: string;
@@ -323,66 +324,158 @@ export default function ComponentenPage() {
 
     const preparedCount = components.filter(c => c.type === 'prepared').length;
     const boughtCount = components.filter(c => c.type === 'bought_in').length;
+    const aiCount = components.filter(c => c.ai_suggested).length;
+    const totalCount = components.length;
+    const aiProgress = totalCount === 0 ? 0 : aiCount / totalCount;
+    const avgCostCents = totalCount === 0
+        ? 0
+        : Math.round(components.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
+    const circumference = 2 * Math.PI * 86;
 
     return (
-        <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-            <Link
-                href="/inspiratie"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[#FFA552]"
-            >
-                <ArrowLeft size={12} /> Inspiratie Bibliotheek
-            </Link>
+        <div className="redesign-root">
+            <div className="main" style={{ padding: '24px 0 40px' }}>
+                <div style={{ marginBottom: 12 }}>
+                    <Link
+                        href="/inspiratie"
+                        className="btn btn-ghost btn-sm"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        <ArrowLeft size={14} /> Inspiratie Bibliotheek
+                    </Link>
+                </div>
 
-            {/* Hero — glassmorphism aligned met event-hub */}
-            <header className="relative overflow-hidden rounded-2xl border border-[var(--border)] p-6 sm:p-8" style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}>
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full opacity-[0.10] blur-3xl"
-                    style={{ background: 'radial-gradient(circle, #FFBF00 0%, transparent 70%)' }}
-                />
-                <div className="relative space-y-2">
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-gold)]">
-                        <span className="inline-block h-px w-6 bg-[var(--brand-gold)]" />
-                        Inspiratie · Laag 1
+                <div className="eh-hero">
+                    <div className="eh-hero-bg"></div>
+                    <div className="eh-hero-content">
+                        <div className="eh-hero-left">
+                            <div>
+                                <div className="eh-hero-eyebrow"><span className="dot"></span>Inspiratie · Laag 1 · Atomair</div>
+                                <h1 className="eh-hero-title">Componenten</h1>
+                                <div className="eh-hero-sub">
+                                    <span className="pill">{totalCount} {totalCount === 1 ? 'bouwsteen' : 'bouwstenen'}</span>
+                                    <span className="sep">·</span>
+                                    <span>Zelf-bereid + Inkoop in één bibliotheek</span>
+                                    <span className="sep">·</span>
+                                    <span>Auto-propagatie naar gerechten</span>
+                                </div>
+                            </div>
+                            <div className="eh-hero-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAi(v => !v); setShowForm(false); }}
+                                    className="btn btn-primary"
+                                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                                >
+                                    <Sparkles size={14} /> AI Genereer
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowForm(v => !v); setShowAi(false); }}
+                                    className="btn btn-ghost"
+                                >
+                                    {showForm ? <X size={14} /> : <Plus size={14} />}
+                                    {showForm ? 'Annuleer' : 'Nieuw component'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowImport(true); setShowForm(false); setShowAi(false); }}
+                                    className="btn btn-ghost"
+                                >
+                                    <Upload size={14} /> Importeer leverancier
+                                </button>
+                            </div>
+                        </div>
+                        <div className="eh-countdown">
+                            <div className="eh-countdown-ring">
+                                <svg viewBox="0 0 200 200">
+                                    <defs>
+                                        <linearGradient id="componentenAiGrad" x1="0" x2="1" y1="0" y2="1">
+                                            <stop offset="0%" stopColor="#FFBF00" />
+                                            <stop offset="60%" stopColor="#ff8c20" />
+                                            <stop offset="100%" stopColor="#ff5010" />
+                                        </linearGradient>
+                                    </defs>
+                                    <circle className="bg-ring" cx="100" cy="100" r="86" />
+                                    <circle className="fg-ring" cx="100" cy="100" r="86"
+                                        stroke="url(#componentenAiGrad)"
+                                        strokeDasharray={circumference}
+                                        strokeDashoffset={circumference * (1 - aiProgress)} />
+                                    {Array.from({ length: 30 }).map((_, i) => {
+                                        const a = (i / 30) * Math.PI * 2;
+                                        const x1 = 100 + Math.cos(a) * 72;
+                                        const y1 = 100 + Math.sin(a) * 72;
+                                        const x2 = 100 + Math.cos(a) * 76;
+                                        const y2 = 100 + Math.sin(a) * 76;
+                                        return <line key={i} className="tick" x1={x1} y1={y1} x2={x2} y2={y2} />;
+                                    })}
+                                </svg>
+                                <div className="eh-countdown-center">
+                                    <div className="eh-countdown-num">{totalCount}</div>
+                                    <div className="eh-countdown-lbl">Componenten</div>
+                                    <div className="eh-countdown-sub">{Math.round(aiProgress * 100)}% via AI</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <h1 className="text-4xl font-semibold leading-tight tracking-tight" style={{ color: 'var(--text)' }}>
-                        Componenten
-                    </h1>
-                    <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
-                        Bouwstenen met receptuur, kostprijs, HACCP en allergenen. Zelf-bereid (gegrilde ananas)
-                        of inkoop (Hanos broodje). Wijzig hier één keer — alle gerechten passen automatisch mee.
-                    </p>
-                </div>
-            </header>
-
-            {/* Toolbar */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                {/* Segmented filter — sober gold */}
-                <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
-                    <button
-                        type="button"
-                        onClick={() => setTypeFilter('all')}
-                        className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
-                    >
-                        Alle <span className="ml-0.5 opacity-60">{components.length}</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setTypeFilter('prepared')}
-                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'prepared' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
-                    >
-                        <Package size={12} /> Zelf-bereid <span className="opacity-60">{preparedCount}</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setTypeFilter('bought_in')}
-                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'bought_in' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
-                    >
-                        <ShoppingBag size={12} /> Inkoop <span className="opacity-60">{boughtCount}</span>
-                    </button>
+                    <div className="eh-hero-stats">
+                        <div className="eh-hero-stat">
+                            <div className="l">Totaal</div>
+                            <div className="v">{totalCount}</div>
+                            <div className="s">In bibliotheek</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Zelf-bereid</div>
+                            <div className="v">{preparedCount}</div>
+                            <div className="s">Met receptuur</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Inkoop</div>
+                            <div className="v">{boughtCount}</div>
+                            <div className="s">Leverancier-gekoppeld</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">AI-suggesties</div>
+                            <div className={`v ${aiCount > 0 ? 'ok' : 'muted'}`}>{aiCount}</div>
+                            <div className="s">{aiCount > 0 ? `${Math.round(aiProgress * 100)}% van bibliotheek` : 'Nog niet gebruikt'}</div>
+                            {totalCount > 0 && (
+                                <div className="bar"><div className="fill" style={{ width: `${aiProgress * 100}%`, background: 'var(--brand)' }}></div></div>
+                            )}
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Gem. kostprijs</div>
+                            <div className="v">€{(avgCostCents / 100).toFixed(2)}</div>
+                            <div className="s">Per basis-eenheid</div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Filter + zoek-balk */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ marginBottom: 18 }}>
+                    <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter('all')}
+                            className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        >
+                            Alle <span className="ml-0.5 opacity-60">{components.length}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter('prepared')}
+                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'prepared' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        >
+                            <Package size={12} /> Zelf-bereid <span className="opacity-60">{preparedCount}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter('bought_in')}
+                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'bought_in' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        >
+                            <ShoppingBag size={12} /> Inkoop <span className="opacity-60">{boughtCount}</span>
+                        </button>
+                    </div>
+
                     <div className="relative">
                         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
                         <input
@@ -393,30 +486,7 @@ export default function ComponentenPage() {
                             className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[var(--brand)]/40 focus:outline-none"
                         />
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => { setShowImport(true); setShowForm(false); setShowAi(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-[12px] text-[var(--muted-light)] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]"
-                    >
-                        <Upload size={12} /> Importeer
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { setShowAi(v => !v); setShowForm(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
-                    >
-                        <Sparkles size={12} /> AI Genereer
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { setShowForm(v => !v); setShowAi(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90"
-                    >
-                        {showForm ? <X size={12} /> : <Plus size={12} />}
-                        {showForm ? 'Annuleer' : 'Nieuw'}
-                    </button>
                 </div>
-            </div>
 
             {/* AI Genereer-strook */}
             {showAi && (
@@ -866,11 +936,12 @@ export default function ComponentenPage() {
                 />
             )}
 
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
-                <Sparkles size={14} className="mr-1 inline text-primary" />
-                AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
-                voorstel te krijgen (incl. allergeen- en HACCP-suggesties). Niets wordt opgeslagen tot je
-                op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground" style={{ marginTop: 18 }}>
+                    <Sparkles size={14} className="mr-1 inline text-primary" />
+                    AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
+                    voorstel te krijgen (incl. allergeen- en HACCP-suggesties). Niets wordt opgeslagen tot je
+                    op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
+                </div>
             </div>
         </div>
     );
