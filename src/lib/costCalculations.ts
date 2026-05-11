@@ -11,6 +11,12 @@
 export interface InventoryLookup {
     naam: string;
     purchase_price?: number;
+    /** Pillar #4 — meest recente leverancier-prijs (uit price_history via trigger).
+     *  Wordt geprefereerd boven purchase_price zodat offerte-marge real-time klopt
+     *  i.p.v. op stale gemiddelde-inkoop-prijs. Pages die deze kolom niet queryen,
+     *  vallen netjes terug op purchase_price. */
+    last_price_eur?: number | null;
+    last_price_at?: string | null;
     unit?: string;
     yield_factor?: number;
 }
@@ -29,19 +35,27 @@ export interface GerechtForCost {
     kostprijs_pp?: number;
 }
 
-/** Lookup inventory-item op normalised naam (case-insensitive trim). */
+/** Lookup inventory-item op normalised naam (case-insensitive trim).
+ *  Pillar #4 — prefereert `last_price_eur` (meest recent betaalde leverancier-prijs)
+ *  boven `purchase_price` (gemiddelde/standaard). Stop margelek op stale prijzen. */
 export function getInvPrice(
     inventory: InventoryLookup[],
     naam: string
-): { price: number; unit: string; yield_factor: number } | null {
+): { price: number; unit: string; yield_factor: number; price_source: 'fresh' | 'stale' | 'missing' } | null {
     if (!naam) return null;
     const target = String(naam).toLowerCase().trim();
     const inv = inventory.find(i => (i.naam || '').toLowerCase().trim() === target);
     if (!inv) return null;
+    const fresh = Number(inv.last_price_eur);
+    const stale = Number(inv.purchase_price);
+    const price = fresh > 0 ? fresh : stale > 0 ? stale : 0;
+    const price_source: 'fresh' | 'stale' | 'missing' =
+        fresh > 0 ? 'fresh' : stale > 0 ? 'stale' : 'missing';
     return {
-        price: Number(inv.purchase_price) || 0,
+        price,
         unit: inv.unit || 'kg',
         yield_factor: Number(inv.yield_factor) || 1.0,
+        price_source,
     };
 }
 

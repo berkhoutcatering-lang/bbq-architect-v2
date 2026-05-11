@@ -17,6 +17,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
+import BestelvoorstelLaan from '@/app/inkoop/_components/BestelvoorstelLaan';
 
 export default function Inkoop() {
     const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
@@ -250,6 +251,8 @@ export default function Inkoop() {
                     { lead: 'Archief', text: '— alle gescande bonnen terugvinden, ook voor de boekhouding.' },
                 ]}
             />
+
+            <BestelvoorstelLaan />
 
             <div className="tab-bar mb-24">
                 <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={() => setTab('leveranciers')}>LEVERANCIERS</button>

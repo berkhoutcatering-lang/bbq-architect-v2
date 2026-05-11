@@ -11,9 +11,9 @@ const inv = [
 ];
 
 describe('getInvPrice', () => {
-    it('returnt price/unit/yield voor exacte naam', () => {
+    it('returnt price/unit/yield voor exacte naam (stale fallback)', () => {
         const r = getInvPrice(inv, 'Brisket');
-        expect(r).toEqual({ price: 28.50, unit: 'kg', yield_factor: 0.65 });
+        expect(r).toEqual({ price: 28.50, unit: 'kg', yield_factor: 0.65, price_source: 'stale' });
     });
 
     it('matcht case-insensitive met trim', () => {
@@ -31,6 +31,24 @@ describe('getInvPrice', () => {
 
     it('default yield_factor 1.0 als ontbreekt', () => {
         expect(getInvPrice(inv, 'Brood')?.yield_factor).toBe(1.0);
+    });
+
+    it('prefereert last_price_eur boven purchase_price (Pillar #4)', () => {
+        const invFresh = [
+            { naam: 'Brisket', purchase_price: 14.00, last_price_eur: 19.50, unit: 'kg', yield_factor: 0.65 },
+        ];
+        const r = getInvPrice(invFresh, 'Brisket');
+        expect(r?.price).toBe(19.50);
+        expect(r?.price_source).toBe('fresh');
+    });
+
+    it('valt terug op purchase_price als last_price_eur null is', () => {
+        const invMixed = [
+            { naam: 'Brisket', purchase_price: 14.00, last_price_eur: null, unit: 'kg' },
+        ];
+        const r = getInvPrice(invMixed, 'Brisket');
+        expect(r?.price).toBe(14.00);
+        expect(r?.price_source).toBe('stale');
     });
 });
 

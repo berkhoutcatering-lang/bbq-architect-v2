@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
+import MargeAlertBanner from '@/components/voorraad/MargeAlertBanner';
 
 const GOLD = '#c4a35a';
 
@@ -114,6 +115,7 @@ export default function LeveranciersPage() {
     return (
         <RequireTier feature="price_intelligence">
             <div style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1280, margin: '0 auto' }}>
+                <MargeAlertBanner />
                 <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
                     marginBottom: 22, flexWrap: 'wrap', gap: 16,

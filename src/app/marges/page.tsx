@@ -97,7 +97,7 @@ export default function MenuEngineering() {
       supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze,verkoopprijs,marge_pct,pijnpunten,toppunten,foto_prompt').order('volgorde'),
       supabase.from('events').select('id,menu'),
       supabase.from('offertes').select('id,menu_selectie,basis_prijs_pp,aantal_gasten'),
-      supabase.from('inventory').select('id,naam,unit,purchase_price,yield_factor'),
+      supabase.from('inventory').select('id,naam,unit,purchase_price,yield_factor,last_price_eur,last_price_at'),
       supabase.from('gerechten').select('id,naam,gang_slug,ingredient_costs,kostprijs_pp'),
     ]).then(function (results: any[]) {
       const gangenData = results[0].data || [];
