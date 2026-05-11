@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import JSZip from 'jszip';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
 import { generateBoekhouderPdf, type PdfBon, type PdfFactuur, type PdfRit } from '@/lib/boekhouderPdf';
@@ -26,8 +27,80 @@ export const maxDuration = 60;
  */
 
 interface PakketRequest {
-  month: string; // YYYY-MM
+  month?: string;          // YYYY-MM voor period_type='maand'
+  quarter?: string;        // YYYY-Q1..Q4 voor period_type='kwartaal'
+  year?: number;           // YYYY voor period_type='jaar'
+  format?: 'json' | 'zip'; // default json met data-urls; zip = volledig pakket met foto's
   email_to?: string;
+}
+
+/** Bereken periode-grenzen + label uit body input. */
+function resolvePeriod(body: PakketRequest): {
+  type: 'maand' | 'kwartaal' | 'jaar';
+  year: number;
+  month?: number;
+  quarter?: number;
+  start: string;
+  end: string;       // exclusive
+  label: string;
+  endLabel: string;  // inclusive (laatste dag)
+  filenameSuffix: string;
+} | { error: string } {
+  if (body.month && /^\d{4}-\d{2}$/.test(body.month)) {
+    const [yyyy, mm] = body.month.split('-');
+    const year = Number(yyyy);
+    const month = Number(mm);
+    const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const label = new Date(`${body.month}-01T00:00:00`).toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
+    return {
+      type: 'maand', year, month,
+      start: `${body.month}-01`, end: nextMonth, label,
+      endLabel: new Date(new Date(nextMonth + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10),
+      filenameSuffix: body.month,
+    };
+  }
+  if (body.quarter && /^\d{4}-Q[1-4]$/.test(body.quarter)) {
+    const [yyyy, q] = body.quarter.split('-Q');
+    const year = Number(yyyy);
+    const quarter = Number(q) as 1 | 2 | 3 | 4;
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 3;
+    const start = `${year}-${String(startMonth).padStart(2, '0')}-01`;
+    const end = endMonth > 12 ? `${year + 1}-01-01` : `${year}-${String(endMonth).padStart(2, '0')}-01`;
+    return {
+      type: 'kwartaal', year, quarter,
+      start, end, label: `Q${quarter} ${year}`,
+      endLabel: new Date(new Date(end + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10),
+      filenameSuffix: `${year}-Q${quarter}`,
+    };
+  }
+  if (typeof body.year === 'number' && body.year >= 2020 && body.year <= 2099) {
+    const year = body.year;
+    return {
+      type: 'jaar', year,
+      start: `${year}-01-01`, end: `${year + 1}-01-01`,
+      label: `Jaar ${year}`, endLabel: `${year}-12-31`,
+      filenameSuffix: String(year),
+    };
+  }
+  return { error: 'Geef month=YYYY-MM, quarter=YYYY-Q1..Q4, of year=YYYY' };
+}
+
+/** Vertaal data-URL naar Buffer voor ZIP-attachments. */
+function dataUrlToBuffer(dataUrl: string): { mime: string; ext: string; buf: Buffer } | null {
+  const m = /^data:([a-z0-9+/-]+);base64,(.+)$/i.exec(dataUrl);
+  if (!m) return null;
+  const mime = m[1];
+  const ext = mime.includes('jpeg') ? 'jpg'
+            : mime.includes('png') ? 'png'
+            : mime.includes('pdf') ? 'pdf'
+            : mime.includes('webp') ? 'webp'
+            : 'bin';
+  return { mime, ext, buf: Buffer.from(m[2], 'base64') };
+}
+
+function safeFilename(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 60);
 }
 
 function csvEscape(s: string | number | null | undefined): string {
@@ -51,15 +124,15 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
 
     const body = await req.json() as PakketRequest;
-    const m = String(body.month || '');
-    if (!/^\d{4}-\d{2}$/.test(m)) {
-      return NextResponse.json({ error: 'month moet YYYY-MM zijn' }, { status: 400 });
+    const periodResult = resolvePeriod(body);
+    if ('error' in periodResult) {
+      return NextResponse.json({ error: periodResult.error }, { status: 400 });
     }
-    const [yyyy, mm] = m.split('-');
-    const start = `${yyyy}-${mm}-01`;
-    const nextMonth = Number(mm) === 12
-      ? `${Number(yyyy) + 1}-01-01`
-      : `${yyyy}-${String(Number(mm) + 1).padStart(2, '0')}-01`;
+    const period = periodResult;
+    const { start, end: nextMonth, filenameSuffix: m, year: periodYear } = period;
+    const yyyy = String(periodYear);
+    const mm = period.month ? String(period.month).padStart(2, '0') : '01';
+    const wantZip = body.format === 'zip';
 
     const { data: memberships } = await supabase
       .from('organization_members')
@@ -70,35 +143,38 @@ export async function POST(req: NextRequest) {
     const orgId = memberships?.[0]?.organization_id;
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
 
-    // Check of er al een vergrendeld pakket bestaat voor deze maand.
-    // Locked → regenereer PDF/CSV uit bestaande data zonder opnieuw te locken
-    // (immutable, audit-trail blijft intact).
-    const { data: existing } = await supabase
+    // Check of er al een vergrendeld pakket bestaat voor deze periode.
+    let existingQuery = supabase
       .from('boekhouder_pakketten')
       .select('id, status')
       .eq('organization_id', orgId)
-      .eq('period_type', 'maand')
-      .eq('period_year', Number(yyyy))
-      .eq('period_month', Number(mm))
-      .limit(1);
+      .eq('period_type', period.type)
+      .eq('period_year', period.year);
+    if (period.type === 'maand' && period.month != null) {
+      existingQuery = existingQuery.eq('period_month', period.month);
+    } else if (period.type === 'kwartaal' && period.quarter != null) {
+      existingQuery = existingQuery.eq('period_quarter', period.quarter);
+    }
+    const { data: existing } = await existingQuery.limit(1);
     const isRegenerate = existing && existing.length > 0 && (existing[0].status === 'locked' || existing[0].status === 'sent');
 
-    // Haal bonnen op
-    const { data: bonnen } = await supabase
-      .from('bonnen')
-      .select(`
+    // Haal bonnen op — image_url alleen meeladen voor ZIP-format om payload te besparen
+    const bonnenSelect = `
         id, datum, totaal_bedrag, netto_bedrag, btw_laag_bedrag, btw_hoog_bedrag,
-        rgs_code, rgs_category_label, ai_classify_status, event_id, leverancier_id, notities,
+        rgs_code, rgs_category_label, ai_classify_status, event_id, leverancier_id, notities${wantZip ? ', image_url' : ''},
         leverancier:leverancier_id (naam, type),
         event:event_id (name, date, guests)
-      `)
+      `;
+    const { data: bonnen } = await supabase
+      .from('bonnen')
+      .select(bonnenSelect)
       .eq('organization_id', orgId)
       .gte('datum', start)
       .lt('datum', nextMonth)
       .order('datum', { ascending: true });
 
     if (!bonnen || bonnen.length === 0) {
-      return NextResponse.json({ error: 'Geen bonnen in deze maand' }, { status: 400 });
+      return NextResponse.json({ error: `Geen bonnen in ${period.label}` }, { status: 400 });
     }
 
     // Valideer: alles classified?
@@ -293,8 +369,8 @@ export async function POST(req: NextRequest) {
     const btwNummer = settingsRow?.btw_nummer || undefined;
     const retentieJaar = Number(orgRow?.bonnen_retentie_jaar) || 7;
 
-    const periodLabel = new Date(start + 'T00:00:00').toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
-    const periodEnd = new Date(new Date(nextMonth + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10);
+    const periodLabel = period.label;
+    const periodEnd = period.endLabel;
 
     const pdfBonnen: PdfBon[] = (bonnen as any[]).map(function (b) {
       const lev = Array.isArray(b.leverancier) ? b.leverancier[0] : b.leverancier;
@@ -370,9 +446,10 @@ export async function POST(req: NextRequest) {
     // Maak / update pakket-record
     const pakketPayload = {
       organization_id: orgId,
-      period_type: 'maand',
-      period_year: Number(yyyy),
-      period_month: Number(mm),
+      period_type: period.type,
+      period_year: period.year,
+      period_month: period.month ?? null,
+      period_quarter: period.quarter ?? null,
       bonnen_count: bonnen.length,
       facturen_count: (facturen || []).length,
       total_purchases_eur: Math.round(totalPurchase * 100) / 100,
@@ -432,13 +509,69 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ─── ZIP-format: PDF + CSV + foto's per bon in één archief ───
+    let zipDataUrl: string | null = null;
+    let zipFilename = `boekhouding-${m}.zip`;
+    if (wantZip) {
+      const zip = new JSZip();
+      zip.file(pdfFilename, pdfBase64, { base64: true });
+      zip.file(`boekhouding-${m}.csv`, csv);
+      const readme = [
+        `BOEKHOUDER-PAKKET — ${periodLabel}`,
+        `Organisatie: ${orgRow?.name || ''}`,
+        `Periode: ${start} – ${periodEnd}`,
+        `Gegenereerd: ${new Date().toISOString()}`,
+        ``,
+        `INHOUD`,
+        `  ${pdfFilename}       — BTW-aangifte-concept + bonnen overzicht`,
+        `  boekhouding-${m}.csv — alle regels voor import in Twinfield/Exact/SnelStart/AFAS`,
+        `  bonnen/              — originele foto/PDF per bon, gegroepeerd per RGS-categorie`,
+        ``,
+        `SAMENVATTING`,
+        `  ${bonnen.length} inkoop-bonnen  · totaal € ${totalPurchase.toFixed(2)}`,
+        `  ${(facturen || []).length} verkoop-facturen · totaal € ${totalSales.toFixed(2)}`,
+        `  Voorbelasting BTW 9%:  € ${totalBtw9.toFixed(2)}`,
+        `  Voorbelasting BTW 21%: € ${totalBtw21.toFixed(2)}`,
+        `  Af te dragen BTW:      € ${afTeDragen.toFixed(2)}`,
+        pdfRitten.length > 0 ? `  Kilometeraftrek: ${totaalKm} km × €${tarief.toFixed(2)} = € ${totaalKmBedrag.toFixed(2)}` : '',
+        ``,
+        `BEWAARTERMIJN`,
+        `  Tot ${new Date(new Date().getFullYear() + retentieJaar, new Date().getMonth(), new Date().getDate()).toLocaleDateString('nl-NL')}`,
+        `  Conform Art. 52 AWR, ${retentieJaar} jaar.`,
+        ``,
+        `BTW-bedragen + km-tarieven uit bron-data, niet AI-derived.`,
+        `Gegenereerd door BBQ Architect.`,
+      ].filter(Boolean).join('\n');
+      zip.file('README.txt', readme);
+
+      // Per-bon foto's in /bonnen/ map, groeperen per RGS-code
+      const bonnenWithImage = (bonnen as any[]).filter(b => b.image_url);
+      for (const b of bonnenWithImage) {
+        const parsed = dataUrlToBuffer(String(b.image_url));
+        if (!parsed) continue;
+        const lev = Array.isArray(b.leverancier) ? b.leverancier[0] : b.leverancier;
+        const datumStr = (b.datum || '').slice(0, 10);
+        const code = b.rgs_code || 'ongesorteerd';
+        const totaal = Math.round((Number(b.totaal_bedrag) || 0) * 100) / 100;
+        const naam = safeFilename(`${datumStr}_${lev?.naam || 'onbekend'}_${totaal.toFixed(2)}EUR.${parsed.ext}`);
+        zip.file(`bonnen/${safeFilename(code)}/${naam}`, parsed.buf);
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      zipDataUrl = 'data:application/zip;base64,' + zipBuffer.toString('base64');
+      zipFilename = `boekhouding-${m}.zip`;
+    }
+
     return NextResponse.json({
       ok: true,
       pakket_id: pakketId,
       regenerated: !!isRegenerate,
+      period_label: periodLabel,
+      period_type: period.type,
       bonnen_count: bonnen.length,
       facturen_count: (facturen || []).length,
       kilometers_count: pdfRitten.length,
+      bonnen_with_image: (bonnen as any[]).filter(b => b.image_url).length,
       btw_voorbelasting: voorbelasting,
       btw_verschuldigd: verschuldigd,
       btw_af_te_dragen: afTeDragen,
@@ -447,7 +580,8 @@ export async function POST(req: NextRequest) {
       csv_filename: `boekhouding-${m}.csv`,
       pdf_data_url: pdfDataUrl,
       pdf_filename: pdfFilename,
-      zip_data_url: csvDataUrl,
+      zip_data_url: zipDataUrl,
+      zip_filename: zipFilename,
     });
   } catch (err: any) {
     console.error('[boekhouder/pakket]', err);

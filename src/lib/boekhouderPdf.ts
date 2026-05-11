@@ -282,6 +282,57 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     y = (doc as any).lastAutoTable.finalY;
   }
 
+  // ─── Investeringen (KIA-vraag) ────────────────────────
+  const investeringen = input.bonnen.filter(function (b) {
+    return b.rgs_code === 'WAfsInv' || (b.totaal >= 450 && (b.rgs_code === 'WBedKlGer' || b.rgs_code === 'WBedKostOv'));
+  });
+  if (investeringen.length > 0) {
+    y += 20;
+    if (y > H - 180) { doc.addPage(); y = margin; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(INK);
+    doc.text('Investeringen — KIA-vraag', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(MUTED);
+    const totaalInv = investeringen.reduce(function (s, b) { return s + b.totaal; }, 0);
+    doc.text(
+      `${investeringen.length} bonnen >€450 — totaal € ${fmtEur(totaalInv)}. Boekhouder beslist KIA-aftrek (Kleinschaligheidsinvesteringsaftrek).`,
+      margin, y + 14
+    );
+    y += 26;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Datum', 'Leverancier', 'Omschrijving', 'RGS', 'Netto', 'BTW', 'Totaal']],
+      body: investeringen.map(function (b) {
+        return [
+          fmtDate(b.datum),
+          b.leverancier_naam || '—',
+          (b.notities || b.rgs_label || '').substring(0, 50),
+          b.rgs_code || '?',
+          fmtEur(b.netto),
+          fmtEur(b.btw_9 + b.btw_21),
+          fmtEur(b.totaal),
+        ];
+      }),
+      foot: [['', '', '', 'Totaal',
+        fmtEur(investeringen.reduce(function (s, b) { return s + b.netto; }, 0)),
+        fmtEur(investeringen.reduce(function (s, b) { return s + b.btw_9 + b.btw_21; }, 0)),
+        fmtEur(totaalInv),
+      ]],
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: '#f5f5f0', textColor: INK, fontStyle: 'bold' },
+      footStyles: { fillColor: '#fafafa', textColor: INK, fontStyle: 'bold' },
+      columnStyles: {
+        4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+  }
+
   // ─── Kilometerregistratie-blok ────────────────────────
   if (input.kilometers && input.kilometers.ritten.length > 0) {
     y += 20;
