@@ -14,8 +14,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { RequireTier } from '@/components/PaywallPrompt';
+import Link from 'next/link';
 import {
-    Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X,
+    Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X, History,
     Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome,
 } from 'lucide-react';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
@@ -300,6 +301,18 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                         <Sparkles size={13} /> Review {lev.pendingMutations}
                     </button>
                 )}
+                <Link
+                    href={`/leveranciers/historie/${lev.id}`}
+                    title="Bonnen-historie + prijs-trends"
+                    style={{
+                        width: 34, height: 34, borderRadius: 8, background: 'transparent',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)',
+                        textDecoration: 'none',
+                    }}
+                >
+                    <History size={14} />
+                </Link>
                 <button
                     onClick={onRefresh}
                     title="Refresh status"
