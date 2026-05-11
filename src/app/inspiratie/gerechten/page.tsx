@@ -409,13 +409,7 @@ function GerechtDetailDrawer({
     }
 
     async function handleRemove(item: GerechtComponentRow) {
-        const ok = await confirm({
-            title: 'Component loskoppelen?',
-            description: `"${item.components?.name ?? 'Component'}" wordt uit dit gerecht verwijderd. De component blijft in de bibliotheek.`,
-            confirmText: 'Verwijder',
-            danger: true,
-        });
-        if (!ok) return;
+        if (!window.confirm(`Component loskoppelen?\n\n"${item.components?.name ?? 'Component'}" wordt uit dit gerecht verwijderd. De component blijft in de bibliotheek.`)) return;
         setRemovingComponentId(item.component_id);
         try {
             const res = await fetch(`/api/gerechten/${gerecht.id}/components/${item.component_id}`, {

@@ -303,13 +303,7 @@ export default function ComponentenPage() {
     }
 
     async function handleDelete(c: ComponentRow) {
-        const ok = await confirm({
-            title: `Verwijder "${c.name}"?`,
-            description: 'Dit kan niet ongedaan worden gemaakt. Als de component in een gerecht zit, wordt verwijderen tegengehouden.',
-            confirmText: 'Verwijder',
-            danger: true,
-        });
-        if (!ok) return;
+        if (!window.confirm(`Verwijder "${c.name}"?\n\nDit kan niet ongedaan worden gemaakt. Als de component in een gerecht zit, wordt verwijderen tegengehouden.`)) return;
         setDeletingId(c.id);
         try {
             const res = await fetch(`/api/components/${c.id}`, {

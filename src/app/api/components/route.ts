@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const v = validateInput(body);
-    if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+    if (v.ok === false) return NextResponse.json({ error: v.error }, { status: 400 });
 
     // Split nested writes uit (allergens + haccp gaan naar join-tables)
     const { allergens, haccp_points, ...componentData } = v.data;
