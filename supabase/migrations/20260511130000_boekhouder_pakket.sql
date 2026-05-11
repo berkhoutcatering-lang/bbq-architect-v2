@@ -119,21 +119,21 @@ ALTER TABLE boekhouder_pakketten ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS boekhouder_pakketten_select ON boekhouder_pakketten;
 CREATE POLICY boekhouder_pakketten_select ON boekhouder_pakketten
-    FOR SELECT USING (organization_id IN (SELECT auth.user_org_ids()));
+    FOR SELECT USING (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS boekhouder_pakketten_insert ON boekhouder_pakketten;
 CREATE POLICY boekhouder_pakketten_insert ON boekhouder_pakketten
-    FOR INSERT WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    FOR INSERT WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS boekhouder_pakketten_update ON boekhouder_pakketten;
 CREATE POLICY boekhouder_pakketten_update ON boekhouder_pakketten
     FOR UPDATE
-    USING (organization_id IN (SELECT auth.user_org_ids()) AND status <> 'locked')  -- locked = immutable
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()) AND status <> 'locked')  -- locked = immutable
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS boekhouder_pakketten_delete ON boekhouder_pakketten;
 CREATE POLICY boekhouder_pakketten_delete ON boekhouder_pakketten
-    FOR DELETE USING (organization_id IN (SELECT auth.user_org_ids()) AND status = 'concept');
+    FOR DELETE USING (organization_id IN (SELECT public.user_org_ids()) AND status = 'concept');
 
 -- ── 4. organizations — boekhouder-instellingen ────────────────
 ALTER TABLE organizations
