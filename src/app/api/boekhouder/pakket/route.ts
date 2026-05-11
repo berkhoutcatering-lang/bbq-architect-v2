@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
-import { generateBoekhouderPdf, type PdfBon, type PdfFactuur } from '@/lib/boekhouderPdf';
+import { generateBoekhouderPdf, type PdfBon, type PdfFactuur, type PdfRit } from '@/lib/boekhouderPdf';
+import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -69,7 +70,9 @@ export async function POST(req: NextRequest) {
     const orgId = memberships?.[0]?.organization_id;
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
 
-    // Check of er al een vergrendeld pakket bestaat voor deze maand
+    // Check of er al een vergrendeld pakket bestaat voor deze maand.
+    // Locked → regenereer PDF/CSV uit bestaande data zonder opnieuw te locken
+    // (immutable, audit-trail blijft intact).
     const { data: existing } = await supabase
       .from('boekhouder_pakketten')
       .select('id, status')
@@ -78,9 +81,7 @@ export async function POST(req: NextRequest) {
       .eq('period_year', Number(yyyy))
       .eq('period_month', Number(mm))
       .limit(1);
-    if (existing && existing.length > 0 && existing[0].status === 'locked') {
-      return NextResponse.json({ error: 'Maand is al vergrendeld. Eerder pakket hergebruiken.' }, { status: 409 });
-    }
+    const isRegenerate = existing && existing.length > 0 && (existing[0].status === 'locked' || existing[0].status === 'sent');
 
     // Haal bonnen op
     const { data: bonnen } = await supabase
@@ -118,6 +119,43 @@ export async function POST(req: NextRequest) {
       .eq('organization_id', orgId)
       .gte('datum', start)
       .lt('datum', nextMonth);
+
+    // Kilometerregistratie (zakelijke ritten) — vóór de CSV-bouw nodig
+    const { data: rittenRaw } = await supabase
+      .from('ritten')
+      .select('id, datum, vertrek_adres, aankomst_adres, kilometers, prive_omleiding_km, zakelijk, doel, event_id')
+      .eq('organization_id', orgId)
+      .gte('datum', start)
+      .lt('datum', nextMonth)
+      .eq('zakelijk', true)
+      .order('datum', { ascending: true });
+    const ritEventIds = Array.from(new Set((rittenRaw || []).map((r: any) => r.event_id).filter(Boolean)));
+    const ritEventMap = new Map<number, string>();
+    if (ritEventIds.length > 0) {
+      const { data: evs } = await supabase.from('events').select('id, name').in('id', ritEventIds);
+      (evs || []).forEach((e: any) => ritEventMap.set(e.id, e.name));
+    }
+    const tarief = tariefVoorJaar(Number(yyyy));
+    const pdfRitten: PdfRit[] = (rittenRaw || []).map(function (r: any) {
+      const km = Math.max(0, Number(r.kilometers || 0) - Number(r.prive_omleiding_km || 0));
+      const bedrag = bedragAftrekbaar({
+        kilometers: Number(r.kilometers) || 0,
+        zakelijk: !!r.zakelijk,
+        priveOmleidingKm: Number(r.prive_omleiding_km) || 0,
+        datum: r.datum,
+      });
+      return {
+        datum: r.datum,
+        vertrek: r.vertrek_adres || '',
+        aankomst: r.aankomst_adres || '',
+        doel: r.doel || null,
+        zakelijke_km: km,
+        bedrag_eur: bedrag,
+        event_naam: r.event_id ? ritEventMap.get(r.event_id) || null : null,
+      };
+    });
+    const totaalKm = pdfRitten.reduce(function (s, r) { return s + r.zakelijke_km; }, 0);
+    const totaalKmBedrag = pdfRitten.reduce(function (s, r) { return s + r.bedrag_eur; }, 0);
 
     // Bouw CSV
     const headers = [
@@ -185,6 +223,32 @@ export async function POST(req: NextRequest) {
     lines.push('');
     lines.push(`TOTAAL INKOOP,,,,,,,,,,${fmtEur(totalPurchase)}`);
     lines.push(`TOTAAL VERKOOP,,,,,,,,,,${fmtEur(totalSales)}`);
+
+    // Kilometerregistratie regels
+    if ((rittenRaw || []).length > 0) {
+      lines.push('');
+      lines.push(`-- KILOMETERREGISTRATIE — ${tarief.toFixed(2)}/km Belastingdienst-tarief --`);
+      (rittenRaw || []).forEach(function (r: any) {
+        const km = Math.max(0, Number(r.kilometers || 0) - Number(r.prive_omleiding_km || 0));
+        const bedrag = bedragAftrekbaar({
+          kilometers: Number(r.kilometers) || 0,
+          zakelijk: !!r.zakelijk,
+          priveOmleidingKm: Number(r.prive_omleiding_km) || 0,
+          datum: r.datum,
+        });
+        lines.push([
+          'kilometers',
+          csvEscape(r.datum || ''),
+          csvEscape(`${r.vertrek_adres} → ${r.aankomst_adres}`),
+          csvEscape(r.doel || (r.event_id && ritEventMap.get(r.event_id)) || ''),
+          'WBedReisOv',
+          'Reiskosten — kilometeraftrek',
+          csvEscape(r.event_id && ritEventMap.get(r.event_id) || ''),
+          fmtEur(bedrag), '0.00', '0.00', fmtEur(bedrag),
+        ].join(','));
+      });
+      lines.push(`TOTAAL KILOMETERAFTREK,,,,,,${totaalKm} km,,,,${fmtEur(totaalKmBedrag)}`);
+    }
     lines.push('');
     lines.push('BTW SAMENVATTING (voor aangifte):');
     lines.push(`Voorbelasting BTW 9% (inkoop food),,,,,,,,${fmtEur(totalBtw9)},,`);
@@ -216,7 +280,7 @@ export async function POST(req: NextRequest) {
     // ─── PDF — BTW-aangifte-concept + bonnen-overzicht ──
     const { data: orgRow } = await supabase
       .from('organizations')
-      .select('name, boekhouder_naam, boekhouder_email')
+      .select('name, boekhouder_naam, boekhouder_email, bonnen_retentie_jaar')
       .eq('id', orgId)
       .single();
     // btw_nummer staat op settings (per-org) — apart ophalen
@@ -227,6 +291,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
     const btwNummer = settingsRow?.btw_nummer || undefined;
+    const retentieJaar = Number(orgRow?.bonnen_retentie_jaar) || 7;
 
     const periodLabel = new Date(start + 'T00:00:00').toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
     const periodEnd = new Date(new Date(nextMonth + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10);
@@ -276,12 +341,19 @@ export async function POST(req: NextRequest) {
       org_name: orgRow?.name || 'Onbekende organisatie',
       org_btw_nr: btwNummer,
       boekhouder_naam: orgRow?.boekhouder_naam || undefined,
+      retentie_jaar: retentieJaar,
       period_label: periodLabel,
       period_start: start,
       period_end: periodEnd,
       generated_at: new Date().toISOString(),
       bonnen: pdfBonnen,
       facturen: pdfFacturen,
+      kilometers: pdfRitten.length > 0 ? {
+        ritten: pdfRitten,
+        totaal_km: totaalKm,
+        totaal_aftrekbaar_eur: Math.round(totaalKmBedrag * 100) / 100,
+        tarief_per_km: tarief,
+      } : undefined,
       totals: {
         inkoop_totaal: totalPurchase,
         verkoop_totaal: totalSales,
@@ -317,7 +389,11 @@ export async function POST(req: NextRequest) {
     };
 
     let pakketId: number;
-    if (existing && existing.length > 0) {
+    if (isRegenerate) {
+      // Locked pakket → alleen regenereren, NIET wijzigen. Audit-trail intact.
+      pakketId = existing![0].id;
+    } else if (existing && existing.length > 0) {
+      // Concept → update + lock
       const { error: updErr } = await supabase
         .from('boekhouder_pakketten')
         .update(pakketPayload)
@@ -325,6 +401,7 @@ export async function POST(req: NextRequest) {
       if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
       pakketId = existing[0].id;
     } else {
+      // Nieuw pakket → insert + lock
       const { data: inserted, error: insErr } = await supabase
         .from('boekhouder_pakketten')
         .insert(pakketPayload)
@@ -334,30 +411,34 @@ export async function POST(req: NextRequest) {
       pakketId = inserted.id;
     }
 
-    // Lock bonnen + facturen voor deze maand (immutable na vergrendeling)
-    const bonIds = bonnen.map((b: any) => b.id);
-    const factuurIds = (facturen || []).map((f: any) => f.id);
-    const lockedAt = new Date().toISOString();
-    if (bonIds.length > 0) {
-      await supabase
-        .from('bonnen')
-        .update({ locked_at: lockedAt, locked_by_user_id: user.id, ai_classify_status: 'verified' })
-        .in('id', bonIds)
-        .eq('organization_id', orgId);
-    }
-    if (factuurIds.length > 0) {
-      await supabase
-        .from('facturen')
-        .update({ locked_at: lockedAt, locked_by_user_id: user.id })
-        .in('id', factuurIds)
-        .eq('organization_id', orgId);
+    // Lock bonnen + facturen — alleen bij eerste keer locken (niet bij regenerate)
+    if (!isRegenerate) {
+      const bonIds = bonnen.map((b: any) => b.id);
+      const factuurIds = (facturen || []).map((f: any) => f.id);
+      const lockedAt = new Date().toISOString();
+      if (bonIds.length > 0) {
+        await supabase
+          .from('bonnen')
+          .update({ locked_at: lockedAt, locked_by_user_id: user.id, ai_classify_status: 'verified' })
+          .in('id', bonIds)
+          .eq('organization_id', orgId);
+      }
+      if (factuurIds.length > 0) {
+        await supabase
+          .from('facturen')
+          .update({ locked_at: lockedAt, locked_by_user_id: user.id })
+          .in('id', factuurIds)
+          .eq('organization_id', orgId);
+      }
     }
 
     return NextResponse.json({
       ok: true,
       pakket_id: pakketId,
+      regenerated: !!isRegenerate,
       bonnen_count: bonnen.length,
       facturen_count: (facturen || []).length,
+      kilometers_count: pdfRitten.length,
       btw_voorbelasting: voorbelasting,
       btw_verschuldigd: verschuldigd,
       btw_af_te_dragen: afTeDragen,
@@ -366,7 +447,7 @@ export async function POST(req: NextRequest) {
       csv_filename: `boekhouding-${m}.csv`,
       pdf_data_url: pdfDataUrl,
       pdf_filename: pdfFilename,
-      zip_data_url: csvDataUrl, // legacy alias — UI gebruikt csv_data_url voortaan
+      zip_data_url: csvDataUrl,
     });
   } catch (err: any) {
     console.error('[boekhouder/pakket]', err);
