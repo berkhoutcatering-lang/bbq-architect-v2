@@ -15,7 +15,28 @@ import Link from 'next/link';
 import {
     ChefHat, ArrowLeft, Loader2, Search, Star, Sparkles,
     Plus, Trash2, X, Boxes, TrendingUp, ArrowUp, ArrowDown, Replace, LogOut, Lightbulb,
+    ShieldAlert, ThermometerSun,
 } from 'lucide-react';
+
+const ALLERGEN_LABELS: Record<string, string> = {
+    G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
+    Sd: 'sesam', M: 'mosterd', W: 'weekdieren', Sl: 'selderij',
+    Lp: 'lupine', Sf: 'sulfiet', Sc: 'schaaldieren', P: 'pinda',
+};
+
+interface RollupAllergen {
+    allergen_code: string;
+    from_components: string[];
+    has_ai_only: boolean;
+}
+interface RollupHaccp {
+    component_name: string;
+    type: string;
+    threshold_value: number | null;
+    threshold_unit: string | null;
+    note: string | null;
+    ai_suggested: boolean;
+}
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -280,6 +301,7 @@ function GerechtDetailDrawer({
     const [showCostEng, setShowCostEng] = useState(false);
     const [costEngBusy, setCostEngBusy] = useState(false);
     const [costEngResult, setCostEngResult] = useState<any>(null);
+    const [rollup, setRollup] = useState<{ allergens: RollupAllergen[]; haccp_points: RollupHaccp[] } | null>(null);
 
     const [formComponentId, setFormComponentId] = useState<string>('');
     const [formQty, setFormQty] = useState<string>('');
@@ -288,12 +310,14 @@ function GerechtDetailDrawer({
     async function loadDrawer() {
         setLoading(true);
         try {
-            const [itemsRes, compsRes] = await Promise.all([
+            const [itemsRes, compsRes, rollupRes] = await Promise.all([
                 fetch(`/api/gerechten/${gerecht.id}/components`, { credentials: 'include' }).then(r => r.json()),
                 fetch('/api/components', { credentials: 'include' }).then(r => r.json()),
+                fetch(`/api/gerechten/${gerecht.id}/rollup`, { credentials: 'include' }).then(r => r.json()),
             ]);
             setItems(itemsRes.items ?? []);
             setAvailableComponents((compsRes.components ?? []) as ComponentRow[]);
+            setRollup({ allergens: rollupRes.allergens ?? [], haccp_points: rollupRes.haccp_points ?? [] });
         } catch (e: any) {
             toast(e.message || 'Laden mislukt', 'error');
         } finally {
@@ -546,6 +570,50 @@ function GerechtDetailDrawer({
                             </li>
                         ))}
                     </ul>
+                )}
+
+                {/* Rollup van componenten — allergens + HACCP */}
+                {rollup && (rollup.allergens.length > 0 || rollup.haccp_points.length > 0) && (
+                    <div className="mt-6 space-y-3">
+                        {rollup.allergens.length > 0 && (
+                            <div>
+                                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                                    <ShieldAlert size={12} /> Allergenen (uit componenten)
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {rollup.allergens.map(a => (
+                                        <span
+                                            key={a.allergen_code}
+                                            title={`Uit: ${a.from_components.join(', ')}${a.has_ai_only ? ' (AI-suggestie, nog niet bevestigd)' : ''}`}
+                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${a.has_ai_only ? 'bg-muted text-muted-foreground ring-1 ring-dashed' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200'}`}
+                                        >
+                                            {ALLERGEN_LABELS[a.allergen_code] ?? a.allergen_code}
+                                            {a.has_ai_only && <Sparkles size={9} />}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {rollup.haccp_points.length > 0 && (
+                            <div>
+                                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                                    <ThermometerSun size={12} /> HACCP-punten (uit componenten)
+                                </div>
+                                <ul className="space-y-1 text-xs">
+                                    {rollup.haccp_points.map((h, i) => (
+                                        <li key={i} className="rounded-md border border-border bg-card px-2.5 py-1.5">
+                                            <span className="text-muted-foreground">{h.component_name}:</span>{' '}
+                                            <span className="font-medium">{h.type}</span>
+                                            {h.threshold_value != null && (
+                                                <span> — {h.threshold_value}{h.threshold_unit ? ' ' + h.threshold_unit : ''}</span>
+                                            )}
+                                            {h.note && <div className="mt-0.5 text-[10px] text-muted-foreground">{h.note}</div>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {items.length > 0 && (
