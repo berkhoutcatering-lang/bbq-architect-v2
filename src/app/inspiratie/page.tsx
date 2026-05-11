@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { Boxes, ChefHat, Sparkles, ArrowRight, Library } from 'lucide-react';
+import { Boxes, ChefHat, Sparkles, ArrowRight, Library, Compass } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
-import PageGuideNote from '@/components/PageGuideNote';
 
 export const metadata = {
     title: 'Inspiratie Bibliotheek',
@@ -17,13 +16,16 @@ export default function InspiratieLandingPage() {
                 icon={<Library size={28} />}
             />
 
-            <PageGuideNote>
-                <p>
-                    Twee lagen, één doel: jij bouwt aan een bibliotheek die met AI-hulp organisch groeit.
-                    <strong> Componenten</strong> zijn atomaire bouwblokken (gegrilde ananas, kokos espuma, Hanos broodje).
-                    <strong> Gerechten</strong> zijn samenstellingen die je goedkeurt en optioneel in de offerte-wizard zet.
+            <div className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-sm">
+                <Compass size={18} className="mt-0.5 shrink-0 text-primary" />
+                <p className="text-muted-foreground">
+                    Twee lagen, één doel: jij bouwt aan een bibliotheek die met AI-hulp organisch groeit.{' '}
+                    <strong className="text-foreground">Componenten</strong> zijn atomaire bouwblokken
+                    (gegrilde ananas, kokos espuma, Hanos broodje).{' '}
+                    <strong className="text-foreground">Gerechten</strong> zijn samenstellingen die je
+                    goedkeurt en optioneel in de offerte-wizard zet.
                 </p>
-            </PageGuideNote>
+            </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Link
