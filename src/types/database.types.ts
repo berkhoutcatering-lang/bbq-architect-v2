@@ -185,13 +185,186 @@ export interface DbEvent {
   created_at: string;
 }
 
+export type PrepTaskStatus =
+  | 'planned'
+  | 'queued'
+  | 'in_progress'
+  | 'done'
+  | 'skipped'
+  | 'blocked';
+
+export type PrepTaskPhase =
+  | 'inkoop'
+  | 'pekel'
+  | 'rub'
+  | 'marinade'
+  | 'smoke'
+  | 'grill'
+  | 'warm'
+  | 'koud'
+  | 'plate'
+  | 'service'
+  | 'other';
+
+export type PrepTaskQtySource =
+  | 'server_recipe'
+  | 'manual'
+  | 'headcount_scaled';
+
 export interface PrepTask {
   id: number;
   event_id: number;
   text: string;
   dagen: number;
+  /* Legacy flag — blijft synced met status via DB trigger. */
   done: boolean;
+  organization_id?: string | null;
+  /* Prep-KDS uitbreiding — migration 20260511140000. */
+  status?: PrepTaskStatus;
+  assignee_id?: string | null;       /* FK personeel.id */
+  station_id?: number | null;        /* FK kitchen_stations.id */
+  course_id?: number | null;         /* FK courses.id — optionele link met service-mode */
+  gerecht_id?: string | null;        /* FK gerechten.id (UUID) */
+  scheduled_at?: string | null;      /* TIMESTAMPTZ — wanneer beginnen */
+  started_at?: string | null;
+  completed_at?: string | null;
+  priority?: number;                 /* 0-100, default 50 */
+  notes?: string | null;
+  target_qty?: number | null;        /* SERVER-DERIVED, nooit AI */
+  target_unit?: string | null;
+  actual_qty?: number | null;        /* door chef ingevuld bij done */
+  qty_source?: PrepTaskQtySource;
+  phase?: PrepTaskPhase;
+  updated_at?: string;
   created_at: string;
+}
+
+export type KitchenStationType =
+  | 'smoker'
+  | 'grill'
+  | 'koud'
+  | 'warm'
+  | 'sauzen'
+  | 'expeditie'
+  | 'dessert'
+  | 'bakkerij'
+  | 'prep'
+  | 'overig';
+
+export interface KitchenStation {
+  id: number;
+  organization_id: string;
+  name: string;
+  type: KitchenStationType;
+  color: string;                     /* hex */
+  capacity_kg: number | null;
+  capacity_concurrent: number;
+  sort_order: number;
+  archived: boolean;
+  created_at: string;
+}
+
+export interface PrepTaskDependency {
+  id: number;
+  organization_id: string;
+  task_id: number;
+  depends_on_id: number;
+  created_at: string;
+}
+
+export type KdsDeviceScope = 'read_only_display' | 'write' | 'read';
+
+export interface KdsDeviceSession {
+  id: string;
+  organization_id: string;
+  device_name: string;
+  station_id: number | null;
+  token_hash: string;                /* bcrypt — plaintext alleen eenmalig bij aanmaken */
+  scope: KdsDeviceScope;
+  pin_required: boolean;
+  last_seen_at: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+/* ─── Floor-plan mapping (Service-modus) ─────────────────────────── */
+
+export type AllergenSeverity = 'normal' | 'high' | 'critical';
+
+export interface FloorPlan {
+  id: string;
+  event_id: number;
+  organization_id: string;
+  name: string;
+  background_image_path: string | null;
+  background_width_px: number | null;
+  background_height_px: number | null;
+  canvas_version: number;
+  /* Konva.Stage.toJSON() blob — geen PII */
+  canvas_json: Record<string, unknown>;
+  is_locked: boolean;
+  last_edited_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FloorPlanGuest {
+  id: string;
+  floor_plan_id: string;
+  organization_id: string;
+  event_id: number;
+  x_pct: number;
+  y_pct: number;
+  /* NOOIT leeg; blijft na PII-anonymize */
+  label: string;
+  full_name: string | null;
+  allergens: string[];
+  dietary_restriction: string | null;
+  severity: AllergenSeverity;
+  color: string | null;
+  note: string | null;
+  pii_anonymized_at: string | null;
+  event_allergy_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceZone {
+  id: string;
+  floor_plan_id: string;
+  organization_id: string;
+  name: string;
+  geometry: {
+    type: 'polygon';
+    points: { x_pct: number; y_pct: number }[];
+  };
+  assigned_personeel_id: string | null;
+  color: string | null;
+  created_at: string;
+}
+
+export type KdsAuditAction =
+  | 'task_started'
+  | 'task_completed'
+  | 'task_skipped'
+  | 'task_reassigned'
+  | 'pin_failed'
+  | 'pin_locked'
+  | 'device_token_created'
+  | 'device_token_revoked'
+  | 'bulk_scheduled'
+  | 'bulk_rescaled';
+
+export interface KdsAuditLog {
+  id: string;
+  organization_id: string;
+  task_id: number | null;
+  device_session_id: string | null;
+  personeel_id: string | null;
+  action: KdsAuditAction;
+  metadata: Record<string, unknown>;
+  at_time: string;
 }
 
 /** Persoonlijke agenda-items — losse afspraken niet aan een event/klant gekoppeld.
@@ -388,6 +561,10 @@ export interface Personeel {
   contract_type: PersoneelContract;
   actief: boolean;
   notitie: string | null;
+  /* Prep-KDS PIN — bcrypt hash, 4 digits. NULL = nog niet ingesteld. */
+  kds_pin_hash?: string | null;
+  /* Verloopt na 5 min na 5 mislukte pogingen — gezet door /api/prep/device-verify. */
+  kds_pin_lockout_until?: string | null;
   created_at: string;
 }
 

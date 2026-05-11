@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { aggregateMiseFromDishes } from '@/lib/miseAggregation';
+import { bulkScheduleEventPrep } from '@/lib/prep/bulkSchedule';
 
 type Supa = SupabaseClient<any, any, any>;
 
@@ -152,82 +153,44 @@ async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promis
 // gerechten-tabel (target_prep_time, ingredient_costs). De recepten-tabel is
 // gedropt in migratie 015 — gerechten is nu de single source of truth voor
 // prep-tijden en ingredients.
+// P0-1 fix: vervangt oude D-3/D-2/D-1/D-0 simpele tasks door phase-aware
+// DAG-templates uit src/lib/prep/recipeTemplates.ts. Eén source of truth
+// voor prep-tasks — zelfde logica wordt vanuit /api/prep/bulk-schedule
+// route gebruikt. Idempotent guard zit in de pure functie.
 async function autoGeneratePrepTasks(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
-        const { data: event } = await supabase.from('events').select('*').eq('id', params.eventId).single();
+        // Resolve org_id via event (vereist door bulkScheduleEventPrep).
+        const { data: event } = await supabase
+            .from('events')
+            .select('id, organization_id, start_time')
+            .eq('id', params.eventId)
+            .maybeSingle();
         if (!event) return { success: false, message: 'Event niet gevonden', count: 0 };
-        const guests = event.guests || 50;
+        if (!event.organization_id) return { success: false, message: 'Event mist organization_id', count: 0 };
 
-        /* Pak menu_selectie (object met gangen → dish-namen) en flatten naar één
-           lijst van unieke gerecht-namen. Werkt zowel voor het JSON-formaat
-           als de string-JSON legacy-vorm. */
-        let menuSel: any = params.offerteData?.menu_selectie || event.menu;
-        if (typeof menuSel === 'string') {
-            try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; }
-        }
-        const dishNames: string[] = [];
-        if (menuSel && typeof menuSel === 'object') {
-            for (const list of Object.values(menuSel)) {
-                if (Array.isArray(list)) {
-                    for (const item of list) {
-                        if (typeof item === 'string' && item.trim()) dishNames.push(item.trim());
-                    }
-                }
-            }
-        }
-
-        let dishes: any[] = [];
-        if (dishNames.length > 0) {
-            const { data } = await supabase
-                .from('gerechten')
-                .select('naam, target_prep_time, porties, gang_slug')
-                .in('naam', Array.from(new Set(dishNames)));
-            dishes = data || [];
-        }
-
-        const tasks: { event_id: number; text: string; dagen: number; done: boolean }[] = [];
-
-        // D-3: Bestelling & check
-        tasks.push({ event_id: params.eventId, text: 'Voorraad check en ingredienten bestellen', dagen: -3, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Materieel controleren en inladen', dagen: -3, done: false });
-        /* target_prep_time staat in seconden — > 7200s = > 2 uur prep-tijd.
-           Die gerechten verdienen een aparte D-3 bestel-task. */
-        dishes.filter(d => (d.target_prep_time || 0) > 7200).forEach(d => {
-            tasks.push({ event_id: params.eventId, text: d.naam + ': bestel vers vlees, check ingredienten', dagen: -3, done: false });
+        const result = await bulkScheduleEventPrep(supabase, params.eventId, event.organization_id, {
+            // Acceptance-flow heeft vaak nog geen start_time gezet — fallback naar 16:00
+            // is een redelijke BBQ-default. Chef kan event later aanpassen + force-rerun
+            // via UI als 'ie precies wil schedulen.
+            defaultStartTime: event.start_time || '16:00:00',
+            // Idempotent: bij re-trigger niets doen tenzij force=true.
+            force: false,
         });
 
-        // D-2: Marineren & rubben
-        tasks.push({ event_id: params.eventId, text: 'Rubs en sauzen aanmaken', dagen: -2, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Rookhout weken', dagen: -2, done: false });
-        dishes.filter(d => (d.target_prep_time || 0) > 3600).forEach(d => {
-            const minutes = Math.round((d.target_prep_time || 0) / 60);
-            tasks.push({ event_id: params.eventId, text: d.naam + ': marineren/rubben (' + minutes + ' min)', dagen: -2, done: false });
-        });
-
-        // D-1: Mise-en-place
-        tasks.push({ event_id: params.eventId, text: 'Smoker/BBQ testen', dagen: -1, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Bus inladen', dagen: -1, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Service materiaal checken', dagen: -1, done: false });
-        dishes.forEach(d => {
-            tasks.push({ event_id: params.eventId, text: d.naam + ': mise-en-place, portioneren voor ' + guests + ' gasten', dagen: -1, done: false });
-        });
-
-        // D-0: Event dag
-        tasks.push({ event_id: params.eventId, text: 'Smoke/BBQ aansteken 4-6u voor service', dagen: 0, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Sauzen opwarmen', dagen: 0, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Garnituren snijden', dagen: 0, done: false });
-        tasks.push({ event_id: params.eventId, text: 'Service-station opzetten', dagen: 0, done: false });
-        tasks.push({ event_id: params.eventId, text: 'HACCP temperaturen registreren', dagen: 0, done: false });
-
-        if (tasks.length === 0) {
-            return { success: true, message: 'Geen prep-taken nodig', count: 0 };
+        if (!result.ok) {
+            const reason = result.reason || 'unknown';
+            return { success: false, message: 'Prep skipped (' + reason + '): ' + (result.error || ''), count: 0 };
         }
-
-        const { error } = await supabase.from('prep_tasks').insert(tasks);
-        if (error) return { success: false, message: 'Prep fout: ' + error.message, count: 0 };
-        return { success: true, message: tasks.length + ' prep-taken aangemaakt (' + dishes.length + ' gerechten)', count: tasks.length };
+        if (result.taskCount === 0) {
+            return { success: true, message: 'Prep-tasks bestonden al — niet overschreven', count: 0 };
+        }
+        return {
+            success: true,
+            message: `${result.taskCount} prep-taken aangemaakt (${result.matchedTemplates} DAG-templates, ${result.fallbackCount} generic)`,
+            count: result.taskCount,
+        };
     } catch (e: any) {
         return { success: false, message: 'Prep fout: ' + (e.message || ''), count: 0 };
     }
@@ -494,10 +457,21 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
 
         /* Haal alle gerechten in één call zodat aggregateMiseFromDishes
            geen N+1 doet. Gerechten zonder ingredient_costs leveren gewoon
-           een lege mise op — geen crash. */
-        const { data: gerechtenData, error: gerechtenErr } = await supabase.from('gerechten').select('naam, ingredient_costs');
+           een lege mise op — geen crash.
+           P0-3 fix: ook `id` selecteren zodat we per course een gerecht_id
+           kunnen vullen — daarmee koppelt prep_tasks.course_id zich automatisch
+           via bulkScheduleEventPrep. */
+        const { data: gerechtenData, error: gerechtenErr } = await supabase
+            .from('gerechten')
+            .select('id, naam, ingredient_costs');
         if (gerechtenErr) console.warn('[acceptance] gerechten fetch error:', gerechtenErr);
         const gerechten = gerechtenData || [];
+
+        /* Map dish-name → gerecht_id (case-insensitive, trim) voor course-coupling. */
+        const dishIdByName = new Map<string, string>();
+        for (const g of gerechten as Array<{ id: string; naam: string }>) {
+            if (g.id && g.naam) dishIdByName.set(g.naam.trim().toLowerCase(), g.id);
+        }
 
         /* Voor elke categorie-spec: pak de eerste matching key (canoniek of alias). */
         const courseRows: any[] = [];
@@ -522,6 +496,17 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
 
             const mise = aggregateMiseFromDishes(dishes, gerechten, guests);
 
+            /* P0-3: koppel de eerste herkende gerecht-naam aan deze course
+               zodat prep_tasks via bulkScheduleEventPrep automatisch
+               course_id krijgen. Niet 1-op-1 want courses kunnen meerdere
+               gerechten bevatten — voor MVP is het hoofdgerecht (eerste in
+               de lijst) representatief voor de course-flow. */
+            let gerechtIdForCourse: string | null = null;
+            for (const dn of dishes) {
+                const lookup = dishIdByName.get(dn.trim().toLowerCase());
+                if (lookup) { gerechtIdForCourse = lookup; break; }
+            }
+
             courseRows.push({
                 event_id: params.eventId,
                 num: courseNum++,
@@ -531,6 +516,7 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
                 emoji: cat.emoji,
                 prep_time_minutes: cat.prepTimeMinutes,
                 serve_offset_minutes: cat.serveOffsetMinutes,
+                gerecht_id: gerechtIdForCourse,
                 steps: [],
                 mise,
                 plating: [],
@@ -607,6 +593,40 @@ export async function runAcceptanceWorkflow(
         haccp: haccpResult,
         courses: coursesResult,
     };
+
+    /* P0-3 post-process coupling: prep + courses lopen parallel via Promise.allSettled
+       dus bij prep-insert bestaan courses nog niet. Hier koppelen we retroactief
+       prep_tasks.course_id aan course.id via gerecht_id-FK. Best-effort —
+       prep_tasks zonder gerecht_id of zonder matching course blijven course_id=NULL. */
+    try {
+        const { error: linkErr } = await supabase.rpc('exec_sql', {
+            sql: `UPDATE prep_tasks pt SET course_id = c.id FROM courses c WHERE pt.event_id = c.event_id AND pt.gerecht_id IS NOT NULL AND pt.gerecht_id = c.gerecht_id AND pt.course_id IS NULL AND pt.event_id = ${params.eventId}`,
+        }).single();
+        // exec_sql RPC bestaat niet standaard — als 'm onbekend is, doen we het via
+        // de generieke client-update path.
+        if (linkErr) throw linkErr;
+    } catch {
+        // Fallback path: query courses, update tasks via een tweede pass.
+        try {
+            const { data: courses } = await supabase
+                .from('courses')
+                .select('id, gerecht_id')
+                .eq('event_id', params.eventId)
+                .not('gerecht_id', 'is', null);
+            if (courses && courses.length > 0) {
+                for (const c of courses as Array<{ id: number; gerecht_id: string }>) {
+                    await supabase
+                        .from('prep_tasks')
+                        .update({ course_id: c.id })
+                        .eq('event_id', params.eventId)
+                        .eq('gerecht_id', c.gerecht_id)
+                        .is('course_id', null);
+                }
+            }
+        } catch (e) {
+            console.warn('[acceptance] course↔prep coupling fallback faalde:', e);
+        }
+    }
 
     return result;
 }

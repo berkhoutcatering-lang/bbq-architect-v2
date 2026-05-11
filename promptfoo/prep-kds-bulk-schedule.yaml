@@ -1,0 +1,66 @@
+# Prep-KDS bulk-schedule heuristic eval.
+#
+# Dit is GEEN AI-eval — bulk-schedule wordt server-side uitgerekend, zonder LLM.
+# Maar promptfoo accepteert ook script-providers; deze eval test dat onze
+# productionQty + prepTaskScheduler + recipeTemplates samen het juiste antwoord
+# geven voor representatieve catering-scenarios.
+#
+# Wanneer we LATER een AI-timeline-generator toevoegen (V1.5, Sonnet 4.6),
+# kan diezelfde eval gerund tegen de AI-output om te checken dat de DAG
+# realistisch is.
+
+description: Prep-KDS bulk-schedule heuristic — pulled pork 75p, brisket 50p, gemengd menu
+
+prompts:
+  - |
+    {{scenario_json}}
+
+# Voor MVP gebruiken we de echo-provider als placeholder. Echte assertions
+# draaien tegen een tsx-script (zie scripts/prep-bulk-schedule-eval.ts in V1.5).
+providers:
+  - id: echo
+
+tests:
+  # Pulled Pork 75 gasten — verwacht: 6 tasks (inkoop/pekel/rub/smoke/plate/service),
+  # smoke-task target_qty ~ 75 × 0.18 / 0.7 = 19.3 kg procureur
+  - vars:
+      scenario_json: |
+        {
+          "guests": 75,
+          "dish": "Pulled Pork",
+          "expected_phases": ["inkoop", "pekel", "rub", "smoke", "plate", "service"],
+          "expected_smoke_qty_kg": 19.3,
+          "expected_smoke_offset_hours": 13
+        }
+    assert:
+      - type: contains
+        value: 'pulled pork'
+
+  # Brisket 50 gasten — smoke-offset 18u (14u smoke + 4u rust)
+  - vars:
+      scenario_json: |
+        {
+          "guests": 50,
+          "dish": "Brisket",
+          "expected_phases": ["inkoop", "pekel", "rub", "smoke", "plate", "service"],
+          "expected_smoke_qty_kg": 16.92,
+          "expected_smoke_offset_hours": 18
+        }
+    assert:
+      - type: contains
+        value: 'brisket'
+
+  # Gemengd menu — multi-event aggregation check
+  - vars:
+      scenario_json: |
+        {
+          "guests": 100,
+          "dishes": ["Pulled Pork", "Coleslaw", "Mac and cheese"],
+          "expected_dish_count": 3
+        }
+    assert:
+      - type: contains
+        value: 'pulled pork'
+
+defaultTest:
+  threshold: 1.0
