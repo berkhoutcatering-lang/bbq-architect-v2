@@ -345,7 +345,18 @@ export default function Facturen() {
                             <div key={f.id} className="ev-row" onClick={function () { editFactuur(f); }}>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600, marginBottom: 2 }}>{f.nummer}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{f.client_naam} — {fmtNl(f.datum)}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                        {f.client_naam ? (
+                                            <a
+                                                href={`/klanten?focus=${encodeURIComponent(f.client_naam)}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ color: 'var(--gold, #c4a35a)', textDecoration: 'none' }}
+                                                title="Open klant-detail"
+                                            >
+                                                {f.client_naam}
+                                            </a>
+                                        ) : '(geen klant)'} — {fmtNl(f.datum)}
+                                    </div>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontWeight: 600 }}>{fmt(total)}</div>

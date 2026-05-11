@@ -1258,9 +1258,18 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceH
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, letterSpacing: '-.01em' }}>{item.naam}</div>
                             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>per {item.unit} · leverancier: {item.supplier || '—'}</div>
                         </div>
-                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <X size={16} />
-                        </button>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <a
+                                href={`/voorraad/historie/${item.id}`}
+                                title="Volledige audit-trail: mutaties + prijshistorie + marge-alerts"
+                                style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                            >
+                                <History size={15} />
+                            </a>
+                            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={16} />
+                            </button>
+                        </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginTop: 20 }}>

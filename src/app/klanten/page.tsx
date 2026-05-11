@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
@@ -33,6 +33,7 @@ function Klanten() {
     });
     const searchParams = useSearchParams();
     const initialZoek = searchParams.get('zoek') || '';
+    const focusNaam = searchParams.get('focus') || '';
 
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
@@ -97,6 +98,16 @@ function Klanten() {
         setForm(JSON.parse(JSON.stringify(k)));
         loadStats(k.naam);
     }
+
+    /* Auto-open klant-detail bij ?focus=naam — gebruikt vanuit /facturen
+       en andere cross-page links. Match case-insensitive op exact naam. */
+    useEffect(function () {
+        if (!focusNaam || editing !== null || klantenLoading) return;
+        const target = focusNaam.toLowerCase().trim();
+        const match = klanten.find(k => (k.naam || '').toLowerCase().trim() === target);
+        if (match) editKlant(match);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusNaam, klanten, klantenLoading, editing]);
 
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
