@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 
-/* /keuken hub-page is op 2026-05-02 vervangen door de nieuwe IA waarin Recepten
-   het top-level item is. Sidebar wijst nu naar /gerechten (canonical), Bedenker
-   en Marges blijven als losse routes maar zijn ook bereikbaar via Recepten-children
-   in de sidebar. Deze redirect houdt oude links werkend. */
+/* /keuken hub-page: 2026-05-10 v5 — vervangen door "Inspiratie Bibliotheek".
+   De hub heet nu Inspiratie en bevat Componenten + Gerechten als sub-pages.
+   Bedenker en Marges blijven als losse routes werken (worden in PR4/PR6 inline
+   geïntegreerd). Deze redirect houdt oude bookmarks naar /keuken werkend. */
 export default function KeukenRedirectPage(): never {
-    redirect('/gerechten');
+    redirect('/inspiratie');
 }

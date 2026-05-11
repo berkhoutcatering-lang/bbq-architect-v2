@@ -4,7 +4,7 @@ import {
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
-    Receipt, TrendingUp,
+    Receipt, TrendingUp, Library, Boxes,
 } from "lucide-react";
 
 export interface NavChild {
@@ -57,16 +57,15 @@ export const navSections: NavSection[] = [
         ],
     },
     {
-        title: "Keuken",
-        icon: <ChefHat size={18} />,
+        title: "Inspiratie",
+        icon: <Library size={18} />,
         type: "folder",
-        slug: "keuken",
-        description: "Gerechten, AI-bedenker en marge-analyse.",
-        hubHref: "/gerechten",
+        slug: "inspiratie",
+        description: "Componenten en gerechten — jouw zichzelf-voedende bibliotheek.",
+        hubHref: "/inspiratie",
         children: [
-            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Vaste gerechten met receptuur en menu-templates" },
-            { label: "Bedenker", icon: <Sparkles size={16} />, href: "/bedenker", description: "AI-speeltuin om concepten te brainstormen" },
-            { label: "Marges", icon: <TrendingUp size={16} />, href: "/marges", description: "BCG-analyse: marges en populariteit per gerecht" },
+            { label: "Componenten", icon: <Boxes size={16} />, href: "/inspiratie/componenten", description: "Atomaire bouwblokken: zelf-maken of inkoop. Hergebruikt in meerdere gerechten" },
+            { label: "Gerechten", icon: <ChefHat size={16} />, href: "/inspiratie/gerechten", description: "Goedgekeurde gerechten samengesteld uit componenten. Vink aan voor offerte-wizard" },
         ],
     },
     {

@@ -43,10 +43,17 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
         if (!open || !supabase) return;
         Promise.all([
             supabase.from('klanten').select('naam,bedrijf,adres,type').limit(50),
-            supabase.from('gerechten').select('naam,gang_slug,tags,kostprijs_pp').limit(100),
+            /* Inspiratie Bibliotheek v5: alleen ⭐-aangevinkte gerechten in de wizard.
+               PR1-backfill heeft alle status='actief' gerechten op true gezet, dus
+               geen disruptie. Defensive: `!== false` zodat oude omgevingen (zonder
+               is_in_wizard-kolom) niet plots leeg lopen. */
+            supabase.from('gerechten').select('naam,gang_slug,tags,kostprijs_pp,is_in_wizard').limit(200),
         ]).then(([kl, ge]) => {
             setExistingKlanten(kl.data || []);
-            setExistingGerechten(ge.data || []);
+            const wizardGerechten = (ge.data || []).filter(
+                (g: Record<string, unknown>) => g.is_in_wizard !== false,
+            );
+            setExistingGerechten(wizardGerechten);
         });
     }, [open]);
 
