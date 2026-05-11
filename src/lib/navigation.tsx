@@ -4,7 +4,7 @@ import {
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
-    Receipt, TrendingUp, Library, Boxes,
+    Receipt, TrendingUp, Library, Boxes, BookOpen,
 } from "lucide-react";
 
 export interface NavChild {
@@ -92,6 +92,7 @@ export const navSections: NavSection[] = [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
             { label: "Bonnen & Facturen", icon: <ScanLine size={16} />, href: "/factuur-lezer", description: "Scan bonnen en facturen — AI extracteert de regels" },
+            { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
     },
