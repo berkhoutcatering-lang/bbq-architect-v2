@@ -2,9 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
+import { generateBoekhouderPdf, type PdfBon, type PdfFactuur } from '@/lib/boekhouderPdf';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /**
  * POST /api/boekhouder/pakket
@@ -212,6 +213,88 @@ export async function POST(req: NextRequest) {
       return s + price * stock;
     }, 0);
 
+    // ─── PDF — BTW-aangifte-concept + bonnen-overzicht ──
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('name, boekhouder_naam, boekhouder_email')
+      .eq('id', orgId)
+      .single();
+    // btw_nummer staat op settings (per-org) — apart ophalen
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('btw_nummer')
+      .eq('organization_id', orgId)
+      .limit(1)
+      .maybeSingle();
+    const btwNummer = settingsRow?.btw_nummer || undefined;
+
+    const periodLabel = new Date(start + 'T00:00:00').toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
+    const periodEnd = new Date(new Date(nextMonth + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10);
+
+    const pdfBonnen: PdfBon[] = (bonnen as any[]).map(function (b) {
+      const lev = Array.isArray(b.leverancier) ? b.leverancier[0] : b.leverancier;
+      const ev = Array.isArray(b.event) ? b.event[0] : b.event;
+      const cat = b.rgs_code ? RGS_BY_CODE[b.rgs_code] : null;
+      return {
+        datum: b.datum,
+        leverancier_naam: lev?.naam || '(onbekend)',
+        rgs_code: b.rgs_code || null,
+        rgs_label: cat?.label || b.rgs_category_label || null,
+        event_naam: ev?.name || null,
+        netto: Number(b.netto_bedrag) || 0,
+        btw_9: Number(b.btw_laag_bedrag) || 0,
+        btw_21: Number(b.btw_hoog_bedrag) || 0,
+        totaal: Number(b.totaal_bedrag) || 0,
+        notities: b.notities,
+      };
+    });
+
+    const pdfFacturen: PdfFactuur[] = ((facturen || []) as any[]).map(function (f) {
+      const items = Array.isArray(f.items) ? f.items : [];
+      let netto = 0, btw9 = 0, btw21 = 0;
+      items.forEach(function (it: any) {
+        const lineTotal = (Number(it.aantal) || 0) * (Number(it.prijs) || 0);
+        const pct = Number(it.btw_pct) || 21;
+        const btwAmount = lineTotal * pct / (100 + pct);
+        netto += lineTotal - btwAmount;
+        if (pct === 9) btw9 += btwAmount;
+        else if (pct === 21) btw21 += btwAmount;
+      });
+      return {
+        datum: f.datum,
+        nummer: f.nummer || String(f.id),
+        client_naam: f.client_naam || '(onbekend)',
+        rgs_code: f.rgs_code || 'WOpbCat',
+        netto: netto,
+        btw_9: btw9,
+        btw_21: btw21,
+        totaal: netto + btw9 + btw21,
+      };
+    });
+
+    const { base64: pdfBase64, filename: pdfFilename } = generateBoekhouderPdf({
+      org_name: orgRow?.name || 'Onbekende organisatie',
+      org_btw_nr: btwNummer,
+      boekhouder_naam: orgRow?.boekhouder_naam || undefined,
+      period_label: periodLabel,
+      period_start: start,
+      period_end: periodEnd,
+      generated_at: new Date().toISOString(),
+      bonnen: pdfBonnen,
+      facturen: pdfFacturen,
+      totals: {
+        inkoop_totaal: totalPurchase,
+        verkoop_totaal: totalSales,
+        btw_voorbelasting_9: totalBtw9,
+        btw_voorbelasting_21: totalBtw21,
+        btw_verschuldigd_9: totalSalesBtw9,
+        btw_verschuldigd_21: totalSalesBtw21,
+        btw_af_te_dragen: afTeDragen,
+        voorraadwaarde_eur: voorraadwaarde,
+      },
+    });
+    const pdfDataUrl = 'data:application/pdf;base64,' + pdfBase64;
+
     // Maak / update pakket-record
     const pakketPayload = {
       organization_id: orgId,
@@ -279,7 +362,11 @@ export async function POST(req: NextRequest) {
       btw_verschuldigd: verschuldigd,
       btw_af_te_dragen: afTeDragen,
       voorraadwaarde,
-      zip_data_url: csvDataUrl,  // v1: CSV, v2: echte ZIP
+      csv_data_url: csvDataUrl,
+      csv_filename: `boekhouding-${m}.csv`,
+      pdf_data_url: pdfDataUrl,
+      pdf_filename: pdfFilename,
+      zip_data_url: csvDataUrl, // legacy alias — UI gebruikt csv_data_url voortaan
     });
   } catch (err: any) {
     console.error('[boekhouder/pakket]', err);

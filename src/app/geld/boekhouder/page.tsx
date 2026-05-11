@@ -5,23 +5,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  ChevronDown, Loader2, ShieldCheck, X,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt,
 } from 'lucide-react';
-import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, type RgsCategory } from '@/lib/rgsCategories';
-import { fmt } from '@/lib/utils';
+import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 
 /**
  * /geld/boekhouder — Boekhouder-pakket UI
  * ────────────────────────────────────────
  * Pillar #1 (RGS-native) · #2 (catering-context) · #3 (twijfel-stapel) · #4 (maandpakket).
  *
- * 3 tabs:
- *   1. Bonnen-stapel   — alle bonnen + AI-suggestie + 1-tap accept
- *   2. Pakket          — genereer maand-ZIP voor boekhouder
- *   3. Twijfel         — filtered queue van flagged items
+ * 4 tabs:
+ *   1. Bonnen-stapel   — inkoop-bonnen + AI-suggestie + 1-tap accept
+ *   2. Verkoop          — verkoop-facturen + RGS-code per factuur
+ *   3. Pakket          — genereer maand-PDF + CSV + email naar boekhouder
+ *   4. Twijfel         — filtered queue van flagged items
  */
 
-type Tab = 'stapel' | 'pakket' | 'twijfel';
+type Tab = 'stapel' | 'verkoop' | 'pakket' | 'twijfel';
 type StatusFilter = 'alle' | 'pending' | 'auto' | 'twijfel';
 
 interface Row {
@@ -85,6 +85,7 @@ export default function BoekhouderPage() {
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [migrationMissing, setMigrationMissing] = useState(false);
 
   const fetchBonnen = useCallback(async function () {
     setLoading(true);
@@ -93,6 +94,12 @@ export default function BoekhouderPage() {
         `/api/boekhouder/bonnen?month=${month}&status=${statusFilter}`,
         { credentials: 'include' }
       );
+      if (r.status === 503) {
+        setMigrationMissing(true);
+        setRows([]); setCounts(null);
+        return;
+      }
+      setMigrationMissing(false);
       if (!r.ok) { setRows([]); setCounts(null); return; }
       const j = await r.json();
       setRows(j.rows || []);
@@ -169,6 +176,29 @@ export default function BoekhouderPage() {
         </div>
       </header>
 
+      {/* Migration-missing banner */}
+      {migrationMissing && (
+        <div style={{
+          background: 'rgba(245,158,11,.1)',
+          border: '1px solid rgba(245,158,11,.35)',
+          borderRadius: 12,
+          padding: '14px 16px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}>
+          <AlertCircle size={18} style={{ color: 'var(--amber, #f59e0b)', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <strong>Migration nog niet gedraaid.</strong> De boekhouder-tabel kolommen bestaan nog niet in de database.
+            <br />
+            <span style={{ color: 'var(--muted)' }}>
+              Run <code style={{ background: 'rgba(0,0,0,.3)', padding: '2px 6px', borderRadius: 4 }}>supabase/migrations/20260511130000_boekhouder_pakket.sql</code> via Supabase Studio → SQL Editor, ververs daarna deze pagina.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* KPI strip */}
       {counts && (
         <div className="bh-kpi-strip">
@@ -184,7 +214,10 @@ export default function BoekhouderPage() {
       {/* Tabs */}
       <nav className="bh-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'stapel'} className={'bh-tab' + (tab === 'stapel' ? ' bh-tab--active' : '')} onClick={() => setTab('stapel')}>
-          <Package2 size={14} /> Bonnen-stapel <span className="bh-tab__count">{counts?.total ?? 0}</span>
+          <Package2 size={14} /> Inkoop-bonnen <span className="bh-tab__count">{counts?.total ?? 0}</span>
+        </button>
+        <button role="tab" aria-selected={tab === 'verkoop'} className={'bh-tab' + (tab === 'verkoop' ? ' bh-tab--active' : '')} onClick={() => setTab('verkoop')}>
+          <Receipt size={14} /> Verkoop-facturen
         </button>
         <button role="tab" aria-selected={tab === 'pakket'} className={'bh-tab' + (tab === 'pakket' ? ' bh-tab--active' : '')} onClick={() => setTab('pakket')}>
           <FileText size={14} /> Boekhouder-pakket
@@ -195,7 +228,9 @@ export default function BoekhouderPage() {
       </nav>
 
       {/* TAB CONTENT */}
-      {tab === 'pakket' ? (
+      {tab === 'verkoop' ? (
+        <VerkoopTab month={month} />
+      ) : tab === 'pakket' ? (
         <PakketTab month={month} counts={counts} rows={rows} />
       ) : (
         <>
@@ -364,7 +399,14 @@ function StatusBadge({ status, locked }: { status: string | null; locked: boolea
 
 function PakketTab({ month, counts, rows }: { month: string; counts: Counts | null; rows: Row[] }) {
   const [generating, setGenerating] = useState(false);
+  const [emailing, setEmailing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<{ pdfUrl: string; pdfName: string; csvUrl: string; csvName: string; bonnenCount: number } | null>(null);
+
+  // Boekhouder-settings
+  const [settings, setSettings] = useState<{ boekhouder_email: string; boekhouder_naam: string } | null>(null);
+  const [emailOverride, setEmailOverride] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
 
   const totals = useMemo(function () {
     let netto = 0, btw9 = 0, btw21 = 0, totaal = 0;
@@ -376,6 +418,13 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
     });
     return { netto, btw9, btw21, totaal, voorbelasting: btw9 + btw21 };
   }, [rows]);
+
+  useEffect(function () {
+    fetch('/api/boekhouder/settings', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (j?.settings) setSettings(j.settings); })
+      .catch(() => {});
+  }, []);
 
   const unclassified = (counts?.pending || 0) + (counts?.twijfel || 0);
   const canLock = unclassified === 0 && rows.length > 0;
@@ -393,32 +442,65 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
       const j = await r.json();
       if (!r.ok) {
         setMessage('Fout: ' + (j.error || 'onbekend'));
-      } else if (j.zip_data_url) {
-        // Trigger download
-        const a = document.createElement('a');
-        a.href = j.zip_data_url;
-        a.download = `boekhouding-${month}.zip`;
-        a.click();
-        setMessage(`✓ Pakket gedownload (${j.bonnen_count} bonnen). Maand vergrendeld.`);
+      } else {
+        setGenerated({
+          pdfUrl: j.pdf_data_url,
+          pdfName: j.pdf_filename,
+          csvUrl: j.csv_data_url,
+          csvName: j.csv_filename,
+          bonnenCount: j.bonnen_count,
+        });
+        setMessage(`✓ Pakket gegenereerd (${j.bonnen_count} bonnen). Maand vergrendeld.`);
       }
     } catch (err: any) {
       setMessage('Fout: ' + (err?.message || 'onbekend'));
     } finally { setGenerating(false); }
   }
 
+  function download(url: string, name: string) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
+
+  async function emailToBoekhouder() {
+    setEmailing(true);
+    setMessage(null);
+    try {
+      const r = await fetch('/api/boekhouder/pakket/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          month,
+          to: emailOverride.trim() || undefined,
+          message: customMessage.trim() || undefined,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) setMessage('Fout: ' + (j.error || 'onbekend'));
+      else setMessage(`✓ Verstuurd naar ${j.sent_to} (${j.bonnen_count} bonnen, ${j.facturen_count} facturen)`);
+    } catch (err: any) {
+      setMessage('Fout: ' + (err?.message || 'onbekend'));
+    } finally { setEmailing(false); }
+  }
+
+  const recipientEmail = emailOverride.trim() || settings?.boekhouder_email || '';
+
   return (
     <div className="bh-pakket">
       <section className="bh-pakket__card">
         <header>
           <h2><Calendar size={16} /> Pakket voor {month}</h2>
-          <p>Eind van de maand 1 klik → ZIP klaar voor je boekhouder.</p>
+          <p>Eén klik → PDF + CSV klaar voor je boekhouder. Vergrendelt de maand voor 7-jaar bewaarplicht.</p>
         </header>
 
         <ul className="bh-pakket__contents">
-          <li>✓ {counts?.total || 0} bonnen + foto's (PDF/JPG)</li>
-          <li>✓ Index.csv met RGS-codes</li>
-          <li>✓ BTW-overzicht-concept-PDF</li>
-          <li>✓ Totale voorbelasting: <strong>{fmtEur(totals.voorbelasting)}</strong></li>
+          <li>✓ <strong>BTW-aangifte-PDF</strong> met rubrieken 1a, 1b, 5b (1-op-1 over te nemen in Belastingdienst-portaal)</li>
+          <li>✓ <strong>CSV met RGS-codes</strong> — direct import in Twinfield, Exact, SnelStart, AFAS</li>
+          <li>✓ <strong>{counts?.total || 0} inkoop-bonnen</strong> gegroepeerd per RGS-categorie</li>
+          <li>✓ Voorraad-snapshot op einde maand (voor balans)</li>
         </ul>
 
         <div className="bh-pakket__summary">
@@ -434,20 +516,252 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
           </div>
         )}
 
-        <button
-          className="bh-btn-primary bh-btn-primary--large"
-          onClick={generatePakket}
-          disabled={!canLock || generating}
-        >
-          {generating
-            ? <><Loader2 size={14} className="bh-spin" /> Pakket bouwen…</>
-            : canLock
-              ? <><ShieldCheck size={14} /> Vergrendel maand + download ZIP</>
-              : 'Eerst alles classificeren'}
-        </button>
+        {!generated ? (
+          <button
+            className="bh-btn-primary bh-btn-primary--large"
+            onClick={generatePakket}
+            disabled={!canLock || generating}
+          >
+            {generating
+              ? <><Loader2 size={14} className="bh-spin" /> Pakket bouwen…</>
+              : canLock
+                ? <><ShieldCheck size={14} /> Vergrendel maand + genereer pakket</>
+                : 'Eerst alles classificeren'}
+          </button>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <button className="bh-btn-primary" onClick={() => download(generated.pdfUrl, generated.pdfName)}>
+                <Download size={14} /> Download PDF
+              </button>
+              <button className="bh-btn-primary" onClick={() => download(generated.csvUrl, generated.csvName)}>
+                <Download size={14} /> Download CSV
+              </button>
+            </div>
+            <div className="bh-pakket__email">
+              <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '12px 0 8px', fontSize: 14, fontWeight: 600 }}>
+                <Mail size={14} /> Direct naar je boekhouder mailen
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 8px' }}>
+                Stuurt PDF + CSV als bijlage. {settings?.boekhouder_email
+                  ? <>Standaard naar <strong>{settings.boekhouder_email}</strong>.</>
+                  : <>Geen email ingesteld <Link href="#" onClick={(e) => { e.preventDefault(); setEmailOverride('boekhouder@'); }}>vul hieronder in</Link>.</>
+                }
+              </p>
+              <input
+                type="email"
+                placeholder={settings?.boekhouder_email || 'boekhouder@kantoor.nl'}
+                value={emailOverride}
+                onChange={e => setEmailOverride(e.target.value)}
+                style={{ width: '100%', background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 8 }}
+              />
+              <textarea
+                placeholder="Optionele begeleidende boodschap (bv. 'Eerste maand zelf gedaan, kun je dit checken?')"
+                value={customMessage}
+                onChange={e => setCustomMessage(e.target.value)}
+                rows={2}
+                style={{ width: '100%', background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 8, resize: 'vertical' }}
+              />
+              <button
+                className="bh-btn-primary bh-btn-primary--large"
+                onClick={emailToBoekhouder}
+                disabled={emailing || !recipientEmail}
+                style={{ width: '100%' }}
+              >
+                {emailing
+                  ? <><Loader2 size={14} className="bh-spin" /> Versturen…</>
+                  : <><Mail size={14} /> {recipientEmail ? `Verstuur naar ${recipientEmail}` : 'Geen email ingesteld'}</>
+                }
+              </button>
+            </div>
+          </>
+        )}
 
         {message && <div className="bh-pakket__msg">{message}</div>}
       </section>
+
+      {/* Boekhouder-settings inline */}
+      <section className="bh-pakket__card" style={{ flex: '0 0 320px', maxWidth: 360 }}>
+        <header>
+          <h2 style={{ fontSize: 18 }}><Settings size={14} /> Boekhouder-instellingen</h2>
+          <p>Eenmalig invullen — gebruikt voor email-versturen.</p>
+        </header>
+        <BoekhouderSettingsForm settings={settings} onSaved={(s) => setSettings(s)} />
+      </section>
     </div>
+  );
+}
+
+function BoekhouderSettingsForm({ settings, onSaved }: { settings: any; onSaved: (s: any) => void }) {
+  const [email, setEmail] = useState('');
+  const [naam, setNaam] = useState('');
+  const [threshold, setThreshold] = useState(0.85);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(function () {
+    if (settings) {
+      setEmail(settings.boekhouder_email || '');
+      setNaam(settings.boekhouder_naam || '');
+      setThreshold(Number(settings.ai_classify_threshold) || 0.85);
+    }
+  }, [settings]);
+
+  async function save() {
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch('/api/boekhouder/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          boekhouder_email: email,
+          boekhouder_naam: naam,
+          ai_classify_threshold: threshold,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) setMsg('Fout: ' + (j.error || 'onbekend'));
+      else {
+        setMsg('✓ Opgeslagen');
+        onSaved({ ...settings, boekhouder_email: email, boekhouder_naam: naam, ai_classify_threshold: threshold });
+      }
+    } catch (err: any) {
+      setMsg('Fout: ' + (err?.message || 'onbekend'));
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label style={{ fontSize: 12, color: 'var(--muted)' }}>Naam boekhouder</label>
+      <input
+        type="text"
+        placeholder="bv. Jan Visser"
+        value={naam}
+        onChange={e => setNaam(e.target.value)}
+        style={{ background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
+      />
+      <label style={{ fontSize: 12, color: 'var(--muted)' }}>Email-adres</label>
+      <input
+        type="email"
+        placeholder="jan@kantoor.nl"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        style={{ background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '7px 10px', fontSize: 13 }}
+      />
+      <label style={{ fontSize: 12, color: 'var(--muted)' }}>
+        AI auto-accept drempel: {Math.round(threshold * 100)}%
+        <br />
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>Lager = meer auto-accept, hoger = meer naar twijfel</span>
+      </label>
+      <input
+        type="range"
+        min={0.5}
+        max={1}
+        step={0.05}
+        value={threshold}
+        onChange={e => setThreshold(Number(e.target.value))}
+      />
+      <button className="bh-btn-primary" onClick={save} disabled={saving} style={{ marginTop: 8 }}>
+        {saving ? 'Opslaan…' : 'Opslaan'}
+      </button>
+      {msg && <div style={{ fontSize: 12, color: msg.startsWith('✓') ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)' }}>{msg}</div>}
+    </div>
+  );
+}
+
+interface VerkoopRow {
+  id: number;
+  nummer: string;
+  datum: string | null;
+  client_naam: string;
+  status: string;
+  rgs_code: string;
+  rgs_label: string;
+  netto_eur: number;
+  btw_9_eur: number;
+  btw_21_eur: number;
+  totaal_eur: number;
+  locked_at: string | null;
+}
+
+function VerkoopTab({ month }: { month: string }) {
+  const [rows, setRows] = useState<VerkoopRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [salesCodes, setSalesCodes] = useState<Array<{ code: string; label: string }>>([]);
+
+  const fetchData = useCallback(async function () {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/boekhouder/facturen?month=${month}`, { credentials: 'include' });
+      if (r.ok) {
+        const j = await r.json();
+        setRows(j.rows || []);
+        setSalesCodes(j.sales_codes || []);
+      }
+    } finally { setLoading(false); }
+  }, [month]);
+
+  useEffect(function () { fetchData(); }, [fetchData]);
+
+  async function changeCode(id: number, code: string) {
+    await fetch('/api/boekhouder/facturen', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ id, rgs_code: code }),
+    });
+    await fetchData();
+  }
+
+  const totals = useMemo(function () {
+    return rows.reduce(function (acc, r) {
+      acc.netto += r.netto_eur;
+      acc.btw9 += r.btw_9_eur;
+      acc.btw21 += r.btw_21_eur;
+      acc.totaal += r.totaal_eur;
+      return acc;
+    }, { netto: 0, btw9: 0, btw21: 0, totaal: 0 });
+  }, [rows]);
+
+  if (loading) return <div className="bh-empty">Verkoop-facturen laden…</div>;
+  if (rows.length === 0) return <div className="bh-empty">Geen verkoop-facturen voor {month}.</div>;
+
+  return (
+    <>
+      <div className="bh-pakket__summary" style={{ marginBottom: 16 }}>
+        <div><span>Facturen</span><strong>{rows.length}</strong></div>
+        <div><span>Netto</span><strong>{fmtEur(totals.netto)}</strong></div>
+        <div><span>BTW 9% (food)</span><strong>{fmtEur(totals.btw9)}</strong></div>
+        <div><span>BTW 21% (overig)</span><strong>{fmtEur(totals.btw21)}</strong></div>
+      </div>
+      <ul className="bh-rows">
+        {rows.map(function (r) {
+          return (
+            <li key={r.id} className={'bh-row bh-row--' + (r.locked_at ? 'verified' : 'auto_accepted')}>
+              <div className="bh-row__main" style={{ cursor: 'default' }}>
+                <span className="bh-row__date">{fmtDate(r.datum)}</span>
+                <span className="bh-row__leverancier">{r.client_naam} — <span style={{ color: 'var(--muted)' }}>#{r.nummer}</span></span>
+                <span className="bh-row__totaal">{fmtEur(r.totaal_eur)}</span>
+                <select
+                  value={r.rgs_code}
+                  onChange={e => changeCode(r.id, e.target.value)}
+                  disabled={!!r.locked_at}
+                  style={{ background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 6, padding: '4px 8px', fontSize: 12 }}
+                >
+                  {salesCodes.map(c => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
+                <span className="bh-row__event" style={{ visibility: 'hidden' }}>—</span>
+                {r.locked_at
+                  ? <span className="bh-status bh-status--locked"><ShieldCheck size={10} /> vergrendeld</span>
+                  : <span className="bh-status bh-status--ok"><Check size={10} /> {r.status}</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

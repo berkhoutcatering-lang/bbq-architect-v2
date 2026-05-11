@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     const monthParam = req.nextUrl.searchParams.get('month'); // YYYY-MM
     const statusFilter = req.nextUrl.searchParams.get('status') || 'alle';
 
+    // Join op leverancier werkt; event-FK is mogelijk nog niet in schema-cache
+    // (pre-migration). We doen events daarom in een aparte query en joinen in JS.
     let query = supabase
       .from('bonnen')
       .select(`
@@ -41,8 +43,7 @@ export async function GET(req: NextRequest) {
         leverancier_id, event_id, rgs_code, rgs_category_label,
         ai_classify_status, ai_classify_confidence, ai_classify_reasoning,
         classified_at, locked_at,
-        leverancier:leverancier_id (id, naam, type),
-        event:event_id (id, name, date, guests)
+        leverancier:leverancier_id (id, naam, type)
       `)
       .eq('organization_id', orgId)
       .order('datum', { ascending: false })
@@ -66,13 +67,36 @@ export async function GET(req: NextRequest) {
     }
 
     const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      // Detecteer "kolom bestaat niet" — gebruiker moet migratie draaien
+      const msg = error.message || '';
+      if (msg.includes('column') && (msg.includes('does not exist') || msg.includes('rgs_code'))) {
+        return NextResponse.json({
+          error: 'Migration nog niet gedraaid',
+          hint: 'Run supabase/migrations/20260511130000_boekhouder_pakket.sql via Supabase Studio',
+        }, { status: 503 });
+      }
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
 
-    // Verrijk elke rij met RGS-meta uit constants
+    // Events apart ophalen (FK-relatie mogelijk nog niet in schema-cache)
+    const eventIds = Array.from(new Set((data || []).map((b: any) => b.event_id).filter((id: any) => typeof id === 'number')));
+    const eventsById = new Map<number, any>();
+    if (eventIds.length > 0) {
+      const { data: evs } = await supabase
+        .from('events')
+        .select('id, name, date, guests')
+        .in('id', eventIds);
+      (evs || []).forEach((e: any) => eventsById.set(e.id, e));
+    }
+
+    // Verrijk elke rij met RGS-meta uit constants + event-info
     const enriched = (data || []).map((b: any) => {
       const cat = b.rgs_code ? RGS_BY_CODE[b.rgs_code] : null;
+      const event = b.event_id ? eventsById.get(b.event_id) : null;
       return {
         ...b,
+        event,
         rgs_kind: cat?.kind || null,
         rgs_btw_default: cat?.btw_default || null,
         rgs_hint: cat?.hint || null,
