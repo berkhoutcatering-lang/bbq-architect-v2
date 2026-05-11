@@ -6,8 +6,41 @@ import Link from 'next/link';
 import {
     Boxes, ArrowLeft, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
-    Upload, FileText,
+    Upload, FileText, Flame,
 } from 'lucide-react';
+
+// Emoji-pick op naam-keyword voor visuele anchors op kaartjes
+function emojiForComponent(name: string, type: 'prepared' | 'bought_in'): string {
+    const n = name.toLowerCase();
+    if (/ananas|pineapple/.test(n)) return '🍍';
+    if (/bacon|spek/.test(n)) return '🥓';
+    if (/kip|chicken|gevogelte/.test(n)) return '🍗';
+    if (/vis|fish|zalm|tonijn/.test(n)) return '🐟';
+    if (/garnaal|shrimp|kreeft/.test(n)) return '🦐';
+    if (/burger|pulled|brisket|rib/.test(n)) return '🍔';
+    if (/saus|sauce|mayo/.test(n)) return '🥫';
+    if (/brood|bun|brioche|toast/.test(n)) return '🍞';
+    if (/kaas|cheese/.test(n)) return '🧀';
+    if (/ei|egg/.test(n)) return '🥚';
+    if (/aardap|potato|frit/.test(n)) return '🥔';
+    if (/tomaat|tomato/.test(n)) return '🍅';
+    if (/komkommer|cucumber|pickle/.test(n)) return '🥒';
+    if (/wortel|carrot/.test(n)) return '🥕';
+    if (/ui|onion/.test(n)) return '🧅';
+    if (/peper|chili|chilli/.test(n)) return '🌶️';
+    if (/knoflook|garlic/.test(n)) return '🧄';
+    if (/sla|salade|salad|greens/.test(n)) return '🥗';
+    if (/bier|beer|hop/.test(n)) return '🍺';
+    if (/wijn|wine/.test(n)) return '🍷';
+    if (/limoen|lime|citroen|lemon/.test(n)) return '🍋';
+    if (/chocolade|chocolate|cacao/.test(n)) return '🍫';
+    if (/honing|honey/.test(n)) return '🍯';
+    if (/koffie|coffee/.test(n)) return '☕';
+    if (/melk|milk|room|cream/.test(n)) return '🥛';
+    if (/folie|verpak|zak|doos/.test(n)) return '📦';
+    if (/snij|plank|pan/.test(n)) return '🔪';
+    return type === 'bought_in' ? '🛒' : '🔥';
+}
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -328,50 +361,59 @@ export default function ComponentenPage() {
         <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
             <Link
                 href="/inspiratie"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[var(--text)]"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[#FFA552]"
             >
                 <ArrowLeft size={12} /> Inspiratie Bibliotheek
             </Link>
 
             {/* Hero */}
-            <header className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--brand)]">
-                    <span className="inline-block h-px w-6 bg-[var(--brand)]" />
-                    Laag 1 — atomair
+            <header className="relative space-y-3 overflow-hidden">
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute -left-10 -top-10 h-48 w-48 rounded-full opacity-20 blur-3xl"
+                    style={{ background: 'radial-gradient(circle, #FF6B35 0%, transparent 70%)' }}
+                />
+                <div className="relative">
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B35]/30 bg-[#FF6B35]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#FFA552]">
+                        <Flame size={10} /> Bouwstenen
+                    </div>
+                    <h1 className="mt-3 text-5xl font-bold leading-[1.05] tracking-tight" style={{ color: 'var(--text)' }}>
+                        Componenten
+                    </h1>
+                    <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
+                        Atomair, herbruikbaar, klaar voor de smoker. Zelf-gegrild (ananas, espuma) of inkoop (Hanos broodje).
+                        Wijzig hier één keer — <span style={{ color: 'var(--text)' }}>alle gerechten passen automatisch mee</span>.
+                    </p>
                 </div>
-                <h1 className="font-[var(--font-artisan)] text-4xl font-medium leading-tight tracking-tight">
-                    Componenten
-                </h1>
-                <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
-                    Bouwblokken met receptuur, kostprijs, HACCP en allergenen. Zelf-bereid (gegrilde ananas)
-                    of inkoop (Hanos broodje). Wijzig één keer — alle gerechten passen mee.
-                </p>
             </header>
 
             {/* Toolbar */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 {/* Segmented filter */}
-                <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
+                <div className="inline-flex items-center rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
                     <button
                         type="button"
                         onClick={() => setTypeFilter('all')}
-                        className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${typeFilter === 'all' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        style={typeFilter === 'all' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
                     >
-                        Alle <span className="ml-0.5 opacity-60">{components.length}</span>
+                        Alle <span className="ml-0.5 opacity-70">{components.length}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setTypeFilter('prepared')}
-                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'prepared' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${typeFilter === 'prepared' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        style={typeFilter === 'prepared' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
                     >
-                        <Package size={12} /> Zelf-bereid <span className="opacity-60">{preparedCount}</span>
+                        🔥 Zelf-gegrild <span className="opacity-70">{preparedCount}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setTypeFilter('bought_in')}
-                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'bought_in' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${typeFilter === 'bought_in' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        style={typeFilter === 'bought_in' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
                     >
-                        <ShoppingBag size={12} /> Inkoop <span className="opacity-60">{boughtCount}</span>
+                        🛒 Inkoop <span className="opacity-70">{boughtCount}</span>
                     </button>
                 </div>
 
@@ -382,28 +424,29 @@ export default function ComponentenPage() {
                             type="search"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Zoek..."
-                            className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)]"
+                            placeholder="Wat zoek je, chef?"
+                            className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[#FF6B35]/40 focus:outline-none"
                         />
                     </div>
                     <button
                         type="button"
                         onClick={() => { setShowImport(true); setShowForm(false); setShowAi(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-[12px] text-[var(--muted-light)] transition hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-[12px] text-[var(--muted-light)] transition hover:border-[#FF6B35]/30 hover:text-[#FFA552]"
                     >
                         <Upload size={12} /> Importeer
                     </button>
                     <button
                         type="button"
                         onClick={() => { setShowAi(v => !v); setShowForm(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[#FF6B35]/30 bg-[#FF6B35]/10 px-3 py-1.5 text-[12px] font-semibold text-[#FFA552] transition hover:bg-[#FF6B35]/15"
                     >
-                        <Sparkles size={12} /> AI Genereer
+                        <Sparkles size={12} /> Vraag de pitmaster
                     </button>
                     <button
                         type="button"
                         onClick={() => { setShowForm(v => !v); setShowAi(false); }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-medium text-black transition hover:opacity-90"
+                        className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-bold text-black shadow-lg shadow-[#FF6B35]/30 transition-all hover:scale-105"
+                        style={{ background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' }}
                     >
                         {showForm ? <X size={12} /> : <Plus size={12} />}
                         {showForm ? 'Annuleer' : 'Nieuw'}
@@ -743,37 +786,39 @@ export default function ComponentenPage() {
 
             {/* Lijst */}
             {loading ? (
-                <div className="flex items-center justify-center py-20 text-[var(--muted)]">
-                    <Loader2 size={18} className="mr-2 animate-spin" /> Componenten laden…
+                <div className="flex items-center justify-center py-20 text-[#FFA552]">
+                    <Flame size={18} className="mr-2 animate-pulse" /> De pitmaster pakt de bouwstenen…
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-14 text-center">
-                    <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/20">
-                        <Boxes size={26} className="text-[var(--brand)]" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-[var(--font-artisan)] text-xl font-medium">
-                        {components.length === 0 ? 'Nog geen componenten' : 'Geen match'}
+                <div
+                    className="overflow-hidden rounded-2xl border-2 border-dashed border-[#FF6B35]/30 p-14 text-center"
+                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                >
+                    <div className="mb-4 text-5xl">{components.length === 0 ? '🔥' : '🤔'}</div>
+                    <h3 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
+                        {components.length === 0 ? 'Lege smoker, lege bibliotheek' : 'Niks gevonden'}
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {components.length === 0
-                            ? 'Begin met je eerste bouwblok. Zelf-bereid (gegrilde ananas, kokos espuma) of inkoop (Hanos broodje, Sligro saus). Of laat AI er een verzinnen.'
-                            : 'Geen component op huidige filter of zoekterm.'}
+                            ? 'Tijd om iets toe te voegen. Vraag de pitmaster om iets bedacht te krijgen, importeer een Hanos-lijst, of zet zelf je eerste bouwsteen neer.'
+                            : 'Geen bouwsteen op deze filter of zoekterm.'}
                     </p>
                     {components.length === 0 && !showForm && !showAi && (
-                        <div className="mt-6 flex items-center justify-center gap-2">
+                        <div className="mt-7 flex items-center justify-center gap-2">
                             <button
                                 type="button"
                                 onClick={() => setShowAi(true)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
+                                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-bold text-black shadow-lg shadow-[#FF6B35]/30 transition-all hover:scale-105"
+                                style={{ background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' }}
                             >
-                                <Sparkles size={12} /> AI Genereer
+                                <Sparkles size={13} /> Vraag de pitmaster
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setShowForm(true)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-medium text-black transition hover:opacity-90"
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[13px] font-semibold text-[var(--text)] transition hover:border-[#FF6B35]/40"
                             >
-                                <Plus size={12} /> Handmatig
+                                <Plus size={13} /> Zelf neerzetten
                             </button>
                         </div>
                     )}
@@ -785,18 +830,22 @@ export default function ComponentenPage() {
                             key={c.id}
                             type="button"
                             onClick={() => setSelectedComponentId(c.id)}
-                            className="group rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left transition hover:border-[var(--brand)]/40"
+                            className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B35]/40 hover:shadow-lg hover:shadow-[#FF6B35]/10"
+                            style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                         >
                             <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
-                                    {c.type === 'prepared'
-                                        ? <><Package size={10} /> Zelf-bereid</>
-                                        : <><ShoppingBag size={10} /> Inkoop</>}
-                                    {c.ai_suggested && (
-                                        <span className="inline-flex items-center gap-0.5 rounded-full bg-[var(--brand)]/10 px-1.5 py-0.5 text-[9px] text-[var(--brand)]">
-                                            <Sparkles size={8} /> AI
-                                        </span>
-                                    )}
+                                <div className="flex items-center gap-2">
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-black/30 text-xl ring-1 ring-[var(--border)] transition group-hover:ring-[#FF6B35]/40">
+                                        {emojiForComponent(c.name, c.type)}
+                                    </span>
+                                    <div className="flex flex-col gap-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#FFA552]">
+                                        {c.type === 'prepared' ? '🔥 Gegrild' : '🛒 Inkoop'}
+                                        {c.ai_suggested && (
+                                            <span className="inline-flex items-center gap-0.5 rounded bg-[#FF6B35]/10 px-1 py-0.5 text-[#FFA552] ring-1 ring-[#FF6B35]/20">
+                                                <Sparkles size={7} /> AI
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <span
                                     role="button"
@@ -810,21 +859,26 @@ export default function ComponentenPage() {
                                 </span>
                             </div>
 
-                            <h3 className="mt-3 font-[var(--font-artisan)] text-base font-medium leading-tight" style={{ color: 'var(--text)' }}>
+                            <h3 className="mt-3 line-clamp-2 text-[15px] font-bold leading-tight" style={{ color: 'var(--text)' }}>
                                 {c.name}
                             </h3>
                             {c.description && (
-                                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
+                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
                             )}
 
-                            <div className="mt-3 border-t border-[var(--border)] pt-2.5 font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
-                                {formatPerBase(c.base_cost_cents, c.base_quantity, c.base_unit)}
+                            <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-2.5">
+                                <span className="font-mono text-[14px] font-bold tabular-nums text-[#FFBF00]">
+                                    €{(c.base_cost_cents / 100).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                                    /{c.base_quantity}{c.base_unit}
+                                </span>
                             </div>
 
                             {c.flavor_tags && c.flavor_tags.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">
                                     {c.flavor_tags.slice(0, 4).map(tag => (
-                                        <span key={tag} className="rounded-md bg-[var(--bg)] px-1.5 py-0.5 text-[10px] text-[var(--muted-light)]">
+                                        <span key={tag} className="rounded-md bg-black/30 px-1.5 py-0.5 text-[10px] text-[var(--muted-light)] ring-1 ring-[var(--border)]">
                                             {tag}
                                         </span>
                                     ))}

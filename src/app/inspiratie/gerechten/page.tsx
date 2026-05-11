@@ -15,8 +15,26 @@ import Link from 'next/link';
 import {
     ChefHat, ArrowLeft, Loader2, Search, Star, Sparkles,
     Plus, Trash2, X, Boxes, TrendingUp, ArrowUp, ArrowDown, Replace, LogOut, Lightbulb,
-    ShieldAlert, ThermometerSun,
+    ShieldAlert, ThermometerSun, Flame,
 } from 'lucide-react';
+
+function emojiForGerecht(name: string): string {
+    const n = name.toLowerCase();
+    if (/pork|spek|varken/.test(n)) return '🐖';
+    if (/burger|slider/.test(n)) return '🍔';
+    if (/rib|brisket|steak|beef|rund/.test(n)) return '🥩';
+    if (/kip|chicken|gevogelte|hen/.test(n)) return '🍗';
+    if (/vis|fish|zalm|tonijn/.test(n)) return '🐟';
+    if (/garnaal|kreeft|shrimp|lobster|oester/.test(n)) return '🦞';
+    if (/burnt|bonbon|truffel/.test(n)) return '✨';
+    if (/coleslaw|salad|sla/.test(n)) return '🥗';
+    if (/mac|kaas|cheese/.test(n)) return '🧀';
+    if (/tofu|veggie|vega/.test(n)) return '🌱';
+    if (/brownie|chocolade|dessert|melba|crumble/.test(n)) return '🍰';
+    if (/peach|perzik|ananas|mango|tropical/.test(n)) return '🍑';
+    if (/bbq|grill|gerookt|smoked/.test(n)) return '🔥';
+    return '🍽️';
+}
 
 const ALLERGEN_LABELS: Record<string, string> = {
     G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
@@ -153,42 +171,50 @@ export default function GerechtenInspiratiePage() {
         <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
             <Link
                 href="/inspiratie"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[var(--text)]"
+                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[#FFA552]"
             >
                 <ArrowLeft size={12} /> Inspiratie Bibliotheek
             </Link>
 
             {/* Hero */}
-            <header className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--brand)]">
-                    <span className="inline-block h-px w-6 bg-[var(--brand)]" />
-                    Laag 2 — samengesteld
+            <header className="relative space-y-3 overflow-hidden">
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute -left-10 -top-10 h-48 w-48 rounded-full opacity-20 blur-3xl"
+                    style={{ background: 'radial-gradient(circle, #FFBF00 0%, transparent 70%)' }}
+                />
+                <div className="relative">
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B35]/30 bg-[#FF6B35]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#FFA552]">
+                        <ChefHat size={10} /> Op het bord
+                    </div>
+                    <h1 className="mt-3 text-5xl font-bold leading-[1.05] tracking-tight" style={{ color: 'var(--text)' }}>
+                        Gerechten
+                    </h1>
+                    <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
+                        Bouwstenen × creativiteit = wat je verkoopt. Marges live, ⭐ aanvinken voor de offerte-wizard.
+                        Klik een gerecht — koppel bouwstenen — <span style={{ color: 'var(--text)' }}>zie marge meebewegen</span>.
+                    </p>
                 </div>
-                <h1 className="font-[var(--font-artisan)] text-4xl font-medium leading-tight tracking-tight">
-                    Gerechten
-                </h1>
-                <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
-                    Goedgekeurde samenstellingen uit jouw componenten. Marges live zichtbaar.
-                    Vink met <Star size={11} className="inline fill-[var(--brand)] text-[var(--brand)]" /> aan voor de offerte-wizard.
-                </p>
             </header>
 
             {/* Toolbar */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
+                <div className="inline-flex items-center rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
                     <button
                         type="button"
                         onClick={() => setWizardFilter('all')}
-                        className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${wizardFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${wizardFilter === 'all' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        style={wizardFilter === 'all' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
                     >
-                        Alle <span className="ml-0.5 opacity-60">{gerechten.length}</span>
+                        Alle <span className="ml-0.5 opacity-70">{gerechten.length}</span>
                     </button>
                     <button
                         type="button"
                         onClick={() => setWizardFilter('wizard')}
-                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${wizardFilter === 'wizard' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${wizardFilter === 'wizard' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                        style={wizardFilter === 'wizard' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
                     >
-                        <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> In wizard <span className="opacity-60">{wizardCount}</span>
+                        <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> Op de kaart <span className="opacity-70">{wizardCount}</span>
                     </button>
                 </div>
 
@@ -198,73 +224,89 @@ export default function GerechtenInspiratiePage() {
                         type="search"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Zoek gerecht…"
-                        className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)]"
+                        placeholder="Welk gerecht?"
+                        className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[#FF6B35]/40 focus:outline-none"
                     />
                 </div>
             </div>
 
             {loading ? (
-                <div className="flex items-center justify-center py-20 text-[var(--muted)]">
-                    <Loader2 size={18} className="mr-2 animate-spin" /> Gerechten laden…
+                <div className="flex items-center justify-center py-20 text-[#FFA552]">
+                    <Flame size={18} className="mr-2 animate-pulse" /> De pitmaster zet de borden klaar…
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-14 text-center">
-                    <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/20">
-                        <ChefHat size={26} className="text-[var(--brand)]" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="font-[var(--font-artisan)] text-xl font-medium">
-                        {gerechten.length === 0 ? 'Nog geen gerechten' : 'Geen match'}
+                <div
+                    className="overflow-hidden rounded-2xl border-2 border-dashed border-[#FF6B35]/30 p-14 text-center"
+                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                >
+                    <div className="mb-4 text-5xl">🍽️</div>
+                    <h3 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
+                        {gerechten.length === 0 ? 'Nog geen gerechten' : 'Niks gevonden'}
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {gerechten.length === 0
-                            ? 'Voeg gerechten toe via /gerechten en koppel ze hier aan componenten.'
-                            : 'Pas filter of zoekterm aan.'}
+                            ? 'Voeg gerechten toe via /gerechten en koppel ze hier aan bouwstenen.'
+                            : 'Andere filter of zoekterm proberen?'}
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map(g => {
                         const marge = margePct(g.verkoopprijs, g.total_cost_cents);
+                        const isStar = marge !== null && marge >= 60;
                         return (
                             <button
                                 key={g.id}
                                 type="button"
                                 onClick={() => setSelectedGerecht(g)}
-                                className="group rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-left transition hover:border-[var(--brand)]/40"
+                                className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B35]/40 hover:shadow-lg hover:shadow-[#FF6B35]/10"
+                                style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                             >
-                                <div className="flex items-start justify-between gap-2">
-                                    <h3 className="line-clamp-2 font-[var(--font-artisan)] text-base font-medium leading-tight" style={{ color: 'var(--text)' }}>
-                                        {g.naam}
-                                    </h3>
+                                {/* Glow voor sterren */}
+                                {g.is_in_wizard && (
+                                    <div
+                                        aria-hidden
+                                        className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-30 blur-2xl"
+                                        style={{ background: 'radial-gradient(circle, #FFBF00 0%, transparent 70%)' }}
+                                    />
+                                )}
+
+                                <div className="relative flex items-start justify-between gap-2">
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-black/30 text-2xl ring-1 ring-[var(--border)] transition group-hover:ring-[#FF6B35]/40">
+                                        {emojiForGerecht(g.naam)}
+                                    </span>
                                     <span
                                         role="button"
                                         tabIndex={0}
-                                        aria-label={g.is_in_wizard ? 'Haal uit wizard' : 'Zet in wizard'}
+                                        aria-label={g.is_in_wizard ? 'Haal van de kaart' : 'Zet op de kaart'}
                                         onClick={(e) => { e.stopPropagation(); toggleWizard(g); }}
                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); toggleWizard(g); } }}
-                                        className={`shrink-0 rounded p-1 transition ${g.is_in_wizard ? 'text-[var(--brand)]' : 'text-[var(--muted)] opacity-40 hover:opacity-100'}`}
+                                        className={`shrink-0 rounded-lg p-1.5 transition ${g.is_in_wizard ? 'bg-[#FFBF00]/10 text-[#FFBF00] ring-1 ring-[#FFBF00]/30' : 'text-[var(--muted)] opacity-40 hover:opacity-100'}`}
                                     >
                                         {togglingId === g.id ? <Loader2 size={15} className="animate-spin" /> : <Star size={15} className={g.is_in_wizard ? 'fill-current' : ''} />}
                                     </span>
                                 </div>
 
+                                <h3 className="relative mt-3 line-clamp-2 text-[15px] font-bold leading-tight" style={{ color: 'var(--text)' }}>
+                                    {g.naam}
+                                </h3>
                                 {g.beschrijving && (
-                                    <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{g.beschrijving}</p>
+                                    <p className="relative mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted-light)]">{g.beschrijving}</p>
                                 )}
 
-                                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border)] pt-2.5 text-[11px]">
+                                <div className="relative mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border)] pt-2.5">
                                     <div>
-                                        <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Verkoop</div>
-                                        <div className="font-mono text-[13px] tabular-nums" style={{ color: 'var(--text)' }}>{g.verkoopprijs != null ? formatEuro(priceCents(g.verkoopprijs)) : '—'}</div>
+                                        <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Verkoop</div>
+                                        <div className="font-mono text-[13px] font-bold tabular-nums" style={{ color: 'var(--text)' }}>{g.verkoopprijs != null ? formatEuro(priceCents(g.verkoopprijs)) : '—'}</div>
                                     </div>
                                     <div>
-                                        <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Kost</div>
-                                        <div className="font-mono text-[13px] tabular-nums" style={{ color: 'var(--text)' }}>{formatEuro(g.total_cost_cents)}</div>
+                                        <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Kost</div>
+                                        <div className="font-mono text-[13px] tabular-nums text-[var(--muted-light)]">{formatEuro(g.total_cost_cents)}</div>
                                     </div>
                                     <div>
-                                        <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Marge</div>
-                                        <div className={`font-mono text-[13px] font-medium tabular-nums ${margeColor(marge)}`}>
+                                        <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Marge</div>
+                                        <div className={`inline-flex items-center gap-0.5 font-mono text-[13px] font-bold tabular-nums ${margeColor(marge)}`}>
+                                            {isStar && <Flame size={10} className="animate-pulse" />}
                                             {marge !== null ? `${marge.toFixed(0)}%` : '—'}
                                         </div>
                                     </div>
