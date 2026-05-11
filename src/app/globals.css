@@ -1059,6 +1059,14 @@
   font-size: 13px;
   color: var(--green, #22c55e);
 }
+.bh-pakket__email {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(255,255,255,.02);
+  border: 1px dashed var(--border, rgba(255,255,255,.12));
+  border-radius: 10px;
+}
+.bh-pakket__email h3 { color: var(--text, #f5f5f5); }
 
 @media (max-width: 760px) {
   .bh-row__main {
