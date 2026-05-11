@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
-import { generateBoekhouderPdf, type PdfBon, type PdfFactuur } from '@/lib/boekhouderPdf';
+import { generateBoekhouderPdf, type PdfBon, type PdfFactuur, type PdfRit } from '@/lib/boekhouderPdf';
+import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
     // Org-info (en boekhouder-default)
     const { data: orgRow } = await supabase
       .from('organizations')
-      .select('name, boekhouder_naam, boekhouder_email')
+      .select('name, boekhouder_naam, boekhouder_email, bonnen_retentie_jaar')
       .eq('id', orgId)
       .single();
     const { data: settingsRow } = await supabase
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
     const btwNummer = settingsRow?.btw_nummer || undefined;
+    const retentieJaar = Number(orgRow?.bonnen_retentie_jaar) || 7;
 
     const recipientEmail = overrideTo || orgRow?.boekhouder_email || '';
     if (!recipientEmail) {
@@ -217,6 +219,39 @@ export async function POST(req: NextRequest) {
       return s + price * stock;
     }, 0);
 
+    // Kilometerregistratie (zakelijke ritten)
+    const { data: rittenRaw } = await supabase
+      .from('ritten')
+      .select('id, datum, vertrek_adres, aankomst_adres, kilometers, prive_omleiding_km, zakelijk, doel, event_id')
+      .eq('organization_id', orgId)
+      .gte('datum', start)
+      .lt('datum', nextMonth)
+      .eq('zakelijk', true)
+      .order('datum', { ascending: true });
+    const ritEventIds = Array.from(new Set((rittenRaw || []).map((r: any) => r.event_id).filter(Boolean)));
+    const ritEventMap = new Map<number, string>();
+    if (ritEventIds.length > 0) {
+      const { data: evs } = await supabase.from('events').select('id, name').in('id', ritEventIds);
+      (evs || []).forEach((e: any) => ritEventMap.set(e.id, e.name));
+    }
+    const tarief = tariefVoorJaar(Number(yyyy));
+    const pdfRitten: PdfRit[] = (rittenRaw || []).map(function (r: any) {
+      const km = Math.max(0, Number(r.kilometers || 0) - Number(r.prive_omleiding_km || 0));
+      const bedrag = bedragAftrekbaar({
+        kilometers: Number(r.kilometers) || 0,
+        zakelijk: !!r.zakelijk,
+        priveOmleidingKm: Number(r.prive_omleiding_km) || 0,
+        datum: r.datum,
+      });
+      return {
+        datum: r.datum, vertrek: r.vertrek_adres || '', aankomst: r.aankomst_adres || '',
+        doel: r.doel || null, zakelijke_km: km, bedrag_eur: bedrag,
+        event_naam: r.event_id ? ritEventMap.get(r.event_id) || null : null,
+      };
+    });
+    const totaalKm = pdfRitten.reduce(function (s, r) { return s + r.zakelijke_km; }, 0);
+    const totaalKmBedrag = pdfRitten.reduce(function (s, r) { return s + r.bedrag_eur; }, 0);
+
     const periodLabel = new Date(start + 'T00:00:00').toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
     const periodEnd = new Date(new Date(nextMonth + 'T00:00:00').getTime() - 86400000).toISOString().slice(0, 10);
 
@@ -225,12 +260,19 @@ export async function POST(req: NextRequest) {
       org_name: orgRow?.name || '',
       org_btw_nr: btwNummer,
       boekhouder_naam: orgRow?.boekhouder_naam || undefined,
+      retentie_jaar: retentieJaar,
       period_label: periodLabel,
       period_start: start,
       period_end: periodEnd,
       generated_at: new Date().toISOString(),
       bonnen: pdfBonnen,
       facturen: pdfFacturen,
+      kilometers: pdfRitten.length > 0 ? {
+        ritten: pdfRitten,
+        totaal_km: totaalKm,
+        totaal_aftrekbaar_eur: Math.round(totaalKmBedrag * 100) / 100,
+        tarief_per_km: tarief,
+      } : undefined,
       totals: {
         inkoop_totaal: totalPurchase, verkoop_totaal: totalSales,
         btw_voorbelasting_9: totalBtw9, btw_voorbelasting_21: totalBtw21,
@@ -265,6 +307,7 @@ ${customMessage ? `<p style="margin:0 0 14px; font-size:14px; line-height:1.6; p
 <tr><td style="padding:4px 0; color:#666;">Totaal inkoop</td><td style="padding:4px 0; text-align:right;">€ ${totalPurchase.toFixed(2)}</td></tr>
 <tr><td style="padding:4px 0; color:#666;">Totaal verkoop</td><td style="padding:4px 0; text-align:right;">€ ${totalSales.toFixed(2)}</td></tr>
 <tr><td style="padding:4px 0; color:#666;">Af te dragen BTW</td><td style="padding:4px 0; text-align:right; font-weight:600;">€ ${afTeDragen.toFixed(2)}</td></tr>
+${pdfRitten.length > 0 ? `<tr><td style="padding:4px 0; color:#666;">Kilometeraftrek (${totaalKm} km × €${tarief.toFixed(2)})</td><td style="padding:4px 0; text-align:right;">€ ${totaalKmBedrag.toFixed(2)}</td></tr>` : ''}
 </table>
 <p style="margin:18px 0 8px; font-size:13px; color:#666;">In de bijlagen:</p>
 <ul style="margin:0 0 14px; padding-left:18px; font-size:13px; color:#444;">

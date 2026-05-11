@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 
@@ -21,7 +21,7 @@ import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCate
  *   4. Twijfel         — filtered queue van flagged items
  */
 
-type Tab = 'stapel' | 'verkoop' | 'pakket' | 'twijfel';
+type Tab = 'stapel' | 'verkoop' | 'pakket' | 'twijfel' | 'archief';
 type StatusFilter = 'alle' | 'pending' | 'auto' | 'twijfel';
 
 interface Row {
@@ -225,10 +225,15 @@ export default function BoekhouderPage() {
         <button role="tab" aria-selected={tab === 'twijfel'} className={'bh-tab' + (tab === 'twijfel' ? ' bh-tab--active' : '')} onClick={() => setTab('twijfel')}>
           <AlertCircle size={14} /> Twijfel <span className="bh-tab__count">{twijfelRows.length}</span>
         </button>
+        <button role="tab" aria-selected={tab === 'archief'} className={'bh-tab' + (tab === 'archief' ? ' bh-tab--active' : '')} onClick={() => setTab('archief')}>
+          <Archive size={14} /> Archief
+        </button>
       </nav>
 
       {/* TAB CONTENT */}
-      {tab === 'verkoop' ? (
+      {tab === 'archief' ? (
+        <ArchiefTab />
+      ) : tab === 'verkoop' ? (
         <VerkoopTab month={month} />
       ) : tab === 'pakket' ? (
         <PakketTab month={month} counts={counts} rows={rows} />
@@ -667,6 +672,109 @@ function BoekhouderSettingsForm({ settings, onSaved }: { settings: any; onSaved:
       </button>
       {msg && <div style={{ fontSize: 12, color: msg.startsWith('✓') ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)' }}>{msg}</div>}
     </div>
+  );
+}
+
+interface ArchiefPakket {
+  id: number;
+  period_year: number;
+  period_month: number | null;
+  bonnen_count: number;
+  facturen_count: number;
+  total_purchases_eur: number;
+  total_sales_eur: number;
+  btw_af_te_dragen_eur: number;
+  voorraadwaarde_eur: number | null;
+  status: string;
+  sent_to_email: string | null;
+  sent_at: string | null;
+  locked_at: string | null;
+  created_at: string;
+}
+
+function ArchiefTab() {
+  const [pakketten, setPakketten] = useState<ArchiefPakket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(function () {
+    fetch('/api/boekhouder/pakket', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { pakketten: [] })
+      .then(j => setPakketten(j.pakketten || []))
+      .catch(() => setPakketten([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function regenerate(year: number, month: number, kind: 'pdf' | 'csv') {
+    const m = `${year}-${String(month).padStart(2, '0')}`;
+    setDownloading(`${m}-${kind}`);
+    try {
+      const r = await fetch('/api/boekhouder/pakket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ month: m }),
+      });
+      const j = await r.json();
+      if (!r.ok) { alert('Fout: ' + (j.error || 'onbekend')); return; }
+      const a = document.createElement('a');
+      a.href = kind === 'pdf' ? j.pdf_data_url : j.csv_data_url;
+      a.download = kind === 'pdf' ? j.pdf_filename : j.csv_filename;
+      a.click();
+    } finally { setDownloading(null); }
+  }
+
+  if (loading) return <div className="bh-empty">Archief laden…</div>;
+  if (pakketten.length === 0) return <div className="bh-empty">Nog geen vergrendelde pakketten in het archief.</div>;
+
+  return (
+    <ul className="bh-rows">
+      {pakketten.map(function (p) {
+        const periodLabel = p.period_month
+          ? new Date(p.period_year, p.period_month - 1, 1).toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' })
+          : String(p.period_year);
+        const pdfKey = `${p.period_year}-${String(p.period_month).padStart(2, '0')}-pdf`;
+        const csvKey = `${p.period_year}-${String(p.period_month).padStart(2, '0')}-csv`;
+        return (
+          <li key={p.id} className={'bh-row bh-row--verified'}>
+            <div className="bh-row__main" style={{ cursor: 'default' }}>
+              <span className="bh-row__date">{periodLabel}</span>
+              <span className="bh-row__leverancier">
+                {p.bonnen_count} bonnen · {p.facturen_count} facturen
+              </span>
+              <span className="bh-row__totaal">{fmtEur(p.total_purchases_eur)}</span>
+              <span className="bh-row__cat">
+                <span className="bh-row__cat-label">
+                  Af te dragen BTW: <strong>{fmtEur(p.btw_af_te_dragen_eur)}</strong>
+                </span>
+              </span>
+              <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  className="bh-btn-secondary"
+                  onClick={() => p.period_month && regenerate(p.period_year, p.period_month, 'pdf')}
+                  disabled={downloading === pdfKey || !p.period_month}
+                  title="Regenereer PDF (audit-trail intact)"
+                >
+                  {downloading === pdfKey ? <Loader2 size={12} className="bh-spin" /> : <Download size={12} />} PDF
+                </button>
+                <button
+                  className="bh-btn-secondary"
+                  onClick={() => p.period_month && regenerate(p.period_year, p.period_month, 'csv')}
+                  disabled={downloading === csvKey || !p.period_month}
+                >
+                  {downloading === csvKey ? <Loader2 size={12} className="bh-spin" /> : <Download size={12} />} CSV
+                </button>
+              </div>
+              {p.sent_at
+                ? <span className="bh-status bh-status--ok" title={`Verstuurd naar ${p.sent_to_email}`}>
+                    <Mail size={10} /> verstuurd
+                  </span>
+                : <span className="bh-status bh-status--locked"><ShieldCheck size={10} /> vergrendeld</span>}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

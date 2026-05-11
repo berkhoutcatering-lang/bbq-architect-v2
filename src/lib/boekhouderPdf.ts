@@ -40,6 +40,23 @@ export interface PdfFactuur {
   totaal: number;
 }
 
+export interface PdfRit {
+  datum: string | null;
+  vertrek: string;
+  aankomst: string;
+  doel?: string | null;
+  zakelijke_km: number;
+  bedrag_eur: number;
+  event_naam?: string | null;
+}
+
+export interface PdfKilometers {
+  ritten: PdfRit[];
+  totaal_km: number;
+  totaal_aftrekbaar_eur: number;
+  tarief_per_km: number; // €0.23 voor 2026
+}
+
 export interface PdfPakketInput {
   org_name: string;
   org_address?: string;
@@ -49,8 +66,10 @@ export interface PdfPakketInput {
   period_start: string;          // "2026-05-01"
   period_end: string;            // "2026-05-31"
   generated_at: string;          // ISO timestamp
+  retentie_jaar?: number;        // 7 default — staat in PDF voet
   bonnen: PdfBon[];
   facturen: PdfFactuur[];
+  kilometers?: PdfKilometers;
   totals: {
     inkoop_totaal: number;
     verkoop_totaal: number;
@@ -183,6 +202,12 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     ['Totaal inkoop (incl. BTW)', `€ ${fmtEur(input.totals.inkoop_totaal)}`],
     ['Totaal verkoop (incl. BTW)', `€ ${fmtEur(input.totals.verkoop_totaal)}`],
   ];
+  if (input.kilometers && input.kilometers.ritten.length > 0) {
+    sumLines.push([
+      `Kilometeraftrek (${input.kilometers.totaal_km} km × €${input.kilometers.tarief_per_km.toFixed(2)})`,
+      `€ ${fmtEur(input.kilometers.totaal_aftrekbaar_eur)}`,
+    ]);
+  }
   if (input.totals.voorraadwaarde_eur != null) {
     sumLines.push(['Voorraadwaarde einde maand', `€ ${fmtEur(input.totals.voorraadwaarde_eur)}`]);
   }
@@ -198,6 +223,114 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     doc.setTextColor(MUTED);
     y += 14;
   });
+
+  // ─── BTW per RGS-code uitsplitsing ────────────────────
+  // Aggregeer per RGS-code: aantal, netto, btw9, btw21, totaal
+  if (input.bonnen.length > 0) {
+    y += 20;
+    if (y > H - 240) { doc.addPage(); y = margin; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(INK);
+    doc.text('BTW-uitsplitsing per RGS-categorie', margin, y);
+    y += 6;
+
+    const aggrMap = new Map<string, { count: number; netto: number; btw9: number; btw21: number; totaal: number }>();
+    input.bonnen.forEach(function (b) {
+      const code = b.rgs_code || 'WBedKostOv';
+      const cur = aggrMap.get(code) || { count: 0, netto: 0, btw9: 0, btw21: 0, totaal: 0 };
+      cur.count += 1;
+      cur.netto += b.netto;
+      cur.btw9 += b.btw_9;
+      cur.btw21 += b.btw_21;
+      cur.totaal += b.totaal;
+      aggrMap.set(code, cur);
+    });
+    const aggrRows = Array.from(aggrMap.entries()).sort(function (a, b) { return b[1].totaal - a[1].totaal; });
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [['Code', 'Categorie', '#', 'Netto', 'BTW 9%', 'BTW 21%', 'Totaal']],
+      body: aggrRows.map(function ([code, v]) {
+        const meta = rgsLookup(code);
+        return [
+          code,
+          meta?.label || 'Onbekend',
+          String(v.count),
+          fmtEur(v.netto),
+          fmtEur(v.btw9),
+          fmtEur(v.btw21),
+          fmtEur(v.totaal),
+        ];
+      }),
+      foot: [['', 'Totaal', String(input.bonnen.length),
+        fmtEur(aggrRows.reduce(function (s, [, v]) { return s + v.netto; }, 0)),
+        fmtEur(aggrRows.reduce(function (s, [, v]) { return s + v.btw9; }, 0)),
+        fmtEur(aggrRows.reduce(function (s, [, v]) { return s + v.btw21; }, 0)),
+        fmtEur(aggrRows.reduce(function (s, [, v]) { return s + v.totaal; }, 0)),
+      ]],
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: '#f5f5f0', textColor: INK, fontStyle: 'bold' },
+      footStyles: { fillColor: '#fafafa', textColor: INK, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 60, fontStyle: 'bold' },
+        2: { halign: 'center', cellWidth: 24 },
+        3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+  }
+
+  // ─── Kilometerregistratie-blok ────────────────────────
+  if (input.kilometers && input.kilometers.ritten.length > 0) {
+    y += 20;
+    if (y > H - 200) { doc.addPage(); y = margin; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(INK);
+    doc.text('Kilometeraftrek', margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(MUTED);
+    doc.text(
+      `${input.kilometers.ritten.length} ritten · ${input.kilometers.totaal_km} km × €${input.kilometers.tarief_per_km.toFixed(2)} (Belastingdienst-tarief) = € ${fmtEur(input.kilometers.totaal_aftrekbaar_eur)}`,
+      margin, y + 14
+    );
+    y += 26;
+
+    // Toon top-10 ritten (compact); rest is in CSV
+    const showRows = input.kilometers.ritten.slice(0, 10);
+    autoTable(doc, {
+      startY: y,
+      head: [['Datum', 'Van', 'Naar', 'Doel / Event', 'Km', 'Bedrag']],
+      body: showRows.map(function (r) {
+        return [
+          fmtDate(r.datum), r.vertrek, r.aankomst,
+          r.event_naam || r.doel || '',
+          String(r.zakelijke_km), fmtEur(r.bedrag_eur),
+        ];
+      }),
+      foot: [
+        [
+          '',
+          input.kilometers.ritten.length > 10 ? `… +${input.kilometers.ritten.length - 10} meer in CSV` : '',
+          '', 'Totaal',
+          String(input.kilometers.totaal_km),
+          fmtEur(input.kilometers.totaal_aftrekbaar_eur),
+        ],
+      ],
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: '#f5f5f0', textColor: INK, fontStyle: 'bold' },
+      footStyles: { fillColor: '#fafafa', textColor: INK, fontStyle: 'bold' },
+      columnStyles: {
+        4: { halign: 'right', cellWidth: 36 },
+        5: { halign: 'right', cellWidth: 56 },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = (doc as any).lastAutoTable.finalY;
+  }
 
   // ─── Page 2 — Inkoop-bonnen ────────────────────────────
   doc.addPage();
@@ -318,7 +451,11 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     });
   }
 
-  // ─── Voettekst op laatste pagina ──────────────────────
+  // ─── Voettekst op alle pagina's ───────────────────────
+  const retentieJaar = input.retentie_jaar || 7;
+  const generatedDt = new Date(input.generated_at);
+  const bewaardTot = new Date(generatedDt.getFullYear() + retentieJaar, generatedDt.getMonth(), generatedDt.getDate());
+  const bewaardTotStr = bewaardTot.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short', year: 'numeric' });
   const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -327,11 +464,15 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     doc.setTextColor(MUTED);
     doc.text(
       `${input.org_name} · ${input.period_label} · pagina ${i} van ${pageCount}`,
-      W / 2, H - 18, { align: 'center' }
+      W / 2, H - 22, { align: 'center' }
     );
     doc.text(
-      'Gegenereerd door BBQ Architect · BTW-bedragen uit bestaande bon-data, niet AI-derived',
-      W / 2, H - 8, { align: 'center' }
+      `Bewaartermijn: tot ${bewaardTotStr} (Art. 52 AWR, ${retentieJaar} jaar)`,
+      W / 2, H - 13, { align: 'center' }
+    );
+    doc.text(
+      'Gegenereerd door BBQ Architect · BTW + km-tarieven niet AI-derived, uit bron-data',
+      W / 2, H - 5, { align: 'center' }
     );
   }
 
