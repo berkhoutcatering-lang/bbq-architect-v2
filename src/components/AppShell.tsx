@@ -28,9 +28,16 @@ import type { ReactNode } from 'react';
 const AUTH_PAGES = ['/login', '/signup', '/auth/'];
 const PUBLIC_PAGES = ['/q/', '/invite'];
 
-// KDS Service Mode = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
+// KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
+// Match drie routes:
+//   /events/[id]/service             — course-flow service-modus
+//   /events/[id]/service/plattegrond — floor-plan tab in service-modus
+//   /keuken/kookbord                 — prep-KDS (was /keuken/board, blijft redirect)
 function isKdsPage(pathname: string): boolean {
-  return /^\/events\/[^/]+\/service(\/.*)?$/.test(pathname);
+  return (
+    /^\/events\/[^/]+\/service(\/.*)?$/.test(pathname) ||
+    /^\/keuken\/(kookbord|board)(\/.*)?$/.test(pathname)
+  );
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
