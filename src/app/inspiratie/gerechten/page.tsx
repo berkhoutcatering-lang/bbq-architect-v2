@@ -15,26 +15,8 @@ import Link from 'next/link';
 import {
     ChefHat, ArrowLeft, Loader2, Search, Star, Sparkles,
     Plus, Trash2, X, Boxes, TrendingUp, ArrowUp, ArrowDown, Replace, LogOut, Lightbulb,
-    ShieldAlert, ThermometerSun, Flame,
+    ShieldAlert, ThermometerSun,
 } from 'lucide-react';
-
-function emojiForGerecht(name: string): string {
-    const n = name.toLowerCase();
-    if (/pork|spek|varken/.test(n)) return '🐖';
-    if (/burger|slider/.test(n)) return '🍔';
-    if (/rib|brisket|steak|beef|rund/.test(n)) return '🥩';
-    if (/kip|chicken|gevogelte|hen/.test(n)) return '🍗';
-    if (/vis|fish|zalm|tonijn/.test(n)) return '🐟';
-    if (/garnaal|kreeft|shrimp|lobster|oester/.test(n)) return '🦞';
-    if (/burnt|bonbon|truffel/.test(n)) return '✨';
-    if (/coleslaw|salad|sla/.test(n)) return '🥗';
-    if (/mac|kaas|cheese/.test(n)) return '🧀';
-    if (/tofu|veggie|vega/.test(n)) return '🌱';
-    if (/brownie|chocolade|dessert|melba|crumble/.test(n)) return '🍰';
-    if (/peach|perzik|ananas|mango|tropical/.test(n)) return '🍑';
-    if (/bbq|grill|gerookt|smoked/.test(n)) return '🔥';
-    return '🍽️';
-}
 
 const ALLERGEN_LABELS: Record<string, string> = {
     G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
@@ -58,6 +40,7 @@ interface RollupHaccp {
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import '@/components/redesign/redesign.css';
 
 interface GerechtRow {
     id: string;
@@ -134,6 +117,18 @@ export default function GerechtenInspiratiePage() {
 
     useEffect(() => { loadGerechten(); }, []);
 
+    /* ⌘K / Ctrl+K focuses the search input — matches the shortcut-hint badge */
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                document.getElementById('gerecht-search')?.focus();
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     const filtered = useMemo(() => {
         return gerechten.filter(g => {
             if (wizardFilter === 'wizard' && !g.is_in_wizard) return false;
@@ -166,138 +161,249 @@ export default function GerechtenInspiratiePage() {
     }
 
     const wizardCount = gerechten.filter(g => g.is_in_wizard).length;
+    const totalCount = gerechten.length;
+    const wizardProgress = totalCount === 0 ? 0 : wizardCount / totalCount;
+    const totalCostCents = gerechten.reduce((s, g) => s + (g.total_cost_cents || 0), 0);
+    const totalVerkoopCents = gerechten.reduce((s, g) => s + priceCents(g.verkoopprijs), 0);
+    const avgCostCents = totalCount === 0 ? 0 : Math.round(totalCostCents / totalCount);
+    const avgVerkoopCents = totalCount === 0 ? 0 : Math.round(totalVerkoopCents / totalCount);
+    const avgMarge = totalVerkoopCents > 0
+        ? ((totalVerkoopCents - totalCostCents) / totalVerkoopCents) * 100
+        : null;
+    const circumference = 2 * Math.PI * 86;
 
     return (
-        <div className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-            <Link
-                href="/inspiratie"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[var(--muted)] no-underline hover:text-[#FFA552]"
-            >
-                <ArrowLeft size={12} /> Inspiratie Bibliotheek
-            </Link>
+        <div className="redesign-root">
+            <div className="main" style={{ padding: '24px 0 40px' }}>
+                <div style={{ marginBottom: 12 }}>
+                    <Link
+                        href="/inspiratie"
+                        className="btn btn-ghost btn-sm"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        <ArrowLeft size={14} /> Inspiratie Bibliotheek
+                    </Link>
+                </div>
 
-            {/* Hero */}
-            <header className="relative space-y-3 overflow-hidden">
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute -left-10 -top-10 h-48 w-48 rounded-full opacity-20 blur-3xl"
-                    style={{ background: 'radial-gradient(circle, #FFBF00 0%, transparent 70%)' }}
-                />
-                <div className="relative">
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B35]/30 bg-[#FF6B35]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#FFA552]">
-                        <ChefHat size={10} /> Op het bord
+                <div className="eh-hero">
+                    <div className="eh-hero-bg"></div>
+                    <div className="eh-hero-content">
+                        <div className="eh-hero-left">
+                            <div>
+                                <div className="eh-hero-eyebrow"><span className="dot"></span>Inspiratie · Laag 2 · Samengesteld</div>
+                                <h1 className="eh-hero-title">Gerechten</h1>
+                                <div className="eh-hero-sub">
+                                    <span className="pill">{totalCount} {totalCount === 1 ? 'gerecht' : 'gerechten'}</span>
+                                    <span className="sep">·</span>
+                                    <span>Marges live · auto-rollup uit componenten</span>
+                                    <span className="sep">·</span>
+                                    <span><Star size={11} className="inline fill-[var(--brand)] text-[var(--brand)]" /> = op de kaart</span>
+                                </div>
+                            </div>
+                            <div className="eh-hero-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => setWizardFilter(wizardFilter === 'wizard' ? 'all' : 'wizard')}
+                                    className="btn btn-primary"
+                                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                                >
+                                    <Star size={14} className={wizardFilter === 'wizard' ? 'fill-current' : ''} />
+                                    {wizardFilter === 'wizard' ? 'Toon alles' : `Toon op de kaart (${wizardCount})`}
+                                </button>
+                                <Link
+                                    href="/gerechten"
+                                    className="btn btn-ghost"
+                                    style={{ textDecoration: 'none' }}
+                                >
+                                    <Plus size={14} /> Nieuw gerecht
+                                </Link>
+                                <Link
+                                    href="/marges"
+                                    className="btn btn-ghost"
+                                    style={{ textDecoration: 'none' }}
+                                >
+                                    <TrendingUp size={14} /> Marges (BCG)
+                                </Link>
+                            </div>
+                        </div>
+                        <div className="eh-countdown">
+                            <div className="eh-countdown-ring">
+                                <svg viewBox="0 0 200 200">
+                                    <defs>
+                                        <linearGradient id="gerechtenWizardGrad" x1="0" x2="1" y1="0" y2="1">
+                                            <stop offset="0%" stopColor="#FFBF00" />
+                                            <stop offset="60%" stopColor="#ff8c20" />
+                                            <stop offset="100%" stopColor="#ff5010" />
+                                        </linearGradient>
+                                    </defs>
+                                    <circle className="bg-ring" cx="100" cy="100" r="86" />
+                                    <circle className="fg-ring" cx="100" cy="100" r="86"
+                                        stroke="url(#gerechtenWizardGrad)"
+                                        strokeDasharray={circumference}
+                                        strokeDashoffset={circumference * (1 - wizardProgress)} />
+                                    {Array.from({ length: 30 }).map((_, i) => {
+                                        const a = (i / 30) * Math.PI * 2;
+                                        const x1 = 100 + Math.cos(a) * 72;
+                                        const y1 = 100 + Math.sin(a) * 72;
+                                        const x2 = 100 + Math.cos(a) * 76;
+                                        const y2 = 100 + Math.sin(a) * 76;
+                                        return <line key={i} className="tick" x1={x1} y1={y1} x2={x2} y2={y2} />;
+                                    })}
+                                </svg>
+                                <div className="eh-countdown-center">
+                                    <div className="eh-countdown-num">{wizardCount}</div>
+                                    <div className="eh-countdown-lbl">Op de kaart</div>
+                                    <div className="eh-countdown-sub">{Math.round(wizardProgress * 100)}% van {totalCount}</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <h1 className="mt-3 text-5xl font-bold leading-[1.05] tracking-tight" style={{ color: 'var(--text)' }}>
-                        Gerechten
-                    </h1>
-                    <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-[var(--muted-light)]">
-                        Bouwstenen × creativiteit = wat je verkoopt. Marges live, ⭐ aanvinken voor de offerte-wizard.
-                        Klik een gerecht — koppel bouwstenen — <span style={{ color: 'var(--text)' }}>zie marge meebewegen</span>.
-                    </p>
+                    <div className="eh-hero-stats">
+                        <div className="eh-hero-stat">
+                            <div className="l">Totaal</div>
+                            <div className="v">{totalCount}</div>
+                            <div className="s">In bibliotheek</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Op de kaart</div>
+                            <div className={`v ${wizardCount > 0 ? 'ok' : 'muted'}`}>{wizardCount}</div>
+                            <div className="s">{wizardCount > 0 ? 'In offerte-wizard' : 'Selecteer met ⭐'}</div>
+                            {totalCount > 0 && (
+                                <div className="bar"><div className="fill" style={{ width: `${wizardProgress * 100}%`, background: 'var(--brand)' }}></div></div>
+                            )}
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Gem. marge</div>
+                            <div className={`v ${avgMarge != null && avgMarge >= 60 ? 'ok' : avgMarge != null && avgMarge >= 35 ? 'warn' : 'muted'}`}>
+                                {avgMarge != null ? `${avgMarge.toFixed(0)}%` : '—'}
+                            </div>
+                            <div className="s">{avgMarge != null ? 'Verkoop − kostprijs' : 'Geen verkoopprijzen'}</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Gem. kostprijs</div>
+                            <div className="v">€{(avgCostCents / 100).toFixed(2)}</div>
+                            <div className="s">Auto-rollup</div>
+                        </div>
+                        <div className="eh-hero-stat">
+                            <div className="l">Gem. verkoop</div>
+                            <div className="v">{avgVerkoopCents > 0 ? `€${(avgVerkoopCents / 100).toFixed(2)}` : '—'}</div>
+                            <div className="s">Per gerecht</div>
+                        </div>
+                    </div>
                 </div>
-            </header>
 
-            {/* Toolbar */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex items-center rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
-                    <button
-                        type="button"
-                        onClick={() => setWizardFilter('all')}
-                        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${wizardFilter === 'all' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
-                        style={wizardFilter === 'all' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
-                    >
-                        Alle <span className="ml-0.5 opacity-70">{gerechten.length}</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setWizardFilter('wizard')}
-                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${wizardFilter === 'wizard' ? 'text-black shadow-md' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
-                        style={wizardFilter === 'wizard' ? { background: 'linear-gradient(90deg, #FFBF00 0%, #FF6B35 100%)' } : undefined}
-                    >
-                        <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> Op de kaart <span className="opacity-70">{wizardCount}</span>
-                    </button>
+                {/* Glass Filter Pill Bar */}
+                <div className="filter-bar">
+                    <div className="filter-bar-pills">
+                        <button
+                            type="button"
+                            onClick={() => setWizardFilter('all')}
+                            className={`filter-bar-pill ${wizardFilter === 'all' ? 'is-active' : ''}`}
+                        >
+                            Alle <span className="count">{gerechten.length}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setWizardFilter('wizard')}
+                            className={`filter-bar-pill ${wizardFilter === 'wizard' ? 'is-active' : ''}`}
+                        >
+                            <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> Op de kaart <span className="count">{wizardCount}</span>
+                        </button>
+                    </div>
+                    <div className="filter-bar-sep" aria-hidden></div>
+                    <div className="filter-bar-search">
+                        <Search size={14} className="search-icon" />
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Zoek gerecht…"
+                            id="gerecht-search"
+                        />
+                        {search.length > 0 ? (
+                            <>
+                                <span className="result-count">{filtered.length} van {gerechten.length}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch('')}
+                                    aria-label="Wis zoekopdracht"
+                                    className="clear-btn"
+                                >
+                                    <X size={11} />
+                                </button>
+                            </>
+                        ) : (
+                            <span className="shortcut-hint">⌘ K</span>
+                        )}
+                    </div>
                 </div>
-
-                <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-                    <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Welk gerecht?"
-                        className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[#FF6B35]/40 focus:outline-none"
-                    />
-                </div>
-            </div>
 
             {loading ? (
-                <div className="flex items-center justify-center py-20 text-[#FFA552]">
-                    <Flame size={18} className="mr-2 animate-pulse" /> De pitmaster zet de borden klaar…
+                <div className="flex items-center justify-center py-20 text-[var(--muted)]">
+                    <Loader2 size={18} className="mr-2 animate-spin" /> Gerechten laden…
                 </div>
             ) : filtered.length === 0 ? (
                 <div
-                    className="overflow-hidden rounded-2xl border-2 border-dashed border-[#FF6B35]/30 p-14 text-center"
+                    className="overflow-hidden rounded-2xl border border-dashed border-[var(--border)] p-14 text-center"
                     style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                 >
-                    <div className="mb-4 text-5xl">🍽️</div>
-                    <h3 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
-                        {gerechten.length === 0 ? 'Nog geen gerechten' : 'Niks gevonden'}
+                    <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/20">
+                        <ChefHat size={24} className="text-[var(--brand)]" strokeWidth={1.5} />
+                    </div>
+                    <h3 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>
+                        {gerechten.length === 0 ? 'Nog geen gerechten' : 'Geen match'}
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {gerechten.length === 0
-                            ? 'Voeg gerechten toe via /gerechten en koppel ze hier aan bouwstenen.'
-                            : 'Andere filter of zoekterm proberen?'}
+                            ? 'Voeg gerechten toe via /gerechten en koppel ze hier aan componenten.'
+                            : 'Pas filter of zoekterm aan.'}
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filtered.map(g => {
                         const marge = margePct(g.verkoopprijs, g.total_cost_cents);
-                        const isStar = marge !== null && marge >= 60;
                         return (
                             <button
                                 key={g.id}
                                 type="button"
                                 onClick={() => setSelectedGerecht(g)}
-                                className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-[#FF6B35]/40 hover:shadow-lg hover:shadow-[#FF6B35]/10"
+                                className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition hover:border-[var(--brand)]/40"
                                 style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                             >
-                                {/* Glow voor sterren */}
+                                {/* Subtle gold-glow voor wizard-gerechten */}
                                 {g.is_in_wizard && (
                                     <div
                                         aria-hidden
-                                        className="pointer-events-none absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-30 blur-2xl"
+                                        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.15] blur-2xl"
                                         style={{ background: 'radial-gradient(circle, #FFBF00 0%, transparent 70%)' }}
                                     />
                                 )}
 
                                 <div className="relative flex items-start justify-between gap-2">
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-black/30 text-2xl ring-1 ring-[var(--border)] transition group-hover:ring-[#FF6B35]/40">
-                                        {emojiForGerecht(g.naam)}
-                                    </span>
+                                    <h3 className="line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
+                                        {g.naam}
+                                    </h3>
                                     <span
                                         role="button"
                                         tabIndex={0}
                                         aria-label={g.is_in_wizard ? 'Haal van de kaart' : 'Zet op de kaart'}
                                         onClick={(e) => { e.stopPropagation(); toggleWizard(g); }}
                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); toggleWizard(g); } }}
-                                        className={`shrink-0 rounded-lg p-1.5 transition ${g.is_in_wizard ? 'bg-[#FFBF00]/10 text-[#FFBF00] ring-1 ring-[#FFBF00]/30' : 'text-[var(--muted)] opacity-40 hover:opacity-100'}`}
+                                        className={`shrink-0 rounded-lg p-1.5 transition ${g.is_in_wizard ? 'text-[var(--brand)]' : 'text-[var(--muted)] opacity-40 hover:opacity-100'}`}
                                     >
                                         {togglingId === g.id ? <Loader2 size={15} className="animate-spin" /> : <Star size={15} className={g.is_in_wizard ? 'fill-current' : ''} />}
                                     </span>
                                 </div>
 
-                                <h3 className="relative mt-3 line-clamp-2 text-[15px] font-bold leading-tight" style={{ color: 'var(--text)' }}>
-                                    {g.naam}
-                                </h3>
                                 {g.beschrijving && (
-                                    <p className="relative mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted-light)]">{g.beschrijving}</p>
+                                    <p className="relative mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{g.beschrijving}</p>
                                 )}
 
                                 <div className="relative mt-3 grid grid-cols-3 gap-2 border-t border-[var(--border)] pt-2.5">
                                     <div>
                                         <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Verkoop</div>
-                                        <div className="font-mono text-[13px] font-bold tabular-nums" style={{ color: 'var(--text)' }}>{g.verkoopprijs != null ? formatEuro(priceCents(g.verkoopprijs)) : '—'}</div>
+                                        <div className="font-mono text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>{g.verkoopprijs != null ? formatEuro(priceCents(g.verkoopprijs)) : '—'}</div>
                                     </div>
                                     <div>
                                         <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Kost</div>
@@ -305,8 +411,7 @@ export default function GerechtenInspiratiePage() {
                                     </div>
                                     <div>
                                         <div className="text-[9px] font-semibold uppercase tracking-wider text-[var(--muted)]">Marge</div>
-                                        <div className={`inline-flex items-center gap-0.5 font-mono text-[13px] font-bold tabular-nums ${margeColor(marge)}`}>
-                                            {isStar && <Flame size={10} className="animate-pulse" />}
+                                        <div className={`font-mono text-[13px] font-semibold tabular-nums ${margeColor(marge)}`}>
                                             {marge !== null ? `${marge.toFixed(0)}%` : '—'}
                                         </div>
                                     </div>
@@ -326,11 +431,12 @@ export default function GerechtenInspiratiePage() {
                 />
             )}
 
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
-                <Sparkles size={14} className="mr-1 inline text-primary" />
-                <strong>De heilige-graal-loop:</strong> Wijzig kostprijs van een component
-                → auto-trigger updatet alle gerechten die de component gebruiken. Vink ⭐ aan
-                → gerecht verschijnt in de offerte-wizard (filter komt in PR6b).
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground" style={{ marginTop: 18 }}>
+                    <Sparkles size={14} className="mr-1 inline text-primary" />
+                    <strong>De heilige-graal-loop:</strong> Wijzig kostprijs van een component
+                    → auto-trigger updatet alle gerechten die de component gebruiken. Vink ⭐ aan
+                    → gerecht verschijnt in de offerte-wizard (filter komt in PR6b).
+                </div>
             </div>
         </div>
     );
