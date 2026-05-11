@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-/* PR8 Inspiratie Bibliotheek — proactieve combo-suggesties.
-   Knop op de landing scant tenant's components-bibliotheek met Sonnet 4.6,
-   suggereert 3 ongebruikte combinaties. Read-only. Mens maakt gerecht via
-   /inspiratie/gerechten als hij/zij eentje wil bouwen. */
-
 import { useState } from 'react';
 import { Sparkles, Loader2, Boxes, RefreshCw, ChefHat } from 'lucide-react';
 import Link from 'next/link';
@@ -61,91 +56,105 @@ export default function DiscoverCombosBlock() {
     }
 
     return (
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                    <Sparkles size={20} className="mt-0.5 shrink-0 text-primary" />
-                    <div>
-                        <h3 className="font-medium">AI als Creative Chef — proactieve combo's</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Klik om AI je components-bibliotheek te laten scannen. Hij vindt 3 ongebruikte
-                            combinaties die een nieuw gerecht zouden vormen — met smaak-onderbouwing en kostprijs.
+        <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+            {/* Lead */}
+            <div className="flex items-start gap-4 p-5 sm:p-6">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)] ring-1 ring-[var(--brand)]/20">
+                    <Sparkles size={16} strokeWidth={1.75} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-relaxed text-[var(--muted-light)]">
+                        Klik om AI je components-bibliotheek te laten scannen. Hij vindt drie ongebruikte combinaties met
+                        smaak-onderbouwing en kostprijs. Read-only — jij beslist.
+                    </p>
+                    {!suggestions && !busy && (
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                            Werkt beter naarmate je bibliotheek groeit (minimaal 3 components).
                         </p>
-                    </div>
+                    )}
                 </div>
                 <button
                     type="button"
                     onClick={handleDiscover}
                     disabled={busy}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 py-2 text-[13px] font-medium text-black transition hover:opacity-90 disabled:opacity-50"
                 >
                     {busy
-                        ? <><Loader2 size={14} className="animate-spin" /> AI scant...</>
+                        ? <><Loader2 size={13} className="animate-spin" /> AI scant…</>
                         : suggestions
-                            ? <><RefreshCw size={14} /> Opnieuw scannen</>
-                            : <><Sparkles size={14} /> Vind combos</>}
+                            ? <><RefreshCw size={13} /> Opnieuw</>
+                            : <><Sparkles size={13} /> Vind combos</>}
                 </button>
             </div>
 
+            {/* Suggesties */}
             {suggestions && suggestions.length > 0 && (
-                <div className="mt-4 space-y-3">
-                    <div className="text-[11px] text-muted-foreground">
-                        {suggestions.length} voorstellen — gegenereerd{ranAt ? ` om ${ranAt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                <div className="border-t border-[var(--border)] bg-[var(--bg)] p-5 sm:p-6">
+                    <div className="mb-3 flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                        <span>{suggestions.length} voorstellen</span>
+                        {ranAt && <span>{ranAt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>}
                     </div>
-                    {suggestions.map((s, i) => (
-                        <div key={i} className="rounded-xl border border-border bg-card p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1">
-                                    <h4 className="text-base font-semibold">{s.name}</h4>
-                                    {s.description && (
-                                        <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>
-                                    )}
-                                </div>
-                                <div className="shrink-0 text-right">
-                                    <div className="text-xs text-muted-foreground">Kostprijs</div>
-                                    <div className="text-sm font-medium">{formatEuro(s.total_cost_cents)}</div>
-                                </div>
-                            </div>
 
-                            {s.components.length > 0 && (
-                                <div className="mt-3">
-                                    <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                                        <Boxes size={11} /> Componenten ({s.components.length})
+                    <div className="space-y-3">
+                        {suggestions.map((s, i) => (
+                            <article
+                                key={i}
+                                className="rounded-xl border border-[var(--border)] bg-[var(--card-solid)] p-5"
+                            >
+                                <header className="mb-3 flex items-start justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="font-[var(--font-artisan)] text-lg font-medium leading-tight">
+                                            {s.name}
+                                        </h4>
+                                        {s.description && (
+                                            <p className="mt-1 text-[12px] leading-relaxed text-[var(--muted-light)]">
+                                                {s.description}
+                                            </p>
+                                        )}
                                     </div>
-                                    <ul className="space-y-0.5 text-xs">
-                                        {s.components.map(c => (
-                                            <li key={c.component_id} className="flex justify-between">
-                                                <span>{c.name}</span>
-                                                <span className="text-muted-foreground">
-                                                    {c.quantity} {c.unit} · {formatEuro(c.cost_cents)}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+                                    <div className="shrink-0 text-right">
+                                        <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+                                            Kostprijs
+                                        </div>
+                                        <div className="font-mono text-[15px] font-medium tabular-nums">
+                                            {formatEuro(s.total_cost_cents)}
+                                        </div>
+                                    </div>
+                                </header>
 
-                            {s.why_this_combo && (
-                                <div className="mt-3 rounded-md bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                                    <Sparkles size={10} className="mr-1 inline text-primary" />
-                                    {s.why_this_combo}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                                {s.components.length > 0 && (
+                                    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+                                        <div className="mb-1.5 flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
+                                            <Boxes size={10} /> Componenten · {s.components.length}
+                                        </div>
+                                        <ul className="space-y-0.5 text-[12px]">
+                                            {s.components.map(c => (
+                                                <li key={c.component_id} className="flex items-baseline justify-between gap-3">
+                                                    <span className="truncate">{c.name}</span>
+                                                    <span className="shrink-0 font-mono tabular-nums text-[var(--muted)]">
+                                                        {c.quantity} {c.unit} · {formatEuro(c.cost_cents)}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {s.why_this_combo && (
+                                    <p className="mt-3 border-l-2 border-[var(--brand)]/40 pl-3 text-[11px] italic leading-relaxed text-[var(--muted-light)]">
+                                        {s.why_this_combo}
+                                    </p>
+                                )}
+                            </article>
+                        ))}
+                    </div>
 
                     <Link
                         href="/inspiratie/gerechten"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-[var(--brand)] hover:underline"
                     >
-                        <ChefHat size={11} /> Maak een gerecht aan op basis van een idee
+                        <ChefHat size={11} /> Bouw een gerecht op basis van een idee
                     </Link>
-                </div>
-            )}
-
-            {!suggestions && !busy && (
-                <div className="mt-3 text-[11px] text-muted-foreground">
-                    Tip: werkt het beste als je &gt;5 components in de bibliotheek hebt. Anders mist AI variatie.
                 </div>
             )}
         </div>
