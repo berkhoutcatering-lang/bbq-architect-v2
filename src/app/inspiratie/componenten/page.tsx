@@ -381,7 +381,7 @@ export default function ComponentenPage() {
                     </div>
                     <button
                         type="button"
-                        onClick={() => setShowImport(true)}
+                        onClick={() => { setShowImport(true); setShowForm(false); setShowAi(false); }}
                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                     >
                         <Upload size={14} /> Importeer
@@ -1114,9 +1114,12 @@ function SupplierImportDrawer({
 }) {
     const toast = useToast();
     const [step, setStep] = useState<'input' | 'preview'>('input');
+    const [inputMode, setInputMode] = useState<'text' | 'image'>('text');
     const [pasted, setPasted] = useState('');
+    const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
     const [supplierHint, setSupplierHint] = useState('');
-    const [supplierId, setSupplierId] = useState<string>('');  // string for select
+    const [supplierId, setSupplierId] = useState<string>('');
     const [createComponents, setCreateComponents] = useState(true);
     const [parsing, setParsing] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -1135,20 +1138,28 @@ function SupplierImportDrawer({
 
     async function handleParse(e: React.FormEvent) {
         e.preventDefault();
-        if (!pasted.trim()) { toast('Plak eerst een lijst', 'error'); return; }
+        if (inputMode === 'text' && !pasted.trim()) { toast('Plak eerst een lijst', 'error'); return; }
+        if (inputMode === 'image' && !fileDataUrl) { toast('Kies eerst een foto of PDF', 'error'); return; }
+
         setParsing(true);
         try {
+            const payload: Record<string, unknown> = {
+                supplier_hint: supplierHint || undefined,
+            };
+            if (inputMode === 'text') payload.text = pasted;
+            else payload.file_data_url = fileDataUrl;
+
             const res = await fetch('/api/ai/supplier-catalog-parse', {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: pasted, supplier_hint: supplierHint || undefined }),
+                body: JSON.stringify(payload),
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Parse mislukt');
             const parsed = body.products as ParsedProduct[];
             if (parsed.length === 0) {
-                toast('AI vond geen producten in deze tekst', 'error');
+                toast('AI vond geen producten — probeer een ander deel uit te lichten of plak de tekst handmatig', 'error');
                 return;
             }
             setProducts(parsed);
@@ -1161,6 +1172,22 @@ function SupplierImportDrawer({
         } finally {
             setParsing(false);
         }
+    }
+
+    function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 6 * 1024 * 1024) {
+            toast('Bestand te groot (max 6 MB) — comprimeer of maak een kleinere screenshot', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            setFileDataUrl(typeof reader.result === 'string' ? reader.result : null);
+            setFileName(file.name);
+        };
+        reader.onerror = () => toast('Bestand lezen mislukt', 'error');
+        reader.readAsDataURL(file);
     }
 
     async function handleSave() {
@@ -1231,8 +1258,26 @@ function SupplierImportDrawer({
                     <form onSubmit={handleParse} className="space-y-4">
                         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
                             <FileText size={12} className="mr-1 inline text-primary" />
-                            Plak een copy-paste uit Hanos Shop / Sligro Marktplaats favorieten, een CSV-export van je leverancier,
-                            of een Excel-rij. AI extraheert naam, prijs, eenheid en SKU per product.
+                            Plak tekst óf upload een screenshot/PDF van je Hanos/Sligro favorieten of een factuur.
+                            AI extraheert naam, prijs, eenheid en SKU per product.
+                        </div>
+
+                        {/* Mode-toggle */}
+                        <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
+                            <button
+                                type="button"
+                                onClick={() => setInputMode('text')}
+                                className={`rounded px-3 py-1 transition ${inputMode === 'text' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                                <FileText size={11} className="mr-1 inline" /> Tekst plakken
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setInputMode('image')}
+                                className={`rounded px-3 py-1 transition ${inputMode === 'image' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                                <Upload size={11} className="mr-1 inline" /> Foto / PDF
+                            </button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -1259,19 +1304,55 @@ function SupplierImportDrawer({
                             </label>
                         </div>
 
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Tekst, CSV-paste of bestellijst</span>
-                            <textarea
-                                value={pasted}
-                                onChange={(e) => setPasted(e.target.value)}
-                                rows={10}
-                                maxLength={30000}
-                                placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04, Hanos 12345\nBBQ saus original, 1L, €6.80, Sligro 67890\n...'}
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                                required
-                            />
-                            <span className="mt-1 block text-[10px] text-muted-foreground">{pasted.length} / 30000 tekens</span>
-                        </label>
+                        {inputMode === 'text' ? (
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Tekst, CSV-paste of bestellijst</span>
+                                <textarea
+                                    value={pasted}
+                                    onChange={(e) => setPasted(e.target.value)}
+                                    rows={10}
+                                    maxLength={30000}
+                                    placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04, Hanos 12345\nBBQ saus original, 1L, €6.80, Sligro 67890\n...'}
+                                    className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                                />
+                                <span className="mt-1 block text-[10px] text-muted-foreground">{pasted.length} / 30000 tekens</span>
+                            </label>
+                        ) : (
+                            <div className="space-y-2">
+                                <label className="block">
+                                    <span className="mb-1 block text-xs text-muted-foreground">Foto (JPEG/PNG) of PDF — max 6 MB</span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                                        onChange={handleFile}
+                                        className="block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:opacity-90"
+                                    />
+                                </label>
+                                {fileDataUrl && fileName && (
+                                    <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px]">
+                                        <div className="flex items-center gap-2">
+                                            <FileText size={12} className="text-primary" />
+                                            <span className="flex-1 truncate font-medium">{fileName}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setFileDataUrl(null); setFileName(null); }}
+                                                aria-label="Verwijder bestand"
+                                                className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                            >
+                                                <X size={11} />
+                                            </button>
+                                        </div>
+                                        {fileDataUrl.startsWith('data:image/') && (
+                                            <img src={fileDataUrl} alt="Preview" className="mt-2 max-h-48 rounded border border-border" />
+                                        )}
+                                    </div>
+                                )}
+                                <div className="text-[10px] text-muted-foreground">
+                                    Tip: screenshot van je Hanos-bestellijst of foto van een factuur werkt prima.
+                                    PDF&apos;s worden ook ondersteund.
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex justify-end gap-2">
                             <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
@@ -1283,7 +1364,7 @@ function SupplierImportDrawer({
                                 className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                             >
                                 {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                                {parsing ? 'AI parseert...' : 'Parse met AI'}
+                                {parsing ? (inputMode === 'image' ? 'AI leest de foto/PDF...' : 'AI parseert...') : 'Parse met AI'}
                             </button>
                         </div>
                     </form>
