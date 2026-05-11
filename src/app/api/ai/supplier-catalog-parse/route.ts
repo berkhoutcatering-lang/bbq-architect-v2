@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const v = validateInput(body);
-    if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+    if (v.ok === false) return NextResponse.json({ error: v.error }, { status: 400 });
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AI niet beschikbaar' }, { status: 503 });
