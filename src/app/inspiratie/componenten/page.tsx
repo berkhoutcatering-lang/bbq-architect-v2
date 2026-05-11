@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
     Boxes, ArrowLeft, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
+    Upload, FileText,
 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -118,6 +119,7 @@ export default function ComponentenPage() {
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [selectedComponentId, setSelectedComponentId] = useState<number | null>(null);
+    const [showImport, setShowImport] = useState(false);
     const [typeFilter, setTypeFilter] = useState<'all' | ComponentType>('all');
     const [search, setSearch] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -377,6 +379,13 @@ export default function ComponentenPage() {
                             className="rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-sm"
                         />
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowImport(true)}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                        <Upload size={14} /> Importeer
+                    </button>
                     <button
                         type="button"
                         onClick={() => { setShowAi(v => !v); setShowForm(false); }}
@@ -814,6 +823,13 @@ export default function ComponentenPage() {
                 />
             )}
 
+            {showImport && (
+                <SupplierImportDrawer
+                    onClose={() => setShowImport(false)}
+                    onImported={() => { setShowImport(false); loadComponents(); }}
+                />
+            )}
+
             <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
                 <Sparkles size={14} className="mr-1 inline text-primary" />
                 AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
@@ -1067,6 +1083,285 @@ function ComponentEditDrawer({
                             <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                 {saving ? 'Opslaan...' : 'Opslaan'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Supplier-import drawer: tekst-paste → AI parse → preview → bulk-insert
+   ────────────────────────────────────────────────────────────────────────── */
+
+interface SupplierLite { id: number; naam: string; }
+interface ParsedProduct {
+    name: string;
+    supplier_sku: string | null;
+    price_cents: number;
+    unit: string;
+    package_size: number | null;
+    package_unit: string | null;
+}
+
+function SupplierImportDrawer({
+    onClose, onImported,
+}: {
+    onClose: () => void;
+    onImported: () => void;
+}) {
+    const toast = useToast();
+    const [step, setStep] = useState<'input' | 'preview'>('input');
+    const [pasted, setPasted] = useState('');
+    const [supplierHint, setSupplierHint] = useState('');
+    const [supplierId, setSupplierId] = useState<string>('');  // string for select
+    const [createComponents, setCreateComponents] = useState(true);
+    const [parsing, setParsing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [suppliers, setSuppliers] = useState<SupplierLite[]>([]);
+    const [products, setProducts] = useState<ParsedProduct[]>([]);
+    const [detectedSupplierName, setDetectedSupplierName] = useState<string | null>(null);
+    const [droppedCount, setDroppedCount] = useState(0);
+    const [keepFlags, setKeepFlags] = useState<boolean[]>([]);
+
+    useEffect(() => {
+        fetch('/api/leveranciers/list', { credentials: 'include' })
+            .then(r => r.json())
+            .then(b => setSuppliers(b.leveranciers ?? []))
+            .catch(() => { /* niet kritisch */ });
+    }, []);
+
+    async function handleParse(e: React.FormEvent) {
+        e.preventDefault();
+        if (!pasted.trim()) { toast('Plak eerst een lijst', 'error'); return; }
+        setParsing(true);
+        try {
+            const res = await fetch('/api/ai/supplier-catalog-parse', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: pasted, supplier_hint: supplierHint || undefined }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Parse mislukt');
+            const parsed = body.products as ParsedProduct[];
+            if (parsed.length === 0) {
+                toast('AI vond geen producten in deze tekst', 'error');
+                return;
+            }
+            setProducts(parsed);
+            setKeepFlags(parsed.map(() => true));
+            setDetectedSupplierName(body.supplier_name ?? null);
+            setDroppedCount(body.dropped_count ?? 0);
+            setStep('preview');
+        } catch (e: any) {
+            toast(e.message || 'Parse mislukt', 'error');
+        } finally {
+            setParsing(false);
+        }
+    }
+
+    async function handleSave() {
+        const selected = products.filter((_, i) => keepFlags[i]);
+        if (selected.length === 0) { toast('Geen producten geselecteerd', 'error'); return; }
+        setSaving(true);
+        try {
+            const res = await fetch('/api/supplier-products/bulk', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    supplier_id: supplierId ? Number(supplierId) : null,
+                    products: selected,
+                    create_components: createComponents,
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            const msg = `${body.supplier_products_inserted} producten opgeslagen` +
+                (body.components_inserted > 0 ? `, ${body.components_inserted} components aangemaakt` : '');
+            toast(msg, 'success');
+            if (body.warning) toast(body.warning, 'error');
+            onImported();
+        } catch (e: any) {
+            toast(e.message || 'Opslaan mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    function toggleKeep(i: number) {
+        setKeepFlags(prev => prev.map((v, idx) => idx === i ? !v : v));
+    }
+    function toggleAll(state: boolean) {
+        setKeepFlags(prev => prev.map(() => state));
+    }
+
+    const keepCount = keepFlags.filter(Boolean).length;
+    const totalCents = products.reduce((sum, p, i) => sum + (keepFlags[i] ? p.price_cents : 0), 0);
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
+            onClick={onClose}
+        >
+            <div
+                className="h-full w-full max-w-2xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <div className="flex items-center gap-1.5 text-xs text-primary">
+                            <Upload size={12} /> Leverancier-lijst importeren
+                        </div>
+                        <h2 className="text-xl font-semibold">
+                            {step === 'input' ? 'Plak je product-lijst' : `Preview: ${keepCount} van ${products.length} producten`}
+                        </h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {step === 'input' && (
+                    <form onSubmit={handleParse} className="space-y-4">
+                        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+                            <FileText size={12} className="mr-1 inline text-primary" />
+                            Plak een copy-paste uit Hanos Shop / Sligro Marktplaats favorieten, een CSV-export van je leverancier,
+                            of een Excel-rij. AI extraheert naam, prijs, eenheid en SKU per product.
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Leverancier (optioneel)</span>
+                                <select
+                                    value={supplierId}
+                                    onChange={(e) => setSupplierId(e.target.value)}
+                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                                >
+                                    <option value="">— niet koppelen —</option>
+                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.naam}</option>)}
+                                </select>
+                            </label>
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Hint voor AI (optioneel)</span>
+                                <input
+                                    type="text"
+                                    value={supplierHint}
+                                    onChange={(e) => setSupplierHint(e.target.value)}
+                                    placeholder="bv. 'Hanos' of 'Sligro'"
+                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                                />
+                            </label>
+                        </div>
+
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Tekst, CSV-paste of bestellijst</span>
+                            <textarea
+                                value={pasted}
+                                onChange={(e) => setPasted(e.target.value)}
+                                rows={10}
+                                maxLength={30000}
+                                placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04, Hanos 12345\nBBQ saus original, 1L, €6.80, Sligro 67890\n...'}
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                                required
+                            />
+                            <span className="mt-1 block text-[10px] text-muted-foreground">{pasted.length} / 30000 tekens</span>
+                        </label>
+
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
+                                Annuleer
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={parsing}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                                {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                {parsing ? 'AI parseert...' : 'Parse met AI'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {step === 'preview' && (
+                    <div className="space-y-4">
+                        <div className="rounded-lg border border-border bg-card p-3 text-xs">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    {detectedSupplierName && <span>Gedetecteerd: <strong>{detectedSupplierName}</strong> · </span>}
+                                    <span>{products.length} producten geparsed</span>
+                                    {droppedCount > 0 && <span className="ml-1 text-muted-foreground">({droppedCount} overgeslagen wegens onvolledige data)</span>}
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <button type="button" onClick={() => toggleAll(true)} className="text-[11px] text-primary hover:underline">Alles aan</button>
+                                    <span className="text-muted-foreground">·</span>
+                                    <button type="button" onClick={() => toggleAll(false)} className="text-[11px] text-primary hover:underline">Alles uit</button>
+                                </div>
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                                Selectie: {keepCount} × · Totale prijs: €{(totalCents / 100).toFixed(2)}
+                            </div>
+                        </div>
+
+                        <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-border">
+                            <table className="w-full text-xs">
+                                <thead className="sticky top-0 bg-muted">
+                                    <tr>
+                                        <th className="px-2 py-1.5 text-left">✓</th>
+                                        <th className="px-2 py-1.5 text-left">Naam</th>
+                                        <th className="px-2 py-1.5 text-left">SKU</th>
+                                        <th className="px-2 py-1.5 text-right">Prijs</th>
+                                        <th className="px-2 py-1.5 text-left">Eenheid</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {products.map((p, i) => (
+                                        <tr key={i} className={`border-t border-border ${!keepFlags[i] ? 'opacity-40' : ''}`}>
+                                            <td className="px-2 py-1.5">
+                                                <input type="checkbox" checked={keepFlags[i]} onChange={() => toggleKeep(i)} />
+                                            </td>
+                                            <td className="px-2 py-1.5">{p.name}</td>
+                                            <td className="px-2 py-1.5 text-muted-foreground">{p.supplier_sku ?? '—'}</td>
+                                            <td className="px-2 py-1.5 text-right">€{(p.price_cents / 100).toFixed(2)}</td>
+                                            <td className="px-2 py-1.5 text-muted-foreground">
+                                                {p.unit}{p.package_size ? ` (${p.package_size} ${p.package_unit ?? ''})` : ''}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+                            <input
+                                type="checkbox"
+                                checked={createComponents}
+                                onChange={(e) => setCreateComponents(e.target.checked)}
+                            />
+                            <span>
+                                <strong>Maak meteen bought_in components</strong> per product (linked aan supplier-product).
+                                Anders zitten ze alleen in de catalogus en moet je later handmatig koppelen.
+                            </span>
+                        </label>
+
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => setStep('input')} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
+                                Terug
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={saving || keepCount === 0}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                {saving ? 'Opslaan...' : `Importeer ${keepCount}`}
                             </button>
                         </div>
                     </div>
