@@ -1258,8 +1258,16 @@ function SupplierImportDrawer({
                     <form onSubmit={handleParse} className="space-y-4">
                         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
                             <FileText size={12} className="mr-1 inline text-primary" />
-                            Plak tekst óf upload een screenshot/PDF van je Hanos/Sligro favorieten of een factuur.
-                            AI extraheert naam, prijs, eenheid en SKU per product.
+                            Voor je <strong className="text-foreground">vaste assortiment</strong>: een favorietenlijst uit
+                            Hanos Shop / Sligro Marktplaats, een prijslijst van je leverancier, of een foto van een productrek.
+                            AI extraheert naam, prijs, eenheid en SKU per product en voegt ze toe als{' '}
+                            <strong className="text-foreground">bought_in components</strong>.
+                        </div>
+
+                        <div className="rounded-lg border border-amber-300/40 bg-amber-50/40 p-2.5 text-[11px] text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
+                            Heb je een <strong>losse factuur</strong> van een eenmalige bestelling? Die hoort thuis in{' '}
+                            <Link href="/inkoop" className="underline">Inkoop</Link> — daar wordt 'm
+                            voor boekhouding + BTW verwerkt. Hier bouw je je structurele product-bibliotheek op.
                         </div>
 
                         {/* Mode-toggle */}
