@@ -878,6 +878,125 @@
 .redesign-root .eh-hero-stat .bar { height: 3px; background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 2px; margin-top: 7px; overflow: hidden; }
 .redesign-root .eh-hero-stat .bar .fill { height: 100%; border-radius: 2px; }
 
+/* ──────────── Filter Pill Bar: glass filter+search container ──────────── */
+.redesign-root .filter-bar {
+  position: sticky; top: 12px; z-index: 8;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 6px;
+  margin: 18px 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--brand-gold) 20%, transparent);
+  box-shadow: 0 8px 24px rgba(0,0,0,.32), inset 0 1px 0 color-mix(in srgb, var(--brand-gold) 15%, transparent);
+}
+.redesign-root .filter-bar-pills {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px;
+  border-radius: 999px;
+}
+.redesign-root .filter-bar-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600; letter-spacing: -.005em;
+  color: var(--muted-light);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all .15s cubic-bezier(.2,.8,.2,1);
+  white-space: nowrap;
+  font-family: inherit;
+}
+.redesign-root .filter-bar-pill:hover:not(.is-active) { color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent); }
+.redesign-root .filter-bar-pill.is-active {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+  color: var(--brand);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 38%, transparent), 0 4px 12px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+.redesign-root .filter-bar-pill .count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 18px; padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+.redesign-root .filter-bar-pill.is-active .count {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+  color: var(--brand);
+}
+.redesign-root .filter-bar-sep {
+  width: 1px; height: 22px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  margin: 0 4px;
+}
+.redesign-root .filter-bar-search {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px 0 12px;
+  height: 36px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background .15s;
+  position: relative;
+}
+.redesign-root .filter-bar-search:focus-within {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+.redesign-root .filter-bar-search svg.search-icon { color: var(--muted); flex-shrink: 0; }
+.redesign-root .filter-bar-search input {
+  flex: 1; min-width: 0;
+  background: transparent; border: none; outline: none;
+  font-size: 12.5px; color: var(--text);
+  font-family: inherit;
+}
+.redesign-root .filter-bar-search input::placeholder { color: var(--muted); }
+.redesign-root .filter-bar-search .shortcut-hint {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Mono", "Menlo", monospace;
+  font-size: 10px; font-weight: 600;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+.redesign-root .filter-bar-search:focus-within .shortcut-hint { display: none; }
+.redesign-root .filter-bar-search .clear-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  color: var(--bg);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.redesign-root .filter-bar-search .clear-btn:hover { background: var(--text); }
+.redesign-root .filter-bar-search .result-count {
+  font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Mobile: stack pills + search */
+@media (max-width: 640px) {
+  .redesign-root .filter-bar {
+    border-radius: 14px;
+    flex-direction: column; align-items: stretch;
+    padding: 8px;
+  }
+  .redesign-root .filter-bar-pills {
+    overflow-x: auto; scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .redesign-root .filter-bar-pills::-webkit-scrollbar { display: none; }
+  .redesign-root .filter-bar-sep { display: none; }
+  .redesign-root .filter-bar-search { width: 100%; height: 40px; }
+}
+
 /* ──────────── Event Hub: documenten hierarchy ──────────── */
 .redesign-root .doc-primary-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 14px;

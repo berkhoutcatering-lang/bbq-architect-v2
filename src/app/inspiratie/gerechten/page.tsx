@@ -117,6 +117,18 @@ export default function GerechtenInspiratiePage() {
 
     useEffect(() => { loadGerechten(); }, []);
 
+    /* ⌘K / Ctrl+K focuses the search input — matches the shortcut-hint badge */
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                document.getElementById('gerecht-search')?.focus();
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     const filtered = useMemo(() => {
         return gerechten.filter(g => {
             if (wizardFilter === 'wizard' && !g.is_in_wizard) return false;
@@ -280,34 +292,49 @@ export default function GerechtenInspiratiePage() {
                     </div>
                 </div>
 
-                {/* Filter + zoek-balk */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ marginBottom: 18 }}>
-                    <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
+                {/* Glass Filter Pill Bar */}
+                <div className="filter-bar">
+                    <div className="filter-bar-pills">
                         <button
                             type="button"
                             onClick={() => setWizardFilter('all')}
-                            className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${wizardFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                            className={`filter-bar-pill ${wizardFilter === 'all' ? 'is-active' : ''}`}
                         >
-                            Alle <span className="ml-0.5 opacity-60">{gerechten.length}</span>
+                            Alle <span className="count">{gerechten.length}</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setWizardFilter('wizard')}
-                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${wizardFilter === 'wizard' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                            className={`filter-bar-pill ${wizardFilter === 'wizard' ? 'is-active' : ''}`}
                         >
-                            <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> Op de kaart <span className="opacity-60">{wizardCount}</span>
+                            <Star size={11} className={wizardFilter === 'wizard' ? 'fill-current' : ''} /> Op de kaart <span className="count">{wizardCount}</span>
                         </button>
                     </div>
-
-                    <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                    <div className="filter-bar-sep" aria-hidden></div>
+                    <div className="filter-bar-search">
+                        <Search size={14} className="search-icon" />
                         <input
                             type="search"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Zoek gerecht…"
-                            className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[var(--brand)]/40 focus:outline-none"
+                            id="gerecht-search"
                         />
+                        {search.length > 0 ? (
+                            <>
+                                <span className="result-count">{filtered.length} van {gerechten.length}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch('')}
+                                    aria-label="Wis zoekopdracht"
+                                    className="clear-btn"
+                                >
+                                    <X size={11} />
+                                </button>
+                            </>
+                        ) : (
+                            <span className="shortcut-hint">⌘ K</span>
+                        )}
                     </div>
                 </div>
 

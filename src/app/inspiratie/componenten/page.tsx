@@ -153,6 +153,18 @@ export default function ComponentenPage() {
 
     useEffect(() => { loadComponents(); }, []);
 
+    /* ⌘K / Ctrl+K focuses the search input — matches the shortcut-hint badge */
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                document.getElementById('component-search')?.focus();
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+
     const filtered = useMemo(() => {
         return components.filter(c => {
             if (typeFilter !== 'all' && c.type !== typeFilter) return false;
@@ -450,41 +462,56 @@ export default function ComponentenPage() {
                     </div>
                 </div>
 
-                {/* Filter + zoek-balk */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between" style={{ marginBottom: 18 }}>
-                    <div className="inline-flex items-center rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5">
+                {/* Glass Filter Pill Bar — search + filter in één object */}
+                <div className="filter-bar">
+                    <div className="filter-bar-pills">
                         <button
                             type="button"
                             onClick={() => setTypeFilter('all')}
-                            className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'all' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                            className={`filter-bar-pill ${typeFilter === 'all' ? 'is-active' : ''}`}
                         >
-                            Alle <span className="ml-0.5 opacity-60">{components.length}</span>
+                            Alle <span className="count">{components.length}</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setTypeFilter('prepared')}
-                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'prepared' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                            className={`filter-bar-pill ${typeFilter === 'prepared' ? 'is-active' : ''}`}
                         >
-                            <Package size={12} /> Zelf-bereid <span className="opacity-60">{preparedCount}</span>
+                            <Package size={12} /> Zelf-bereid <span className="count">{preparedCount}</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setTypeFilter('bought_in')}
-                            className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${typeFilter === 'bought_in' ? 'bg-[var(--brand)] text-black' : 'text-[var(--muted-light)] hover:text-[var(--text)]'}`}
+                            className={`filter-bar-pill ${typeFilter === 'bought_in' ? 'is-active' : ''}`}
                         >
-                            <ShoppingBag size={12} /> Inkoop <span className="opacity-60">{boughtCount}</span>
+                            <ShoppingBag size={12} /> Inkoop <span className="count">{boughtCount}</span>
                         </button>
                     </div>
-
-                    <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                    <div className="filter-bar-sep" aria-hidden></div>
+                    <div className="filter-bar-search">
+                        <Search size={14} className="search-icon" />
                         <input
                             type="search"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Zoek component…"
-                            className="rounded-lg border border-[var(--border)] bg-[var(--card)] py-1.5 pl-8 pr-3 text-[12px] placeholder:text-[var(--muted)] focus:border-[var(--brand)]/40 focus:outline-none"
+                            id="component-search"
                         />
+                        {search.length > 0 ? (
+                            <>
+                                <span className="result-count">{filtered.length} van {components.length}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch('')}
+                                    aria-label="Wis zoekopdracht"
+                                    className="clear-btn"
+                                >
+                                    <X size={11} />
+                                </button>
+                            </>
+                        ) : (
+                            <span className="shortcut-hint">⌘ K</span>
+                        )}
                     </div>
                 </div>
 
