@@ -61,14 +61,12 @@ CREATE INDEX IF NOT EXISTS marge_alerts_open_idx
     ON marge_alerts (organization_id, detected_at DESC)
     WHERE status = 'open';
 
--- Idempotency: voorkomt dubbel-flaggen van dezelfde prijs-jump in zelfde dag-bucket
+-- Idempotency: maximaal 1 open alert per org+inventory+leverancier.
+-- Partial-index op WHERE status='open' is genoeg — resolved/dismissed alerts
+-- voor zelfde item mogen wel naast elkaar bestaan (historie).
+-- DATE_TRUNC kan niet in index-expression (functions must be IMMUTABLE).
 CREATE UNIQUE INDEX IF NOT EXISTS marge_alerts_dedup_idx
-    ON marge_alerts (
-        organization_id,
-        inventory_id,
-        leverancier_id,
-        (DATE_TRUNC('day', detected_at))
-    )
+    ON marge_alerts (organization_id, inventory_id, leverancier_id)
     WHERE status = 'open';
 
 -- updated_at trigger
@@ -86,21 +84,21 @@ ALTER TABLE marge_alerts ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS marge_alerts_select ON marge_alerts;
 CREATE POLICY marge_alerts_select ON marge_alerts
-    FOR SELECT USING (organization_id IN (SELECT auth.user_org_ids()));
+    FOR SELECT USING (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS marge_alerts_insert ON marge_alerts;
 CREATE POLICY marge_alerts_insert ON marge_alerts
-    FOR INSERT WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    FOR INSERT WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS marge_alerts_update ON marge_alerts;
 CREATE POLICY marge_alerts_update ON marge_alerts
     FOR UPDATE
-    USING (organization_id IN (SELECT auth.user_org_ids()))
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()))
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS marge_alerts_delete ON marge_alerts;
 CREATE POLICY marge_alerts_delete ON marge_alerts
-    FOR DELETE USING (organization_id IN (SELECT auth.user_org_ids()));
+    FOR DELETE USING (organization_id IN (SELECT public.user_org_ids()));
 
 -- ── 2. order_templates ────────────────────────────────────────
 -- "Vorige keer voor 80 gasten" — bewaard bestelvoorstel uit prakritjk-brainstorm.
@@ -148,21 +146,21 @@ ALTER TABLE order_templates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS order_templates_select ON order_templates;
 CREATE POLICY order_templates_select ON order_templates
-    FOR SELECT USING (organization_id IN (SELECT auth.user_org_ids()));
+    FOR SELECT USING (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS order_templates_insert ON order_templates;
 CREATE POLICY order_templates_insert ON order_templates
-    FOR INSERT WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    FOR INSERT WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS order_templates_update ON order_templates;
 CREATE POLICY order_templates_update ON order_templates
     FOR UPDATE
-    USING (organization_id IN (SELECT auth.user_org_ids()))
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()))
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 DROP POLICY IF EXISTS order_templates_delete ON order_templates;
 CREATE POLICY order_templates_delete ON order_templates
-    FOR DELETE USING (organization_id IN (SELECT auth.user_org_ids()));
+    FOR DELETE USING (organization_id IN (SELECT public.user_org_ids()));
 
 -- ── 3. inventory.last_price_eur (cache van meest recente leverancier-prijs) ─
 -- Niet kritisch maar maakt offerte-cost-calc real-time zonder JOIN op price_history.

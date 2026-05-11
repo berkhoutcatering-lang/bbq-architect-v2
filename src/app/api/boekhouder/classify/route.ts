@@ -35,6 +35,12 @@ REGELS:
 - BTW-percentage zit al in RGS-code, je hoeft het niet te bepalen.
 - Als de bon onduidelijk is: kies WBedKostOv ("overige kosten") met lage confidence — niet gokken.
 
+INVESTERINGSDREMPEL (Kleinschaligheidsinvesteringsaftrek 2026):
+- Bonnen boven €450 voor duurzame bedrijfsmiddelen (smoker, koelcel, aanhanger, computers, gereedschap >€450) →
+  kies WAfsInv ("Investering inventaris"). Boekhouder beslist of KIA-aftrek van toepassing is.
+- Onder €450: WBedKlGer ("Klein gereedschap") of een andere kosten-code.
+- Belangrijk: AI mag dit suggereren, boekhouder bepaalt de definitieve activatie + afschrijvingsduur.
+
 OUTPUT FORMAT (strict JSON):
 {"rgs_code": "WKprIng", "confidence": 0.92, "reasoning": "Slager-bon — vlees voor event."}
 

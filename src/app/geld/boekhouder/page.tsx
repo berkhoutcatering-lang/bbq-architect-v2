@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
+import BonAddSheet from './_components/BonAddSheet';
 
 /**
  * /geld/boekhouder — Boekhouder-pakket UI
@@ -86,6 +87,7 @@ export default function BoekhouderPage() {
   const [classifying, setClassifying] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [migrationMissing, setMigrationMissing] = useState(false);
+  const [bonAddOpen, setBonAddOpen] = useState(false);
 
   const fetchBonnen = useCallback(async function () {
     setLoading(true);
@@ -166,6 +168,14 @@ export default function BoekhouderPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="bh-btn-primary"
+            onClick={() => setBonAddOpen(true)}
+            title="Bon of factuur toevoegen met AI-extract + voorraad-suggestie"
+          >
+            <Plus size={14} /> Bon toevoegen
+          </button>
           <label style={{ fontSize: 12, color: 'var(--muted)' }}>Maand:</label>
           <input
             type="month"
@@ -175,6 +185,13 @@ export default function BoekhouderPage() {
           />
         </div>
       </header>
+
+      {bonAddOpen && (
+        <BonAddSheet
+          onClose={() => setBonAddOpen(false)}
+          onCommitted={() => { fetchBonnen(); }}
+        />
+      )}
 
       {/* Migration-missing banner */}
       {migrationMissing && (
@@ -402,14 +419,31 @@ function StatusBadge({ status, locked }: { status: string | null; locked: boolea
   return <span className="bh-status bh-status--neutral">wachtend</span>;
 }
 
+type PeriodMode = 'maand' | 'kwartaal' | 'jaar';
+interface MargelekSummary {
+  alerts_count: number;
+  total_impact_eur: number;
+  negative_impact_eur: number;
+  open_alerts: number;
+}
+
+function currentQuarter(monthIso: string): string {
+  const [y, m] = monthIso.split('-');
+  const q = Math.floor((Number(m) - 1) / 3) + 1;
+  return `${y}-Q${q}`;
+}
+
 function PakketTab({ month, counts, rows }: { month: string; counts: Counts | null; rows: Row[] }) {
   const [generating, setGenerating] = useState(false);
   const [emailing, setEmailing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [generated, setGenerated] = useState<{ pdfUrl: string; pdfName: string; csvUrl: string; csvName: string; bonnenCount: number } | null>(null);
+  const [generated, setGenerated] = useState<{ pdfUrl: string; pdfName: string; csvUrl: string; csvName: string; zipUrl?: string | null; zipName?: string; bonnenCount: number; bonnenWithImage: number; periodLabel: string } | null>(null);
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('maand');
+  const [zipBuilding, setZipBuilding] = useState(false);
+  const [margelek, setMargelek] = useState<MargelekSummary | null>(null);
 
   // Boekhouder-settings
-  const [settings, setSettings] = useState<{ boekhouder_email: string; boekhouder_naam: string } | null>(null);
+  const [settings, setSettings] = useState<{ boekhouder_email: string; boekhouder_naam: string; bonnen_retentie_jaar?: number } | null>(null);
   const [emailOverride, setEmailOverride] = useState('');
   const [customMessage, setCustomMessage] = useState('');
 
@@ -431,6 +465,20 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
       .catch(() => {});
   }, []);
 
+  // Margelek-data voor huidige maand
+  useEffect(function () {
+    fetch(`/api/boekhouder/margelek?period=${month}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (j?.summary) setMargelek(j.summary); })
+      .catch(() => {});
+  }, [month]);
+
+  function periodBody(): Record<string, unknown> {
+    if (periodMode === 'maand') return { month };
+    if (periodMode === 'kwartaal') return { quarter: currentQuarter(month) };
+    return { year: Number(month.split('-')[0]) };
+  }
+
   const unclassified = (counts?.pending || 0) + (counts?.twijfel || 0);
   const canLock = unclassified === 0 && rows.length > 0;
 
@@ -442,7 +490,7 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ month }),
+        body: JSON.stringify(periodBody()),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -454,12 +502,36 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
           csvUrl: j.csv_data_url,
           csvName: j.csv_filename,
           bonnenCount: j.bonnen_count,
+          bonnenWithImage: j.bonnen_with_image || 0,
+          periodLabel: j.period_label || month,
         });
-        setMessage(`✓ Pakket gegenereerd (${j.bonnen_count} bonnen). Maand vergrendeld.`);
+        setMessage(`✓ Pakket gegenereerd (${j.bonnen_count} bonnen, ${j.facturen_count} facturen, ${j.kilometers_count} ritten). ${periodMode === 'maand' ? 'Maand' : periodMode === 'kwartaal' ? 'Kwartaal' : 'Jaar'} vergrendeld.`);
       }
     } catch (err: any) {
       setMessage('Fout: ' + (err?.message || 'onbekend'));
     } finally { setGenerating(false); }
+  }
+
+  async function downloadZip() {
+    setZipBuilding(true);
+    setMessage(null);
+    try {
+      const r = await fetch('/api/boekhouder/pakket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ...periodBody(), format: 'zip' }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setMessage('Fout: ' + (j.error || 'onbekend'));
+      } else if (j.zip_data_url) {
+        download(j.zip_data_url, j.zip_filename || 'boekhouding.zip');
+        setMessage(`✓ ZIP gedownload (${j.bonnen_count} bonnen, ${j.bonnen_with_image} met foto).`);
+      }
+    } catch (err: any) {
+      setMessage('Fout: ' + (err?.message || 'onbekend'));
+    } finally { setZipBuilding(false); }
   }
 
   function download(url: string, name: string) {
@@ -467,6 +539,12 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
     a.href = url;
     a.download = name;
     a.click();
+  }
+
+  function periodLabel(): string {
+    if (periodMode === 'maand') return new Date(month + '-01T00:00:00').toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' });
+    if (periodMode === 'kwartaal') return `Q${Math.floor((Number(month.split('-')[1]) - 1) / 3) + 1} ${month.split('-')[0]}`;
+    return `Jaar ${month.split('-')[0]}`;
   }
 
   async function emailToBoekhouder() {
@@ -497,15 +575,30 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
     <div className="bh-pakket">
       <section className="bh-pakket__card">
         <header>
-          <h2><Calendar size={16} /> Pakket voor {month}</h2>
-          <p>Eén klik → PDF + CSV klaar voor je boekhouder. Vergrendelt de maand voor 7-jaar bewaarplicht.</p>
+          <h2><Calendar size={16} /> Pakket voor {periodLabel()}</h2>
+          <p>Eén klik → PDF + CSV + ZIP klaar voor je boekhouder. Vergrendelt de periode voor 7-jaar bewaarplicht.</p>
         </header>
+
+        {/* Period-mode toggle */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          {(['maand', 'kwartaal', 'jaar'] as PeriodMode[]).map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriodMode(p)}
+              className={'bh-filter' + (periodMode === p ? ' bh-filter--active' : '')}
+            >
+              {p === 'maand' ? 'Maand' : p === 'kwartaal' ? 'Kwartaal' : 'Heel jaar'}
+            </button>
+          ))}
+        </div>
 
         <ul className="bh-pakket__contents">
           <li>✓ <strong>BTW-aangifte-PDF</strong> met rubrieken 1a, 1b, 5b (1-op-1 over te nemen in Belastingdienst-portaal)</li>
+          <li>✓ <strong>BTW-uitsplitsing per RGS</strong> + investeringen (KIA-vraag) {'>'} €450</li>
           <li>✓ <strong>CSV met RGS-codes</strong> — direct import in Twinfield, Exact, SnelStart, AFAS</li>
-          <li>✓ <strong>{counts?.total || 0} inkoop-bonnen</strong> gegroepeerd per RGS-categorie</li>
-          <li>✓ Voorraad-snapshot op einde maand (voor balans)</li>
+          <li>✓ <strong>{counts?.total || 0} inkoop-bonnen</strong> gegroepeerd per RGS-categorie + kilometeraftrek</li>
+          <li>✓ <strong>ZIP-archief</strong> met originele foto's per bon (voor Belastingdienst-controle)</li>
         </ul>
 
         <div className="bh-pakket__summary">
@@ -521,6 +614,32 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
           </div>
         )}
 
+        {/* Margelek-tile als er alerts zijn deze maand */}
+        {margelek && margelek.alerts_count > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            padding: '10px 12px',
+            background: 'rgba(245,158,11,.08)',
+            border: '1px solid rgba(245,158,11,.25)',
+            borderRadius: 8,
+            marginBottom: 14,
+            fontSize: 12,
+            color: 'var(--muted-light)',
+            alignItems: 'flex-start',
+          }}>
+            <AlertCircle size={14} style={{ color: 'var(--amber, #f59e0b)', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <strong style={{ color: 'var(--text, #f5f5f5)' }}>Margelek deze maand:</strong>
+              {' '}{margelek.alerts_count} prijs-shifts bij leveranciers, totaal impact{' '}
+              <strong style={{ color: margelek.total_impact_eur < 0 ? 'var(--red, #ef4444)' : 'var(--green, #22c55e)' }}>
+                € {Math.abs(margelek.total_impact_eur).toFixed(2)}{margelek.total_impact_eur < 0 ? ' verlies' : ' winst'}
+              </strong>.{' '}
+              <Link href="/leveranciers" style={{ color: 'var(--gold, #c4a35a)' }}>open alerts ↗</Link>
+            </div>
+          </div>
+        )}
+
         {!generated ? (
           <button
             className="bh-btn-primary bh-btn-primary--large"
@@ -530,7 +649,7 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
             {generating
               ? <><Loader2 size={14} className="bh-spin" /> Pakket bouwen…</>
               : canLock
-                ? <><ShieldCheck size={14} /> Vergrendel maand + genereer pakket</>
+                ? <><ShieldCheck size={14} /> Vergrendel {periodMode === 'maand' ? 'maand' : periodMode === 'kwartaal' ? 'kwartaal' : 'jaar'} + genereer pakket</>
                 : 'Eerst alles classificeren'}
           </button>
         ) : (
@@ -542,7 +661,30 @@ function PakketTab({ month, counts, rows }: { month: string; counts: Counts | nu
               <button className="bh-btn-primary" onClick={() => download(generated.csvUrl, generated.csvName)}>
                 <Download size={14} /> Download CSV
               </button>
+              <button className="bh-btn-primary" onClick={downloadZip} disabled={zipBuilding}>
+                {zipBuilding
+                  ? <><Loader2 size={14} className="bh-spin" /> ZIP bouwen…</>
+                  : <><Download size={14} /> Download ZIP {generated.bonnenWithImage > 0 ? `(${generated.bonnenWithImage} foto's)` : ''}</>
+                }
+              </button>
             </div>
+            {settings?.bonnen_retentie_jaar && (
+              <div style={{
+                fontSize: 11,
+                color: 'var(--muted)',
+                marginBottom: 12,
+                padding: '6px 10px',
+                background: 'rgba(99,102,241,.06)',
+                border: '1px solid rgba(99,102,241,.18)',
+                borderRadius: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <ShieldCheck size={12} style={{ color: '#818cf8' }} />
+                Bewaard tot {new Date(new Date().getFullYear() + (settings.bonnen_retentie_jaar || 7), new Date().getMonth(), new Date().getDate()).toLocaleDateString('nl-NL', { year: 'numeric', month: 'long' })} (Art. 52 AWR · {settings.bonnen_retentie_jaar} jaar)
+              </div>
+            )}
             <div className="bh-pakket__email">
               <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '12px 0 8px', fontSize: 14, fontWeight: 600 }}>
                 <Mail size={14} /> Direct naar je boekhouder mailen

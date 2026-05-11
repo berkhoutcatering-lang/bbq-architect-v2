@@ -19,6 +19,7 @@ import {
     Star, Truck, UserCog, Users,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
 
@@ -303,6 +304,9 @@ function FinancienInner() {
             {tab === 'dashboard' && (
                 <>
                     <PageSection>
+                        <div style={{ marginBottom: 20 }}>
+                            <TransportBlock year={selectedYear} />
+                        </div>
                         <div className="stat-grid" style={{ marginBottom: 30 }}>
                             <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
                                 <div className="stat-icon" style={{ background: 'rgba(255,140,0,.15)', color: 'var(--brand)' }}><Coins size={14} /></div>
