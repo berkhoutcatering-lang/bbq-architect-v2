@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
+import BonAddSheet from './_components/BonAddSheet';
 
 /**
  * /geld/boekhouder — Boekhouder-pakket UI
@@ -86,6 +87,7 @@ export default function BoekhouderPage() {
   const [classifying, setClassifying] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [migrationMissing, setMigrationMissing] = useState(false);
+  const [bonAddOpen, setBonAddOpen] = useState(false);
 
   const fetchBonnen = useCallback(async function () {
     setLoading(true);
@@ -166,6 +168,14 @@ export default function BoekhouderPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="bh-btn-primary"
+            onClick={() => setBonAddOpen(true)}
+            title="Bon of factuur toevoegen met AI-extract + voorraad-suggestie"
+          >
+            <Plus size={14} /> Bon toevoegen
+          </button>
           <label style={{ fontSize: 12, color: 'var(--muted)' }}>Maand:</label>
           <input
             type="month"
@@ -175,6 +185,13 @@ export default function BoekhouderPage() {
           />
         </div>
       </header>
+
+      {bonAddOpen && (
+        <BonAddSheet
+          onClose={() => setBonAddOpen(false)}
+          onCommitted={() => { fetchBonnen(); }}
+        />
+      )}
 
       {/* Migration-missing banner */}
       {migrationMissing && (
