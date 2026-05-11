@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Boxes, ChefHat, Sparkles, ArrowRight, Library, Compass } from 'lucide-react';
+import { Boxes, ChefHat, ArrowRight, Library, Compass } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import DiscoverCombosBlock from './_components/DiscoverCombosBlock';
 
 export const metadata = {
     title: 'Inspiratie Bibliotheek',
@@ -73,18 +74,7 @@ export default function InspiratieLandingPage() {
                 </Link>
             </div>
 
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5">
-                <div className="flex items-start gap-3">
-                    <Sparkles size={20} className="mt-0.5 text-primary" />
-                    <div>
-                        <h3 className="font-medium">AI als Creative Chef</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Vraag de AI om een component te genereren, twee componenten te combineren tot een gerecht
-                            of een passend Hanos/Sligro-product te zoeken. Jij blijft pitmaster — AI suggereert, jij keurt goed.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <DiscoverCombosBlock />
         </div>
     );
 }
