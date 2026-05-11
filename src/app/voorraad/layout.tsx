@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react';
-import VoorraadTabs from '@/components/VoorraadTabs';
+import VoorraadHeader from '@/components/voorraad/VoorraadHeader';
 
 export default function VoorraadLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <div style={{ padding: '16px 32px 0' }}>
-        <VoorraadTabs />
-      </div>
+      <VoorraadHeader />
       {children}
     </>
   );
