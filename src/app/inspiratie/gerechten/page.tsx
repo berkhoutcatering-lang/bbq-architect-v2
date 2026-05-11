@@ -436,217 +436,255 @@ function GerechtDetailDrawer({
 
     const totalCost = items.reduce((sum, i) => sum + i.cost_at_use_cents, 0);
 
+    const marge = margePct(gerecht.verkoopprijs, totalCost);
+
     return (
         <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="drawer-title"
-            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
+            className="fixed inset-0 z-40 flex items-end justify-end bg-black/60 backdrop-blur-sm sm:items-stretch"
             onClick={onClose}
         >
             <div
-                className="h-full w-full max-w-lg overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                className="h-full w-full max-w-lg overflow-y-auto border-l border-[var(--border)] bg-[var(--bg)] shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="text-xs text-muted-foreground">Gerecht</div>
-                        <h2 id="drawer-title" className="text-xl font-semibold">{gerecht.naam}</h2>
-                    </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <div className="mb-6 grid grid-cols-3 gap-2 rounded-xl border border-border bg-card p-3 text-xs">
-                    <div>
-                        <div className="text-muted-foreground">Verkoop</div>
-                        <div className="font-medium">{gerecht.verkoopprijs != null ? formatEuro(priceCents(gerecht.verkoopprijs)) : '—'}</div>
-                    </div>
-                    <div>
-                        <div className="text-muted-foreground">Kost (uit components)</div>
-                        <div className="font-medium">{formatEuro(totalCost)}</div>
-                    </div>
-                    <div>
-                        <div className="text-muted-foreground">Marge</div>
-                        <div className={`font-medium ${margeColor(margePct(gerecht.verkoopprijs, totalCost))}`}>
-                            {(() => {
-                                const m = margePct(gerecht.verkoopprijs, totalCost);
-                                return m !== null ? `${m.toFixed(0)}%` : '—';
-                            })()}
+                {/* Header */}
+                <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg)]/95 px-6 pb-4 pt-5 backdrop-blur">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--brand)]">
+                                Gerecht
+                            </div>
+                            <h2 id="drawer-title" className="font-[var(--font-artisan)] text-2xl font-medium leading-tight" style={{ color: 'var(--text)' }}>
+                                {gerecht.naam}
+                            </h2>
+                            {gerecht.beschrijving && (
+                                <p className="mt-1 line-clamp-2 text-[12px] text-[var(--muted-light)]">{gerecht.beschrijving}</p>
+                            )}
                         </div>
-                    </div>
-                </div>
-
-                <div className="mb-3 flex items-center justify-between">
-                    <h3 className="font-medium">
-                        <Boxes size={14} className="mr-1 inline" />
-                        Componenten ({items.length})
-                    </h3>
-                    {!showAddForm && (
                         <button
                             type="button"
-                            onClick={() => setShowAddForm(true)}
-                            disabled={selectableComponents.length === 0}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            onClick={onClose}
+                            aria-label="Sluit"
+                            className="shrink-0 rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--card)] hover:text-[var(--text)]"
                         >
-                            <Plus size={12} /> Toevoegen
+                            <X size={16} />
                         </button>
-                    )}
+                    </div>
                 </div>
 
-                {showAddForm && (
-                    <form onSubmit={handleAdd} className="mb-4 space-y-3 rounded-xl border border-border bg-muted/30 p-3">
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Component</span>
-                            <select
-                                value={formComponentId}
-                                onChange={(e) => onPickComponent(e.target.value)}
-                                required
-                                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                            >
-                                <option value="">— kies een component —</option>
-                                {selectableComponents.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name} ({formatEuro(c.base_cost_cents)} / {c.base_quantity}{c.base_unit})
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Hoeveelheid</span>
-                                <input
-                                    type="number"
-                                    step="0.001"
-                                    min="0.001"
-                                    value={formQty}
-                                    onChange={(e) => setFormQty(e.target.value)}
-                                    required
-                                    placeholder="9"
-                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                                />
-                            </label>
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Eenheid</span>
-                                <input
-                                    type="text"
-                                    value={formUnit}
-                                    onChange={(e) => setFormUnit(e.target.value)}
-                                    required
-                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                                />
-                            </label>
+                <div className="space-y-6 px-6 py-5">
+                    {/* Totals strip */}
+                    <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-[var(--border)]">
+                        <div className="bg-[var(--card)] p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Verkoop</div>
+                            <div className="mt-0.5 font-mono text-[16px] font-medium tabular-nums" style={{ color: 'var(--text)' }}>
+                                {gerecht.verkoopprijs != null ? formatEuro(priceCents(gerecht.verkoopprijs)) : '—'}
+                            </div>
                         </div>
-                        <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => { setShowAddForm(false); setFormComponentId(''); setFormQty(''); }} className="rounded-md border border-border bg-background px-2.5 py-1 text-xs">
-                                Annuleer
-                            </button>
-                            <button type="submit" disabled={adding} className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
-                                {adding ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-                                {adding ? 'Toevoegen...' : 'Voeg toe'}
-                            </button>
+                        <div className="bg-[var(--card)] p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Kost</div>
+                            <div className="mt-0.5 font-mono text-[16px] font-medium tabular-nums" style={{ color: 'var(--text)' }}>
+                                {formatEuro(totalCost)}
+                            </div>
                         </div>
-                    </form>
-                )}
+                        <div className="bg-[var(--card)] p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Marge</div>
+                            <div className={`mt-0.5 font-mono text-[16px] font-medium tabular-nums ${margeColor(marge)}`}>
+                                {marge !== null ? `${marge.toFixed(0)}%` : '—'}
+                            </div>
+                        </div>
+                    </div>
 
-                {loading ? (
-                    <div className="flex items-center justify-center py-12 text-muted-foreground">
-                        <Loader2 size={16} className="mr-2 animate-spin" /> Laden...
-                    </div>
-                ) : items.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/10 p-8 text-center text-sm text-muted-foreground">
-                        Nog geen components gekoppeld.
-                        {availableComponents.length > 0
-                            ? ' Klik op "Toevoegen".'
-                            : ' Maak eerst components aan in de Componenten-pagina.'}
-                    </div>
-                ) : (
-                    <ul className="space-y-2">
-                        {items.map(item => (
-                            <li key={item.component_id} className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
-                                <div className="flex-1 text-sm">
-                                    <div className="font-medium">{item.components?.name ?? `Component #${item.component_id}`}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {item.quantity_used} {item.unit} · {formatEuro(item.cost_at_use_cents)}
-                                        {item.components && (
-                                            <span className="opacity-60"> (basis: {formatEuro(item.components.base_cost_cents)} / {item.components.base_quantity}{item.components.base_unit})</span>
-                                        )}
-                                    </div>
-                                </div>
+                    {/* Components-sectie */}
+                    <section>
+                        <div className="mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+                                <Boxes size={11} /> Componenten · {items.length}
+                            </div>
+                            {!showAddForm && (
                                 <button
                                     type="button"
-                                    onClick={() => handleRemove(item)}
-                                    disabled={removingComponentId === item.component_id}
-                                    aria-label={`Verwijder ${item.components?.name ?? 'component'}`}
-                                    className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                                    onClick={() => setShowAddForm(true)}
+                                    disabled={selectableComponents.length === 0}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-2.5 py-1 text-[11px] font-medium text-black transition hover:opacity-90 disabled:opacity-50"
                                 >
-                                    {removingComponentId === item.component_id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                    <Plus size={11} /> Koppel
                                 </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                            )}
+                        </div>
 
-                {/* Rollup van componenten — allergens + HACCP */}
-                {rollup && (rollup.allergens.length > 0 || rollup.haccp_points.length > 0) && (
-                    <div className="mt-6 space-y-3">
-                        {rollup.allergens.length > 0 && (
-                            <div>
-                                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                                    <ShieldAlert size={12} /> Allergenen (uit componenten)
+                        {showAddForm && (
+                            <form onSubmit={handleAdd} className="mb-3 space-y-2.5 rounded-xl border border-[var(--brand)]/30 bg-[var(--brand)]/5 p-3">
+                                <label className="block text-[11px]">
+                                    <span className="mb-1 block uppercase tracking-wider text-[var(--muted)]">Component</span>
+                                    <select
+                                        value={formComponentId}
+                                        onChange={(e) => onPickComponent(e.target.value)}
+                                        required
+                                        className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-[12px]"
+                                    >
+                                        <option value="">— kies een component —</option>
+                                        {selectableComponents.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} ({formatEuro(c.base_cost_cents)} / {c.base_quantity}{c.base_unit})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="block text-[11px]">
+                                        <span className="mb-1 block uppercase tracking-wider text-[var(--muted)]">Hoeveelheid</span>
+                                        <input
+                                            type="number" step="0.001" min="0.001"
+                                            value={formQty}
+                                            onChange={(e) => setFormQty(e.target.value)}
+                                            required
+                                            placeholder="9"
+                                            className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-[12px]"
+                                        />
+                                    </label>
+                                    <label className="block text-[11px]">
+                                        <span className="mb-1 block uppercase tracking-wider text-[var(--muted)]">Eenheid</span>
+                                        <input
+                                            type="text"
+                                            value={formUnit}
+                                            onChange={(e) => setFormUnit(e.target.value)}
+                                            required
+                                            className="w-full rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-1.5 text-[12px]"
+                                        />
+                                    </label>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {rollup.allergens.map(a => (
-                                        <span
-                                            key={a.allergen_code}
-                                            title={`Uit: ${a.from_components.join(', ')}${a.has_ai_only ? ' (AI-suggestie, nog niet bevestigd)' : ''}`}
-                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${a.has_ai_only ? 'bg-muted text-muted-foreground ring-1 ring-dashed' : 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200'}`}
+                                <div className="flex justify-end gap-2 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setShowAddForm(false); setFormComponentId(''); setFormQty(''); }}
+                                        className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-[11px] text-[var(--muted-light)]"
+                                    >
+                                        Annuleer
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={adding}
+                                        className="inline-flex items-center gap-1 rounded-md bg-[var(--brand)] px-3 py-1 text-[11px] font-medium text-black hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {adding ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
+                                        {adding ? 'Bezig…' : 'Koppel'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {loading ? (
+                            <div className="flex items-center justify-center py-10 text-[var(--muted)]">
+                                <Loader2 size={14} className="mr-2 animate-spin" /> Laden…
+                            </div>
+                        ) : items.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-6 text-center text-[12px] text-[var(--muted-light)]">
+                                Nog geen componenten gekoppeld.
+                                {availableComponents.length > 0
+                                    ? ' Klik op Koppel.'
+                                    : ' Maak eerst componenten aan.'}
+                            </div>
+                        ) : (
+                            <ul className="space-y-1.5">
+                                {items.map(item => (
+                                    <li
+                                        key={item.component_id}
+                                        className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-[13px]" style={{ color: 'var(--text)' }}>
+                                                {item.components?.name ?? `Component #${item.component_id}`}
+                                            </div>
+                                            <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[var(--muted)]">
+                                                {item.quantity_used} {item.unit} · {formatEuro(item.cost_at_use_cents)}
+                                                {item.components && (
+                                                    <span className="opacity-60"> · basis {formatEuro(item.components.base_cost_cents)}/{item.components.base_quantity}{item.components.base_unit}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemove(item)}
+                                            disabled={removingComponentId === item.component_id}
+                                            aria-label={`Verwijder ${item.components?.name ?? 'component'}`}
+                                            className="shrink-0 rounded p-1 text-[var(--muted)] transition hover:bg-[var(--red)]/10 hover:text-[var(--red)] disabled:opacity-50"
                                         >
-                                            {ALLERGEN_LABELS[a.allergen_code] ?? a.allergen_code}
-                                            {a.has_ai_only && <Sparkles size={9} />}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
+                                            {removingComponentId === item.component_id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
-                        {rollup.haccp_points.length > 0 && (
-                            <div>
-                                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                                    <ThermometerSun size={12} /> HACCP-punten (uit componenten)
+                    </section>
+
+                    {/* Rollup */}
+                    {rollup && (rollup.allergens.length > 0 || rollup.haccp_points.length > 0) && (
+                        <section className="space-y-4">
+                            {rollup.allergens.length > 0 && (
+                                <div>
+                                    <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+                                        <ShieldAlert size={11} /> Allergenen · uit componenten
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {rollup.allergens.map(a => (
+                                            <span
+                                                key={a.allergen_code}
+                                                title={`Uit: ${a.from_components.join(', ')}${a.has_ai_only ? ' (AI-suggestie)' : ''}`}
+                                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] ${a.has_ai_only ? 'bg-[var(--card)] text-[var(--muted-light)] ring-1 ring-dashed ring-[var(--border-strong)]' : 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'}`}
+                                            >
+                                                {ALLERGEN_LABELS[a.allergen_code] ?? a.allergen_code}
+                                                {a.has_ai_only && <Sparkles size={9} />}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
-                                <ul className="space-y-1 text-xs">
-                                    {rollup.haccp_points.map((h, i) => (
-                                        <li key={i} className="rounded-md border border-border bg-card px-2.5 py-1.5">
-                                            <span className="text-muted-foreground">{h.component_name}:</span>{' '}
-                                            <span className="font-medium">{h.type}</span>
-                                            {h.threshold_value != null && (
-                                                <span> — {h.threshold_value}{h.threshold_unit ? ' ' + h.threshold_unit : ''}</span>
-                                            )}
-                                            {h.note && <div className="mt-0.5 text-[10px] text-muted-foreground">{h.note}</div>}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                            {rollup.haccp_points.length > 0 && (
+                                <div>
+                                    <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+                                        <ThermometerSun size={11} /> HACCP-punten · uit componenten
+                                    </div>
+                                    <ul className="space-y-1">
+                                        {rollup.haccp_points.map((h, i) => (
+                                            <li key={i} className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-[11px]">
+                                                <span className="text-[var(--muted)]">{h.component_name}</span>
+                                                <span className="mx-1.5 text-[var(--muted)]">·</span>
+                                                <span style={{ color: 'var(--text)' }}>{h.type}</span>
+                                                {h.threshold_value != null && (
+                                                    <span className="font-mono tabular-nums" style={{ color: 'var(--brand)' }}> — {h.threshold_value}{h.threshold_unit ? ' ' + h.threshold_unit : ''}</span>
+                                                )}
+                                                {h.note && <div className="mt-0.5 text-[10px] italic text-[var(--muted-light)]">{h.note}</div>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </section>
+                    )}
 
-                {items.length > 0 && (
-                    <button
-                        type="button"
-                        onClick={handleCostEngineering}
-                        disabled={costEngBusy}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
-                    >
-                        {costEngBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        {costEngBusy ? 'AI analyseert marge...' : 'AI: optimaliseer marge'}
-                    </button>
-                )}
+                    {items.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleCostEngineering}
+                            disabled={costEngBusy}
+                            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-2.5 text-[13px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15 disabled:opacity-50"
+                        >
+                            {costEngBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                            {costEngBusy ? 'AI analyseert marge…' : 'AI · Optimaliseer marge'}
+                        </button>
+                    )}
 
-                <div className="mt-4 text-[11px] text-muted-foreground">
-                    Wijzig de kostprijs van een component in de <Link className="text-primary hover:underline" href="/inspiratie/componenten">Componenten</Link>-pagina
-                    → trigger updatet automatisch de kost van dit gerecht.
+                    <p className="text-[10px] leading-relaxed text-[var(--muted)]">
+                        Wijzig de kostprijs in{' '}
+                        <Link className="text-[var(--brand)] no-underline hover:underline" href="/inspiratie/componenten">
+                            Componenten
+                        </Link>
+                        {' '}→ alle gerechten passen automatisch mee.
+                    </p>
                 </div>
             </div>
 
@@ -695,99 +733,117 @@ function CostEngineeringPanel({
     }
 
     function verdictColor(v: string | undefined) {
-        if (v === 'Star') return 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300';
-        if (v === 'Plowhorse') return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300';
-        if (v === 'Puzzle') return 'text-sky-600 bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300';
-        if (v === 'Dog') return 'text-rose-600 bg-rose-100 dark:bg-rose-900/30 dark:text-rose-300';
-        return 'text-muted-foreground bg-muted';
+        if (v === 'Star') return 'text-emerald-300 bg-emerald-500/15 ring-emerald-500/30';
+        if (v === 'Plowhorse') return 'text-amber-300 bg-amber-500/15 ring-amber-500/30';
+        if (v === 'Puzzle') return 'text-sky-300 bg-sky-500/15 ring-sky-500/30';
+        if (v === 'Dog') return 'text-rose-300 bg-rose-500/15 ring-rose-500/30';
+        return 'text-[var(--muted-light)] bg-[var(--card)] ring-[var(--border)]';
     }
 
     return (
         <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-50 flex items-end justify-end bg-black/40 sm:items-stretch"
+            className="fixed inset-0 z-50 flex items-end justify-end bg-black/60 backdrop-blur-sm sm:items-stretch"
             onClick={onClose}
         >
             <div
-                className="h-full w-full max-w-lg overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                className="h-full w-full max-w-lg overflow-y-auto border-l border-[var(--border)] bg-[var(--bg)] shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="flex items-center gap-1.5 text-xs text-primary">
-                            <TrendingUp size={12} /> Cost Engineering
+                {/* Header */}
+                <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg)]/95 px-6 pb-4 pt-5 backdrop-blur">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--brand)]">
+                                <TrendingUp size={11} /> Cost Engineering
+                            </div>
+                            <h2 className="font-[var(--font-artisan)] text-2xl font-medium leading-tight" style={{ color: 'var(--text)' }}>
+                                Marge-suggesties
+                            </h2>
                         </div>
-                        <h2 className="text-xl font-semibold">Marge-suggesties</h2>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Sluit"
+                            className="shrink-0 rounded-lg p-1.5 text-[var(--muted)] transition hover:bg-[var(--card)] hover:text-[var(--text)]"
+                        >
+                            <X size={16} />
+                        </button>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
                 </div>
 
-                {busy && (
-                    <div className="flex items-center justify-center py-12 text-muted-foreground">
-                        <Loader2 size={20} className="mr-2 animate-spin" /> AI analyseert je gerecht...
-                    </div>
-                )}
-
-                {!busy && analysis && (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
-                            <div>
-                                <div className="text-xs text-muted-foreground">{ctx?.gerecht_name}</div>
-                                <div className="text-sm">
-                                    Huidige marge: <strong>{(analysis.current_margin_pct ?? 0).toFixed(1)}%</strong>
-                                </div>
-                            </div>
-                            {analysis.verdict && (
-                                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${verdictColor(analysis.verdict)}`}>
-                                    {analysis.verdict}
-                                </span>
-                            )}
+                <div className="space-y-5 px-6 py-5">
+                    {busy && (
+                        <div className="flex flex-col items-center justify-center gap-3 py-16 text-[var(--muted)]">
+                            <Loader2 size={22} className="animate-spin text-[var(--brand)]" />
+                            <p className="text-[12px]">AI analyseert je gerecht…</p>
                         </div>
+                    )}
 
-                        {suggestions.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                                AI heeft geen concrete suggesties — marge is wellicht al optimaal.
+                    {!busy && analysis && (
+                        <>
+                            <div className="flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">{ctx?.gerecht_name}</div>
+                                    <div className="mt-1 flex items-baseline gap-1.5">
+                                        <span className="font-mono text-[22px] font-medium tabular-nums" style={{ color: 'var(--text)' }}>
+                                            {(analysis.current_margin_pct ?? 0).toFixed(1)}%
+                                        </span>
+                                        <span className="text-[10px] uppercase tracking-wider text-[var(--muted)]">marge</span>
+                                    </div>
+                                </div>
+                                {analysis.verdict && (
+                                    <span className={`rounded-md px-2.5 py-1 text-[11px] font-medium ring-1 ${verdictColor(analysis.verdict)}`}>
+                                        {analysis.verdict}
+                                    </span>
+                                )}
                             </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {suggestions.map((s, i) => (
-                                    <div key={i} className="rounded-xl border border-border bg-card p-3">
-                                        <div className="flex items-start gap-2">
-                                            <div className="mt-0.5 shrink-0 rounded-md bg-primary/10 p-1.5 text-primary">
-                                                {actionIcon(s.action)}
-                                            </div>
-                                            <div className="flex-1 space-y-1">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="text-sm font-medium">{s.title}</div>
-                                                    {s.estimated_new_margin_pct != null && (
-                                                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                                                            → {s.estimated_new_margin_pct.toFixed(0)}%
-                                                        </span>
+
+                            {suggestions.length === 0 ? (
+                                <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)] p-6 text-center text-[12px] text-[var(--muted-light)]">
+                                    AI heeft geen concrete suggesties — marge is wellicht al optimaal.
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+                                        {suggestions.length} suggesties
+                                    </div>
+                                    {suggestions.map((s, i) => (
+                                        <div key={i} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 transition hover:border-[var(--brand)]/30">
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-0.5 shrink-0 rounded-lg bg-[var(--brand)]/10 p-2 text-[var(--brand)] ring-1 ring-[var(--brand)]/20">
+                                                    {actionIcon(s.action)}
+                                                </div>
+                                                <div className="flex-1 space-y-1.5">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="text-[13px] font-medium leading-tight" style={{ color: 'var(--text)' }}>{s.title}</div>
+                                                        {s.estimated_new_margin_pct != null && (
+                                                            <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-medium tabular-nums text-emerald-300 ring-1 ring-emerald-500/30">
+                                                                → {s.estimated_new_margin_pct.toFixed(0)}%
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[11px] leading-relaxed text-[var(--muted-light)]">{s.description}</p>
+                                                    {s.target_component_name && (
+                                                        <div className="inline-flex items-center gap-1 rounded bg-[var(--bg)] px-1.5 py-0.5 text-[10px] text-[var(--muted-light)]">
+                                                            <Boxes size={9} /> {s.target_component_name}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-muted-foreground">{s.description}</p>
-                                                {s.target_component_name && (
-                                                    <div className="text-[11px] text-muted-foreground">
-                                                        <Boxes size={10} className="mr-1 inline" />
-                                                        {s.target_component_name}
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                    ))}
+                                </div>
+                            )}
 
-                        <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-                            <Sparkles size={11} className="mr-1 inline text-primary" />
-                            Advies — geen automatische wijzigingen. Pas zelf aan in de drawer of in de Componenten-pagina.
-                        </div>
-                    </div>
-                )}
+                            <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--card)] p-3 text-[10px] leading-relaxed text-[var(--muted-light)]">
+                                <Sparkles size={10} className="mr-1 inline text-[var(--brand)]" />
+                                Advies — geen automatische wijzigingen. Pas zelf aan in de drawer of in Componenten.
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
