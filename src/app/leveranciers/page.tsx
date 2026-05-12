@@ -247,57 +247,80 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
             borderRadius: 12, padding: 14,
             display: 'flex', alignItems: 'center', gap: 14,
         }}>
-            <div style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: `${GOLD}1A`, border: `1px solid ${GOLD}44`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: GOLD,
-                flexShrink: 0, overflow: 'hidden',
-            }}>
-                {portalHost ? (
-                    <img
-                        src={`https://www.google.com/s2/favicons?domain=${portalHost}&sz=64`}
-                        width={28} height={28}
-                        style={{ borderRadius: 4 }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        alt=""
-                    />
-                ) : (
-                    <Store size={20} />
-                )}
-            </div>
+            {/* Hele linker gebied is klikbaar → opent prijslijsten + PDF-upload */}
+            <Link
+                href={`/leveranciers/${lev.id}/prijslijsten`}
+                title="Open prijslijsten — drop PDF om te uploaden"
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    flex: 1, minWidth: 0,
+                    textDecoration: 'none', color: 'inherit',
+                    padding: '4px 6px', margin: '-4px -6px', borderRadius: 10,
+                    transition: 'background .12s',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${GOLD}0A`; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+                <div style={{
+                    width: 44, height: 44, borderRadius: 12,
+                    background: `${GOLD}1A`, border: `1px solid ${GOLD}44`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: GOLD,
+                    flexShrink: 0, overflow: 'hidden',
+                }}>
+                    {portalHost ? (
+                        <img
+                            src={`https://www.google.com/s2/favicons?domain=${portalHost}&sz=64`}
+                            width={28} height={28}
+                            style={{ borderRadius: 4 }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            alt=""
+                        />
+                    ) : (
+                        <Store size={20} />
+                    )}
+                </div>
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{lev.naam}</span>
-                    {lev.type && (
-                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(130,130,130,.12)', color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600 }}>
-                            {lev.type}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{lev.naam}</span>
+                        {lev.type && (
+                            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(130,130,130,.12)', color: 'var(--muted)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+                                {lev.type}
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <MethodIcon size={11} /> {methodLabel}
+                        </span>
+                        {lev.scope_filter && lev.scope_filter !== 'alles' && (
+                            <span style={{ color: GOLD, fontWeight: 600 }}>
+                                {lev.scope_filter === 'food_drinks' ? '🍴 Food & drinks' : '🔍 Custom-scope'}
+                            </span>
+                        )}
+                        <span>{lev.products_count} producten</span>
+                        <span>Laatste sync: {fmtRelative(lev.last_sync_at)}</span>
+                        {isRunning && <span style={{ color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" /> bezig…</span>}
+                        {isFailed && <span style={{ color: '#e57373', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> mislukt</span>}
+                    </div>
+                    {lev.portal_url && (
+                        <span
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (lev.portal_url) window.open(lev.portal_url, '_blank', 'noopener,noreferrer');
+                            }}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                fontSize: 11, color: GOLD, textDecoration: 'none', marginTop: 4,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Open portal <ExternalLink size={10} />
                         </span>
                     )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <MethodIcon size={11} /> {methodLabel}
-                    </span>
-                    {lev.scope_filter && lev.scope_filter !== 'alles' && (
-                        <span style={{ color: GOLD, fontWeight: 600 }}>
-                            {lev.scope_filter === 'food_drinks' ? '🍴 Food & drinks' : '🔍 Custom-scope'}
-                        </span>
-                    )}
-                    <span>{lev.products_count} producten</span>
-                    <span>Laatste sync: {fmtRelative(lev.last_sync_at)}</span>
-                    {isRunning && <span style={{ color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" /> bezig…</span>}
-                    {isFailed && <span style={{ color: '#e57373', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> mislukt</span>}
-                </div>
-                {lev.portal_url && (
-                    <a href={lev.portal_url} target="_blank" rel="noopener noreferrer" style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        fontSize: 11, color: GOLD, textDecoration: 'none', marginTop: 4,
-                    }}>
-                        Open portal <ExternalLink size={10} />
-                    </a>
-                )}
-            </div>
+            </Link>
 
             <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                 {hasPending && (
@@ -316,15 +339,16 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                 )}
                 <Link
                     href={`/leveranciers/${lev.id}/prijslijsten`}
-                    title="PDF prijslijsten"
+                    title="PDF prijslijsten — upload of bekijk eerdere"
                     style={{
-                        width: 34, height: 34, borderRadius: 8, background: 'transparent',
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '8px 12px', borderRadius: 8,
+                        background: 'transparent', color: 'var(--text)',
                         border: '1px solid var(--border)', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)',
-                        textDecoration: 'none',
+                        textDecoration: 'none', fontSize: 12, fontWeight: 600,
                     }}
                 >
-                    <FileText size={14} />
+                    <FileText size={13} /> PDF
                 </Link>
                 <Link
                     href={`/leveranciers/historie/${lev.id}`}

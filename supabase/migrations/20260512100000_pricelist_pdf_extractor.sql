@@ -182,14 +182,7 @@ CREATE POLICY "pricelist_select_own_org" ON storage.objects FOR SELECT TO authen
     );
 
 
--- ── 5. Audit log seed ─────────────────────────────────────────────────────
-
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
-        INSERT INTO audit_log (entity_type, entity_id, action, metadata, created_at)
-        VALUES ('migration', NULL, 'applied',
-                jsonb_build_object('migration', '20260512100000_pricelist_pdf_extractor'), now())
-        ON CONFLICT DO NOTHING;
-    END IF;
-END $$;
+-- Note: audit_log seed weggehaald. Migration 017 hernoemde audit_log naar
+-- (record_table, record_id, action, changes, metadata) met CHECK-constraint
+-- op record_table die 'migration' niet toelaat. Migration-history wordt al
+-- bijgehouden in supabase_migrations.schema_migrations — geen extra log nodig.
