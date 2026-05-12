@@ -4,6 +4,10 @@
         {
             "path": "/api/cron/anonymize-floor-plan-guests",
             "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/api/pricelists/batch/poll",
+            "schedule": "*/5 * * * *"
         }
     ]
 }

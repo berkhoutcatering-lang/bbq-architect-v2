@@ -10,8 +10,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import {
-    X, Check, Loader2, TrendingUp, TrendingDown, Search, Filter,
+    X, Check, Loader2, TrendingUp, TrendingDown, Search, Sparkles,
 } from 'lucide-react';
+import CutChip, { cutFromNotes, type CutInfo } from '@/components/voorraad/CutChip';
 
 const GOLD = '#c4a35a';
 const PAGE_SIZE = 100;
@@ -30,7 +31,10 @@ interface MutationRow {
     match_confidence: number | null;
     confidence: number;
     status: string;
+    notes: string | null;       // JSON met cut_taxonomy_id / soort / cut_groep / bereiding (Pillar #1)
 }
+
+type SoortFilter = 'all' | 'varken' | 'kip' | 'rund' | 'lam' | 'gevogelte' | 'vis' | 'worst' | 'overig';
 
 export default function LeverancierReviewSheet({
     leverancierId, leverancierNaam, onClose,
@@ -45,8 +49,12 @@ export default function LeverancierReviewSheet({
     const [submitting, setSubmitting] = useState(false);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [filter, setFilter] = useState<'all' | 'new' | 'up' | 'down'>('all');
+    const [soortFilter, setSoortFilter] = useState<SoortFilter>('all');
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
+    /* Pillar #4: aliassen die geleerd moeten worden bij approve.
+       Key = mutation.id, value = true wanneer toggle aan. */
+    const [aliasToLearn, setAliasToLearn] = useState<Map<string, boolean>>(new Map());
 
     useEffect(() => {
         let cancelled = false;
@@ -69,18 +77,51 @@ export default function LeverancierReviewSheet({
         return () => { cancelled = true; };
     }, [leverancierId, showToast]);
 
-    /* Filter + search */
+    /* Filter + search + cut-soort */
     const filtered = useMemo(() => {
         let list = mutations;
         if (filter === 'new') list = list.filter(m => m.current_prijs == null);
         else if (filter === 'up') list = list.filter(m => (m.delta_pct ?? 0) > 0);
         else if (filter === 'down') list = list.filter(m => (m.delta_pct ?? 0) < 0);
+        if (soortFilter !== 'all') {
+            list = list.filter(m => {
+                const c = cutFromNotes(m.notes);
+                return c?.soort === soortFilter;
+            });
+        }
         if (search) {
             const q = search.toLowerCase();
             list = list.filter(m => m.parsed_naam.toLowerCase().includes(q));
         }
         return list;
-    }, [mutations, filter, search]);
+    }, [mutations, filter, soortFilter, search]);
+
+    /* Soort-counts voor filter-row */
+    const soortCounts = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const m of mutations) {
+            const c = cutFromNotes(m.notes);
+            if (c?.soort) map.set(c.soort, (map.get(c.soort) ?? 0) + 1);
+        }
+        return map;
+    }, [mutations]);
+
+    function toggleAliasLearn(mutationId: string, defaultOn: boolean) {
+        setAliasToLearn(prev => {
+            const next = new Map(prev);
+            const current = next.has(mutationId) ? next.get(mutationId)! : defaultOn;
+            next.set(mutationId, !current);
+            return next;
+        });
+    }
+
+    function getAliasLearnState(m: MutationRow): boolean {
+        if (aliasToLearn.has(m.id)) return aliasToLearn.get(m.id)!;
+        /* Default ON wanneer er een matched master is maar naam afwijkt (confidence < 1.0) */
+        const mc = m.match_confidence;
+        if (m.master_product_id != null && mc != null && mc < 1.0) return true;
+        return false;
+    }
 
     const paged = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -128,9 +169,43 @@ export default function LeverancierReviewSheet({
                 totalDone += (d.approved ?? d.dismissed ?? 0);
                 totalCreated += d.createdMasters || 0;
             }
+            /* Pillar #4: persist aliassen die toggle aan hebben staan bij approve */
+            let aliasesLearned = 0;
+            if (action === 'approve') {
+                const aliasItems = mutations
+                    .filter(m => selected.has(m.id))
+                    .filter(m => m.master_product_id != null && getAliasLearnState(m))
+                    .map(m => {
+                        const c = cutFromNotes(m.notes);
+                        return {
+                            mutationId: m.id,
+                            masterProductId: m.master_product_id as number,
+                            alias: m.parsed_naam,
+                            cutTaxonomyId: (() => {
+                                if (!c?.soort) return null;
+                                try {
+                                    const j = m.notes ? JSON.parse(m.notes) : null;
+                                    return (j?.cut_taxonomy_id as number) ?? null;
+                                } catch { return null; }
+                            })(),
+                        };
+                    });
+                if (aliasItems.length > 0) {
+                    try {
+                        const r = await fetch(`/api/leveranciers/${leverancierId}/aliases/learn`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ items: aliasItems }),
+                        });
+                        const d = await r.json();
+                        if (r.ok) aliasesLearned = d.learned ?? 0;
+                    } catch { /* niet kritisch — approve is al succesvol */ }
+                }
+            }
+
             showToast(
                 action === 'approve'
-                    ? `${totalDone} prijzen toegevoegd${totalCreated ? ` · ${totalCreated} nieuw product` : ''}`
+                    ? `${totalDone} prijzen toegevoegd${totalCreated ? ` · ${totalCreated} nieuw product` : ''}${aliasesLearned ? ` · ${aliasesLearned} alias geleerd` : ''}`
                     : `${totalDone} mutations genegeerd`,
                 'success'
             );
@@ -186,6 +261,24 @@ export default function LeverancierReviewSheet({
                         <FilterChip label={`Nieuw (${counters.new})`} active={filter === 'new'} onClick={() => { setFilter('new'); setPage(0); }} />
                         <FilterChip label={`Stijgers (${counters.up})`} active={filter === 'up'} onClick={() => { setFilter('up'); setPage(0); }} />
                         <FilterChip label={`Dalers (${counters.down})`} active={filter === 'down'} onClick={() => { setFilter('down'); setPage(0); }} />
+                        {/* Pillar #1: cut-soort filter, alleen tonen als er cuts zijn */}
+                        {soortCounts.size > 0 && (
+                            <>
+                                <span style={{ color: 'var(--border)', margin: '0 4px' }}>·</span>
+                                {(['varken','kip','rund','lam','gevogelte','vis','worst','overig'] as const).map(s => {
+                                    const c = soortCounts.get(s) ?? 0;
+                                    if (c === 0) return null;
+                                    return (
+                                        <FilterChip
+                                            key={s}
+                                            label={`${s} (${c})`}
+                                            active={soortFilter === s}
+                                            onClick={() => { setSoortFilter(soortFilter === s ? 'all' : s); setPage(0); }}
+                                        />
+                                    );
+                                })}
+                            </>
+                        )}
                         <div style={{ flex: 1 }} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px' }}>
                             <Search size={13} style={{ color: 'var(--muted)' }} />
@@ -238,6 +331,9 @@ export default function LeverancierReviewSheet({
                                     mutation={m}
                                     selected={selected.has(m.id)}
                                     onToggle={() => toggle(m.id)}
+                                    cut={cutFromNotes(m.notes)}
+                                    aliasLearnOn={getAliasLearnState(m)}
+                                    onToggleAliasLearn={() => toggleAliasLearn(m.id, getAliasLearnState(m))}
                                 />
                             ))}
 
@@ -308,12 +404,25 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
     );
 }
 
-function MutationRowItem({ mutation, selected, onToggle }: { mutation: MutationRow; selected: boolean; onToggle: () => void }) {
+function MutationRowItem({
+    mutation, selected, onToggle, cut, aliasLearnOn, onToggleAliasLearn,
+}: {
+    mutation: MutationRow;
+    selected: boolean;
+    onToggle: () => void;
+    cut: CutInfo | null;
+    aliasLearnOn: boolean;
+    onToggleAliasLearn: () => void;
+}) {
     const delta = mutation.delta_pct;
     const isUp = delta != null && delta > 0;
     const isDown = delta != null && delta < 0;
     const isNew = mutation.current_prijs == null;
     const isLowConfidence = (mutation.confidence ?? 1) < 0.7 || (mutation.match_confidence ?? 1) < 0.6;
+
+    /* Alias-toggle: alleen tonen als er een matched master is en naam afwijkt (Pillar #4) */
+    const showAliasToggle = mutation.master_product_id != null
+        && (mutation.match_confidence ?? 1) < 1.0;
 
     let deltaColor = 'var(--muted)';
     if (isUp && Math.abs(delta!) > 10) deltaColor = '#e57373';
@@ -341,6 +450,29 @@ function MutationRowItem({ mutation, selected, onToggle }: { mutation: MutationR
                     {isNew && <Badge color={GOLD}>NIEUW</Badge>}
                     {isLowConfidence && <Badge color="#f0b756">⚠ CHECK</Badge>}
                 </div>
+                {/* Pillar #1: cut-chip + Pillar #4: alias-toggle */}
+                {(cut || showAliasToggle) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        {cut && <CutChip cut={cut} size="sm" />}
+                        {showAliasToggle && (
+                            <span
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleAliasLearn(); }}
+                                title="Onthoud deze naam als alias zodat AI volgende keer direct herkent"
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+                                    background: aliasLearnOn ? `${GOLD}1F` : 'transparent',
+                                    border: `1px dashed ${aliasLearnOn ? `${GOLD}66` : 'var(--border)'}`,
+                                    color: aliasLearnOn ? GOLD : 'var(--muted)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <Sparkles size={10} />
+                                {aliasLearnOn ? 'onthoud alias' : 'leer niet'}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 90 }}>
                 {!isNew && (
