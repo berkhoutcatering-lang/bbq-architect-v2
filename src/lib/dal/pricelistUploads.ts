@@ -34,7 +34,10 @@ export interface CreateUploadArgs {
 export interface CreateUploadResult {
     id: string;
     storagePath: string;
-    deduped: boolean; // true = identieke hash al eerder geupload, returned existing
+    deduped: boolean;          // true = identieke hash al eerder geupload, returned existing
+    reassigned: boolean;       // true = bestaande upload was niet-gekoppeld en is nu aan leverancier gekoppeld
+    existingStatus: string | null; // status van bestaande row (alleen bij deduped)
+    existingLeverancierId: number | null;
     contentHash: string;
 }
 
@@ -45,16 +48,32 @@ export async function createUpload(args: CreateUploadArgs): Promise<CreateUpload
     /* Check dedup vóór storage-upload — bespaart bandwidth */
     const { data: existing } = await sb
         .from('org_pricelist_uploads')
-        .select('id, storage_path')
+        .select('id, storage_path, status, leverancier_id')
         .eq('organization_id', args.organizationId)
         .eq('content_hash', hash)
         .maybeSingle();
 
     if (existing) {
+        let reassigned = false;
+        const existingLevId = existing.leverancier_id as number | null;
+
+        /* Bestaande upload had geen leverancier én nieuwe upload heeft er wel een
+           → koppel ze automatisch zodat de prijslijsten-page hem toont. */
+        if (existingLevId == null && args.leverancierId != null) {
+            const { error: relErr } = await sb
+                .from('org_pricelist_uploads')
+                .update({ leverancier_id: args.leverancierId })
+                .eq('id', existing.id);
+            if (!relErr) reassigned = true;
+        }
+
         return {
             id: existing.id as string,
             storagePath: existing.storage_path as string,
             deduped: true,
+            reassigned,
+            existingStatus: (existing.status as string) ?? null,
+            existingLeverancierId: reassigned ? args.leverancierId : existingLevId,
             contentHash: hash,
         };
     }
@@ -90,15 +109,25 @@ export async function createUpload(args: CreateUploadArgs): Promise<CreateUpload
         if (error.code === '23505') {
             const { data: ex2 } = await sb
                 .from('org_pricelist_uploads')
-                .select('id, storage_path')
+                .select('id, storage_path, status, leverancier_id')
                 .eq('organization_id', args.organizationId)
                 .eq('content_hash', hash)
                 .single();
             if (ex2) {
+                let reassigned = false;
+                if (ex2.leverancier_id == null && args.leverancierId != null) {
+                    await sb.from('org_pricelist_uploads')
+                        .update({ leverancier_id: args.leverancierId })
+                        .eq('id', ex2.id);
+                    reassigned = true;
+                }
                 return {
                     id: ex2.id as string,
                     storagePath: ex2.storage_path as string,
                     deduped: true,
+                    reassigned,
+                    existingStatus: (ex2.status as string) ?? null,
+                    existingLeverancierId: reassigned ? args.leverancierId : (ex2.leverancier_id as number | null),
                     contentHash: hash,
                 };
             }
@@ -110,6 +139,9 @@ export async function createUpload(args: CreateUploadArgs): Promise<CreateUpload
         id: data.id as string,
         storagePath: data.storage_path as string,
         deduped: false,
+        reassigned: false,
+        existingStatus: null,
+        existingLeverancierId: null,
         contentHash: hash,
     };
 }

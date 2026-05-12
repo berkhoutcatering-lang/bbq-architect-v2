@@ -110,7 +110,10 @@ export async function POST(req: NextRequest): Promise<Response> {
             processingMode: 'batch',
         });
         if (u.deduped) {
-            skipped.push({ filename: f.name, reason: 'duplicate' });
+            skipped.push({
+                filename: f.name,
+                reason: u.reassigned ? 'reassigned' : 'duplicate',
+            });
             uploadIds.push(u.id);
             continue;
         }
