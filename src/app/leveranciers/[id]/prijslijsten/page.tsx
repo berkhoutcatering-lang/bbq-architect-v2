@@ -43,6 +43,7 @@ export default function PrijslijstenPage() {
     const [lev, setLev] = useState<LeverancierMini | null>(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [polling, setPolling] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -64,13 +65,45 @@ export default function PrijslijstenPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    /* Auto-refresh wanneer er iets parsing/queued is */
+    /* Auto-refresh wanneer er iets parsing/queued is + 1× /min een echte
+       batch-poll triggeren zodat Sam niet 24u op de daily cron hoeft te
+       wachten (Vercel Hobby tier limit). */
     useEffect(() => {
         const stillBusy = uploads.some(u => u.status === 'parsing' || u.status === 'queued');
         if (!stillBusy) return;
-        const t = setInterval(() => { load(); }, 15_000);
+        let tick = 0;
+        const t = setInterval(async () => {
+            tick++;
+            /* Elke 60s: trigger Anthropic-poll. Elke 15s: lokale refresh. */
+            if (tick % 4 === 0) {
+                try { await fetch('/api/pricelists/batch/poll-mine', { method: 'POST' }); }
+                catch { /* niet kritisch */ }
+            }
+            load();
+        }, 15_000);
         return () => clearInterval(t);
     }, [uploads, load]);
+
+    async function pollBatchesNow() {
+        if (polling) return;
+        setPolling(true);
+        try {
+            const r = await fetch('/api/pricelists/batch/poll-mine', { method: 'POST' });
+            const d = await r.json();
+            if (!r.ok) {
+                showToast(d?.error || 'refresh mislukt', 'error');
+            } else if (d.processed > 0) {
+                showToast(`${d.processed} batches verwerkt`, 'success');
+            } else if (d.pendingBatches > 0) {
+                showToast(`${d.pendingBatches} batches nog bezig — probeer over 5-10 min`, 'info');
+            } else {
+                showToast('Niks om te refreshen', 'info');
+            }
+            await load();
+        } finally {
+            setPolling(false);
+        }
+    }
 
     async function uploadFiles(files: FileList | File[]) {
         const list = Array.from(files).filter(f => f.type === 'application/pdf' && f.size <= 32 * 1024 * 1024);
@@ -141,18 +174,39 @@ export default function PrijslijstenPage() {
                             PDF-imports. AI extract producten + classificeert vlees-cuts.
                         </div>
                     </div>
-                    <button
-                        onClick={load}
-                        title="Refresh"
-                        style={{
-                            width: 36, height: 36, borderRadius: 8,
-                            background: 'transparent', border: '1px solid var(--border)',
-                            cursor: 'pointer', color: 'var(--muted)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        <RefreshCw size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        {uploads.some(u => u.status === 'parsing' || u.status === 'queued') && (
+                            <button
+                                onClick={pollBatchesNow}
+                                disabled={polling}
+                                title="Check Anthropic batch-status nu (in plaats van wachten op nachtelijke cron)"
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '8px 14px', borderRadius: 8,
+                                    background: GOLD, color: '#0a0a0c', border: 'none',
+                                    cursor: polling ? 'wait' : 'pointer', fontWeight: 700, fontSize: 12,
+                                    opacity: polling ? 0.6 : 1,
+                                }}
+                            >
+                                {polling
+                                    ? <><Loader2 size={13} className="animate-spin" /> Checken…</>
+                                    : <><RefreshCw size={13} /> Refresh batches</>
+                                }
+                            </button>
+                        )}
+                        <button
+                            onClick={load}
+                            title="Refresh lijst"
+                            style={{
+                                width: 36, height: 36, borderRadius: 8,
+                                background: 'transparent', border: '1px solid var(--border)',
+                                cursor: 'pointer', color: 'var(--muted)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                        >
+                            <RefreshCw size={14} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Dropzone */}
