@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { checkAiCapServer } from '@/lib/aiUsageServer';
 import { createUpload, markUploadStatus, countUploadsThisMonth } from '@/lib/dal/pricelistUploads';
-import { enqueueBatchExtraction, type BatchEnqueueItem } from '@/lib/ai/pricelistPdfPrompt';
+import { enqueueBatchExtraction, type BatchEnqueueItem, humanizeAnthropicError } from '@/lib/ai/pricelistPdfPrompt';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
@@ -141,14 +141,16 @@ export async function POST(req: NextRequest): Promise<Response> {
             enqueuedCount: enqueueItems.length,
         });
     } catch (e) {
-        const msg = (e as Error).message || 'unknown';
+        const rawMsg = (e as Error).message || 'unknown';
+        const userMsg = humanizeAnthropicError(e);
         await Promise.all(enqueueItems.map(item =>
             markUploadStatus(item.uploadId, {
                 status: 'failed',
-                parse_error: `batch_enqueue_failed: ${msg}`.slice(0, 500),
+                parse_error: userMsg.slice(0, 500),
                 parse_finished_at: new Date().toISOString(),
             }),
         ));
-        return NextResponse.json({ error: 'batch_enqueue_failed', detail: msg }, { status: 500 });
+        console.warn(`[pricelist-batch] enqueue fail: ${rawMsg.slice(0, 300)}`);
+        return NextResponse.json({ error: 'batch_enqueue_failed', detail: userMsg }, { status: 500 });
     }
 }
