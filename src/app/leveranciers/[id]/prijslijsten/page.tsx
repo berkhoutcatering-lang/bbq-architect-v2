@@ -277,7 +277,30 @@ export default function PrijslijstenPage() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {uploads.map(u => <UploadRowItem key={u.id} u={u} levId={levId} />)}
+                        {uploads.map(u => (
+                            <UploadRowItem
+                                key={u.id}
+                                u={u}
+                                levId={levId}
+                                onRetry={async () => {
+                                    try {
+                                        const r = await fetch(
+                                            `/api/leveranciers/${levId}/prijslijst/${u.id}/retry`,
+                                            { method: 'POST' },
+                                        );
+                                        const d = await r.json();
+                                        if (!r.ok) {
+                                            showToast(d?.detail || d?.error || 'retry mislukt', 'error');
+                                        } else {
+                                            showToast(`Klaar — ${d.lineCount ?? 0} regels in review`, 'success');
+                                        }
+                                        await load();
+                                    } catch (e) {
+                                        showToast((e as Error).message, 'error');
+                                    }
+                                }}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
@@ -294,7 +317,13 @@ function fmtAgo(iso: string): string {
     return `${Math.floor(diff / 86400)}d`;
 }
 
-function UploadRowItem({ u, levId }: { u: UploadRow; levId: number }) {
+function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onRetry: () => Promise<void> }) {
+    const [retrying, setRetrying] = React.useState(false);
+    async function handleRetry() {
+        if (retrying) return;
+        setRetrying(true);
+        try { await onRetry(); } finally { setRetrying(false); }
+    }
     const StatusIcon =
         u.status === 'parsed' ? CheckCircle2 :
         u.status === 'failed' ? AlertTriangle :
@@ -349,6 +378,24 @@ function UploadRowItem({ u, levId }: { u: UploadRow; levId: number }) {
                     )}
                 </div>
             </div>
+            {u.status === 'failed' && (
+                <button
+                    onClick={handleRetry}
+                    disabled={retrying}
+                    title="PDF opnieuw door AI laten verwerken"
+                    style={{
+                        padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        background: GOLD, color: '#0a0a0c', border: 'none',
+                        cursor: retrying ? 'wait' : 'pointer', opacity: retrying ? 0.6 : 1,
+                        display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                    }}
+                >
+                    {retrying
+                        ? <><Loader2 size={11} className="animate-spin" /> Bezig…</>
+                        : <><RefreshCw size={11} /> Probeer opnieuw</>
+                    }
+                </button>
+            )}
             {u.status === 'parsed' && (
                 <Link
                     href={`/leveranciers?review=${levId}`}

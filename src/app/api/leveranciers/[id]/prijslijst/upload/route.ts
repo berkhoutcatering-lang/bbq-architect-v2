@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { checkAiCapServer, logAiUsageServer } from '@/lib/aiUsageServer';
 import { createUpload, markUploadStatus, countUploadsThisMonth } from '@/lib/dal/pricelistUploads';
-import { extractFromPdfSync, MODEL_NAME } from '@/lib/ai/pricelistPdfPrompt';
+import { extractFromPdfSync, MODEL_NAME, humanizeAnthropicError } from '@/lib/ai/pricelistPdfPrompt';
 import { processLines } from '@/lib/pricelistProcessor';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { TIER_LIMITS } from '@/lib/featureFlags';
@@ -163,14 +163,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             model: MODEL_NAME,
         });
     } catch (e) {
-        const msg = (e as Error).message || 'unknown';
+        const rawMsg = (e as Error).message || 'unknown';
+        const userMsg = humanizeAnthropicError(e);
         await markUploadStatus(upload.id, {
             status: 'failed',
-            parse_error: msg.slice(0, 500),
+            parse_error: userMsg.slice(0, 500),
             parse_finished_at: new Date().toISOString(),
         });
+        /* Log volledige fout server-side voor debugging */
+        console.warn(`[pricelist-upload] PDF ${upload.id} fail: ${rawMsg.slice(0, 300)}`);
         return NextResponse.json({
-            error: 'parse_failed', detail: msg, uploadId: upload.id,
+            error: 'parse_failed', detail: userMsg, uploadId: upload.id,
         }, { status: 500 });
     }
 }

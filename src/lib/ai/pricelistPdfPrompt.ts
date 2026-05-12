@@ -76,9 +76,59 @@ function getClient(apiKey?: string): Anthropic {
     return new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
 }
 
+/**
+ * Retry wrapper voor Anthropic calls die tijdelijk falen (429 rate-limit,
+ * 529 overloaded, 5xx server errors). Exponential backoff met jitter.
+ * Geeft op bij niet-retryable errors (400 validation, 401 auth, etc.).
+ */
+async function withAnthropicRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (e: unknown) {
+            lastErr = e;
+            const status = (e as { status?: number; statusCode?: number })?.status
+                ?? (e as { status?: number; statusCode?: number })?.statusCode;
+            const isRetryable = status === 429 || status === 529 || (status != null && status >= 500 && status < 600);
+            const lastTry = attempt >= maxAttempts - 1;
+            if (!isRetryable || lastTry) throw e;
+            /* 1s, 2s, 4s + 0-500ms jitter, max 10s */
+            const wait = Math.min(1000 * 2 ** attempt + Math.random() * 500, 10_000);
+            await new Promise(r => setTimeout(r, wait));
+        }
+    }
+    throw lastErr;
+}
+
+/**
+ * Vertaal een Anthropic SDK error naar een Sam-leesbaar bericht.
+ * Behoud de oorspronkelijke fout-string voor server-side logging.
+ */
+export function humanizeAnthropicError(err: unknown): string {
+    const msg = (err as Error)?.message || String(err);
+    if (msg.includes('overloaded_error') || msg.includes('Overloaded') || msg.includes('529')) {
+        return 'Anthropic AI is tijdelijk overbelast. Probeer over 1-2 min opnieuw.';
+    }
+    if (msg.includes('rate_limit_error') || msg.includes('429')) {
+        return 'AI rate-limit bereikt. Probeer over 1 min opnieuw.';
+    }
+    if (msg.includes('invalid_api_key') || msg.includes('authentication_error') || msg.includes('401')) {
+        return 'AI API-sleutel ontbreekt of ongeldig. Check ANTHROPIC_API_KEY in Vercel env vars.';
+    }
+    if (msg.includes('TOO_MANY_LINES_SUSPICIOUS')) {
+        return 'PDF leek te veel regels te bevatten (>500) — mogelijk prompt-injection. Check de PDF.';
+    }
+    if (msg.includes('PARSE_FAIL') || msg.includes('SCHEMA_FAIL')) {
+        return 'AI gaf onverwacht antwoord. Probeer opnieuw of upload een andere PDF.';
+    }
+    if (msg.length > 200) return msg.slice(0, 200) + '…';
+    return msg;
+}
+
 export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResult> {
     const client = getClient(args.apiKey);
-    const response = await client.messages.create({
+    const response = await withAnthropicRetry(() => client.messages.create({
         model: MODEL_SONNET,
         max_tokens: 8000,
         system: [
@@ -100,7 +150,7 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
                 ],
             },
         ],
-    });
+    }));
 
     const u = response.usage;
     const inTok = u.input_tokens ?? 0;
@@ -167,7 +217,7 @@ export interface BatchEnqueueItem {
 export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?: string): Promise<{ batchId: string }> {
     if (items.length === 0) throw new Error('EMPTY_BATCH');
     const client = getClient(apiKey);
-    const batch = await client.messages.batches.create({
+    const batch = await withAnthropicRetry(() => client.messages.batches.create({
         requests: items.map(p => ({
             custom_id: p.uploadId,
             params: {
@@ -189,7 +239,7 @@ export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?:
                 }],
             } as Anthropic.MessageCreateParamsNonStreaming,
         })),
-    });
+    }));
     return { batchId: batch.id };
 }
 
