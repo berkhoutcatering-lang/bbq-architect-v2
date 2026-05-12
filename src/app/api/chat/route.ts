@@ -189,7 +189,22 @@ interface ChatRequestBody {
         label: string;
         meta?: string;
     } | null;
+    /**
+     * Foto-attachments bij de laatste user-message. Komt uit ChatPanel composer
+     * (paperclip / paste / drop). Server hangt ze als image-content-blocks vóór
+     * de tekst aan het laatste user-bericht. Max 4 per turn (Vercel 4.5MB body).
+     */
+    attachments?: Array<{
+        mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+        base64: string;
+        filename?: string;
+    }>;
 }
+
+// Anthropic-supported image media types
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+const MAX_ATTACHMENTS = 4;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB per image (Anthropic cap is 5MB, headroom voor body)
 
 // Welke actietypes mag elke rol uitvoeren? De AI krijgt dit lijstje mee in
 // de system-prompt zodat hij nooit een delete_event kaartje genereert voor
@@ -235,7 +250,7 @@ const MODEL_MAP: Record<string, string> = {
 export async function POST(req: NextRequest): Promise<NextResponse | Response> {
     try {
         const body: ChatRequestBody = await req.json();
-        const { messages, pageContext, mode, contextData, model: modelChoice, thinkingMode: rawThinkingMode, userRole, activeResource } = body;
+        const { messages, pageContext, mode, contextData, model: modelChoice, thinkingMode: rawThinkingMode, userRole, activeResource, attachments } = body;
         const thinkingMode = isThinkingMode(rawThinkingMode) ? rawThinkingMode : 'standard';
         const modeDef = getMode(thinkingMode);
 
@@ -386,13 +401,52 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             }
         }
 
+        // ── Attachments → multimodal user-message ───────────────────────────
+        // ChatPanel-composer kan foto's meesturen via base64. We hangen die als
+        // image-content-blocks vóór de tekst aan het laatste user-bericht,
+        // zodat het model zowel de afbeelding als de bijbehorende vraag krijgt.
+        // Limits gevalideerd server-side — client-validatie is alleen UX-helper.
+        if (attachments && attachments.length > 0 && merged.length > 0) {
+            const lastMsg = merged[merged.length - 1];
+            if (lastMsg.role === 'user' && typeof lastMsg.content === 'string') {
+                const accepted = attachments
+                    .slice(0, MAX_ATTACHMENTS)
+                    .filter((a) => {
+                        if (!a || !a.base64 || !a.mediaType) return false;
+                        if (!ALLOWED_IMAGE_TYPES.includes(a.mediaType)) return false;
+                        // base64 length × 0.75 ≈ byte-size — snelle cap-check zonder decode
+                        if (a.base64.length * 0.75 > MAX_IMAGE_BYTES) return false;
+                        return true;
+                    });
+                if (accepted.length > 0) {
+                    const blocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
+                    for (const att of accepted) {
+                        blocks.push({
+                            type: 'image',
+                            source: { type: 'base64', media_type: att.mediaType, data: att.base64 },
+                        });
+                    }
+                    // User-tekst eerst als plain string verwijderd uit content, daarna na de images.
+                    const userText = lastMsg.content || '';
+                    blocks.push({
+                        type: 'text',
+                        text: userText
+                            ? userText + '\n\n[' + accepted.length + ' foto(\'s) bijgevoegd — beschrijf wat je ziet en gebruik het in je antwoord. Page-context geldt nog steeds.]'
+                            : '[Foto bijgevoegd, geen tekst. Beschrijf wat je ziet op de page-context en stel concrete vervolgactie voor via respond_with_blocks.]',
+                    });
+                    lastMsg.content = blocks;
+                    console.log('[chat] Attachments: ' + accepted.length + ' image(s) attached to user message');
+                }
+            }
+        }
+
         // ── URL-scraping op /materieel ────────────────────────────────────────
         // Wanneer user URLs plakt: fetch elke pagina + product-image server-side,
         // bouw multimodal content (image + tekst) zodat Claude Vision het werkelijke
         // product ziet. Loopt vóór intent-detection — daarom mag intent-detection
         // niet meer aannemen dat content een string is (zie hieronder).
         let scrapeNeedsScreenshot = false;
-        if (pageContext === '/materieel' && merged.length > 0) {
+        if (normalizedPage === '/materieel' && merged.length > 0) {
             const lastMsg = merged[merged.length - 1];
             if (lastMsg.role === 'user' && typeof lastMsg.content === 'string') {
                 // BELANGRIJK: na collapse-stap kan content meerdere user-messages bevatten
@@ -575,7 +629,9 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                 ? lastContent.filter((b: any) => b && b.type === 'text').map((b: any) => b.text || '').join('\n')
                 : '';
         const lastUserMsg = (rawLastUserContent.split('\n\n').pop() || '').toLowerCase();
-        const isOnGerechten = pageContext === '/gerechten' || pageContext === '/marges' || pageContext === '/ai-chat' || pageContext === '/recepten';
+        // Check via normalizedPage zodat hub-and-spoke routes (bv /inspiratie/gerechten)
+        // dezelfde tool-forcing krijgen als hun stand-alone variant.
+        const isOnGerechten = normalizedPage === '/gerechten' || normalizedPage === '/marges' || normalizedPage === '/ai-chat' || normalizedPage === '/recepten';
         const wantsBrainstorm = isOnGerechten && (
             /\b(bedenk|brainstorm|maak|geef me|verzin|kom met|stel\s*samen|kom\s*op\s*met)\b/.test(lastUserMsg) &&
             /\b\d+\b/.test(lastUserMsg) &&
@@ -591,7 +647,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         // /materieel bulk-import detector: pageContext + (lijstindicatie OF veel-regels-input).
         // Een gewone analyse-vraag fired forceBlocks; alleen bij duidelijke import-intent of
         // multi-line lijst (≥3 newlines) routeren we naar bulk_create_materieel.
-        const isOnMaterieel = pageContext === '/materieel';
+        const isOnMaterieel = normalizedPage === '/materieel';
         // BELANGRIJK: na URL-scrape bevat rawLastUserContent ook server-instructies
         // ("Vraag user om screenshot...") en gestripte HTML-content — die mag NIET tellen
         // voor newlineCount/containsUrls. We gebruiken alleen het ORIGINELE user-bericht.

@@ -16,6 +16,12 @@ export function normalizePagePath(pathname: string | null | undefined): string {
     if (!pathname) return '/';
     // Strip query string en hash voordat we matchen — /inkoop?event=12 → /inkoop
     const clean = pathname.split('?')[0].split('#')[0];
+    // Hub-and-spoke IA: sub-pages onder een hub-prefix delen de AI-page-context
+    // van hun stand-alone variant. /inspiratie/gerechten = /gerechten voor de AI.
+    // Voorkomt dat tool-forcing+block-contract per hub-page opnieuw geregistreerd
+    // moet. Voeg hier toe wanneer een nieuwe hub-sub-page live gaat.
+    const hubSpoke = clean.match(/^\/(?:inspiratie|verkoop|keuken|voorraad|geld|plannen|systeem|power)\/(.+)$/);
+    if (hubSpoke) return '/' + hubSpoke[1];
     // /events/123/hub → /events/[id]/hub  (en /reflectie, /field, /prep, /klantgesprek, /haccp, /service)
     const eventsMatch = clean.match(/^\/events\/[^/]+\/(.+)$/);
     if (eventsMatch) return '/events/[id]/' + eventsMatch[1];
