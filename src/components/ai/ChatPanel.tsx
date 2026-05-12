@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Bot, Loader2, Send, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Bot, Loader2, Send, X, Maximize2, Minimize2, Paperclip } from 'lucide-react';
 import BlockRenderer from './BlockRenderer';
 import { useActionDispatcher } from './ActionDispatcher';
 import { coerceBlocks, type Block } from '@/lib/ai/blocks';
@@ -26,12 +26,38 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { loadPageContextData } from '@/lib/ai-actions';
 
+// Foto-attachments uit composer (paperclip, paste, drop) → base64 voor /api/chat
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+type ImageMediaType = typeof ACCEPTED_IMAGE_TYPES[number];
+const MAX_ATTACHMENTS = 4;
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;   // 3MB per foto (server cap)
+const MAX_TOTAL_BYTES = 4 * 1024 * 1024;   // 4MB combined — onder Vercel 4.5MB body-cap
+
+interface Attachment {
+    id: string;
+    filename: string;
+    mediaType: ImageMediaType;
+    base64: string;          // raw base64, geen data:URL prefix — server verwacht het zonder
+    previewUrl: string;       // data:URL voor thumbnail (heeft prefix wél nodig)
+}
+
 interface ChatMessage {
     id: string;
     role: 'user' | 'assistant';
     text?: string;        // plain delta text (voor partial of fallback)
     blocks?: Block[];     // geparsed uit info_blocks ACTION
     streaming?: boolean;
+    attachmentPreviews?: string[]; // data:URLs van foto's die met deze user-msg meegingen
+}
+
+// Strip de "data:image/png;base64," prefix → server wil raw base64
+function stripDataUrlPrefix(dataUrl: string): string {
+    const idx = dataUrl.indexOf('base64,');
+    return idx >= 0 ? dataUrl.slice(idx + 'base64,'.length) : dataUrl;
+}
+
+function isAcceptedImage(file: File): file is File & { type: ImageMediaType } {
+    return (ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type);
 }
 
 const ACTION_REGEX = /<<<ACTION:([\s\S]*?)>>>/;
@@ -61,10 +87,85 @@ export default function ChatPanel() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
+    const [attachments, setAttachments] = useState<Attachment[]>([]);
+    const [attachmentError, setAttachmentError] = useState<string | null>(null);
+    const [dragActive, setDragActive] = useState(false);
     const pathname = usePathname() || '/';
     const { orgId } = useOrg();
     const execute = useActionDispatcher();
     const scrollerRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Files → Attachment[]. Filter + cap + base64-encode. Returnt zodra alle
+    // FileReaders klaar zijn. Niet-image files worden stil geskipt; per-file
+    // errors zetten attachmentError voor UI-feedback.
+    const acceptFiles = useCallback(async function (files: FileList | File[]): Promise<void> {
+        setAttachmentError(null);
+        const arr = Array.from(files);
+        const room = MAX_ATTACHMENTS - attachments.length;
+        if (room <= 0) {
+            setAttachmentError('Max ' + MAX_ATTACHMENTS + " foto's per bericht.");
+            return;
+        }
+        const candidates = arr.slice(0, room);
+        const next: Attachment[] = [];
+        // Loopt totaal-bytes van bestaande attachments mee — voorkomt 4.5MB body-cap
+        let runningTotal = attachments.reduce((s, a) => s + a.base64.length * 0.75, 0);
+        for (const file of candidates) {
+            if (!isAcceptedImage(file)) {
+                setAttachmentError('Alleen JPG, PNG, WebP of GIF — "' + file.name + '" overgeslagen.');
+                continue;
+            }
+            if (file.size > MAX_IMAGE_BYTES) {
+                setAttachmentError('"' + file.name + '" is groter dan 3MB.');
+                continue;
+            }
+            if (runningTotal + file.size > MAX_TOTAL_BYTES) {
+                setAttachmentError("Samen te groot — max 4MB aan foto's per bericht.");
+                continue;
+            }
+            runningTotal += file.size;
+            const dataUrl = await new Promise<string>(function (resolve, reject) {
+                const reader = new FileReader();
+                reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+                reader.onerror = () => reject(new Error('FileReader failed'));
+                reader.readAsDataURL(file);
+            }).catch(function () { return ''; });
+            if (!dataUrl) continue;
+            next.push({
+                id: 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                filename: file.name || 'foto',
+                mediaType: file.type as ImageMediaType,
+                base64: stripDataUrlPrefix(dataUrl),
+                previewUrl: dataUrl,
+            });
+        }
+        if (next.length > 0) {
+            setAttachments((prev) => [...prev, ...next]);
+        }
+    }, [attachments.length]);
+
+    const removeAttachment = useCallback(function (id: string): void {
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
+    }, []);
+
+    // Paste — onderschep image-blobs uit clipboard (screenshot-paste ChatGPT-pattern)
+    const handlePaste = useCallback(function (e: React.ClipboardEvent<HTMLTextAreaElement>): void {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const files: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (it.kind === 'file') {
+                const f = it.getAsFile();
+                if (f && isAcceptedImage(f)) files.push(f);
+            }
+        }
+        if (files.length > 0) {
+            e.preventDefault();
+            void acceptFiles(files);
+        }
+    }, [acceptFiles]);
 
     // Auto-scroll naar onder bij nieuwe message of streaming delta
     useEffect(function () {
@@ -83,12 +184,15 @@ export default function ChatPanel() {
     const send = useCallback(
         async function () {
             const text = input.trim();
-            if (!text || busy) return;
+            const hasAttachments = attachments.length > 0;
+            // Sturen mag óók met alleen foto's en geen tekst (vision-only vraag)
+            if ((!text && !hasAttachments) || busy) return;
 
             const userMsg: ChatMessage = {
                 id: 'u-' + Date.now(),
                 role: 'user',
-                text,
+                text: text || (hasAttachments ? '(' + attachments.length + " foto's)" : ''),
+                attachmentPreviews: hasAttachments ? attachments.map((a) => a.previewUrl) : undefined,
             };
             const placeholder: ChatMessage = {
                 id: 'a-' + Date.now(),
@@ -97,7 +201,15 @@ export default function ChatPanel() {
                 streaming: true,
             };
             setMessages((prev) => [...prev, userMsg, placeholder]);
+            // Snapshot attachments lokaal — we clearen ze direct uit composer-state
+            const attachmentsToSend = attachments.map((a) => ({
+                mediaType: a.mediaType,
+                base64: a.base64,
+                filename: a.filename,
+            }));
             setInput('');
+            setAttachments([]);
+            setAttachmentError(null);
             setBusy(true);
 
             try {
@@ -122,12 +234,13 @@ export default function ChatPanel() {
                                 role: m.role,
                                 content: m.text || '',
                             })),
-                            { role: 'user', content: text },
+                            { role: 'user', content: text || '(foto bijgevoegd)' },
                         ],
                         pageContext: pathname,
                         mode: 'page',
                         thinkingMode: 'standard',
                         contextData,
+                        attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
                     }),
                 });
 
@@ -185,7 +298,7 @@ export default function ChatPanel() {
                 setBusy(false);
             }
         },
-        [busy, input, messages, pathname, orgId, execute]
+        [busy, input, messages, pathname, orgId, execute, attachments]
     );
 
     // Op phone (<=767) = full-screen sheet (100vw); op tablet+ = drawer met max-width
@@ -198,6 +311,23 @@ export default function ChatPanel() {
                 <aside
                     role="complementary"
                     aria-label="AI assistent"
+                    onDragOver={(e) => {
+                        if (e.dataTransfer?.types?.includes('Files')) {
+                            e.preventDefault();
+                            setDragActive(true);
+                        }
+                    }}
+                    onDragLeave={(e) => {
+                        // Alleen reset bij leave-uit-aside, niet bij kind-elementen
+                        if (e.currentTarget === e.target) setDragActive(false);
+                    }}
+                    onDrop={(e) => {
+                        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+                            e.preventDefault();
+                            setDragActive(false);
+                            void acceptFiles(e.dataTransfer.files);
+                        }
+                    }}
                     style={{
                         position: 'fixed',
                         top: 0,
@@ -213,6 +343,8 @@ export default function ChatPanel() {
                         color: 'var(--text)',
                         paddingTop: 'env(safe-area-inset-top, 0px)',
                         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                        outline: dragActive ? '2px dashed var(--brand)' : 'none',
+                        outlineOffset: -4,
                     }}
                 >
                     {/* Header */}
@@ -297,9 +429,36 @@ export default function ChatPanel() {
                                             alignSelf: 'flex-end',
                                             maxWidth: '85%',
                                             marginLeft: 'auto',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 'var(--space-2)',
                                         }}
                                     >
-                                        {m.text}
+                                        {m.attachmentPreviews && m.attachmentPreviews.length > 0 && (
+                                            <div
+                                                role="list"
+                                                aria-label="Bijgevoegde foto's"
+                                                style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}
+                                            >
+                                                {m.attachmentPreviews.map((src, i) => (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        key={i}
+                                                        role="listitem"
+                                                        src={src}
+                                                        alt={'Bijgevoegde foto ' + (i + 1)}
+                                                        style={{
+                                                            width: 96,
+                                                            height: 96,
+                                                            objectFit: 'cover',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            border: '1px solid var(--border)',
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        {m.text && <div>{m.text}</div>}
                                     </div>
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -335,7 +494,13 @@ export default function ChatPanel() {
                                                 }}
                                             >
                                                 <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} aria-hidden="true" />
-                                                Rook denkt na…
+                                                {(() => {
+                                                    // Lookup vorige user-msg in messages om te bepalen of er foto's bij gingen
+                                                    const idx = messages.findIndex((x) => x.id === m.id);
+                                                    const prev = idx > 0 ? messages[idx - 1] : null;
+                                                    const hasFoto = prev?.attachmentPreviews && prev.attachmentPreviews.length > 0;
+                                                    return hasFoto ? 'Rook bekijkt je foto…' : 'Rook denkt na…';
+                                                })()}
                                             </div>
                                         )}
                                     </div>
@@ -354,46 +519,147 @@ export default function ChatPanel() {
                             padding: 'var(--space-3) var(--space-4)',
                             borderTop: '1px solid var(--border)',
                             display: 'flex',
+                            flexDirection: 'column',
                             gap: 'var(--space-2)',
-                            alignItems: 'flex-end',
                         }}
                     >
-                        <textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    send();
-                                }
-                            }}
-                            placeholder="Vraag iets over deze pagina…"
-                            rows={1}
-                            aria-label="Vraag aan AI"
-                            style={{
-                                flex: 1,
-                                background: 'var(--card)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 'var(--radius-md)',
-                                padding: 'var(--space-2) var(--space-3)',
-                                color: 'var(--text)',
-                                fontSize: 16, // 16px voorkomt iOS auto-zoom on focus
-                                resize: 'none',
-                                fontFamily: 'inherit',
-                                minHeight: 44,
-                                maxHeight: 120,
-                            }}
-                            disabled={busy}
-                        />
-                        <button
-                            type="submit"
-                            disabled={busy || !input.trim()}
-                            className="btn btn-brand touch-manipulation"
-                            style={{ minHeight: 44, minWidth: 44, padding: '8px 12px' }}
-                            aria-label="Verstuur"
-                        >
-                            {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
-                        </button>
+                        {/* Attachment-strip (alleen zichtbaar bij ≥1 foto) */}
+                        {attachments.length > 0 && (
+                            <div
+                                role="list"
+                                aria-label="Bijgevoegde foto's"
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 'var(--space-2)',
+                                    paddingBottom: 'var(--space-1)',
+                                }}
+                            >
+                                {attachments.map((att) => (
+                                    <div
+                                        key={att.id}
+                                        role="listitem"
+                                        style={{
+                                            position: 'relative',
+                                            width: 64,
+                                            height: 64,
+                                            borderRadius: 'var(--radius-md)',
+                                            overflow: 'hidden',
+                                            border: '1px solid var(--border)',
+                                            background: 'var(--card)',
+                                        }}
+                                    >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                            src={att.previewUrl}
+                                            alt={att.filename}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachment(att.id)}
+                                            aria-label={'Verwijder ' + att.filename}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                right: 2,
+                                                width: 20,
+                                                height: 20,
+                                                borderRadius: '50%',
+                                                background: 'rgba(0,0,0,0.6)',
+                                                color: '#fff',
+                                                border: 'none',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                padding: 0,
+                                            }}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {attachmentError && (
+                            <div
+                                role="alert"
+                                style={{
+                                    fontSize: 'var(--text-xs)',
+                                    color: 'var(--danger, #b91c1c)',
+                                    background: 'var(--danger-tint, rgba(185,28,28,0.08))',
+                                    padding: '4px 8px',
+                                    borderRadius: 'var(--radius-sm)',
+                                }}
+                            >
+                                {attachmentError}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-end' }}>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                multiple
+                                onChange={(e) => {
+                                    if (e.target.files) void acceptFiles(e.target.files);
+                                    // Reset zodat zelfde file opnieuw kan ('change' fired niet bij identieke selection)
+                                    e.target.value = '';
+                                }}
+                                style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+                                aria-hidden="true"
+                                tabIndex={-1}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={busy || attachments.length >= MAX_ATTACHMENTS}
+                                aria-label="Foto toevoegen"
+                                className="btn btn-ghost touch-manipulation"
+                                style={{ minHeight: 44, minWidth: 44, padding: '8px 10px' }}
+                                title={attachments.length >= MAX_ATTACHMENTS ? "Max " + MAX_ATTACHMENTS + " foto's" : 'Foto toevoegen'}
+                            >
+                                <Paperclip size={16} aria-hidden="true" />
+                            </button>
+                            <textarea
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onPaste={handlePaste}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        send();
+                                    }
+                                }}
+                                placeholder={attachments.length > 0 ? "Wat moet ik met deze foto('s) doen?" : 'Vraag iets over deze pagina…'}
+                                rows={1}
+                                aria-label="Vraag aan AI"
+                                style={{
+                                    flex: 1,
+                                    background: 'var(--card)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    padding: 'var(--space-2) var(--space-3)',
+                                    color: 'var(--text)',
+                                    fontSize: 16, // 16px voorkomt iOS auto-zoom on focus
+                                    resize: 'none',
+                                    fontFamily: 'inherit',
+                                    minHeight: 44,
+                                    maxHeight: 120,
+                                }}
+                                disabled={busy}
+                            />
+                            <button
+                                type="submit"
+                                disabled={busy || (!input.trim() && attachments.length === 0)}
+                                className="btn btn-brand touch-manipulation"
+                                style={{ minHeight: 44, minWidth: 44, padding: '8px 12px' }}
+                                aria-label="Verstuur"
+                            >
+                                {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
+                            </button>
+                        </div>
                     </form>
                 </aside>
             )}
