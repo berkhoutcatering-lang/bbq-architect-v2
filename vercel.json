@@ -7,7 +7,7 @@
         },
         {
             "path": "/api/pricelists/batch/poll",
-            "schedule": "*/5 * * * *"
+            "schedule": "0 4 * * *"
         }
     ]
 }

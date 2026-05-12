@@ -12,7 +12,7 @@ import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
 import {
-    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, ArrowRight, X, FileCheck2,
+    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, ArrowRight, X, FileCheck2, RefreshCw,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -40,6 +40,7 @@ export default function BulkUploadPage() {
     const [processing, setProcessing] = useState(false);
     const [leveranciers, setLeveranciers] = useState<Leverancier[]>([]);
     const [selectedLevId, setSelectedLevId] = useState<number | null>(null);
+    const [polling, setPolling] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -75,6 +76,34 @@ export default function BulkUploadPage() {
     const removeItem = (idx: number) => {
         setQueue(q => q.filter((_, i) => i !== idx));
     };
+
+    async function pollBatchesNow() {
+        if (polling) return;
+        setPolling(true);
+        try {
+            const r = await fetch('/api/pricelists/batch/poll-mine', { method: 'POST' });
+            const d = await r.json();
+            if (!r.ok) {
+                showToast(d?.error || 'refresh mislukt', 'error');
+                return;
+            }
+            if (d.processed > 0) {
+                /* Mark de queue items als done — naam zou via uploadId refetcht moeten,
+                   maar voor v1: simpel laat user op "Naar review queue" klikken */
+                setQueue(q => q.map(item => {
+                    if (item.status === 'parsing') return { ...item, status: 'done' as UploadStatus };
+                    return item;
+                }));
+                showToast(`${d.processed} PDFs verwerkt — open review queue`, 'success');
+            } else if (d.pendingBatches > 0) {
+                showToast(`${d.pendingBatches} batches nog bezig — probeer over 5-10 min`, 'info');
+            } else {
+                showToast('Niks om te refreshen', 'info');
+            }
+        } finally {
+            setPolling(false);
+        }
+    }
 
     async function startProcessing() {
         if (queue.length === 0 || processing) return;
@@ -275,6 +304,25 @@ export default function BulkUploadPage() {
                                 geschat <strong style={{ color: 'var(--text)' }}>€{(totalEstimateCents / 100).toFixed(2)}</strong>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
+                                {queue.some(q => q.status === 'parsing') && (
+                                    <button
+                                        onClick={pollBatchesNow}
+                                        disabled={polling}
+                                        title="Check Anthropic batch-status nu"
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                                            padding: '11px 14px', borderRadius: 10, fontWeight: 600, fontSize: 13,
+                                            background: 'transparent', color: 'var(--text)',
+                                            border: '1px solid var(--border)',
+                                            cursor: polling ? 'wait' : 'pointer', opacity: polling ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {polling
+                                            ? <><Loader2 size={13} className="animate-spin" /> Checken…</>
+                                            : <><RefreshCw size={13} /> Refresh batches</>
+                                        }
+                                    </button>
+                                )}
                                 {allDone ? (
                                     <Link
                                         href="/leveranciers"
