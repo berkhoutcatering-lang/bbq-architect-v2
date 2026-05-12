@@ -126,7 +126,7 @@ export default function PrijslijstenPage() {
                 return;
             }
             if (d1.deduped) {
-                showToast('Al eerder verwerkt', 'info');
+                showToast(d1.message || 'Al eerder verwerkt', d1.reassigned ? 'success' : 'info');
             } else {
                 showToast(`${list[0].name}: ${d1.lineCount ?? 0} regels in review`, 'success');
             }

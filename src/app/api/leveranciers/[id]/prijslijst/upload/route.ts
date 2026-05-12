@@ -111,9 +111,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
 
     if (upload.deduped) {
+        let message: string;
+        if (upload.reassigned) {
+            message = 'PDF was eerder zonder leverancier geupload — nu gekoppeld aan deze leverancier.';
+        } else if (upload.existingLeverancierId === (leverancierId > 0 ? leverancierId : null)) {
+            message = 'Deze PDF is hier al verwerkt — open de bestaande review.';
+        } else {
+            message = `Deze PDF is al verwerkt onder een andere leverancier (#${upload.existingLeverancierId}).`;
+        }
         return NextResponse.json({
-            uploadId: upload.id, deduped: true,
-            message: 'Deze PDF is eerder geupload. Open de bestaande review.',
+            uploadId: upload.id,
+            deduped: true,
+            reassigned: upload.reassigned,
+            existingStatus: upload.existingStatus,
+            existingLeverancierId: upload.existingLeverancierId,
+            message,
         });
     }
 

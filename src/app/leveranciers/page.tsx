@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -19,7 +20,6 @@ import {
     Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X, History,
     Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
 import MargeAlertBanner from '@/components/voorraad/MargeAlertBanner';
@@ -69,6 +69,8 @@ function fmtRelative(iso: string | null): string {
 export default function LeveranciersPage() {
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const [leveranciers, setLeveranciers] = useState<Leverancier[]>([]);
     const [loading, setLoading] = useState(true);
     const [wizardOpen, setWizardOpen] = useState(false);
@@ -100,6 +102,21 @@ export default function LeveranciersPage() {
     }, [showToast]);
 
     useEffect(() => { load(); }, [load]);
+
+    /* Auto-open review-sheet via ?review={leverancierId} URL-param.
+       Gebruikt zodra de leverancier-lijst geladen is. */
+    useEffect(() => {
+        const revIdStr = searchParams.get('review');
+        if (!revIdStr || reviewOpen) return;
+        const revId = Number(revIdStr);
+        if (!Number.isInteger(revId)) return;
+        const lev = leveranciers.find(l => l.id === revId);
+        if (lev) {
+            setReviewOpen({ id: lev.id, naam: lev.naam });
+            /* Clear param zodat refresh niet opnieuw opent */
+            router.replace('/leveranciers', { scroll: false });
+        }
+    }, [searchParams, leveranciers, reviewOpen, router]);
 
     async function archive(id: number, naam: string) {
         showConfirm(`Leverancier "${naam}" archiveren? Producten blijven in voorraad.`, async () => {

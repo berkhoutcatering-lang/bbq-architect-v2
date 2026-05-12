@@ -133,8 +133,12 @@ export default function BulkUploadPage() {
             }
             if (d1.deduped) {
                 setQueue(q => q.map((x, i) => i === 0
-                    ? { ...x, status: 'duplicate', uploadId: d1.uploadId }
+                    ? { ...x, status: 'duplicate', uploadId: d1.uploadId,
+                        errorMsg: d1.message }
                     : x));
+                if (d1.reassigned) {
+                    showToast(d1.message || 'Gekoppeld aan deze leverancier', 'success');
+                }
             } else {
                 setQueue(q => q.map((x, i) => i === 0 ? {
                     ...x, status: 'done',
