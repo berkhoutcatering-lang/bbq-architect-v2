@@ -17,8 +17,9 @@ import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
 import {
     Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X, History,
-    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome,
+    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
 import MargeAlertBanner from '@/components/voorraad/MargeAlertBanner';
@@ -132,7 +133,19 @@ export default function LeveranciersPage() {
                             Beheer waar je producten + prijzen vandaan komen.
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <Link
+                            href="/leveranciers/bulk-upload"
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 8,
+                                padding: '11px 14px', borderRadius: 10,
+                                background: 'transparent', color: 'var(--text)',
+                                border: '1px solid var(--border)', cursor: 'pointer',
+                                fontWeight: 600, fontSize: 13, textDecoration: 'none',
+                            }}
+                        >
+                            <FileText size={15} /> Bulk PDF upload
+                        </Link>
                         <button
                             onClick={() => setExtPanelOpen(true)}
                             style={{
@@ -302,6 +315,18 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                     </button>
                 )}
                 <Link
+                    href={`/leveranciers/${lev.id}/prijslijsten`}
+                    title="PDF prijslijsten"
+                    style={{
+                        width: 34, height: 34, borderRadius: 8, background: 'transparent',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)',
+                        textDecoration: 'none',
+                    }}
+                >
+                    <FileText size={14} />
+                </Link>
+                <Link
                     href={`/leveranciers/historie/${lev.id}`}
                     title="Bonnen-historie + prijs-trends"
                     style={{
@@ -407,6 +432,7 @@ interface DetectedInfo {
 
 function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const showToast = useToast();
+    const router = useRouter();
     const [url, setUrl] = useState('');
     const [detecting, setDetecting] = useState(false);
     const [detected, setDetected] = useState<DetectedInfo | null>(null);
@@ -448,7 +474,10 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         detect(targetUrl);
     }
 
-    async function createLeverancier(method: 'extension' | 'email_in' | 'csv' | 'manual') {
+    async function createLeverancier(
+        method: 'extension' | 'email_in' | 'csv' | 'manual',
+        opts?: { afterCreate?: 'bulk-upload' | 'prijslijsten' },
+    ) {
         if (naam.trim().length < 2) {
             showToast('Naam minimaal 2 karakters', 'error');
             return;
@@ -473,6 +502,18 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
             const d = await r.json();
             if (!r.ok) throw new Error(d?.error || 'Aanmaken mislukt');
             showToast(`${naam} toegevoegd${d.restored ? ' (hersteld)' : ''}`, 'success');
+
+            const newId = d?.leverancier?.id ?? d?.id;
+            if (opts?.afterCreate === 'bulk-upload') {
+                router.push('/leveranciers/bulk-upload');
+                onCreated();
+                return;
+            }
+            if (opts?.afterCreate === 'prijslijsten' && typeof newId === 'number') {
+                router.push(`/leveranciers/${newId}/prijslijsten`);
+                onCreated();
+                return;
+            }
             onCreated();
         } catch (e) {
             showToast((e as Error).message, 'error');
@@ -694,6 +735,14 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                                         hint="Forward naar pl-{org}@in.bbqarchitect.app of zet een filter."
                                         accent={suggestedMethod === 'email_in'}
                                         onClick={() => createLeverancier('email_in')}
+                                        disabled={submitting}
+                                    />
+                                    <MethodCard
+                                        icon={FileText}
+                                        title="Upload prijslijst-PDFs"
+                                        tagline="Tot 25 PDFs tegelijk — AI extract"
+                                        hint="Vlees-cut herkenning (spiering, kippendij, brisket). 1e binnen 30s, rest in batch."
+                                        onClick={() => createLeverancier('manual', { afterCreate: 'bulk-upload' })}
                                         disabled={submitting}
                                     />
                                     <MethodCard
