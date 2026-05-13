@@ -32,6 +32,7 @@ interface MutationRow {
     confidence: number;
     status: string;
     notes: string | null;       // JSON met cut_taxonomy_id / soort / cut_groep / bereiding (Pillar #1)
+    suggested_aliases: string[] | null;  // AI-suggested synoniemen (Haiku 4.5) — user toggled per chip
 }
 
 type SoortFilter = 'all' | 'varken' | 'kip' | 'rund' | 'lam' | 'gevogelte' | 'vis' | 'worst' | 'overig';
@@ -55,6 +56,10 @@ export default function LeverancierReviewSheet({
     /* Pillar #4: aliassen die geleerd moeten worden bij approve.
        Key = mutation.id, value = true wanneer toggle aan. */
     const [aliasToLearn, setAliasToLearn] = useState<Map<string, boolean>>(new Map());
+    /* AI-gesuggereerde aliases die GE-EXCLUDED zijn per mutation.
+       Key = mutation.id, value = Set<aliasString> waar chip OFF is.
+       Default: alle suggested_aliases zijn ON; klik = OFF (verwijder uit set). */
+    const [excludedAliases, setExcludedAliases] = useState<Map<string, Set<string>>>(new Map());
 
     useEffect(() => {
         let cancelled = false;
@@ -123,6 +128,22 @@ export default function LeverancierReviewSheet({
         return false;
     }
 
+    function toggleSuggestedAlias(mutationId: string, alias: string) {
+        setExcludedAliases(prev => {
+            const next = new Map(prev);
+            const set = new Set(next.get(mutationId) ?? []);
+            if (set.has(alias)) set.delete(alias); else set.add(alias);
+            next.set(mutationId, set);
+            return next;
+        });
+    }
+
+    function getActiveSuggestedAliases(m: MutationRow): string[] {
+        const suggested = m.suggested_aliases ?? [];
+        const excluded = excludedAliases.get(m.id) ?? new Set();
+        return suggested.filter(a => !excluded.has(a));
+    }
+
     const paged = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -154,9 +175,10 @@ export default function LeverancierReviewSheet({
         setSubmitting(true);
         try {
             const ids = Array.from(selected);
-            /* Chunk client-side */
+            /* Chunk client-side. Accumulate freshMasters mapping across chunks. */
             let totalDone = 0;
             let totalCreated = 0;
+            const freshMasterByMutation = new Map<string, number>();
             for (let i = 0; i < ids.length; i += 1000) {
                 const chunk = ids.slice(i, i + 1000);
                 const r = await fetch(`/api/leveranciers/${leverancierId}/mutations/${action}`, {
@@ -168,28 +190,58 @@ export default function LeverancierReviewSheet({
                 if (!r.ok) throw new Error(d?.error || 'fout');
                 totalDone += (d.approved ?? d.dismissed ?? 0);
                 totalCreated += d.createdMasters || 0;
+                /* Server geeft newly-created masters terug zodat we aliases voor
+                   net-aangemaakte producten kunnen opslaan (Pillar #4 voor nieuwe). */
+                if (Array.isArray(d.freshMasters)) {
+                    for (const f of d.freshMasters as Array<{ mutationId: string; masterProductId: number }>) {
+                        freshMasterByMutation.set(f.mutationId, f.masterProductId);
+                    }
+                }
             }
-            /* Pillar #4: persist aliassen die toggle aan hebben staan bij approve */
+            /* Pillar #4: persist aliassen voor approved mutations. Combineer:
+               1. parsed_naam zelf (als aliasLearnOn) — bestaande gedrag
+               2. AI-suggested aliases die NIET zijn uit-getoggled */
             let aliasesLearned = 0;
             if (action === 'approve') {
-                const aliasItems = mutations
-                    .filter(m => selected.has(m.id))
-                    .filter(m => m.master_product_id != null && getAliasLearnState(m))
-                    .map(m => {
-                        const c = cutFromNotes(m.notes);
-                        return {
+                type AliasItem = { mutationId: string; masterProductId: number; alias: string; cutTaxonomyId: number | null };
+                const aliasItems: AliasItem[] = [];
+
+                for (const m of mutations) {
+                    if (!selected.has(m.id)) continue;
+                    /* Resolve master_product_id: bestaand of net aangemaakt */
+                    const masterId = m.master_product_id ?? freshMasterByMutation.get(m.id) ?? null;
+                    if (masterId == null) continue;
+
+                    const c = cutFromNotes(m.notes);
+                    const cutTaxonomyId = (() => {
+                        if (!c?.soort) return null;
+                        try {
+                            const j = m.notes ? JSON.parse(m.notes) : null;
+                            return (j?.cut_taxonomy_id as number) ?? null;
+                        } catch { return null; }
+                    })();
+
+                    /* Verzamel alle aliases: parsed_naam (alleen als toggle ON)
+                       + alle suggested_aliases die NIET excluded zijn */
+                    const aliasesForThisMut = new Set<string>();
+                    if (getAliasLearnState(m)) {
+                        aliasesForThisMut.add(m.parsed_naam.trim());
+                    }
+                    for (const a of getActiveSuggestedAliases(m)) {
+                        aliasesForThisMut.add(a);
+                    }
+
+                    for (const alias of aliasesForThisMut) {
+                        if (alias.length < 2 || alias.length > 200) continue;
+                        aliasItems.push({
                             mutationId: m.id,
-                            masterProductId: m.master_product_id as number,
-                            alias: m.parsed_naam,
-                            cutTaxonomyId: (() => {
-                                if (!c?.soort) return null;
-                                try {
-                                    const j = m.notes ? JSON.parse(m.notes) : null;
-                                    return (j?.cut_taxonomy_id as number) ?? null;
-                                } catch { return null; }
-                            })(),
-                        };
-                    });
+                            masterProductId: masterId,
+                            alias,
+                            cutTaxonomyId,
+                        });
+                    }
+                }
+
                 if (aliasItems.length > 0) {
                     try {
                         const r = await fetch(`/api/leveranciers/${leverancierId}/aliases/learn`, {
@@ -334,6 +386,8 @@ export default function LeverancierReviewSheet({
                                     cut={cutFromNotes(m.notes)}
                                     aliasLearnOn={getAliasLearnState(m)}
                                     onToggleAliasLearn={() => toggleAliasLearn(m.id, getAliasLearnState(m))}
+                                    excludedAliases={excludedAliases.get(m.id) ?? new Set()}
+                                    onToggleSuggestedAlias={(alias) => toggleSuggestedAlias(m.id, alias)}
                                 />
                             ))}
 
@@ -406,6 +460,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 
 function MutationRowItem({
     mutation, selected, onToggle, cut, aliasLearnOn, onToggleAliasLearn,
+    excludedAliases, onToggleSuggestedAlias,
 }: {
     mutation: MutationRow;
     selected: boolean;
@@ -413,6 +468,8 @@ function MutationRowItem({
     cut: CutInfo | null;
     aliasLearnOn: boolean;
     onToggleAliasLearn: () => void;
+    excludedAliases: Set<string>;
+    onToggleSuggestedAlias: (alias: string) => void;
 }) {
     const delta = mutation.delta_pct;
     const isUp = delta != null && delta > 0;
@@ -423,6 +480,10 @@ function MutationRowItem({
     /* Alias-toggle: alleen tonen als er een matched master is en naam afwijkt (Pillar #4) */
     const showAliasToggle = mutation.master_product_id != null
         && (mutation.match_confidence ?? 1) < 1.0;
+
+    /* AI-suggested aliases — toon altijd als ze er zijn */
+    const suggestedAliases = mutation.suggested_aliases ?? [];
+    const showSuggestedAliases = suggestedAliases.length > 0;
 
     let deltaColor = 'var(--muted)';
     if (isUp && Math.abs(delta!) > 10) deltaColor = '#e57373';
@@ -471,6 +532,40 @@ function MutationRowItem({
                                 {aliasLearnOn ? 'onthoud alias' : 'leer niet'}
                             </span>
                         )}
+                    </div>
+                )}
+                {/* AI-suggested overkoepelende namen (Haiku 4.5) — click chip = toggle on/off.
+                    Default: alle ON. Bij approve gaan ON-chips als aliases naar org_product_aliases. */}
+                {showSuggestedAliases && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                        <span style={{
+                            fontSize: 9, color: 'var(--muted)', fontWeight: 700,
+                            letterSpacing: '.08em', textTransform: 'uppercase', marginRight: 2,
+                        }}>
+                            ook bekend als:
+                        </span>
+                        {suggestedAliases.map(alias => {
+                            const on = !excludedAliases.has(alias);
+                            return (
+                                <span
+                                    key={alias}
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSuggestedAlias(alias); }}
+                                    title={on ? "Klik om uit te zetten — wordt niet als alias opgeslagen" : "Klik om aan te zetten — wordt bij approve als alias geleerd"}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center',
+                                        padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+                                        background: on ? `${GOLD}1A` : 'transparent',
+                                        border: `1px solid ${on ? `${GOLD}55` : 'var(--border)'}`,
+                                        color: on ? GOLD : 'var(--muted)',
+                                        cursor: 'pointer',
+                                        textDecoration: on ? 'none' : 'line-through',
+                                        opacity: on ? 1 : 0.5,
+                                    }}
+                                >
+                                    {alias}
+                                </span>
+                            );
+                        })}
                     </div>
                 )}
             </div>

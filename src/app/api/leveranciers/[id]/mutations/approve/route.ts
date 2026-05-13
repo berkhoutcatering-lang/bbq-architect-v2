@@ -83,6 +83,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     let createdMasters = 0;
     let priceRows = 0;
     const errors: string[] = [];
+    /* Mapping mutationId → master_product_id voor freshly-created masters,
+       zodat UI aliases kan opslaan voor net-aangemaakte producten. */
+    const freshMasters: Array<{ mutationId: string; masterProductId: number }> = [];
 
     /* Stap 1: Maak masters voor unmatched */
     const unmatched = pendingMuts.filter(m => !m.master_product_id);
@@ -118,7 +121,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             for (const m of unmatched) {
                 if (m.master_product_id) continue;
                 const masterId = masterByNorm.get(dbNormalize(m.parsed_naam));
-                if (masterId) m.master_product_id = masterId;
+                if (masterId) {
+                    m.master_product_id = masterId;
+                    freshMasters.push({ mutationId: m.id, masterProductId: masterId });
+                }
             }
         }
     }
@@ -227,6 +233,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         approved,
         createdMasters,
         priceRows,
+        freshMasters,
         errors: errors.slice(0, 10),
         elapsedMs: Date.now() - t0,
     });
