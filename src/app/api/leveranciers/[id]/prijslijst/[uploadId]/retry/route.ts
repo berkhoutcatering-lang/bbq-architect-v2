@@ -25,7 +25,6 @@ import {
 } from '@/lib/ai/pricelistPdfPrompt';
 import { processLines } from '@/lib/pricelistProcessor';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { splitPdfBufferIntoChunks } from '@/lib/server/pdfSplitServer';
 import { aggregateParentIfDone } from '@/lib/ai/pricelistChunkedBatch';
 
 export const runtime = 'nodejs';
@@ -237,19 +236,16 @@ async function retryChunk(args: RetryDeps & { chunkId: string; parentUploadId: s
     const parentBuf = Buffer.from(await pdfBlob.arrayBuffer());
 
     try {
-        const chunks = await splitPdfBufferIntoChunks(parentBuf);
-        const target = chunks.find(c => c.chunkIndex === chunk.chunkIndex);
-        if (!target) {
-            throw new Error(`chunk index ${chunk.chunkIndex} niet teruggevonden in split`);
-        }
-
+        /* P0 fix: gebruik originele PDF + page-range. pdf-lib copyPages
+           produceert lege content-streams voor sommige PDFs, dus we sturen
+           de hele PDF mee + instructie voor de page-range. */
         const result = await extractFromPdfSync({
-            pdfBase64: target.buffer.toString('base64'),
+            pdfBase64: parentBuf.toString('base64'),
             chunkMeta: {
-                pageStart: target.pageStart,
-                pageEnd: target.pageEnd,
-                chunkIndex: target.chunkIndex,
-                chunkTotal: target.chunkTotal,
+                pageStart: chunk.pageStart,
+                pageEnd: chunk.pageEnd,
+                chunkIndex: chunk.chunkIndex,
+                chunkTotal: chunk.chunkTotal,
             },
         });
 
