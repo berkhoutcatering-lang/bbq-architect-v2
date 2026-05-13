@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
 import {
-    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight, Ban,
+    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight, Ban, Trash2,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -346,6 +346,27 @@ export default function PrijslijstenPage() {
                                         showToast((e as Error).message, 'error');
                                     }
                                 }}
+                                onDelete={async () => {
+                                    try {
+                                        const r = await fetch(
+                                            `/api/leveranciers/${levId}/prijslijst/${u.id}/delete`,
+                                            { method: 'POST' },
+                                        );
+                                        const d = await r.json();
+                                        if (!r.ok) {
+                                            showToast(d?.detail || d?.error || 'verwijderen mislukt', 'error');
+                                        } else {
+                                            const kept = d.keptMutations ?? 0;
+                                            const msg = kept > 0
+                                                ? `Upload verwijderd · ${kept} goedgekeurde mutations blijven staan`
+                                                : 'Upload verwijderd — PDF kan opnieuw geupload worden';
+                                            showToast(msg, 'success');
+                                        }
+                                        await load();
+                                    } catch (e) {
+                                        showToast((e as Error).message, 'error');
+                                    }
+                                }}
                             />
                         ))}
                     </div>
@@ -365,15 +386,17 @@ function fmtAgo(iso: string): string {
 }
 
 function UploadRowItem({
-    u, levId, onRetry, onCancel,
+    u, levId, onRetry, onCancel, onDelete,
 }: {
     u: UploadRow;
     levId: number;
     onRetry: () => Promise<void>;
     onCancel: () => Promise<void>;
+    onDelete: () => Promise<void>;
 }) {
     const [retrying, setRetrying] = React.useState(false);
     const [cancelling, setCancelling] = React.useState(false);
+    const [deleting, setDeleting] = React.useState(false);
     async function handleRetry() {
         if (retrying) return;
         setRetrying(true);
@@ -384,6 +407,12 @@ function UploadRowItem({
         if (!confirm('Deze upload stoppen? Status wordt op "mislukt" gezet zodat je opnieuw kan proberen.')) return;
         setCancelling(true);
         try { await onCancel(); } finally { setCancelling(false); }
+    }
+    async function handleDelete() {
+        if (deleting) return;
+        if (!confirm('Deze upload volledig verwijderen? PDF + alle openstaande regels worden gewist. Goedgekeurde mutations blijven staan.')) return;
+        setDeleting(true);
+        try { await onDelete(); } finally { setDeleting(false); }
     }
     const isChunked = (u.chunk_total ?? 0) > 1;
     const StatusIcon =
@@ -514,6 +543,24 @@ function UploadRowItem({
                         Review <ArrowRight size={11} />
                     </Link>
                 )}
+                <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    title="Verwijder deze upload helemaal (PDF + openstaande regels). Goedgekeurde mutations blijven."
+                    style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        background: 'transparent', color: 'var(--muted)',
+                        border: '1px solid var(--border)',
+                        cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.5 : 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                    }}
+                >
+                    {deleting
+                        ? <Loader2 size={12} className="animate-spin" />
+                        : <Trash2 size={12} />
+                    }
+                </button>
             </div>
 
             {showProgress && (
