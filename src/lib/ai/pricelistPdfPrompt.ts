@@ -71,11 +71,18 @@ VOORBEELD-OUTPUT:
 const USER_PROMPT = 'Extract alle product-regels uit deze prijslijst. Output een enkele JSON-array volgens de gespecificeerde regels. Geen markdown, geen uitleg.';
 
 /**
- * Build chunk-specifieke user prompt met page-range hint.
- * Gebruik dit als je een fragment van een grotere PDF stuurt.
+ * Build chunk-specifieke user prompt met page-range instructie.
+ *
+ * P0 audit-fix: we sturen de ORIGINELE PDF (niet een chunked buffer want
+ * pdf-lib's copyPages maakt content-streams kapot). AI ziet alle pagina's
+ * en moet zelf de range respecteren.
  */
 export function buildChunkUserPrompt(pageStart: number, pageEnd: number, chunkIndex: number, chunkTotal: number): string {
-    return `${USER_PROMPT}\n\n[FRAGMENT: pagina ${pageStart}-${pageEnd} van origineel; blok ${chunkIndex + 1} van ${chunkTotal}. Pagina-volgorde is relatief, focus op product-regels.]`;
+    return `Extract ALLEEN product-regels van pagina ${pageStart} t/m ${pageEnd} van deze PDF (blok ${chunkIndex + 1} van ${chunkTotal}).
+
+NEGEER alle pagina's BUITEN range ${pageStart}-${pageEnd}. Geen producten van andere pagina's meenemen — andere blokken behandelen die.
+
+Output een enkele JSON-array volgens de regels in het system prompt. Geen markdown.`;
 }
 
 /* USD/EUR + per-MTok prijzen Sonnet 4.6 (april 2026). Refresh per kwartaal. */
@@ -178,31 +185,36 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
         ? buildChunkUserPrompt(args.chunkMeta.pageStart, args.chunkMeta.pageEnd, args.chunkMeta.chunkIndex, args.chunkMeta.chunkTotal)
         : USER_PROMPT;
     /* P0 fix: maxAttempts=1 + per-call timeout 100s zodat absolute worst-case
-       binnen Vercel 120s function-limit blijft. Bij 529 of timeout: 1 attempt
-       fail, user klikt retry-knop voor handmatige retry. Beter dan stuck DB. */
-    const response = await withAnthropicRetry(() => client.messages.create({
-        model: MODEL_SONNET,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: [
-            {
-                type: 'text',
-                text: SYSTEM_PROMPT,
-                cache_control: { type: 'ephemeral', ttl: '1h' },
-            },
-        ],
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'document',
-                        source: { type: 'base64', media_type: 'application/pdf', data: args.pdfBase64 },
-                    },
-                    { type: 'text', text: userText },
-                ],
-            },
-        ],
-    }, { timeout: SYNC_TIMEOUT_MS }), 1);
+       binnen Vercel 120s function-limit blijft. Gebruik streaming-mode want
+       SDK eist dat voor max_tokens > 16k (voorkomt 10-min hang). finalMessage()
+       wacht tot stream klaar is en returnt zelfde shape als .create(). */
+    const response = await withAnthropicRetry(() =>
+        client.messages.stream({
+            model: MODEL_SONNET,
+            max_tokens: MAX_OUTPUT_TOKENS,
+            system: [
+                {
+                    type: 'text',
+                    text: SYSTEM_PROMPT,
+                    cache_control: { type: 'ephemeral', ttl: '1h' },
+                },
+            ],
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'document',
+                            source: { type: 'base64', media_type: 'application/pdf', data: args.pdfBase64 },
+                            /* Cache PDF voor chunk-retry op zelfde PDF (binnen 1h) */
+                            cache_control: { type: 'ephemeral', ttl: '1h' },
+                        },
+                        { type: 'text', text: userText },
+                    ],
+                },
+            ],
+        }, { timeout: SYNC_TIMEOUT_MS }).finalMessage(),
+    1);
 
     const u = response.usage;
     const inTok = u.input_tokens ?? 0;
@@ -300,7 +312,14 @@ export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?:
                     messages: [{
                         role: 'user',
                         content: [
-                            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: p.pdfBase64 } },
+                            /* P0 fix: cache_control op de PDF zodat alle chunks
+                               van dezelfde parent de PDF maar 1× duur betalen.
+                               Tweede+ chunk leest 'm 90% goedkoper uit cache. */
+                            {
+                                type: 'document',
+                                source: { type: 'base64', media_type: 'application/pdf', data: p.pdfBase64 },
+                                cache_control: { type: 'ephemeral', ttl: '1h' },
+                            },
                             { type: 'text', text: userText },
                         ],
                     }],

@@ -78,33 +78,30 @@ export async function getPdfPageCountFromBuffer(buf: Buffer): Promise<number> {
 }
 
 /**
- * Splits een PDF in chunks van pagesPerChunk pagina's. Bij ≤pagesPerChunk
- * pagina's: returnt 1 chunk met de hele PDF. Boven MAX_PAGES_PER_PDF: throws.
+ * Bereken chunk-ranges voor een PDF zonder de PDF zelf te splitten.
  *
- * Als pdf-lib de PDF niet kan parsen (rare non-compliant generators zoals
- * FOODMASTER), throws met `PDF_UNSPLITTABLE` zodat caller kan fall-backen
- * naar de hele PDF als 1 chunk.
+ * P0 audit-fix: pdf-lib's copyPages produceert voor sommige PDF-generators
+ * (FOODMASTER, Van Engelandt) technisch geldige output-PDFs zonder zichtbare
+ * content (content-streams worden niet correct gekopieerd). Anthropic vision
+ * zag dan "lege pagina's" → returnde [].
+ *
+ * Nieuwe strategie: stuur per chunk de ORIGINELE PDF + page-range instructie
+ * in de user prompt. Anthropic ziet alle pagina's maar focused op de range.
+ * Met prompt-cache (1h) wordt de PDF input maar 1× duur betaald — alle
+ * volgende chunks lezen 'm uit cache (90% korting).
+ *
+ * Returnt page-ranges + de ORIGINELE buffer (gedeeld door alle chunks).
  */
 export async function splitPdfBufferIntoChunks(
     buf: Buffer,
     pagesPerChunk: number = DEFAULT_PAGES_PER_CHUNK,
 ): Promise<ServerPdfChunk[]> {
-    /* Permissieve laden — sommige PDF-generators maken niet 100% spec-compliant
-       files. ignoreEncryption: true werkt voor "trivially encrypted" PDFs (lege
-       wachtwoord, alleen permission-flags); throwOnInvalidObject: false slikt
-       structurele fouten in. */
-    let srcDoc;
-    try {
-        srcDoc = await PDFDocument.load(buf, {
-            ignoreEncryption: true,
-            updateMetadata: false,
-            throwOnInvalidObject: false,
-        });
-    } catch (e) {
-        throw new Error(`PDF_UNSPLITTABLE:${(e as Error).message.slice(0, 100)}`);
-    }
-    const totalPages = srcDoc.getPageCount();
+    /* Permissieve page-count via pdf-lib of regex-fallback */
+    const totalPages = await getPdfPageCountFromBuffer(buf);
 
+    if (totalPages === 0) {
+        throw new Error('PDF_UNPARSEABLE');
+    }
     if (totalPages > MAX_PAGES_PER_PDF) {
         throw new Error(`PDF_TOO_LARGE:${totalPages}`);
     }
@@ -123,20 +120,15 @@ export async function splitPdfBufferIntoChunks(
     const chunks: ServerPdfChunk[] = [];
 
     for (let i = 0; i < chunkTotal; i++) {
-        const startIdx = i * pagesPerChunk;
-        const endIdx = Math.min(startIdx + pagesPerChunk, totalPages);
-        const pageIndexes: number[] = [];
-        for (let p = startIdx; p < endIdx; p++) pageIndexes.push(p);
+        const pageStart = i * pagesPerChunk + 1;
+        const pageEnd = Math.min((i + 1) * pagesPerChunk, totalPages);
 
-        const newDoc = await PDFDocument.create();
-        const copiedPages = await newDoc.copyPages(srcDoc, pageIndexes);
-        for (const page of copiedPages) newDoc.addPage(page);
-        const bytes = await newDoc.save();
-
+        /* Alle chunks delen dezelfde buffer — Anthropic gebruikt prompt-cache
+           zodat de PDF maar 1× duur als input wordt betaald. */
         chunks.push({
-            buffer: Buffer.from(bytes),
-            pageStart: startIdx + 1,
-            pageEnd: endIdx,
+            buffer: buf,
+            pageStart,
+            pageEnd,
             chunkIndex: i,
             chunkTotal,
         });
