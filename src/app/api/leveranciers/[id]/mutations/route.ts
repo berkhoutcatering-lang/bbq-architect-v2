@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
     const { data, error } = await supabase
         .from('org_price_mutations')
-        .select('id, source, leverancier, parsed_naam, parsed_eenheid, parsed_categorie, parsed_prijs, current_prijs, delta_pct, master_product_id, match_confidence, confidence, status, notes, created_at')
+        .select('id, source, leverancier, parsed_naam, parsed_eenheid, parsed_categorie, parsed_prijs, current_prijs, delta_pct, master_product_id, match_confidence, confidence, status, notes, suggested_aliases, created_at')
         .eq('organization_id', orgId)
         .eq('leverancier_id', leverancierId)
         .eq('status', 'pending')
