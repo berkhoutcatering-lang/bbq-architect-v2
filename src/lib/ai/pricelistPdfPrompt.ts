@@ -13,15 +13,17 @@ import { z } from 'zod';
 
 const MODEL_SONNET = 'claude-sonnet-4-6';
 
-/* Output-token budget. 16000 = ~25% van Sonnet 4.6 cap; ruim genoeg voor
-   25p-chunks met dichte tabellen (~250 producten × ~60 tokens). */
-export const MAX_OUTPUT_TOKENS = 16000;
+/* Output-token budget. 32000 = ~50% van Sonnet 4.6 cap (64k). Dichte
+   groothandel-PDFs (Van Engelandt: ~75 prod/pag × 10p chunks × ~30 tokens =
+   ~22k output tokens) passen daarmee zonder truncation. */
+export const MAX_OUTPUT_TOKENS = 32000;
 
-/* Per-chunk LLM01 line guard. 250 lines / 25p chunk = 10/page realistische
-   ceiling voor groothandel-catalogi. Boven dit = die chunk fail, andere
-   gaan door. Globale aggregator heeft eigen 5000-product backstop. */
-export const MAX_LINES_PER_CHUNK = 250;
-export const MAX_LINES_PER_AGGREGATE = 5000;
+/* Per-chunk LLM01 line guard. 800 lines / 10p chunk = 80/page worst-case
+   voor groothandel met zware tabellen (Van Engelandt 20p × 75 prod = 1500
+   total, splits in 2 chunks van 750 lines = past). Globale aggregator heeft
+   10000-product backstop voor PDFs zoals 100p × 75 = 7500 producten. */
+export const MAX_LINES_PER_CHUNK = 800;
+export const MAX_LINES_PER_AGGREGATE = 10000;
 
 /* P0 audit fix: Anthropic SDK heeft default timeout van 10 min, maar Vercel
    serverless function max = 120s. Zonder eigen timeout: Vercel killt de
