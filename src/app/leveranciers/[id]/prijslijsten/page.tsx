@@ -558,11 +558,32 @@ function UploadProgressBar({
         return `${m}m ${r}s bezig`;
     };
 
-    /* Chunked: exacte progress.  Sync: indeterminate (loopt heen-en-weer met CSS animatie). */
+    /* Stage-tekst die meeloopt met elapsed time. Geeft Sam een idee van WAT er
+       gebeurt op elk moment — vooral nuttig in sync flow waar er anders geen
+       feedback is tussen "send" en "receive". */
+    const syncStage = (() => {
+        if (elapsedSec < 3) return 'PDF voorbereiden…';
+        if (elapsedSec < 12) return 'AI bekijkt de PDF…';
+        if (elapsedSec < 30) return 'AI leest producten…';
+        if (elapsedSec < 60) return 'AI verwerkt regels…';
+        if (elapsedSec < 90) return 'Bijna klaar, dit duurt iets langer dan normaal…';
+        return 'Hapert mogelijk — overweeg te annuleren en opnieuw';
+    })();
+
+    const chunkedStage = (() => {
+        if (chunksDone === 0 && elapsedSec < 30) return 'Blokken worden voorbereid voor Batch API…';
+        if (chunksDone === 0) return 'Wachten op eerste blok van Anthropic Batch (kan paar min duren)…';
+        if (chunksDone < chunkTotal) return `${chunksDone} van ${chunkTotal} blokken geanalyseerd…`;
+        return 'Resultaten worden samengevoegd…';
+    })();
+
+    /* Chunked: exacte progress. Sync: indeterminate (loopt heen-en-weer met CSS animatie). */
     const pct = isChunked ? Math.round((chunksDone / chunkTotal) * 100) : 0;
 
-    /* Waarschuwing als > 5 min — kan stuck zijn */
-    const stuck = elapsedSec > 5 * 60;
+    /* Stuck-threshold: sync = 90s (1 Anthropic call moet snel zijn),
+       chunked = 10 min (Batch API kan tot 24u, 10 min is realistic voor first chunk). */
+    const stuckThreshold = isChunked ? 10 * 60 : 90;
+    const stuck = elapsedSec > stuckThreshold;
 
     return (
         <div style={{ marginTop: 8, paddingLeft: 28 }}>
@@ -592,16 +613,14 @@ function UploadProgressBar({
             </div>
             <div style={{
                 marginTop: 4, fontSize: 10, color: stuck ? '#e0a040' : 'var(--muted)',
-                display: 'flex', justifyContent: 'space-between',
+                display: 'flex', justifyContent: 'space-between', gap: 12,
             }}>
-                <span>
-                    {isChunked
-                        ? `${chunksDone} van ${chunkTotal} blokken (${pct}%)`
-                        : 'AI leest PDF…'}
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {isChunked ? chunkedStage : syncStage}
                 </span>
-                <span>
+                <span style={{ flexShrink: 0 }}>
                     {fmtElapsed(elapsedSec)}
-                    {stuck && ' · controleer of er iets misgaat'}
+                    {stuck && (isChunked ? ' · duurt langer dan normaal' : ' · annuleer en probeer opnieuw')}
                 </span>
             </div>
             <style jsx>{`
