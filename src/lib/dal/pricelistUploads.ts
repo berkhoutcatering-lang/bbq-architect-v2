@@ -54,8 +54,65 @@ export async function createUpload(args: CreateUploadArgs): Promise<CreateUpload
         .maybeSingle();
 
     if (existing) {
-        let reassigned = false;
+        const existingStatus = (existing.status as string) ?? null;
         const existingLevId = existing.leverancier_id as number | null;
+
+        /* P0 fix: failed rows mogen opnieuw geprobeerd worden via drag-drop.
+           Reset state, wis oude chunks + pending mutations, en doorloop dan
+           gewoon de normale upload-flow alsof het een nieuwe upload was. */
+        if (existingStatus === 'failed') {
+            /* Delete oude chunks (anders conflict op ux_uploads_chunk_per_parent) */
+            await sb
+                .from('org_pricelist_uploads')
+                .delete()
+                .eq('parent_upload_id', existing.id);
+            /* Delete oude pending mutations zodat re-run geen dupes maakt */
+            await sb
+                .from('org_price_mutations')
+                .delete()
+                .eq('source_ref_id', existing.id)
+                .eq('status', 'pending');
+            /* Reset parent-rij naar fresh-upload state */
+            const { error: resetErr } = await sb
+                .from('org_pricelist_uploads')
+                .update({
+                    status: 'uploaded',
+                    parse_error: null,
+                    parse_started_at: null,
+                    parse_finished_at: null,
+                    aggregated_at: null,
+                    manual_review_required: false,
+                    chunk_total: null,
+                    parsed_product_count: null,
+                    new_count: null,
+                    updated_count: null,
+                    ai_cost_cents: null,
+                    ai_model: null,
+                    anthropic_batch_id: null,
+                    page_count: null,
+                    /* leverancier_id update als nieuwe upload er een meebrengt */
+                    leverancier_id: args.leverancierId ?? existingLevId,
+                    processing_mode: args.processingMode,
+                })
+                .eq('id', existing.id);
+            if (!resetErr) {
+                /* Return als niet-deduped — caller doorloopt page-count + branching flow */
+                return {
+                    id: existing.id as string,
+                    storagePath: existing.storage_path as string,
+                    deduped: false,
+                    reassigned: false,
+                    existingStatus: null,
+                    existingLeverancierId: null,
+                    contentHash: hash,
+                };
+            }
+            /* Reset faalde — fallthrough naar normale dedup return zodat user
+               in elk geval iets ziet, plus we loggen het. */
+            console.warn(`[pricelistUploads] failed-row reset fail ${existing.id}: ${resetErr.message}`);
+        }
+
+        let reassigned = false;
 
         /* Bestaande upload had geen leverancier én nieuwe upload heeft er wel een
            → koppel ze automatisch zodat de prijslijsten-page hem toont. */
@@ -72,7 +129,7 @@ export async function createUpload(args: CreateUploadArgs): Promise<CreateUpload
             storagePath: existing.storage_path as string,
             deduped: true,
             reassigned,
-            existingStatus: (existing.status as string) ?? null,
+            existingStatus,
             existingLeverancierId: reassigned ? args.leverancierId : existingLevId,
             contentHash: hash,
         };

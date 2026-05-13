@@ -23,6 +23,13 @@ export const MAX_OUTPUT_TOKENS = 16000;
 export const MAX_LINES_PER_CHUNK = 250;
 export const MAX_LINES_PER_AGGREGATE = 5000;
 
+/* P0 audit fix: Anthropic SDK heeft default timeout van 10 min, maar Vercel
+   serverless function max = 120s. Zonder eigen timeout: Vercel killt de
+   function en DB-rij blijft 'parsing' hangen. 100s laat 20s headroom voor
+   retry-wrapper + processLines + response. */
+const SYNC_TIMEOUT_MS = 100_000;
+const BATCH_ENQUEUE_TIMEOUT_MS = 60_000;
+
 /* Zod-schema dat AI MOET produceren. Géén btw_pct of allergenen toegestaan. */
 export const parsedLineSchema = z.object({
     parsed_naam: z.string().min(1).max(200),
@@ -132,6 +139,11 @@ async function withAnthropicRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Pro
  */
 export function humanizeAnthropicError(err: unknown): string {
     const msg = (err as Error)?.message || String(err);
+    /* SDK throws either 'Request timed out' (built-in) or AbortError when our
+       timeout option triggers. Beide herkennen we hier. */
+    if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('AbortError') || (err as { name?: string })?.name === 'AbortError') {
+        return 'AI-call duurde te lang (>100s) — Anthropic is mogelijk overbelast. Probeer over 1-2 min opnieuw.';
+    }
     if (msg.includes('overloaded_error') || msg.includes('Overloaded') || msg.includes('529')) {
         return 'Anthropic AI is tijdelijk overbelast. Probeer over 1-2 min opnieuw.';
     }
@@ -156,6 +168,10 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
     const userText = args.chunkMeta
         ? buildChunkUserPrompt(args.chunkMeta.pageStart, args.chunkMeta.pageEnd, args.chunkMeta.chunkIndex, args.chunkMeta.chunkTotal)
         : USER_PROMPT;
+    /* P0 fix: expliciete timeout zodat Vercel function (120s max) niet midden
+       in een Anthropic call wordt gekilled. Bij overschrijding gooit SDK een
+       APIError met code 'request_timeout' die withAnthropicRetry NIET retry'd
+       (geen 5xx), dus we krijgen een schone fail i.p.v. stuck DB-row. */
     const response = await withAnthropicRetry(() => client.messages.create({
         model: MODEL_SONNET,
         max_tokens: MAX_OUTPUT_TOKENS,
@@ -178,7 +194,7 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
                 ],
             },
         ],
-    }));
+    }, { timeout: SYNC_TIMEOUT_MS }));
 
     const u = response.usage;
     const inTok = u.input_tokens ?? 0;
@@ -254,6 +270,8 @@ export interface BatchEnqueueItem {
 export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?: string): Promise<{ batchId: string }> {
     if (items.length === 0) throw new Error('EMPTY_BATCH');
     const client = getClient(apiKey);
+    /* P0 fix: timeout op batch-enqueue. Anthropic batch.create returnt snel
+       (60s ruim), maar bij netwerk-issue voorkomt dit een hanging Vercel function. */
     const batch = await withAnthropicRetry(() => client.messages.batches.create({
         requests: items.map(p => {
             const userText = p.chunkMeta
@@ -281,7 +299,7 @@ export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?:
                 } as Anthropic.MessageCreateParamsNonStreaming,
             };
         }),
-    }));
+    }, { timeout: BATCH_ENQUEUE_TIMEOUT_MS }));
     return { batchId: batch.id };
 }
 
