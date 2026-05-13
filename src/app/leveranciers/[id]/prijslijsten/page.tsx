@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
 import {
-    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight,
+    Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight, Ban,
 } from 'lucide-react';
 
 const GOLD = '#c4a35a';
@@ -329,6 +329,23 @@ export default function PrijslijstenPage() {
                                         showToast((e as Error).message, 'error');
                                     }
                                 }}
+                                onCancel={async () => {
+                                    try {
+                                        const r = await fetch(
+                                            `/api/leveranciers/${levId}/prijslijst/${u.id}/cancel`,
+                                            { method: 'POST' },
+                                        );
+                                        const d = await r.json();
+                                        if (!r.ok) {
+                                            showToast(d?.detail || d?.error || 'annuleren mislukt', 'error');
+                                        } else {
+                                            showToast('Upload geannuleerd — je kan opnieuw proberen', 'success');
+                                        }
+                                        await load();
+                                    } catch (e) {
+                                        showToast((e as Error).message, 'error');
+                                    }
+                                }}
                             />
                         ))}
                     </div>
@@ -347,12 +364,26 @@ function fmtAgo(iso: string): string {
     return `${Math.floor(diff / 86400)}d`;
 }
 
-function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onRetry: () => Promise<void> }) {
+function UploadRowItem({
+    u, levId, onRetry, onCancel,
+}: {
+    u: UploadRow;
+    levId: number;
+    onRetry: () => Promise<void>;
+    onCancel: () => Promise<void>;
+}) {
     const [retrying, setRetrying] = React.useState(false);
+    const [cancelling, setCancelling] = React.useState(false);
     async function handleRetry() {
         if (retrying) return;
         setRetrying(true);
         try { await onRetry(); } finally { setRetrying(false); }
+    }
+    async function handleCancel() {
+        if (cancelling) return;
+        if (!confirm('Deze upload stoppen? Status wordt op "mislukt" gezet zodat je opnieuw kan proberen.')) return;
+        setCancelling(true);
+        try { await onCancel(); } finally { setCancelling(false); }
     }
     const isChunked = (u.chunk_total ?? 0) > 1;
     const StatusIcon =
@@ -434,6 +465,25 @@ function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onR
                         )}
                     </div>
                 </div>
+                {showProgress && (
+                    <button
+                        onClick={handleCancel}
+                        disabled={cancelling}
+                        title="Force-stop deze upload zodat je opnieuw kan proberen"
+                        style={{
+                            padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                            background: 'transparent', color: '#e57373',
+                            border: '1px solid #e5737355',
+                            cursor: cancelling ? 'wait' : 'pointer', opacity: cancelling ? 0.6 : 1,
+                            display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                        }}
+                    >
+                        {cancelling
+                            ? <><Loader2 size={11} className="animate-spin" /> Stoppen…</>
+                            : <><Ban size={11} /> Annuleer</>
+                        }
+                    </button>
+                )}
                 {canRetryWhole && (
                     <button
                         onClick={handleRetry}
