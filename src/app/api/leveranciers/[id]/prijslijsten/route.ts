@@ -26,6 +26,7 @@ interface UploadView {
     parse_error: string | null;
     manual_review_required: boolean | null;
     created_at: string;
+    parse_started_at: string | null;
     parse_finished_at: string | null;
     chunk_total: number | null;
     chunks_done: number;
@@ -63,7 +64,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         .select(`
             id, filename, size_bytes, page_count, status, processing_mode,
             parsed_product_count, new_count, updated_count, ai_cost_cents, ai_model,
-            parse_error, manual_review_required, created_at, parse_finished_at, chunk_total
+            parse_error, manual_review_required, created_at, parse_started_at, parse_finished_at, chunk_total
         `)
         .eq('organization_id', orgId)
         .eq('leverancier_id', leverancierId)
