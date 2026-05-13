@@ -139,6 +139,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     /* Tel pagina's; bepaalt sync vs chunked-batch vs reject */
     const pageCount = await getPdfPageCountFromBuffer(buf);
+
+    /* P0 fix: pageCount=0 = pdf-lib parse fail (corrupt/encrypted/lege PDF).
+       Eerder viel dit stil door naar sync flow waar AI 100s+ kon hangen op
+       een onparseable PDF. Nu: fail fast met duidelijke melding. */
+    if (pageCount === 0) {
+        await markUploadStatus(upload.id, {
+            status: 'failed',
+            page_count: 0,
+            parse_error: 'PDF kon niet gelezen worden — mogelijk corrupt, beveiligd met wachtwoord, of geen geldige PDF.',
+            parse_finished_at: new Date().toISOString(),
+        });
+        return NextResponse.json({
+            error: 'pdf_unreadable',
+            detail: 'Deze PDF kon niet gelezen worden. Check of het bestand niet beveiligd is met een wachtwoord en probeer opnieuw.',
+            uploadId: upload.id,
+        }, { status: 400 });
+    }
+
     if (pageCount > MAX_PAGES_PER_PDF) {
         await markUploadStatus(upload.id, {
             status: 'failed',
