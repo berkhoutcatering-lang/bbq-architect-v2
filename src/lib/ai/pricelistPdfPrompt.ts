@@ -175,10 +175,9 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
     const userText = args.chunkMeta
         ? buildChunkUserPrompt(args.chunkMeta.pageStart, args.chunkMeta.pageEnd, args.chunkMeta.chunkIndex, args.chunkMeta.chunkTotal)
         : USER_PROMPT;
-    /* P0 fix: expliciete timeout zodat Vercel function (120s max) niet midden
-       in een Anthropic call wordt gekilled. Bij overschrijding gooit SDK een
-       APIError met code 'request_timeout' die withAnthropicRetry NIET retry'd
-       (geen 5xx), dus we krijgen een schone fail i.p.v. stuck DB-row. */
+    /* P0 fix: maxAttempts=1 + per-call timeout 100s zodat absolute worst-case
+       binnen Vercel 120s function-limit blijft. Bij 529 of timeout: 1 attempt
+       fail, user klikt retry-knop voor handmatige retry. Beter dan stuck DB. */
     const response = await withAnthropicRetry(() => client.messages.create({
         model: MODEL_SONNET,
         max_tokens: MAX_OUTPUT_TOKENS,
@@ -201,7 +200,7 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
                 ],
             },
         ],
-    }, { timeout: SYNC_TIMEOUT_MS }));
+    }, { timeout: SYNC_TIMEOUT_MS }), 1);
 
     const u = response.usage;
     const inTok = u.input_tokens ?? 0;
@@ -277,8 +276,8 @@ export interface BatchEnqueueItem {
 export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?: string): Promise<{ batchId: string }> {
     if (items.length === 0) throw new Error('EMPTY_BATCH');
     const client = getClient(apiKey);
-    /* P0 fix: timeout op batch-enqueue. Anthropic batch.create returnt snel
-       (60s ruim), maar bij netwerk-issue voorkomt dit een hanging Vercel function. */
+    /* P0 fix: timeout 60s + maxAttempts=1 zodat batch-enqueue binnen Vercel
+       120s blijft (worst-case: 60s timeout + 1s response time ≈ 61s). */
     const batch = await withAnthropicRetry(() => client.messages.batches.create({
         requests: items.map(p => {
             const userText = p.chunkMeta
@@ -306,7 +305,7 @@ export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?:
                 } as Anthropic.MessageCreateParamsNonStreaming,
             };
         }),
-    }, { timeout: BATCH_ENQUEUE_TIMEOUT_MS }));
+    }, { timeout: BATCH_ENQUEUE_TIMEOUT_MS }), 1);
     return { batchId: batch.id };
 }
 
