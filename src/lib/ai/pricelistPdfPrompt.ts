@@ -105,7 +105,14 @@ interface SyncArgs {
 }
 
 function getClient(apiKey?: string): Anthropic {
-    return new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
+    /* P0 fix: SDK default maxRetries=2 vermenigvuldigt onze timeout met 3.
+       Onze withAnthropicRetry doet al 3 attempts met expo backoff, dus disable
+       SDK-level retries om dubbele retry-storm + Vercel 120s overschrijding
+       te voorkomen. */
+    return new Anthropic({
+        apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+        maxRetries: 0,
+    });
 }
 
 /**

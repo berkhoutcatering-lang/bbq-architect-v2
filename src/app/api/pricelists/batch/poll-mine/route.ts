@@ -79,7 +79,11 @@ export async function POST(req: NextRequest): Promise<Response> {
         byBatch.get(p.anthropic_batch_id)!.push(p);
     }
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    /* P0: disable SDK retries om Vercel function timeout te respecteren */
+    const client = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        maxRetries: 0,
+    });
     let processedCount = 0;
     let batchesEnded = 0;
     const stillPending: string[] = [];

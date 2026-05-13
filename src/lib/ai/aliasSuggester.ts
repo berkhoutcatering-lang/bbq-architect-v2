@@ -124,7 +124,11 @@ export async function suggestAliasesForProducts(
         return result;
     }
 
-    const client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
+    /* P0: disable SDK retries — withRetry doet z'n eigen mechanism */
+    const client = new Anthropic({
+        apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+        maxRetries: 0,
+    });
 
     /* Compacte JSON-input voor de model — bespaart tokens */
     const compactInput = inputs.map(i => ({
