@@ -31,6 +31,23 @@ interface UploadRow {
     parse_error: string | null;
     created_at: string;
     parse_finished_at: string | null;
+    chunk_total: number | null;
+    chunks_done: number;
+    chunks_failed: number;
+    manual_review_required?: boolean | null;
+}
+
+interface ChunkRow {
+    id: string;
+    chunk_index: number;
+    chunk_total: number;
+    page_start: number;
+    page_end: number;
+    status: string;
+    parsed_product_count: number | null;
+    parse_error: string | null;
+    retry_count: number;
+    ai_cost_cents: number | null;
 }
 
 interface LeverancierMini { id: number; naam: string }
@@ -67,9 +84,12 @@ export default function PrijslijstenPage() {
 
     /* Auto-refresh wanneer er iets parsing/queued is + 1× /min een echte
        batch-poll triggeren zodat Sam niet 24u op de daily cron hoeft te
-       wachten (Vercel Hobby tier limit). */
+       wachten (Vercel Hobby tier limit). 'partial' telt ook als nog actief
+       voor de eerste paar minuten zodat chunk-retry-knoppen direct werken. */
     useEffect(() => {
-        const stillBusy = uploads.some(u => u.status === 'parsing' || u.status === 'queued');
+        const stillBusy = uploads.some(u =>
+            u.status === 'parsing' || u.status === 'queued',
+        );
         if (!stillBusy) return;
         let tick = 0;
         const t = setInterval(async () => {
@@ -113,7 +133,7 @@ export default function PrijslijstenPage() {
         }
         setUploading(true);
         try {
-            /* 1e PDF realtime */
+            /* 1e PDF realtime — kan sync, chunked of reject teruggeven */
             const fd = new FormData();
             fd.append('file', list[0]);
             const r1 = await fetch(`/api/leveranciers/${levId}/prijslijst/upload`, {
@@ -121,12 +141,21 @@ export default function PrijslijstenPage() {
             });
             const d1 = await r1.json();
             if (!r1.ok) {
-                showToast(d1?.error || 'upload mislukt', 'error');
+                if (d1?.error === 'pdf_too_large') {
+                    showToast(d1.detail || 'PDF te groot — splits handmatig', 'error');
+                } else {
+                    showToast(d1?.detail || d1?.error || 'upload mislukt', 'error');
+                }
                 setUploading(false);
                 return;
             }
             if (d1.deduped) {
                 showToast(d1.message || 'Al eerder verwerkt', d1.reassigned ? 'success' : 'info');
+            } else if (d1.chunked) {
+                showToast(
+                    d1.message || `${list[0].name}: wordt in ${d1.chunkTotal} blokken verwerkt`,
+                    'info',
+                );
             } else {
                 showToast(`${list[0].name}: ${d1.lineCount ?? 0} regels in review`, 'success');
             }
@@ -324,90 +353,244 @@ function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onR
         setRetrying(true);
         try { await onRetry(); } finally { setRetrying(false); }
     }
+    const isChunked = (u.chunk_total ?? 0) > 1;
     const StatusIcon =
         u.status === 'parsed' ? CheckCircle2 :
+        u.status === 'partial' ? AlertTriangle :
         u.status === 'failed' ? AlertTriangle :
         u.status === 'dismissed' ? X :
         FileCheck2;
     const statusColor =
         u.status === 'parsed' ? '#5cb85c' :
+        u.status === 'partial' ? '#e0a040' :
         u.status === 'failed' ? '#e57373' :
         u.status === 'parsing' || u.status === 'queued' ? GOLD :
         'var(--muted)';
     const spinning = u.status === 'parsing' || u.status === 'queued' || u.status === 'uploaded';
 
+    /* Voor non-chunked failed uploads kan je hele upload retryen.
+       Voor partial of chunked uploads loopt retry via chunk-strip. */
+    const canRetryWhole = u.status === 'failed' && !isChunked;
+
     return (
         <div style={{
             background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10,
-            padding: 12, display: 'flex', alignItems: 'center', gap: 12,
+            padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
         }}>
-            {spinning
-                ? <Loader2 size={16} className="animate-spin" style={{ color: GOLD, flexShrink: 0 }} />
-                : <StatusIcon size={16} style={{ color: statusColor, flexShrink: 0 }} />
-            }
-            <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                    fontSize: 13, fontWeight: 700, color: 'var(--text)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                    {u.filename}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {spinning
+                    ? <Loader2 size={16} className="animate-spin" style={{ color: GOLD, flexShrink: 0 }} />
+                    : <StatusIcon size={16} style={{ color: statusColor, flexShrink: 0 }} />
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                        fontSize: 13, fontWeight: 700, color: 'var(--text)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                        {u.filename}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                        <span>{fmtAgo(u.created_at)} geleden</span>
+                        {u.size_bytes != null && (
+                            <><span>·</span><span>{(u.size_bytes / 1024 / 1024).toFixed(1)}MB</span></>
+                        )}
+                        {u.page_count != null && (
+                            <><span>·</span><span>{u.page_count} pag</span></>
+                        )}
+                        <span>·</span>
+                        <span style={{ textTransform: 'capitalize' }}>
+                            {isChunked ? `chunked (${u.chunk_total} blokken)` : u.processing_mode}
+                        </span>
+                        {u.status === 'parsing' && !isChunked && <><span>·</span><span style={{ color: GOLD }}>verwerken…</span></>}
+                        {u.status === 'parsing' && isChunked && (
+                            <><span>·</span><span style={{ color: GOLD }}>{u.chunks_done}/{u.chunk_total} klaar</span></>
+                        )}
+                        {u.status === 'queued' && <><span>·</span><span style={{ color: GOLD }}>in wachtrij</span></>}
+                        {u.status === 'partial' && (
+                            <><span>·</span><span style={{ color: '#e0a040' }}>
+                                {u.chunks_done}/{u.chunk_total} gelukt
+                            </span></>
+                        )}
+                        {(u.status === 'parsed' || u.status === 'partial') && u.parsed_product_count != null && (
+                            <>
+                                <span>·</span>
+                                <span style={{ color: 'var(--text)' }}>
+                                    {u.parsed_product_count} regels
+                                    {u.new_count != null && ` · ${u.new_count} nieuw`}
+                                    {u.updated_count != null && ` · ${u.updated_count} updates`}
+                                </span>
+                            </>
+                        )}
+                        {u.ai_cost_cents != null && u.ai_cost_cents > 0 && (
+                            <><span>·</span><span>€{(u.ai_cost_cents / 100).toFixed(2)}</span></>
+                        )}
+                        {u.status === 'failed' && u.parse_error && (
+                            <><span>·</span><span style={{ color: '#e57373' }}>{u.parse_error.slice(0, 80)}</span></>
+                        )}
+                        {u.manual_review_required && (
+                            <><span>·</span><span style={{ color: '#e0a040', fontWeight: 700 }}>handmatig nakijken</span></>
+                        )}
+                    </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-                    <span>{fmtAgo(u.created_at)} geleden</span>
-                    <span>·</span>
-                    <span>{(u.size_bytes / 1024 / 1024).toFixed(1)}MB</span>
-                    <span>·</span>
-                    <span style={{ textTransform: 'capitalize' }}>{u.processing_mode}</span>
-                    {u.status === 'parsing' && <><span>·</span><span style={{ color: GOLD }}>verwerken…</span></>}
-                    {u.status === 'queued' && <><span>·</span><span style={{ color: GOLD }}>in wachtrij</span></>}
-                    {u.status === 'parsed' && u.parsed_product_count != null && (
-                        <>
-                            <span>·</span>
-                            <span style={{ color: 'var(--text)' }}>
-                                {u.parsed_product_count} regels
-                                {u.new_count != null && ` · ${u.new_count} nieuw`}
-                                {u.updated_count != null && ` · ${u.updated_count} updates`}
-                            </span>
-                        </>
-                    )}
-                    {u.ai_cost_cents != null && u.ai_cost_cents > 0 && (
-                        <><span>·</span><span>€{(u.ai_cost_cents / 100).toFixed(2)}</span></>
-                    )}
-                    {u.status === 'failed' && u.parse_error && (
-                        <><span>·</span><span style={{ color: '#e57373' }}>{u.parse_error.slice(0, 80)}</span></>
-                    )}
-                </div>
+                {canRetryWhole && (
+                    <button
+                        onClick={handleRetry}
+                        disabled={retrying}
+                        title="PDF opnieuw door AI laten verwerken"
+                        style={{
+                            padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                            background: GOLD, color: '#0a0a0c', border: 'none',
+                            cursor: retrying ? 'wait' : 'pointer', opacity: retrying ? 0.6 : 1,
+                            display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                        }}
+                    >
+                        {retrying
+                            ? <><Loader2 size={11} className="animate-spin" /> Bezig…</>
+                            : <><RefreshCw size={11} /> Probeer opnieuw</>
+                        }
+                    </button>
+                )}
+                {(u.status === 'parsed' || u.status === 'partial') && (
+                    <Link
+                        href={`/leveranciers?review=${levId}`}
+                        style={{
+                            padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                            background: GOLD, color: '#0a0a0c', textDecoration: 'none',
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}
+                    >
+                        Review <ArrowRight size={11} />
+                    </Link>
+                )}
             </div>
-            {u.status === 'failed' && (
-                <button
-                    onClick={handleRetry}
-                    disabled={retrying}
-                    title="PDF opnieuw door AI laten verwerken"
-                    style={{
-                        padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                        background: GOLD, color: '#0a0a0c', border: 'none',
-                        cursor: retrying ? 'wait' : 'pointer', opacity: retrying ? 0.6 : 1,
-                        display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-                    }}
-                >
-                    {retrying
-                        ? <><Loader2 size={11} className="animate-spin" /> Bezig…</>
-                        : <><RefreshCw size={11} /> Probeer opnieuw</>
-                    }
-                </button>
+
+            {isChunked && (u.status === 'parsing' || u.status === 'partial' || u.status === 'failed') && (
+                <ChunkProgressStrip parentId={u.id} levId={levId} />
             )}
-            {u.status === 'parsed' && (
-                <Link
-                    href={`/leveranciers?review=${levId}`}
-                    style={{
-                        padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                        background: GOLD, color: '#0a0a0c', textDecoration: 'none',
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                    }}
-                >
-                    Review <ArrowRight size={11} />
-                </Link>
-            )}
+        </div>
+    );
+}
+
+function ChunkProgressStrip({ parentId, levId }: { parentId: string; levId: number }) {
+    const showToast = useToast();
+    const [chunks, setChunks] = React.useState<ChunkRow[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [retryingId, setRetryingId] = React.useState<string | null>(null);
+
+    const load = React.useCallback(async () => {
+        try {
+            const r = await fetch(`/api/pricelists/uploads/${parentId}/chunks`);
+            const d = await r.json();
+            if (r.ok) setChunks((d.chunks ?? []) as ChunkRow[]);
+        } catch { /* silent */ }
+        finally { setLoading(false); }
+    }, [parentId]);
+
+    React.useEffect(() => { load(); }, [load]);
+
+    /* Poll als chunks nog parsing zijn */
+    React.useEffect(() => {
+        const busy = chunks.some(c => c.status === 'parsing' || c.status === 'queued');
+        if (!busy) return;
+        const t = setInterval(load, 8_000);
+        return () => clearInterval(t);
+    }, [chunks, load]);
+
+    async function retryChunk(chunkId: string) {
+        if (retryingId) return;
+        setRetryingId(chunkId);
+        try {
+            const r = await fetch(
+                `/api/leveranciers/${levId}/prijslijst/${parentId}/retry?chunkId=${chunkId}`,
+                { method: 'POST' },
+            );
+            const d = await r.json();
+            if (!r.ok) {
+                showToast(d?.detail || d?.error || 'chunk retry mislukt', 'error');
+            } else {
+                showToast(`Blok klaar — ${d.lineCount ?? 0} regels`, 'success');
+            }
+            await load();
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        } finally {
+            setRetryingId(null);
+        }
+    }
+
+    if (loading) {
+        return (
+            <div style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 28 }}>
+                blokken laden…
+            </div>
+        );
+    }
+    if (chunks.length === 0) return null;
+
+    return (
+        <div style={{
+            paddingLeft: 28, display: 'flex', flexDirection: 'column', gap: 4,
+            borderTop: '1px dashed var(--border)', paddingTop: 8,
+        }}>
+            <div style={{
+                display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
+            }}>
+                {chunks.map(c => {
+                    const dotColor =
+                        c.status === 'parsed' ? '#5cb85c' :
+                        c.status === 'failed' ? '#e57373' :
+                        c.status === 'parsing' ? GOLD : 'var(--muted)';
+                    return (
+                        <div
+                            key={c.id}
+                            title={`Blok ${c.chunk_index + 1}/${c.chunk_total} — pag ${c.page_start}-${c.page_end} — ${c.status}${c.parsed_product_count != null ? ` (${c.parsed_product_count} regels)` : ''}${c.parse_error ? ` · ${c.parse_error.slice(0, 100)}` : ''}`}
+                            style={{
+                                width: 10, height: 10, borderRadius: 5, background: dotColor,
+                                flexShrink: 0,
+                                animation: c.status === 'parsing' ? 'pulse 1.4s ease-in-out infinite' : undefined,
+                            }}
+                        />
+                    );
+                })}
+                <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 6 }}>
+                    {chunks.filter(c => c.status === 'parsed').length}/{chunks.length} blokken
+                </span>
+            </div>
+            {chunks.filter(c => c.status === 'failed').map(c => (
+                <div key={`fail-${c.id}`} style={{
+                    fontSize: 11, color: '#e57373', display: 'flex', alignItems: 'center', gap: 8,
+                    marginTop: 2,
+                }}>
+                    <span>
+                        Blok {c.chunk_index + 1} (pag {c.page_start}-{c.page_end}) mislukt
+                        {c.retry_count > 0 && ` · ${c.retry_count}× geprobeerd`}
+                    </span>
+                    {c.retry_count < 2 && (
+                        <button
+                            onClick={() => retryChunk(c.id)}
+                            disabled={retryingId === c.id}
+                            style={{
+                                fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                                background: GOLD, color: '#0a0a0c', border: 'none',
+                                cursor: retryingId === c.id ? 'wait' : 'pointer',
+                                opacity: retryingId === c.id ? 0.6 : 1,
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                            }}
+                        >
+                            {retryingId === c.id
+                                ? <><Loader2 size={10} className="animate-spin" /> Bezig…</>
+                                : <><RefreshCw size={10} /> Opnieuw</>
+                            }
+                        </button>
+                    )}
+                </div>
+            ))}
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.4; }
+                }
+            `}</style>
         </div>
     );
 }

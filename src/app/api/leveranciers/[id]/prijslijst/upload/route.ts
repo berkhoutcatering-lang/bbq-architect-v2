@@ -13,9 +13,17 @@ import { extractFromPdfSync, MODEL_NAME, humanizeAnthropicError } from '@/lib/ai
 import { processLines } from '@/lib/pricelistProcessor';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { TIER_LIMITS } from '@/lib/featureFlags';
+import {
+    getPdfPageCountFromBuffer,
+    MAX_PAGES_PER_PDF,
+    SYNC_PAGE_THRESHOLD,
+} from '@/lib/server/pdfSplitServer';
+import { enqueueChunkedBatch } from '@/lib/ai/pricelistChunkedBatch';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+/* 120s nodig: getPdfPageCount + split + storage upload + Batch enqueue.
+   Voor sync path is dit ruim; chunked path doet alleen enqueue (geen wait). */
+export const maxDuration = 120;
 
 /* Monthly upload-cap per tier — P1 uit Phase 5 audit (OWASP API6). */
 const MONTHLY_PDF_CAP: Record<string, number> = {
@@ -129,8 +137,63 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         });
     }
 
+    /* Tel pagina's; bepaalt sync vs chunked-batch vs reject */
+    const pageCount = await getPdfPageCountFromBuffer(buf);
+    if (pageCount > MAX_PAGES_PER_PDF) {
+        await markUploadStatus(upload.id, {
+            status: 'failed',
+            page_count: pageCount,
+            parse_error: `PDF te groot (${pageCount} pagina's, max ${MAX_PAGES_PER_PDF}). Splits handmatig in delen.`,
+            parse_finished_at: new Date().toISOString(),
+        });
+        return NextResponse.json({
+            error: 'pdf_too_large',
+            detail: `PDF heeft ${pageCount} pagina's; max ${MAX_PAGES_PER_PDF} per upload. Splits handmatig in delen onder ${MAX_PAGES_PER_PDF} pagina's.`,
+            uploadId: upload.id,
+            pageCount,
+        }, { status: 413 });
+    }
+
+    /* CHUNKED PATH: 9-100 pagina's → server-side split + Anthropic Batch */
+    if (pageCount > SYNC_PAGE_THRESHOLD) {
+        try {
+            const result = await enqueueChunkedBatch({
+                parentUploadId: upload.id,
+                organizationId: orgId,
+                leverancierId: leverancierId > 0 ? leverancierId : null,
+                pdfBuffer: buf,
+                parentFilename: file.name,
+                userId: user.id,
+            });
+            await markUploadStatus(upload.id, { page_count: pageCount });
+            return NextResponse.json({
+                uploadId: upload.id,
+                chunked: true,
+                chunkTotal: result.chunkTotal,
+                batchId: result.batchId,
+                pageCount,
+                message: `PDF heeft ${pageCount} pagina's en wordt in ${result.chunkTotal} blokken verwerkt. Geschatte tijd: 1-5 minuten.`,
+            });
+        } catch (e) {
+            const rawMsg = (e as Error).message || 'unknown';
+            const userMsg = humanizeAnthropicError(e);
+            await markUploadStatus(upload.id, {
+                status: 'failed',
+                page_count: pageCount,
+                parse_error: userMsg.slice(0, 500),
+                parse_finished_at: new Date().toISOString(),
+            });
+            console.warn(`[pricelist-upload] chunked enqueue fail ${upload.id}: ${rawMsg.slice(0, 300)}`);
+            return NextResponse.json({
+                error: 'chunked_enqueue_failed', detail: userMsg, uploadId: upload.id,
+            }, { status: 500 });
+        }
+    }
+
+    /* SYNC PATH: ≤8 pagina's → realtime extract */
     await markUploadStatus(upload.id, {
         status: 'parsing',
+        page_count: pageCount,
         parse_started_at: new Date().toISOString(),
     });
 

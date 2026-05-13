@@ -1,25 +1,40 @@
 /**
  * POST /api/leveranciers/[id]/prijslijst/[uploadId]/retry
  *
- * Probeer een eerder gefaalde PDF-upload opnieuw. Haalt de PDF uit Storage,
- * stuurt 'm opnieuw door Anthropic met retry, en schrijft mutations naar
- * review queue. Geen nieuwe upload nodig — saves bandwidth + content_hash
- * dedup conflict wordt vermeden.
+ * Probeer een eerder gefaalde PDF-upload opnieuw. Twee modes:
+ * - Zonder ?chunkId: hele upload retry (standalone sync flow)
+ * - Met ?chunkId=<uuid>: per-chunk retry — splits parent PDF opnieuw, neemt
+ *   alleen die ene chunk's pagina-range, draait sync extract, triggert
+ *   aggregator op parent
+ *
+ * Max 2 retries per chunk. Daarna blijft chunk 'failed'.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { checkAiCapServer, logAiUsageServer } from '@/lib/aiUsageServer';
-import { markUploadStatus } from '@/lib/dal/pricelistUploads';
-import { extractFromPdfSync, MODEL_NAME, humanizeAnthropicError } from '@/lib/ai/pricelistPdfPrompt';
+import {
+    markUploadStatus,
+    loadChunkWithParent,
+    resetAggregatorForReRun,
+} from '@/lib/dal/pricelistUploads';
+import {
+    extractFromPdfSync,
+    MODEL_NAME,
+    humanizeAnthropicError,
+} from '@/lib/ai/pricelistPdfPrompt';
 import { processLines } from '@/lib/pricelistProcessor';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { splitPdfBufferIntoChunks } from '@/lib/server/pdfSplitServer';
+import { aggregateParentIfDone } from '@/lib/ai/pricelistChunkedBatch';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
+
+const MAX_CHUNK_RETRIES = 2;
 
 export async function POST(
-    _req: NextRequest,
+    req: NextRequest,
     ctx: { params: Promise<{ id: string; uploadId: string }> },
 ): Promise<Response> {
     const { id, uploadId } = await ctx.params;
@@ -38,11 +53,9 @@ export async function POST(
     const orgId = mem?.organization_id as string | undefined;
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
 
-    /* Rate limit: 5 retries per minuut per org */
     const rl = checkRateLimit(`pricelist-retry:${orgId}`, 5);
     if (!rl.allowed) return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
 
-    /* AI cap */
     const aiCap = await checkAiCapServer(orgId);
     if (!aiCap.allowed) {
         return NextResponse.json({ error: 'ai_cap_exceeded', tier: aiCap.tier }, { status: 429 });
@@ -58,16 +71,42 @@ export async function POST(
         { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    /* Load upload + scope-check */
+    /* Decide mode: chunk retry vs whole-upload retry */
+    const url = new URL(req.url);
+    const chunkId = url.searchParams.get('chunkId');
+
+    if (chunkId) {
+        return retryChunk({ chunkId, parentUploadId: uploadId, orgId, levId, userId: user.id, admin });
+    }
+
+    return retryWholeUpload({ uploadId, orgId, levId, userId: user.id, admin });
+}
+
+interface RetryDeps {
+    orgId: string;
+    levId: number;
+    userId: string;
+    admin: SupabaseClient;
+}
+
+async function retryWholeUpload(args: RetryDeps & { uploadId: string }): Promise<Response> {
+    const { uploadId, orgId, levId, userId, admin } = args;
+
     const { data: upload, error: upErr } = await admin
         .from('org_pricelist_uploads')
-        .select('id, organization_id, leverancier_id, storage_path, status, filename')
+        .select('id, organization_id, leverancier_id, storage_path, status, filename, parent_upload_id')
         .eq('id', uploadId)
         .eq('organization_id', orgId)
         .maybeSingle();
 
     if (upErr || !upload) {
         return NextResponse.json({ error: 'upload_not_found' }, { status: 404 });
+    }
+    if (upload.parent_upload_id != null) {
+        return NextResponse.json({
+            error: 'use_chunk_retry',
+            detail: 'Deze rij is een chunk; gebruik ?chunkId=... voor chunk-level retry',
+        }, { status: 400 });
     }
     if (upload.status !== 'failed') {
         return NextResponse.json({
@@ -79,7 +118,6 @@ export async function POST(
         return NextResponse.json({ error: 'leverancier_mismatch' }, { status: 403 });
     }
 
-    /* Download PDF van storage */
     const { data: pdfBlob, error: dlErr } = await admin.storage
         .from('pricelist-pdfs')
         .download(upload.storage_path as string);
@@ -90,7 +128,6 @@ export async function POST(
         }, { status: 500 });
     }
 
-    /* Mark as parsing + clear error */
     await markUploadStatus(upload.id as string, {
         status: 'parsing',
         parse_started_at: new Date().toISOString(),
@@ -100,13 +137,11 @@ export async function POST(
     const buf = Buffer.from(await pdfBlob.arrayBuffer());
 
     try {
-        const result = await extractFromPdfSync({
-            pdfBase64: buf.toString('base64'),
-        });
+        const result = await extractFromPdfSync({ pdfBase64: buf.toString('base64') });
 
         logAiUsageServer({
             organization_id: orgId,
-            user_id: user.id,
+            user_id: userId,
             action_type: 'other',
             model: result.model,
             tokens_input: result.inputTokens,
@@ -147,6 +182,147 @@ export async function POST(
         console.warn(`[pricelist-retry] PDF ${upload.id} fail again: ${rawMsg.slice(0, 300)}`);
         return NextResponse.json({
             error: 'retry_failed', detail: userMsg, uploadId: upload.id,
+        }, { status: 500 });
+    }
+}
+
+async function retryChunk(args: RetryDeps & { chunkId: string; parentUploadId: string }): Promise<Response> {
+    const { chunkId, parentUploadId, orgId, levId, userId, admin } = args;
+
+    /* Load chunk via DAL helper — bevat parent storage path */
+    const chunk = await loadChunkWithParent(chunkId);
+    if (!chunk) {
+        return NextResponse.json({ error: 'chunk_not_found' }, { status: 404 });
+    }
+    if (chunk.organizationId !== orgId) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    if (chunk.parentUploadId !== parentUploadId) {
+        return NextResponse.json({ error: 'chunk_parent_mismatch' }, { status: 400 });
+    }
+    if (levId > 0 && chunk.leverancierId !== levId) {
+        return NextResponse.json({ error: 'leverancier_mismatch' }, { status: 403 });
+    }
+    if (chunk.status !== 'failed') {
+        return NextResponse.json({
+            error: 'not_retryable',
+            detail: `Chunk-status is '${chunk.status}', alleen 'failed' kan retry`,
+        }, { status: 400 });
+    }
+    if (chunk.retryCount >= MAX_CHUNK_RETRIES) {
+        return NextResponse.json({
+            error: 'max_retries_reached',
+            detail: `Chunk al ${MAX_CHUNK_RETRIES}× geprobeerd. Upload de PDF opnieuw.`,
+        }, { status: 400 });
+    }
+
+    /* Download parent PDF + split + extract die ene chunk */
+    const { data: pdfBlob, error: dlErr } = await admin.storage
+        .from('pricelist-pdfs')
+        .download(chunk.parentStoragePath);
+    if (dlErr || !pdfBlob) {
+        return NextResponse.json({
+            error: 'pdf_not_in_storage',
+            detail: dlErr?.message,
+        }, { status: 500 });
+    }
+
+    await markUploadStatus(chunkId, {
+        status: 'parsing',
+        retry_count: chunk.retryCount + 1,
+        parse_started_at: new Date().toISOString(),
+        parse_error: null,
+    });
+
+    const parentBuf = Buffer.from(await pdfBlob.arrayBuffer());
+
+    try {
+        const chunks = await splitPdfBufferIntoChunks(parentBuf);
+        const target = chunks.find(c => c.chunkIndex === chunk.chunkIndex);
+        if (!target) {
+            throw new Error(`chunk index ${chunk.chunkIndex} niet teruggevonden in split`);
+        }
+
+        const result = await extractFromPdfSync({
+            pdfBase64: target.buffer.toString('base64'),
+            chunkMeta: {
+                pageStart: target.pageStart,
+                pageEnd: target.pageEnd,
+                chunkIndex: target.chunkIndex,
+                chunkTotal: target.chunkTotal,
+            },
+        });
+
+        logAiUsageServer({
+            organization_id: orgId,
+            user_id: userId,
+            action_type: 'other',
+            model: result.model,
+            tokens_input: result.inputTokens,
+            tokens_output: result.outputTokens,
+            tokens_cache_read: result.cacheReadTokens,
+            tokens_cache_creation: result.cacheCreationTokens,
+            cost_eur_cents: result.costCents,
+            metadata: {
+                feature: 'pricelist_pdf_extract',
+                upload_id: chunkId,
+                parent_upload_id: parentUploadId,
+                mode: 'chunk_retry',
+                chunk_index: chunk.chunkIndex,
+            },
+        }).catch(() => { /* never block */ });
+
+        await markUploadStatus(chunkId, {
+            status: 'parsed',
+            extracted_lines: result.lines,
+            parsed_product_count: result.lines.length,
+            ai_cost_cents: result.costCents,
+            ai_model: result.model,
+            parse_finished_at: new Date().toISOString(),
+        });
+
+        /* Als parent al 'partial' of 'failed' was, was aggregator gedraaid met
+           onvolledige set. Reset aggregator-claim + pending mutations zodat de
+           re-run de nieuwe chunk-lines meeneemt. */
+        const { data: parentRow } = await admin
+            .from('org_pricelist_uploads')
+            .select('status, aggregated_at')
+            .eq('id', parentUploadId)
+            .maybeSingle();
+        if (parentRow && parentRow.aggregated_at != null) {
+            await resetAggregatorForReRun(parentUploadId);
+        }
+
+        /* Trigger aggregator op parent */
+        const agg = await aggregateParentIfDone(parentUploadId);
+
+        return NextResponse.json({
+            chunkId,
+            parentUploadId,
+            status: 'parsed',
+            lineCount: result.lines.length,
+            costCents: result.costCents,
+            parentState: agg.state,
+            parentProductCount: agg.productCount,
+            parentManualReview: agg.manualReview,
+        });
+    } catch (e) {
+        const rawMsg = (e as Error).message || 'unknown';
+        const userMsg = humanizeAnthropicError(e);
+        await markUploadStatus(chunkId, {
+            status: 'failed',
+            parse_error: userMsg.slice(0, 500),
+            parse_finished_at: new Date().toISOString(),
+        });
+        /* Aggregator runt nog steeds — partial-success mogelijk */
+        await aggregateParentIfDone(parentUploadId).catch(() => { /* ignore */ });
+        console.warn(`[chunk-retry] ${chunkId} fail: ${rawMsg.slice(0, 300)}`);
+        return NextResponse.json({
+            error: 'chunk_retry_failed',
+            detail: userMsg,
+            chunkId,
+            retryCount: chunk.retryCount + 1,
+            maxRetries: MAX_CHUNK_RETRIES,
         }, { status: 500 });
     }
 }
