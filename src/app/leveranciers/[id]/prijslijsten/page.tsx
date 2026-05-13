@@ -30,6 +30,7 @@ interface UploadRow {
     ai_model: string | null;
     parse_error: string | null;
     created_at: string;
+    parse_started_at: string | null;
     parse_finished_at: string | null;
     chunk_total: number | null;
     chunks_done: number;
@@ -367,6 +368,7 @@ function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onR
         u.status === 'parsing' || u.status === 'queued' ? GOLD :
         'var(--muted)';
     const spinning = u.status === 'parsing' || u.status === 'queued' || u.status === 'uploaded';
+    const showProgress = u.status === 'parsing' || u.status === 'queued';
 
     /* Voor non-chunked failed uploads kan je hele upload retryen.
        Voor partial of chunked uploads loopt retry via chunk-strip. */
@@ -464,9 +466,100 @@ function UploadRowItem({ u, levId, onRetry }: { u: UploadRow; levId: number; onR
                 )}
             </div>
 
+            {showProgress && (
+                <UploadProgressBar
+                    isChunked={isChunked}
+                    chunksDone={u.chunks_done}
+                    chunkTotal={u.chunk_total ?? 1}
+                    startedAt={u.parse_started_at ?? u.created_at}
+                />
+            )}
+
             {isChunked && (u.status === 'parsing' || u.status === 'partial' || u.status === 'failed') && (
                 <ChunkProgressStrip parentId={u.id} levId={levId} />
             )}
+        </div>
+    );
+}
+
+function UploadProgressBar({
+    isChunked, chunksDone, chunkTotal, startedAt,
+}: {
+    isChunked: boolean;
+    chunksDone: number;
+    chunkTotal: number;
+    startedAt: string;
+}) {
+    const [elapsedSec, setElapsedSec] = React.useState(() =>
+        Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000),
+    );
+
+    React.useEffect(() => {
+        const t = setInterval(() => {
+            setElapsedSec(Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+        }, 1000);
+        return () => clearInterval(t);
+    }, [startedAt]);
+
+    const fmtElapsed = (s: number): string => {
+        if (s < 60) return `${s}s bezig`;
+        const m = Math.floor(s / 60);
+        const r = s % 60;
+        return `${m}m ${r}s bezig`;
+    };
+
+    /* Chunked: exacte progress.  Sync: indeterminate (loopt heen-en-weer met CSS animatie). */
+    const pct = isChunked ? Math.round((chunksDone / chunkTotal) * 100) : 0;
+
+    /* Waarschuwing als > 5 min — kan stuck zijn */
+    const stuck = elapsedSec > 5 * 60;
+
+    return (
+        <div style={{ marginTop: 8, paddingLeft: 28 }}>
+            <div style={{
+                height: 4, background: 'rgba(255,255,255,.06)', borderRadius: 2,
+                overflow: 'hidden', position: 'relative',
+            }}>
+                {isChunked ? (
+                    <div style={{
+                        height: '100%',
+                        width: `${pct}%`,
+                        background: stuck ? '#e0a040' : GOLD,
+                        transition: 'width .4s ease',
+                        boxShadow: `0 0 8px ${stuck ? '#e0a04055' : `${GOLD}66`}`,
+                    }} />
+                ) : (
+                    <div style={{
+                        position: 'absolute',
+                        height: '100%',
+                        width: '30%',
+                        background: stuck ? '#e0a040' : GOLD,
+                        borderRadius: 2,
+                        boxShadow: `0 0 8px ${stuck ? '#e0a04055' : `${GOLD}66`}`,
+                        animation: 'indeterminate 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+                    }} />
+                )}
+            </div>
+            <div style={{
+                marginTop: 4, fontSize: 10, color: stuck ? '#e0a040' : 'var(--muted)',
+                display: 'flex', justifyContent: 'space-between',
+            }}>
+                <span>
+                    {isChunked
+                        ? `${chunksDone} van ${chunkTotal} blokken (${pct}%)`
+                        : 'AI leest PDF…'}
+                </span>
+                <span>
+                    {fmtElapsed(elapsedSec)}
+                    {stuck && ' · controleer of er iets misgaat'}
+                </span>
+            </div>
+            <style jsx>{`
+                @keyframes indeterminate {
+                    0% { left: -30%; }
+                    100% { left: 100%; }
+                }
+            `}</style>
         </div>
     );
 }
