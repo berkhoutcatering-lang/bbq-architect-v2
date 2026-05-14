@@ -112,7 +112,24 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
                 })
                 .select('id, naam_normalized');
 
-            if (upErr) return NextResponse.json({ error: 'Master upsert: ' + upErr.message }, { status: 500 });
+            if (upErr) {
+                console.error('[approve] Master upsert FAIL:', JSON.stringify({
+                    code: upErr.code,
+                    message: upErr.message,
+                    details: upErr.details,
+                    hint: upErr.hint,
+                    batch_size: batch.length,
+                    first_naam: batch[0]?.naam,
+                    org_id: orgId,
+                    lev_naam: lev.naam,
+                }));
+                return NextResponse.json({
+                    error: 'Master upsert: ' + (upErr.message || 'unknown'),
+                    code: upErr.code,
+                    details: upErr.details,
+                    hint: upErr.hint,
+                }, { status: 500 });
+            }
 
             const masterByNorm = new Map<string, number>();
             for (const r of (upserted || [])) masterByNorm.set(r.naam_normalized, r.id);

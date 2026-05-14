@@ -179,15 +179,21 @@ export default function LeverancierReviewSheet({
             let totalDone = 0;
             let totalCreated = 0;
             const freshMasterByMutation = new Map<string, number>();
-            for (let i = 0; i < ids.length; i += 1000) {
-                const chunk = ids.slice(i, i + 1000);
+            /* Kleinere chunks (200) zodat per-call onder Vercel timeout blijft;
+               729 producten × master_upsert + supplier_prices kan lang duren. */
+            for (let i = 0; i < ids.length; i += 200) {
+                const chunk = ids.slice(i, i + 200);
                 const r = await fetch(`/api/leveranciers/${leverancierId}/mutations/${action}`, {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({ mutationIds: chunk }),
                 });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d?.error || 'fout');
+                let d: { error?: string; approved?: number; dismissed?: number; createdMasters?: number; freshMasters?: Array<{ mutationId: string; masterProductId: number }>; details?: string; hint?: string } = {};
+                try { d = await r.json(); } catch { /* non-JSON body */ }
+                if (!r.ok) {
+                    const detail = d?.error || d?.details || d?.hint || `HTTP ${r.status} ${r.statusText}`;
+                    throw new Error(detail);
+                }
                 totalDone += (d.approved ?? d.dismissed ?? 0);
                 totalCreated += d.createdMasters || 0;
                 /* Server geeft newly-created masters terug zodat we aliases voor
@@ -243,15 +249,19 @@ export default function LeverancierReviewSheet({
                 }
 
                 if (aliasItems.length > 0) {
-                    try {
-                        const r = await fetch(`/api/leveranciers/${leverancierId}/aliases/learn`, {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify({ items: aliasItems }),
-                        });
-                        const d = await r.json();
-                        if (r.ok) aliasesLearned = d.learned ?? 0;
-                    } catch { /* niet kritisch — approve is al succesvol */ }
+                    /* Chunk per 1500 items zodat we onder de server-side 2000-limit blijven */
+                    for (let i = 0; i < aliasItems.length; i += 1500) {
+                        const chunk = aliasItems.slice(i, i + 1500);
+                        try {
+                            const r = await fetch(`/api/leveranciers/${leverancierId}/aliases/learn`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({ items: chunk }),
+                            });
+                            const d = await r.json();
+                            if (r.ok) aliasesLearned += d.learned ?? 0;
+                        } catch { /* niet kritisch — approve is al succesvol */ }
+                    }
                 }
             }
 
