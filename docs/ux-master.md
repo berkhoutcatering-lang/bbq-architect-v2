@@ -1,6 +1,6 @@
 # BBQ Architect — UX Master Document
 
-**Laatst bijgewerkt:** 2026-05-01
+**Laatst bijgewerkt:** 2026-05-15
 **Doel:** één plek waar status, principes, KPI's, personas en open items bij elkaar staan. Lees deze als eerste bij een nieuwe sessie.
 
 ---
@@ -11,7 +11,8 @@
 |---|---|---|---|
 | **IA-revisie** | Sidebar 28 → 7 hubs, hub-and-spoke met tabs, Vandaag-laag, sitemap, ⌘K | ✅ Af | — |
 | **1A — Design-system tokens** | `--radius-*`, `--space-*`, `--brand-tint-*` in `globals.css`; HubTabs generiek | ✅ Af | 313 hardcoded `borderRadius` in 42 files buiten dashboard nog niet getokenized |
-| **1B — WCAG 2.1 AA** | Contrast --muted-light, aria-current, touch-targets ≥44px, font-sizes ≥11px | ✅ Af | Brede WCAG-audit op overige pages staat open |
+| **1B — WCAG 2.1 AA** | Contrast --muted-light, aria-current, touch-targets ≥44px, font-sizes ≥11px | ✅ Af | — |
+| **1B-Mobile** | App-wide 390px audit + fixes: 44px floor in Button-tsx + tailwind tokens, EventHero+eh-hero stack op mobile, ev-next-stats 2-col, FAB hide phone, PunchPanel stack, breadcrumb 68px voor hamburger | ✅ Af | Polish per niet-hub page (price-intelligence body, factuur-lezer flow) bij gelegenheid |
 | **1C — UX-copy** | Pitmaster Studio → AI Pitmaster, Menu Engineering → Menu-analyse, sentence-case, tone-of-voice principe | ✅ Af | — |
 | **2 — Pro-tier onboarding** | PersonaQuiz + OnboardingChecklist + tracking | ✅ UI af | Generieke demo-data seed-API (technical debt) |
 | **3 — AI-inline** | /prep-counter echte AiStudio i.p.v. fake alert(); /gerechten allergenen-detect bestond al | ✅ Af | AiAssistant 1865r → ~500r refactor; AI-context cross-page persist |
@@ -126,6 +127,7 @@ Vastgelegd in `~/.claude/projects/-Users-mathi-Documents-GitHub-bbq-architect-v2
 ### Field-readiness (Lars)
 - **Lars-test live op event-dag** — touch-targets met handschoenen, zonlicht-leesbaarheid
 - Auto-redirect /haccp → /haccp/field op tablet?
+- /uren PunchPanel volledig mobile-ready (Play-knop bovenaan, status onder, event-select onderaan) — 2026-05-15
 
 ### Launch
 - `/admin/funnel` uitbreiden met 5 nieuwe KPI's + funnel-grafiek

@@ -360,13 +360,13 @@ function Klanten() {
                 {filtered.map(function (k) {
                     const pillColor = k.type === 'Zakelijk' ? 'pill-blue' : k.type === 'Festival' ? 'pill-purple' : k.type === 'Horeca' ? 'pill-cyan' : 'pill-amber';
                     return (
-                        <div key={k.id} className="ev-row" onClick={function () { editKlant(k); }}>
+                        <div key={k.id} className="ev-row klant-row" onClick={function () { editKlant(k); }}>
                             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, var(--brand), #d4b36a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#111', flexShrink: 0 }}>
                                 {(k.naam || '?')[0].toUpperCase()}
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    {k.naam}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ wordBreak: 'break-word' }}>{k.naam}</span>
                                     {k.bedrijf && <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>({k.bedrijf})</span>}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
@@ -375,7 +375,7 @@ function Klanten() {
                                     {k.plaats && <span style={{ marginLeft: 12 }}><MapPin size={10} className="mr-1.5" />{k.plaats}</span>}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                 {k.telefoon && (function () {
                                     const tel = (k.telefoon || '').replace(/[^0-9+]/g, '');
                                     const waTel = tel.startsWith('0') ? '31' + tel.slice(1) : tel.replace('+', '');
@@ -388,7 +388,7 @@ function Klanten() {
                                         </a>
                                     );
                                 })()}
-                                <span className={'pill ' + pillColor}>{k.type}</span>
+                                <span className={'pill ' + pillColor} style={{ flexShrink: 0 }}>{k.type}</span>
                             </div>
                         </div>
                     );
