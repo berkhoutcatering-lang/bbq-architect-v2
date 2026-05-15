@@ -9,6 +9,9 @@
  */
 
 export interface InventoryLookup {
+    /** Soft-FK doel — beste tight-coupling tussen ingredient_costs en inventory.
+     *  Pages die deze kolom niet queryen vallen netjes terug op naam-match. */
+    id?: number;
     naam: string;
     purchase_price?: number;
     /** Pillar #4 — meest recente leverancier-prijs (uit price_history via trigger).
@@ -23,9 +26,16 @@ export interface InventoryLookup {
 
 export interface IngredientCost {
     naam: string;
+    /** Tight-coupling naar inventory.id — overleeft rename van het voorraad-item.
+     *  Gevuld bij selectie via InventoryAutocomplete; legacy ingredient_costs hebben dit niet. */
+    inventory_id?: number | null;
     qty_pp?: number;
     unit?: string;
     yield?: number;
+    /** AI-flag: prijs is een schatting, niet gebaseerd op gemeten voorraad-prijs.
+     *  UI toont dan "Geschat €X — verfijn met foto" en biedt screenshot-upload. */
+    is_estimated?: boolean;
+    estimated_price?: number | null;
 }
 
 export interface GerechtForCost {
@@ -35,16 +45,29 @@ export interface GerechtForCost {
     kostprijs_pp?: number;
 }
 
-/** Lookup inventory-item op normalised naam (case-insensitive trim).
+/** Lookup inventory-item — eerst op `inventory_id` (tight-coupling, overleeft rename),
+ *  daarna fallback op normalised naam-match voor legacy-rijen.
  *  Pillar #4 — prefereert `last_price_eur` (meest recent betaalde leverancier-prijs)
  *  boven `purchase_price` (gemiddelde/standaard). Stop margelek op stale prijzen. */
 export function getInvPrice(
     inventory: InventoryLookup[],
-    naam: string
-): { price: number; unit: string; yield_factor: number; price_source: 'fresh' | 'stale' | 'missing' } | null {
-    if (!naam) return null;
-    const target = String(naam).toLowerCase().trim();
-    const inv = inventory.find(i => (i.naam || '').toLowerCase().trim() === target);
+    naam: string,
+    inventoryId?: number | null
+): { price: number; unit: string; yield_factor: number; price_source: 'fresh' | 'stale' | 'missing'; matched_by: 'id' | 'name' } | null {
+    let inv: InventoryLookup | undefined;
+    let matchedBy: 'id' | 'name' = 'name';
+
+    if (inventoryId && Number.isFinite(inventoryId)) {
+        inv = inventory.find(i => i.id === inventoryId);
+        if (inv) matchedBy = 'id';
+    }
+
+    if (!inv) {
+        if (!naam) return null;
+        const target = String(naam).toLowerCase().trim();
+        inv = inventory.find(i => (i.naam || '').toLowerCase().trim() === target);
+    }
+
     if (!inv) return null;
     const fresh = Number(inv.last_price_eur);
     const stale = Number(inv.purchase_price);
@@ -56,6 +79,7 @@ export function getInvPrice(
         unit: inv.unit || 'kg',
         yield_factor: Number(inv.yield_factor) || 1.0,
         price_source,
+        matched_by: matchedBy,
     };
 }
 
@@ -102,7 +126,7 @@ export function calcDishCostPP(
     if (costsArray.length > 0) {
         return costsArray.reduce((sum, item) => {
             if (!item || !item.naam) return sum;
-            const inv = getInvPrice(inventory, item.naam);
+            const inv = getInvPrice(inventory, item.naam, item.inventory_id);
             const price = inv ? inv.price : 0;
             const yld = (item.yield || (inv ? inv.yield_factor : 1.0)) || 1.0;
             let unitFactor = 1;
