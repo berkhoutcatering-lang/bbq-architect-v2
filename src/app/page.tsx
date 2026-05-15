@@ -499,17 +499,18 @@ export default function DashboardPage() {
       <PersonaQuiz />
 
       <header
-        className="sticky top-0 z-40 backdrop-blur-xl"
+        className="dashboard-header sticky top-0 z-40 backdrop-blur-xl"
         style={{
           background: 'color-mix(in srgb, var(--color-bg-primary) 80%, transparent)',
           borderBottom: '1px solid var(--color-bg-elevated)',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 shrink-0 sidebar-hidden-spacer" />
-            <div className="relative sidebar-hidden-logo">
+        <div className="dashboard-header__inner max-w-[1500px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* w-12 ≈ 48px = ruimte voor hamburger (44px) + 4px gap; spacer verborgen op desktop ≥md */}
+            <div className="w-12 shrink-0 sidebar-hidden-spacer" />
+            <div className="relative sidebar-hidden-logo shrink-0">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{
@@ -524,24 +525,25 @@ export default function DashboardPage() {
                 style={{ background: 'rgba(196,163,90,.05)', filter: 'blur(8px)' }}
               />
             </div>
-            <div className="sidebar-hidden-logo">
+            <div className="sidebar-hidden-logo dashboard-header__title min-w-0">
               <h1
-                className="text-[14px] font-semibold tracking-[0.08em]"
+                className="text-[14px] font-semibold tracking-[0.08em] truncate"
                 style={{ color: 'var(--text)', fontFamily: "'Outfit', sans-serif" }}
               >
                 BBQ ARCHITECT
               </h1>
               <p
-                className="text-[9px] tracking-[0.25em] uppercase"
+                className="text-[9px] tracking-[0.25em] uppercase truncate"
                 style={{ color: 'var(--muted)' }}
               >
                 Hop &amp; Bites · Ambacht
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
             <button
-              className="relative p-2 md:p-2.5 rounded-xl transition-colors"
+              aria-label="Notificaties"
+              className="relative p-2 md:p-2.5 rounded-xl transition-colors min-w-touch min-h-touch flex items-center justify-center"
               style={{ background: '#111115', border: '1px solid var(--card-solid)' }}
             >
               <Bell className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
@@ -552,16 +554,24 @@ export default function DashboardPage() {
                 />
               )}
             </button>
-            <div className="ml-1 md:ml-2 text-right">
+            <div className="dashboard-header__time ml-1 md:ml-2 text-right">
               <p
-                className="text-[10px] md:text-[11px] font-medium capitalize"
+                className="text-[11px] md:text-[11px] font-medium capitalize whitespace-nowrap"
                 style={{ color: 'var(--muted)' }}
               >
-                {currentTime.toLocaleDateString('nl-NL', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                })}
+                <span className="hidden sm:inline">
+                  {currentTime.toLocaleDateString('nl-NL', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </span>
+                <span className="sm:hidden">
+                  {currentTime.toLocaleDateString('nl-NL', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                </span>
               </p>
               <p
                 className="text-[12px] md:text-[13px] font-light tabular-nums"

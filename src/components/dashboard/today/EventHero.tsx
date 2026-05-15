@@ -73,6 +73,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
   return (
     <div
       onClick={() => onOpen?.(event)}
+      className="event-hero"
       style={{
         background:
           'linear-gradient(135deg, rgba(255,191,0,.04), rgba(196,163,90,.015) 50%), var(--card-solid)',
@@ -98,6 +99,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
 
       {/* Top label row */}
       <div
+        className="event-hero-label"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -125,6 +127,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
           </>
         ) : null}
         <span
+          className="event-hero-label__cta"
           style={{
             marginLeft: 'auto',
             display: 'flex',
@@ -151,7 +154,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
       >
         {/* — Col 1: Countdown ring — */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ position: 'relative', width: ringSize, height: ringSize }}>
+          <div className="event-hero-ring" style={{ position: 'relative', width: ringSize, height: ringSize }}>
             <svg width={ringSize} height={ringSize} style={{ transform: 'rotate(-90deg)' }}>
               <circle
                 cx={ringSize / 2}
@@ -191,6 +194,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
               }}
             >
               <div
+                className="event-hero-ring__big"
                 style={{
                   fontFamily: 'var(--font-display)',
                   fontSize: 56,

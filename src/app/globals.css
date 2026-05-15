@@ -751,8 +751,11 @@
 
 @media (max-width: 640px) {
   .scan-fab {
-    right: 14px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
+    /* Links-onder i.p.v. rechts om overlap met MobileCmdKTrigger (zoek-FAB rechts) te voorkomen.
+       Bottom = 76px (60 BottomNav + 16 gap) + safe-area om niet onder de tab-balk te vallen. */
+    left: 16px;
+    right: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
     padding: 14px;
     min-width: 56px;
     min-height: 56px;
@@ -1656,6 +1659,8 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   padding: 8px;
   aspect-ratio: 1;
   justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .btn-group {
@@ -1709,7 +1714,17 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   padding: 8px 14px;
   font-size: 13px;
   border-radius: 8px;
-  min-height: 36px;
+  min-height: 44px; /* WCAG 2.2 SC 2.5.8 — was 36px, raised globally om mobile/desktop consistent te maken */
+}
+
+/* Field-context button (Lars-mode): 56px tall voor handschoenen + zonlicht.
+   Gebruik op stocktake, timer, HACCP-presets. Patroon afkomstig van /haccp/field. */
+.btn-touch {
+  padding: 14px 20px;
+  font-size: 15px;
+  border-radius: 12px;
+  min-height: 56px;
+  font-weight: 700;
 }
 
 /* Forms */
@@ -7363,10 +7378,12 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
     min-height: 44px !important;
   }
 
-  /* Icon-only buttons need minimum width too */
-  button:not(.bottom-nav__tab),
-  [role="button"] {
-    min-width: 36px;
+  /* Icon-only buttons need minimum width too. 44px = WCAG 2.2 SC 2.5.8 floor.
+     Excludes bottom-nav__tab (flex: 1 fills available space) en in-table-buttons
+     die in een scroll-tabel met breekbare layout zitten. */
+  button:not(.bottom-nav__tab):not(.tbl button),
+  [role="button"]:not(.tbl [role="button"]) {
+    min-width: 44px;
   }
 
   /* Checkbox/radio: 24px with proper accent color */
@@ -7540,12 +7557,13 @@ textarea:focus-visible,
     white-space: nowrap;
   }
 
-  /* Add bottom padding to main content so it is not hidden behind the nav bar */
-  /* Add side padding for breathing room on mobile */
+  /* Add bottom padding to main content so it is not hidden behind the nav bar.
+     72px = 60px nav + 12px buffer so content "floats" boven de nav i.p.v. eronder gesneden.
+     Side-padding 16px voor leesbare ademruimte op 390px viewport (was 12px). */
   #main-content {
-    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 
@@ -8606,6 +8624,83 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   html, body {
     overflow-x: hidden;
   }
+}
+
+/* FAB component — hide on phone (mobile heeft MobileCmdKTrigger + BottomNav).
+   styled-jsx :global() werkt niet altijd in Turbopack; vandaar override in globals. */
+@media (max-width: 767px) {
+  .fab-root {
+    display: none !important;
+  }
+}
+
+/* Breadcrumb — laat ruimte voor de mobile hamburger (44px op left:12px = eindigt 56px).
+   Zonder deze regel valt PLANNEN > Agenda onder de hamburger op /agenda etc. */
+@media (max-width: 767px) {
+  .breadcrumb-nav {
+    padding-left: 68px !important;
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
+    min-height: 44px;
+  }
+}
+
+/* Price-intelligence inbox banner: button onder email-block stacken op mobile
+   omdat email-adres lang is en de Kopieer-knop anders rechts buiten viewport valt. */
+@media (max-width: 767px) {
+  .pi-inbox-banner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .pi-copy-btn {
+    width: 100%;
+  }
+}
+
+/* PunchPanel (uren) — desktop 3-kolom (klok-knop / status / event-select)
+   past niet op 390px → tekst breekt woord-per-regel. Stack op mobile met
+   knop bovenaan en event-select onderaan voor 1-tap field-flow. */
+@media (max-width: 767px) {
+  .punch-panel {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    padding: 20px 18px !important;
+    justify-items: center;
+    text-align: center;
+  }
+  .punch-panel > div[style*="minWidth: 220"],
+  .punch-panel > div[style*="min-width: 220"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* EventHero (dashboard /) — mobile stacking.
+   Desktop = 3-kolom grid (countdown · event · prep). Phone = 1 kolom met kleine
+   ring zodat content niet rechts afgesneden wordt ("PARTICULI..."-bug). */
+@media (max-width: 767px) {
+  .event-hero {
+    padding: 18px 16px !important;
+  }
+  .event-hero-label {
+    flex-wrap: wrap !important;
+    gap: 6px 8px !important;
+  }
+  .event-hero-label .event-hero-label__cta {
+    margin-left: 0 !important;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .event-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+  .event-hero-grid h2 {
+    font-size: 22px !important;
+  }
+  /* Ring blijft 168×168 (past in 1-kolom mobile content-width).
+     Inline SVG-attrs zonder viewBox kunnen niet via CSS geschaald
+     worden — daarom alleen content rond de ring krimpen. */
 }
 
 /* Bottom-clearance helper (used by <MobileSafeBottom>).
