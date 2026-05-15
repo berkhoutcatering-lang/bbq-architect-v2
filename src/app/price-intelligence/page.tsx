@@ -20,6 +20,7 @@ import {
     ListOrdered, FileUp, Inbox,
 } from 'lucide-react';
 import FolderInbox from './_components/FolderInbox';
+import MoneybirdImportCard from './_components/MoneybirdImportCard';
 
 const GOLD = '#c4a35a';
 const FOLDER_KEY = 'pi_folder_v3';   // bumped: nieuwe 'inbox' optie
@@ -811,6 +812,8 @@ function FolderInvoices() {
             <SectionExplain>
                 <strong style={{ color: 'var(--text)' }}>Zo werkt AI factuur lezen:</strong> upload een PDF of foto van een leverancier-factuur → Claude/Groq AI leest alle regels, totalen en BTW → je controleert → je boekt in. Werkt met Sligro, Hanos, Bidfood, of welke leverancier dan ook.
             </SectionExplain>
+
+            <MoneybirdImportCard />
 
             <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 <MiniStat label="Facturen totaal" value={stats.count} icon={FileText} />
