@@ -240,8 +240,8 @@ function AddressCard({ address, onCopy }: { address: string; onCopy: () => void 
             border: `1px solid ${GOLD}33`,
             borderRadius: 14, padding: 18,
             display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, justifyContent: 'space-between',
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+        }} className="pi-inbox-banner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 220px' }}>
                 <div style={{
                     width: 44, height: 44, borderRadius: 12,
                     background: `${GOLD}26`, border: `1px solid ${GOLD}55`,
@@ -250,7 +250,7 @@ function AddressCard({ address, onCopy }: { address: string; onCopy: () => void 
                 }}>
                     <Mail size={20} />
                 </div>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>
                         Stuur prijslijsten naar
                     </div>
@@ -262,10 +262,10 @@ function AddressCard({ address, onCopy }: { address: string; onCopy: () => void 
                     </div>
                 </div>
             </div>
-            <button onClick={onCopy} disabled={!address} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
+            <button onClick={onCopy} disabled={!address} className="pi-copy-btn" style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
                 background: address ? GOLD : 'var(--card)', color: address ? '#0a0a0c' : 'var(--muted)',
-                fontWeight: 700, fontSize: 13, border: 'none',
+                fontWeight: 700, fontSize: 13, border: 'none', minHeight: 44,
                 cursor: address ? 'pointer' : 'not-allowed', flexShrink: 0,
             }}>
                 <Copy size={14} /> Kopieer adres

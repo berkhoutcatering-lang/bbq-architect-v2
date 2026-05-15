@@ -48,7 +48,7 @@ const tabs: Tab[] = [
         label: "Geld",
         icon: <BarChart3 size={22} />,
         href: "/financien",
-        match: (p) => p === "/financien" || p.startsWith("/financien/") || p === "/uren" || p === "/klanten",
+        match: (p) => p === "/financien" || p.startsWith("/financien/") || p === "/uren" || p.startsWith("/uren/") || p === "/factuur-lezer" || p.startsWith("/geld/") || p.startsWith("/administratie/"),
     },
     {
         label: "Meer",
