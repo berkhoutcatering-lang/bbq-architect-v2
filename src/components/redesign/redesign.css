@@ -254,6 +254,17 @@
     padding: 12px 14px !important;
   }
   .redesign-root .eh-hero-stat:nth-child(odd) { border-right: 1px solid var(--border) !important; }
+
+  /* Sub-line ([pill] · uitleg · ⭐ = legenda) wrapt op mobile met losse "·" spans
+     die als zwevende dots eindigen. Stack i.p.v. wrap + verberg expliciete separators. */
+  .redesign-root .eh-hero-sub {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  .redesign-root .eh-hero-sub .sep {
+    display: none !important;
+  }
 }
 
 /* Prep task row — native checkbox is visually hidden; label is the interactive surface */
