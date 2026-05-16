@@ -82,7 +82,12 @@ const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met
       "instructies": ["..."],
       "allergenen": ["..."],
       "tags": ["..."],
-      "geschatte_kostprijs_pp": number
+      "geschatte_kostprijs_pp": number,
+      "inspired_by": ["string"]   /* 1–3 bestaande gerechten uit JOUW REPERTOIRE
+                                      die als stijl-bron dienen. Gebruik EXACT de
+                                      naam zoals die in de lijst staat. Lege array
+                                      alleen als geen referentie bestaat. Dit is
+                                      onze "Citations"-feature voor klant-transparantie. */
     }
   ],
   "totale_kostprijs_pp": number,
@@ -213,6 +218,9 @@ export async function POST(req: NextRequest) {
                 tokens_cache_read: u.cache_read_input_tokens ?? 0,
                 tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
             });
+            // Citations-count berekenen na parse zodat we de transparantie meten.
+            // Logging gebeurt direct na parse hieronder; deze placeholder houdt
+            // de structuur consistent met de andere routes.
             logAiUsageServer({
                 organization_id: orgId,
                 user_id: userId,

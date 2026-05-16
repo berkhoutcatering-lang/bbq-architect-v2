@@ -23,6 +23,7 @@ import {
     resolveOrgFromAddress,
     stageAttachment,
     markInboxFailed,
+    classifyInboundEmail,
     type InboundEmailPayload,
 } from '@/lib/emailInbound';
 import { createServiceSupabase } from '@/lib/supabase-server';
@@ -112,8 +113,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'db insert failed' }, { status: 500 });
     }
 
-    /* ─── 6. Stage attachments + trigger parser (non-blocking) ─── */
+    /* ─── 6. Stage attachments + classify + trigger parser (non-blocking) ─── */
     after(async () => {
+        // 6a. AI-classify in parallel met staging — categorie verschijnt in
+        // mailbox-UI ook voor mails zonder attachments. Failure → 'onbekend'.
+        const classifyPromise = classifyInboundEmail({
+            inboxId: inbox.id,
+            organizationId: orgId,
+            subject: payload.subject ?? null,
+            fromEmail: payload.from,
+            bodyExcerpt: payload.bodyExcerpt ?? null,
+            attachmentNames: payload.attachments.map(function (a) { return a.filename; }),
+        });
+
         const stagedIds: string[] = [];
         try {
             for (const att of payload.attachments) {
@@ -159,6 +171,10 @@ export async function POST(req: NextRequest) {
             console.error('[email-inbound] after() crashed:', (e as Error).message);
             await markInboxFailed(inbox.id, (e as Error).message);
         }
+
+        // Wacht op classify zodat de log-line de category bevat (eventuele
+        // failures zijn al binnen classifyInboundEmail afgehandeld).
+        await classifyPromise.catch(function () { /* swallowed */ });
     });
 
     return NextResponse.json({

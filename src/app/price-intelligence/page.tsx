@@ -2271,6 +2271,7 @@ type LibStat = {
 };
 
 function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number; orgId: string | null; onChange?: () => void }) {
+    const showToast = useToast();
     const [stats, setStats] = useState<LibStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState<string | null>(null);
@@ -2289,7 +2290,7 @@ function PricelistLibrary({ refreshKey, orgId, onChange }: { refreshKey: number;
                 .eq('organization_id', orgId!)
                 .eq('leverancier', leverancier);
             if (error) {
-                alert('Fout: ' + error.message);
+                showToast('Fout: ' + error.message, 'error');
             } else {
                 setStats(prev => prev.filter(s => s.leverancier !== leverancier));
                 onChange?.();

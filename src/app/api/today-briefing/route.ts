@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiCost';
 
 /**
  * AI-briefing endpoint voor /Vandaag.
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
     const candidates: BriefingCandidate[] = Array.isArray(body?.candidates) ? body.candidates : [];
     const firstName: string = typeof body?.firstName === 'string' ? body.firstName : '';
     const time: string = typeof body?.time === 'string' ? body.time : '';
+    const organizationId: string | null = typeof body?.organizationId === 'string' ? body.organizationId : null;
 
     if (candidates.length === 0) {
       return NextResponse.json({
@@ -189,6 +192,30 @@ export async function POST(req: NextRequest) {
       ],
       messages: [{ role: 'user', content: userMessage }],
     } as any);
+
+    /* Log usage incl. cache-tokens — Pillar #5 (Systeem) cost-transparantie.
+       Fire-and-forget; failures blokkeren de response niet. */
+    if (organizationId) {
+      const u: any = resp.usage || {};
+      const model = (resp as any).model || 'claude-haiku-4-5-20251001';
+      void logAiUsageServer({
+        organization_id: organizationId,
+        action_type: 'other',
+        model,
+        tokens_input: u.input_tokens ?? 0,
+        tokens_output: u.output_tokens ?? 0,
+        tokens_cache_read: u.cache_read_input_tokens ?? 0,
+        tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+        cost_eur_cents: estimateAiCostCents({
+          model,
+          tokens_input: u.input_tokens ?? 0,
+          tokens_output: u.output_tokens ?? 0,
+          tokens_cache_read: u.cache_read_input_tokens ?? 0,
+          tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+        }),
+        metadata: { feature: 'today_briefing', candidates_count: candidates.length },
+      });
+    }
 
     const toolBlock = (resp.content as any[]).find((b: any) => b.type === 'tool_use');
     const out = toolBlock?.input as { bullets?: AiBriefingBullet[] } | undefined;

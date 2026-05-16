@@ -22,6 +22,8 @@ interface Props {
     saving?: boolean;
     /** Dirty: zijn er onopgeslagen wijzigingen? */
     dirty: boolean;
+    /** Optionele AI-suggest knop (vóór save). */
+    aiSuggest?: React.ReactNode;
 }
 
 const SHAPE_BUTTONS: Array<{ kind: ShapeKind; label: string; icon: typeof CircleIcon }> = [
@@ -43,7 +45,7 @@ export default function FloorPlanToolbar({
     tool, onToolChange,
     selectedShapeKind, onShapeKindChange,
     selectedId, onDeleteSelected,
-    onSave, saving, dirty,
+    onSave, saving, dirty, aiSuggest,
 }: Props) {
     const [shapeMenuOpen, setShapeMenuOpen] = useState(false);
 
@@ -107,6 +109,8 @@ export default function FloorPlanToolbar({
                     <Trash2 size={20} />
                 </button>
             )}
+
+            {aiSuggest}
 
             <button
                 className={`prep-canvas-tool prep-canvas-tool--primary ${dirty ? 'is-dirty' : ''}`}

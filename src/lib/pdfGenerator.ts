@@ -1000,7 +1000,6 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
 
     } catch (err: any) {
         console.error('PDF generatie fout:', err);
-        alert('PDF kon niet gegenereerd worden: ' + (err.message || 'Onbekende fout') + '\n\nProbeer de pagina te vernieuwen.');
     }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

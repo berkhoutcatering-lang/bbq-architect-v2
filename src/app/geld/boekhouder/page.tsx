@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 import BonAddSheet from './_components/BonAddSheet';
+import { useToast } from '@/components/Toast';
 
 /**
  * /geld/boekhouder — Boekhouder-pakket UI
@@ -835,6 +836,7 @@ interface ArchiefPakket {
 }
 
 function ArchiefTab() {
+  const showToast = useToast();
   const [pakketten, setPakketten] = useState<ArchiefPakket[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -858,7 +860,7 @@ function ArchiefTab() {
         body: JSON.stringify({ month: m }),
       });
       const j = await r.json();
-      if (!r.ok) { alert('Fout: ' + (j.error || 'onbekend')); return; }
+      if (!r.ok) { showToast('Fout: ' + (j.error || 'onbekend'), 'error'); return; }
       const a = document.createElement('a');
       a.href = kind === 'pdf' ? j.pdf_data_url : j.csv_data_url;
       a.download = kind === 'pdf' ? j.pdf_filename : j.csv_filename;
