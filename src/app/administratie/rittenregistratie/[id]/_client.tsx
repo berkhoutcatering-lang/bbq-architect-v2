@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -33,7 +34,14 @@ import { useToast } from '@/components/Toast';
 import type { Rit, Voertuig, DbEvent } from '@/types';
 import { fmtKm, fmtEur, fmtDateR, categoriseerRit, CAT_BY_ID } from '@/lib/ritten-aggregaties';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
-import RealRouteMap from '../_components/RealRouteMap';
+
+// Lazy laad RealRouteMap: maplibre-gl is ~800KB en trekt een grote module-graph
+// die de Next.js 16 webpack production-build laat hangen. Met dynamic+ssr:false
+// blijft de map uit de initial bundle en wordt pas client-side gehaald.
+const RealRouteMap = dynamic(() => import('../_components/RealRouteMap'), {
+  ssr: false,
+  loading: () => <div className="h-[400px] animate-pulse rounded-md bg-gray-100" />,
+});
 
 type Tab = 'route' | 'kosten' | 'fiscaal' | 'log';
 
