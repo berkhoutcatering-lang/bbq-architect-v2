@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const lev = useSupabase('leveranciers', []);
   const crs = useSupabase('courses', []);
   const ealg = useSupabase('event_allergies', []);
+  const ma = useSupabase('marge_alerts', []);
 
   const events: any[] = ev.data || [];
   const facturen: any[] = fac.data || [];
@@ -67,6 +68,7 @@ export default function DashboardPage() {
   const leveranciers: any[] = lev.data || [];
   const courses: any[] = crs.data || [];
   const eventAllergies: any[] = ealg.data || [];
+  const margeAlerts: any[] = (ma.data || []).filter((a: any) => a.status === 'open');
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState('Welkom');
@@ -483,6 +485,28 @@ export default function DashboardPage() {
       detail: 'Controleer en accepteer in agenda.',
       cta: 'Bekijk',
       href: '/agenda',
+    });
+  }
+  // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op
+  // open offertes. Engine: scanMargeAlerts() in src/lib/dal/margeAlerts.ts.
+  if (margeAlerts.length > 0) {
+    const worst = margeAlerts.reduce(function (a: any, b: any) {
+      return Math.abs(Number(b.pct_change) || 0) > Math.abs(Number(a.pct_change) || 0) ? b : a;
+    });
+    const totalImpact = margeAlerts.reduce(function (s: number, a: any) {
+      return s + (Number(a.total_marge_impact_eur) || 0);
+    }, 0);
+    const pct = Number(worst.pct_change) || 0;
+    attentionItems.push({
+      id: 'att-marge-alert',
+      severity: Math.abs(pct) >= 10 ? 'high' : 'medium',
+      icon: 'percent',
+      title: `${margeAlerts.length} prijsshift${margeAlerts.length === 1 ? '' : 's'} raken open offertes`,
+      detail: totalImpact !== 0
+        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
+        : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
+      cta: 'Bekijk impact',
+      href: '/voorraad',
     });
   }
 

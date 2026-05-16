@@ -2,17 +2,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// ── Google Calendar Bidirectional Sync ──
-// TODO: Productie-setup:
-//   1. Maak een Google Cloud project aan op https://console.cloud.google.com
-//   2. Activeer de Google Calendar API
-//   3. Maak OAuth 2.0 credentials aan (Web application)
-//   4. Genereer een refresh token via de OAuth flow
-//   5. Voeg de volgende env vars toe aan .env.local:
-//      GOOGLE_CLIENT_ID=...
-//      GOOGLE_CLIENT_SECRET=...
-//      GOOGLE_REFRESH_TOKEN=...
-//      GOOGLE_CALENDAR_ID=primary  (of een specifiek agenda-ID)
+/**
+ * Google Calendar Bidirectional Sync — Pillar #2 (Plannen).
+ *
+ * GET  → pull events uit Google Calendar
+ * POST → push events naar Google Calendar (volledig of single-event)
+ * Cron  → /api/cron/calendar-google-sync triggert elke 6 uur de POST sync.
+ *
+ * Setup (productie):
+ *   1. console.cloud.google.com → nieuw project → Calendar API activeren
+ *   2. OAuth 2.0 Web-credentials → redirect URI = <domein>/api/calendar/google/callback
+ *   3. OAuth-flow doorlopen → refresh_token uit response opslaan
+ *   4. .env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN,
+ *      GOOGLE_CALENDAR_ID (default 'primary')
+ *   5. CRON_SECRET in Vercel env voor de cron-job.
+ */
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
