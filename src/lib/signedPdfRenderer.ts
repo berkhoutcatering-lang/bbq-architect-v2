@@ -8,7 +8,9 @@
  * timestamp). De brand-styling van de offerte komt uit de browser-PDF;
  * dit certificaat is bewust 1-pagina en vendor-onafhankelijk leesbaar.
  */
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+/* pdf-lib heeft een grote CJS-graph; lazy-import binnen de render-functie
+   voorkomt dat webpack hem tijdens production-build in een client-chunk
+   probeert te treeshaken (zie commit 32ec2b3 voor identieke fix in pdfSplit.ts). */
 
 export interface SignedPdfInput {
     offerteNummer: string;
@@ -41,6 +43,7 @@ function truncate(s: string, max: number): string {
 }
 
 export async function renderSignedCertificate(input: SignedPdfInput): Promise<Uint8Array> {
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([595, 842]); // A4 portrait, points
     const helv = await pdf.embedFont(StandardFonts.Helvetica);
