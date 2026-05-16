@@ -40,7 +40,8 @@ const nextConfig = {
     'jspdf',
     'jspdf-autotable',
     'resend',
-    'recharts',
+    // recharts NIET toevoegen — Vercel zet 'm zelf in transpilePackages via
+    // modifyConfig en die twee lijsten mogen geen overlap hebben.
   ],
 
   // experimental.workerThreads:false + cpus:1 stond hier maar bleek zelf de
