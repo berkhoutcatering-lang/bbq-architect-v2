@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
@@ -8,6 +8,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
 
 /* Per-request context dat helpers gebruiken voor AI-usage logging */
 interface LogCtx { orgId: string | null; userId: string | null; model: string }
@@ -122,10 +123,10 @@ function recoverPartialJson(s: string): any | null {
 }
 
 async function callAnthropic(
-    client: Anthropic,
+    client: AnthropicType,
     model: string,
     isHaikuOrSonnet: boolean,
-    contentBlocks: Anthropic.Messages.ContentBlockParam[],
+    contentBlocks: AnthropicType.Messages.ContentBlockParam[],
 ): Promise<{ parsed: any; content: string; truncated: boolean; usage: any; stopReason: string | null }> {
     const stream = client.messages.stream({
         model,
@@ -152,8 +153,8 @@ async function callAnthropic(
 }
 
 async function runSingleCall(
-    client: Anthropic, model: string, isHaikuOrSonnet: boolean,
-    contentBlocks: Anthropic.Messages.ContentBlockParam[], t0: number,
+    client: AnthropicType, model: string, isHaikuOrSonnet: boolean,
+    contentBlocks: AnthropicType.Messages.ContentBlockParam[], t0: number,
     logCtx?: LogCtx,
 ): Promise<NextResponse> {
     try {
@@ -175,7 +176,7 @@ async function runSingleCall(
 }
 
 async function runChunkedTextCalls(
-    client: Anthropic, model: string, isHaikuOrSonnet: boolean,
+    client: AnthropicType, model: string, isHaikuOrSonnet: boolean,
     fullText: string, t0: number, logCtx?: LogCtx,
 ): Promise<NextResponse> {
     const CHUNK_SIZE = 50_000; /* Kleinere chunks = meer output-ruimte + minder kans op missers */
@@ -201,7 +202,7 @@ async function runChunkedTextCalls(
 
     for (let i = 0; i < chunks.length; i++) {
         try {
-            const blocks: Anthropic.Messages.ContentBlockParam[] = [
+            const blocks: AnthropicType.Messages.ContentBlockParam[] = [
                 { type: 'text', text: `Hieronder deel ${i + 1}/${chunks.length} van een groothandel-prijslijst. Extraheer ALLE producten:\n\n${chunks[i]}` },
                 { type: 'text', text: 'Extraheer alle producten als JSON.' },
             ];
@@ -272,7 +273,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geen input meegegeven' }, { status: 400 });
         }
 
-        const client = new Anthropic({ apiKey });
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client: AnthropicType = new Anthropic({ apiKey });
         const MODEL_MAP = {
             haiku: 'claude-haiku-4-5',
             sonnet: 'claude-sonnet-4-6',
@@ -288,7 +290,7 @@ export async function POST(req: NextRequest) {
         if (textContent && textContent.length > 100) {
             const MAX_SINGLE_CALL = 60_000;
             if (textContent.length <= MAX_SINGLE_CALL) {
-                const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [
+                const contentBlocks: AnthropicType.Messages.ContentBlockParam[] = [
                     { type: 'text', text: 'Hieronder de tekst van een groothandel-prijslijst. Extraheer ALLE producten:\n\n' + textContent },
                     { type: 'text', text: 'Extraheer alle producten als JSON.' },
                 ];
@@ -298,7 +300,7 @@ export async function POST(req: NextRequest) {
         }
 
         /* VISION-MODE (via URL of base64) */
-        const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
+        const contentBlocks: AnthropicType.Messages.ContentBlockParam[] = [];
 
         if (pdfUrl) {
             const r = await fetch(pdfUrl);
@@ -328,7 +330,7 @@ export async function POST(req: NextRequest) {
         return await runSingleCall(client, model, isHaikuOrSonnet, contentBlocks, t0, logCtx);
     } catch (e: any) {
         console.error('[parse-pricelist:outer]', e?.status, e?.message, e);
-        if (e instanceof Anthropic.RateLimitError) {
+        if (e?.status === 429 || e?.name === 'RateLimitError') {
             return NextResponse.json({ error: 'Rate limit — wacht even' }, { status: 429 });
         }
         const detail = e?.error?.error?.message || e?.message || 'Onbekende fout';

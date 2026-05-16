@@ -8,13 +8,14 @@
    Output is een PREVIEW — niets opgeslagen tot UI accept-roep doet via /api/supplier-products/bulk. */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -115,11 +116,12 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AI niet beschikbaar' }, { status: 503 });
-    const anthropic = new Anthropic({ apiKey });
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const anthropic: AnthropicType = new Anthropic({ apiKey });
 
     // Bouw user-message content: tekst, foto of PDF
     const supplierHint = v.data.supplier_hint ? ` supplier_hint="${v.data.supplier_hint.replace(/"/g, '')}"` : '';
-    const userContent: Anthropic.Messages.ContentBlockParam[] = [];
+    const userContent: AnthropicType.Messages.ContentBlockParam[] = [];
 
     if (v.data.file_data_url) {
         const parsed = parseDataUrl(v.data.file_data_url)!;
@@ -127,7 +129,7 @@ export async function POST(req: NextRequest) {
             userContent.push({
                 type: 'document',
                 source: { type: 'base64', media_type: 'application/pdf', data: parsed.base64 },
-            } as Anthropic.Messages.ContentBlockParam);
+            } as AnthropicType.Messages.ContentBlockParam);
         } else {
             userContent.push({
                 type: 'image',

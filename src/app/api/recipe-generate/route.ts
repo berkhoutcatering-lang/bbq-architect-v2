@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
+export const dynamic = 'force-dynamic';
 
 type GenerateMode = 'recipe' | 'menu' | 'enrich' | 'scale';
 
@@ -161,7 +162,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geef een prompt mee' }, { status: 400 });
         }
 
-        const client = new Anthropic({ apiKey });
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client: AnthropicType = new Anthropic({ apiKey });
         const userMessage = buildUserMessage(mode, prompt || '', existing, options);
 
         // Slimme default per mode:
@@ -275,10 +277,12 @@ export async function POST(req: NextRequest) {
         });
     } catch (e: any) {
         console.error('[recipe-generate]', e);
-        if (e instanceof Anthropic.AuthenticationError) {
+        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try
+        // dus niet in scope hier. Werkt voor alle Anthropic.X*Error klassen.
+        if (e?.status === 401 || e?.name === 'AuthenticationError') {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
         }
-        if (e instanceof Anthropic.RateLimitError) {
+        if (e?.status === 429 || e?.name === 'RateLimitError') {
             return NextResponse.json({ error: 'Te veel requests — wacht even' }, { status: 429 });
         }
         return NextResponse.json({ error: e?.message || 'Onbekende fout' }, { status: 500 });
