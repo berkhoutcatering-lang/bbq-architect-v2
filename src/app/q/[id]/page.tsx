@@ -2,10 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Leaf } from 'lucide-react';
 import SignaturePad from '@/components/SignaturePad';
-import { useToast } from '@/components/Toast';
-import { formatCarbon, SCORE_LABELS } from '@/lib/carbonFootprint';
 
 function formatEuro(n: number) { return '€' + n.toFixed(2).replace('.', ','); }
 
@@ -28,10 +25,8 @@ function getStepIndex(status: string) {
 }
 
 export default function QuotePage({ params }: { params: Promise<{ id: string }> }) {
-    const showToast = useToast();
     const [offer, setOffer] = useState<any>(null);
     const [settings, setSettings] = useState<any>(null);
-    const [carbon, setCarbon] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [accepted, setAccepted] = useState(false);
@@ -57,7 +52,6 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
             const data = result.offer;
             setOffer(data);
             setSettings(result.settings ?? null);
-            setCarbon(result.carbon ?? null);
             if (['geaccepteerd', 'akkoord', 'betaald', 'goedgekeurd', 'definitief'].includes(data.status)) {
                 setAccepted(true);
             }
@@ -87,10 +81,10 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                 setAccepted(true);
                 setSignStep(false);
             } else {
-                showToast('Fout bij accepteren: ' + (data.error || 'Onbekende fout'), 'error');
+                alert('Fout bij accepteren: ' + (data.error || 'Onbekende fout'));
             }
         } catch (e: any) {
-            showToast('Fout: ' + (e.message || 'Netwerk fout'), 'error');
+            alert('Fout: ' + (e.message || 'Netwerk fout'));
         }
         setSubmitting(false);
     }
@@ -279,43 +273,6 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     );
                                 })}
                             </div>
-
-                            {/* Eco-score — 2026 ESG-trend. Toon alleen als server-side
-                                de carbon-data heeft kunnen berekenen (matched_count > 0). */}
-                            {carbon && carbon.matched_count > 0 && (() => {
-                                const meta = (SCORE_LABELS as any)[carbon.score] || { label: '—', color: '#6b7280' };
-                                return (
-                                    <div style={{
-                                        marginTop: 14, padding: '10px 14px', borderRadius: 10,
-                                        background: meta.color + '12',
-                                        border: '1px solid ' + meta.color + '35',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{
-                                                width: 32, height: 32, borderRadius: 8,
-                                                background: meta.color + '25', color: meta.color,
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                fontSize: 14, fontWeight: 800,
-                                            }}>{carbon.score}</div>
-                                            <div>
-                                                <div style={{ fontSize: 10, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--zinc)', fontWeight: 700 }}>
-                                                    Duurzaamheid
-                                                </div>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: meta.color, display: 'flex', alignItems: 'center', gap: 5 }}>
-                                                    <Leaf size={12} /> {meta.label}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: 10, color: 'var(--zinc)' }}>Per portie</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                                                {formatCarbon(carbon.total_g_per_pp)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
                         </div>
                     )}
 

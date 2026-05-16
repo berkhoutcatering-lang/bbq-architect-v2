@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@/lib/supabase-server';
-import type AnthropicType from '@anthropic-ai/sdk';
-import { logAiUsageServer } from '@/lib/aiUsageServer';
-import { estimateAiCostCents } from '@/lib/aiCost';
-
-export const dynamic = 'force-dynamic';
+import Anthropic from '@anthropic-ai/sdk';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -151,17 +147,7 @@ const enrichMaterieelTool = {
     },
 };
 
-interface EnrichResult {
-    data: Record<string, any>;
-    usage?: {
-        input_tokens: number;
-        output_tokens: number;
-        cache_read_input_tokens?: number;
-        cache_creation_input_tokens?: number;
-    };
-}
-
-async function enrichSingleItem(client: AnthropicType, naam: string, type: string): Promise<EnrichResult> {
+async function enrichSingleItem(client: Anthropic, naam: string, type: string): Promise<Record<string, any>> {
     try {
         const resp = await client.messages.create({
             model: 'claude-haiku-4-5-20251001',
@@ -174,13 +160,10 @@ async function enrichSingleItem(client: AnthropicType, naam: string, type: strin
             }],
         } as any);
         const tb = (resp.content as any[]).find((b: any) => b.type === 'tool_use');
-        return {
-            data: (tb?.input as Record<string, any>) || {},
-            usage: (resp as any).usage,
-        };
+        return (tb?.input as Record<string, any>) || {};
     } catch (e) {
         console.error('[enrichSingleItem] ' + naam + ': ' + (e as Error).message);
-        return { data: {} };
+        return {};
     }
 }
 
@@ -192,45 +175,15 @@ async function bulkCreateMaterieel(sb: SupabaseClient, orgId: string | null, par
     // Parallel enrichment in batches van 5 — voorkomt rate-limit, max ~5s totaal voor 14 items.
     const apiKey = process.env.ANTHROPIC_API_KEY;
     let enriched: Record<string, any>[] = items.map(() => ({}));
-    let aggUsage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
     if (apiKey) {
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
         const BATCH = 5;
         for (let i = 0; i < items.length; i += BATCH) {
             const slice = items.slice(i, i + BATCH);
             const results = await Promise.all(slice.map((it: any) =>
                 enrichSingleItem(client, it.naam || 'Onbekend item', normalizeMaterieelType(it.type, it.naam))
             ));
-            results.forEach((r, j) => {
-                enriched[i + j] = r.data;
-                if (r.usage) {
-                    aggUsage.in += r.usage.input_tokens || 0;
-                    aggUsage.out += r.usage.output_tokens || 0;
-                    aggUsage.cacheRead += r.usage.cache_read_input_tokens || 0;
-                    aggUsage.cacheWrite += r.usage.cache_creation_input_tokens || 0;
-                }
-            });
-        }
-        // Pillar #5 — log aggregaat usage incl. cache-tokens
-        if (orgId && (aggUsage.in + aggUsage.out) > 0) {
-            void logAiUsageServer({
-                organization_id: orgId,
-                action_type: 'other',
-                model: 'claude-haiku-4-5-20251001',
-                tokens_input: aggUsage.in,
-                tokens_output: aggUsage.out,
-                tokens_cache_read: aggUsage.cacheRead,
-                tokens_cache_creation: aggUsage.cacheWrite,
-                cost_eur_cents: estimateAiCostCents({
-                    model: 'claude-haiku-4-5-20251001',
-                    tokens_input: aggUsage.in,
-                    tokens_output: aggUsage.out,
-                    tokens_cache_read: aggUsage.cacheRead,
-                    tokens_cache_creation: aggUsage.cacheWrite,
-                }),
-                metadata: { feature: 'materieel_enrich', item_count: items.length },
-            });
+            results.forEach((r, j) => { enriched[i + j] = r; });
         }
     }
 

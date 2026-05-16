@@ -5,7 +5,6 @@ import { X, ArrowRight, Sparkles } from 'lucide-react';
 import { track } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
 import { seedDemoData } from '@/lib/onboardingSeed';
-import { supabase } from '@/lib/supabase';
 
 const STORAGE_KEY = 'bbq_persona_quiz_v1';
 
@@ -63,32 +62,11 @@ export default function PersonaQuiz({ forceShow, onComplete }: Props) {
       setOpen(true);
       return;
     }
-    // Eerst localStorage (snel), dan settings.persona_result (cross-device).
-    let cancelled = false;
-    (async () => {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved && saved !== '{}') return; // al ingevuld
-        // Cross-device check: heeft deze tenant elders al ingevuld?
-        if (orgId && supabase) {
-          const { data } = await supabase
-            .from('settings')
-            .select('persona_result')
-            .eq('organization_id', orgId)
-            .maybeSingle();
-          if (!cancelled && data?.persona_result && Object.keys(data.persona_result).length > 0) {
-            // Hydrate localStorage zodat volgende load nog sneller is
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.persona_result)); } catch { /* */ }
-            return;
-          }
-        }
-        if (!cancelled) setOpen(true);
-      } catch {
-        if (!cancelled) setOpen(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [forceShow, orgId]);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) setOpen(true);
+    } catch { setOpen(true); }
+  }, [forceShow]);
 
   if (!open) return null;
 
@@ -116,14 +94,6 @@ export default function PersonaQuiz({ forceShow, onComplete }: Props) {
       biggestPain: final.biggestPain,
       hasName: !!final.bedrijfsnaam,
     });
-    /* Persist server-side zodat het quiz-resultaat cross-device beschikbaar is
-       en /admin/funnel kan rapporteren. Fire-and-forget. */
-    if (orgId && supabase) {
-      void supabase
-        .from('settings')
-        .update({ persona_result: final })
-        .eq('organization_id', orgId);
-    }
     /* Demo-data seed: idempotent — vult lege hubs met realistische voorbeeld-events,
        gerechten, klanten, offertes en 1 factuur. Fire-and-forget zodat modal direct
        sluit; de seed werkt op de achtergrond via RLS (geen service-role nodig). */

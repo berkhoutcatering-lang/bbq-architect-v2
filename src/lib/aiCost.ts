@@ -27,13 +27,7 @@ export function estimateAiCostCents(params: {
         'claude-haiku-4-5': { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 },
     };
 
-    // Match exact eerst, anders prefix-match (Anthropic returnt model-IDs
-    // met datum-suffix zoals 'claude-haiku-4-5-20251001'; PRICING-keys
-    // gebruiken het korte alias).
-    const m = params.model || 'claude-sonnet-4-6';
-    const prices = PRICING[m]
-        || Object.entries(PRICING).find(function ([k]) { return m.startsWith(k); })?.[1]
-        || PRICING['claude-sonnet-4-6'];
+    const prices = PRICING[params.model || 'claude-sonnet-4-6'] || PRICING['claude-sonnet-4-6'];
 
     const usd =
         ((params.tokens_input || 0) * prices.input +

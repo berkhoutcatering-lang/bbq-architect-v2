@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-export const dynamic = 'force-dynamic';
 
 const INVOICE_SYSTEM_PROMPT = `Lees Nederlandse leveranciersfactuur → retourneer alleen JSON.
 Geen uitleg, geen markdown, geen denk-tekst. Direct JSON.
@@ -100,11 +99,10 @@ export async function POST(req: NextRequest) {
         const systemPrompt = type === 'invoice' ? INVOICE_SYSTEM_PROMPT : RECEIPT_SYSTEM_PROMPT;
         const userText = 'JSON.';
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
 
         // Build the document content block — Claude supports both native PDF and image input
-        const contentBlocks: AnthropicType.Messages.ContentBlockParam[] = [];
+        const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
         if (pdfBase64) {
             const parsed = pdfBase64.startsWith('data:') ? parseDataUrl(pdfBase64) : { mediaType: 'application/pdf', data: pdfBase64 };
@@ -269,14 +267,13 @@ export async function POST(req: NextRequest) {
         });
     } catch (e: any) {
         console.error('[parse-document]', e);
-        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try.
-        if (e?.status === 401 || e?.name === 'AuthenticationError') {
+        if (e instanceof Anthropic.AuthenticationError) {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY — check console.anthropic.com' }, { status: 401 });
         }
-        if (e?.status === 429 || e?.name === 'RateLimitError') {
+        if (e instanceof Anthropic.RateLimitError) {
             return NextResponse.json({ error: 'Te veel requests — wacht even en probeer opnieuw' }, { status: 429 });
         }
-        if (e?.status && e?.name?.endsWith?.('APIError')) {
+        if (e instanceof Anthropic.APIError) {
             return NextResponse.json({ error: 'Claude API fout', detail: e.message, status: e.status }, { status: 502 });
         }
         return NextResponse.json({ error: e?.message || 'Onbekende fout' }, { status: 500 });

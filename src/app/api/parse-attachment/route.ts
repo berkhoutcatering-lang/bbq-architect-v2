@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import Papa from 'papaparse';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
@@ -33,7 +33,6 @@ import {
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
-export const dynamic = 'force-dynamic';
 
 const STAGING_BUCKET = 'email-attachments';
 
@@ -131,7 +130,7 @@ interface AttachmentRow {
 }
 
 async function parseAttachmentContent(
-    client: AnthropicType,
+    client: Anthropic,
     model: string,
     fileBuffer: Buffer,
     mime: string,
@@ -171,7 +170,7 @@ async function parseAttachmentContent(
     }
 
     /* Binary types: vision via document of image block */
-    const blocks: AnthropicType.Messages.ContentBlockParam[] = [];
+    const blocks: Anthropic.Messages.ContentBlockParam[] = [];
     const base64 = fileBuffer.toString('base64');
 
     if (mime === 'application/pdf') {
@@ -267,8 +266,7 @@ export async function POST(req: NextRequest) {
         .eq('organization_id', orgId);
     const mastersArr: MasterRow[] = (masters || []) as MasterRow[];
 
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
     const MODEL = 'claude-haiku-4-5';
 
     let totalProducten = 0;

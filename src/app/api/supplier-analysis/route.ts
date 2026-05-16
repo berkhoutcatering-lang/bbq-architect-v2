@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
 
 const SYSTEM_PROMPT = `Je bent een BBQ/catering inkoopadviseur. Analyseer een leverancier en geef praktisch advies voor een kleine horeca-ondernemer.
 
@@ -83,8 +82,7 @@ Andere leveranciers in systeem: ${context.others.map(o => o.leverancier).join(',
 
 Geef praktisch advies voor een kleine horeca-ondernemer. Verwerk de goedkoper-elders data in savings_tips.`;
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
 
         // Resolve org for usage logging
         let orgId: string | null = null;
@@ -162,14 +160,13 @@ Geef praktisch advies voor een kleine horeca-ondernemer. Verwerk de goedkoper-el
         });
     } catch (e: any) {
         console.error('[supplier-analysis]', e);
-        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try.
-        if (e?.status === 401 || e?.name === 'AuthenticationError') {
+        if (e instanceof Anthropic.AuthenticationError) {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
         }
-        if (e?.status === 429 || e?.name === 'RateLimitError') {
+        if (e instanceof Anthropic.RateLimitError) {
             return NextResponse.json({ error: 'Rate limit — wacht even' }, { status: 429 });
         }
-        if (e?.status && e?.name?.endsWith?.('APIError')) {
+        if (e instanceof Anthropic.APIError) {
             return NextResponse.json({ error: 'Claude API fout', detail: e.message }, { status: 502 });
         }
         return NextResponse.json({ error: e?.message || 'Onbekend' }, { status: 500 });

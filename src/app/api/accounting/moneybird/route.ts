@@ -1,57 +1,34 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { mergedAccountingConfig, type AccountingConfig } from '@/lib/accountingConfig';
 
-/**
- * Moneybird sales-invoice push. Tenant-specifieke config (administratie-ID,
- * BTW tax_rate_ids, betaaltermijn, email-template) komt uit
- * settings.accounting_config; env-vars zijn fallback voor single-tenant dev.
- *
- * Setup-flow (Pro-tier tenant):
- *   1. /instellingen/integraties/moneybird → connect (OAuth komt in S3)
- *   2. /instellingen/integraties/accounting → vul accounting_config
- *      met grootboekrekening + BTW tax_rate_ids + payment_terms_dagen
- *   3. Test push via /api/accounting/moneybird POST { factuurId, action:'preview' }
- */
-const ENV_MONEYBIRD_TOKEN = process.env.MONEYBIRD_TOKEN || '';
-const ENV_MONEYBIRD_ADMINISTRATION_ID = process.env.MONEYBIRD_ADMINISTRATION_ID || '';
+// ── Moneybird Integratie ──
+// TODO: Productie-setup:
+//   1. Ga naar https://moneybird.com/user/applications/new
+//   2. Maak een persoonlijke token aan (of gebruik OAuth voor multi-user)
+//   3. Zoek je administratie-ID op via https://moneybird.com/ (staat in de URL)
+//   4. Voeg de volgende env vars toe aan .env.local:
+//      MONEYBIRD_TOKEN=...
+//      MONEYBIRD_ADMINISTRATION_ID=...
+
+const MONEYBIRD_TOKEN = process.env.MONEYBIRD_TOKEN || '';
+const MONEYBIRD_ADMINISTRATION_ID = process.env.MONEYBIRD_ADMINISTRATION_ID || '';
 const MONEYBIRD_BASE = 'https://moneybird.com/api/v2';
 
-const ENV_MONEYBIRD_TAX_RATE_21 = process.env.MONEYBIRD_TAX_RATE_21 || '';
-const ENV_MONEYBIRD_TAX_RATE_9 = process.env.MONEYBIRD_TAX_RATE_9 || '';
-const ENV_MONEYBIRD_TAX_RATE_0 = process.env.MONEYBIRD_TAX_RATE_0 || '';
+// BTW tax_rate_ids — ophalen via GET /tax_rates.json in je Moneybird-administratie
+const MONEYBIRD_TAX_RATE_21 = process.env.MONEYBIRD_TAX_RATE_21 || '';
+const MONEYBIRD_TAX_RATE_9 = process.env.MONEYBIRD_TAX_RATE_9 || '';
+const MONEYBIRD_TAX_RATE_0 = process.env.MONEYBIRD_TAX_RATE_0 || '';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-interface ResolvedConfig {
-  token: string;
-  administrationId: string;
-  taxRate21: string;
-  taxRate9: string;
-  taxRate0: string;
-  cfg: ReturnType<typeof mergedAccountingConfig>;
+function isConfigured(): boolean {
+  return !!(MONEYBIRD_TOKEN && MONEYBIRD_ADMINISTRATION_ID);
 }
 
-function resolveConfig(rawCfg: AccountingConfig | null): ResolvedConfig {
-  const cfg = mergedAccountingConfig(rawCfg);
-  return {
-    token: ENV_MONEYBIRD_TOKEN,
-    administrationId: cfg.moneybird_administration_id || ENV_MONEYBIRD_ADMINISTRATION_ID,
-    taxRate21: cfg.moneybird_tax_rate_21 || ENV_MONEYBIRD_TAX_RATE_21,
-    taxRate9: cfg.moneybird_tax_rate_9 || ENV_MONEYBIRD_TAX_RATE_9,
-    taxRate0: cfg.moneybird_tax_rate_0 || ENV_MONEYBIRD_TAX_RATE_0,
-    cfg,
-  };
-}
-
-function isConfigured(c: ResolvedConfig): boolean {
-  return !!(c.token && c.administrationId);
-}
-
-function areTaxRatesConfigured(c: ResolvedConfig): boolean {
-  return !!(c.taxRate21 && c.taxRate9 && c.taxRate0);
+function areTaxRatesConfigured(): boolean {
+  return !!(MONEYBIRD_TAX_RATE_21 && MONEYBIRD_TAX_RATE_9 && MONEYBIRD_TAX_RATE_0);
 }
 
 function getSupabase() {
@@ -60,12 +37,12 @@ function getSupabase() {
 }
 
 // ── Moneybird API helper ──
-async function moneybirdFetch(c: ResolvedConfig, endpoint: string, options: RequestInit = {}) {
-  const url = `${MONEYBIRD_BASE}/${c.administrationId}${endpoint}.json`;
+async function moneybirdFetch(endpoint: string, options: RequestInit = {}) {
+  const url = `${MONEYBIRD_BASE}/${MONEYBIRD_ADMINISTRATION_ID}${endpoint}.json`;
   const res = await fetch(url, {
     ...options,
     headers: {
-      Authorization: `Bearer ${c.token}`,
+      Authorization: `Bearer ${MONEYBIRD_TOKEN}`,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
@@ -74,30 +51,28 @@ async function moneybirdFetch(c: ResolvedConfig, endpoint: string, options: Requ
 }
 
 // ── Zoek contact op naam, maak aan als het niet bestaat ──
-async function findOrCreateContact(
-  c: ResolvedConfig,
-  klant: { naam: string; adres?: string | null; email?: string | null; telefoon?: string | null },
-): Promise<string | null> {
+async function findOrCreateContact(clientNaam: string, clientAdres?: string): Promise<string | null> {
   // Zoek op naam
-  const searchRes = await moneybirdFetch(c, `/contacts?query=${encodeURIComponent(klant.naam)}`);
+  const searchRes = await moneybirdFetch(`/contacts?query=${encodeURIComponent(clientNaam)}`);
   if (searchRes.ok) {
     const contacts = await searchRes.json();
     if (contacts.length > 0) return contacts[0].id;
   }
 
-  // Maak nieuw contact aan met volledige gegevens (adres, email, telefoon).
-  const adresParts = (klant.adres || '').split(',').map(function (s: string) { return s.trim(); });
-  const createRes = await moneybirdFetch(c, '/contacts', {
+  // Maak nieuw contact aan
+  const adresParts = (clientAdres || '').split(',').map(function (s: string) { return s.trim(); });
+  const createRes = await moneybirdFetch('/contacts', {
     method: 'POST',
     body: JSON.stringify({
       contact: {
-        company_name: klant.naam,
+        company_name: clientNaam,
         address1: adresParts[0] || '',
         city: adresParts[1] || '',
         zipcode: adresParts[2] || '',
-        country: c.cfg.contact_default_country,
-        send_invoices_to_email: klant.email || undefined,
-        phone: klant.telefoon || undefined,
+        country: 'NL',
+        // TODO: Voeg extra contactgegevens toe (email, telefoon)
+        // email: '',
+        // phone: '',
       },
     }),
   });
@@ -112,37 +87,33 @@ async function findOrCreateContact(
 }
 
 // ── Map BBQ Architect factuur naar Moneybird verkoopfactuur ──
-function factuurToMoneybirdInvoice(
-  c: ResolvedConfig,
-  factuur: any,
-  contactId: string,
-): Record<string, any> {
+function factuurToMoneybirdInvoice(factuur: any, contactId: string): Record<string, any> {
   const detailLines = (factuur.items || []).map(function (item: any) {
     const btwPercentage = item.btw || 21;
+
     return {
       description: item.omschrijving || item.desc || 'Catering',
       price: String(item.prijs || 0),
       amount: String(item.qty || 1),
-      tax_rate_id: btwToMoneybirdTaxRate(c, btwPercentage),
-      // Tenant-specifieke grootboekrekening uit accounting_config.
-      ledger_account_id: c.cfg.grootboekrekening_omzet,
+      // Moneybird BTW-tarief ID's
+      // TODO: Pas aan op basis van je Moneybird administratie
+      // Standaard tax_rate_ids:
+      //   NL 21% = zoek op via /tax_rates.json
+      //   NL 9%  = zoek op via /tax_rates.json
+      //   0%     = zoek op via /tax_rates.json
+      tax_rate_id: btwToMoneybirdTaxRate(btwPercentage),
+      // TODO: Configureer de juiste grootboekrekening
+      // ledger_account_id: 'MONEYBIRD_LEDGER_ACCOUNT_ID',
     };
   });
-
-  // Bereken due_date uit payment_terms_dagen als factuur.vervaldatum leeg is.
-  let dueDate = factuur.vervaldatum;
-  if (!dueDate && factuur.datum) {
-    const d = new Date(factuur.datum);
-    d.setDate(d.getDate() + c.cfg.payment_terms_dagen);
-    dueDate = d.toISOString().slice(0, 10);
-  }
 
   return {
     sales_invoice: {
       contact_id: contactId,
       reference: factuur.nummer,
       invoice_date: factuur.datum,
-      due_date: dueDate,
+      // Moneybird berekent vervaldatum op basis van workflow of je kunt het handmatig meegeven
+      due_date: factuur.vervaldatum,
       currency: 'EUR',
       prices_are_incl_tax: false,
       details_attributes: detailLines,
@@ -150,12 +121,14 @@ function factuurToMoneybirdInvoice(
   };
 }
 
-function btwToMoneybirdTaxRate(c: ResolvedConfig, percentage: number): string {
+// ── BTW percentage naar Moneybird tax_rate_id ──
+// IDs ophalen via GET /tax_rates.json in Moneybird en instellen als env vars
+function btwToMoneybirdTaxRate(percentage: number): string {
   switch (percentage) {
-    case 21: return c.taxRate21;
-    case 9:  return c.taxRate9;
-    case 0:  return c.taxRate0;
-    default: return c.taxRate21;
+    case 21: return MONEYBIRD_TAX_RATE_21;
+    case 9:  return MONEYBIRD_TAX_RATE_9;
+    case 0:  return MONEYBIRD_TAX_RATE_0;
+    default: return MONEYBIRD_TAX_RATE_21;
   }
 }
 
@@ -165,6 +138,19 @@ function btwToMoneybirdTaxRate(c: ResolvedConfig, percentage: number): string {
 //   of: { factuurId: 123, action: 'send' } - maak aan EN verstuur via Moneybird
 export async function POST(req: NextRequest) {
   try {
+    if (!isConfigured()) {
+      return NextResponse.json(
+        { error: 'Moneybird niet geconfigureerd \u2014 voeg MONEYBIRD_TOKEN en MONEYBIRD_ADMINISTRATION_ID toe in .env' },
+        { status: 501 }
+      );
+    }
+    if (!areTaxRatesConfigured()) {
+      return NextResponse.json(
+        { error: 'Moneybird BTW-tarieven niet geconfigureerd \u2014 voeg MONEYBIRD_TAX_RATE_21, MONEYBIRD_TAX_RATE_9 en MONEYBIRD_TAX_RATE_0 toe in .env (ophalen via GET /tax_rates.json in Moneybird)' },
+        { status: 501 }
+      );
+    }
+
     const sb = getSupabase();
     if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
@@ -175,7 +161,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Geen factuurId meegegeven' }, { status: 400 });
     }
 
-    // Haal factuur + bedrijfsnaam + accounting_config van dezelfde tenant op
+    // Haal factuur op
     const { data: factuur, error: fetchErr } = await sb
       .from('facturen')
       .select('*')
@@ -186,35 +172,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Factuur niet gevonden' }, { status: 404 });
     }
 
-    const { data: settingsRow } = await sb
-      .from('settings')
-      .select('accounting_config, bedrijfsnaam')
-      .eq('organization_id', factuur.organization_id)
-      .maybeSingle();
-
-    const config = resolveConfig((settingsRow?.accounting_config as AccountingConfig) || null);
-    const bedrijfsnaam = settingsRow?.bedrijfsnaam || 'BBQ Architect';
-
-    if (!isConfigured(config)) {
-      return NextResponse.json(
-        { error: 'Moneybird niet geconfigureerd. Vul de administratie-ID in via /instellingen/integraties/accounting of voeg MONEYBIRD_TOKEN/MONEYBIRD_ADMINISTRATION_ID toe in env.' },
-        { status: 501 }
-      );
-    }
-    if (!areTaxRatesConfigured(config)) {
-      return NextResponse.json(
-        { error: 'Moneybird BTW-tarieven niet geconfigureerd. Vul de drie tax_rate_ids in via /instellingen/integraties/accounting. Ophalen via GET /tax_rates.json in Moneybird.' },
-        { status: 501 }
-      );
-    }
-
     // Zoek of maak contact
-    const contactId = await findOrCreateContact(config, {
-      naam: factuur.client_naam,
-      adres: factuur.client_adres,
-      email: factuur.client_email,
-      telefoon: factuur.client_telefoon,
-    });
+    const contactId = await findOrCreateContact(factuur.client_naam, factuur.client_adres);
     if (!contactId) {
       return NextResponse.json(
         { error: `Kon contact "${factuur.client_naam}" niet vinden of aanmaken in Moneybird` },
@@ -223,7 +182,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Map naar Moneybird formaat
-    const invoicePayload = factuurToMoneybirdInvoice(config, factuur, contactId);
+    const invoicePayload = factuurToMoneybirdInvoice(factuur, contactId);
 
     // Preview modus
     if (action === 'preview') {
@@ -241,7 +200,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Maak verkoopfactuur aan in Moneybird
-    const createRes = await moneybirdFetch(config, '/sales_invoices', {
+    const createRes = await moneybirdFetch('/sales_invoices', {
       method: 'POST',
       body: JSON.stringify(invoicePayload),
     });
@@ -253,26 +212,18 @@ export async function POST(req: NextRequest) {
 
     const invoice = await createRes.json();
 
-    // Optioneel: verstuur de factuur via Moneybird e-mail.
-    // Subject + body komen uit accounting_config.email_template_* (tenant-instelbaar).
+    // Optioneel: verstuur de factuur via Moneybird e-mail
     if (action === 'send' && invoice.id) {
-      const { fillTemplate } = await import('@/lib/accountingConfig');
-      const vars = {
-        nummer: factuur.nummer,
-        bedrijfsnaam,
-        klant: factuur.client_naam || '',
-      };
       const sendRes = await moneybirdFetch(
-        config,
         `/sales_invoices/${invoice.id}/send_invoice`,
         {
           method: 'PATCH',
           body: JSON.stringify({
             sales_invoice_sending: {
               delivery_method: 'Email',
-              email_address: factuur.client_email || undefined,
-              email_message: fillTemplate(config.cfg.email_template_body, vars),
-              invoice_subject: fillTemplate(config.cfg.email_template_subject, vars),
+              // TODO: Pas het e-mail template aan
+              // email_address: factuur.client_email,
+              // email_message: 'Bijgaand ontvangt u onze factuur.',
             },
           }),
         }

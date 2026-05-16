@@ -6,14 +6,13 @@
    Pillar 1 (AI als Creative Chef): proactief inspireren, niet alleen reageren. */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -84,8 +83,7 @@ export async function POST(_req: NextRequest) {
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AI niet beschikbaar' }, { status: 503 });
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const anthropic: AnthropicType = new Anthropic({ apiKey });
+    const anthropic = new Anthropic({ apiKey });
 
     const componentsBlock = (components as ComponentLite[]).map(c => {
         const tags = (c.flavor_tags ?? []).join(', ') || '(geen tags)';

@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type ButtonVariant = 'brand' | 'ghost' | 'red' | 'green' | 'cyan' | 'gold' | 'gold-outline';
-type ButtonSize = 'default' | 'sm' | 'icon' | 'touch';
+type ButtonSize = 'default' | 'sm' | 'icon';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: ButtonVariant;
@@ -28,7 +28,6 @@ const sizeClass: Record<ButtonSize, string> = {
     default: '',
     sm: 'btn-sm',
     icon: 'btn-icon',
-    touch: 'btn-touch',
 };
 
 export default function Button({

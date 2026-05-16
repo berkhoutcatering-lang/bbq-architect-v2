@@ -3,7 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
@@ -11,7 +11,6 @@ import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
 
 // Hard ceiling tegen DDoS via giant base64 payloads. 5MB raw ≈ 7MB base64.
 // Een normale dashboard-foto is 200-800KB; 5MB dekt zware HEIC ruim.
@@ -118,8 +117,7 @@ export async function POST(req: NextRequest) {
   }
 
   const parsed = parseDataUrl(imageBase64);
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client: AnthropicType = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey });
   const model = 'claude-haiku-4-5';
 
   const stream = client.messages.stream({

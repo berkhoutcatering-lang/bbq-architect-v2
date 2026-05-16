@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Download, ArrowLeft, ShieldCheck, Database, Trash2 } from 'lucide-react';
 import { useOrg } from '@/lib/OrgContext';
 import { removeDemoData } from '@/lib/demoData';
-import { useToast } from '@/components/Toast';
 
 /**
  * SF-11 — Data-export & -verwijdering voor AVG-compliance.
@@ -16,7 +15,6 @@ import { useToast } from '@/components/Toast';
  */
 export default function DataExportPage() {
   const { orgId, organization } = useOrg();
-  const showToast = useToast();
   const [downloading, setDownloading] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removedMessage, setRemovedMessage] = useState<string | null>(null);
@@ -28,7 +26,7 @@ export default function DataExportPage() {
       const res = await fetch(`/api/data-export?orgId=${orgId}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        showToast(`Export mislukt: ${body.error || res.statusText}`, 'error');
+        alert(`Export mislukt: ${body.error || res.statusText}`);
         return;
       }
       const blob = await res.blob();

@@ -5,13 +5,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
-export const dynamic = 'force-dynamic';
 
 const VERGETEN_SYSTEM = `Je krijgt een lijst bevestigde events van een cateraar zonder gekoppelde rit. Bepaal welke events waarschijnlijk een rit hadden gehad (op basis van locatie + datum) en formuleer 1 vriendelijke notificatie-zin.
 
@@ -50,8 +49,7 @@ export async function POST(req: Request) {
     .in('plan', ['professional', 'enterprise']);
   if (!orgs?.length) return NextResponse.json({ ok: true, processed: 0 });
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client: AnthropicType = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey });
   const model = 'claude-haiku-4-5';
   let processed = 0;
 

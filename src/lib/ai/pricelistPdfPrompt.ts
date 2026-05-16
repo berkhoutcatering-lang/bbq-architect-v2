@@ -8,7 +8,7 @@
  * Batch (PDFs 2..25): enqueueBatchExtraction + parseBatchResult
  */
 import 'server-only';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 
 const MODEL_SONNET = 'claude-sonnet-4-6';
@@ -113,15 +113,11 @@ interface SyncArgs {
     };
 }
 
-async function getClient(apiKey?: string): Promise<AnthropicType> {
+function getClient(apiKey?: string): Anthropic {
     /* P0 fix: SDK default maxRetries=2 vermenigvuldigt onze timeout met 3.
        Onze withAnthropicRetry doet al 3 attempts met expo backoff, dus disable
        SDK-level retries om dubbele retry-storm + Vercel 120s overschrijding
-       te voorkomen.
-
-       Lazy-import om webpack module-graph traversal tijdens build te vermijden
-       (anders hangt productie-build op import-resolution loop). */
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+       te voorkomen. */
     return new Anthropic({
         apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
         maxRetries: 0,
@@ -184,7 +180,7 @@ export function humanizeAnthropicError(err: unknown): string {
 }
 
 export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResult> {
-    const client = await getClient(args.apiKey);
+    const client = getClient(args.apiKey);
     const userText = args.chunkMeta
         ? buildChunkUserPrompt(args.chunkMeta.pageStart, args.chunkMeta.pageEnd, args.chunkMeta.chunkIndex, args.chunkMeta.chunkTotal)
         : USER_PROMPT;
@@ -235,7 +231,7 @@ export async function extractFromPdfSync(args: SyncArgs): Promise<PdfExtractResu
     const costCents = Math.round(costUsd * USD_TO_EUR_CENTS);
 
     const text = response.content
-        .filter((b): b is AnthropicType.TextBlock => b.type === 'text')
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map(b => b.text)
         .join('');
 
@@ -293,7 +289,7 @@ export interface BatchEnqueueItem {
 
 export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?: string): Promise<{ batchId: string }> {
     if (items.length === 0) throw new Error('EMPTY_BATCH');
-    const client = await getClient(apiKey);
+    const client = getClient(apiKey);
     /* P0 fix: timeout 60s + maxAttempts=1 zodat batch-enqueue binnen Vercel
        120s blijft (worst-case: 60s timeout + 1s response time ≈ 61s). */
     const batch = await withAnthropicRetry(() => client.messages.batches.create({
@@ -327,7 +323,7 @@ export async function enqueueBatchExtraction(items: BatchEnqueueItem[], apiKey?:
                             { type: 'text', text: userText },
                         ],
                     }],
-                } as AnthropicType.MessageCreateParamsNonStreaming,
+                } as Anthropic.MessageCreateParamsNonStreaming,
             };
         }),
     }, { timeout: BATCH_ENQUEUE_TIMEOUT_MS }), 1);

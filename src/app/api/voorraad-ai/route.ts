@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
 
 /*
  * Voorraad AI-assistent endpoint
@@ -51,8 +50,7 @@ ${snapshot || '(geen snapshot beschikbaar)'}
 
 Vraag: ${question}`;
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
         const response = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 600,

@@ -12,14 +12,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
 
 async function resolveOrgId(supabase: any, userId: string): Promise<string | null> {
     const { data } = await supabase
@@ -147,8 +146,7 @@ export async function POST(req: NextRequest) {
         // Fetch mislukt (timeout, DNS, etc.) — probeer toch een AI-call zonder HTML
     }
 
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const anthropic: AnthropicType = new Anthropic();
+    const anthropic = new Anthropic();
     const userContent = html
         ? `Website URL: ${rawUrl}\n\n<page_content>\n${html}\n</page_content>`
         : `Website URL: ${rawUrl}\n\n(Homepage kon niet worden opgehaald — geef beste gok op basis van de URL.)`;

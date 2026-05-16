@@ -22,7 +22,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, GripVertical, Save, ChevronUp, ChevronDown, X, Sparkles } from 'lucide-react';
 import type { DbCourse, CourseMise, CourseItem } from '@/types';
-import { useToast } from '@/components/Toast';
 
 interface Props {
     eventId: number;
@@ -84,7 +83,6 @@ function emptyCourse(num: number, guests: number, defaultTables = 6): EditableCo
 }
 
 export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) {
-    const showToast = useToast();
     const [courses, setCourses] = useState<EditableCourse[]>([]);
     const [tableCount, setTableCount] = useState(6);
     const [loading, setLoading] = useState(true);
@@ -203,7 +201,7 @@ export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) 
             onSaved?.();
         } catch (e: any) {
             console.error('[CoursesEditor] save failed:', e);
-            showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error');
+            alert('Opslaan mislukt: ' + (e?.message || 'onbekende fout'));
         } finally {
             setSaving(false);
         }

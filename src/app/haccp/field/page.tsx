@@ -1,14 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Check, Minus, Plus, Thermometer, Printer, Mic, MicOff } from 'lucide-react';
+import { ArrowLeft, Check, Minus, Plus, Thermometer } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { MobileSafeBottom } from '@/components/mobile';
-import { useToast } from '@/components/Toast';
-import { printTempRecordLabel } from '@/lib/printLabel';
-import { parseVoiceHaccp } from '@/lib/voiceHaccpParser';
 
 /**
  * SF-3 — HACCP Field Mode
@@ -38,8 +35,7 @@ const CHECK_TYPES = [
 ];
 
 export default function HaccpFieldPage() {
-  const { orgId, organization } = useOrg();
-  const showToast = useToast();
+  const { orgId } = useOrg();
   const [presetIdx, setPresetIdx] = useState<number | null>(null);
   const [customWat, setCustomWat] = useState('');
   const [temp, setTemp] = useState<number>(4);
@@ -48,10 +44,6 @@ export default function HaccpFieldPage() {
   const [notitie, setNotitie] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<{
-    id?: number; wat: string; temp: number; datum: string; tijd: string;
-    check_type: string; chef: string | null; status: 'ok' | 'afwijking';
-  } | null>(null);
   const [recent, setRecent] = useState<{ id: number; wat: string; temp: number; tijd: string }[]>([]);
 
   // Load recent logs (last 5)
@@ -86,7 +78,7 @@ export default function HaccpFieldPage() {
     if (!orgId || !supabase) return;
     const watFinal = (presetIdx !== null && PRESETS[presetIdx].wat) || customWat.trim();
     if (!watFinal) {
-      showToast('Kies een preset of vul een productnaam in', 'warning');
+      alert('Kies een preset of vul een productnaam in');
       return;
     }
 
@@ -95,121 +87,27 @@ export default function HaccpFieldPage() {
 
     setSaving(true);
     const now = new Date();
-    const datum = now.toISOString().slice(0, 10);
-    const tijd = now.toTimeString().slice(0, 5);
-    const statusVal: 'ok' | 'afwijking' = inRange ? 'ok' : 'afwijking';
-    const { data: inserted, error } = await supabase.from('haccp_records').insert({
+    const { error } = await supabase.from('haccp_records').insert({
       organization_id: orgId,
-      datum,
-      tijd,
+      datum: now.toISOString().slice(0, 10),
+      tijd: now.toTimeString().slice(0, 5),
       wat: watFinal,
       temp,
       type: 'temperatuur',
       check_type: checkType,
       chef: chef || null,
       notitie: notitie || null,
-      status: statusVal,
+      status: inRange ? 'ok' : 'afwijking',
       auto_logged: false,
-    }).select('id').maybeSingle();
+    });
     setSaving(false);
     if (error) {
-      showToast('Opslaan mislukt: ' + error.message, 'error');
+      alert('Opslaan mislukt: ' + error.message);
       return;
     }
     setSavedAt(now.toISOString());
-    setLastSaved({
-      id: inserted?.id,
-      wat: watFinal,
-      temp,
-      datum,
-      tijd,
-      check_type: checkType,
-      chef: chef || null,
-      status: statusVal,
-    });
     // reset minimal velden — chef en preset blijven om snel volgend log te doen
     setNotitie('');
-  }
-
-  function handlePrintSticker() {
-    if (!lastSaved) return;
-    printTempRecordLabel({
-      ...lastSaved,
-      org_naam: organization?.name || null,
-      record_id: lastSaved.id ?? null,
-    });
-  }
-
-  /* Voice-HACCP — Pillar #4 / Lars-persona. Web Speech API → parse → autofill.
-     Chrome/Edge ondersteunen webkitSpeechRecognition. Bij iOS Safari / Firefox
-     verbergen we de knop. Fallback: handmatig invullen blijft altijd werken. */
-  const [voiceListening, setVoiceListening] = useState(false);
-  const [voiceSupported, setVoiceSupported] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
-
-  useEffect(function () {
-    if (typeof window === 'undefined') return;
-    const w: any = window;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    setVoiceSupported(!!Ctor);
-  }, []);
-
-  function startVoiceCapture() {
-    if (typeof window === 'undefined') return;
-    const w: any = window;
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) {
-      showToast('Spraak-invoer niet ondersteund op dit apparaat', 'warning');
-      return;
-    }
-    try {
-      const rec = new Ctor();
-      rec.lang = 'nl-NL';
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.maxAlternatives = 1;
-
-      rec.onresult = function (event: any) {
-        const transcript: string = event.results?.[0]?.[0]?.transcript || '';
-        setVoiceTranscript(transcript);
-        const parsed = parseVoiceHaccp(transcript);
-        if (parsed.confidence < 0.5) {
-          showToast('Niet begrepen: "' + transcript.slice(0, 60) + '" — probeer opnieuw of vul handmatig in.', 'warning');
-          return;
-        }
-        // Apply detected fields
-        if (parsed.wat) {
-          const idx = PRESETS.findIndex(function (p) { return p.wat === parsed.wat; });
-          if (idx >= 0) selectPreset(idx);
-          else { setPresetIdx(PRESETS.length - 1); setCustomWat(parsed.wat); }
-        }
-        if (parsed.temp != null) setTemp(parsed.temp);
-        if (parsed.check_type) setCheckType(parsed.check_type);
-        showToast(
-          'Verstaan: ' + (parsed.wat || '?') + ' ' + (parsed.temp != null ? parsed.temp + '°C' : '') + ' (' + (parsed.check_type || '?') + ')',
-          parsed.confidence >= 0.9 ? 'success' : 'info',
-        );
-      };
-      rec.onerror = function (event: any) {
-        setVoiceListening(false);
-        showToast('Spraak-fout: ' + (event.error || 'onbekend'), 'error');
-      };
-      rec.onend = function () { setVoiceListening(false); };
-
-      recognitionRef.current = rec;
-      setVoiceTranscript(null);
-      setVoiceListening(true);
-      rec.start();
-    } catch (e: any) {
-      setVoiceListening(false);
-      showToast('Spraak-start mislukt: ' + (e.message || ''), 'error');
-    }
-  }
-
-  function stopVoiceCapture() {
-    try { recognitionRef.current?.stop(); } catch { /* */ }
-    setVoiceListening(false);
   }
 
   return (
@@ -243,30 +141,6 @@ export default function HaccpFieldPage() {
             className="w-full px-4 mb-6 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)] text-[var(--text)] text-[16px]"
             style={{ minHeight: 56 }}
           />
-
-          {/* Voice-capture rij — verschijnt alleen op Chrome/Edge. Eén tap →
-              Web Speech API transcribeert NL → parseVoiceHaccp vult de form. */}
-          {voiceSupported && (
-            <div className="mb-5 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={voiceListening ? stopVoiceCapture : startVoiceCapture}
-                className={`inline-flex items-center justify-center gap-2 rounded-xl text-[14px] font-bold transition-all touch-manipulation ${voiceListening ? 'bg-red-500/15 text-red-400 border-2 border-red-500/40 animate-pulse' : 'bg-[var(--color-accent-gold)]/15 text-[var(--color-accent-gold)] border-2 border-[var(--color-accent-gold)]/40 hover:bg-[var(--color-accent-gold)]/25'}`}
-                style={{ minHeight: 56, minWidth: 56, paddingInline: 16 }}
-                aria-label={voiceListening ? 'Stop spraak-opname' : 'Start spraak-opname voor temperatuur-log'}
-              >
-                {voiceListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                <span className="hidden sm:inline">{voiceListening ? 'Luistert...' : 'Spreek log in'}</span>
-              </button>
-              <div className="flex-1 text-[11px] text-[var(--muted)] leading-snug">
-                {voiceListening
-                  ? 'Zeg bv. "kerntemp kip vijfenzeventig graden".'
-                  : voiceTranscript
-                    ? <>Verstaan: <span className="text-[var(--text)] italic">"{voiceTranscript}"</span></>
-                    : 'Tap mic en zeg type + product + temperatuur.'}
-              </div>
-            </div>
-          )}
 
           {/* Stap 2: preset */}
           <label className="block text-[12px] uppercase tracking-[0.15em] text-[var(--muted)] mb-3">Wat meet je?</label>
@@ -406,22 +280,9 @@ export default function HaccpFieldPage() {
           </button>
 
           {savedAt && (
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-[13px] text-emerald-400">
-                <Check className="w-4 h-4" />
-                Opgeslagen om {new Date(savedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              {lastSaved && (
-                <button
-                  type="button"
-                  onClick={handlePrintSticker}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-[13px] font-bold bg-[var(--card-solid)] hover:bg-[var(--card-solid)]/80 text-[var(--text)] border border-[var(--card-solid)] touch-manipulation"
-                  style={{ minHeight: 56 }}
-                >
-                  <Printer className="w-4 h-4" />
-                  Print sticker
-                </button>
-              )}
+            <div className="mt-4 flex items-center gap-2 text-[13px] text-emerald-400">
+              <Check className="w-4 h-4" />
+              Opgeslagen om {new Date(savedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
         </div>

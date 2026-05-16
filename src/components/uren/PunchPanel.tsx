@@ -76,7 +76,6 @@ export default function PunchPanel({ me, myActiveLog, events, myYearTotalHours, 
 
   return (
     <div
-      className="punch-panel"
       style={{
         padding: '24px 28px',
         borderRadius: 16,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -14,7 +14,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 const CHAT_REQUESTS_PER_MINUTE = 30;
 
@@ -363,7 +362,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const roleConstraint = buildRoleConstraint(userRole);
         if (roleConstraint) staticParts.push(roleConstraint);
 
-        const systemBlocks: AnthropicType.Messages.TextBlockParam[] = [
+        const systemBlocks: Anthropic.Messages.TextBlockParam[] = [
             { type: 'text', text: staticParts.join('\n'), cache_control: { type: 'ephemeral' } },
         ];
         if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
@@ -381,7 +380,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         }
 
         // Map messages to Anthropic format — system is separate, only user/assistant in messages
-        const anthropicMessages: AnthropicType.Messages.MessageParam[] = messages
+        const anthropicMessages: Anthropic.Messages.MessageParam[] = messages
             .filter(m => m.role === 'user' || m.role === 'assistant')
             .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
@@ -391,7 +390,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         }
 
         // Collapse consecutive same-role messages (Anthropic handles it but cleaner)
-        const merged: AnthropicType.Messages.MessageParam[] = [];
+        const merged: Anthropic.Messages.MessageParam[] = [];
         for (const msg of anthropicMessages) {
             const last = merged[merged.length - 1];
             if (last && last.role === msg.role) {
@@ -420,7 +419,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                         return true;
                     });
                 if (accepted.length > 0) {
-                    const blocks: Array<AnthropicType.ImageBlockParam | AnthropicType.TextBlockParam> = [];
+                    const blocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
                     for (const att of accepted) {
                         blocks.push({
                             type: 'image',
@@ -548,7 +547,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                     }));
 
                     // Bouw content-blocks: per URL eerst image (als gefetched) dan text-block
-                    const contentBlocks: Array<AnthropicType.ImageBlockParam | AnthropicType.TextBlockParam> = [];
+                    const contentBlocks: Array<Anthropic.ImageBlockParam | Anthropic.TextBlockParam> = [];
                     contentBlocks.push({ type: 'text', text: (lastMsg.content as string) });
                     for (const f of fetched) {
                         if ('error' in f && f.error) {
@@ -611,8 +610,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             maxTokens = Math.max(maxTokens, 4000);
         }
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
 
         // ── TOOL-USE FORCING voor /gerechten brainstorm ──────────────────────────
         // Opus 4.7 met thinking negeert prompt-instructies om brainstorm_gerechten_concepts
@@ -885,7 +883,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const readable = new ReadableStream({
             async start(controller) {
                 let fullText = '';
-                let usage: AnthropicType.Messages.Usage | null = null;
+                let usage: Anthropic.Messages.Usage | null = null;
                 let outputTokens = 0;
                 let controllerClosed = false;
                 // Helper: enqueue alleen zolang client nog luistert. Voorkomt
@@ -1069,12 +1067,11 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                     if (!controllerClosed) {
                         console.error('Anthropic stream error:', err);
                     }
-                    // Duck-type op status/naam — Anthropic is lazy-imported binnen de POST scope.
-                    const msg = (err?.status === 401 || err?.name === 'AuthenticationError')
+                    const msg = err instanceof Anthropic.AuthenticationError
                         ? 'Ongeldige ANTHROPIC_API_KEY'
-                        : (err?.status === 429 || err?.name === 'RateLimitError')
+                        : err instanceof Anthropic.RateLimitError
                         ? 'AI rate limit bereikt — wacht even en probeer opnieuw.'
-                        : (err?.status && err?.name?.endsWith?.('APIError'))
+                        : err instanceof Anthropic.APIError
                         ? 'Claude API fout: ' + err.message
                         : err?.message || 'Onbekende AI-fout';
                     safeEnqueue({ error: msg, done: true, full: fullText });
@@ -1106,24 +1103,23 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         };
         console.error('[CHAT API ERROR]', JSON.stringify(details, null, 2));
 
-        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try scope hierboven.
-        if (error?.status === 401 || error?.name === 'AuthenticationError') {
+        if (error instanceof Anthropic.AuthenticationError) {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY', detail: error.message }, { status: 401 });
         }
-        if (error?.status === 429 || error?.name === 'RateLimitError') {
+        if (error instanceof Anthropic.RateLimitError) {
             return NextResponse.json({ error: 'Rate limit — wacht even', detail: error.message }, { status: 429 });
         }
-        if (error?.status === 400 || error?.name === 'BadRequestError') {
+        if (error instanceof Anthropic.BadRequestError) {
             return NextResponse.json({ error: 'Anthropic API fout', detail: error.message, status: error.status }, { status: 400 });
         }
-        if (error?.status === 404 || error?.name === 'NotFoundError') {
+        if (error instanceof Anthropic.NotFoundError) {
             return NextResponse.json({
                 error: 'Model niet beschikbaar — mogelijk geen toegang tot dit model op jouw account',
                 detail: error.message,
                 hint: 'Check console.anthropic.com → Models voor beschikbare modellen',
             }, { status: 404 });
         }
-        if (error?.status && error?.name?.endsWith?.('APIError')) {
+        if (error instanceof Anthropic.APIError) {
             return NextResponse.json({ error: 'Anthropic API fout', detail: error.message, status: error.status }, { status: error.status || 502 });
         }
         return NextResponse.json({

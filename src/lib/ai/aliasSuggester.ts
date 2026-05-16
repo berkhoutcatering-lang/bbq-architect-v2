@@ -12,7 +12,7 @@
  * Cost: Haiku 4.5 is goedkoper dan Sonnet (~80% korting); 100 producten ≈ €0.01.
  */
 import 'server-only';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 
 const MODEL_HAIKU = 'claude-haiku-4-5-20251001';
@@ -124,10 +124,8 @@ export async function suggestAliasesForProducts(
         return result;
     }
 
-    /* P0: disable SDK retries — withRetry doet z'n eigen mechanism.
-       Lazy-import om webpack hang tijdens production build te voorkomen. */
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({
+    /* P0: disable SDK retries — withRetry doet z'n eigen mechanism */
+    const client = new Anthropic({
         apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
         maxRetries: 0,
     });
@@ -142,7 +140,7 @@ export async function suggestAliasesForProducts(
 
     const userText = `Geef voor elk product 0-5 overkoepelende namen. Output JSON-array.\n\nINPUT:\n${JSON.stringify(compactInput)}`;
 
-    let response: AnthropicType.Messages.Message;
+    let response: Anthropic.Messages.Message;
     try {
         response = await withRetry(() => client.messages.create({
             model: MODEL_HAIKU,
@@ -179,7 +177,7 @@ export async function suggestAliasesForProducts(
     const costCents = Math.round(costUsd * USD_TO_EUR_CENTS);
 
     const text = response.content
-        .filter((b): b is AnthropicType.TextBlock => b.type === 'text')
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map(b => b.text).join('');
 
     /* Parse + valideer */

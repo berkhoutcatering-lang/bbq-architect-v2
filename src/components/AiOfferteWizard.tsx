@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus, BookOpen } from 'lucide-react';
+import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import CarbonScoreCard from '@/components/CarbonScoreCard';
 
 const GOLD = '#c4a35a';
 
@@ -375,69 +374,23 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                 );
                             })()}
 
-                            {/* Carbon-footprint preview — Pillar #2 + 2026-trend. */}
-                            {(() => {
-                                const allIngredients = (generated.gerechten || []).flatMap(function (g: any) {
-                                    return Array.isArray(g.ingredienten) ? g.ingredienten : [];
-                                });
-                                if (allIngredients.length === 0) return null;
-                                return (
-                                    <CarbonScoreCard
-                                        ingredients={allIngredients}
-                                        gasten={gasten}
-                                    />
-                                );
-                            })()}
-
                             <div>
-                                {(() => {
-                                    const totalCites = (generated.gerechten || []).reduce(
-                                        (acc: number, g: any) => acc + (Array.isArray(g.inspired_by) ? g.inspired_by.length : 0),
-                                        0,
-                                    );
-                                    return (
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted, #999)', textTransform: 'uppercase', letterSpacing: '.15em' }}>
-                                                Menu · {(generated.gerechten || []).length} gerechten
-                                            </div>
-                                            {totalCites > 0 && (
-                                                <div title="AI baseert zich op jouw bestaande gerechten — klik op een chip om de bron te zien"
-                                                    style={{ fontSize: 10, fontWeight: 600, color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                    <BookOpen size={11} /> {totalCites} bronvermelding{totalCites === 1 ? '' : 'en'}
+                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted, #999)', textTransform: 'uppercase', letterSpacing: '.15em', marginBottom: 8 }}>Menu · {(generated.gerechten || []).length} gerechten</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {(generated.gerechten || []).map((g: any, i: number) => (
+                                        <div key={i} style={{ padding: 10, borderRadius: 8, background: 'var(--card, #15151a)', border: '1px solid var(--card-solid, #1a1a1e)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: 'var(--muted, #999)' }}>{g.gang || g.categorie || '—'}</span>
                                                 </div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{g.naam}</div>
+                                                {g.beschrijving && <div style={{ fontSize: 11, color: 'var(--muted, #999)', marginTop: 2 }}>{g.beschrijving}</div>}
+                                            </div>
+                                            {g.geschatte_kostprijs_pp && (
+                                                <span style={{ fontSize: 11, color: GOLD, fontVariantNumeric: 'tabular-nums', fontWeight: 700, whiteSpace: 'nowrap' }}>€{Number(g.geschatte_kostprijs_pp).toFixed(2)}/p</span>
                                             )}
                                         </div>
-                                    );
-                                })()}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                    {(generated.gerechten || []).map((g: any, i: number) => {
-                                        const sources: string[] = Array.isArray(g.inspired_by) ? g.inspired_by.filter((s: any) => typeof s === 'string' && s.trim()) : [];
-                                        return (
-                                            <div key={i} style={{ padding: 10, borderRadius: 8, background: 'var(--card, #15151a)', border: '1px solid var(--card-solid, #1a1a1e)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: 'var(--muted, #999)' }}>{g.gang || g.categorie || '—'}</span>
-                                                    </div>
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{g.naam}</div>
-                                                    {g.beschrijving && <div style={{ fontSize: 11, color: 'var(--muted, #999)', marginTop: 2 }}>{g.beschrijving}</div>}
-                                                    {sources.length > 0 && (
-                                                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                                            {sources.slice(0, 3).map((src, j) => (
-                                                                <span key={j}
-                                                                    title={`Bron uit jouw repertoire: ${src}`}
-                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.25)', color: GOLD }}>
-                                                                    <BookOpen size={8} /> {src}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {g.geschatte_kostprijs_pp && (
-                                                    <span style={{ fontSize: 11, color: GOLD, fontVariantNumeric: 'tabular-nums', fontWeight: 700, whiteSpace: 'nowrap' }}>€{Number(g.geschatte_kostprijs_pp).toFixed(2)}/p</span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                    ))}
                                 </div>
                             </div>
 
