@@ -17,6 +17,11 @@
  *  - org_price_mutations tabel met source='invoice' (al ondersteund in 024)
  */
 
+// Server-only directive — Next.js' eigen signaal aan webpack dat deze file
+// nooit in client-bundle mag terechtkomen. Voorkomt dat webpack indirecte
+// pathways probeert om deze code via client te bundelen.
+import 'server-only';
+
 // Type-only imports — TypeScript verwijdert deze tijdens compile.
 // Voorkomt dat webpack de Anthropic-SDK + Supabase-client (gigantische
 // module-graphs) probeert te bundelen in deze file's chunk, wat anders een

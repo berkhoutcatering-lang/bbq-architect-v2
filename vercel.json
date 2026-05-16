@@ -8,10 +8,6 @@
         {
             "path": "/api/pricelists/batch/poll",
             "schedule": "0 4 * * *"
-        },
-        {
-            "path": "/api/cron/moneybird-purchase-sync",
-            "schedule": "0 5 * * *"
         }
     ]
 }
