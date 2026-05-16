@@ -3,9 +3,10 @@
  * Werkt met pdf-lib (kleine bundle, runs in browser).
  * Gebruikt als fallback wanneer pdfjs text-extract faalt EN de PDF
  * boven Anthropic's 100-page vision-limiet zit.
+ *
+ * NB: pdf-lib lazy-geladen via dynamic import — top-level import veroorzaakt
+ * webpack production-build hangs (CJS interop met grote dependency-graph).
  */
-
-import { PDFDocument } from 'pdf-lib';
 
 export interface SplitChunk {
     blob: Blob;
@@ -16,6 +17,7 @@ export interface SplitChunk {
 }
 
 export async function splitPdfIntoChunks(file: File, pagesPerChunk = 90): Promise<SplitChunk[]> {
+    const { PDFDocument } = await import('pdf-lib');
     const arrayBuf = await file.arrayBuffer();
     const srcDoc = await PDFDocument.load(arrayBuf);
     const totalPages = srcDoc.getPageCount();
@@ -60,6 +62,7 @@ export async function splitPdfIntoChunks(file: File, pagesPerChunk = 90): Promis
 
 export async function getPdfPageCount(file: File): Promise<number> {
     try {
+        const { PDFDocument } = await import('pdf-lib');
         const arrayBuf = await file.arrayBuffer();
         const doc = await PDFDocument.load(arrayBuf);
         return doc.getPageCount();
