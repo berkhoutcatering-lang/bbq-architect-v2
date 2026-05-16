@@ -11,13 +11,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 const EXTRACT_TOOL = {
     name: 'extract_klantgesprek',
@@ -82,7 +83,8 @@ async function handler(req: NextRequest, ctx: TenantAuthCtx): Promise<NextRespon
        <transcript>-delimiters; we instrueren het model die als data te lezen. */
     const safeTranscript = transcript.replace(/[<>]/g, '');
 
-    const client = new Anthropic({ apiKey });
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client: AnthropicType = new Anthropic({ apiKey });
     const model = 'claude-haiku-4-5-20251001';
 
     let response;

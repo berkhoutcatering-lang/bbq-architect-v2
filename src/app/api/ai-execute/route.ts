@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@/lib/supabase-server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+
+export const dynamic = 'force-dynamic';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -159,7 +161,7 @@ interface EnrichResult {
     };
 }
 
-async function enrichSingleItem(client: Anthropic, naam: string, type: string): Promise<EnrichResult> {
+async function enrichSingleItem(client: AnthropicType, naam: string, type: string): Promise<EnrichResult> {
     try {
         const resp = await client.messages.create({
             model: 'claude-haiku-4-5-20251001',
@@ -192,7 +194,8 @@ async function bulkCreateMaterieel(sb: SupabaseClient, orgId: string | null, par
     let enriched: Record<string, any>[] = items.map(() => ({}));
     let aggUsage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
     if (apiKey) {
-        const client = new Anthropic({ apiKey });
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client: AnthropicType = new Anthropic({ apiKey });
         const BATCH = 5;
         for (let i = 0; i < items.length; i += BATCH) {
             const slice = items.slice(i, i + BATCH);

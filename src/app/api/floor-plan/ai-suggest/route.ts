@@ -10,13 +10,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+// Skip static analysis tijdens build (zie commit 4f76e47 / Sam's webpack-hang-fix).
+export const dynamic = 'force-dynamic';
 
 const SHAPE_KINDS = [
     'round-table-6', 'round-table-8', 'round-table-10',
@@ -86,7 +88,10 @@ async function handler(req: NextRequest, ctx: TenantAuthCtx): Promise<NextRespon
         'Genereer een layout-suggestie als JSON volgens het schema.',
     ].filter(Boolean).join('\n');
 
-    const client = new Anthropic({ apiKey });
+    // Lazy-import voorkomt dat webpack de hele Anthropic-graph tijdens build
+    // probeert te bundelen (compile-loop, zie #51).
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client: AnthropicType = new Anthropic({ apiKey });
     const model = 'claude-haiku-4-5-20251001';
 
     let parsed: any = null;
