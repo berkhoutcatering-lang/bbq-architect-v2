@@ -20,7 +20,10 @@ import {
     ListOrdered, FileUp, Inbox,
 } from 'lucide-react';
 import FolderInbox from './_components/FolderInbox';
-import MoneybirdImportCard from './_components/MoneybirdImportCard';
+// MoneybirdImportCard via next/dynamic — voorkomt build-time analyse van de
+// component-keten die webpack production-build laat hangen.
+import dynamic from 'next/dynamic';
+const MoneybirdImportCard = dynamic(() => import('./_components/MoneybirdImportCard'), { ssr: false });
 
 const GOLD = '#c4a35a';
 const FOLDER_KEY = 'pi_folder_v3';   // bumped: nieuwe 'inbox' optie
