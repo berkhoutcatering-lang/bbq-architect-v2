@@ -10,7 +10,7 @@
  * en triggeren parent-aggregator als alle siblings done zijn.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -18,7 +18,6 @@ import { handleBatchResultItem, type PendingUploadRow } from '@/lib/ai/pricelist
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest): Promise<Response> {
     /* Auth: bestaande user-session via Supabase SSR */
@@ -81,8 +80,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     /* P0: disable SDK retries om Vercel function timeout te respecteren */
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({
+    const client = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
         maxRetries: 0,
     });

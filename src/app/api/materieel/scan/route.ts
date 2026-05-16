@@ -3,14 +3,13 @@
 // Geen DB-insert — frontend toont preview, user reviewt en klikt opslaan.
 // Hergebruikt het patroon van /api/parse-document maar met materieel-schema.
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 const MATERIEEL_SYSTEM_PROMPT = `Je bekijkt een productafbeelding (screenshot van IKEA/Sligro/etc, of foto van het echte product) voor Hop & Bites catering. Extract de relevante materieel-data → retourneer ALLEEN JSON.
 
@@ -61,9 +60,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geen afbeelding meegegeven (imageBase64 of imageUrl)' }, { status: 400 });
         }
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
-        const contentBlocks: AnthropicType.Messages.ContentBlockParam[] = [];
+        const client = new Anthropic({ apiKey });
+        const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
         if (imageBase64) {
             const parsed = imageBase64.startsWith('data:') ? parseDataUrl(imageBase64) : { mediaType: 'image/jpeg', data: imageBase64 };
@@ -178,11 +176,10 @@ export async function POST(req: NextRequest) {
         });
     } catch (err: any) {
         console.error('[materieel/scan] error:', err);
-        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try.
-        if (err?.status === 401 || err?.name === 'AuthenticationError') {
+        if (err instanceof Anthropic.AuthenticationError) {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
         }
-        if (err?.status === 429 || err?.name === 'RateLimitError') {
+        if (err instanceof Anthropic.RateLimitError) {
             return NextResponse.json({ error: 'AI rate limit — probeer opnieuw' }, { status: 429 });
         }
         return NextResponse.json({ error: err.message || 'Onbekende fout' }, { status: 500 });

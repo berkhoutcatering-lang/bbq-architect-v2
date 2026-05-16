@@ -22,13 +22,6 @@ const config: Config = {
         text: "var(--text)",
         muted: "var(--muted)",
       },
-      minHeight: {
-        touch: "44px",
-        field: "56px",
-      },
-      minWidth: {
-        touch: "44px",
-      },
     },
   },
   plugins: [],

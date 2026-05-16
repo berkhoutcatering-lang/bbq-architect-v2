@@ -2,18 +2,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
-import { renderSignedCertificate } from '@/lib/signedPdfRenderer';
 
 let sb: ReturnType<typeof createServiceSupabase> | null = null;
 try { sb = createServiceSupabase(); } catch { sb = null; }
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
-
-function getClientIp(req: NextRequest): string | null {
-    const xff = req.headers.get('x-forwarded-for');
-    if (xff) return xff.split(',')[0]!.trim();
-    return req.headers.get('x-real-ip') || null;
-}
 
 export async function POST(req: NextRequest) {
     try {
@@ -23,10 +16,6 @@ export async function POST(req: NextRequest) {
         const { offerteId, publicToken, signedBy, signatureUrl } = body;
         if (!offerteId) return NextResponse.json({ error: 'Geen offerte ID' }, { status: 400 });
         if (!publicToken || typeof publicToken !== 'string') return NextResponse.json({ error: 'Geen publieke token' }, { status: 400 });
-
-        const signedIp = getClientIp(req);
-        const signedUserAgent = req.headers.get('user-agent');
-        const signedAtIso = new Date().toISOString();
 
         // 1. Fetch offerte
         const { data: offerte, error: fetchErr } = await sb
@@ -42,62 +31,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, message: 'Offerte was al geaccepteerd', skipped: true });
         }
 
-        // 2. Update offerte status + signature data (audit-trail: signer, IP, UA, timestamp)
+        // 2. Update offerte status + signature data
         const updatePayload: Record<string, any> = { status: 'geaccepteerd' };
         if (signedBy) updatePayload.signed_by = signedBy;
         if (signatureUrl) updatePayload.signature_url = signatureUrl;
-        updatePayload.signed_at = signedAtIso;
-        if (signedIp) updatePayload.signed_ip = signedIp;
-        if (signedUserAgent) updatePayload.signed_user_agent = signedUserAgent;
+        updatePayload.signed_at = new Date().toISOString();
 
         const { error: updateErr } = await sb.from('offertes').update(updatePayload).eq('id', offerteId).eq('public_token', publicToken);
         if (updateErr) return NextResponse.json({ error: 'Status update mislukt: ' + updateErr.message }, { status: 500 });
-
-        // 2b. Render signed certificate PDF + upload to Storage (Pillar #2 audit-trail)
-        try {
-            const items = (function () {
-                let it = offerte.items;
-                if (typeof it === 'string') { try { it = JSON.parse(it); } catch { it = []; } }
-                return Array.isArray(it) ? it : [];
-            })();
-            const bedragIncl = items.reduce(function (sum: number, x: any) {
-                return sum + (Number(x.qty) || 0) * (Number(x.prijs) || 0);
-            }, 0);
-
-            const pdfBytes = await renderSignedCertificate({
-                offerteNummer: String(offerte.nummer || offerte.id),
-                offerteDatum: offerte.datum || null,
-                clientNaam: offerte.client_naam || null,
-                bedragIncl,
-                signedBy: signedBy || 'Onbekend',
-                signedAt: signedAtIso,
-                signedIp,
-                signedUserAgent,
-                signatureDataUrl: signatureUrl || null,
-                organizationName: null,
-                organizationKvk: null,
-            });
-
-            const orgId = offerte.organization_id;
-            const storagePath = `org_${orgId}/offertes/signed/${offerte.id}.pdf`;
-            const { error: uploadErr } = await sb.storage
-                .from('signed-pdfs')
-                .upload(storagePath, pdfBytes as any, {
-                    contentType: 'application/pdf',
-                    upsert: true,
-                });
-
-            if (uploadErr) {
-                console.error('[ACCEPT-API] Signed-PDF upload failed:', uploadErr.message);
-            } else {
-                const { data: urlData } = sb.storage.from('signed-pdfs').getPublicUrl(storagePath);
-                if (urlData?.publicUrl) {
-                    await sb.from('offertes').update({ signed_pdf_url: urlData.publicUrl }).eq('id', offerteId);
-                }
-            }
-        } catch (pdfErr: any) {
-            console.error('[ACCEPT-API] Signed-PDF render error:', pdfErr.message);
-        }
 
         // 3. Parse items safely
         let items = offerte.items;

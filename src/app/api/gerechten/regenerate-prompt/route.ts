@@ -4,14 +4,13 @@
 // "fine-dining-perfect" prompts kunnen worden vervangen door de nieuwe
 // "echte foto met menselijke handtouch" stijl.
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {
@@ -37,8 +36,7 @@ export async function POST(req: NextRequest) {
         const mem = await sb.from('organization_members').select('organization_id').eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
         orgId = mem.data?.organization_id ?? null;
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
 
         const tool = {
             name: 'generate_realistic_foto_prompt',

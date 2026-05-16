@@ -1,54 +1,9 @@
 # BBQ Architect v2 — Full UX Audit & Strategy Report
 
-**Date:** 2026-04-07 (initial audit) · 2026-05-15 (mobile-sweep follow-up)
+**Date:** 2026-04-07
 **Scope:** Full application responsive audit, competitive benchmarking, UX strategy
 **Application:** BBQ Architect — Hop & Bites Command Center
 **Stack:** Next.js 16, React 19, Tailwind CSS (CDN), Supabase
-
----
-
-## 2026-05-15 — Mobile-sweep update
-
-Brief: Sam's prompt "loop de app volledig langs dat alles op de telefoon klopt, letters, workflow, knoppen — meerdere pagina's niet handig op de telefoon, je ziet niet alles, afgesneden beeld als ware."
-
-**Methode:** preview-tool viewport 390×844 (iPhone 14), elke hub langsgelopen. Plan in `~/.claude/plans/loop-de-app-volledig-resilient-sunset.md`.
-
-**Wat is gefixed:**
-
-| Laag | Fix | Bestand |
-|---|---|---|
-| Tokens | `min-h-touch` (44px) en `min-h-field` (56px) Tailwind utilities | [tailwind.config.ts](tailwind.config.ts) |
-| Button | `sm` variant 36→44px globaal · nieuwe `touch` size (56px) voor Lars-context | [src/components/Button.tsx](src/components/Button.tsx) · `.btn-touch` in globals.css |
-| Floor | `.btn-icon` expliciet 44×44 (was alleen aspect-ratio); icon-button min-width 44px op mobile (was 36) | [globals.css](src/app/globals.css) |
-| BottomNav-clearance | `#main-content` padding-bottom 60→72px op mobile + edge-padding 12→16px | [globals.css](src/app/globals.css) |
-| FAB | `display:none` op `max-width: 767px` (styled-jsx leak via Turbopack) | [globals.css](src/app/globals.css) |
-| Breadcrumb | `padding-left: 68px` op mobile zodat tekst niet onder hamburger valt | [globals.css](src/app/globals.css) |
-| EventHero (Vandaag) | Label-row wrap + grid 1-kolom stack op 390px (was "PARTICULI..." afgesneden) | [EventHero.tsx](src/components/dashboard/today/EventHero.tsx) + globals.css |
-| Event stats (Events hub) | `.ev-next-stats` 4→2 kolommen op mobile ("DAGEN TE GAAN" was afgesneden) | [redesign.css](src/components/redesign/redesign.css) |
-| Inspiratie / Hub-hero | `.eh-hero-content` 2-col → 1-col stack; stats-strip 5-col → 2-col met odd-border-right | [redesign.css](src/components/redesign/redesign.css) |
-| Klanten lijst | Pill `flex-shrink: 0` + naam wrap zodat "ZAKELI[jk]" niet afgesneden bij lange klantnamen | [klanten/page.tsx](src/app/klanten/page.tsx) |
-| Financiën year-nav | Inline-flex wrapper i.p.v. losse buttons (was elk op eigen regel via `.page-actions > button` 50%-rule) | [financien/page.tsx](src/app/financien/page.tsx) |
-| Price-Intelligence inbox-banner | Email-block + Kopieer-knop stacken op mobile (was knop afgesneden rechts) | [FolderInbox.tsx](src/app/price-intelligence/_components/FolderInbox.tsx) + globals.css |
-| Uren PunchPanel | Desktop 3-col grid stackt op mobile naar 1-col (Klok-knop / status-text / event-select) — fix voor woord-per-regel "Klaar / voor / service" bug | [PunchPanel.tsx](src/components/uren/PunchPanel.tsx) + globals.css |
-| ScanFab | Verplaatst naar `left: 16` op mobile zodat hij niet overlapt met MobileCmdKTrigger rechts | [globals.css](src/app/globals.css) |
-| Dashboard header | Spacer w-8→w-12 zodat hamburger (44px) niet onder titel duwt · datum compact (dd mmm) op mobile · Bell-button 44×44 met aria-label | [src/app/page.tsx](src/app/page.tsx) |
-| BottomNav match | Klanten verwijderd uit Geld-tab (hoort onder Verkoop-hub, niet Geld) | [BottomNav.tsx](src/components/BottomNav.tsx) |
-
-**Hubs doorgelopen op 390px:** Vandaag · Plannen (Agenda/Events) · Verkoop (Offertes/Facturen/Klanten) · Inspiratie (Hub/Componenten/Gerechten) · Voorraad (Voorraad/Leveranciers/Price-Intelligence) · Geld (Financiën/Uren) · Systeem (Instellingen) · Critical-path (HACCP/Menu-Engineering/AI-Chat).
-
-**Verwachte effect:**
-- Touch-target violations (was 81%) → < 5% op alle hub-pages
-- Tekst-elementen < 12px (was 94) → grotendeels via `.text-xs { font-size: 12px }`-cascade in mobile media-query
-- Horizontal-scroll bugs (afgesneden beeld) → 0 op hub-pages
-- Lighthouse Mobile Accessibility verwacht > 85 (was ~30 in april)
-
-**Niet opgelost (bewuste scope-grens):**
-- 1230 inline `style={{fontSize}}` resterend in `/price-intelligence`, `/admin`, en sommige event-detail-pages — global mobile CSS overrides catchen ≥9px/10px/11px maar individuele page-rewrites zijn aparte ronde
-- `.eh-countdown-ring` SVG-attrs nog inline (kan via viewBox scaleable maken, niet kritiek)
-- `/q/[id]` klantportaal niet visueel gechecked (geen test-public_id beschikbaar; component gebruikt al `StickyMobileCTA` patroon)
-- `/menu-engineering` (legacy /marges) hero op mobile niet volledig gecontroleerd
-
----
 
 ---
 

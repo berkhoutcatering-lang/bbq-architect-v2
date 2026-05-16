@@ -11,7 +11,7 @@
  * /api/pricelists/batch/poll-mine (user-triggered).
  */
 import 'server-only';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import {
     parseAndValidate,
     estimateBatchCostCents,
@@ -43,7 +43,7 @@ export interface BatchResultOutcome {
 }
 
 export async function handleBatchResultItem(
-    item: AnthropicType.Messages.Batches.MessageBatchIndividualResponse,
+    item: Anthropic.Messages.Batches.MessageBatchIndividualResponse,
     upload: PendingUploadRow,
     opts: { triggeredBy?: 'cron' | 'user_poll' } = {},
 ): Promise<BatchResultOutcome> {
@@ -72,7 +72,7 @@ export async function handleBatchResultItem(
     /* Batch result succeeded: parse JSON */
     const msg = item.result.message;
     const text = msg.content
-        .filter((b): b is AnthropicType.TextBlock => b.type === 'text')
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
         .map(b => b.text).join('');
 
     let lines;

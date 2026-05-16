@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCentsPure as estimateAiCostCents } from '@/lib/aiCostEstimate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
-export const dynamic = 'force-dynamic';
 
 /*
  * AI Chef Coach — persistent assistant voor Service KDS
@@ -160,8 +159,7 @@ ${ctx.userQuestion ? `\nVRAAG VAN PITMASTER: "${ctx.userQuestion}"` : '\n(Geen s
 
 Geef je directive als JSON.`;
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
         const response = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 350,

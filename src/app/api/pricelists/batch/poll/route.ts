@@ -11,7 +11,7 @@
  * CRON_SECRET env-var is set in vercel.json).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { handleBatchResultItem, type PendingUploadRow } from '@/lib/ai/pricelistBatchProcessing';
 
@@ -69,8 +69,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     /* P0: disable SDK retries om Vercel function timeout te respecteren */
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({
+    const client = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
         maxRetries: 0,
     });

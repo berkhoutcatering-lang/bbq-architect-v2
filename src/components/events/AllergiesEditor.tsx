@@ -16,7 +16,6 @@ import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, Save, AlertTriangle, Sparkles } from 'lucide-react';
 import { ALLERGENS, type AllergenCode } from '@/app/events/[id]/service/_data/serviceMockData';
 import type { DbEventAllergy } from '@/types';
-import { useToast } from '@/components/Toast';
 
 interface Props {
     eventId: number;
@@ -50,7 +49,6 @@ function emptyAllergy(): EditableAllergy {
 }
 
 export default function AllergiesEditor({ eventId, onSaved }: Props) {
-    const showToast = useToast();
     const [rows, setRows] = useState<EditableAllergy[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -114,7 +112,7 @@ export default function AllergiesEditor({ eventId, onSaved }: Props) {
             onSaved?.();
         } catch (e: any) {
             console.error('[AllergiesEditor] save failed:', e);
-            showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error');
+            alert('Opslaan mislukt: ' + (e?.message || 'onbekende fout'));
         } finally {
             setSaving(false);
         }

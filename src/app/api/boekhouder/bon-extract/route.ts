@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
@@ -9,7 +9,6 @@ import { PURCHASE_CODES, rgsLookup } from '@/lib/rgsCategories';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
-export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/boekhouder/bon-extract
@@ -136,8 +135,7 @@ export async function POST(req: NextRequest) {
       return `${cat.code}: ${cat.label}`;
     }).join(' | ');
 
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
     const mediaTypeMatch = /^data:([^;]+);base64,/i.exec(body.image_data_url);
     const mediaType = mediaTypeMatch?.[1] || 'image/jpeg';
     const base64Data = body.image_data_url.replace(/^data:[^;]+;base64,/i, '');

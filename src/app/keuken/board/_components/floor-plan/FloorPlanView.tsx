@@ -12,7 +12,6 @@ import { useOrg } from '@/lib/OrgContext';
 import { AlertTriangle, Wind, Check } from 'lucide-react';
 
 import FloorPlanToolbar, { type CanvasTool } from './FloorPlanToolbar';
-import FloorPlanAiSuggestButton from './FloorPlanAiSuggestButton';
 import type { ShapeKind, CanvasShape, WindDirection } from './CanvasShapes';
 import { SHAPE_META } from './CanvasShapes';
 import GuestPinSheet, { type GuestPinFormInput } from './GuestPinSheet';
@@ -428,27 +427,6 @@ export default function FloorPlanView({ event }: Props) {
                 onSave={saveCanvas}
                 saving={saving}
                 dirty={dirty}
-                aiSuggest={
-                    <FloorPlanAiSuggestButton
-                        eventId={typeof floorPlan?.event_id === 'number' ? floorPlan.event_id : undefined}
-                        defaultHeadcount={guests.length || 40}
-                        onApply={(aiShapes) => {
-                            updateShapes((curr) => [
-                                ...curr,
-                                ...aiShapes.map((s) => ({
-                                    id: s.id || `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                                    kind: s.kind,
-                                    x_pct: s.x_pct,
-                                    y_pct: s.y_pct,
-                                    w_pct: s.w_pct,
-                                    h_pct: s.h_pct,
-                                    rotation: s.rotation ?? 0,
-                                    label: s.label,
-                                })),
-                            ]);
-                        }}
-                    />
-                }
             />
 
             <div className="prep-canvas-main">

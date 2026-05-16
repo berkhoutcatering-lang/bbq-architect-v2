@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { ArrowLeft, Copy, Gift, Users, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
-import { useToast } from '@/components/Toast';
 
 /**
  * Referral-programma UI (playbook §L)
@@ -31,7 +30,6 @@ const MAX_ACTIVE = 10;
 
 export default function ReferralPage() {
   const { orgId } = useOrg();
-  const showToast = useToast();
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -72,7 +70,7 @@ export default function ReferralPage() {
     if (!error && data) {
       setReferrals(prev => [data as Referral, ...prev]);
     } else if (error) {
-      showToast('Code aanmaken mislukt: ' + error.message, 'error');
+      alert('Code aanmaken mislukt: ' + error.message);
     }
   }
 

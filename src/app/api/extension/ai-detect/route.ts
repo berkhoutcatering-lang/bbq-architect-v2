@@ -15,14 +15,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { verifyExtensionKey } from '@/lib/extensionAuth';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 function corsHeaders(): HeadersInit {
     return {
@@ -140,11 +139,10 @@ export async function POST(req: NextRequest) {
     const scopeKeywords: string[] = Array.isArray(body?.scopeKeywords) ? body.scopeKeywords : [];
     const SYSTEM_PROMPT = buildSystemPrompt(scope, scopeKeywords);
 
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
     const MODEL = 'claude-haiku-4-5';
 
-    let userBlocks: AnthropicType.Messages.ContentBlockParam[];
+    let userBlocks: Anthropic.Messages.ContentBlockParam[];
     if (mode === 'image') {
         /* Accept either `images: [{base64, mimeType}, ...]` (multi-screenshot) of legacy single `imageBase64`. */
         const imagesParam: Array<{ base64?: string; mimeType?: string }> | undefined = Array.isArray(body?.images) ? body.images : undefined;

@@ -54,7 +54,6 @@ export default function DashboardPage() {
   const lev = useSupabase('leveranciers', []);
   const crs = useSupabase('courses', []);
   const ealg = useSupabase('event_allergies', []);
-  const ma = useSupabase('marge_alerts', []);
 
   const events: any[] = ev.data || [];
   const facturen: any[] = fac.data || [];
@@ -68,7 +67,6 @@ export default function DashboardPage() {
   const leveranciers: any[] = lev.data || [];
   const courses: any[] = crs.data || [];
   const eventAllergies: any[] = ealg.data || [];
-  const margeAlerts: any[] = (ma.data || []).filter((a: any) => a.status === 'open');
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState('Welkom');
@@ -487,28 +485,6 @@ export default function DashboardPage() {
       href: '/agenda',
     });
   }
-  // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op
-  // open offertes. Engine: scanMargeAlerts() in src/lib/dal/margeAlerts.ts.
-  if (margeAlerts.length > 0) {
-    const worst = margeAlerts.reduce(function (a: any, b: any) {
-      return Math.abs(Number(b.pct_change) || 0) > Math.abs(Number(a.pct_change) || 0) ? b : a;
-    });
-    const totalImpact = margeAlerts.reduce(function (s: number, a: any) {
-      return s + (Number(a.total_marge_impact_eur) || 0);
-    }, 0);
-    const pct = Number(worst.pct_change) || 0;
-    attentionItems.push({
-      id: 'att-marge-alert',
-      severity: Math.abs(pct) >= 10 ? 'high' : 'medium',
-      icon: 'percent',
-      title: `${margeAlerts.length} prijsshift${margeAlerts.length === 1 ? '' : 's'} raken open offertes`,
-      detail: totalImpact !== 0
-        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
-        : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
-      cta: 'Bekijk impact',
-      href: '/voorraad',
-    });
-  }
 
   // Pre-mount loading
   if (!isMounted) {
@@ -523,18 +499,17 @@ export default function DashboardPage() {
       <PersonaQuiz />
 
       <header
-        className="dashboard-header sticky top-0 z-40 backdrop-blur-xl"
+        className="sticky top-0 z-40 backdrop-blur-xl"
         style={{
           background: 'color-mix(in srgb, var(--color-bg-primary) 80%, transparent)',
           borderBottom: '1px solid var(--color-bg-elevated)',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <div className="dashboard-header__inner max-w-[1500px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* w-12 ≈ 48px = ruimte voor hamburger (44px) + 4px gap; spacer verborgen op desktop ≥md */}
-            <div className="w-12 shrink-0 sidebar-hidden-spacer" />
-            <div className="relative sidebar-hidden-logo shrink-0">
+        <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 shrink-0 sidebar-hidden-spacer" />
+            <div className="relative sidebar-hidden-logo">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{
@@ -549,25 +524,24 @@ export default function DashboardPage() {
                 style={{ background: 'rgba(196,163,90,.05)', filter: 'blur(8px)' }}
               />
             </div>
-            <div className="sidebar-hidden-logo dashboard-header__title min-w-0">
+            <div className="sidebar-hidden-logo">
               <h1
-                className="text-[14px] font-semibold tracking-[0.08em] truncate"
+                className="text-[14px] font-semibold tracking-[0.08em]"
                 style={{ color: 'var(--text)', fontFamily: "'Outfit', sans-serif" }}
               >
                 BBQ ARCHITECT
               </h1>
               <p
-                className="text-[9px] tracking-[0.25em] uppercase truncate"
+                className="text-[9px] tracking-[0.25em] uppercase"
                 style={{ color: 'var(--muted)' }}
               >
                 Hop &amp; Bites · Ambacht
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+          <div className="flex items-center gap-2 md:gap-3">
             <button
-              aria-label="Notificaties"
-              className="relative p-2 md:p-2.5 rounded-xl transition-colors min-w-touch min-h-touch flex items-center justify-center"
+              className="relative p-2 md:p-2.5 rounded-xl transition-colors"
               style={{ background: '#111115', border: '1px solid var(--card-solid)' }}
             >
               <Bell className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
@@ -578,24 +552,16 @@ export default function DashboardPage() {
                 />
               )}
             </button>
-            <div className="dashboard-header__time ml-1 md:ml-2 text-right">
+            <div className="ml-1 md:ml-2 text-right">
               <p
-                className="text-[11px] md:text-[11px] font-medium capitalize whitespace-nowrap"
+                className="text-[10px] md:text-[11px] font-medium capitalize"
                 style={{ color: 'var(--muted)' }}
               >
-                <span className="hidden sm:inline">
-                  {currentTime.toLocaleDateString('nl-NL', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                  })}
-                </span>
-                <span className="sm:hidden">
-                  {currentTime.toLocaleDateString('nl-NL', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </span>
+                {currentTime.toLocaleDateString('nl-NL', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
               </p>
               <p
                 className="text-[12px] md:text-[13px] font-light tabular-nums"

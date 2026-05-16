@@ -1,7 +1,6 @@
 'use client';
 import React from 'react';
-import Link from 'next/link';
-import { Plus, Sparkles, Flame, BookOpen } from 'lucide-react';
+import { Plus, Sparkles, Flame } from 'lucide-react';
 import MetallicCard from './MetallicCard';
 import { PAGE_CHIPS, EMPTY_STATE_CONFIG } from '@/lib/constants';
 
@@ -47,22 +46,10 @@ export default function EmptyState({ page, onAction, onAiChip, icon, title, desc
 
         {/* Primary Action */}
         {onAction && (
-          <button className="btn btn-brand mb-3" onClick={onAction}>
+          <button className="btn btn-brand mb-6" onClick={onAction}>
             <Plus size={12} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }} />
             {displayActionLabel}
           </button>
-        )}
-
-        {/* Secundair "Of leer hoe →" voor Pro-tier-tenants die zonder Sam moeten leren */}
-        {config?.learnHref && (
-          <Link
-            href={config.learnHref}
-            className="inline-flex items-center gap-1.5 text-xs mb-6 underline-offset-4 hover:underline"
-            style={{ color: 'var(--muted)' }}
-          >
-            <BookOpen size={11} />
-            Of leer hoe →
-          </Link>
         )}
 
         {/* AI Suggestion Chips — alleen tonen als handler gezet is */}

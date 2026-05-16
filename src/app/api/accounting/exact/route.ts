@@ -1,23 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { mergedAccountingConfig, type AccountingConfig } from '@/lib/accountingConfig';
 
-/**
- * Exact Online sales-entry push. Tenant-instelbare division-code via
- * settings.accounting_config.exact_division_code; env-var EXACT_DIVISION
- * is fallback voor single-tenant dev.
- *
- * Setup-flow (Pro-tier tenant):
- *   1. Registreer app op apps.exactonline.com → redirect URI:
- *      https://<domein>/api/accounting/exact/callback
- *   2. OAuth → refresh_token wordt in integration_tokens opgeslagen
- *   3. /instellingen/integraties/accounting → vul exact_division_code +
- *      grootboekrekening + payment_terms in
- */
+// ── Exact Online Integratie ──
+// TODO: Productie-setup:
+//   1. Registreer een app op https://apps.exactonline.com
+//   2. Doorloop de OAuth 2.0 flow voor de eerste autorisatie
+//   3. Sla de refresh token op en vernieuw deze automatisch
+//   4. Voeg de volgende env vars toe aan .env.local:
+//      EXACT_CLIENT_ID=...
+//      EXACT_CLIENT_SECRET=...
+//      EXACT_REFRESH_TOKEN=...
+//      EXACT_DIVISION=...  (je administratie-code, bijv. 12345)
+//   5. Stel de redirect URI in op je app: https://jouw-domein.nl/api/accounting/exact/callback
+
 const EXACT_CLIENT_ID = process.env.EXACT_CLIENT_ID || '';
 const EXACT_CLIENT_SECRET = process.env.EXACT_CLIENT_SECRET || '';
-const ENV_EXACT_DIVISION = process.env.EXACT_DIVISION || '';
+const EXACT_DIVISION = process.env.EXACT_DIVISION || '';
 const EXACT_BASE_URL = 'https://start.exactonline.nl/api/v1';
 const EXACT_TOKEN_URL = 'https://start.exactonline.nl/api/oauth2/token';
 
@@ -30,13 +29,13 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-function isConfigured(divisionCode: string): boolean {
-  return !!(EXACT_CLIENT_ID && EXACT_CLIENT_SECRET && divisionCode &&
+function isConfigured(): boolean {
+  return !!(EXACT_CLIENT_ID && EXACT_CLIENT_SECRET && EXACT_DIVISION &&
     (process.env.EXACT_REFRESH_TOKEN || supabaseServiceKey));
 }
 
-function isFullyConfigured(divisionCode: string): boolean {
-  return isConfigured(divisionCode) && !!(EXACT_GL_ACCOUNT_GUID && EXACT_JOURNAL_CODE && EXACT_PAYMENT_TERMS_CODE);
+function isFullyConfigured(): boolean {
+  return isConfigured() && !!(EXACT_GL_ACCOUNT_GUID && EXACT_JOURNAL_CODE && EXACT_PAYMENT_TERMS_CODE);
 }
 
 function getSupabase() {
@@ -104,8 +103,8 @@ async function getAccessToken(): Promise<string> {
 }
 
 // ── Exact Online API helper ──
-async function exactFetch(accessToken: string, divisionCode: string, endpoint: string, options: RequestInit = {}) {
-  const url = `${EXACT_BASE_URL}/${divisionCode}${endpoint}`;
+async function exactFetch(accessToken: string, endpoint: string, options: RequestInit = {}) {
+  const url = `${EXACT_BASE_URL}/${EXACT_DIVISION}${endpoint}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -148,9 +147,9 @@ function factuurToExactSalesEntry(factuur: any): Record<string, any> {
 }
 
 // ── BTW percentage naar Exact Online BTW-code ──
-// Codes zijn administratie-specifiek; bij afwijkende mapping override
-// via settings.accounting_config.exact_vat_codes (zie type-extension).
 function btwPercentageToExactVATCode(percentage: number): string {
+  // TODO: Pas aan op basis van je Exact Online administratie
+  // Deze mapping is afhankelijk van je administratie-instellingen
   switch (percentage) {
     case 21: return '2';  // Standaard 21% BTW
     case 9:  return '4';  // Laag tarief 9% BTW
@@ -167,11 +166,10 @@ function formatExactDate(dateStr: string): string {
 }
 
 // ── Zoek of maak relatie (Account) in Exact ──
-async function findOrCreateAccount(accessToken: string, divisionCode: string, factuur: any): Promise<string | null> {
+async function findOrCreateAccount(accessToken: string, factuur: any): Promise<string | null> {
   // Zoek bestaande relatie op naam
   const searchRes = await exactFetch(
     accessToken,
-    divisionCode,
     `/crm/Accounts?$filter=Name eq '${encodeURIComponent(factuur.client_naam)}'&$select=ID,Name`
   );
 
@@ -181,18 +179,13 @@ async function findOrCreateAccount(accessToken: string, divisionCode: string, fa
     if (results.length > 0) return results[0].ID;
   }
 
-  // Maak nieuwe relatie aan met adresgegevens (uit factuur.client_*).
-  const adresParts = (factuur.client_adres || '').split(',').map(function (s: string) { return s.trim(); });
-  const createRes = await exactFetch(accessToken, divisionCode, '/crm/Accounts', {
+  // Maak nieuwe relatie aan
+  const createRes = await exactFetch(accessToken, '/crm/Accounts', {
     method: 'POST',
     body: JSON.stringify({
       Name: factuur.client_naam,
-      AddressLine1: adresParts[0] || undefined,
-      City: adresParts[1] || undefined,
-      Postcode: adresParts[2] || undefined,
-      Country: 'NL',
-      Email: factuur.client_email || undefined,
-      Phone: factuur.client_telefoon || undefined,
+      // TODO: Voeg adresgegevens toe
+      // AddressLine1: factuur.client_adres,
       Status: 'C', // C = Customer (klant)
     }),
   });
@@ -210,6 +203,19 @@ async function findOrCreateAccount(accessToken: string, divisionCode: string, fa
 //   of: { factuurId: 123, action: 'preview' } voor een droge run
 export async function POST(req: NextRequest) {
   try {
+    if (!isConfigured()) {
+      return NextResponse.json(
+        { error: 'Exact Online niet geconfigureerd \u2014 voeg EXACT_CLIENT_ID, EXACT_CLIENT_SECRET, EXACT_REFRESH_TOKEN en EXACT_DIVISION toe in .env' },
+        { status: 501 }
+      );
+    }
+    if (!isFullyConfigured()) {
+      return NextResponse.json(
+        { error: 'Exact Online GL-configuratie ontbreekt \u2014 voeg EXACT_GL_ACCOUNT_GUID, EXACT_JOURNAL_CODE en EXACT_PAYMENT_TERMS_CODE toe in .env' },
+        { status: 501 }
+      );
+    }
+
     const sb = getSupabase();
     if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
@@ -220,7 +226,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Geen factuurId meegegeven' }, { status: 400 });
     }
 
-    // Haal factuur + accounting_config van tenant op
+    // Haal factuur op
     const { data: factuur, error: fetchErr } = await sb
       .from('facturen')
       .select('*')
@@ -229,28 +235,6 @@ export async function POST(req: NextRequest) {
 
     if (fetchErr || !factuur) {
       return NextResponse.json({ error: 'Factuur niet gevonden' }, { status: 404 });
-    }
-
-    const { data: settingsRow } = await sb
-      .from('settings')
-      .select('accounting_config')
-      .eq('organization_id', factuur.organization_id)
-      .maybeSingle();
-
-    const cfg = mergedAccountingConfig((settingsRow?.accounting_config as AccountingConfig) || null);
-    const divisionCode = cfg.exact_division_code || ENV_EXACT_DIVISION;
-
-    if (!isConfigured(divisionCode)) {
-      return NextResponse.json(
-        { error: 'Exact Online niet geconfigureerd. Vul exact_division_code in via /instellingen/integraties/accounting of voeg EXACT_DIVISION toe in env.' },
-        { status: 501 }
-      );
-    }
-    if (!isFullyConfigured(divisionCode)) {
-      return NextResponse.json(
-        { error: 'Exact Online GL-configuratie ontbreekt. Voeg EXACT_GL_ACCOUNT_GUID, EXACT_JOURNAL_CODE en EXACT_PAYMENT_TERMS_CODE toe in env.' },
-        { status: 501 }
-      );
     }
 
     // Map naar Exact Online formaat
@@ -274,12 +258,12 @@ export async function POST(req: NextRequest) {
     const accessToken = await getAccessToken();
 
     // Zoek of maak de klant als relatie
-    const accountId = await findOrCreateAccount(accessToken, divisionCode, factuur);
+    const accountId = await findOrCreateAccount(accessToken, factuur);
     if (accountId) {
       salesEntry.Customer = accountId;
     }
 
-    const res = await exactFetch(accessToken, divisionCode, '/salesentry/SalesEntries', {
+    const res = await exactFetch(accessToken, '/salesentry/SalesEntries', {
       method: 'POST',
       body: JSON.stringify(salesEntry),
     });

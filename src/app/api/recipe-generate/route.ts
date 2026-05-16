@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
-export const dynamic = 'force-dynamic';
 
 type GenerateMode = 'recipe' | 'menu' | 'enrich' | 'scale';
 
@@ -83,12 +82,7 @@ const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met
       "instructies": ["..."],
       "allergenen": ["..."],
       "tags": ["..."],
-      "geschatte_kostprijs_pp": number,
-      "inspired_by": ["string"]   /* 1–3 bestaande gerechten uit JOUW REPERTOIRE
-                                      die als stijl-bron dienen. Gebruik EXACT de
-                                      naam zoals die in de lijst staat. Lege array
-                                      alleen als geen referentie bestaat. Dit is
-                                      onze "Citations"-feature voor klant-transparantie. */
+      "geschatte_kostprijs_pp": number
     }
   ],
   "totale_kostprijs_pp": number,
@@ -162,8 +156,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geef een prompt mee' }, { status: 400 });
         }
 
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
         const userMessage = buildUserMessage(mode, prompt || '', existing, options);
 
         // Slimme default per mode:
@@ -220,9 +213,6 @@ export async function POST(req: NextRequest) {
                 tokens_cache_read: u.cache_read_input_tokens ?? 0,
                 tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
             });
-            // Citations-count berekenen na parse zodat we de transparantie meten.
-            // Logging gebeurt direct na parse hieronder; deze placeholder houdt
-            // de structuur consistent met de andere routes.
             logAiUsageServer({
                 organization_id: orgId,
                 user_id: userId,
@@ -277,12 +267,10 @@ export async function POST(req: NextRequest) {
         });
     } catch (e: any) {
         console.error('[recipe-generate]', e);
-        // Duck-type op status/naam — Anthropic is lazy-imported binnen de try
-        // dus niet in scope hier. Werkt voor alle Anthropic.X*Error klassen.
-        if (e?.status === 401 || e?.name === 'AuthenticationError') {
+        if (e instanceof Anthropic.AuthenticationError) {
             return NextResponse.json({ error: 'Ongeldige ANTHROPIC_API_KEY' }, { status: 401 });
         }
-        if (e?.status === 429 || e?.name === 'RateLimitError') {
+        if (e instanceof Anthropic.RateLimitError) {
             return NextResponse.json({ error: 'Te veel requests — wacht even' }, { status: 429 });
         }
         return NextResponse.json({ error: e?.message || 'Onbekende fout' }, { status: 500 });
