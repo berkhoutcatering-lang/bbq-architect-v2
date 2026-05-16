@@ -65,6 +65,31 @@ export default function HelpCenter() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+
+  /* Empty-state deep-links (S4.5): /hulp#offertes opent direct die categorie.
+     EMPTY_STATE_CONFIG.learnHref-anchors landen hier. */
+  useEffect(function () {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash.replace(/^#/, '').trim();
+    if (!hash) return;
+    /* Probeer eerst exact category-slug match (van CATEGORY_LABELS),
+       anders gebruiken we het als zoekterm. */
+    const categoryMatches = ['aan-de-slag', 'offertes', 'facturen', 'team', 'voedselveiligheid', 'integraties', 'beheer', 'tips'];
+    if (categoryMatches.includes(hash)) {
+      setSelectedCategory(hash);
+    } else {
+      // Mapping van empty-state-anchors naar categorieën
+      const aliases: Record<string, string> = {
+        events: 'aan-de-slag',
+        haccp: 'voedselveiligheid',
+        voorraad: 'aan-de-slag',
+        recepten: 'aan-de-slag',
+        gerechten: 'aan-de-slag',
+      };
+      if (aliases[hash]) setSelectedCategory(aliases[hash]);
+      else setSearchQuery(hash);
+    }
+  }, []);
   const [openArticle, setOpenArticle] = useState<Article | null>(null);
   const [activeView, setActiveView] = useState<'articles' | 'support'>('articles');
 

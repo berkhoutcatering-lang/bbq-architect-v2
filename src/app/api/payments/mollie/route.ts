@@ -2,16 +2,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// ── Mollie Betalingen ──
-// TODO: Productie-setup:
-//   1. Maak een account aan op https://mollie.com
-//   2. Ga naar Ontwikkelaars > API-sleutels
-//   3. Gebruik de live API key voor productie (begint met live_)
-//   4. Voeg toe aan .env.local:
-//      MOLLIE_API_KEY=test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-//   5. Configureer de webhook URL in Mollie dashboard:
-//      https://jouw-domein.nl/api/payments/mollie?webhook=true
-//   6. Optioneel: stel MOLLIE_REDIRECT_URL in voor na betaling
+/**
+ * Mollie iDEAL/SEPA betaallinken voor facturen.
+ *
+ * Setup (Pro-tier tenant):
+ *   1. mollie.com account → Ontwikkelaars > API-sleutels (live_ voor productie)
+ *   2. .env: MOLLIE_API_KEY=...
+ *   3. Webhook in Mollie dashboard: <domein>/api/payments/mollie?webhook=true
+ *   4. Optioneel MOLLIE_REDIRECT_URL voor post-betaling-pagina
+ *
+ * De webhook-flow is idempotent op `mollie_payment_id` (voorkomt dubbel-boeken
+ * bij retries). Status-update is server-authoritative — we vertrouwen nooit
+ * de PUT-body, we halen status opnieuw op via Mollie API.
+ */
 
 const MOLLIE_API_KEY = process.env.MOLLIE_API_KEY || '';
 const MOLLIE_REDIRECT_URL = process.env.MOLLIE_REDIRECT_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://app.bbqarchitect.nl';
@@ -205,9 +208,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ── Webhook handler: Mollie stuurt een POST als betalingsstatus wijzigt ──
-// Dit wordt aangeroepen door Mollie's webhook systeem
-// TODO: Registreer deze URL als webhook in je Mollie dashboard
+// ── Webhook handler: Mollie stuurt een PUT als betalingsstatus wijzigt ──
+// Configureer in Mollie dashboard onder Ontwikkelaars > Webhooks. Mollie
+// retried tot 24h bij niet-2xx — onze handler is idempotent.
 export async function PUT(req: NextRequest) {
   try {
     if (!isConfigured()) {

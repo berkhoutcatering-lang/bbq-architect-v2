@@ -28,6 +28,7 @@ import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
+import { useToast } from '@/components/Toast';
 import '@/components/redesign/redesign.css';
 
 const MENUKAART_STYLE_TO_NAME: Record<MenuCardTemplate, string> = {
@@ -62,6 +63,7 @@ function parseMenu(m: unknown): number[] {
 export default function EventHubPage() {
   const params = useParams();
   const router = useRouter();
+  const showToast = useToast();
   const eventId = parseInt(String(params.id), 10);
 
   const { orgId } = useOrg();
@@ -283,9 +285,7 @@ export default function EventHubPage() {
       setPrepState(s => ({ ...s, [id]: prev }));
       // eslint-disable-next-line no-console
       console.error('[PREP] toggle failed, reverted:', error.message);
-      if (typeof window !== 'undefined') {
-        alert('Kon taak niet bijwerken. Probeer opnieuw.');
-      }
+      showToast('Kon taak niet bijwerken. Probeer opnieuw.', 'error');
     }
   }
 
@@ -300,7 +300,7 @@ export default function EventHubPage() {
   }
 
   async function downloadMenukaartPdf() {
-    if (!offerte) { alert('Maak eerst een offerte aan.'); return; }
+    if (!offerte) { showToast('Maak eerst een offerte aan.', 'warning'); return; }
     setDownloading('menukaart');
     try {
       const branding = buildBrandingConfig(settings);
@@ -337,7 +337,7 @@ export default function EventHubPage() {
   }
 
   function downloadPrepList() {
-    if (prepTasks.length === 0) { alert('Geen prep-taken om te exporteren.'); return; }
+    if (prepTasks.length === 0) { showToast('Geen prep-taken om te exporteren.', 'info'); return; }
     const title = `Prep-lijst — ${displayEventName(event?.name)} — ${event?.date || ''}`;
     const body = prepTasks.map(p => {
       const d = typeof p.dagen === 'number' ? (p.dagen === 0 ? 'Op de dag' : `T-${p.dagen}d`) : '';
@@ -1146,6 +1146,7 @@ export default function EventHubPage() {
    INKOOPLIJST CARD — met AI-generator uit menu
    ═══════════════════════════════════════════════════════════════════ */
 function EventInkooplijstCard({ eventId, eventName, menuGroups, recepten, gerechten }: { eventId: number; eventName: string; menuGroups: any[]; recepten: any[]; gerechten: any[] }) {
+  const showToast = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiBusy, setAiBusy] = useState(false);
@@ -1179,12 +1180,12 @@ function EventInkooplijstCard({ eventId, eventName, menuGroups, recepten, gerech
         }),
       });
       const body = await res.json();
-      if (!res.ok) { alert('AI fout: ' + (body.error || 'onbekend')); return; }
+      if (!res.ok) { showToast('AI fout: ' + (body.error || 'onbekend'), 'error'); return; }
       const inkoop = body.data?.samengevatte_inkooplijst || [];
       const mapped = inkoop.map((i: any) => ({ naam: i.product, hoeveelheid: i.totale_hoeveelheid, eenheid: i.eenheid, categorie: i.categorie, besteld: false }));
       await saveItems(mapped);
     } catch (e: any) {
-      alert('Fout: ' + (e.message || 'onbekend'));
+      showToast('Fout: ' + (e.message || 'onbekend'), 'error');
     } finally {
       setAiBusy(false);
     }

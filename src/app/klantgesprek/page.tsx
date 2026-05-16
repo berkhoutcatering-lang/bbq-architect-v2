@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
+import TranscriptExtractButton, { type ExtractedFields } from '@/components/klantgesprek/TranscriptExtractButton';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, today, addDays, genNummer, nextNummer } from '@/lib/utils';
@@ -146,6 +147,44 @@ export default function KlantGesprek() {
     if (step === 0) return klant.naam.trim().length >= 2;
     if (step === 1) return event.datum.length > 0 && event.gasten > 0;
     return true;
+  }
+
+  /* AI transcript → form: vul alleen velden die de wizard nog leeg heeft of
+     duidelijk een betere waarde meekrijgt. Geen overschrijven van handmatig
+     ingetypte data tenzij dat veld leeg is. */
+  function applyExtractedTranscript(ex: ExtractedFields) {
+    setKlant(function (p) {
+      return {
+        ...p,
+        naam: p.naam || (ex.klant_naam || ''),
+        email: p.email || (ex.klant_email || ''),
+        telefoon: p.telefoon || (ex.klant_telefoon || ''),
+        adres: p.adres || (ex.event_locatie || ''),
+      };
+    });
+    setEvent(function (p) {
+      return {
+        ...p,
+        datum: p.datum && p.datum !== today() ? p.datum : (ex.event_datum || p.datum),
+        locatie: p.locatie || (ex.event_locatie || ''),
+        gasten: ex.aantal_gasten && ex.aantal_gasten > 0 ? ex.aantal_gasten : p.gasten,
+        vegaGasten: ex.aantal_vega && ex.aantal_vega > 0 ? ex.aantal_vega : p.vegaGasten,
+      };
+    });
+    if (ex.budget_pp_eur && ex.budget_pp_eur > 0) {
+      setBudget(function (p) { return { ...p, ppp: ex.budget_pp_eur! }; });
+    }
+    if (ex.menu_wensen || ex.dieet_wensen?.length) {
+      setMenuExtra(function (p) {
+        return {
+          speciale_wensen: p.speciale_wensen || (ex.menu_wensen || ''),
+          dieet_opmerkingen: p.dieet_opmerkingen || (ex.dieet_wensen?.join(', ') || ''),
+        };
+      });
+    }
+    if (ex.notities) {
+      setNotities(function (p) { return { ...p, tekst: p.tekst || ex.notities! }; });
+    }
   }
 
   // ── Save handlers ──
@@ -307,9 +346,12 @@ export default function KlantGesprek() {
       {/* ═══════════════ STAP 1: KLANT ═══════════════ */}
       {step === 0 && (
         <MetallicCard className="p-5 md:p-7" hover={false} accent="var(--color-accent-gold)">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-            <Users size={16} className="text-[var(--color-accent-gold)]" />
-            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Klantgegevens</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Users size={16} className="text-[var(--color-accent-gold)]" />
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)' }}>Klantgegevens</span>
+            </div>
+            <TranscriptExtractButton onApply={applyExtractedTranscript} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <KlantAutocomplete label="Klantnaam" value={klant.naam}

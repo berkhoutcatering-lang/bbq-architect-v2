@@ -33,48 +33,55 @@ export const PAGE_CHIPS: Record<string, string[]> = {
 };
 
 // EmptyState configuratie per pagina
-export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; description: string; actionLabel: string }> = {
+export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; description: string; actionLabel: string; learnHref?: string }> = {
   '/events': {
     icon: 'CalendarPlus',
     title: 'Nog geen events',
     description: 'Plan je eerste BBQ event en begin met het beheren van je catering-opdrachten.',
     actionLabel: 'Nieuw event plannen',
+    learnHref: '/hulp#events',
   },
   '/offertes': {
     icon: 'FileText',
     title: 'Nog geen offertes',
     description: 'Maak je eerste offerte aan voor een klant. Selecteer gerechten, stel prijzen in en verstuur.',
     actionLabel: 'Eerste offerte maken',
+    learnHref: '/hulp#offertes',
   },
   '/facturen': {
     icon: 'Receipt',
     title: 'Nog geen facturen',
     description: 'Facturen worden automatisch aangemaakt wanneer je een offerte accepteert. Of maak er handmatig een aan.',
     actionLabel: 'Factuur aanmaken',
+    learnHref: '/hulp#facturen',
   },
   '/voorraad': {
     icon: 'Package',
     title: 'Voorraad is leeg',
     description: 'Voeg je eerste ingrediënten toe of laat de AI ze genereren uit je recepten.',
     actionLabel: 'Ingrediënt toevoegen',
+    learnHref: '/hulp#voorraad',
   },
   '/recepten': {
     icon: 'BookOpen',
     title: 'Nog geen recepten',
     description: 'Voeg je eerste BBQ-recept toe met ingrediënten, bereidingswijze en kostprijsberekening.',
     actionLabel: 'Recept toevoegen',
+    learnHref: '/hulp#recepten',
   },
   '/gerechten': {
     icon: 'UtensilsCrossed',
     title: 'Nog geen gerechten',
     description: 'Maak gerechten aan die je kunt aanbieden op je menu. Koppel ze aan recepten voor kostprijsberekening.',
     actionLabel: 'Gerecht toevoegen',
+    learnHref: '/hulp#gerechten',
   },
   '/haccp': {
     icon: 'Thermometer',
     title: 'Geen HACCP-registraties',
     description: 'Log temperaturen voor voedselveiligheid. Verplicht voor elke professionele cateringoperatie.',
     actionLabel: 'Temperatuur registreren',
+    learnHref: '/hulp#haccp',
   },
   '/klanten': {
     icon: 'Users',
