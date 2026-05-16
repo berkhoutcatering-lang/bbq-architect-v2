@@ -12,17 +12,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import { runMoneybirdImport } from '@/lib/moneybirdImport';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
 
 const SYNC_DAYS = 7;
 const MAX_INVOICES_PER_ORG = 100;
 
 async function run(req: NextRequest) {
+  // Lazy import zware deps (Anthropic + moneybird helpers) zodat webpack
+  // ze niet in de build-time module-graph hoeft te bundelen.
+  const [{ default: Anthropic }, { runMoneybirdImport }] = await Promise.all([
+    import('@anthropic-ai/sdk'),
+    import('@/lib/moneybirdImport'),
+  ]);
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get('authorization') || '';
   const provided = authHeader.replace(/^Bearer\s+/i, '');

@@ -14,12 +14,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
-import { previewMoneybirdImport } from '@/lib/moneybirdImport';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // Lazy import — voorkomt webpack compile-loop bij build (Anthropic SDK +
+  // moneybird helpers blijven uit de build-time module-graph).
+  const { previewMoneybirdImport } = await import('@/lib/moneybirdImport');
   const authSb = await createServerSupabase();
   const { data: { user } } = await authSb.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
