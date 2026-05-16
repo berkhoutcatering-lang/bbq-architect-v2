@@ -17,8 +17,13 @@
  *  - org_price_mutations tabel met source='invoice' (al ondersteund in 024)
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-import { SupabaseClient } from '@supabase/supabase-js';
+// Type-only imports — TypeScript verwijdert deze tijdens compile.
+// Voorkomt dat webpack de Anthropic-SDK + Supabase-client (gigantische
+// module-graphs) probeert te bundelen in deze file's chunk, wat anders een
+// production-build compile-loop veroorzaakt ("Creating an optimized
+// production build.." → hangt 45m → Vercel timeout).
+import type Anthropic from '@anthropic-ai/sdk';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   listAllPurchaseInvoices,
   getPurchaseInvoice,
