@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
 import { checkAiCapServer, logAiUsageServer } from '@/lib/aiUsageServer';
@@ -21,6 +21,7 @@ import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -173,7 +174,10 @@ export async function POST(req: NextRequest) {
     ? '(Geen voorraad-items — alle ingrediënten worden geschat.)'
     : inventory.map(i => `${i.id}|${i.naam}|${i.unit}|${i.price.toFixed(2)}€${i.supplier ? `|${i.supplier}` : ''}`).join('\n');
 
-  const client = new Anthropic({ apiKey });
+  // Lazy-loaded Anthropic SDK — voorkomt dat webpack de SDK module-graph
+  // bij build-time analyseert (production-build compile-loop).
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client: AnthropicType = new Anthropic({ apiKey });
 
   const userMessage = `## VOORRAAD-CATALOGUS (id|naam|eenheid|prijs/eenheid|leverancier)
 ${inventoryContext}
