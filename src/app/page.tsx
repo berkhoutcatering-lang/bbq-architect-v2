@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Bell, Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -21,7 +22,13 @@ import GreetingStrip from '@/components/dashboard/today/GreetingStrip';
 import EventHero, { type EventHeroEvent } from '@/components/dashboard/today/EventHero';
 import AIQuickPrompts from '@/components/dashboard/today/AIQuickPrompts';
 import AIPromptDrawer, { type QuickPrompt } from '@/components/dashboard/today/AIPromptDrawer';
-import BusinessCharts from '@/components/dashboard/today/BusinessCharts';
+// BusinessCharts trekt recharts via DonutMini — lazy laden zodat de homepage
+// bundle niet de hele recharts module-graph hoeft te bevatten (anders hangt
+// Next.js 16 webpack op de production-build).
+const BusinessCharts = dynamic(() => import('@/components/dashboard/today/BusinessCharts'), {
+  ssr: false,
+  loading: () => <div className="h-[260px] animate-pulse rounded-2xl bg-[var(--card-solid)]/40" />,
+});
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
 import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';
 import AttentionPanel, { type AttentionItem } from '@/components/dashboard/today/AttentionPanel';
