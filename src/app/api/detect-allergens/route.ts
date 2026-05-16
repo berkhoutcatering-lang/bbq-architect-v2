@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCentsPure as estimateAiCostCents } from '@/lib/aiCostEstimate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
+export const dynamic = 'force-dynamic';
 
 /*
  * AI allergeen-detectie
@@ -98,7 +99,8 @@ ${ingredients.map(i => '- ' + i).join('\n')}
 
 Welke allergeen-codes zijn aanwezig?`;
 
-        const client = new Anthropic({ apiKey });
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client: AnthropicType = new Anthropic({ apiKey });
         const response = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 200,

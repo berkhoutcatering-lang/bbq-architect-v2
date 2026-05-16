@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
 import { checkAiCapServer, logAiUsageServer } from '@/lib/aiUsageServer';
@@ -21,6 +21,7 @@ import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-haiku-4-5';
 
@@ -116,7 +117,8 @@ export async function POST(req: NextRequest) {
   // Strip data:URL prefix als die meegestuurd is
   const cleanBase64 = image_base64.replace(/^data:image\/(jpeg|jpg|png|webp);base64,/i, '');
 
-  const client = new Anthropic({ apiKey });
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client: AnthropicType = new Anthropic({ apiKey });
 
   try {
     const response = await client.messages.create({

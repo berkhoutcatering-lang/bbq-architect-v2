@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
 
 /*
  * Service feedback rewrite endpoint
@@ -79,7 +80,8 @@ ${rawNotes}
 
 Geef de nette samenvatting als JSON.`;
 
-        const client = new Anthropic({ apiKey });
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client: AnthropicType = new Anthropic({ apiKey });
         const response = await client.messages.create({
             model: 'claude-haiku-4-5',
             max_tokens: 1500,

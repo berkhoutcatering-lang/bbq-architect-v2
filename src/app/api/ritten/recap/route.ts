@@ -3,7 +3,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
@@ -125,7 +125,8 @@ export async function POST(req: Request) {
     heeft_event: r.event_id !== null,
   }));
 
-  const client = new Anthropic({ apiKey });
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client: AnthropicType = new Anthropic({ apiKey });
   const model = 'claude-haiku-4-5';
 
   const stream = client.messages.stream({

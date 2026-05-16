@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
@@ -8,6 +8,7 @@ import { RGS_CATERING_CATEGORIES, PURCHASE_CODES, rgsLookup } from '@/lib/rgsCat
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/boekhouder/classify
@@ -123,7 +124,8 @@ export async function POST(req: NextRequest) {
       return `- ${cat.code}: ${cat.label} — ${cat.hint}`;
     }).join('\n');
 
-    const client = new Anthropic({ apiKey });
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client: AnthropicType = new Anthropic({ apiKey });
     const results: ClassifyResult[] = [];
 
     // Per bon één call (parallel zou kunnen, maar 1-op-1 is veiliger qua rate-limiting)

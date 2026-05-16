@@ -6,13 +6,14 @@
    Haiku 4.5 voor lage kosten + snelheid (real-time feel). */
 
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type AnthropicType from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-haiku-4-5';
 
@@ -95,7 +96,8 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AI niet beschikbaar' }, { status: 503 });
-    const anthropic = new Anthropic({ apiKey });
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const anthropic: AnthropicType = new Anthropic({ apiKey });
 
     const userMessage = `<gerecht>
 Naam: ${gerecht.naam}
