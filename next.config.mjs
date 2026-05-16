@@ -40,14 +40,13 @@ const nextConfig = {
     'jspdf',
     'jspdf-autotable',
     'resend',
+    'recharts',
   ],
 
-  experimental: {
-    // Single-process compile — vermijdt het patroon waar 4 parallel jest-workers
-    // op Vercel's 2-core/8GB build-box om memory vechten en de build OOM-killing veroorzaakt.
-    workerThreads: false,
-    cpus: 1,
-  },
+  // experimental.workerThreads:false + cpus:1 stond hier maar bleek zelf de
+  // build te laten hangen op "Creating an optimized production build..." —
+  // Next.js 16.2.6 heeft die flags niet meer stabiel. Standaard parallelism
+  // werkt prima zolang we serverExternalPackages goed gevuld houden.
 };
 
 export default nextConfig;
