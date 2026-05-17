@@ -223,6 +223,48 @@
   }
   .redesign-root .ev-view-tabs::-webkit-scrollbar { display: none; }
   .redesign-root .ev-view-tabs button { white-space: nowrap; min-height: 44px; }
+
+  /* Event hero stats — desktop 4-kolom past niet op 390px (afgesneden "DAGEN TE GAAN").
+     2x2 grid op mobile geeft elke stat 160-170px breedte voor leesbare label.
+     !important nodig omdat Turbopack hot-reload ordering soms inverted. */
+  .redesign-root .ev-next-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 14px !important;
+  }
+  .redesign-root .ev-next-title { font-size: 22px; }
+  .redesign-root .ev-pulse-stats { grid-template-columns: 1fr !important; gap: 10px; }
+
+  /* Event Hub cinematic hero (inspiratie, event-detail) — desktop 2-kolom (left content + countdown ring) past niet op 390px. Stack op mobile. */
+  .redesign-root .eh-hero-content {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+    padding: 20px 18px !important;
+  }
+  .redesign-root .eh-hero-title { font-size: 26px !important; white-space: normal !important; }
+  .redesign-root .eh-countdown { width: 100% !important; }
+  .redesign-root .eh-countdown-ring { width: 140px !important; height: 140px !important; }
+  .redesign-root .eh-countdown-num { font-size: 44px !important; }
+  /* Stats-strip: 5-col desktop past niet — 2x op mobile met border-bottom in plaats van border-right. */
+  .redesign-root .eh-hero-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .redesign-root .eh-hero-stat {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px !important;
+  }
+  .redesign-root .eh-hero-stat:nth-child(odd) { border-right: 1px solid var(--border) !important; }
+
+  /* Sub-line ([pill] · uitleg · ⭐ = legenda) wrapt op mobile met losse "·" spans
+     die als zwevende dots eindigen. Stack i.p.v. wrap + verberg expliciete separators. */
+  .redesign-root .eh-hero-sub {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+  .redesign-root .eh-hero-sub .sep {
+    display: none !important;
+  }
 }
 
 /* Prep task row — native checkbox is visually hidden; label is the interactive surface */

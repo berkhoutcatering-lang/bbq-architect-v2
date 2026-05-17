@@ -274,11 +274,13 @@ function FinancienInner() {
             <PageHeader
                 title="Financiën"
                 description={tab === 'dashboard' ? `Live Profit & Loss Dashboard over ${selectedYear}` : `Boekhouding · ${TAB_LABELS[tab]}`}
-                actions={tab === 'dashboard' ? <>
-                    <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost btn-sm" aria-label="Vorig jaar"><ChevronLeft size={14} /></button>
-                    <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{selectedYear}</span>
-                    <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost btn-sm" aria-label="Volgend jaar"><ChevronRight size={14} /></button>
-                </> : undefined}
+                actions={tab === 'dashboard' ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost btn-sm" aria-label="Vorig jaar" style={{ minWidth: 44 }}><ChevronLeft size={14} /></button>
+                        <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{selectedYear}</span>
+                        <button onClick={() => setSelectedYear(selectedYear + 1)} className="btn btn-ghost btn-sm" aria-label="Volgend jaar" style={{ minWidth: 44 }}><ChevronRight size={14} /></button>
+                    </div>
+                ) : undefined}
             />
 
             <PageGuideNote
