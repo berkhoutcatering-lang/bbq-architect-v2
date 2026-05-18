@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { useOrg } from '@/lib/OrgContext';
@@ -29,21 +28,10 @@ import {
   fmtSmokeTime,
 } from './_components/stats-helpers';
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
-// next/dynamic op deze 4 zware client-components (~1600 lines totaal).
-// Eager imports laten de Turbopack production-build hangen op /gerechten.
-// Types blijven top-level (TS verwijdert tijdens compile, geen bundle impact).
-import type { InventoryRow } from '@/components/InventoryAutocomplete';
-import type { AiFillResult, AiFillMeta } from '@/components/RecipeAiButton';
-import type { FixResult } from '@/components/EstimatedPriceFixButton';
-import type { FineTune, RecipeForTune } from '@/components/RecipeFineTuneButton';
-const InventoryAutocomplete = dynamic(() => import('@/components/InventoryAutocomplete'), { ssr: false, loading: () => null });
-const RecipeAiButton = dynamic(() => import('@/components/RecipeAiButton'), { ssr: false, loading: () => null });
-const EstimatedPriceFixButton = dynamic(() => import('@/components/EstimatedPriceFixButton'), { ssr: false, loading: () => null });
-const RecipeFineTuneButton = dynamic(() => import('@/components/RecipeFineTuneButton'), { ssr: false, loading: () => null });
 import KitchenModeStepper from '@/components/KitchenModeStepper';
 import AuditTrailTimeline from '@/components/AuditTrailTimeline';
 import PageGuideNote from '@/components/PageGuideNote';
-import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
+import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame } from 'lucide-react';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
@@ -56,7 +44,7 @@ export default function Gerechten() {
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
-    const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', []);
+    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const [gangen, setGangen] = useState<any[]>([]);
     const [gerechten, setGerechten] = useState<any[]>([]);
     const [activeGang, setActiveGang] = useState<string | null>(null);
@@ -474,207 +462,9 @@ export default function Gerechten() {
 
     function addCostItem() {
         if (!costInput.naam.trim()) return;
-        const items = (form.ingredient_costs || []).concat([Object.assign({}, costInput, {
-            naam: costInput.naam.trim(),
-            qty_pp: parseFloat(costInput.qty_pp) || 0,
-            yield: parseFloat(costInput.yield) || 1.0,
-            inventory_id: costInput.inventory_id || null,
-        })]);
+        const items = (form.ingredient_costs || []).concat([Object.assign({}, costInput, { naam: costInput.naam.trim(), qty_pp: parseFloat(costInput.qty_pp) || 0, yield: parseFloat(costInput.yield) || 1.0 })]);
         setForm(Object.assign({}, form, { ingredient_costs: items }));
-        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0, inventory_id: null });
-    }
-    function pickFromInventory(naam: string, inv?: InventoryRow) {
-        setCostInput((c) => Object.assign({}, c, {
-            naam,
-            inventory_id: inv?.id ?? null,
-            // Als gebruiker geen eenheid heeft gekozen, pak die van het voorraad-item
-            unit: c.unit === 'kg' && inv?.unit ? inv.unit : c.unit,
-        }));
-    }
-
-    function applyAiFill(data: AiFillResult, meta: AiFillMeta) {
-        setForm((f: any) => Object.assign({}, f, {
-            naam: f.naam || data.naam,                             // overschrijf niet als al ingevuld
-            beschrijving: f.beschrijving || data.beschrijving,
-            porties: f.porties || data.porties || 10,
-            ingredient_costs: (data.ingredient_costs || []).map(ing => ({
-                naam: ing.naam,
-                inventory_id: ing.inventory_id ?? null,
-                qty_pp: ing.qty_pp,
-                unit: ing.unit,
-                yield: ing.yield ?? 1.0,
-                is_estimated: ing.is_estimated ?? false,
-                estimated_price: ing.estimated_price_eur ?? null,
-            })),
-            bereidingswijze: data.bereidingswijze || f.bereidingswijze || '',
-            allergenen: (data.allergenen && data.allergenen.length) ? data.allergenen : f.allergenen,
-            tags: (data.tags && data.tags.length) ? data.tags : f.tags,
-            wijn_suggestie: data.wijn_suggestie || f.wijn_suggestie || '',
-            service_tip: data.service_tip || f.service_tip || '',
-            ingredienten: (data.ingredient_costs || []).map(i => i.naam),  // legacy field sync
-        }));
-        showToast(`AI vulde recept in (${meta.matched_count} matched, ${meta.estimated_count} geschat — €${(meta.cost_cents / 100).toFixed(3)})`, 'success');
-    }
-
-    async function applyFineTune(tune: FineTune) {
-        if (tune.type === 'add_ingredient') {
-            const d = tune.details;
-            setForm((f: any) => {
-                const items = (f.ingredient_costs || []).slice();
-                items.push({
-                    naam: d.naam,
-                    qty_pp: d.qty_pp,
-                    unit: d.unit,
-                    yield: d.yield ?? 1.0,
-                    inventory_id: d.inventory_id ?? null,
-                    is_estimated: !!d.is_estimated,
-                    estimated_price: d.estimated_price_eur ?? null,
-                });
-                return Object.assign({}, f, { ingredient_costs: items });
-            });
-            return;
-        }
-        if (tune.type === 'replace_ingredient') {
-            const d = tune.details;
-            setForm((f: any) => {
-                const items = (f.ingredient_costs || []).slice();
-                const idx = items.findIndex((i: any) =>
-                    (i.naam || '').toLowerCase().trim() === d.from_naam.toLowerCase().trim()
-                );
-                const replacement = {
-                    naam: d.to_naam,
-                    qty_pp: d.to_qty_pp,
-                    unit: d.to_unit,
-                    yield: 1.0,
-                    inventory_id: d.inventory_id ?? null,
-                    is_estimated: !!d.is_estimated,
-                    estimated_price: d.estimated_price_eur ?? null,
-                };
-                if (idx >= 0) items[idx] = replacement;
-                else items.push(replacement);
-                return Object.assign({}, f, { ingredient_costs: items });
-            });
-            return;
-        }
-        if (tune.type === 'tweak_quantity') {
-            const d = tune.details;
-            setForm((f: any) => {
-                const items = (f.ingredient_costs || []).slice();
-                const idx = items.findIndex((i: any) =>
-                    (i.naam || '').toLowerCase().trim() === d.ingredient_naam.toLowerCase().trim()
-                );
-                if (idx >= 0) {
-                    items[idx] = Object.assign({}, items[idx], {
-                        qty_pp: d.new_qty_pp,
-                        ...(d.new_unit ? { unit: d.new_unit } : {}),
-                    });
-                    return Object.assign({}, f, { ingredient_costs: items });
-                }
-                return f;
-            });
-            return;
-        }
-        if (tune.type === 'add_step') {
-            const d = tune.details;
-            setForm((f: any) => {
-                const current = String(f.bereidingswijze || '').trim();
-                const lines = current ? current.split('\n') : [];
-                if (d.positie === 'begin') {
-                    lines.unshift(d.stap_text);
-                } else if (d.positie === 'eind' || typeof d.positie !== 'number') {
-                    lines.push(d.stap_text);
-                } else {
-                    const idx = Math.max(0, Math.min(lines.length, d.positie));
-                    lines.splice(idx, 0, d.stap_text);
-                }
-                return Object.assign({}, f, { bereidingswijze: lines.join('\n') });
-            });
-            return;
-        }
-        if (tune.type === 'general_tip') {
-            const d = tune.details;
-            setForm((f: any) => {
-                if (d.veld === 'wijn_suggestie') {
-                    return Object.assign({}, f, { wijn_suggestie: d.tip_text });
-                }
-                if (d.veld === 'service_tip') {
-                    return Object.assign({}, f, { service_tip: d.tip_text });
-                }
-                // 'vrij' — append onderaan bereiding als tip-regel
-                const current = String(f.bereidingswijze || '').trim();
-                return Object.assign({}, f, {
-                    bereidingswijze: current
-                        ? current + '\n\n💡 ' + d.tip_text
-                        : '💡 ' + d.tip_text,
-                });
-            });
-            return;
-        }
-    }
-
-    const tuneRecept: RecipeForTune = {
-        naam: form.naam || '',
-        beschrijving: form.beschrijving,
-        porties: form.porties || 10,
-        ingredient_costs: (form.ingredient_costs || []).map((i: any) => ({
-            naam: i.naam,
-            qty_pp: Number(i.qty_pp) || 0,
-            unit: i.unit || 'kg',
-            yield: i.yield,
-            inventory_id: i.inventory_id ?? null,
-            is_estimated: i.is_estimated,
-            estimated_price: i.estimated_price,
-        })),
-        bereidingswijze: form.bereidingswijze,
-        allergenen: form.allergenen,
-        tags: form.tags,
-        wijn_suggestie: form.wijn_suggestie,
-        service_tip: form.service_tip,
-    };
-
-    async function applyEstimateFix(idx: number, fix: FixResult) {
-        let newInventoryId: number | null = null;
-
-        if (fix.addToInventory) {
-            try {
-                const existing = (inventoryData || []).find((i: any) =>
-                    (i.naam || '').toLowerCase().trim() === fix.naam.toLowerCase().trim()
-                );
-                if (existing) {
-                    newInventoryId = existing.id;
-                } else {
-                    const created = await insertInventory({
-                        naam: fix.naam,
-                        unit: fix.unit,
-                        purchase_price: fix.price,
-                        last_price_eur: fix.price,
-                        last_price_at: new Date().toISOString(),
-                        current_stock: 0,
-                        min_stock: 0,
-                        par_level: 0,
-                        categorie: 'Overig',
-                        supplier: fix.supplier || '',
-                    } as any);
-                    newInventoryId = (created as any)?.id ?? null;
-                    void refetchInventory();
-                }
-            } catch (e) {
-                console.warn('[applyEstimateFix] inventory add faalde:', (e as Error).message);
-            }
-        }
-
-        setForm((f: any) => {
-            const items = (f.ingredient_costs || []).slice();
-            if (!items[idx]) return f;
-            items[idx] = Object.assign({}, items[idx], {
-                naam: fix.naam,
-                unit: fix.unit,
-                inventory_id: newInventoryId ?? items[idx].inventory_id ?? null,
-                is_estimated: false,
-                estimated_price: null,
-            });
-            return Object.assign({}, f, { ingredient_costs: items });
-        });
+        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
     }
     function removeCostItem(idx: number) {
         const items = (form.ingredient_costs || []).slice();
@@ -682,7 +472,7 @@ export default function Gerechten() {
         setForm(Object.assign({}, form, { ingredient_costs: items }));
     }
     function calcCostPP(item: any) {
-        const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
+        const inv = sharedGetInvPrice(inventoryData as any, item.naam);
         const price = inv ? inv.price : 0;
         const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
         let unitFactor = 1;
@@ -1100,36 +890,6 @@ export default function Gerechten() {
                                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
                             </div>
 
-                            <div style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                gap: 12, marginBottom: 12, padding: '12px 14px', borderRadius: 12,
-                                background: 'linear-gradient(135deg, rgba(196,163,90,.10), rgba(196,163,90,.02))',
-                                border: '1px solid rgba(196,163,90,.28)',
-                                flexWrap: 'wrap',
-                            }}>
-                                <div style={{ minWidth: 200, flex: 1 }}>
-                                    <div style={{ fontSize: 10, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--color-accent-gold)', fontWeight: 700, marginBottom: 2 }}>
-                                        AI Receptuur-Assistent
-                                    </div>
-                                    <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>
-                                        Geef alleen een naam (bv. &ldquo;Pulled Pork Taco&rdquo;) — AI vult ingrediënten, bereiding, allergenen, kostprijs in. Matcht tegen je voorraad; onbekende producten worden geschat (met foto-fix-knop).
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <RecipeAiButton
-                                        defaultName={form.naam || ''}
-                                        defaultPorties={form.porties || 10}
-                                        onResult={applyAiFill}
-                                    />
-                                    {(form.ingredient_costs || []).length > 0 && form.naam && (
-                                        <RecipeFineTuneButton
-                                            recept={tuneRecept}
-                                            onApply={applyFineTune}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
                             <div className="form-grid">
                                 <div className="field">
                                     <label>Naam</label>
@@ -1368,31 +1128,14 @@ export default function Gerechten() {
                                 {(form.ingredient_costs || []).length > 0 && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                                         {(form.ingredient_costs || []).map(function (item: any, idx: number) {
-                                            const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
+                                            const inv = sharedGetInvPrice(inventoryData as any, item.naam);
                                             const costPP = calcCostPP(item);
-                                            const isEstimated = !!item.is_estimated && !inv;
-                                            const estPrice = Number(item.estimated_price);
                                             return (
                                                 <div key={idx} className="ingredient-cost-row">
                                                     <div className="ingredient-cost-info">
                                                         <span className="ingredient-cost-name">{item.naam}</span>
                                                         {inv ? (
                                                             <span className="ingredient-cost-linked"><Link size={14} /> €{inv.price.toFixed(2)}/{inv.unit}</span>
-                                                        ) : isEstimated ? (
-                                                            <span style={{
-                                                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                                padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                                                                letterSpacing: '.1em', textTransform: 'uppercase',
-                                                                color: '#f59e0b', background: 'rgba(245,158,11,.10)',
-                                                                border: '1px solid rgba(245,158,11,.35)', borderRadius: 5,
-                                                            }}>
-                                                                <Sparkles size={11} /> Geschat
-                                                                {Number.isFinite(estPrice) && estPrice > 0 && (
-                                                                    <span style={{ marginLeft: 4, fontWeight: 600, textTransform: 'none', letterSpacing: 'normal' }}>
-                                                                        €{estPrice.toFixed(2)}/{item.unit}
-                                                                    </span>
-                                                                )}
-                                                            </span>
                                                         ) : (
                                                             <span className="ingredient-cost-unlinked"><Unlink size={14} /> niet in voorraad</span>
                                                         )}
@@ -1400,22 +1143,7 @@ export default function Gerechten() {
                                                     <div className="ingredient-cost-details">
                                                         <span className="ingredient-cost-chip">{item.qty_pp} {item.unit}/gast</span>
                                                         {item.yield && item.yield < 1 && <span className="ingredient-cost-chip">yield {(item.yield * 100).toFixed(0)}%</span>}
-                                                        {isEstimated && Number.isFinite(estPrice) && estPrice > 0 && (
-                                                            <span className={'ingredient-cost-price'} title="Op basis van schatting">
-                                                                ~€{((item.qty_pp || 0) * estPrice / (item.yield || 1)).toFixed(2)}
-                                                            </span>
-                                                        )}
-                                                        {!isEstimated && (
-                                                            <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>€{costPP.toFixed(2)}</span>
-                                                        )}
-                                                        {isEstimated && (
-                                                            <EstimatedPriceFixButton
-                                                                ingredientName={item.naam}
-                                                                ingredientUnit={item.unit || 'kg'}
-                                                                estimatedPrice={Number.isFinite(estPrice) ? estPrice : null}
-                                                                onResult={(fix) => applyEstimateFix(idx, fix)}
-                                                            />
-                                                        )}
+                                                        <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>€{costPP.toFixed(2)}</span>
                                                     </div>
                                                     <button type="button" className="tag-remove" onClick={function () { removeCostItem(idx); }}>×</button>
                                                 </div>
@@ -1430,15 +1158,15 @@ export default function Gerechten() {
                                 )}
 
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                    <div className="field" style={{ flex: 2, minWidth: 160 }}>
+                                    <div className="field" style={{ flex: 2, minWidth: 120 }}>
                                         <label>Ingrediënt</label>
-                                        <InventoryAutocomplete
-                                            inventory={inventoryData as unknown as InventoryRow[]}
-                                            value={costInput.naam}
-                                            onChange={pickFromInventory}
-                                            onCommit={addCostItem}
-                                            placeholder="Tik 3+ letters, bv. 'ker' voor kerrie…"
-                                        />
+                                        <input value={costInput.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCostInput(Object.assign({}, costInput, { naam: e.target.value })); }}
+                                            onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === 'Enter') { e.preventDefault(); addCostItem(); } }}
+                                            placeholder="bijv. Bavette" style={{ fontSize: 12, padding: '7px 10px' }}
+                                            list="inv-suggestions" />
+                                        <datalist id="inv-suggestions">
+                                            {inventoryData.map(function (inv) { return <option key={inv.id} value={inv.naam} />; })}
+                                        </datalist>
                                     </div>
                                     <div className="field" style={{ minWidth: 70, flex: '0 1 80px' }}>
                                         <label>Qty p.p.</label>
