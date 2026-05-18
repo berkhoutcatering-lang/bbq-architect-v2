@@ -1,20 +1,31 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import dynamic from 'next/dynamic';
+import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useFormValidation } from '@/hooks/useFormValidation';
+import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import KeukenTabs from '@/components/KeukenTabs';
-import PageSection from '@/components/PageSection';
-import GerechtenPageHero from './_components/GerechtenPageHero';
 import RichKeukenTabs from '@/components/RichKeukenTabs';
+import PageSection from '@/components/PageSection';
+import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
+import KitchenModeStepper from '@/components/KitchenModeStepper';
+import AuditTrailTimeline from '@/components/AuditTrailTimeline';
+import PageGuideNote from '@/components/PageGuideNote';
+import { LoadingState } from '@/components/LoadingState';
+import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
+import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
+import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
+import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
+import GerechtenPageHero from './_components/GerechtenPageHero';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
 import SignatureSpotlight from './_components/SignatureSpotlight';
 import DietAllergensOverview from './_components/DietAllergensOverview';
@@ -28,23 +39,6 @@ import {
   schatMarge,
   fmtSmokeTime,
 } from './_components/stats-helpers';
-import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
-// Lazy load — 4 zware client-components, blijven in eigen client-chunks.
-import type { InventoryRow } from '@/components/InventoryAutocomplete';
-import type { AiFillResult, AiFillMeta } from '@/components/RecipeAiButton';
-import type { FixResult } from '@/components/EstimatedPriceFixButton';
-import type { FineTune, RecipeForTune } from '@/components/RecipeFineTuneButton';
-const InventoryAutocomplete = dynamic(() => import('@/components/InventoryAutocomplete'), { ssr: false, loading: () => null });
-const RecipeAiButton = dynamic(() => import('@/components/RecipeAiButton'), { ssr: false, loading: () => null });
-const EstimatedPriceFixButton = dynamic(() => import('@/components/EstimatedPriceFixButton'), { ssr: false, loading: () => null });
-const RecipeFineTuneButton = dynamic(() => import('@/components/RecipeFineTuneButton'), { ssr: false, loading: () => null });
-import KitchenModeStepper from '@/components/KitchenModeStepper';
-import AuditTrailTimeline from '@/components/AuditTrailTimeline';
-import PageGuideNote from '@/components/PageGuideNote';
-import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
-import { LoadingState } from '@/components/LoadingState';
-import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
-import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import type { InventoryItem, Gang } from '@/types';
 
 export default function Gerechten() {
