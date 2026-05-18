@@ -63,6 +63,11 @@ OUTPUT-FORMAT (alleen dit, geen extra tekst):
 interface DetectRequest {
     ingredients: string[];
     dish_name?: string;
+    /* Pillar #2 (Allergeen-cascade): als component_id meegegeven wordt, schrijven we
+       de AI-detectie naar component_allergens (hard-rule 2 compliant ground-truth).
+       AI mag voorstellen met ai_suggested=true, mens bevestigt in UI.
+       Zonder component_id: legacy gedrag (return JSON only, schrijf NIETS). */
+    component_id?: number;
 }
 
 interface DetectResponse {
@@ -70,6 +75,10 @@ interface DetectResponse {
     allergens?: string[];
     reasoning?: string;
     error?: string;
+    /* Pillar #2: wanneer component_id gegeven was en we hebben naar
+       component_allergens geschreven, meldt dit hoeveel rijen zijn toegevoegd
+       (alleen nieuwe, dankzij ON CONFLICT DO NOTHING). */
+    persisted_count?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -144,10 +153,36 @@ Welke allergeen-codes zijn aanwezig?`;
             .map((c: string) => c.toUpperCase().trim())
             .filter((c: string) => validCodes.has(c));
 
+        /* Pillar #2: wanneer client een component_id meegeeft, schrijven we de
+           AI-detectie als ai_suggested=true naar component_allergens. Dit is het
+           hard-rule 2 compliant pad — mens bevestigt later via een Server Action.
+           Geen component_id = legacy flow (return only). */
+        let persistedCount = 0;
+        if (orgId && body.component_id && allergens.length > 0) {
+            const rows = allergens.map(code => ({
+                component_id: body.component_id!,
+                allergen_code: code,
+                organization_id: orgId,
+                ai_suggested: true,
+                confirmed_at: null as string | null,
+                confirmed_by: null as string | null,
+            }));
+            // ON CONFLICT DO NOTHING: idempotent, behoudt eerder bevestigde rijen
+            const { error: insertErr, count } = await supabase
+                .from('component_allergens')
+                .upsert(rows, { onConflict: 'component_id,allergen_code', ignoreDuplicates: true, count: 'exact' });
+            if (insertErr) {
+                console.warn('[detect-allergens] persist failed:', insertErr.message);
+            } else {
+                persistedCount = count ?? 0;
+            }
+        }
+
         const result: DetectResponse = {
             success: true,
             allergens,
             reasoning: parsed.reasoning || '',
+            ...(body.component_id ? { persisted_count: persistedCount } : {}),
         };
         return NextResponse.json(result);
     } catch (e: any) {

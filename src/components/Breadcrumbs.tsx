@@ -5,11 +5,14 @@ import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
 import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 
+/* Sub-routes voor /gerechten/* worden onderaan in subRouteLabels gemapt
+   zodat de breadcrumb-tail leesbaar is ("Allergenen" i.p.v. "Allergen queue"). */
 const routeMap: Record<string, { label: string; section: string }> = {
-    '/marges': { label: 'Marges & analyse', section: 'Keuken' },
-    '/gerechten': { label: 'Gerechten', section: 'Keuken' },
-    '/recepten': { label: 'Recepten', section: 'Keuken' },
-    '/ai-chat': { label: 'AI Pitmaster', section: 'Keuken' },
+    '/marges': { label: 'Marges & analyse', section: 'Menu & Recepten' },
+    '/gerechten': { label: 'Gerechten', section: 'Menu & Recepten' },
+    '/recepten': { label: 'Recepten', section: 'Menu & Recepten' },
+    '/bedenker': { label: 'Bedenker', section: 'Menu & Recepten' },
+    '/ai-chat': { label: 'AI Pitmaster', section: 'Menu & Recepten' },
     '/agenda': { label: 'Agenda', section: 'Plannen' },
     '/events': { label: 'Events', section: 'Plannen' },
     '/prep-counter': { label: 'Prep Counter', section: 'Plannen' },
@@ -20,11 +23,12 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/klanten': { label: 'Klanten', section: 'Verkoop' },
     '/financien': { label: 'Financiën', section: 'Geld' },
     '/uren': { label: 'Uren', section: 'Geld' },
-    '/inkoop': { label: 'Inkoop', section: 'Beheer' },
-    '/voorraad': { label: 'Voorraad', section: 'Beheer' },
-    '/logistiek': { label: 'Logistiek', section: 'Beheer' },
-    '/materieel': { label: 'Materieel', section: 'Beheer' },
-    '/price-intelligence': { label: 'Prijsintelligentie', section: 'Beheer' },
+    '/inkoop': { label: 'Inkoop', section: 'Voorraad' },
+    '/voorraad': { label: 'Voorraad', section: 'Voorraad' },
+    '/leveranciers': { label: 'Leveranciers', section: 'Voorraad' },
+    '/logistiek': { label: 'Logistiek', section: 'Voorraad' },
+    '/materieel': { label: 'Materieel', section: 'Voorraad' },
+    '/price-intelligence': { label: 'Prijsintelligentie', section: 'Voorraad' },
     '/foto-archief': { label: 'Foto-archief', section: 'Systeem' },
     '/gebruikers': { label: 'Gebruikers', section: 'Systeem' },
     '/instellingen': { label: 'Instellingen', section: 'Systeem' },
@@ -33,6 +37,17 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/faq': { label: 'FAQ', section: 'Systeem' },
     '/contact': { label: 'Contact', section: 'Systeem' },
     '/hulp': { label: 'Help Center', section: 'Systeem' },
+};
+
+/* Expliciete labels voor sub-route segments — beter dan auto-format
+   (zoals "Allergen queue") wanneer de tab/UI een andere naam hanteert. */
+const subRouteLabels: Record<string, string> = {
+    'componenten':      'Componenten',
+    'ingredienten':     'Ingrediënten',
+    'allergen-queue':   'Allergenen',
+    'insights':         'Insights',
+    'menu-analyse':     'Menu-analyse',
+    'ai-pitmaster':     'AI Pitmaster',
 };
 
 export default function Breadcrumbs() {
@@ -134,11 +149,14 @@ export default function Breadcrumbs() {
                 <span style={{ color: 'var(--text)', fontWeight: 600 }}>{route.label}</span>
             )}
             {isSubPage && subSegments.map(function (seg, i) {
+                // Lookup explicit label, fallback op auto-formatted slug
+                const label = subRouteLabels[seg]
+                    ?? seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
                 return (
                     <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <ChevronRight size={11} style={{ opacity: 0.4 }} />
                         <span style={{ color: 'var(--text)', fontWeight: 600 }}>
-                            {seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ')}
+                            {label}
                         </span>
                     </span>
                 );

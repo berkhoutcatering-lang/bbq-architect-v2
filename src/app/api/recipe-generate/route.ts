@@ -113,9 +113,21 @@ function buildFlavourContext(flavour: RecipeFlavour, ctx: RecipeFlavourContext):
     return '';
 }
 
+/* Pillar #1 (Provenance-first AI): bouw het repertoire als CITABLE DOCUMENT
+   in plaats van als string concat. Anthropic Citations API chunked dan elke
+   regel zodat de response per claim kan terugverwijzen naar bron-gerecht. */
+function buildRepertoireDocument(existing: ExistingDish[]): string {
+    if (existing.length === 0) return '';
+    return existing.slice(0, 40)
+        .map((d, i) => `[${i + 1}] ${d.naam}${d.categorie ? ` (${d.categorie})` : ''}${d.gang ? ` · ${d.gang}` : ''}${d.tags?.length ? ` [${d.tags.join(', ')}]` : ''}`)
+        .join('\n');
+}
+
 function buildUserMessage(mode: GenerateMode, userPrompt: string, existing: ExistingDish[], options: any): string {
+    // Voor Citations-flow gaat het repertoire via document-block (zie POST handler).
+    // De prompt verwijst er expliciet naar zodat AI er gebruik van maakt.
     const stijlContext = existing.length > 0
-        ? `\n\n## JOUW BESTAANDE REPERTOIRE (blijf in deze stijl):\n${existing.slice(0, 40).map(d => `- ${d.naam}${d.categorie ? ` (${d.categorie})` : ''}${d.gang ? ` · ${d.gang}` : ''}${d.tags?.length ? ` [${d.tags.join(', ')}]` : ''}`).join('\n')}`
+        ? `\n\n## JOUW BESTAANDE REPERTOIRE (zie meegestuurde "Repertoire"-document — gebruik [n] notatie om te verwijzen).`
         : '';
 
     if (mode === 'recipe') {
@@ -199,11 +211,32 @@ export async function POST(req: NextRequest) {
 
         const maxTokens = mode === 'menu' ? 8000 : mode === 'recipe' ? 4000 : 2500;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
+
+        /* Pillar #1 (Provenance-first AI): bouw user-content als array met
+           optioneel een document-block voor het repertoire. Citations enabled
+           geeft per AI-claim een source-attribution terug. Haiku ondersteunt
+           dit ook (sinds SDK 0.34) maar we gebruiken hem alleen voor
+           classify/extract dus daar geen citations needed. */
+        const repertoireDoc = buildRepertoireDocument(existing);
+        const useCitations = repertoireDoc.length > 0 && model !== MODEL_MAP.haiku;
+        const userContent = useCitations
+            ? [
+                {
+                    type: 'document' as const,
+                    source: { type: 'text' as const, media_type: 'text/plain' as const, data: repertoireDoc },
+                    title: 'Repertoire — bestaande gerechten van deze caterier',
+                    context: 'Stijl-referentie. Gebruik [n] om naar regels te verwijzen waar je op leunt.',
+                    citations: { enabled: true },
+                },
+                { type: 'text' as const, text: userMessage },
+              ]
+            : userMessage;
+
         const stream = client.messages.stream({
             model,
             max_tokens: maxTokens,
             system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-            messages: [{ role: 'user', content: userMessage }],
+            messages: [{ role: 'user', content: userContent as any }],
             ...(isHaikuOrSonnet ? { thinking: { type: 'disabled' as const } } : {}),
         } as any);
         const response = await stream.finalMessage();
@@ -265,13 +298,31 @@ export async function POST(req: NextRequest) {
             }, { status: 502 });
         }
 
-        console.log(`[recipe-generate] success total=${Date.now() - t0}ms tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
+        /* Pillar #1: verzamel alle citations uit de response-content. Elke text-block
+           kan een citations[]-array hebben met source-spans. We platten dat naar
+           een unieke lijst van bron-gerechten zodat de UI [Pulled from: X, Y] kan tonen. */
+        type ContentBlockWithCitations = { type: string; text?: string; citations?: Array<{ cited_text?: string; document_title?: string; start_char_index?: number; end_char_index?: number }> };
+        const citationsFlat: Array<{ source_title: string; cited_text: string }> = [];
+        for (const block of response.content as ContentBlockWithCitations[]) {
+            if (block.type !== 'text' || !block.citations) continue;
+            for (const c of block.citations) {
+                if (!c.cited_text) continue;
+                citationsFlat.push({
+                    source_title: c.document_title ?? 'Repertoire',
+                    cited_text: c.cited_text.trim(),
+                });
+            }
+        }
+
+        console.log(`[recipe-generate] success total=${Date.now() - t0}ms tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out citations=${citationsFlat.length}`);
         return NextResponse.json({
             success: true,
             data: parsed,
             mode,
             elapsedMs: Date.now() - t0,
             usage: response.usage,
+            citations: citationsFlat,
+            citationsEnabled: useCitations,
         });
     } catch (e: any) {
         console.error('[recipe-generate]', e);

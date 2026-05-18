@@ -12,9 +12,8 @@ import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
-import KeukenTabs from '@/components/KeukenTabs';
-import RichKeukenTabs from '@/components/RichKeukenTabs';
 import PageSection from '@/components/PageSection';
+import MargeBar from '@/components/chips/MargeBar';
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
 import KitchenModeStepper from '@/components/KitchenModeStepper';
 import AuditTrailTimeline from '@/components/AuditTrailTimeline';
@@ -763,7 +762,7 @@ export default function Gerechten() {
 
     return (
         <div className="main-content mobile-safe-bottom">
-            <RichKeukenTabs />
+            {/* RichKeukenTabs verwijderd — vervangen door HubTabs in /gerechten/layout.tsx (Menu & Recepten unify). */}
             <PageGuideNote
                 id="gerechten"
                 accent="#FFBF00"
@@ -1009,6 +1008,15 @@ export default function Gerechten() {
 
                             {g.kostprijs_pp > 0 && (
                                 <div className="dish-kostprijs">€{Number(g.kostprijs_pp).toFixed(2)} p.p.</div>
+                            )}
+                            {/* Pillar #3 (One-glance margin-truth): MargeBar zichtbaar zodra
+                                kost+verkoop+positieve marge bekend zijn. */}
+                            {Number(g.kostprijs_pp || 0) > 0 && Number(g.verkoopprijs || 0) > Number(g.kostprijs_pp || 0) && (
+                                <div style={{ marginTop: 6 }}>
+                                    <MargeBar
+                                        margin={(Number(g.verkoopprijs) - Number(g.kostprijs_pp)) / Number(g.verkoopprijs)}
+                                    />
+                                </div>
                             )}
                         </div>
                     );
