@@ -8,14 +8,6 @@
         {
             "path": "/api/pricelists/batch/poll",
             "schedule": "0 4 * * *"
-        },
-        {
-            "path": "/api/cron/calendar-google-sync",
-            "schedule": "0 */6 * * *"
-        },
-        {
-            "path": "/api/cron/marge-alerts-scan",
-            "schedule": "30 */6 * * *"
         }
     ]
 }
