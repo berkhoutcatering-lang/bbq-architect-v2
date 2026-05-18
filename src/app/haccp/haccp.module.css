@@ -1,0 +1,594 @@
+/* HACCP-specific styles. Most layout uses existing globals (.metal, .pill,
+ * .eyebrow, .btn). This file only adds what the new HACCP flow uniquely
+ * needs: step bar, citation tooltip, AI status bar, resource timeline,
+ * and a handful of fade-up animations the prototype relies on. */
+
+/* ── Step bar ─────────────────────────────────────────────── */
+.steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 16px 0 24px;
+}
+.step {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: none;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    padding: 0;
+    cursor: pointer;
+}
+.stepDot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border);
+    color: var(--muted);
+    transition: all 0.25s;
+}
+.stepDotAct {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #000;
+    box-shadow: 0 0 16px rgba(255, 191, 0, 0.25);
+}
+.stepDotDone {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+}
+.stepLbl {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: color 0.2s;
+}
+.stepActLbl,
+.stepDoneLbl {
+    color: var(--text);
+}
+.stepLine {
+    width: 40px;
+    height: 2px;
+    margin: 0 6px;
+    background: var(--border);
+    border-radius: 1px;
+    transition: background 0.3s;
+}
+.stepLineDone {
+    background: var(--green);
+}
+.stepLineAct {
+    background: linear-gradient(90deg, var(--green), var(--brand));
+}
+
+/* ── Instap hero & cards ──────────────────────────────────── */
+.heroIcon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: rgba(255, 191, 0, 0.06);
+    border: 1px solid rgba(255, 191, 0, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+.instapCard {
+    transition: border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+.instapCardActive {
+    border-color: rgba(255, 191, 0, 0.3) !important;
+    box-shadow: 0 0 20px rgba(255, 191, 0, 0.08);
+}
+.instapCardIcon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(196, 163, 90, 0.1);
+    border: 1px solid rgba(196, 163, 90, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+.dossierLink {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-sans);
+    transition: color 0.15s;
+    padding: 8px 0;
+}
+.dossierLink:hover {
+    color: var(--brand-gold);
+}
+.dateChip {
+    width: 48px;
+    text-align: center;
+    padding: 7px 0;
+    background: rgba(255, 191, 0, 0.08);
+    border: 1px solid rgba(255, 191, 0, 0.25);
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.dateChipMon {
+    font-size: 9px;
+    color: var(--brand);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+}
+.dateChipDay {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+}
+.dishSearchRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dishSearchRow:hover {
+    background: rgba(130, 130, 130, 0.07);
+}
+
+/* ── Type badge ───────────────────────────────────────────── */
+.typeBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* ── Citation ─────────────────────────────────────────────── */
+.citeInline {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    border-left: 2px solid var(--border);
+    padding-left: 8px;
+    line-height: 1.4;
+}
+.citeExpandBtn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-sans);
+    padding: 4px 0;
+}
+.citeExpandBtn:hover {
+    color: var(--text);
+}
+.citeExpandBody {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    padding: 8px 10px;
+    background: rgba(130, 130, 130, 0.05);
+    border-radius: 6px;
+    line-height: 1.4;
+}
+.citeTooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: -10px;
+    padding: 12px 16px;
+    background: var(--card-solid, #1e1e22);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    width: 300px;
+    z-index: 100;
+}
+.citeTooltipSum {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.citeTooltipWrap {
+    position: relative;
+    display: inline-flex;
+}
+
+/* ── Check card ───────────────────────────────────────────── */
+.checkCard {
+    transition: opacity 0.2s, border-color 0.2s;
+}
+.checkCard::before {
+    height: 0 !important;
+}
+
+/* ── Custom checkbox ─────────────────────────────────────── */
+.hcheck {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-top: 3px;
+}
+.hcheck input {
+    display: none;
+}
+.hcheckBox {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.15s;
+}
+.hcheck input:checked + .hcheckBox {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #000;
+}
+
+/* ── AI status ───────────────────────────────────────────── */
+.aiStatusBar {
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+}
+.aiStatusIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.aiStatusIconGenerating {
+    background: rgba(255, 191, 0, 0.1);
+    border: 1px solid rgba(255, 191, 0, 0.25);
+    animation: aiPulse 3s ease-in-out infinite;
+}
+.aiStatusIconDone {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.aiProgress {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(130, 130, 130, 0.12);
+    margin-top: 12px;
+    overflow: hidden;
+}
+.aiProgressFill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-gold), var(--brand));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+@keyframes dotPulse {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+}
+@keyframes aiPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 191, 0, 0.3); }
+    50% { box-shadow: 0 0 0 10px rgba(255, 191, 0, 0); }
+}
+@keyframes lowStockPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15); }
+}
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+.fadeUp {
+    animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.typingDot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--brand-gold);
+    animation: dotPulse 1s ease-in-out infinite;
+}
+
+/* ── Log card ─────────────────────────────────────────────── */
+.logInput:focus {
+    box-shadow: 0 0 0 3px rgba(255, 191, 0, 0.15);
+}
+
+/* ── Dossier table ────────────────────────────────────────── */
+.anomalyBanner {
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.dossierTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.dossierTable th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+}
+.dossierTable td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(130, 130, 130, 0.06);
+}
+.dossierRowAnom {
+    background: rgba(245, 158, 11, 0.04);
+}
+.dossierRowAnom td {
+    border-bottom-color: rgba(245, 158, 11, 0.1);
+}
+
+/* ── Resource timeline ────────────────────────────────────── */
+.tlWrap {
+    padding: 4px 0;
+}
+.tlHead {
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.tlLblCol {
+    width: 140px;
+    flex-shrink: 0;
+    padding-right: 10px;
+}
+.tlAxis {
+    flex: 1;
+    position: relative;
+    height: 20px;
+    min-width: 600px;
+}
+.tlHourMark {
+    position: absolute;
+    font-size: 9px;
+    color: var(--muted-light, var(--muted));
+    letter-spacing: 0.04em;
+    transform: translateX(-50%);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.tlBody {
+    position: relative;
+}
+.tlRow {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(130, 130, 130, 0.04);
+}
+.tlTrack {
+    flex: 1;
+    position: relative;
+    height: 26px;
+    min-width: 600px;
+}
+.tlGridLine {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(130, 130, 130, 0.06);
+}
+.tlPrep {
+    position: absolute;
+    top: 5px;
+    height: 16px;
+    border-radius: 3px;
+    opacity: 0.18;
+}
+.tlServeMark {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: var(--brand);
+    opacity: 0.45;
+    border-radius: 1px;
+}
+.tlDot {
+    position: absolute;
+    top: 1px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateX(-50%);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    z-index: 3;
+}
+.tlDot:hover {
+    transform: translateX(-50%) scale(1.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.tlLegend {
+    display: flex;
+    gap: 14px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(130, 130, 130, 0.06);
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.tlLegendItem {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--muted);
+}
+.tlLegendDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+/* ── AI drawer ────────────────────────────────────────────── */
+.drawerScrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
+}
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 400px;
+    max-width: 100vw;
+    background: var(--bg, #0e0e10);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    z-index: 9999;
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.drawerHead {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.drawerBody {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.drawerFoot {
+    padding: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.aiFab {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(255, 191, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    z-index: 9990;
+    border: none;
+    transition: transform 0.2s;
+    animation: aiPulse 3s ease-in-out infinite;
+}
+.aiFab:hover {
+    transform: scale(1.05);
+}
+
+/* ── StatTile ─────────────────────────────────────────────── */
+.statTile {
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.statTileIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: rgba(196, 163, 90, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.statTileIconOk {
+    background: rgba(34, 197, 94, 0.12);
+}
+.statTileIconWarn {
+    background: rgba(245, 158, 11, 0.12);
+}
+.statTileValue {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+}
+.statTileLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .stepLine {
+        width: 20px;
+    }
+    .stepLbl {
+        display: none;
+    }
+}
