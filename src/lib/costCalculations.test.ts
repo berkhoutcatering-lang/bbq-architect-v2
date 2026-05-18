@@ -13,7 +13,7 @@ const inv = [
 describe('getInvPrice', () => {
     it('returnt price/unit/yield voor exacte naam (stale fallback)', () => {
         const r = getInvPrice(inv, 'Brisket');
-        expect(r).toEqual({ price: 28.50, unit: 'kg', yield_factor: 0.65, price_source: 'stale' });
+        expect(r).toEqual({ price: 28.50, unit: 'kg', yield_factor: 0.65, price_source: 'stale', matched_by: 'name' });
     });
 
     it('matcht case-insensitive met trim', () => {
