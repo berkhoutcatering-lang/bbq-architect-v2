@@ -208,9 +208,9 @@ export default function InventoryAutocomplete({
         />
         <style jsx>{`
           .inv-ac-input:focus-visible {
-            outline: 2px solid ${GOLD};
+            outline: 2px solid #c4a35a;
             outline-offset: 1px;
-            border-color: ${GOLD};
+            border-color: #c4a35a;
           }
         `}</style>
       </div>

@@ -1,11 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
-
-export const dynamic = 'force-dynamic';
 
 /**
  * AI-briefing endpoint voor /Vandaag.
@@ -158,8 +156,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client: AnthropicType = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey });
 
     const userMessage = [
       firstName ? `Mathijs heet ${firstName}.` : '',

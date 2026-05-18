@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import type AnthropicType from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
 
 const SYSTEM_PROMPT = `Je bent een Nederlandse catering-inkoopadviseur voor Hop & Bites.
 Jouw taak: advies geven wanneer een product uit het assortiment is bij een leverancier,
@@ -115,8 +114,7 @@ export async function POST(req: NextRequest) {
         }
 
         /* AI call met context */
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
-        const client: AnthropicType = new Anthropic({ apiKey });
+        const client = new Anthropic({ apiKey });
         const userMessage = `Product uit assortiment:
 - Naam: ${original.naam}
 - Categorie: ${original.categorie || 'Onbekend'}
