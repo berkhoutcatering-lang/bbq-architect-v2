@@ -10,6 +10,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useAuth } from '@/lib/AuthContext';
+import { useToast } from '@/components/Toast';
 
 /**
  * SF-4 — Event-day field view (mobile-first)
@@ -48,6 +49,7 @@ type PackItem = {
 };
 
 export default function EventFieldPage({ params }: { params: Promise<{ id: string }> }) {
+  const showToast = useToast();
   const { id } = use(params);
   const { orgId } = useOrg();
   const { user } = useAuth();
@@ -123,7 +125,7 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
       .single();
     setBusy(false);
     if (!error && data) setActive(data);
-    else if (error) alert('Start-timer mislukt: ' + error.message);
+    else if (error) showToast('Start-timer mislukt: ' + error.message, 'error');
   }
 
   async function stopTimer() {
@@ -135,7 +137,7 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
       .eq('id', active.id);
     setBusy(false);
     if (!error) setActive(null);
-    else alert('Stop-timer mislukt: ' + error.message);
+    else showToast('Stop-timer mislukt: ' + error.message, 'error');
   }
 
   async function togglePackItem(item: PackItem) {

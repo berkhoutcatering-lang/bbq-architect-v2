@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { estimateAiCostCents } from '@/lib/aiCost';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -169,6 +171,27 @@ Geef 1-3 suggesties in het JSON-formaat. Prioriteit: 1 enkele vervanger + evt. 1
             model_used: reqModel,
             status: 'pending',
         }).select('*').single();
+
+        /* Pillar #5 — log usage incl. cache-tokens */
+        const u: any = response.usage || {};
+        void logAiUsageServer({
+            organization_id: orgId,
+            user_id: user.id,
+            action_type: 'other',
+            model: reqModel,
+            tokens_input: u.input_tokens ?? 0,
+            tokens_output: u.output_tokens ?? 0,
+            tokens_cache_read: u.cache_read_input_tokens ?? 0,
+            tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+            cost_eur_cents: estimateAiCostCents({
+                model: reqModel,
+                tokens_input: u.input_tokens ?? 0,
+                tokens_output: u.output_tokens ?? 0,
+                tokens_cache_read: u.cache_read_input_tokens ?? 0,
+                tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+            }),
+            metadata: { feature: 'substitution_advice', master_product_id: masterProductId },
+        });
 
         return NextResponse.json({
             success: true,

@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, Loader2 } from 'lucide-react';
 import { resizeImage } from '@/lib/utils';
+import { useToast } from '@/components/Toast';
 
 /**
  * ScanFab
@@ -19,6 +20,7 @@ import { resizeImage } from '@/lib/utils';
 export default function ScanFab() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+  const showToast = useToast();
   const [uploading, setUploading] = useState(false);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -46,7 +48,7 @@ export default function ScanFab() {
       // Naar /inkoop met scan-id, daar kan cateraar bevestigen
       router.push(`/inkoop?bon=${json.bon_id}`);
     } catch (err: any) {
-      alert('Scan-fout: ' + (err?.message || 'onbekend'));
+      showToast('Scan-fout: ' + (err?.message || 'onbekend'), 'error');
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';

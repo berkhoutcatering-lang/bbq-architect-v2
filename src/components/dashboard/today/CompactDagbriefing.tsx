@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Check } from 'lucide-react';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
+import { useOrg } from '@/lib/OrgContext';
 
 export interface CompactBullet {
   id: string;
@@ -59,6 +60,7 @@ export default function CompactDagbriefing({
   firstName,
   visibleCount = 4,
 }: Props): React.ReactElement | null {
+  const { orgId } = useOrg();
   const [bullets, setBullets] = useState<CompactBullet[]>([]);
   const [loading, setLoading] = useState(false);
   const currentHash = hashCandidates(candidates);
@@ -82,7 +84,7 @@ export default function CompactDagbriefing({
         const r = await fetch('/api/today-briefing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidates, firstName, time }),
+          body: JSON.stringify({ candidates, firstName, time, organizationId: orgId }),
           cache: 'no-store',
         });
         const data = await r.json();
@@ -103,7 +105,7 @@ export default function CompactDagbriefing({
         setLoading(false);
       }
     },
-    [candidates, currentHash, firstName],
+    [candidates, currentHash, firstName, orgId],
   );
 
   useEffect(() => { fetchBriefing(false); }, [fetchBriefing]);
