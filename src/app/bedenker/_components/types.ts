@@ -28,6 +28,9 @@ export interface Concept {
   /** Save state for UI */
   saveState?: 'idle' | 'saving' | 'saved' | 'error';
   saveError?: string;
+  /** Pillar #1 (Provenance-first AI): per AI-claim de bron-attribution uit
+   *  Anthropic Citations API. Aanvullend op inspiredBy (de hele recipe-bron). */
+  citations?: Array<{ source_title: string; cited_text: string }>;
 }
 
 export interface HistoryItem {

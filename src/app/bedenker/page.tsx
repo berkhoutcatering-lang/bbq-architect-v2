@@ -230,7 +230,10 @@ export default function BedenkerPage() {
       });
       const body = await res.json();
       if (!res.ok || !body?.data) return null;
-      return { concept: mapApiToConcept(body.data, p, bestaande), raw: body.data };
+      // Pillar #1 (Provenance-first AI): pass citations array from Anthropic
+      // Citations API response (top-level body.citations, not body.data) so the
+      // Concept carries source-attribution into the UI.
+      return { concept: mapApiToConcept(body.data, p, bestaande, body.citations), raw: body.data };
     } catch {
       return null;
     }

@@ -5,6 +5,7 @@ import { Sparkles, BookmarkPlus, Check, Maximize2 } from 'lucide-react';
 import type { Concept } from './types';
 import { RISK_COLOR, RISK_LABEL } from './types';
 import { useAnimatedNumber, useTilt, fireSparkles } from './wow-hooks';
+import CitationsChip from '@/components/chips/CitationsChip';
 
 interface Props {
   concept: Concept;
@@ -201,6 +202,25 @@ export default function ConceptCard({ concept, onSave, onOpen, revealIndex = 0 }
           </div>
           <ConfidenceBar pct={aniConfidence / 100} />
         </div>
+
+        {/* Pillar #1 (Provenance-first AI): Citations API source-attribution per claim */}
+        {concept.citations && concept.citations.length > 0 && (
+          <div>
+            <div
+              style={{
+                fontSize: 9,
+                letterSpacing: '.22em',
+                textTransform: 'uppercase',
+                color: 'var(--muted-light)',
+                fontWeight: 700,
+                marginBottom: 6,
+              }}
+            >
+              AI bron-attribution
+            </div>
+            <CitationsChip citations={concept.citations} />
+          </div>
+        )}
 
         {/* Inspired by */}
         {concept.inspiredBy.length > 0 && (

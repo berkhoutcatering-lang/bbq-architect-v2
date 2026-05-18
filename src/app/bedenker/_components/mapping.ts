@@ -147,6 +147,9 @@ export function mapApiToConcept(
   api: ApiRecipe,
   prompt: string,
   existing: ExistingDish[],
+  /* Pillar #1 (Provenance-first AI): citations uit /api/recipe-generate response
+     komen apart binnen (response.citations top-level, niet response.data). */
+  citations?: Array<{ source_title: string; cited_text: string }>,
 ): Concept {
   const category = api.categorie || 'Hoofd';
   const ingredients = (api.ingredienten || []).map((i, idx) => ({
@@ -191,6 +194,7 @@ export function mapApiToConcept(
     pairing: api.wijn_suggestie || '',
     serviceTip: api.service_tip || '',
     risk: pickRisk(method, ingredients),
+    citations: citations && citations.length > 0 ? citations : undefined,
   };
 }
 

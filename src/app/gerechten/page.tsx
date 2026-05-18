@@ -10,10 +10,8 @@ import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
-import KeukenTabs from '@/components/KeukenTabs';
 import PageSection from '@/components/PageSection';
 import GerechtenPageHero from './_components/GerechtenPageHero';
-import RichKeukenTabs from '@/components/RichKeukenTabs';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
 import SignatureSpotlight from './_components/SignatureSpotlight';
 import DietAllergensOverview from './_components/DietAllergensOverview';
@@ -40,6 +38,7 @@ import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import type { InventoryItem, Gang } from '@/types';
+import MargeBar from '@/components/chips/MargeBar';
 
 export default function Gerechten() {
     const showToast = useToast();
@@ -763,7 +762,7 @@ export default function Gerechten() {
 
     return (
         <div className="main-content mobile-safe-bottom">
-            <RichKeukenTabs />
+            {/* RichKeukenTabs verwijderd — vervangen door HubTabs in /gerechten/layout.tsx (5-tab Menu & Recepten unify, 2026-05-16). */}
             <PageGuideNote
                 id="gerechten"
                 accent="#FFBF00"
@@ -1009,6 +1008,15 @@ export default function Gerechten() {
 
                             {g.kostprijs_pp > 0 && (
                                 <div className="dish-kostprijs">€{Number(g.kostprijs_pp).toFixed(2)} p.p.</div>
+                            )}
+                            {/* Pillar #3 (One-glance margin-truth): MargeBar zichtbaar zodra
+                                kost+verkoop+positieve marge bekend zijn. Compact-mode = inline-bar. */}
+                            {Number(g.kostprijs_pp || 0) > 0 && Number(g.verkoopprijs || 0) > Number(g.kostprijs_pp || 0) && (
+                                <div style={{ marginTop: 6 }}>
+                                    <MargeBar
+                                        margin={(Number(g.verkoopprijs) - Number(g.kostprijs_pp)) / Number(g.verkoopprijs)}
+                                    />
+                                </div>
                             )}
                         </div>
                     );

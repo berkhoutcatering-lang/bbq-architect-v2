@@ -1,0 +1,577 @@
+/* ═══════════════════════════════════════════════════════════════
+   Mobile-Lars view styles
+   Recreated from Claude Design package: mobile-lars.html (Cool Mint theme)
+   Pillar #5: Lars-friendly mobile assembly
+   ─────────────────────────────────────────────────────────────── */
+
+/* Cool Mint theme overrides — applied via :where(.shell) for low specificity */
+.shell {
+    /* Multi-tenant theming demo: deze overrides leven alleen binnen .shell zodat
+       de rest van de app de globale theme behoudt. */
+    --brand: #00d4a1;
+    --brand-light: rgba(0, 212, 161, 0.12);
+    --brand-tint: rgba(0, 212, 161, 0.14);
+    --brand-hover: #33e0b8;
+    --brand-gold: #00d4a1;
+    --brand-gold-deep: #00a87e;
+    --bg: #121214;
+    --bg-elevated: #18181c;
+    --bg-subtle: #1a1a1e;
+    --card-solid: #1a1a1e;
+    --border: rgba(255, 255, 255, 0.06);
+    --text: #f5f5f7;
+    --muted: #a1a1aa;
+    --muted-weak: #71717a;
+    --red: #ef4444;
+    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Georgia', 'Times New Roman', serif;
+
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    font-size: 14px;
+    position: relative;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Phone-frame container (desktop preview) ───────────────── */
+.frameWrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #0e0e12;
+    padding: 32px 16px;
+    box-sizing: border-box;
+}
+
+.phoneFrame {
+    width: 390px;
+    height: 844px;
+    max-width: 100%;
+    background: #000;
+    border-radius: 44px;
+    padding: 10px;
+    box-shadow:
+        0 0 0 2px rgba(255, 255, 255, 0.06),
+        0 24px 60px rgba(0, 0, 0, 0.45);
+    position: relative;
+    overflow: hidden;
+}
+
+.phoneScreen {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Dynamic-island mock — pure decorative on desktop preview */
+.island {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 32px;
+    background: #000;
+    border-radius: 18px;
+    z-index: 40;
+    pointer-events: none;
+}
+
+/* On true mobile (≤480px) we ditch the phone-frame and go full-bleed */
+@media (max-width: 480px) {
+    .frameWrap { padding: 0; min-height: 100vh; background: var(--bg); }
+    .phoneFrame {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        padding: 0;
+        box-shadow: none;
+    }
+    .phoneScreen { border-radius: 0; }
+    .island { display: none; }
+}
+
+/* ── Pull-to-refresh hint ──────────────────────────────────── */
+.pullHint {
+    text-align: center;
+    padding: 6px 0;
+    font-size: 10px;
+    color: var(--muted-weak);
+    letter-spacing: 0.1em;
+}
+
+/* ── Mobile header ─────────────────────────────────────────── */
+.header {
+    padding: 14px 16px 10px;
+    background: rgba(18, 18, 20, 0.9);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+}
+
+.headerTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.logo { display: flex; align-items: center; gap: 8px; }
+
+.logoMark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0, 212, 161, 0.2), rgba(0, 212, 161, 0.05));
+    border: 1px solid rgba(0, 212, 161, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand);
+}
+
+.logoText {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+.logoSub {
+    font-size: 8px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 1px;
+}
+
+.micBtn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(0, 212, 161, 0.12);
+    border: 1px solid rgba(0, 212, 161, 0.3);
+    color: var(--brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.15s, background 0.15s;
+}
+
+.micBtn:active { transform: scale(0.94); background: rgba(0, 212, 161, 0.18); }
+.micBtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    cursor: text;
+}
+
+/* ── Filter chips ──────────────────────────────────────────── */
+.filters {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: sticky;
+    top: 90px;
+    z-index: 9;
+    background: rgba(18, 18, 20, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.filters::-webkit-scrollbar { display: none; }
+
+.filterChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 40px;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filterChip:active { transform: scale(0.96); }
+.filterChip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.filterChipActive {
+    background: rgba(0, 212, 161, 0.08);
+    border-color: rgba(0, 212, 161, 0.3);
+    color: var(--brand);
+}
+
+/* ── Card list ─────────────────────────────────────────────── */
+.cards {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 100px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.card {
+    padding: 16px;
+    background: var(--card-solid);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    min-height: 56px;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    display: block;
+}
+
+.card:active { background: #222226; }
+.card:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cardOpen { border-color: rgba(0, 212, 161, 0.3); }
+
+.cardTop {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.cardGlyph {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #1f1f23, #18181c);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.cardName {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.25;
+}
+
+.cardSub {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cardRight { text-align: right; flex-shrink: 0; }
+.cardRightLabel {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-weak);
+    font-weight: 700;
+}
+.cardRightPrice {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.tag {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.prov {
+    font-size: 9.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.provAi {
+    background: rgba(139, 139, 240, 0.10);
+    border: 1px solid rgba(139, 139, 240, 0.25);
+    color: #a5a5f0;
+}
+
+.provCurated {
+    background: rgba(0, 212, 161, 0.08);
+    border: 1px solid rgba(0, 212, 161, 0.25);
+    color: var(--brand);
+}
+
+.conceptTag {
+    background: rgba(167, 139, 250, 0.10);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    color: #c4b5fd;
+}
+
+/* ── Marge bar ─────────────────────────────────────────────── */
+.marge { display: flex; align-items: center; gap: 10px; }
+
+.margeTrack {
+    flex: 1;
+    height: 6px;
+    display: flex;
+    gap: 1px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.margePct {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+    text-align: right;
+}
+
+/* ── Bottom drawer ─────────────────────────────────────────── */
+.drawerOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 20;
+    border: 0;
+    cursor: pointer;
+}
+
+.drawer {
+    position: absolute;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    z-index: 21;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawerHandle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 10px auto;
+}
+
+.drawerHead {
+    padding: 0 18px 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.drawerHeadTitle {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.drawerHeadSub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.drawerBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 18px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.drawerSection { margin-bottom: 16px; }
+
+.drawerSectionLabel {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted-weak);
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.recipeText { font-size: 13px; color: var(--text); line-height: 1.65; }
+.recipeText p { margin: 0 0 8px; }
+
+.recipeMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.recipeMetaSmoke {
+    background: rgba(0, 212, 161, 0.06);
+    border: 1px solid rgba(0, 212, 161, 0.18);
+    color: var(--brand);
+}
+
+.recipeMetaTemp {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.18);
+    color: var(--red);
+}
+
+.recipeMetaLabel { color: var(--muted); font-weight: 600; }
+
+.recipeMetaValue {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 500;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.allergenChip {
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+.kitchenBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--brand);
+    color: #000;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--font-sans);
+    border: none;
+    cursor: pointer;
+    min-height: 56px;
+    box-shadow: 0 4px 20px rgba(0, 212, 161, 0.35);
+    transition: transform 0.15s;
+}
+
+.kitchenBtn:active { transform: scale(0.97); }
+.kitchenBtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ── Bottom nav ────────────────────────────────────────────── */
+.bottomNav {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 max(4px, env(safe-area-inset-bottom));
+    background: rgba(18, 18, 20, 0.95);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--border);
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+}
+
+.navItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 0;
+    min-width: 56px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 9.5px;
+    font-weight: 600;
+    transition: color 0.15s;
+    text-decoration: none;
+}
+
+.navItemActive { color: var(--brand); }
+.navItem:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+/* Voice-search pulsing mic animation */
+@keyframes m-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 161, 0.5); }
+    50%      { box-shadow: 0 0 0 8px rgba(0, 212, 161, 0); }
+}
+
+/* Empty-state when no dishes returned */
+.empty {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--muted);
+    font-size: 13px;
+}
