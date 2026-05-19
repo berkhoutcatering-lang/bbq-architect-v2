@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { checkAiCap } from '@/lib/aiCostCap';
 import { matchInventory } from '@/lib/inventoryDeduction';
 import { PURCHASE_CODES, rgsLookup } from '@/lib/rgsCategories';
 
@@ -108,6 +109,20 @@ export async function POST(req: NextRequest) {
       .limit(1);
     const orgId = memberships?.[0]?.organization_id;
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
+
+    // P0.40 — AI hard-cap kill-switch. Vision-extract = ~€0.01-0.03 per bon
+    // (Haiku 4.5 met image). Conservative estimate 0.03 om over-cap te
+    // voorkomen bij meerdere parallel calls.
+    const cap = await checkAiCap(orgId, 0.03);
+    if (cap.status === 'hard_block') {
+      return NextResponse.json({
+        error: 'ai_cap_exceeded',
+        message: cap.message,
+        used_eur: cap.used_eur,
+        hard_eur: cap.hard_eur,
+        tier: cap.tier,
+      }, { status: 402 });
+    }
 
     const body = await req.json() as ExtractRequest;
     if (!body.image_data_url || !body.image_data_url.startsWith('data:image/')) {

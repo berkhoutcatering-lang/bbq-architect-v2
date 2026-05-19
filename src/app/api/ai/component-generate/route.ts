@@ -13,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -98,6 +99,10 @@ export async function POST(req: NextRequest) {
 
     // User-prompt in delimiters tegen prompt-injection (OWASP LLM01)
     const userMessage = `<user_prompt type="${v.data.type}">\n${v.data.prompt.replace(/<\/user_prompt>/gi, '')}\n</user_prompt>\n\nGeef ÉÉN component-voorstel als JSON.`;
+
+    /* P0.40 — component-generate Sonnet ≈ €0.03/call (2k out). */
+    const capRes = await enforceAiCap(orgId, 0.03);
+    if (capRes) return capRes;
 
     try {
         const response = await anthropic.messages.create({

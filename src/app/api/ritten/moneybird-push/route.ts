@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { kwartaalRange, bedragAftrekbaar } from '@/lib/ritten-tarieven';
+import { getValidMoneybirdToken } from '@/lib/moneybird';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -89,7 +90,9 @@ export async function POST(req: Request) {
     0,
   );
 
-  // Moneybird-koppeling check
+  /* P0.12 — Moneybird OAuth-token met automatische refresh-rotatie. Voor
+     scope_version-check lezen we feature_flags apart; access_token komt uit
+     getValidMoneybirdToken (refresh als nodig). */
   const { data: org } = await sb
     .from('organizations')
     .select('feature_flags')
@@ -114,13 +117,21 @@ export async function POST(req: Request) {
     );
   }
 
+  const tok = await getValidMoneybirdToken(sb, orgId);
+  if ('error' in tok) {
+    return NextResponse.json(
+      { error: `Moneybird-koppeling probleem: ${tok.error}. Herverbind via Instellingen → Integraties.` },
+      { status: 503 },
+    );
+  }
+
   // Push naar Moneybird
   const mbRes = await fetch(
-    `https://moneybird.com/api/v2/${mb.administration_id}/purchase_invoices.json`,
+    `https://moneybird.com/api/v2/${tok.administration_id ?? mb.administration_id}/purchase_invoices.json`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${mb.access_token}`,
+        Authorization: `Bearer ${tok.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

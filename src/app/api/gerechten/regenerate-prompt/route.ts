@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -76,6 +77,12 @@ export async function POST(req: NextRequest) {
             '',
             'Gebruik de tool generate_realistic_foto_prompt — gebruik specifieke ingrediënt-formaten + menselijke imperfectie-woorden.',
         ].join('\n');
+
+        /* P0.40 — Sonnet tool-call ≈ €0.04/call. */
+        if (orgId) {
+            const capRes = await enforceAiCap(orgId, 0.04);
+            if (capRes) return capRes;
+        }
 
         const response = await client.messages.create({
             model: 'claude-sonnet-4-6',

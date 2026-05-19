@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -211,6 +212,16 @@ export async function POST(req: NextRequest) {
 
         const maxTokens = mode === 'menu' ? 8000 : mode === 'recipe' ? 4000 : 2500;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
+
+        /* P0.40 — hard-cap kill-switch. Schatting per mode: menu (Sonnet, 8000 tok)
+           ≈ €0.15; recipe (Sonnet, 4000 tok) ≈ €0.07; enrich/scale (Haiku) ≈ €0.02.
+           Opus-fallback duurder maar Sam kiest dat expliciet. Skip wanneer orgId
+           onbekend (anonymous test-call, gate-keepen via middleware). */
+        if (orgId) {
+            const estEur = mode === 'menu' ? 0.15 : mode === 'recipe' ? 0.07 : 0.02;
+            const capRes = await enforceAiCap(orgId, estEur);
+            if (capRes) return capRes;
+        }
 
         /* Pillar #1 (Provenance-first AI): bouw user-content als array met
            optioneel een document-block voor het repertoire. Citations enabled

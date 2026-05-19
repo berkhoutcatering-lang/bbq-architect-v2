@@ -440,6 +440,8 @@ export default function DashboardPage() {
   }), [briefingInput, verlopenTotaal, upcomingZonderPrepMonth, heroEvent?.id, heroEvent?.daysAway, unbookedReceiptsCount]);
 
   // ─── AttentionPanel items ─────────────────────────────────────────────
+  // Pillar 4 Vandaag-hub: elke kaart heeft een query-param zodat de target-page
+  // direct focust op het juiste item. Geen losse /conflicts route.
   const attentionItems: AttentionItem[] = [];
   if (lowStockItems.length > 0) {
     attentionItems.push({
@@ -449,10 +451,11 @@ export default function DashboardPage() {
       title: `${plural(lowStockItems.length, 'item', 'items')} onder minimum`,
       detail: lowStockItems.slice(0, 3).map((i: any) => i.naam).join(', '),
       cta: 'Open bestelling',
-      href: '/voorraad',
+      href: '/voorraad?filter=below_min',
     });
   }
   if (verlopenFacturen.length > 0) {
+    const firstOverdueId = (verlopenFacturen[0] as any)?.id;
     attentionItems.push({
       id: 'att-overdue',
       severity: 'high',
@@ -462,10 +465,11 @@ export default function DashboardPage() {
         `${f.client_naam || 'klant'} € ${Math.round(calcFactuurBedrag(f)).toLocaleString('nl-NL')}`,
       ).join(' · '),
       cta: 'Stuur herinnering',
-      href: '/facturen',
+      href: firstOverdueId ? `/facturen?overdue=1&focus=${firstOverdueId}` : '/facturen?overdue=1',
     });
   }
   if (lowMargeOffertes.length > 0) {
+    const firstLowMargeId = (lowMargeOffertes[0] as any)?.id;
     attentionItems.push({
       id: 'att-marge',
       severity: 'medium',
@@ -473,7 +477,7 @@ export default function DashboardPage() {
       title: `${plural(lowMargeOffertes.length, 'offerte', 'offertes')} met lage marge`,
       detail: lowMargeOffertes.map((o: any) => `${o.client_naam || 'klant'}`).join(' · '),
       cta: 'Open offerte',
-      href: '/offertes',
+      href: firstLowMargeId ? `/offertes?filter=lowmargin&edit=${firstLowMargeId}` : '/offertes?filter=lowmargin',
     });
   }
   if (pendingSuggestions.length > 0) {
@@ -484,7 +488,7 @@ export default function DashboardPage() {
       title: `${pendingSuggestions.length} AI-suggesties open`,
       detail: 'Controleer en accepteer in agenda.',
       cta: 'Bekijk',
-      href: '/agenda',
+      href: '/agenda?suggestions=1',
     });
   }
   // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op
@@ -506,7 +510,7 @@ export default function DashboardPage() {
         ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
         : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
       cta: 'Bekijk impact',
-      href: '/voorraad',
+      href: '/price-intelligence?filter=alerts',
     });
   }
 
@@ -648,8 +652,8 @@ export default function DashboardPage() {
           onNewEvent={() => setWizardOpen(true)}
         />
 
-        {/* ── 2. AIQuickPrompts ── */}
-        <AIQuickPrompts onPrompt={setAiPrompt} />
+        {/* ── 2. AIQuickPrompts ── Pillar 2 Vandaag: context-aware prompts obv heroEvent */}
+        <AIQuickPrompts onPrompt={setAiPrompt} heroEvent={heroEvent} />
 
         {/* ── 3. BusinessCharts ── */}
         <BusinessCharts

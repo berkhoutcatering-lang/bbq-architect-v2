@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -163,6 +164,13 @@ export async function POST(req: NextRequest) {
         } catch { /* logging optional */ }
 
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
+
+        /* P0.40 — invoice-parse op Sonnet vision ≈ €0.04/call. Conservatief. */
+        if (orgId) {
+            const capRes = await enforceAiCap(orgId, type === 'invoice' ? 0.08 : 0.04);
+            if (capRes) return capRes;
+        }
+
         const stream = client.messages.stream({
             model,
             max_tokens: type === 'invoice' ? 16000 : 4000,

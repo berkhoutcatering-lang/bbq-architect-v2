@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Camera, Loader2, X, Check, AlertCircle, Package, Plus } from 'lucide-react';
 import { resizeImage } from '@/lib/utils';
 import { RGS_CATERING_CATEGORIES } from '@/lib/rgsCategories';
+import AiBadge from '@/components/ai/AiBadge';
 
 /**
  * BonAddSheet
@@ -228,6 +229,9 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
 
         {phase === 'review' && preview && (
           <div className="bh-bon-sheet__review">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <AiBadge model="claude-haiku-4-5" inline />
+            </div>
             <section className="bh-bon-sheet__meta">
               <h3>Bon-data</h3>
               <div className="bh-bon-sheet__meta-grid">

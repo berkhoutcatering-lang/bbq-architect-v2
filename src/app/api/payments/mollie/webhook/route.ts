@@ -52,6 +52,31 @@ export async function POST(req: NextRequest) {
             return new NextResponse('OK', { status: 200 });
         }
 
+        /* P0.11 — idempotency-guard. Mollie kan dezelfde status-update meerdere
+           keren posten bij retry/timeout. UNIQUE(mollie_payment_id, mollie_status)
+           in `processed_mollie_events` voorkomt dubbele factuur-updates +
+           dubbele notificatie-mails. Eerste write = OK; tweede = 23505 conflict
+           = stille 200 OK terug zonder verdere processing. */
+        const sbIdem = createServiceSupabase();
+        const { data: factuurRow } = await sbIdem.from('facturen')
+            .select('organization_id').eq('id', factuurId).single();
+        const { error: idempErr } = await sbIdem.from('processed_mollie_events').insert({
+            mollie_payment_id: paymentId,
+            mollie_status: payment.status,
+            factuur_id: factuurId,
+            organization_id: factuurRow?.organization_id ?? null,
+            payload: { status: payment.status, paidAt: payment.paidAt ?? null, amount: payment.amount ?? null },
+        });
+        if (idempErr) {
+            // 23505 = unique_violation = already processed
+            if (idempErr.code === '23505') {
+                console.info('[mollie-webhook] idempotent skip — already processed:', paymentId, payment.status);
+                return new NextResponse('OK (replay)', { status: 200 });
+            }
+            // Andere DB-error: log maar laat door zodat we niet vastlopen
+            console.warn('[mollie-webhook] idempotency-table write failed:', idempErr.message);
+        }
+
         /* Map Mollie-status naar onze factuur-status. */
         let factuurStatus: string | null = null;
         let extraUpdates: Record<string, any> = {};

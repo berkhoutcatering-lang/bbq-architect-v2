@@ -20,6 +20,7 @@
  */
 
 import { matchInventory, normalizeInventoryName } from '@/lib/inventoryDeduction';
+import { validateBtwPct } from '@/lib/btw-rules';
 import type { BonItemRow } from '@/types';
 
 export interface LeverancierLookup {
@@ -95,7 +96,11 @@ export function normalizeBonItem(raw: any): BonItemRow | null {
     const totaal = parseAmount(raw.totaal ?? raw.total ?? (aantal * prijs));
     const unit = (raw.eenheid || raw.unit || raw.uom || 'stuks').toString().toLowerCase().trim();
 
-    /* btw_pct: AI kan 9 / 21 / 0 of "9%" of "laag"/"hoog" sturen. */
+    /* btw_pct: AI kan 9 / 21 / 0 of "9%" of "laag"/"hoog" sturen. We mappen
+       eerst naar één getal en valideren daarna via de centrale BTW_RULES_2026
+       lookup (src/lib/btw-rules.ts) — zo blijft er één bron-of-truth voor
+       toegestane percentages, ook als de Belastingdienst-tarieven wijzigen.
+       Hard rule 1: BTW komt nooit direct uit AI-output. */
     let btw_pct: number = 0;
     const rawBtw = raw.btw ?? raw.btw_pct ?? raw.tax ?? raw.tax_rate;
     if (typeof rawBtw === 'number') btw_pct = rawBtw;
@@ -105,10 +110,8 @@ export function normalizeBonItem(raw: any): BonItemRow | null {
         else if (/hoog|high|standard/.test(lower)) btw_pct = 21;
         else btw_pct = parseAmount(rawBtw);
     }
-    /* Normalize losse waardes — als 9.5% AI-fluctuatie binnen kwam: snap naar dichtstbijzijnde NL-tarief. */
-    if (btw_pct > 0 && btw_pct < 5) btw_pct = 0;
-    else if (btw_pct >= 5 && btw_pct < 15) btw_pct = 9;
-    else if (btw_pct >= 15) btw_pct = 21;
+    /* validateBtwPct snapt naar 0 / 9 / 21 — geen losse percentages mogelijk. */
+    btw_pct = validateBtwPct(btw_pct);
 
     return {
         naam,

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { trackOnce } from '@/lib/track';
 import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -116,6 +117,8 @@ function Klanten() {
         if (editing === 'new') {
             insert(form!).then(function () {
                 showToast('Klant aangemaakt', 'success');
+                /* Activation tracking \u2014 `first_klant_created` (ux-master.md sectie 7). */
+                trackOnce('first_klant_created', 'first_klant');
                 setFollowUpActions([
                     { icon: '\ud83d\udcc4', label: 'Offerte opstellen', href: '/offertes' },
                     { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },

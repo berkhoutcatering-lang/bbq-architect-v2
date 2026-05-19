@@ -34,6 +34,11 @@ export default function Mailbox() {
     const { data: templates, loading: loadingTemplates, insert: insertTemplate, update: updateTemplate, remove: removeTemplate } = useSupabase<EmailTemplate>('email_templates', []);
     const { data: klanten } = useSupabase<Klant>('klanten', []);
     const { data: settingsArr } = useSupabase<any>('settings', []);
+    // Email-in inbox-adres voor leverancier-PDFs (Voorraad Pillar 2).
+    // View `v_org_inbox_address` resolveert per tenant. Toon read-only met kopieer-knop.
+    // View-rows hebben geen `id`-kolom; cast om de useSupabase generic-constraint te halen.
+    const { data: inboxAddrArr } = useSupabase<{ id: number; inbox_address: string }>('v_org_inbox_address', []);
+    const inboxAddress: string | null = inboxAddrArr[0]?.inbox_address ?? null;
     const showToast = useToast();
     const showConfirm = useConfirm();
 
@@ -241,6 +246,47 @@ export default function Mailbox() {
                     { lead: 'Templates beheer je apart', text: '— pas ze aan met variabelen zoals {{naam}} en {{datum}} en gebruik ze overal.' },
                 ]}
             />
+
+            {inboxAddress ? (
+                <div
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(196,163,90,0.08), rgba(196,163,90,0.02))',
+                        border: '1px solid rgba(196,163,90,0.3)',
+                        borderRadius: 'var(--radius-md, 12px)',
+                        padding: 16,
+                        marginBottom: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <Inbox size={20} color="var(--color-accent-gold, #c4a35a)" />
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-light)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
+                            Email-in voor leverancier-PDFs
+                        </div>
+                        <code style={{ fontSize: 15, fontWeight: 600, fontFamily: 'monospace' }}>{inboxAddress}</code>
+                        <div style={{ fontSize: 12, color: 'var(--muted-light)', marginTop: 4 }}>
+                            Stuur leveranciersmail met prijslijst (PDF) naar dit adres. Binnen 5 min staat het resultaat in Price-Intelligence review-queue.
+                        </div>
+                    </div>
+                    <button
+                        className="btn btn-ghost"
+                        onClick={async function () {
+                            try {
+                                await navigator.clipboard.writeText(inboxAddress);
+                                showToast('Adres gekopieerd', 'success');
+                            } catch {
+                                showToast('Kopiëren niet gelukt', 'error');
+                            }
+                        }}
+                        style={{ minHeight: 44 }}
+                    >
+                        Kopieer
+                    </button>
+                </div>
+            ) : null}
 
             <div className="tab-bar" style={{ marginBottom: 16 }}>
                 <button className={'tab-btn' + (tab === 'verzonden' ? ' active' : '')} onClick={function () { setTab('verzonden'); setSelectedEmail(null); }}>

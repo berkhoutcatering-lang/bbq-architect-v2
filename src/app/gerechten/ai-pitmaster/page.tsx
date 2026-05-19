@@ -1,29 +1,46 @@
 import PageHeader from '@/components/PageHeader';
+import { createServerSupabase } from '@/lib/supabase-server';
+import AiPitmasterClient from './_client';
 
 export const metadata = {
     title: 'AI Pitmaster — Menu & Recepten',
-    description: 'AI-coach voor BBQ-events: directives, kerntemp-alerts, allergie-cross-refs',
+    description: 'AI-coach Rook Maart: directives, kerntemp-alerts, allergie-cross-refs en menu-vragen.',
 };
 
-export default function AiPitmasterPage() {
+export const dynamic = 'force-dynamic';
+
+/* P0.17 — AI Pitmaster is geen "Binnenkort"-stub meer. Server Component
+   haalt de komende events op (7-daagse horizon) en geeft die als context
+   aan de Client-body. Daar kan de pitmaster:
+    - kiezen welk event hij wil bekijken
+    - prefilled prompts klikken die de Vraag-Rook drawer openen
+    - Vraag-Rook drawer pikt page-context op (`usePathname`) zodat de chat
+      al weet dat we in AI-Pitmaster context zitten.
+
+   De zware chat-streaming gebeurt in `<ChatPanel>` (al gemount in AppShell).
+   Deze page voegt event-context + AI-prompts toe, niet een tweede chat. */
+export default async function AiPitmasterPage() {
+    const supabase = await createServerSupabase();
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + 7);
+    const horizonIso = horizon.toISOString().slice(0, 10);
+
+    const { data: upcoming } = await supabase
+        .from('events')
+        .select('id, name, date, aantal_gasten, type, location, status')
+        .gte('date', today)
+        .lte('date', horizonIso)
+        .order('date', { ascending: true })
+        .limit(5);
+
     return (
         <div style={{ padding: 'var(--space-6) 0' }}>
             <PageHeader
                 title="AI Pitmaster"
-                description="Live coach in de keuken — directives op basis van gang-status, smoker-temperaturen en allergie-cross-refs."
+                description="Live coach in de keuken — vragen over allergieën, kerntemperaturen, voorbereiding en menu-keuzes."
             />
-
-            <div className="card" style={{ padding: 'var(--space-5)', marginTop: 'var(--space-4)' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand-gold)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
-                    Binnenkort
-                </div>
-                <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>Chef-coach Rook Maart</h2>
-                <p style={{ fontSize: 13, color: 'var(--muted-light)', maxWidth: 640 }}>
-                    De Haiku-gebaseerde chef-coach draait al tijdens events (/api/chef-coach). In een volgende slice
-                    krijgt hij een dedicated tab binnen Menu &amp; Recepten met chat-history, directives-log en
-                    recipe-context op basis van het actieve event.
-                </p>
-            </div>
+            <AiPitmasterClient upcomingEvents={upcoming ?? []} />
         </div>
     );
 }

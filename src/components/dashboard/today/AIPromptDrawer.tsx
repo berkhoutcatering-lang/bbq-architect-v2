@@ -5,6 +5,7 @@ import { Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import PromptChart from './PromptChart';
 import { useToast } from '@/components/Toast';
+import AiBadge from '@/components/ai/AiBadge';
 
 export interface QuickPrompt {
   id: string;
@@ -264,6 +265,13 @@ function DrawerPanel({
                 )}
               </div>
             )}
+
+            {/* NL-15 AI Act: transparency disclosure bij elke AI-output */}
+            {!loading && !error && cleanText.length > 0 ? (
+              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                <AiBadge model="claude-sonnet-4-6" inline />
+              </div>
+            ) : null}
           </div>
         </div>
 

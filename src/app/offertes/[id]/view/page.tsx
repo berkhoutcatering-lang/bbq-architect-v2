@@ -538,7 +538,7 @@ export default function OfferteViewPage() {
               className="btn btn-ghost"
               onClick={() => offerte.public_token && window.open(`/q/${offerte.public_token}`, '_blank')}
               disabled={!offerte.public_token}
-              title={offerte.public_token ? 'Open publieke link in nieuw tabblad' : 'Nog geen publieke link — publiceer eerst via de offerte-editor'}
+              title={offerte.public_token ? 'Open publieke link in nieuw tabblad' : 'Nog geen publieke link — open eerst de offerte op /offertes en sla op'}
               style={!offerte.public_token ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
             >
               <Eye size={14} />Preview

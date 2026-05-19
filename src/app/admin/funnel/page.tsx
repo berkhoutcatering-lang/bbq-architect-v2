@@ -280,6 +280,19 @@ export default function FunnelDashboardPage() {
           />
         </div>
 
+        {/* P0.39 — Funnel-grafiek: drop-off per stap. Concurrent-pattern: Tripleseat
+            en Notion gebruiken ook horizontale bars met absolute aantallen +
+            conversie-% tussen stappen. */}
+        <FunnelChart
+          steps={[
+            { label: 'Sign-up', count: uniqueOrgsWithEvents, target: null },
+            { label: 'Quiz voltooid', count: quizCompleted, target: null },
+            { label: 'Activated (4 checklist-items)', count: orgsWithFullChecklist, target: 0.4 },
+            { label: '1e offerte concept', count: firstOfferteConcept, target: null },
+            { label: '1e offerte verzonden', count: firstOfferteSent, target: 0.7 },
+          ]}
+        />
+
         {/* Event-feed: laatste 10 raw events */}
         <div className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] overflow-hidden">
           <div className="px-5 py-3 border-b border-[var(--card-solid)] text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--muted)] flex items-center justify-between">
@@ -371,6 +384,64 @@ function Kpi({ icon, label, value, highlight, target }: { icon: React.ReactNode;
       </div>
       <div className={`text-[32px] font-extralight tabular-nums ${color}`}>{value}</div>
       {target && <div className="text-[11px] text-[var(--muted)] mt-1">{target}</div>}
+    </div>
+  );
+}
+
+/* P0.39 — Funnel-visualisatie. Horizontale bars met absolute aantallen +
+   conversie-% tussen elke stap. Pure CSS, geen library — concurrent-pattern
+   Tripleseat/Notion. Bij target: tonen of we boven/onder doel zitten. */
+function FunnelChart({ steps }: { steps: { label: string; count: number; target: number | null }[] }) {
+  const maxCount = Math.max(1, ...steps.map(s => s.count));
+  return (
+    <div className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] overflow-hidden mb-4">
+      <div className="px-5 py-3 border-b border-[var(--card-solid)] text-[12px] font-bold uppercase tracking-[0.15em] text-[var(--muted)]">
+        Funnel — drop-off per stap
+      </div>
+      <div className="p-5 space-y-3">
+        {steps.map((s, i) => {
+          const widthPct = (s.count / maxCount) * 100;
+          const prev = i > 0 ? steps[i - 1].count : null;
+          const conversion = prev && prev > 0 ? Math.round((s.count / prev) * 100) : null;
+          const targetMet = s.target !== null && prev && prev > 0
+            ? (s.count / prev) >= s.target
+            : null;
+          const conversionColor = targetMet === true
+            ? 'text-emerald-400'
+            : targetMet === false
+              ? 'text-amber-400'
+              : 'text-[var(--muted)]';
+
+          return (
+            <div key={s.label}>
+              <div className="flex items-center justify-between text-[12px] mb-1">
+                <span className="font-medium text-[var(--text)]">{s.label}</span>
+                <span className="flex items-center gap-2 tabular-nums">
+                  <span className="text-[var(--text)] font-semibold">{s.count}</span>
+                  {conversion !== null && (
+                    <span className={`text-[11px] ${conversionColor}`}>
+                      {conversion}%{s.target !== null && ` (doel ≥${Math.round(s.target * 100)}%)`}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="h-2 bg-[var(--color-bg-deep)]/40 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${widthPct}%`,
+                    background: targetMet === true
+                      ? 'linear-gradient(90deg, rgba(52,211,153,0.7), rgba(52,211,153,0.4))'
+                      : targetMet === false
+                        ? 'linear-gradient(90deg, rgba(251,191,36,0.7), rgba(251,191,36,0.4))'
+                        : 'linear-gradient(90deg, rgba(196,163,90,0.7), rgba(196,163,90,0.4))',
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

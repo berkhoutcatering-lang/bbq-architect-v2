@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import { detectAllConflicts } from '@/lib/conflictDetection';
@@ -247,8 +248,8 @@ const WEEKDAYS_NL = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 function daysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
 function dowMon0(date: Date) { return (date.getDay() + 6) % 7; }
 
-function MonthGrid({ year, month, activeCals, events, onSelectEvent, onQuickAddDay }: {
-    year: number; month: number; activeCals: string[]; events: AgendaEvent[]; onSelectEvent: (e: AgendaEvent) => void; onQuickAddDay?: (isoDate: string) => void;
+function MonthGrid({ year, month, activeCals, events, onSelectEvent, onQuickAddDay, focusedEventId }: {
+    year: number; month: number; activeCals: string[]; events: AgendaEvent[]; onSelectEvent: (e: AgendaEvent) => void; onQuickAddDay?: (isoDate: string) => void; focusedEventId?: string | null;
 }) {
     /* "Vandaag" alleen highlighten als de zichtbare maand daadwerkelijk de
        huidige maand is — anders staat hij verkeerd in een ander tijdvak. */
@@ -294,6 +295,7 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent, onQuickAddD
                                 events={cell.day ? eventsByDay[cell.day] || [] : []}
                                 isLastCol={cIdx === 6}
                                 onSelectEvent={onSelectEvent}
+                                focusedEventId={focusedEventId}
                                 onQuickAdd={onQuickAddDay && cell.day ? () => {
                                     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`;
                                     onQuickAddDay(iso);
@@ -308,8 +310,8 @@ function MonthGrid({ year, month, activeCals, events, onSelectEvent, onQuickAddD
     );
 }
 
-function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, onQuickAdd }: {
-    day: number | null; isWeekend: boolean; isToday: boolean; events: AgendaEvent[]; isLastCol: boolean; onSelectEvent: (e: AgendaEvent) => void; onQuickAdd?: () => void;
+function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, onQuickAdd, focusedEventId }: {
+    day: number | null; isWeekend: boolean; isToday: boolean; events: AgendaEvent[]; isLastCol: boolean; onSelectEvent: (e: AgendaEvent) => void; onQuickAdd?: () => void; focusedEventId?: string | null;
 }) {
     if (!day) return <div style={{ minHeight: 110, borderRight: isLastCol ? 'none' : '1px solid var(--border)', background: 'rgba(0,0,0,.15)' }} />;
     const visible = events.slice(0, 3);
@@ -333,7 +335,7 @@ function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, on
                 {isToday && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: BRAND, color: '#000', fontWeight: 700, letterSpacing: '.1em' }}>NU</span>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {visible.map(ev => <EventChip key={ev.id} event={ev} onClick={() => onSelectEvent(ev)} />)}
+                {visible.map(ev => <EventChip key={ev.id} event={ev} onClick={() => onSelectEvent(ev)} focused={focusedEventId === ev.id} />)}
                 {more > 0 && (
                     <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', padding: 2 }}>+ {more} meer</div>
                 )}
@@ -342,20 +344,26 @@ function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, on
     );
 }
 
-function EventChip({ event, onClick }: { event: AgendaEvent; onClick: () => void }) {
+function EventChip({ event, onClick, focused }: { event: AgendaEvent; onClick: () => void; focused?: boolean }) {
     const cal = calById(event.calId);
     /* Personal items mogen eigen kleur kiezen; voor andere calendars de cal-default. */
     const accentColor: string = (event.isPersonal && event.color) ? event.color as string : cal.color;
     const critical = event.critical || event.conflict || event.warning;
     return (
-        <div onClick={(e) => { e.stopPropagation(); onClick(); }} style={{
-            padding: '3px 6px', borderRadius: 4, fontSize: 10, lineHeight: 1.3,
-            background: `${accentColor}1f`, color: 'var(--text)',
-            borderLeft: `3px solid ${accentColor}`,
-            cursor: 'pointer',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            position: 'relative',
-        }}>
+        <div
+            data-event-id={event.id}
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            style={{
+                padding: '3px 6px', borderRadius: 4, fontSize: 10, lineHeight: 1.3,
+                background: focused ? `${accentColor}4d` : `${accentColor}1f`, color: 'var(--text)',
+                borderLeft: `3px solid ${accentColor}`,
+                cursor: 'pointer',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                position: 'relative',
+                outline: focused ? `2px solid ${accentColor}` : undefined,
+                outlineOffset: focused ? 1 : undefined,
+                transition: 'background 200ms, outline 200ms',
+            }}>
             <span style={{ fontVariantNumeric: 'tabular-nums', color: accentColor, fontWeight: 600, marginRight: 4 }}>
                 {String(Math.floor(event.start)).padStart(2, '0')}:{event.start % 1 ? '30' : '00'}
             </span>
@@ -647,6 +655,27 @@ export default function Agenda() {
     const [view, setView] = useState<'month' | 'week' | 'list'>('month');
     const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
 
+    /* Deep-link uit Vandaag-AttentionPanel: /agenda?conflict=<event-id>
+       focust en scrollt naar het event in de calendar (Pillar 4 Vandaag-hub). */
+    const searchParams = useSearchParams();
+    const conflictId = searchParams?.get('conflict') ?? null;
+    const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
+
+    useEffect(function () {
+        if (!conflictId) return;
+        setFocusedEventId(conflictId);
+        /* Scroll naar event-chip; rAF zodat layout klaar is. */
+        const t = setTimeout(function () {
+            const el = document.querySelector(`[data-event-id="${conflictId}"]`);
+            if (el && typeof el.scrollIntoView === 'function') {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 250);
+        /* Highlight 5s, dan auto-clear zodat scroll-jumps niet blijvend storen. */
+        const clearT = setTimeout(function () { setFocusedEventId(null); }, 5000);
+        return function () { clearTimeout(t); clearTimeout(clearT); };
+    }, [conflictId]);
+
     const { data: dbEvents } = useSupabase<DbEvent>('events', []);
     const { data: prepTasks } = useSupabase<PrepTask>('prep_tasks', []);
     const { rows: personalRows, insert: insertPersonal, update: updatePersonal, remove: removePersonal } = useAgendaPersonal();
@@ -815,6 +844,7 @@ export default function Agenda() {
                             events={allEvents}
                             onSelectEvent={setSelectedEvent}
                             onQuickAddDay={(iso) => openPersonalModal({ date: iso })}
+                            focusedEventId={focusedEventId}
                         />
                     )}
                     {view !== 'month' && (
