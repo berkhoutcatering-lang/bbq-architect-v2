@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { upsertEvent, deleteEvent as deleteEventAction } from '@/app/events/actions';
 import { fmt, today, addDays, nextNummer } from '@/lib/utils';
 import { mailEventBevestiging } from '@/lib/emailHelper';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -78,9 +79,17 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
     const lastStatus = lastSavedStatusRef.current || 'pending';
     const justCompleted = lastStatus !== 'completed' && form.status === 'completed';
     const { id: _id, created_at: _c, ...rest } = form;
-    const { error } = await supabase.from('events').update(rest).eq('id', eventId);
+
+    /* P0.7 — Server Action met Zod-validatie + re-auth. Vervangt directe
+       client-side Supabase update (OWASP A01 mitigatie). Schema staat
+       ruimhartig open zodat legacy-velden niet weggeworpen worden. */
+    const result = await upsertEvent({ id: eventId, ...rest });
     setSaving(false);
-    if (error) { showToast('Fout bij opslaan: ' + error.message, 'error'); return; }
+    if ('error' in result) {
+      const detail = result.fields ? Object.values(result.fields).flat().filter(Boolean).join(' · ') : '';
+      showToast('Fout bij opslaan: ' + result.error + (detail ? ' (' + detail + ')' : ''), 'error');
+      return;
+    }
     lastSavedStatusRef.current = form.status || 'pending';
     showToast('Event bijgewerkt', 'success');
     if (justCompleted) drainInventoryForEvent(form);
@@ -151,8 +160,12 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
 
   function deleteEvent() {
     showConfirm('Weet je zeker dat je dit event wilt verwijderen?', async () => {
-      const { error } = await supabase.from('events').delete().eq('id', eventId);
-      if (error) { showToast('Fout bij verwijderen: ' + error.message, 'error'); return; }
+      /* P0.7 — Server Action delete; tenant-isolatie via RLS in Supabase-policy. */
+      const result = await deleteEventAction(String(eventId));
+      if ('error' in result) {
+        showToast('Fout bij verwijderen: ' + result.error, 'error');
+        return;
+      }
       showToast('Event verwijderd', 'success');
       onDeleted?.();
     });

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { deleteOfferte as deleteOfferteAction } from '@/app/offertes/actions';
 import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
@@ -388,11 +389,22 @@ export default function Offertes() {
     }
 
     function deleteOfferte() {
-        showConfirm('Weet je zeker dat je deze offerte wilt verwijderen?', function () {
-            supabase.from('events').delete().eq('offerte_id', editing).then(function (res: any) {
+        showConfirm('Weet je zeker dat je deze offerte wilt verwijderen?', async function () {
+            /* P0.14 — Server Action met Zod + re-auth (OWASP A01 mitigatie).
+               Vervangt directe Client-supabase delete. Event-koppeling
+               (gekoppelde events bij offerte) blijft Client-side want dat
+               is een aparte cleanup-stap die geen Zod-validatie vereist. */
+            await supabase.from('events').delete().eq('offerte_id', editing).then(function (res: any) {
                 if (res.error) console.error('[DELETE] Event delete error:', res.error);
             });
-            remove(editing as number).then(function () { showToast('Offerte verwijderd', 'success'); setEditing(null); setForm(null); });
+            const result = await deleteOfferteAction(editing as number);
+            if ('error' in result) {
+                showToast('Fout bij verwijderen: ' + result.error, 'error');
+                return;
+            }
+            showToast('Offerte verwijderd', 'success');
+            setEditing(null);
+            setForm(null);
         });
     }
 

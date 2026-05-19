@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import CarbonScoreCard from '@/components/CarbonScoreCard';
+import AiBadge from '@/components/ai/AiBadge';
+import { track } from '@/lib/track';
 
 const GOLD = '#c4a35a';
 
@@ -95,6 +97,10 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
             }
             setGenerated(body.data);
             setStep('preview');
+            /* Activation tracking — `ai_wizard_used` markeert dat een tenant
+               de AI-wizard tot een succesvol resultaat heeft gebracht. ux-master
+               sectie 3 KPI 5: AI-adoptie-rate ≥30%. */
+            track('ai_wizard_used', { wizard: 'offerte', gasten, datum: eventDate });
         } catch (e: any) {
             setError(e.message || 'Onbekende fout');
             setStep('input');
@@ -299,9 +305,12 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
 
                     {step === 'preview' && generated && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.25)', display: 'flex', gap: 10, alignItems: 'center' }}>
-                                <Check size={18} style={{ color: '#22c55e' }} />
-                                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Menu bedacht — check en sla op als concept-offerte</span>
+                            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.25)', display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    <Check size={18} style={{ color: '#22c55e' }} />
+                                    <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>Menu bedacht — check en sla op als concept-offerte</span>
+                                </div>
+                                <AiBadge model="claude-sonnet-4-6" inline />
                             </div>
 
                             <div>

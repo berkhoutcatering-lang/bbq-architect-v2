@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { mergedAccountingConfig, type AccountingConfig } from '@/lib/accountingConfig';
+import { getValidMoneybirdToken } from '@/lib/moneybird';
 
 /**
  * Moneybird sales-invoice push. Tenant-specifieke config (administratie-ID,
@@ -195,9 +196,20 @@ export async function POST(req: NextRequest) {
     const config = resolveConfig((settingsRow?.accounting_config as AccountingConfig) || null);
     const bedrijfsnaam = settingsRow?.bedrijfsnaam || 'BBQ Architect';
 
+    /* P0.12 — OAuth-token uit feature_flags is leidend voor multi-tenant.
+       Helper doet refresh-rotation automatisch. Env-MONEYBIRD_TOKEN blijft
+       fallback voor single-tenant dev-modus (Hop & Bites legacy). */
+    const oauthTok = await getValidMoneybirdToken(sb, factuur.organization_id);
+    if (!('error' in oauthTok) && oauthTok.access_token) {
+      config.token = oauthTok.access_token;
+      if (oauthTok.administration_id) {
+        config.administrationId = oauthTok.administration_id;
+      }
+    }
+
     if (!isConfigured(config)) {
       return NextResponse.json(
-        { error: 'Moneybird niet geconfigureerd. Vul de administratie-ID in via /instellingen/integraties/accounting of voeg MONEYBIRD_TOKEN/MONEYBIRD_ADMINISTRATION_ID toe in env.' },
+        { error: 'Moneybird niet geconfigureerd. Verbind je Moneybird-account via /instellingen/integraties/moneybird, of voeg MONEYBIRD_TOKEN/MONEYBIRD_ADMINISTRATION_ID toe in env.' },
         { status: 501 }
       );
     }

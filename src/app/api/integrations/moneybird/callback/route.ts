@@ -59,10 +59,16 @@ export async function GET(request: NextRequest) {
     .single();
 
   const ff = (org?.feature_flags || {}) as Record<string, unknown>;
+  /* P0.12 — sla expires_at expliciet op zodat getValidMoneybirdToken
+     weet wanneer hij moet refreshen. Moneybird geeft expires_in (seconden),
+     wij rekenen het om naar absoluut tijdstip. Fallback 30 dagen als
+     Moneybird geen expires_in stuurt. */
+  const lifetimeMs = (tokenRes.expires_in ?? 30 * 24 * 60 * 60) * 1000;
   ff.moneybird = {
     access_token: tokenRes.access_token,
     refresh_token: tokenRes.refresh_token || null,
     administration_id: adminId,
+    expires_at: new Date(Date.now() + lifetimeMs).toISOString(),
     connected_at: new Date().toISOString(),
   };
 

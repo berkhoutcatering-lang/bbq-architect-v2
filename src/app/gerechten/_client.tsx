@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
+import { track, trackOnce } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -40,16 +41,27 @@ import {
 } from './_components/stats-helpers';
 import type { InventoryItem, Gang } from '@/types';
 
-export default function Gerechten() {
+/* P0.19 — GerechtenClient is de Client-body; `<page.tsx>` Server Component
+   prefetcht gangen + gerechten + inventory + menu_templates parallel zodat
+   first paint geen waterfall toont. `loadData()` blijft als refetch zodat
+   menu-templates en realtime updates blijven werken. */
+export interface GerechtenInitial {
+    gangen?: any[];
+    gerechten?: any[];
+    inventory?: InventoryItem[];
+    menuTemplates?: any[];
+}
+
+export default function Gerechten({ initial }: { initial?: GerechtenInitial } = {}) {
     const showToast = useToast();
     const showConfirm = useConfirm();
     const { orgId } = useOrg();
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
-    const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', []);
-    const [gangen, setGangen] = useState<any[]>([]);
-    const [gerechten, setGerechten] = useState<any[]>([]);
+    const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
+    const [gangen, setGangen] = useState<any[]>(initial?.gangen ?? []);
+    const [gerechten, setGerechten] = useState<any[]>(initial?.gerechten ?? []);
     const [activeGang, setActiveGang] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
@@ -320,6 +332,11 @@ export default function Gerechten() {
             });
             if (!res.ok) return [];
             const body = await res.json();
+            /* Activation tracking — `ai_allergen_detect` markeert dat een tenant
+               de allergeen-AI succesvol heeft gebruikt. */
+            if (Array.isArray(body.allergens) && body.allergens.length > 0) {
+                track('ai_allergen_detect', { dish: saveData.naam, count: body.allergens.length });
+            }
             return Array.isArray(body.allergens) ? body.allergens : [];
         } catch (e) {
             console.warn('[gerecht] allergen detection failed:', e);
@@ -356,6 +373,8 @@ export default function Gerechten() {
             const { error } = await supabase.from('gerechten').insert([dbData]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht toegevoegd!');
+            /* Activation tracking — `first_gerecht_created` (ux-master.md sectie 7). */
+            trackOnce('first_gerecht_created', 'first_gerecht');
             setFollowUpActions([
                 { icon: '\ud83c\udf7d\ufe0f', label: 'Stel een menu samen', onClick: function() { newMenuTemplate(); } },
                 { icon: '\u2795', label: 'Nog een gerecht toevoegen', onClick: function() { newGerecht(); } },

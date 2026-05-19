@@ -6,6 +6,13 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/q/', '/invite', 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // /offerte-editor is uitgefaseerd — redirect oude bookmarks naar /offertes
+  // (route-directory zelf is verwijderd; deze redirect blijft tot we zeker weten
+  //  dat geen externe links er meer naar wijzen).
+  if (pathname.startsWith('/offerte-editor')) {
+    return NextResponse.redirect(new URL('/offertes', request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();

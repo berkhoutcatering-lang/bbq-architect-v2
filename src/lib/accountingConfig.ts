@@ -19,6 +19,12 @@ export interface AccountingConfig {
     /** Default land voor nieuwe contacten (ISO-2, default 'NL'). */
     contact_default_country?: string;
 
+    /** P0.34 — per-tenant labor cost per uur (default 35 voor BBQ-catering NL).
+     *  Wordt gebruikt door financien W&V wanneer time_logs geen snapshot bevatten.
+     *  Optioneel weekend-tarief; valt terug op werkdag-rate als leeg. */
+    labor_cost_per_hour?: number;
+    labor_cost_per_hour_weekend?: number;
+
     /** Moneybird BTW tax_rate_ids per percentage. Ophalen via /tax_rates.json. */
     moneybird_tax_rate_21?: string;
     moneybird_tax_rate_9?: string;
@@ -43,6 +49,8 @@ export const ACCOUNTING_DEFAULTS: Required<Omit<AccountingConfig,
     email_template_subject: 'Factuur {nummer} van {bedrijfsnaam}',
     email_template_body: 'Beste {klant},\n\nBijgaand ontvangt u factuur {nummer}.\n\nMet vriendelijke groet,\n{bedrijfsnaam}',
     contact_default_country: 'NL',
+    labor_cost_per_hour: 35.00,
+    labor_cost_per_hour_weekend: 42.00,
 };
 
 /**
@@ -62,12 +70,25 @@ export function mergedAccountingConfig(cfg: AccountingConfig | null | undefined)
         email_template_subject: c.email_template_subject ?? ACCOUNTING_DEFAULTS.email_template_subject,
         email_template_body: c.email_template_body ?? ACCOUNTING_DEFAULTS.email_template_body,
         contact_default_country: c.contact_default_country ?? ACCOUNTING_DEFAULTS.contact_default_country,
+        labor_cost_per_hour: c.labor_cost_per_hour ?? ACCOUNTING_DEFAULTS.labor_cost_per_hour,
+        labor_cost_per_hour_weekend: c.labor_cost_per_hour_weekend ?? ACCOUNTING_DEFAULTS.labor_cost_per_hour_weekend,
         moneybird_tax_rate_21: c.moneybird_tax_rate_21,
         moneybird_tax_rate_9: c.moneybird_tax_rate_9,
         moneybird_tax_rate_0: c.moneybird_tax_rate_0,
         moneybird_administration_id: c.moneybird_administration_id,
         exact_division_code: c.exact_division_code,
     };
+}
+
+/**
+ * Helper: krijg het labor-rate voor een datum. Weekend = za/zo.
+ * Server- en client-side bruikbaar.
+ */
+export function laborRateForDate(cfg: AccountingConfig | null | undefined, date: Date | string): number {
+    const merged = mergedAccountingConfig(cfg);
+    const d = typeof date === 'string' ? new Date(date) : date;
+    const dow = d.getDay(); // 0 = zondag, 6 = zaterdag
+    return (dow === 0 || dow === 6) ? merged.labor_cost_per_hour_weekend : merged.labor_cost_per_hour;
 }
 
 /**

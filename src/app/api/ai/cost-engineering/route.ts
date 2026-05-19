@@ -10,6 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -114,6 +115,10 @@ ${components.map(c => {
 </components>
 
 Geef JSON met 3-5 marge-suggesties.`;
+
+    /* P0.40 — cost-engineering Sonnet ≈ €0.03/call. */
+    const capRes = await enforceAiCap(orgId, 0.03);
+    if (capRes) return capRes;
 
     try {
         const response = await anthropic.messages.create({

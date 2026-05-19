@@ -12,6 +12,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -156,6 +157,15 @@ export async function POST(req: NextRequest) {
     // v1: gebruik Sonnet 4.6 voor alles (cost-efficient). Bij output<3 producten ondersteund
     // upgrade-pad naar Opus in v2.
     const isVision = !!v.data.file_data_url;
+
+    /* P0.40 — supplier-catalog-parse is de duurste route in de app: Sonnet
+       vision tot 8000 output-tokens × meerdere pagina's. Conservatief €0.25
+       per PDF (gem. 3-4 pagina's). Batch-25 verwerking dempt dit doordat
+       prompt-prefix cached wordt — eerste in batch krijgt full cost,
+       de volgende 24 betalen alleen cache_read. */
+    const estEur = isVision ? 0.25 : 0.10;
+    const capRes = await enforceAiCap(orgId, estEur);
+    if (capRes) return capRes;
 
     try {
         const response = await anthropic.messages.create({

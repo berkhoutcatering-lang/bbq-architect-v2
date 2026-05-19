@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Sparkles, Beef, Snowflake, ClipboardList,
   Thermometer, Percent, ShoppingCart, MailWarning,
   type LucideIcon,
 } from 'lucide-react';
 import type { QuickPrompt } from './AIPromptDrawer';
+import type { EventHeroEvent } from './EventHero';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   beef: Beef,
@@ -32,11 +33,62 @@ export const QUICK_PROMPTS: QuickPrompt[] = [
 
 interface Props {
   onPrompt: (qp: QuickPrompt) => void;
+  /** Pillar 2 Vandaag-hub: hero-event injecteert context in prompts. */
+  heroEvent?: EventHeroEvent | null;
 }
 
-export default function AIQuickPrompts({ onPrompt }: Props): React.ReactElement {
-  const keuken = QUICK_PROMPTS.filter((q) => q.category === 'keuken');
-  const zaak = QUICK_PROMPTS.filter((q) => q.category === 'zaak');
+/* Bouwt event-aware prompts wanneer er een hero-event is. Hop & Bites context
+   is ingebakken in de server-side prompt-handler (memory: prompts NIET vragen
+   wie de gebruiker is), dus hier zetten we alleen event-data tussen. */
+function buildEventAwarePrompts(hero: EventHeroEvent | null | undefined): QuickPrompt[] {
+  if (!hero) return [];
+  const naam = hero.name || 'het event';
+  const dagen = hero.daysAway;
+  const gasten = hero.guests;
+  return [
+    {
+      id: 'qp-ev-briefing',
+      icon: 'sparkles',
+      label: `Briefing voor ${naam}`,
+      prompt: `Maak een korte briefing voor ${naam} (${gasten} gasten, over ${dagen} dagen). Wat moet ik wanneer doen en waar moet ik op letten?`,
+      category: 'keuken',
+    },
+    {
+      id: 'qp-ev-meelijst',
+      icon: 'beef',
+      label: `Meelijst voor ${naam}`,
+      prompt: `Maak een meelijst voor ${naam} (${gasten} gasten) — welke ingrediënten heb ik nodig en bij wie bestel ik het goedkoopst?`,
+      category: 'keuken',
+    },
+    {
+      id: 'qp-ev-prep',
+      icon: 'clipboard-list',
+      label: `Prep-planning ${naam}`,
+      prompt: `Welk voorwerk staat er voor ${naam} — wat kan ik nu al prepen of invriezen?`,
+      category: 'keuken',
+    },
+    {
+      id: 'qp-ev-reminder',
+      icon: 'mail-warning',
+      label: dagen <= 7 ? `Herinner klant van ${naam}` : `Bevestig met klant ${naam}`,
+      prompt: dagen <= 7
+        ? `Stel een korte herinnerings-mail op voor de klant van ${naam} — bevestiging gasten-aantal en allergieën.`
+        : `Stel een check-in-mail op voor de klant van ${naam} — kort, vriendelijk, vraag of er nog wijzigingen zijn.`,
+      category: 'zaak',
+    },
+  ];
+}
+
+export default function AIQuickPrompts({ onPrompt, heroEvent = null }: Props): React.ReactElement {
+  /* Event-aware prompts gaan bovenaan keuken-kolom als er een hero-event is.
+     Generieke prompts vullen de rest aan — concurrent-pattern: Linear toont
+     ook contextuele AI-suggesties bij de actieve view zonder de generieke
+     commands te verbergen. */
+  const eventPrompts = useMemo(() => buildEventAwarePrompts(heroEvent), [heroEvent]);
+  const eventKeuken = eventPrompts.filter((q) => q.category === 'keuken');
+  const eventZaak = eventPrompts.filter((q) => q.category === 'zaak');
+  const keuken = [...eventKeuken, ...QUICK_PROMPTS.filter((q) => q.category === 'keuken')];
+  const zaak = [...eventZaak, ...QUICK_PROMPTS.filter((q) => q.category === 'zaak')];
 
   return (
     <div

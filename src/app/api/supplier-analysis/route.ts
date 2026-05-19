@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -105,6 +106,13 @@ Geef praktisch advies voor een kleine horeca-ondernemer. Verwerk de goedkoper-el
         /* Sonnet 4.6 is ruim voldoende voor leveranciers-vergelijking met
            gestructureerde input — Opus was overkill. ~5x goedkoper. */
         const model = 'claude-sonnet-4-6';
+
+        /* P0.40 — supplier-analysis Sonnet ≈ €0.04/call (2k out). */
+        if (orgId) {
+            const capRes = await enforceAiCap(orgId, 0.04);
+            if (capRes) return capRes;
+        }
+
         const response = await client.messages.create({
             model,
             max_tokens: 2000,

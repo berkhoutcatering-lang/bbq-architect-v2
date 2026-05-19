@@ -1,14 +1,39 @@
 import { NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { estimateCarbon } from '@/lib/carbonFootprint';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
   if (!token) {
     return NextResponse.json({ error: 'Geen publieke token' }, { status: 400 });
+  }
+
+  /* P0.16 — anti-scraping rate-limit voor publieke endpoint zonder auth.
+     20 reqs/min per IP volstaat voor normaal klant-gedrag (paar refreshes,
+     PDF-preview, deelbare link). Token entropy is OK: `public_token` is een
+     UUID (gen_random_uuid → 122 bits), dus geen enumeration-risico — alleen
+     scraping als iemand een lijst tokens al heeft. */
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown';
+  const rl = checkRateLimit(`public-offerte:${ip}`, 20);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Te veel verzoeken — probeer over een minuut opnieuw.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.resetInSeconds),
+          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(Date.now() + rl.resetInSeconds * 1000),
+        },
+      },
+    );
   }
 
   const supabase = createServiceSupabase();

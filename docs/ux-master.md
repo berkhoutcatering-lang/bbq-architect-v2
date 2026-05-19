@@ -69,16 +69,24 @@ Vastgelegd in `~/.claude/projects/-Users-mathi-Documents-GitHub-bbq-architect-v2
 
 ## 5. IA-overzicht (sidebar + hub-and-spoke)
 
+Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijziging daar.
+
 ```
-🏠 Vandaag         → /                  (control-tower, Vandaag-laag)
-📅 Plannen & Events → /agenda           (tabs: Agenda · Events · Klantgesprek · Prep · Service · HACCP)
-🛒 Verkoop & Klanten → /offertes        (tabs: Offertes · Facturen · Klanten)
-📚 Inspiratie Bibliotheek → /inspiratie  (sub-pages: Componenten · Gerechten) — v5 2026-05-10
-                                          (was: 🍳 Menu & Recepten → /gerechten met tabs Gerechten · Bedenker · Marges)
-💰 Geld & Boekhouding → /financien      (tabs: Financiën · Uren) + interne 5-tabs binnen Financiën
-📦 Voorraad & Beheer → /voorraad        (tabs: Voorraad · Inkoop · Logistiek · Materieel · Prijzen)
-⚙️ Instellingen & Hulp → /sectie/systeem (tabs: Instellingen · Gebruikers · Mailbox · Website · Foto-archief · Hulp · Admin)
+🏠 Vandaag          → /          (hardcoded bovenaan Sidebar.tsx, control-tower)
+📅 Plannen          → /agenda    (children: Agenda · Events)
+🛒 Verkoop          → /offertes  (children: Offertes · Klanten)
+🍳 Menu & Recepten  → /gerechten (children: Gerechten · Componenten · Ingrediënten · Kookbord)
+                                  + sub-tabs in _client.tsx: AI Bedenker · AI Pitmaster · Menu-analyse · Insights · Allergen-queue
+📦 Voorraad         → /voorraad  (children: Voorraad · Inkoop · Leveranciers)
+💰 Geld             → /financien (children: Financiën · Uren · Bonnen & Facturen · Boekhouder · Rittenregistratie)
+⚙️ Systeem          → /systeem   (secondary; children: Instellingen · Gebruikers · Integraties · Mailbox · Website · Foto-archief · Help Center · Platform Beheer)
 ```
+
+**Naam-historie** (voor wie oude docs leest):
+- "Inspiratie Bibliotheek" → vervangen door "Menu & Recepten" (2026-05-16, `/inspiratie` is dood-redirect)
+- "Instellingen & Hulp" → vervangen door "Systeem"
+- "Plannen & Events" / "Verkoop & Klanten" / "Geld & Boekhouding" / "Voorraad & Beheer" → ingekort
+- Hub-URL `/sectie/systeem` (dynamic) → `/systeem` (statisch via navigation)
 
 **Patroon**:
 - Klik hub-naam in sidebar → ga naar `hubHref` (default tab van die hub)
