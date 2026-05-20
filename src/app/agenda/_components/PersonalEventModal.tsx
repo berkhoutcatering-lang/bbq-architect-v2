@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { X, Calendar, Clock, Trash2 } from 'lucide-react';
 import type { AgendaPersonal } from '@/types/database.types';
 import type { InsertArgs } from './useAgendaPersonal';
+import type { AgendaCategoryRow } from '../_lib/useAgendaCategories';
 
 const COLOR_OPTIONS = [
   { value: '#888888', label: 'Grijs' },
@@ -19,18 +20,21 @@ interface Props {
   initialDate?: string;
   /** Bij edit: bestaande row wordt voorgevuld; bij create: undefined. */
   editing?: AgendaPersonal | null;
+  /** Custom agenda-categorieën uit de DB — gebruiker kan kiezen waar afspraak in valt. */
+  categories?: AgendaCategoryRow[];
   onClose: () => void;
   onSave: (args: InsertArgs) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
 
-export default function PersonalEventModal({ open, initialDate, editing, onClose, onSave, onDelete }: Props) {
+export default function PersonalEventModal({ open, initialDate, editing, categories = [], onClose, onSave, onDelete }: Props) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
   const [color, setColor] = useState('#888888');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [busy, setBusy] = useState(false);
 
   /* Voorvullen bij open. Gebruik editing-row indien meegegeven, anders initialDate
@@ -44,6 +48,7 @@ export default function PersonalEventModal({ open, initialDate, editing, onClose
       setEndTime(editing.end_time ? editing.end_time.slice(0, 5) : '');
       setNotes(editing.notes || '');
       setColor(editing.color || '#888888');
+      setCategoryId(editing.category_id || '');
     } else {
       setTitle('');
       setDate(initialDate || new Date().toISOString().slice(0, 10));
@@ -51,6 +56,7 @@ export default function PersonalEventModal({ open, initialDate, editing, onClose
       setEndTime('');
       setNotes('');
       setColor('#888888');
+      setCategoryId('');
     }
   }, [open, editing, initialDate]);
 
@@ -66,6 +72,7 @@ export default function PersonalEventModal({ open, initialDate, editing, onClose
       end_time: endTime || null,
       notes: notes.trim() || null,
       color,
+      category_id: categoryId || null,
     });
     setBusy(false);
     onClose();
@@ -148,6 +155,21 @@ export default function PersonalEventModal({ open, initialDate, editing, onClose
               ))}
             </div>
           </Field>
+
+          {categories.length > 0 && (
+            <Field label="Agenda">
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                style={{ ...inputStyle, appearance: 'none', colorScheme: 'dark' }}
+              >
+                <option value="">Persoonlijk (standaard)</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
 
           <Field label="Notitie (optioneel)">
             <textarea

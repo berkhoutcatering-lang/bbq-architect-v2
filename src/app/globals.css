@@ -8021,6 +8021,94 @@ textarea:focus-visible,
   .agenda-legend__title { font-size: 11px !important; letter-spacing: .15em; text-transform: uppercase; color: var(--muted) !important; margin-bottom: 8px !important; }
 }
 
+/* FullCalendar dark-theme overrides — scoped binnen .agenda-fc-wrap zodat
+   andere views (PDF-preview, klant-portal) niet geraakt worden. */
+.agenda-fc-wrap {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(255,255,255,.02);
+  --fc-neutral-text-color: var(--muted);
+  --fc-today-bg-color: rgba(255,191,0,.06);
+  --fc-now-indicator-color: #FFBF00;
+  --fc-list-event-hover-bg-color: rgba(255,255,255,.04);
+  --fc-event-text-color: var(--text);
+
+  padding: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.agenda-fc-wrap .fc { color: var(--text); }
+.agenda-fc-wrap .fc-theme-standard td,
+.agenda-fc-wrap .fc-theme-standard th,
+.agenda-fc-wrap .fc-scrollgrid {
+  border-color: var(--border);
+}
+.agenda-fc-wrap .fc-col-header-cell {
+  background: rgba(255,255,255,.02);
+}
+.agenda-fc-wrap .fc-col-header-cell-cushion {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 8px 6px;
+}
+.agenda-fc-wrap .fc-timegrid-slot-label-cushion,
+.agenda-fc-wrap .fc-timegrid-axis-cushion {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.agenda-fc-wrap .fc-timegrid-slot,
+.agenda-fc-wrap .fc-timegrid-slot-lane {
+  border-color: rgba(255,255,255,.04);
+}
+.agenda-fc-wrap .fc-event {
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-size: 11px;
+  border-width: 1px;
+  border-style: solid;
+  cursor: pointer;
+}
+.agenda-fc-wrap .fc-event:hover {
+  filter: brightness(1.15);
+}
+.agenda-fc-wrap .fc-event-title {
+  font-weight: 600;
+}
+.agenda-fc-wrap .fc-event--focused {
+  outline: 2px solid #FFBF00;
+  outline-offset: 1px;
+  animation: fc-focus-pulse 1.2s ease-in-out 2;
+}
+@keyframes fc-focus-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,191,0,.4); }
+  50% { box-shadow: 0 0 0 6px rgba(255,191,0,.0); }
+}
+.agenda-fc-wrap .fc-list-day-cushion {
+  background: rgba(255,255,255,.03) !important;
+  color: var(--text);
+}
+.agenda-fc-wrap .fc-list-day-text,
+.agenda-fc-wrap .fc-list-day-side-text {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.agenda-fc-wrap .fc-list-event-time,
+.agenda-fc-wrap .fc-list-event-title {
+  color: var(--text);
+  font-size: 12px;
+}
+.agenda-fc-wrap .fc-list-empty {
+  background: transparent;
+  color: var(--muted);
+  padding: 40px 16px;
+}
+
 /* Agenda KPI strip — 5 kolom desktop, 2 kolom mobile */
 .agenda-kpi-grid {
   display: grid;
