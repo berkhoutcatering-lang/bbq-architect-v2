@@ -11,6 +11,7 @@ import type { ServiceEvent, Course, CourseStatus, CourseItem } from './_types/se
 import { buildServiceDirectives } from './_lib/serviceDirectives';
 import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
 import { useSupabase } from '@/lib/useSupabase';
+import { useToast } from '@/components/Toast';
 import { dbEventToServiceEvent } from '@/lib/serviceData';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -28,10 +29,17 @@ type View = 'hub' | 'board' | 'detail' | 'wrapup';
 
 /* ═══════════════════════════════════════════════════════════════════
    VOORRAAD AFTREK — bij course/item "served" trekken we het verbruik
-   af via de gedeelde inventoryDeduction helper. Best-effort: faalt
-   stil zodat service-flow nooit blokkeert op stock-fail.
+   af via de gedeelde inventoryDeduction helper. Best-effort: service-
+   flow blokkeert nooit op stock-fail, maar via `onError` wordt de
+   pitmaster geattendeerd zodat hij voorraad handmatig kan corrigeren.
+   Voorheen faalde dit volledig stil — stock liep stilletjes scheef.
    ═══════════════════════════════════════════════════════════════════ */
-async function deductCourseFromInventory(course: Course, portionsServed: number, eventTitle: string): Promise<void> {
+async function deductCourseFromInventory(
+    course: Course,
+    portionsServed: number,
+    eventTitle: string,
+    onError?: (msg: string) => void,
+): Promise<void> {
     try {
         if (portionsServed <= 0 || !course.mise || course.mise.length === 0) return;
         const totalPortions = course.items.reduce((a, i) => a + (i.count || 0), 0) || 1;
@@ -39,9 +47,12 @@ async function deductCourseFromInventory(course: Course, portionsServed: number,
 
         const { supabase } = await import('@/lib/supabase');
         const { parseQty, deductFromInventory } = await import('@/lib/inventoryDeduction');
-        const { data: inv } = await supabase
+        const { data: inv, error: invErr } = await supabase
             .from('inventory')
             .select('id, naam, current_stock, unit, organization_id');
+        if (invErr) {
+            throw new Error('Voorraad-query mislukt: ' + invErr.message);
+        }
         if (!inv) return;
 
         const lines = course.mise
@@ -57,7 +68,13 @@ async function deductCourseFromInventory(course: Course, portionsServed: number,
             .filter((x): x is { name: string; qty: number; note: string } => x !== null);
 
         await deductFromInventory(lines, inv as any);
-    } catch { /* silent */ }
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : 'onbekende fout';
+        console.error('[SERVICE] inventory-deduction failed for ' + course.title + ':', msg);
+        if (onError) {
+            onError('Voorraad-aftrek mislukt voor gang ' + course.title + ' — controleer voorraad handmatig (' + msg + ')');
+        }
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1108,6 +1125,8 @@ export default function ServiceMode() {
     const { isFullscreen, enterFullscreen, exitFullscreen } = useFullscreen();
     useWakeLock(isFullscreenMode);
 
+    const showToast = useToast();
+
     const [view, setView] = useState<Exclude<View, 'hub'>>('board');
     const [courseId, setCourseId] = useState<string | null>(null);
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
@@ -1190,7 +1209,9 @@ export default function ServiceMode() {
                         const totalPortions = c.items.reduce((a, i) => a + (i.count || 0), 0);
                         const alreadyServed = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
                         const newlyServed = totalPortions - alreadyServed;   /* portions die met deze advance "served" worden */
-                        if (newlyServed > 0) void deductCourseFromInventory(c, newlyServed, state.title);
+                        if (newlyServed > 0) {
+                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'));
+                        }
                     }
                     return { ...c, status: newStatus };
                 }),
@@ -1213,7 +1234,7 @@ export default function ServiceMode() {
                             if (i.served) return { ...i, served: false, ready: true };
                             if (i.ready) {
                                 /* Item van ready → served: trek dat aandeel af van voorraad */
-                                void deductCourseFromInventory(c, i.count || 0, state.title);
+                                void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'));
                                 return { ...i, served: true };
                             }
                             if (i.inProgress) return { ...i, inProgress: false, ready: true };
