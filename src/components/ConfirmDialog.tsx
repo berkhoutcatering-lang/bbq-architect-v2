@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useCallback, useId, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useId, type ReactNode } from 'react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 /**
@@ -54,6 +54,19 @@ function ConfirmDialogInner({ dialog, onConfirm, onCancel }: {
     const titleId = useId();
     const descId = useId();
     const trapRef = useFocusTrap(true);
+
+    /* Escape sluit dialog — power-user verwachting. useFocusTrap doet
+       alleen Tab-cycling, Escape-handling moet apart. */
+    useEffect(function () {
+        function onKey(e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+            }
+        }
+        document.addEventListener('keydown', onKey);
+        return function () { document.removeEventListener('keydown', onKey); };
+    }, [onCancel]);
 
     return (
         <div className="modal-bg" onClick={onCancel} role="presentation">

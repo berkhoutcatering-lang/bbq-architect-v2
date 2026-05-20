@@ -1291,7 +1291,7 @@ function EventDraaiboekCard({ event, onSave }: { event: any; onSave: (d: any[]) 
         <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr auto', gap: 6, marginBottom: 10 }}>
           <input type="time" value={tijd} onChange={e => setTijd(e.target.value)} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
           <input value={wat} onChange={e => setWat(e.target.value)} placeholder="bv. Voorgerecht uit" style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--card-solid)', background: 'var(--color-bg-deep)', color: 'var(--text)', fontSize: 12, outline: 'none' }} />
-          <button className="btn btn-primary btn-sm" onClick={add} disabled={!tijd || !wat}><Plus size={11} /></button>
+          <button className="btn btn-primary btn-sm" onClick={add} disabled={!tijd || !wat} aria-label="Tijdslot toevoegen"><Plus size={11} /></button>
         </div>
         {items.length === 0 ? (
           <div style={{ padding: '8px 4px', fontSize: 11, color: 'var(--muted)' }}>Nog geen tijdlijn. Plan service-momenten hierboven (bv. 17:00 Welkom, 18:00 Voorgerecht).</div>

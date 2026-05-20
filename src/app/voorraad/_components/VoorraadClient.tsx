@@ -234,13 +234,17 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
        Zod-validatie + re-auth + dedup-check + negative-stock-prevention server-
        side gegarandeerd zijn. `refetch` halen we wel uit useSupabase voor live
        refresh na een action. */
-    const { data: inventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
-    const { data: recepten } = useSupabase<Recept>('recepten', initial?.recepten ?? []);
-    const { data: supplierPrices } = useSupabase<any>('supplier_prices', initial?.supplierPrices ?? []);
-    const { data: movements } = useSupabase<StockMovement>('stock_movements', initial?.movements ?? []);
+    /* Server Component leverde al data → eerste fetch op de Client overslaan
+       voorkomt de "refetch-flash" (loading-flicker bij elke mount). Realtime
+       subscription blijft actief, dus updates van andere tabs komen alsnog door. */
+    const skipFetch = { skipInitialFetch: !!initial };
+    const { data: inventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? [], skipFetch);
+    const { data: recepten } = useSupabase<Recept>('recepten', initial?.recepten ?? [], skipFetch);
+    const { data: supplierPrices } = useSupabase<any>('supplier_prices', initial?.supplierPrices ?? [], skipFetch);
+    const { data: movements } = useSupabase<StockMovement>('stock_movements', initial?.movements ?? [], skipFetch);
     /* price_history wordt door /api/bon-process gevuld bij elke verwerkte bon —
        voedt de prijs-trend grafiek per item zonder dat user iets handmatig hoeft te doen. */
-    const { data: priceHistoryRows } = useSupabase<{ id: number; inventory_id: number; datum: string; unit_price: number; unit?: string; source: string }>('price_history', initial?.priceHistory ?? []);
+    const { data: priceHistoryRows } = useSupabase<{ id: number; inventory_id: number; datum: string; unit_price: number; unit?: string; source: string }>('price_history', initial?.priceHistory ?? [], skipFetch);
     const showToast = useToast();
     const showConfirm = useConfirm();
 

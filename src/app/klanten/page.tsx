@@ -43,6 +43,9 @@ function Klanten() {
 
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
+    /* Server Action result.fields → per-veld error onder het input. Voorheen
+       werden alle field-errors geconcat in één toast — onleesbaar bij >1 fout. */
+    const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({});
     const [searchQuery, setSearchQuery] = useState(initialZoek);
     const [filterType, setFilterType] = useState<string>('alle');
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
@@ -115,10 +118,22 @@ function Klanten() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [focusNaam, klanten, klantenLoading, editing]);
 
-    function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
+    function setField(key: string, val: any) {
+        setForm(Object.assign({}, form, { [key]: val }));
+        /* Server-side veld-error van vorige save wegklikken zodra de gebruiker
+           het veld aanpast — anders blijft de melding hangen tot volgende save. */
+        if (serverFieldErrors[key]) {
+            setServerFieldErrors(function (prev) {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+    }
 
     async function saveKlant() {
         if (!validateAll({ naam: form!.naam })) return;
+        setServerFieldErrors({});
         const isNew = editing === 'new';
         /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
         const { id: _existingId, created_at: _ca, ...rest } = form!;
@@ -126,8 +141,12 @@ function Klanten() {
         const result = await upsertKlant(payload);
         if (result.error) {
             console.error('[klanten] upsert failed:', result.error, result.fields);
-            const fieldMsg = result.fields ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')' : '';
-            showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            if (result.fields && Object.keys(result.fields).length > 0) {
+                setServerFieldErrors(result.fields);
+                showToast('Controleer de gemarkeerde velden', 'error');
+            } else {
+                showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error, 'error');
+            }
             return;
         }
         await refetch();
@@ -173,19 +192,19 @@ function Klanten() {
                 <div className="panel-body">
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginBottom: 12 }}>Contactgegevens</h4>
                     <div className="form-grid">
-                        <div className="field full"><label>Naam / Contactpersoon</label><input name="naam" value={form.naam} onChange={function (e) { setField('naam', e.target.value); clearError('naam'); }} style={errors.naam ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} /><FieldError message={errors.naam} fieldName="naam" /></div>
-                        <div className="field"><label>Bedrijfsnaam</label><input value={form.bedrijf || ''} onChange={function (e) { setField('bedrijf', e.target.value); }} /></div>
+                        <div className="field full" data-required><label>Naam / Contactpersoon</label><input name="naam" value={form.naam} onChange={function (e) { setField('naam', e.target.value); clearError('naam'); }} style={(errors.naam || serverFieldErrors.naam) ? { borderColor: 'var(--red)' } : {}} {...fieldProps('naam', form.naam)} /><FieldError message={errors.naam} name="naam" fields={serverFieldErrors} fieldName="naam" /></div>
+                        <div className="field"><label>Bedrijfsnaam</label><input value={form.bedrijf || ''} onChange={function (e) { setField('bedrijf', e.target.value); }} /><FieldError name="bedrijf" fields={serverFieldErrors} /></div>
                         <div className="field"><label>Type</label>
                             <select value={form.type} onChange={function (e) { setField('type', e.target.value); }}>
                                 {['Particulier', 'Zakelijk', 'Festival', 'Horeca'].map(function (t) { return <option key={t}>{t}</option>; })}
                             </select>
                         </div>
-                        <div className="field"><label>Email</label><input type="email" value={form.email || ''} onChange={function (e) { setField('email', e.target.value); }} /></div>
-                        <div className="field"><label>Telefoon</label><input value={form.telefoon || ''} onChange={function (e) { setField('telefoon', e.target.value); }} /></div>
-                        <div className="field full"><label>Adres</label><input value={form.adres || ''} onChange={function (e) { setField('adres', e.target.value); }} /></div>
-                        <div className="field"><label>Postcode</label><input value={form.postcode || ''} onChange={function (e) { setField('postcode', e.target.value); }} /></div>
-                        <div className="field"><label>Plaats</label><input value={form.plaats || ''} onChange={function (e) { setField('plaats', e.target.value); }} /></div>
-                        <div className="field full"><label>Notities</label><textarea rows={3} value={form.notities || ''} onChange={function (e) { setField('notities', e.target.value); }} /></div>
+                        <div className="field"><label>Email</label><input type="email" value={form.email || ''} onChange={function (e) { setField('email', e.target.value); }} style={serverFieldErrors.email ? { borderColor: 'var(--red)' } : {}} /><FieldError name="email" fields={serverFieldErrors} /></div>
+                        <div className="field"><label>Telefoon</label><input value={form.telefoon || ''} onChange={function (e) { setField('telefoon', e.target.value); }} /><FieldError name="telefoon" fields={serverFieldErrors} /></div>
+                        <div className="field full"><label>Adres</label><input value={form.adres || ''} onChange={function (e) { setField('adres', e.target.value); }} /><FieldError name="adres" fields={serverFieldErrors} /></div>
+                        <div className="field"><label>Postcode</label><input value={form.postcode || ''} onChange={function (e) { setField('postcode', e.target.value); }} /><FieldError name="postcode" fields={serverFieldErrors} /></div>
+                        <div className="field"><label>Plaats</label><input value={form.plaats || ''} onChange={function (e) { setField('plaats', e.target.value); }} /><FieldError name="plaats" fields={serverFieldErrors} /></div>
+                        <div className="field full"><label>Notities</label><textarea rows={3} value={form.notities || ''} onChange={function (e) { setField('notities', e.target.value); }} /><FieldError name="notities" fields={serverFieldErrors} /></div>
                     </div>
 
                     {/* Snelle communicatie */}

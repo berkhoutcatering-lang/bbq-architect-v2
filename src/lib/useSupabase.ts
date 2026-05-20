@@ -39,7 +39,23 @@ function useActiveOfflineState(): ActiveOfflineEvent | null {
     return state;
 }
 
-export function useSupabase<T extends { id: number }>(table: string, defaultVal?: T[]): {
+export interface UseSupabaseOptions {
+    /**
+     * Skip de initiële client-side fetch — gebruik dit als de Server
+     * Component al data heeft prefetched en via `defaultVal` doorgaf.
+     * Vermijdt de "refetch-flash": loading-flicker op pagina's waar
+     * data al server-side beschikbaar is. Realtime subscriptions
+     * blijven gewoon werken zodat updates op andere tabs/devices
+     * meekomen.
+     */
+    skipInitialFetch?: boolean;
+}
+
+export function useSupabase<T extends { id: number }>(
+    table: string,
+    defaultVal?: T[],
+    options?: UseSupabaseOptions,
+): {
     data: T[];
     loading: boolean;
     refetch: () => void;
@@ -48,8 +64,10 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
     remove: (id: number) => Promise<void>;
     setData: React.Dispatch<React.SetStateAction<T[]>>;
 } {
+    const skipInitialFetch = options?.skipInitialFetch ?? false;
     const [data, setData] = useState<T[]>(defaultVal || []);
-    const [loading, setLoading] = useState(true);
+    /* Loading start false als Server Component al data leverde — geen flash. */
+    const [loading, setLoading] = useState(!skipInitialFetch);
     const { orgId } = useOrg();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const activeOffline = useActiveOfflineState();
@@ -92,7 +110,13 @@ export function useSupabase<T extends { id: number }>(table: string, defaultVal?
         debounceRef.current = setTimeout(fetchData, 300);
     }, [fetchData]);
 
-    useEffect(function () { fetchData(); }, [fetchData]);
+    /* Initial fetch — skip als Server Component al data leverde. Realtime
+       subscription hieronder blijft wel actief, dus updates uit andere
+       tabs/devices komen alsnog binnen. */
+    useEffect(function () {
+        if (skipInitialFetch) return;
+        fetchData();
+    }, [fetchData, skipInitialFetch]);
 
     // Supabase Realtime — shared channel per table+org, debounced refresh.
     // Offline-mode: skip subscribe — anders eindeloos reconnect-pogingen op

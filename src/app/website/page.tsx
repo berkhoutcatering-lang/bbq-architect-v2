@@ -686,8 +686,8 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
 
             {/* Legend */}
             <div className="flex flex-wrap gap-4 mb-6 text-[10px] text-[var(--muted)]">
-                <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>Normaal menu (volgorde &lt; 10)</span>
-                <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-1"></span>Dieet optie (volgorde ≥ 10)</span>
+                <span><span className="inline-block w-2 h-2 rounded-full bg-[var(--success)] mr-1"></span>Normaal menu (volgorde &lt; 10)</span>
+                <span><span className="inline-block w-2 h-2 rounded-full bg-[var(--warning)] mr-1"></span>Dieet optie (volgorde ≥ 10)</span>
                 <span className="inline-flex items-center"><span className="px-1 py-0.5 rounded bg-orange-900/30 text-orange-300 text-[9px] mr-1">{ALLERGENEN[0].icon} Gluten</span>= allergeen badge</span>
             </div>
 
@@ -792,7 +792,7 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                     <div key={gang.id} className={`mb-8 ${!gang.actief ? 'opacity-50' : ''}`}>
                         <div className="flex items-center gap-3 mb-3">
                             <h4 className="text-[var(--text)] font-semibold text-sm uppercase tracking-wider">{gang.naam}</h4>
-                            {!gang.actief && <span className="text-red-400 text-[9px] font-medium px-1.5 py-0.5 rounded bg-red-900/20">INACTIEF</span>}
+                            {!gang.actief && <span className="text-[var(--danger)] text-[9px] font-medium px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--danger)_20%,transparent)]">INACTIEF</span>}
                             <span className="text-[var(--muted)] text-xs">min {gang.minimum} | +€{Number(gang.extra_prijs_pp || 0).toFixed(2)} p.p.</span>
                             <span className="text-[var(--muted)] text-xs ml-auto mr-2">{normalCount} normaal, {dieetCount} dieet</span>
                             <button className={S.btnIcon} title="Gang bewerken" onClick={() => { setEditId(gang.id); setForm({ ...gang, _type: 'gang' }); }}>
