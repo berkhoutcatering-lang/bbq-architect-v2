@@ -86,7 +86,11 @@ export default function PrepTaskCard({
     const primary = primaryAllergen(eventAllergens);
     const primaryMeta = primary ? ALLERGEN_META[primary] : null;
     const severity = eventAllergenSeverity ?? highestSeverity(eventAllergens);
-    const showAllergenBand = eventAllergens.length > 0 && severity === 'critical';
+    /* Audit Bundel 3 — allergen-band ALTIJD zichtbaar als er allergenen zijn,
+       niet alleen bij critical. Severity bepaalt de kleur via data-attribute
+       (geel = normal, oranje = high, rood = critical). Voorheen was lactose/ei
+       verstopt in de detail-sheet — risico op gemist worden tijdens prep. */
+    const showAllergenBand = eventAllergens.length > 0;
 
     const qtyDisplay = formatQty(task);
 
@@ -190,8 +194,12 @@ export default function PrepTaskCard({
             }}
         >
             {showAllergenBand && primaryMeta && (
-                <div className="prep-task__allergen-band" style={{ background: `var(--${primaryMeta.color}, var(--red))` }}>
-                    <AlertTriangle size={12} />
+                <div
+                    className="prep-task__allergen-band"
+                    data-severity={severity}
+                    aria-label={`Allergenen: ${primaryMeta.label}${eventAllergens.length > 1 ? ` en ${eventAllergens.length - 1} andere` : ''}`}
+                >
+                    <AlertTriangle size={12} aria-hidden />
                     <span>{primaryMeta.label.toUpperCase()}</span>
                     {eventAllergens.length > 1 && (
                         <span className="prep-task__allergen-extra">+{eventAllergens.length - 1}</span>
