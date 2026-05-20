@@ -96,7 +96,7 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
-            { label: "Bonnen & Facturen", icon: <ScanLine size={16} />, href: "/factuur-lezer", description: "Scan bonnen en facturen — AI extracteert de regels" },
+            { label: "Bonnen & Facturen", icon: <ScanLine size={16} />, href: "/inkoop?tab=bonnen", description: "Scan PDFs, foto's en screenshots — AI extracteert per batch" },
             { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
