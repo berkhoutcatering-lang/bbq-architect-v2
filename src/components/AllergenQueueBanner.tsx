@@ -9,11 +9,18 @@ import { createServerSupabase } from '@/lib/supabase-server';
    toont alleen iets als count > 0. Geen banner = no noise.
    ─────────────────────────────────────────────────────────────── */
 
-async function getPendingCount(): Promise<number> {
+interface QueueCounts {
+    components: number;
+    ingredients: number;
+    total: number;
+}
+
+async function getPendingCounts(): Promise<QueueCounts> {
+    const empty: QueueCounts = { components: 0, ingredients: 0, total: 0 };
     try {
         const sb = await createServerSupabase();
         const { data: { user } } = await sb.auth.getUser();
-        if (!user) return 0;
+        if (!user) return empty;
 
         const { data: mem } = await sb
             .from('organization_members')
@@ -22,31 +29,51 @@ async function getPendingCount(): Promise<number> {
             .eq('status', 'active')
             .limit(1)
             .maybeSingle();
-        if (!mem) return 0;
+        if (!mem) return empty;
 
-        // Distinct components, not raw rows — banner-message reads better
-        const { data } = await sb
-            .from('component_allergens')
-            .select('component_id')
-            .eq('organization_id', mem.organization_id)
-            .eq('ai_suggested', true)
-            .is('confirmed_at', null);
+        /* Twee parallelle queries: component-level + ingredient-level.
+           Distinct ipv raw rows zodat de banner-tekst leesbaar blijft
+           (1 component met 3 suggesties telt als 1, niet 3). */
+        const [compRes, ingrRes] = await Promise.all([
+            sb.from('component_allergens')
+                .select('component_id')
+                .eq('organization_id', mem.organization_id)
+                .eq('ai_suggested', true)
+                .is('confirmed_at', null),
+            sb.from('ingredient_allergens')
+                .select('inventory_id')
+                .eq('organization_id', mem.organization_id)
+                .eq('ai_suggested', true)
+                .is('confirmed_at', null),
+        ]);
 
-        if (!data) return 0;
-        return new Set(data.map((r) => r.component_id)).size;
+        const components = compRes.data ? new Set(compRes.data.map((r) => r.component_id)).size : 0;
+        const ingredients = ingrRes.data ? new Set(ingrRes.data.map((r) => r.inventory_id)).size : 0;
+        return { components, ingredients, total: components + ingredients };
     } catch {
-        return 0;
+        return empty;
     }
 }
 
 export default async function AllergenQueueBanner() {
-    const count = await getPendingCount();
-    if (count === 0) return null;
+    const counts = await getPendingCounts();
+    if (counts.total === 0) return null;
+
+    /* Lees-vriendelijke titel afhankelijk van waar de queue zit. */
+    const title = (() => {
+        if (counts.ingredients > 0 && counts.components > 0) {
+            return `${counts.total} items wachten op allergen-bevestiging`;
+        }
+        if (counts.ingredients > 0) {
+            return `${counts.ingredients} ingrediënt${counts.ingredients === 1 ? '' : 'en'} wacht${counts.ingredients === 1 ? '' : 'en'} op allergen-bevestiging`;
+        }
+        return `${counts.components} component${counts.components === 1 ? '' : 'en'} wacht${counts.components === 1 ? '' : 'en'} op allergen-bevestiging`;
+    })();
 
     return (
         <Link
             href="/gerechten/allergen-queue"
-            aria-label={`${count} component${count === 1 ? '' : 'en'} wachten op allergen-bevestiging — open queue`}
+            aria-label={`${title} — open queue`}
             style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -81,7 +108,7 @@ export default async function AllergenQueueBanner() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b' }}>
-                    {count} {count === 1 ? 'component' : 'componenten'} wacht{count === 1 ? '' : 'en'} op allergen-bevestiging
+                    {title}
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--muted-light, #a1a1aa)', marginTop: 2 }}>
                     AI heeft suggesties gedaan — bevestig of verwerp voor EU 1169/2011 audit-evidence.

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Recycle, TrendingUp, ShieldCheck, Boxes } from 'lucide-react';
+import { ArrowRight, Sparkles, Recycle, TrendingUp, ShieldCheck, Boxes, Package } from 'lucide-react';
 import { createServerSupabase } from '@/lib/supabase-server';
 import PageHeader from '@/components/PageHeader';
 import MargeBar from '@/components/chips/MargeBar';
@@ -20,6 +20,11 @@ interface Insights {
     marginBuckets: Array<{ label: string; min: number; max: number; count: number; color: string }>;
     margeAverage: number | null;
     margeMedian: number | null;
+    /* Ingredient-niveau stats — verhuisd uit /gerechten/ingredienten (S2.7).
+       Ingrediënten staan in /voorraad; we tonen hier alleen de roll-up. */
+    totalIngredients: number;
+    ingredientsWithAllergen: number;
+    ingredientAiSuggestionsPending: number;
 }
 
 async function loadInsights(): Promise<Insights | { error: string }> {
@@ -45,6 +50,9 @@ async function loadInsights(): Promise<Insights | { error: string }> {
             aiSuggestedRes,
             gerechtComponentsRes,
             componentsListRes,
+            inventoryCountRes,
+            ingredientAllergenRes,
+            ingredientAiPendingRes,
         ] = await Promise.all([
             sb.from('component_allergens').select('component_id')
                 .eq('organization_id', orgId).eq('ai_suggested', true).is('confirmed_at', null),
@@ -56,6 +64,12 @@ async function loadInsights(): Promise<Insights | { error: string }> {
             sb.from('gerecht_components').select('component_id')
                 .eq('organization_id', orgId),
             sb.from('components').select('id, name, type').eq('organization_id', orgId),
+            sb.from('inventory').select('id', { count: 'exact', head: true })
+                .eq('organization_id', orgId),
+            sb.from('ingredient_allergens').select('inventory_id', { count: 'exact', head: true })
+                .eq('organization_id', orgId),
+            sb.from('ingredient_allergens').select('inventory_id', { count: 'exact', head: true })
+                .eq('organization_id', orgId).eq('ai_suggested', true).is('confirmed_at', null),
         ]);
 
         // Distinct pending components
@@ -124,6 +138,9 @@ async function loadInsights(): Promise<Insights | { error: string }> {
             marginBuckets: buckets,
             margeAverage,
             margeMedian,
+            totalIngredients: inventoryCountRes.count ?? 0,
+            ingredientsWithAllergen: ingredientAllergenRes.count ?? 0,
+            ingredientAiSuggestionsPending: ingredientAiPendingRes.count ?? 0,
         };
     } catch (e) {
         return { error: e instanceof Error ? e.message : 'Onbekende fout' };
@@ -160,18 +177,38 @@ export default async function InsightsPage() {
                 description="Eén view: marge-gezondheid, component-reuse, allergen-status. Voor power-users en pre-launch checks."
             />
 
+            {/* Allergeen-cascade rolldown — laat de drie niveaus zien (ingrediënt
+                → component → gerecht) als één visuele rij. Tekstuele uitleg
+                stond op /gerechten/ingredienten; die pagina is in S2.7 verwijderd. */}
+            <div style={{ marginTop: 'var(--space-4)', padding: '14px 16px', background: 'rgba(255,255,255,.02)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, color: 'var(--muted-light)' }}>
+                <strong style={{ color: 'var(--text)' }}>Allergenen-cascade</strong> — ingrediënt
+                ({result.totalIngredients} in <Link href="/voorraad" style={{ color: 'var(--color-accent-gold)', textDecoration: 'none' }}>Voorraad</Link>) →
+                component ({result.totalComponents}) → gerecht ({result.totalGerechten}). AI mag voorstellen, jij bevestigt.
+            </div>
+
             {/* KPI-tile row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3, 12px)', marginTop: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3, 12px)', marginTop: 'var(--space-3, 12px)' }}>
                 <KpiTile
-                    label="Gerechten"
-                    value={result.totalGerechten.toString()}
-                    icon={<Boxes size={14} />}
+                    label="Ingrediënten"
+                    value={result.totalIngredients.toString()}
+                    icon={<Package size={14} />}
+                    sub={
+                        result.ingredientsWithAllergen > 0
+                            ? `${result.ingredientsWithAllergen} met allergeen`
+                            : 'nog geen allergenen gekoppeld'
+                    }
+                    ctaHref="/voorraad"
                 />
                 <KpiTile
                     label="Componenten"
                     value={result.totalComponents.toString()}
                     icon={<Recycle size={14} />}
                     sub={result.aiSuggestedComponents > 0 ? `${result.aiSuggestedComponents} via AI` : undefined}
+                />
+                <KpiTile
+                    label="Gerechten"
+                    value={result.totalGerechten.toString()}
+                    icon={<Boxes size={14} />}
                 />
                 <KpiTile
                     label="Gem. marge"
@@ -182,11 +219,15 @@ export default async function InsightsPage() {
                 />
                 <KpiTile
                     label="Allergen-queue"
-                    value={result.pendingComponentsCount.toString()}
+                    value={(result.pendingComponentsCount + result.ingredientAiSuggestionsPending).toString()}
                     icon={<ShieldCheck size={14} />}
-                    sub={result.pendingComponentsCount === 0 ? 'alles bevestigd' : 'wachten op bevestiging'}
-                    accentColor={result.pendingComponentsCount === 0 ? '#00d4a1' : '#f59e0b'}
-                    ctaHref={result.pendingComponentsCount > 0 ? '/gerechten/allergen-queue' : undefined}
+                    sub={
+                        result.pendingComponentsCount + result.ingredientAiSuggestionsPending === 0
+                            ? 'alles bevestigd'
+                            : `${result.ingredientAiSuggestionsPending} ingr. + ${result.pendingComponentsCount} comp.`
+                    }
+                    accentColor={result.pendingComponentsCount + result.ingredientAiSuggestionsPending === 0 ? '#00d4a1' : '#f59e0b'}
+                    ctaHref={result.pendingComponentsCount + result.ingredientAiSuggestionsPending > 0 ? '/gerechten/allergen-queue' : undefined}
                 />
             </div>
 
