@@ -22,10 +22,15 @@ import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt
 import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
 import type { Factuur } from '@/types';
+import { upsertFactuur, deleteFactuur as deleteFactuurAction, markFactuurStatus } from './actions';
 import { ArrowLeft, Bell, Code, CreditCard, FileSpreadsheet, FileText, Link2, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
 
 export default function Facturen() {
-    const { data: facturen, loading, insert, update, remove } = useSupabase<Factuur>('facturen', []);
+    /* Mutaties lopen via Server Actions (`./actions.ts`) zodat Zod-validatie,
+       re-auth en de inventory-cascade (bij status verzonden/betaald) server-
+       side gegarandeerd zijn. `refetch` halen we uit useSupabase voor live
+       refresh na een action. */
+    const { data: facturen, loading, refetch } = useSupabase<Factuur>('facturen', []);
     const { settings } = useSettings();
     const { orgId } = useOrg();
     const showToast = useToast();
@@ -51,55 +56,61 @@ export default function Facturen() {
 
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
-    function saveFactuur() {
+    async function saveFactuur() {
         if (!validateAll({ client_naam: form!.client_naam })) return;
-        const oldFactuur = facturen.find(function (f) { return f.id === editing; });
-        const statusChanged = oldFactuur && oldFactuur.status !== form!.status && (form!.status === 'verzonden' || form!.status === 'betaald');
-        if (editing === 'new') {
-            insert(form!).then(function () {
-                showToast('Factuur aangemaakt', 'success');
-                setFollowUpTitle('Factuur aangemaakt!');
-                setFollowUpActions([
-                    { icon: '📧', label: 'Factuur versturen per email', onClick: function () { /* trigger email */ } },
-                    { icon: '📄', label: 'PDF downloaden', onClick: function () { /* trigger PDF */ } },
-                    { icon: '📊', label: 'Analytics bekijken', href: '/financien' },
-                ]);
-                setEditing(null); setForm(null);
-            }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
-        } else {
-            const { id, created_at, ...rest } = form!;
-            update(editing as number, rest).then(function () {
-                showToast('Factuur bijgewerkt', 'success');
-                if (statusChanged) { drainInventory(form!); }
-                setEditing(null); setForm(null);
-            }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+        const isNew = editing === 'new';
+        const payload = isNew
+            ? form!
+            : (() => {
+                /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+                const { id: _id, created_at: _ca, ...rest } = form!;
+                return { id: editing as number, ...rest };
+            })();
+        const result = await upsertFactuur(payload);
+        if (result.error) {
+            const fieldMsg = result.fields
+                ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')'
+                : '';
+            showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            return;
         }
-    }
 
-    function drainInventory(factuur: Record<string, any>) {
-        supabase.from('inventory').select('*').then(function (res: any) {
-            const items = res.data || [];
-            if (items.length === 0) return;
-            const deducted: string[] = [];
-            (factuur.items || []).forEach(function (lineItem: any) {
-                const desc = (lineItem.desc || '').toLowerCase();
-                items.forEach(function (inv: any) {
-                    if (desc.indexOf(inv.naam.toLowerCase()) >= 0) {
-                        const newStock = Math.max(0, (inv.current_stock || 0) - (lineItem.qty || 0));
-                        supabase.from('inventory').update({ current_stock: newStock }).eq('id', inv.id).then(function () { });
-                        deducted.push(inv.naam + ' -' + lineItem.qty);
-                    }
-                });
-            });
-            if (deducted.length > 0) {
-                showToast('📉 Voorraad afgetrokken: ' + deducted.join(', '), 'info');
+        /* Bij status-overgang naar verzonden/betaald: server-side inventory-cascade
+           via markFactuurStatus. De upsertFactuur slaat alleen de velden op; de
+           cascade-logica is gescheiden zodat we de drained-lijst kunnen tonen. */
+        if (result.data?.statusChanged && result.data.id && (form!.status === 'verzonden' || form!.status === 'betaald')) {
+            const statusRes = await markFactuurStatus({ id: result.data.id, new_status: form!.status });
+            if (statusRes.data?.drained?.length) {
+                const summary = statusRes.data.drained.map(d => `${d.naam} ${d.delta}`).join(', ');
+                showToast('📉 Voorraad afgetrokken: ' + summary, 'info');
             }
-        });
+        }
+
+        await refetch();
+        showToast(isNew ? 'Factuur aangemaakt' : 'Factuur bijgewerkt', 'success');
+        if (isNew) {
+            setFollowUpTitle('Factuur aangemaakt!');
+            setFollowUpActions([
+                { icon: '📧', label: 'Factuur versturen per email', onClick: function () { /* trigger email */ } },
+                { icon: '📄', label: 'PDF downloaden', onClick: function () { /* trigger PDF */ } },
+                { icon: '📊', label: 'Analytics bekijken', href: '/financien' },
+            ]);
+        }
+        setEditing(null);
+        setForm(null);
     }
 
     function deleteFactuur() {
-        showConfirm('Weet je zeker dat je deze factuur wilt verwijderen?', function () {
-            remove(editing as number).then(function () { showToast('Factuur verwijderd', 'success'); setEditing(null); setForm(null); }).catch(function(err: any) { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+        showConfirm('Weet je zeker dat je deze factuur wilt verwijderen?', async function () {
+            const result = await deleteFactuurAction(editing as number);
+            if (result.error) {
+                showToast('Verwijderen mislukt: ' + result.error, 'error');
+                return;
+            }
+            await refetch();
+            showToast('Factuur verwijderd', 'success');
+            setEditing(null);
+            setForm(null);
         });
     }
 
