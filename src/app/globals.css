@@ -9351,6 +9351,65 @@ html, body { max-width: 100vw; overflow-x: hidden; }
     .prep-task--late-late { animation: none !important; }
 }
 
+/* ─── KDS-MODE HARDENING (Bundel 3 — Audit Groep 3 P0) ────────────────────
+   Wanneer `.prep-task` binnen `.kds-layout` zit (= fullscreen Kookbord of
+   /events/[id]/service), maak de UI glance-at-30cm-leesbaar en
+   handschoen-vriendelijk:
+     - Font ≥18px op titles + ≥14px op meta (was 15/12)
+     - Tap-targets ≥60px op primary + ≥56px op secondary (was 44/36)
+     - Padding ruimer voor minder muis-precisie-eis
+
+   Buiten KDS-mode (gewone /agenda prep-views, settings) blijven de
+   compacte 44px-defaults staan. */
+.kds-layout .prep-task {
+    padding: 16px;
+    gap: 12px;
+}
+.kds-layout .prep-task__title { font-size: 18px; line-height: 1.3; }
+.kds-layout .prep-task__context { font-size: 13px; }
+.kds-layout .prep-task__meta { font-size: 14px; gap: 10px; }
+.kds-layout .prep-task__qty { font-size: 15px; }
+.kds-layout .prep-task__status { font-size: 13px; padding: 4px 10px; }
+.kds-layout .prep-task__assignee { font-size: 13px; gap: 6px; }
+.kds-layout .prep-task__station { font-size: 11px; }
+.kds-layout .prep-task__menu {
+    width: 56px; height: 56px;
+    border-radius: 12px;
+}
+.kds-layout .prep-task__primary {
+    min-height: 60px;
+    padding: 14px 20px;
+    font-size: 15px;
+    border-radius: 12px;
+    gap: 8px;
+}
+.kds-layout .prep-task__allergen-band {
+    padding: 8px 12px;
+    margin: -16px -16px 0 -16px;
+    border-radius: 12px 12px 0 0;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+}
+
+/* ─── ALLERGEN-BAND ALTIJD ZICHTBAAR met severity-kleur ──────────────────
+   Voorheen alleen op `severity === 'critical'` getoond — minder ernstige
+   maar nog steeds aanwezige allergens (b.v. lactose, ei) waren verstopt
+   in de detail-sheet, terwijl ze in de kaart-glance moeten zitten zodat
+   de prep-staff een allergie-event niet over het hoofd ziet.
+   `data-severity` op de band → kleur per niveau. */
+.prep-task__allergen-band[data-severity='normal'] {
+    background: var(--brand, #FFBF00);
+    color: #0a0a0c;
+}
+.prep-task__allergen-band[data-severity='high'] {
+    background: var(--warning, #f59e0b);
+    color: #0a0a0c;
+}
+.prep-task__allergen-band[data-severity='critical'] {
+    background: var(--danger, #ef4444);
+    color: #fff;
+}
+
 /* Tablet portrait — single column scroll */
 @media (max-width: 900px) {
     .prep-board {
