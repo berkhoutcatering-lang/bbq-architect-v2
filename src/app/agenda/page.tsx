@@ -24,6 +24,7 @@ import AgendaCategoryModal from './_components/AgendaCategoryModal';
 import type { AgendaEvent as AgendaEventType, AgendaFilterState } from './_lib/types';
 import { useAgendaFilter, applyFilter } from './_lib/useAgendaFilter';
 import { useAgendaCategories, type AgendaCategoryRow } from './_lib/useAgendaCategories';
+import { getAgendaIconComponent } from './_lib/icons';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -296,7 +297,13 @@ function CalendarLegend({
                                 }}
                             >
                                 <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
-                                {systemMeta ? <systemMeta.Icon size={13} style={{ color: c.color, flexShrink: 0 }} /> : <Calendar size={13} style={{ color: c.color, flexShrink: 0 }} />}
+                                {(() => {
+                                    /* System rows hebben hun eigen Icon-component; custom rows krijgen
+                                       de icoon-string die de gebruiker in de modal heeft gekozen,
+                                       vertaald via getAgendaIconComponent. */
+                                    const IconComp = systemMeta ? systemMeta.Icon : getAgendaIconComponent(c.customRow?.icon);
+                                    return <IconComp size={13} style={{ color: c.color, flexShrink: 0 }} />;
+                                })()}
                                 <div style={{ flex: 1, minWidth: 0 }} className="agenda-legend__label">
                                     <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
                                     <div className="agenda-legend__sub" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

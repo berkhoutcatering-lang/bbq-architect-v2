@@ -7,6 +7,7 @@ import {
     deleteAgendaCategory,
 } from '../actions';
 import type { AgendaCategoryRow } from '../_lib/useAgendaCategories';
+import { AGENDA_CATEGORY_ICONS } from '../_lib/icons';
 
 const PRESET_COLORS = [
     '#a78bfa', // paars
@@ -19,12 +20,6 @@ const PRESET_COLORS = [
     '#94a3b8', // grijs
 ];
 
-const PRESET_ICONS = [
-    'Calendar', 'Briefcase', 'Users', 'Truck',
-    'Home', 'Heart', 'Coffee', 'ChefHat',
-    'Wrench', 'Phone', 'MessageSquare', 'Star',
-];
-
 interface Props {
     open: boolean;
     editing: AgendaCategoryRow | null;
@@ -35,7 +30,7 @@ interface Props {
 export default function AgendaCategoryModal({ open, editing, onClose, onSaved }: Props) {
     const [name, setName] = useState('');
     const [color, setColor] = useState(PRESET_COLORS[0]);
-    const [icon, setIcon] = useState(PRESET_ICONS[0]);
+    const [icon, setIcon] = useState<string>(AGENDA_CATEGORY_ICONS[0].id);
     const [defaultVisible, setDefaultVisible] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
@@ -45,7 +40,7 @@ export default function AgendaCategoryModal({ open, editing, onClose, onSaved }:
         if (open) {
             setName(editing?.name ?? '');
             setColor(editing?.color ?? PRESET_COLORS[0]);
-            setIcon(editing?.icon ?? PRESET_ICONS[0]);
+            setIcon(editing?.icon ?? AGENDA_CATEGORY_ICONS[0].id);
             setDefaultVisible(editing?.default_visible ?? true);
             setError(null);
             setDeleting(false);
@@ -149,24 +144,29 @@ export default function AgendaCategoryModal({ open, editing, onClose, onSaved }:
                     <div style={fieldStyle}>
                         <span style={labelStyle}>Icoon</span>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-                            {PRESET_ICONS.map(name => (
-                                <button
-                                    key={name}
-                                    type="button"
-                                    onClick={() => setIcon(name)}
-                                    aria-pressed={icon === name}
-                                    style={{
-                                        padding: '8px 4px', borderRadius: 8,
-                                        background: icon === name ? 'rgba(255,191,0,.08)' : 'rgba(0,0,0,.2)',
-                                        border: `1px solid ${icon === name ? 'rgba(255,191,0,.4)' : 'var(--border)'}`,
-                                        color: icon === name ? '#FFBF00' : 'var(--muted)',
-                                        fontSize: 10, cursor: 'pointer',
-                                    }}
-                                    title={name}
-                                >
-                                    {name}
-                                </button>
-                            ))}
+                            {AGENDA_CATEGORY_ICONS.map(({ id, Icon, label }) => {
+                                const active = icon === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        onClick={() => setIcon(id)}
+                                        aria-pressed={active}
+                                        aria-label={label}
+                                        title={label}
+                                        style={{
+                                            padding: '10px 4px', borderRadius: 8,
+                                            background: active ? `${color}18` : 'rgba(0,0,0,.2)',
+                                            border: `1px solid ${active ? `${color}55` : 'var(--border)'}`,
+                                            color: active ? color : 'var(--muted)',
+                                            cursor: 'pointer', minHeight: 40,
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                    >
+                                        <Icon size={16} />
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
