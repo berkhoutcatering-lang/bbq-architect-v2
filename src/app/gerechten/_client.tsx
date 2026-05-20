@@ -38,48 +38,20 @@ import {
   schatMarge,
   fmtSmokeTime,
 } from './_components/stats-helpers';
-import type { InventoryItem, Gang, Gerecht } from '@/types';
+import type { InventoryItem, Gang, Gerecht, MenuTemplateRow } from '@/types';
 
-/* Lokaal type voor menu-templates (geen export in database.types.ts).
-   menu_templates is een jsonb-tabel waar shape per template kan verschillen. */
-interface MenuTemplateRow {
-    id: number;
-    organization_id?: string;
-    naam: string;
-    is_default?: boolean;
-    template_data?: unknown;
-    created_at?: string;
-    updated_at?: string;
-    [key: string]: unknown;
-}
-
-/* Extended Gerecht-type met velden die in DB voorkomen maar (nog) niet
-   in database.types.ts staan. UI rendert deze, dus toevoegen voorkomt
-   `any`-casts per gebruik-site. `ingredient_costs` komt uit Gerecht zelf. */
-interface GerechtRow extends Gerecht {
-    gang_slug?: string;
-    foto_url?: string | null;
-    tags?: string[];
-    allergenen?: string[];
-    ingredienten?: Array<{ naam: string; qty?: number; unit?: string; [k: string]: unknown }>;
-    bron?: string;
-    kostprijs_pp?: number;
-    verkoopprijs?: number;
-}
-
-/* Extended Gang-type — UI gebruikt extra velden minimum + extra_prijs_pp. */
-interface GangRow extends Gang {
-    minimum?: number;
-    extra_prijs_pp?: number;
-}
+/* Velden voor Gerecht (gang_slug, foto_url, tags, allergenen, ingredienten,
+   bron, kostprijs_pp, verkoopprijs) en Gang (minimum, extra_prijs_pp) zijn
+   centraal toegevoegd via src/types/database.types.extensions.ts (module
+   augmentation). MenuTemplateRow komt ook uit die file. */
 
 /* P0.19 — GerechtenClient is de Client-body; `<page.tsx>` Server Component
    prefetcht gangen + gerechten + inventory + menu_templates parallel zodat
    first paint geen waterfall toont. `loadData()` blijft als refetch zodat
    menu-templates en realtime updates blijven werken. */
 export interface GerechtenInitial {
-    gangen?: GangRow[];
-    gerechten?: GerechtRow[];
+    gangen?: Gang[];
+    gerechten?: Gerecht[];
     inventory?: InventoryItem[];
     menuTemplates?: MenuTemplateRow[];
 }
@@ -92,8 +64,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         naam: [{ required: 'Vul een naam in' }],
     });
     const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
-    const [gangen, setGangen] = useState<GangRow[]>(initial?.gangen ?? []);
-    const [gerechten, setGerechten] = useState<GerechtRow[]>(initial?.gerechten ?? []);
+    const [gangen, setGangen] = useState<Gang[]>(initial?.gangen ?? []);
+    const [gerechten, setGerechten] = useState<Gerecht[]>(initial?.gerechten ?? []);
     const [activeGang, setActiveGang] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
