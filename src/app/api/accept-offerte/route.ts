@@ -1,8 +1,36 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import { renderSignedCertificate } from '@/lib/signedPdfRenderer';
+
+/* Zod-schema voor accept-payload — voorkomt XSS in signedBy (komt in
+   audit-PDF + email), DoS via mega-signatureUrl, en string-injection
+   in publicToken. Klant-facing endpoint: liberaal genoeg om geldige
+   namen toe te laten ('José'/'Anne-Marie'/'王' etc.) maar streng genoeg
+   om HTML/script/control-chars te weren. */
+const AcceptOfferteSchema = z.object({
+    offerteId: z.union([z.string().uuid(), z.coerce.number().int().positive()]),
+    publicToken: z.string().min(16).max(200),
+    signedBy: z.string()
+        .min(2, 'Naam moet minimaal 2 tekens zijn')
+        .max(100, 'Naam te lang (max 100 tekens)')
+        .refine(
+            function (s) { return !/[<>{}]|javascript:|data:|on\w+=/i.test(s); },
+            'Naam bevat ongeldige tekens',
+        )
+        .refine(
+            function (s) { return s.trim().length >= 2; },
+            'Naam mag niet enkel uit spaties bestaan',
+        ),
+    /* Signature data-URL — accepteer alleen `data:image/png;base64,...`
+       om PNG-injectie (SVG met embedded JS) te voorkomen. Cap op 500KB
+       base64 (~375KB binary) is ruim voldoende voor een handtekening. */
+    signatureUrl: z.string()
+        .regex(/^data:image\/(png|jpeg);base64,/, 'Ongeldig signatuur-format')
+        .max(500_000, 'Signatuur te groot'),
+});
 
 let sb: ReturnType<typeof createServiceSupabase> | null = null;
 try { sb = createServiceSupabase(); } catch { sb = null; }
@@ -19,10 +47,24 @@ export async function POST(req: NextRequest) {
     try {
         if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
-        const body = await req.json();
-        const { offerteId, publicToken, signedBy, signatureUrl } = body;
-        if (!offerteId) return NextResponse.json({ error: 'Geen offerte ID' }, { status: 400 });
-        if (!publicToken || typeof publicToken !== 'string') return NextResponse.json({ error: 'Geen publieke token' }, { status: 400 });
+        let body: unknown;
+        try {
+            body = await req.json();
+        } catch {
+            return NextResponse.json({ error: 'Ongeldige JSON' }, { status: 400 });
+        }
+
+        const parsed = AcceptOfferteSchema.safeParse(body);
+        if (!parsed.success) {
+            return NextResponse.json(
+                {
+                    error: 'Ongeldige gegevens — controleer naam en handtekening',
+                    fields: parsed.error.flatten().fieldErrors,
+                },
+                { status: 400 },
+            );
+        }
+        const { offerteId, publicToken, signedBy, signatureUrl } = parsed.data;
 
         const signedIp = getClientIp(req);
         const signedUserAgent = req.headers.get('user-agent');
@@ -166,9 +208,16 @@ export async function POST(req: NextRequest) {
         const { data: facturenAll } = await sb.from('facturen').select('nummer');
         const facturenNummers = (facturenAll || []).map(f => f.nummer);
 
+        /* `runAcceptanceWorkflow` verwacht `offerteId: number`. Zod
+           accepteert union(uuid|int) maar in praktijk is offerte.id
+           altijd integer in DB — coerce hier zodat de workflow-types
+           kloppen. */
+        const offerteIdNum = typeof offerteId === 'number'
+            ? offerteId
+            : Number.parseInt(offerteId, 10);
         const workflow = await runAcceptanceWorkflow(sb as any, {
             eventId,
-            offerteId,
+            offerteId: offerteIdNum,
             offerteData: { ...offerte, items },
             settings,
             facturenCount: facturenNummers.length,

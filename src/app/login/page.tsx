@@ -125,8 +125,19 @@ export default function LoginPage() {
           </a>
         </p>
 
-        {/* Dev quick login buttons — only in development, mount-gated tegen hydration-mismatch */}
-        {mounted && process.env.NODE_ENV === 'development' && (
+        {/* Dev quick login button — alleen zichtbaar als BOTH env-vars zijn gezet
+            in .env.local (gitignored). Voorheen waren credentials hardcoded in
+            de source — risico bij git-history dump of open-sourcen. Nu staat
+            de email + password in lokale .env.local, NIET in de repo.
+
+            Voor Sam: zet in .env.local:
+              NEXT_PUBLIC_DEV_QUICK_EMAIL=jouw-test@email.nl
+              NEXT_PUBLIC_DEV_QUICK_PASSWORD=jouw-test-wachtwoord
+         */}
+        {mounted
+          && process.env.NODE_ENV === 'development'
+          && process.env.NEXT_PUBLIC_DEV_QUICK_EMAIL
+          && process.env.NEXT_PUBLIC_DEV_QUICK_PASSWORD && (
           <div style={{ marginTop: 24, padding: 16, borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
               Dev Quick Login
@@ -134,10 +145,13 @@ export default function LoginPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
                 type="button"
-                onClick={function () { setEmail('berkhout.catering@gmail.com'); setPassword('Hop&Bites'); }}
+                onClick={function () {
+                  setEmail(process.env.NEXT_PUBLIC_DEV_QUICK_EMAIL || '');
+                  setPassword(process.env.NEXT_PUBLIC_DEV_QUICK_PASSWORD || '');
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--blue)', textAlign: 'left' }}
               >
-                🔥 Hop &amp; Bites (Catering)
+                🔥 Dev quick-login
               </button>
             </div>
           </div>

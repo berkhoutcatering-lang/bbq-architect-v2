@@ -67,8 +67,28 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
         load();
     }, [params]);
 
+    /* Client-side signer-name validatie — server doet dezelfde check
+       via Zod (Bundel 1: hardening klant-facing portal). Voorkomt
+       hopeloze server-roundtrip bij triviale fouten zoals lege naam. */
+    function validateSignerName(name: string): string | null {
+        const trimmed = name.trim();
+        if (trimmed.length < 2) return 'Naam moet minimaal 2 tekens zijn';
+        if (trimmed.length > 100) return 'Naam te lang (max 100 tekens)';
+        if (/[<>{}]|javascript:|data:|on\w+=/i.test(trimmed)) {
+            return 'Naam bevat ongeldige tekens';
+        }
+        return null;
+    }
+
     async function handleAccept() {
-        if (!offer || !signatureData || !signerName.trim()) return;
+        if (!offer || !signatureData) return;
+
+        const nameError = validateSignerName(signerName);
+        if (nameError) {
+            showToast(nameError, 'error');
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -86,6 +106,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
             if (res.ok && data.success) {
                 setAccepted(true);
                 setSignStep(false);
+            } else if (data.fields) {
+                /* Server-side Zod-validation faalde — meest specifieke
+                   field-error tonen i.p.v. generieke "Onbekende fout". */
+                const firstField = Object.entries(data.fields)[0] as [string, string[] | undefined] | undefined;
+                const msg = firstField?.[1]?.[0] || data.error || 'Onbekende fout';
+                showToast(msg, 'error');
             } else {
                 showToast('Fout bij accepteren: ' + (data.error || 'Onbekende fout'), 'error');
             }
@@ -94,6 +120,23 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
         }
         setSubmitting(false);
     }
+
+    /* Detecteer orientation-change tijdens signing — canvas verliest
+       stroke-data omdat het opnieuw initialiseert met nieuwe afmetingen.
+       Beter waarschuwen + reset dan klant laten denken dat handtekening
+       opgeslagen is. Volledige stroke-preservation vergt SignaturePad-
+       refactor (apart issue). */
+    useEffect(function () {
+        if (!signStep) return;
+        function onOrient() {
+            if (signatureData) {
+                showToast('Schermrotatie reset de handtekening — teken opnieuw.', 'info');
+                setSignatureData(null);
+            }
+        }
+        window.addEventListener('orientationchange', onOrient);
+        return function () { window.removeEventListener('orientationchange', onOrient); };
+    }, [signStep, signatureData, showToast]);
 
     // --- Loading ---
     if (loading) {
