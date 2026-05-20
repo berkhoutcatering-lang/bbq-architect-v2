@@ -131,45 +131,101 @@ export default function EventHubPage() {
   useEffect(() => {
     if (!eventId || Number.isNaN(eventId)) return;
     (async () => {
-      const { data: ev } = await supabase.from('events').select('*').eq('id', eventId).single();
-      if (!ev) { setLoading(false); return; }
+      const { data: ev, error: evErr } = await supabase.from('events').select('*').eq('id', eventId).single();
+      if (evErr || !ev) {
+        if (evErr) {
+          console.error('[EVENT-HUB] failed to load event:', evErr.message);
+          showToast('Event laden mislukt: ' + evErr.message, 'error');
+        }
+        setLoading(false);
+        return;
+      }
       setEvent(ev);
-      const [rOff, rPrep, rFact, rRec, rGer, rKlant, rSet, rHaccp, rSvc, rRefl, rInk, rGang] = await Promise.all([
-        ev.offerte_id ? supabase.from('offertes').select('*').eq('id', ev.offerte_id).single() : Promise.resolve({ data: null }) as any,
+
+      /* Promise.allSettled i.p.v. Promise.all — als één query faalt (b.v.
+         service_logs niet geladen) crasht de page niet meer. Per-query
+         error wordt gelogd zodat we het wel zien, maar de andere cards
+         renderen gewoon door met hun beschikbare data. */
+      const results = await Promise.allSettled([
+        ev.offerte_id ? supabase.from('offertes').select('*').eq('id', ev.offerte_id).single() : Promise.resolve({ data: null, error: null }) as any,
         supabase.from('prep_tasks').select('*').eq('event_id', eventId).order('dagen', { ascending: false }),
         supabase.from('facturen').select('*').eq('client_naam', ev.client_naam || '__none__').limit(1),
         /* recepten samengevouwen onder gerechten 2026-05-01 — twee aparte queries
            teruggebracht naar één. `recepten` blijft als alias-key in de result-set
            zodat downstream component-props (EventInkooplijstCard, menuGroups)
            niet hoeven te veranderen tot een aparte cleanup-ronde. */
-        Promise.resolve({ data: [] }),
+        Promise.resolve({ data: [], error: null }),
         supabase.from('gerechten').select('*'),
-        ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null }) as any,
+        ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null, error: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),
         supabase.from('haccp_records').select('*').eq('event_id', eventId),
-        ev.offerte_id ? supabase.from('service_logs').select('*').eq('offerte_id', ev.offerte_id) : Promise.resolve({ data: [] }) as any,
+        ev.offerte_id ? supabase.from('service_logs').select('*').eq('offerte_id', ev.offerte_id) : Promise.resolve({ data: [], error: null }) as any,
         supabase.from('event_reflecties').select('*').eq('event_id', eventId).limit(1),
         supabase.from('inkooplijsten').select('*').eq('event_id', eventId).limit(1),
         supabase.from('gangen').select('*').order('volgorde', { ascending: true }),
       ]);
-      if (rOff && 'data' in rOff && rOff.data) setOfferte(rOff.data);
-      setPrepTasks(rPrep.data || []);
+
+      const labels = ['offerte', 'prep_tasks', 'facturen', 'recepten', 'gerechten', 'klant', 'settings', 'haccp', 'service_logs', 'reflectie', 'inkooplijst', 'gangen'] as const;
+      const failed: string[] = [];
+
+      /* Helper: pak `data` uit een gefulfilled result + log eventuele
+         Supabase-error in dat result. Failed queries krijgen `null`. */
+      function unwrap<T>(idx: number): T | null {
+        const r = results[idx];
+        if (r.status === 'rejected') {
+          failed.push(labels[idx]);
+          console.error('[EVENT-HUB] query failed (' + labels[idx] + '):', r.reason);
+          return null;
+        }
+        const val = r.value as { data?: T; error?: { message: string } | null };
+        if (val.error) {
+          failed.push(labels[idx]);
+          console.error('[EVENT-HUB] supabase-error (' + labels[idx] + '):', val.error.message);
+          return null;
+        }
+        return (val.data ?? null) as T | null;
+      }
+
+      const offerteData = unwrap<Record<string, unknown>>(0);
+      const prepData = unwrap<Array<Record<string, unknown>>>(1);
+      const factData = unwrap<Array<Record<string, unknown>>>(2);
+      const recData = unwrap<Array<Record<string, unknown>>>(3);
+      const gerData = unwrap<Array<Record<string, unknown>>>(4);
+      const klantData = unwrap<Array<Record<string, unknown>>>(5);
+      const setData = unwrap<Record<string, unknown>>(6);
+      const haccpData = unwrap<Array<Record<string, unknown>>>(7);
+      const svcData = unwrap<Array<Record<string, unknown>>>(8);
+      const reflData = unwrap<Array<Record<string, unknown>>>(9);
+      const inkData = unwrap<Array<Record<string, unknown>>>(10);
+      const gangData = unwrap<Array<Record<string, unknown>>>(11);
+
+      if (offerteData) setOfferte(offerteData);
+      const prepArr = prepData || [];
+      setPrepTasks(prepArr);
       const initState: Record<number, boolean> = {};
-      (rPrep.data || []).forEach((p: any) => { initState[p.id] = !!p.done; });
+      prepArr.forEach((p: any) => { initState[p.id] = !!p.done; });
       setPrepState(initState);
-      if (rFact.data && rFact.data.length > 0) setFactuur(rFact.data[0]);
-      setRecepten(rRec.data || []);
-      setGerechten(rGer.data || []);
-      if (rSet && 'data' in rSet && rSet.data) setSettings(rSet.data);
-      if (rKlant && 'data' in rKlant && rKlant.data && rKlant.data.length > 0) setKlant(rKlant.data[0]);
-      setHaccpRecords(rHaccp.data || []);
-      setServiceLogs(rSvc.data || []);
-      if (rRefl.data && rRefl.data.length > 0) setReflectie(rRefl.data[0]);
-      if (rInk.data && rInk.data.length > 0) setInkooplijst(rInk.data[0]);
-      setGangen(rGang.data || []);
+      if (factData && factData.length > 0) setFactuur(factData[0]);
+      setRecepten(recData || []);
+      setGerechten(gerData || []);
+      if (setData) setSettings(setData);
+      if (klantData && klantData.length > 0) setKlant(klantData[0]);
+      setHaccpRecords(haccpData || []);
+      setServiceLogs(svcData || []);
+      if (reflData && reflData.length > 0) setReflectie(reflData[0]);
+      if (inkData && inkData.length > 0) setInkooplijst(inkData[0]);
+      setGangen(gangData || []);
+
+      if (failed.length > 0) {
+        showToast(
+          'Sommige event-data is niet geladen (' + failed.join(', ') + ') — andere secties werken wel.',
+          'warning',
+        );
+      }
+
       setLoading(false);
     })();
-  }, [eventId]);
+  }, [eventId, showToast]);
 
   const derived = useMemo(() => {
     if (!event) return null;
@@ -296,6 +352,10 @@ export default function EventHubPage() {
       const totals = calcLineTotals(offerte.items);
       const branding = buildBrandingConfig(settings);
       await generatePDF({ type: 'offerte', form: offerte, settings, totals, branding, orgId: orgId || undefined });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'onbekende fout';
+      console.error('[EVENT-HUB] offerte PDF failed:', msg);
+      showToast('Offerte-PDF maken mislukt: ' + msg, 'error');
     } finally { setDownloading(null); }
   }
 
@@ -305,6 +365,10 @@ export default function EventHubPage() {
     try {
       const branding = buildBrandingConfig(settings);
       await generatePDF({ type: 'menukaart', form: offerte, settings, gerechten, branding, orgId: orgId || undefined });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'onbekende fout';
+      console.error('[EVENT-HUB] menukaart PDF failed:', msg);
+      showToast('Menukaart-PDF maken mislukt: ' + msg, 'error');
     } finally { setDownloading(null); }
   }
 
@@ -315,6 +379,10 @@ export default function EventHubPage() {
       const totals = calcLineTotals(factuur.items);
       const branding = buildBrandingConfig(settings);
       await generatePDF({ type: 'factuur', form: factuur, settings, totals, branding, orgId: orgId || undefined });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'onbekende fout';
+      console.error('[EVENT-HUB] factuur PDF failed:', msg);
+      showToast('Factuur-PDF maken mislukt: ' + msg, 'error');
     } finally { setDownloading(null); }
   }
 
@@ -322,7 +390,10 @@ export default function EventHubPage() {
     setDownloading('haccp');
     try {
       const branding = buildBrandingConfig(settings);
-      const { data: records } = await supabase.from('haccp_records').select('*').eq('event_id', eventId);
+      const { data: records, error: recErr } = await supabase.from('haccp_records').select('*').eq('event_id', eventId);
+      if (recErr) {
+        throw new Error('HACCP-records laden mislukt: ' + recErr.message);
+      }
       await generatePDF({
         type: 'haccp',
         settings,
@@ -333,6 +404,10 @@ export default function EventHubPage() {
         eventGasten: event?.guests || 0,
         records: records || [],
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'onbekende fout';
+      console.error('[EVENT-HUB] HACCP PDF failed:', msg);
+      showToast('HACCP-PDF maken mislukt: ' + msg, 'error');
     } finally { setDownloading(null); }
   }
 
@@ -393,8 +468,22 @@ export default function EventHubPage() {
 
   async function markBevestigd() {
     if (!event) return;
-    await supabase.from('events').update({ status: 'confirmed' }).eq('id', event.id);
+    /* Optimistic: zet status alvast lokaal zodat UI direct reageert. */
+    const prevStatus = event.status;
     setEvent({ ...event, status: 'confirmed' });
+    const { error } = await supabase
+      .from('events')
+      .update({ status: 'confirmed' })
+      .eq('id', event.id);
+    if (error) {
+      /* Rollback naar vorige status — voorheen bleef UI op "confirmed"
+         hangen terwijl DB nog op "concept" stond → stale state-bug. */
+      setEvent({ ...event, status: prevStatus });
+      console.error('[EVENT-HUB] markBevestigd failed:', error.message);
+      showToast('Kon event niet bevestigen — probeer opnieuw.', 'error');
+    } else {
+      showToast('Event bevestigd', 'success');
+    }
   }
 
   if (loading) {
