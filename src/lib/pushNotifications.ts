@@ -3,6 +3,11 @@
 // and showing local notifications for prep tasks and event alerts.
 
 let swRegistration: ServiceWorkerRegistration | null = null;
+let reloadInFlight = false;
+
+/* Periodieke update-check zodat lang-open tabs (een tablet die overnacht aan
+   blijft staan in de keuken) ook een nieuwe deploy oppakken. */
+const UPDATE_CHECK_INTERVAL_MS = 60_000;
 
 /**
  * Register the service worker and store the registration for later use.
@@ -20,20 +25,45 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
     swRegistration = registration;
 
-    // Listen for updates
+    /* Update-flow: zodra een nieuwe SW is geïnstalleerd náást een actieve
+       controller (= een upgrade, geen first-install), vraag de nieuwe SW om
+       direct over te nemen via SKIP_WAITING. De activate-stap in sw.js doet
+       clients.claim() — dat triggert hieronder een controllerchange event
+       waarop we de pagina herladen zodat de gebruiker de nieuwe JS-bundle
+       krijgt. Zonder deze flow blijft de oude bundle actief tot de gebruiker
+       handmatig de service worker unregistert. */
     registration.addEventListener('updatefound', function () {
       const newWorker = registration.installing;
-      if (newWorker) {
-        newWorker.addEventListener('statechange', function () {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New version available, could prompt user to refresh
-            // New version available
-          }
-        });
-      }
+      if (!newWorker) return;
+      newWorker.addEventListener('statechange', function () {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
     });
 
-    // SW registered
+    /* Controllerchange vuurt zodra de nieuwe SW de controle overneemt
+       (clients.claim() in sw.js activate-handler). Reload één keer — guard
+       voorkomt loops als het event om een of andere reden meerdere keren
+       vuurt. useFormAutosave is in /klanten en /facturen al actief, dus
+       form-data overleeft de reload in de meeste flows. */
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloadInFlight) return;
+      reloadInFlight = true;
+      window.location.reload();
+    });
+
+    /* Forceer een update-check elke 60s zodat tabs die uren of dagen open
+       staan (Lars in de foodtruck-modus) toch deploys oppakken. update() doet
+       een no-cache fetch van /sw.js — als de byte-inhoud verschilt installeert
+       de browser de nieuwe SW. CACHE_VERSION wordt per build geinjecteerd
+       via scripts/inject-sw-version.mjs zodat sw.js elke deploy verandert. */
+    if (typeof window !== 'undefined') {
+      setInterval(function () {
+        registration.update().catch(function () { /* network hiccup, skip */ });
+      }, UPDATE_CHECK_INTERVAL_MS);
+    }
+
     return registration;
   } catch (error) {
     console.error('[PWA] Service Worker registratie mislukt:', error);
