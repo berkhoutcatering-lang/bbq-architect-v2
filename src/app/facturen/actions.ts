@@ -16,37 +16,21 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import {
+    FactuurSchema,
+    FACTUUR_STATUSES,
+    type FactuurInput,
+} from '@/lib/schemas/factuur';
 
-/* ─── Schemas ────────────────────────────────────────────────── */
+export type { FactuurInput };
 
-const FactuurItemSchema = z.object({
-    desc: z.string().max(500).optional().default(''),
-    qty: z.coerce.number().nonnegative().default(0),
-    prijs: z.coerce.number().nonnegative().default(0),
-    btw: z.coerce.number().min(0).max(100).optional().default(21),
-});
-
-const FACTUUR_STATUSES = [
-    'concept', 'verzonden', 'betaald', 'verlopen', 'vervallen', 'geannuleerd',
-] as const;
-
-const FactuurSchema = z.object({
-    id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
-    nummer: z.string().min(1).max(50),
-    client_naam: z.string().min(1, 'Klantnaam is verplicht').max(200),
-    client_adres: z.string().max(500).optional().default(''),
-    datum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    vervaldatum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    status: z.enum(FACTUUR_STATUSES).optional().default('concept'),
-    items: z.array(FactuurItemSchema).optional().default([]),
-});
-
+/* StatusMutationSchema blijft lokaal — het is een action-payload (niet de
+   entity-shape) en hoort daarom niet in de centrale schemas-module. Hij
+   gebruikt wel de geëxporteerde FACTUUR_STATUSES constant. */
 const StatusMutationSchema = z.object({
     id: z.union([z.string().uuid(), z.coerce.number().int()]),
     new_status: z.enum(FACTUUR_STATUSES),
 });
-
-export type FactuurInput = z.input<typeof FactuurSchema>;
 
 interface ActionResult<T = unknown> {
     data?: T;
