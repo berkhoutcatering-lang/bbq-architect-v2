@@ -2,19 +2,16 @@
  * Helper voor Service Mode: combineert een echt DB-event + DB-courses +
  * DB-allergies tot het rich `ServiceEvent`-shape dat de KDS-UI verwacht.
  *
- * Vóór deze module liep Service Mode alléén op hardcoded SERVICE_EVENTS
- * mock-data; een echt event selecteren had een lege courses-array tot gevolg
- * en de KDS-UI viel om. Met deze merge:
- *   - useDbServiceEvents() haalt events + courses + allergies op
- *   - dbEventToServiceEvent() bouwt het ServiceEvent shape
- *   - bij events zonder courses returnt de helper null zodat consumers naar
- *     mock kunnen fallbacken (graceful degradation tot data ingevuld is)
+ * Sinds P0.5 (2026-05-20) is de oude `_data/serviceMockData.ts`
+ * verwijderd — alle KDS-data komt nu uit de database. Bij events zonder
+ * courses returnt deze helper null zodat de UI een lege state met link
+ * naar event-hub kan tonen i.p.v. mock-fallback.
  */
 
 import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
 import type {
     ServiceEvent, Course, AllergyEntry, AllergenCode,
-} from '@/app/events/[id]/service/_data/serviceMockData';
+} from '@/app/events/[id]/service/_types/service';
 
 /* Lichte gerecht-shape — alleen wat we nodig hebben voor allergie-cross-ref. */
 export interface GerechtAllergenLookup {

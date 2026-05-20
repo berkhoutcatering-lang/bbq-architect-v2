@@ -6,7 +6,7 @@
  * allergenen-codes, severity en optionele notitie. Output wordt door
  * Service Mode gebruikt voor de allergie-tabel + Rook AI critical-flag.
  *
- * Allergen-codes komen uit `serviceMockData.ALLERGENS`. We tonen ze als
+ * Allergen-codes komen uit `_types/service.ALLERGENS`. We tonen ze als
  * toggle-chips (multi-select) i.p.v. tekst-input zodat typo's onmogelijk
  * zijn — Rook detecteert immers op exacte codes.
  */
@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, Save, AlertTriangle, Sparkles } from 'lucide-react';
-import { ALLERGENS, type AllergenCode } from '@/app/events/[id]/service/_data/serviceMockData';
+import { ALLERGENS, type AllergenCode } from '@/app/events/[id]/service/_types/service';
 import type { DbEventAllergy } from '@/types';
 import { useToast } from '@/components/Toast';
 
