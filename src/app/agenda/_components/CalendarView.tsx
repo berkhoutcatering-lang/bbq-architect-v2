@@ -57,6 +57,17 @@ export default function CalendarView({ mode, year, month, events, calendarColors
         api.gotoDate(targetIso);
     }, [year, month]);
 
+    /* `initialView` wordt alleen bij mount gelezen — als deze component gemount
+       blijft en de mode prop wijzigt (bv. Lijst → Week), zou FullCalendar in
+       z'n oude view blijven hangen. Expliciet `changeView()` aanroepen lost
+       dat op zonder remount. */
+    const view = mode === 'week' ? 'timeGridWeek' : 'listMonth';
+    useEffect(function () {
+        const api = ref.current?.getApi();
+        if (!api) return;
+        if (api.view.type !== view) api.changeView(view);
+    }, [view]);
+
     /* Highlight focused event uit ?conflict=<id> deep-link. */
     useEffect(function () {
         if (!focusedEventId) return;
@@ -73,8 +84,6 @@ export default function CalendarView({ mode, year, month, events, calendarColors
         const agendaEvent = arg.event.extendedProps.agendaEvent as AgendaEvent;
         if (agendaEvent) onSelectEvent(agendaEvent);
     }
-
-    const view = mode === 'week' ? 'timeGridWeek' : 'listMonth';
 
     return (
         <div className="agenda-fc-wrap">
