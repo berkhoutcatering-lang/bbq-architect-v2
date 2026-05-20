@@ -13,7 +13,7 @@ import ThemeProvider from "@/components/ThemeProvider";
 import type { Viewport } from 'next';
 
 export const metadata = {
-  title: 'BBQ Architect — Hop & Bites',
+  title: 'BBQ Architect',
   description: 'Beheer je BBQ catering events, recepten, facturen en meer.',
   manifest: '/manifest.json',
   appleWebApp: {

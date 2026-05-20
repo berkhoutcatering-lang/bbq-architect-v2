@@ -45,7 +45,14 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
   const [datum, setDatum] = useState(rit?.datum || new Date().toISOString().slice(0, 10));
   const [vertrekTijd, setVertrekTijd] = useState(rit?.vertrek_tijd?.slice(0, 5) || '');
   const [duurMinuten, setDuurMinuten] = useState<string>(rit?.duur_minuten ? String(rit.duur_minuten) : '');
-  const [vertrekAdres, setVertrekAdres] = useState(rit?.vertrek_adres || 'Hop & Bites HQ, Borger');
+  /* Default vertrek-adres: meest recente rit > leeg. Een hardcoded default
+     hoort niet in een multi-tenant app (toonde "Hop & Bites HQ, Borger" voor
+     elke tenant). */
+  const lastVertrekAdres = useMemo(() => {
+    const recent = [...ritten].sort((a, b) => (a.datum < b.datum ? 1 : -1))[0];
+    return recent?.vertrek_adres || '';
+  }, [ritten]);
+  const [vertrekAdres, setVertrekAdres] = useState(rit?.vertrek_adres || lastVertrekAdres);
   const [aankomstAdres, setAankomstAdres] = useState(rit?.aankomst_adres || prefilledEvent?.location || '');
   const [routeOmleiding, setRouteOmleiding] = useState(rit?.route_omleiding || '');
   const [kmBegin, setKmBegin] = useState<string>(String(rit?.km_begin ?? ''));
@@ -59,6 +66,13 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
   useEffect(() => {
     if (voertuigId === null && defaultVoertuigId !== null) setVoertuigId(defaultVoertuigId);
   }, [defaultVoertuigId, voertuigId]);
+
+  // Sync default vertrek-adres wanneer ritten async laden (nieuwe rit alleen)
+  useEffect(() => {
+    if (rit) return;
+    if (vertrekAdres) return;
+    if (lastVertrekAdres) setVertrekAdres(lastVertrekAdres);
+  }, [lastVertrekAdres, rit, vertrekAdres]);
 
   // Auto-vullen km_begin vanuit laatste rit van geselecteerd voertuig (alleen nieuwe rit)
   useEffect(() => {
@@ -258,7 +272,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
                 type="text"
                 value={vertrekAdres}
                 onChange={(e) => setVertrekAdres(e.target.value)}
-                placeholder="Hop & Bites HQ, Borger"
+                placeholder="Bedrijfsadres"
                 list="adres-suggesties"
                 style={textboxStyle}
               />

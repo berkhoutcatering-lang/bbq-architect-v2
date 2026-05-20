@@ -81,7 +81,7 @@ const pages: SearchResult[] = [
     { id: 'p_gebruikers', type: 'pagina', title: 'Gebruikers', subtitle: 'Instellingen & Hulp', href: '/gebruikers', icon: Users, accent: HUB_ACCENT.systeem },
     { id: 'p_mailbox', type: 'pagina', title: 'Mailbox', subtitle: 'Instellingen & Hulp', href: '/mailbox', icon: Mail, accent: HUB_ACCENT.systeem },
     { id: 'p_website', type: 'pagina', title: 'Website', subtitle: 'Instellingen & Hulp', href: '/website', icon: Globe, accent: HUB_ACCENT.systeem },
-    { id: 'p_foto', type: 'pagina', title: 'Foto-archief', subtitle: 'Menu & Recepten · media', href: '/foto-archief', icon: Camera, accent: HUB_ACCENT.keuken },
+    { id: 'p_foto', type: 'pagina', title: 'Foto-archief', subtitle: 'Menu · media', href: '/foto-archief', icon: Camera, accent: HUB_ACCENT.keuken },
     { id: 'p_help', type: 'pagina', title: 'Help Center', subtitle: 'Instellingen & Hulp', href: '/hulp', icon: HelpCircle, accent: HUB_ACCENT.systeem },
     { id: 'p_admin', type: 'pagina', title: 'Platform Beheer', subtitle: 'Admin · power', href: '/admin', icon: Building2, accent: HUB_ACCENT.systeem },
 ];

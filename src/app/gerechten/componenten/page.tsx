@@ -349,11 +349,11 @@ export default function ComponentenPage() {
             <div className="main" style={{ padding: '24px 0 40px' }}>
                 <div style={{ marginBottom: 12 }}>
                     <Link
-                        href="/inspiratie"
+                        href="/gerechten"
                         className="btn btn-ghost btn-sm"
                         style={{ textDecoration: 'none' }}
                     >
-                        <ArrowLeft size={14} /> Inspiratie Bibliotheek
+                        <ArrowLeft size={14} /> Menu
                     </Link>
                 </div>
 

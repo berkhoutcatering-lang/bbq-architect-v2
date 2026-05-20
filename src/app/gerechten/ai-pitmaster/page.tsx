@@ -3,7 +3,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import AiPitmasterClient from './_client';
 
 export const metadata = {
-    title: 'AI Pitmaster — Menu & Recepten',
+    title: 'AI Pitmaster — Menu',
     description: 'AI-coach Rook Maart: directives, kerntemp-alerts, allergie-cross-refs en menu-vragen.',
 };
 

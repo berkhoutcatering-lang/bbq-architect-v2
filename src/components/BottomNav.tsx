@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
     LayoutDashboard,
-    PartyPopper,
+    Calendar,
     ChefHat,
     BarChart3,
     MoreHorizontal,
@@ -19,6 +19,9 @@ interface Tab {
     match: (pathname: string) => boolean;
 }
 
+/* Labels matchen de desktop-sidebar (navigation.tsx) zodat een tenant tussen
+   tablet en laptop dezelfde mentale kaart houdt. Hrefs verwijzen naar de
+   canonical hub-URL — geen dode redirects (/inspiratie is dood). */
 const tabs: Tab[] = [
     {
         label: "Vandaag",
@@ -27,28 +30,42 @@ const tabs: Tab[] = [
         match: (p) => p === "/",
     },
     {
-        label: "Events",
-        icon: <PartyPopper size={22} />,
-        href: "/events",
-        match: (p) => p === "/events" || p.startsWith("/events/"),
+        label: "Plannen",
+        icon: <Calendar size={22} />,
+        href: "/agenda",
+        match: (p) =>
+            p === "/agenda" ||
+            p.startsWith("/agenda/") ||
+            p === "/events" ||
+            p.startsWith("/events/"),
     },
     {
-        label: "Inspiratie",
+        label: "Menu",
         icon: <ChefHat size={22} />,
-        href: "/inspiratie",
+        href: "/gerechten",
         match: (p) =>
-            p === "/inspiratie" ||
-            p.startsWith("/inspiratie/") ||
             p === "/gerechten" ||
             p.startsWith("/gerechten/") ||
             p === "/bedenker" ||
-            p === "/marges",
+            p.startsWith("/bedenker/") ||
+            p === "/marges" ||
+            p.startsWith("/keuken/") ||
+            // Backwards-compat: /inspiratie redirect → /gerechten
+            p === "/inspiratie" ||
+            p.startsWith("/inspiratie/"),
     },
     {
         label: "Geld",
         icon: <BarChart3 size={22} />,
         href: "/financien",
-        match: (p) => p === "/financien" || p.startsWith("/financien/") || p === "/uren" || p.startsWith("/uren/") || p === "/factuur-lezer" || p.startsWith("/geld/") || p.startsWith("/administratie/"),
+        match: (p) =>
+            p === "/financien" ||
+            p.startsWith("/financien/") ||
+            p === "/uren" ||
+            p.startsWith("/uren/") ||
+            p === "/factuur-lezer" ||
+            p.startsWith("/geld/") ||
+            p.startsWith("/administratie/"),
     },
     {
         label: "Meer",

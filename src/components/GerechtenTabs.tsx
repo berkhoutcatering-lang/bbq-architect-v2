@@ -18,5 +18,5 @@ const TABS: HubTab[] = [
 ];
 
 export default function GerechtenTabs() {
-    return <HubTabs tabs={TABS} ariaLabel="Menu & Recepten modules" />;
+    return <HubTabs tabs={TABS} ariaLabel="Menu modules" />;
 }

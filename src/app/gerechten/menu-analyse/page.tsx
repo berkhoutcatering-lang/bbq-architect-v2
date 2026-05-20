@@ -2,7 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import MenuAnalyseClient from './_client';
 
 export const metadata = {
-    title: 'Menu-analyse — Menu & Recepten',
+    title: 'Menu-analyse — Menu',
     description: 'Marge × populariteit per gerecht — BCG-kwadrant, runners en bleeders',
 };
 
