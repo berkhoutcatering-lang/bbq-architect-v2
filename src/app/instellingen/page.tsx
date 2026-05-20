@@ -10,6 +10,7 @@ import PageHeader from '@/components/PageHeader';
 import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
+import EmailInboxCard from '@/components/email-inbox/EmailInboxCard';
 
 export default function Instellingen() {
     /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
@@ -142,6 +143,10 @@ export default function Instellingen() {
                     </div>
                 </div>
             </div>
+
+            {/* Email-inbox setup — eigen forward-adres + stats. Verschijnt boven
+                Huisstijl omdat het een veel-gevraagde feature is. */}
+            <EmailInboxCard />
 
             {/* Huisstijl / Branding */}
             <div className="panel" style={{ marginBottom: 20 }}>
