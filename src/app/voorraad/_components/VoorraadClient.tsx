@@ -1600,7 +1600,7 @@ function AddItemModal({ onClose, onSave }: { onClose: () => void; onSave: (data:
                             <Eyebrow>Nieuw product toevoegen</Eyebrow>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 4 }}>Voeg item aan voorraad toe</div>
                         </div>
-                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
+                        <button onClick={onClose} aria-label="Sluiten" style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
                     </div>
                     <div style={{ display: 'flex', gap: 4, marginTop: 16 }}>
                         {[{ id: 'ai' as const, label: 'AI-assistent', Icon: Sparkles }, { id: 'manual' as const, label: 'Handmatig', Icon: Edit3 }].map(t => (
@@ -2035,7 +2035,7 @@ function AIReportDrawer({ loading, report, onClose, onRegenerate }: { loading: b
                             <Eyebrow style={{ color: GOLD }}>AI Voorraad-advies</Eyebrow>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 4 }}>Gegenereerd advies-rapport</div>
                         </div>
-                        <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
+                        <button onClick={onClose} aria-label="Sluiten" style={{ width: 34, height: 34, borderRadius: 8, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', cursor: 'pointer' }}><X size={16} /></button>
                     </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
