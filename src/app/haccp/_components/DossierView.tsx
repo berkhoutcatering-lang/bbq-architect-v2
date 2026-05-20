@@ -375,7 +375,7 @@ export default function DossierView({
                         100% mens-bevestigd
                     </span>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <div className="tbl-wrap">
                     <table className={styles.dossierTable} style={{ minWidth: 860 }}>
                         <thead>
                             <tr>
