@@ -9,9 +9,14 @@ import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
 import PageHeader from '@/components/PageHeader';
 import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import { updateSettings } from './actions';
 
 export default function Instellingen() {
-    const { settings, loading, save } = useSettings();
+    /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
+       We negeren die en gebruiken de Server Action `updateSettings` voor de
+       writes — `useSettings` levert nog wel `settings` + `loading` voor het
+       initiële form-state. */
+    const { settings, loading } = useSettings();
     const ev = useSupabase<DbEvent>('events', []);
     const fac = useSupabase<Factuur>('facturen', []);
     const off = useSupabase<Offerte>('offertes', []);
@@ -51,7 +56,8 @@ export default function Instellingen() {
     // Track the brand colours we last loaded so we can detect changes and offer a cascade
     const [pendingCascade, setPendingCascade] = useState<null | { primary?: string; accent?: string }>(null);
 
-    function saveSettings() {
+    async function saveSettings() {
+        /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
         const { id, created_at, updated_at, ...data } = form;
         const beforePrimary = settings?.brand_primary as string | undefined;
         const beforeAccent = settings?.brand_accent as string | undefined;
@@ -66,33 +72,40 @@ export default function Instellingen() {
             return (data[k] as unknown) !== (settings?.[k] as unknown) && (data[k] as unknown) != null;
         });
 
-        save(data).then(async function () {
-            showToast('Instellingen opgeslagen', 'success');
-            // Detect huisstijl change → ask the user whether to also update existing templates
-            const changed: { primary?: string; accent?: string } = {};
-            if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;
-            if (data.brand_accent && data.brand_accent !== beforeAccent) changed.accent = data.brand_accent;
-            if (changed.primary || changed.accent) setPendingCascade(changed);
+        const result = await updateSettings(data);
+        if (result.error) {
+            const fieldMsg = result.fields
+                ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')'
+                : '';
+            showToast('Opslaan mislukt: ' + result.error + fieldMsg, 'error');
+            return;
+        }
 
-            if (themeChanged) {
-                // SW + browser caches flushen zodat CSS-assets vers worden opgehaald.
-                try {
-                    if ('caches' in window) {
-                        const keys = await caches.keys();
-                        await Promise.all(keys.map(function (k) { return caches.delete(k); }));
-                    }
-                    if ('serviceWorker' in navigator) {
-                        const regs = await navigator.serviceWorker.getRegistrations();
-                        await Promise.all(regs.map(function (r) { return r.update(); }));
-                    }
-                } catch { /* cache flush is best-effort */ }
-                // Kleine delay zodat de toast nog even leesbaar is, dan hard reload (cache-buster in URL).
-                setTimeout(function () {
-                    const sep = window.location.href.includes('?') ? '&' : '?';
-                    window.location.href = window.location.href.split('#')[0] + sep + '_t=' + Date.now();
-                }, 600);
-            }
-        });
+        showToast('Instellingen opgeslagen', 'success');
+        // Detect huisstijl change → ask the user whether to also update existing templates
+        const changed: { primary?: string; accent?: string } = {};
+        if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;
+        if (data.brand_accent && data.brand_accent !== beforeAccent) changed.accent = data.brand_accent;
+        if (changed.primary || changed.accent) setPendingCascade(changed);
+
+        if (themeChanged) {
+            // SW + browser caches flushen zodat CSS-assets vers worden opgehaald.
+            try {
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                }
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(function (r) { return r.update(); }));
+                }
+            } catch { /* cache flush is best-effort */ }
+            // Kleine delay zodat de toast nog even leesbaar is, dan hard reload (cache-buster in URL).
+            setTimeout(function () {
+                const sep = window.location.href.includes('?') ? '&' : '?';
+                window.location.href = window.location.href.split('#')[0] + sep + '_t=' + Date.now();
+            }, 600);
+        }
     }
 
     if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
