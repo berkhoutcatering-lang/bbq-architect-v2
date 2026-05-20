@@ -1,8 +1,11 @@
-name: Tests + Typecheck
+name: Tests + Typecheck + Build
 
-# Snelle checks op elke push + PR. Pure unit tests — geen DB / geen AI / geen
-# secrets nodig. Ontworpen om binnen 1 minuut te draaien zodat de feedback-loop
-# strak blijft.
+# Snelle checks op elke push + PR. Pure unit tests + Next.js production
+# build — geen DB / geen AI / geen secrets nodig. De build-step is nieuw
+# (vorige versie deed alleen typecheck + vitest) en vangt nu Vercel-build-
+# failures op vóór de Vercel-deploy zelf draait. Voorkomt rode preview-
+# deploys voor problemen die lokaal al detecteerbaar zijn (Turbopack-hangs,
+# missing exports, cron-schedule-limits).
 
 on:
   push:
@@ -19,7 +22,15 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+
+    # Dummy env-vars voor de Next.js build — die heeft alleen de PUBLIC vars
+    # nodig voor static-analysis (geen netwerk-calls naar Supabase). Echte
+    # secrets blijven uitsluitend voor de ai-eval workflow.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      NEXT_PUBLIC_PLATFORM_ADMIN_EMAILS: ''
 
     steps:
       - uses: actions/checkout@v4
@@ -37,3 +48,6 @@ jobs:
 
       - name: Unit tests (vitest)
         run: npm test
+
+      - name: Production build (next build)
+        run: npm run build
