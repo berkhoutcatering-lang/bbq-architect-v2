@@ -10,6 +10,7 @@ import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { upsertKlant, deleteKlant as deleteKlantAction } from './actions';
 import { useFormValidation } from '@/hooks/useFormValidation';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
@@ -97,9 +98,31 @@ function Klanten() {
         }
     }
 
+    /* Form-autosave alleen actief bij "nieuwe klant" — bestaande klanten
+       hoeven niet bewaard te worden, die staan al in de DB. Voorkomt dat
+       een typo in een bestaand record stilletjes in localStorage belandt. */
+    const { loadDraft, clearDraft } = useFormAutosave(
+        'bbq_klanten_new_draft',
+        form,
+        {
+            enabled: editing === 'new',
+            onRestore: (saved) => {
+                /* Behoud type-veiligheid: cast naar Record<string, any>
+                   (form is een vrij object) en merge met defaults. */
+                if (saved && typeof saved === 'object') {
+                    setForm(saved as Record<string, any>);
+                }
+            },
+        },
+    );
+
     function newKlant() {
         setEditing('new');
-        setForm({ naam: '', bedrijf: '', adres: '', postcode: '', plaats: '', telefoon: '', email: '', type: 'Particulier', notities: '' });
+        const defaults = { naam: '', bedrijf: '', adres: '', postcode: '', plaats: '', telefoon: '', email: '', type: 'Particulier', notities: '' };
+        setForm(defaults);
+        /* Probeer vorige onafgemaakte concept terug te halen. Als die
+           bestaat overschrijft onRestore de defaults binnen 1 render. */
+        loadDraft();
     }
 
     function editKlant(k: Klant) {
@@ -159,6 +182,9 @@ function Klanten() {
                 { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },
             ]);
             setFollowUpTitle('Klant aangemaakt!');
+            /* Concept is verbruikt \u2014 wis localStorage zodat volgende
+               "nieuwe klant"-knop met een schoon formulier begint. */
+            clearDraft();
         }
         setEditing(null);
         setForm(null);

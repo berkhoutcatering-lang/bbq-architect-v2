@@ -14,6 +14,7 @@ import { downloadUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import { useFormValidation } from '@/hooks/useFormValidation';
+import { useFormAutosave } from '@/hooks/useFormAutosave';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
@@ -47,11 +48,30 @@ export default function Facturen() {
         client_naam: [{ required: 'Vul een klantnaam in' }],
     });
 
+    /* Form-autosave alleen bij "nieuwe factuur". Existing facturen
+       komen al uit de DB. Voorkomt dat een halve-getikte regel in
+       localStorage blijft hangen wanneer Sam per ongeluk wegnavigeert. */
+    const { loadDraft, clearDraft } = useFormAutosave(
+        'bbq_facturen_new_draft',
+        form,
+        {
+            enabled: editing === 'new',
+            onRestore: (saved) => {
+                if (saved && typeof saved === 'object') {
+                    setForm(saved as Record<string, any>);
+                }
+            },
+        },
+    );
+
     function newFactuur() {
         const nummer = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.map((f: any) => f.nummer));
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), vervaldatum: addDays(today(), betaaltermijn), items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
+        /* Herstel concept als die binnen TTL terug te halen is — overschrijft
+           de zojuist gezette defaults binnen 1 render. */
+        loadDraft();
     }
 
     function editFactuur(f: Factuur) { setEditing(f.id); setForm(JSON.parse(JSON.stringify(f))); }
@@ -109,6 +129,8 @@ export default function Facturen() {
                 { icon: '📄', label: 'PDF downloaden', onClick: function () { /* trigger PDF */ } },
                 { icon: '📊', label: 'Analytics bekijken', href: '/financien' },
             ]);
+            /* Concept verbruikt — wis localStorage. */
+            clearDraft();
         }
         setEditing(null);
         setForm(null);
