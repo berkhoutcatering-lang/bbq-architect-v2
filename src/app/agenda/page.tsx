@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type ComponentType } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import { detectAllConflicts } from '@/lib/conflictDetection';
+import type { LucideProps } from 'lucide-react';
 import type { Event as DbEvent, PrepTask } from '@/types';
 import type { AgendaPersonal } from '@/types/database.types';
 import {
@@ -28,7 +28,9 @@ const BRAND = '#FFBF00';
 
 const NL_MONTHS = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
 
-interface CalendarMeta { id: string; label: string; color: string; Icon: any; synced: boolean; source: string }
+type IconComponent = ComponentType<LucideProps>;
+
+interface CalendarMeta { id: string; label: string; color: string; Icon: IconComponent; synced: boolean; source: string }
 
 const CALENDARS: CalendarMeta[] = [
     { id: 'events', label: 'Events', color: BRAND, Icon: PartyPopper, synced: true, source: 'lokaal' },
@@ -38,10 +40,38 @@ const CALENDARS: CalendarMeta[] = [
 
 interface AgendaEvent {
     id: string; calId: string; day: number; start: number; duration: number; title: string;
-    [key: string]: any;
+    /* Optionele velden die de UI rendert — toegevoegd zodat ts-narrowing werkt
+       zonder dat we per gebruik een cast nodig hebben. */
+    client?: string;
+    guests?: number;
+    venue?: string;
+    revenue?: number;
+    package?: string;
+    cuts?: string;
+    target?: string;
+    wood?: string;
+    staff?: string[];
+    supplier?: string;
+    amount?: number;
+    kind?: string;
+    conflict?: { note?: string } | string;
+    conflictNote?: string;
+    notes?: string;
+    isPersonal?: boolean;
+    personalId?: string;
+    color?: string;
+    critical?: boolean;
+    warning?: boolean;
+    dbDate?: string;
+    for?: string;
+    done?: boolean;
+    /* extras uit `ev(... extras)` of `personalToAgendaEvent` mogen overige
+       velden hebben; we typeen dat als unknown ipv any zodat de eslint-disable
+       weg kan en consumers expliciet narrowen waar nodig. */
+    [key: string]: unknown;
 }
 
-const ev = (id: string, calId: string, day: number, start: number, duration: number, title: string, extras: any = {}): AgendaEvent =>
+const ev = (id: string, calId: string, day: number, start: number, duration: number, title: string, extras: Partial<AgendaEvent> = {}): AgendaEvent =>
     ({ id, calId, day, start, duration, title, ...extras });
 
 /* Demo-fallback is bewust verwijderd (2026-05-08). De agenda draait altijd
@@ -108,7 +138,7 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
     );
 }
 
-function KpiTile({ Icon, color, label, value, sub }: { Icon: any; color: string; label: string; value: string; sub: string }) {
+function KpiTile({ Icon, color, label, value, sub }: { Icon: IconComponent; color: string; label: string; value: string; sub: string }) {
     return (
         <div style={{ padding: 14, borderRadius: 12, background: 'rgba(28,28,32,.6)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -490,7 +520,7 @@ function EventDetailDrawer({ event, onClose, onEditPersonal }: { event: AgendaEv
                     {event.conflict && (
                         <div style={{ padding: 12, borderRadius: 10, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.25)' }}>
                             <Eyebrow style={{ color: 'var(--red)', marginBottom: 4 }}>Conflict</Eyebrow>
-                            <div style={{ fontSize: 12, color: 'var(--text)' }}>{event.conflict.note || event.conflict}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text)' }}>{typeof event.conflict === 'string' ? event.conflict : (event.conflict.note ?? '')}</div>
                         </div>
                     )}
                     {event.conflictNote && (
@@ -543,7 +573,7 @@ function EventDetailDrawer({ event, onClose, onEditPersonal }: { event: AgendaEv
     );
 }
 
-function FactRow({ label, value, Icon, highlight }: { label: string; value: React.ReactNode; Icon?: any; highlight?: boolean }) {
+function FactRow({ label, value, Icon, highlight }: { label: string; value: React.ReactNode; Icon?: IconComponent; highlight?: boolean }) {
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12, padding: '10px 12px', borderRadius: 8, background: highlight ? `${GOLD}0a` : 'transparent', border: `1px solid ${highlight ? `${GOLD}26` : 'var(--border)'}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)', letterSpacing: '.08em', textTransform: 'uppercase', fontWeight: 600 }}>
