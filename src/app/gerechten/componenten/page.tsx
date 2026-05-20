@@ -12,6 +12,9 @@ import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import '@/components/redesign/redesign.css';
+import { useComponentFolders, type ComponentFolderRow } from './_lib/useComponentFolders';
+import FolderBar from './_components/FolderBar';
+import FolderModal from './_components/FolderModal';
 
 interface AiProposal {
     name: string;
@@ -79,6 +82,8 @@ interface ComponentRow {
     approved_at: string | null;
     created_at: string;
     updated_at: string;
+    /* S2-deel-3: koppeling aan component_folders. NULL = root. */
+    folder_id: string | null;
 }
 
 interface FormState {
@@ -137,6 +142,13 @@ export default function ComponentenPage() {
     const [confirmedAllergens, setConfirmedAllergens] = useState<Set<string>>(new Set());
     const [confirmedHaccp, setConfirmedHaccp] = useState<Set<number>>(new Set());
 
+    /* S2-deel-3: folder-state. currentFolderId=null toont alle componenten;
+       als ingesteld → filter op components.folder_id. */
+    const { rows: folders, available: foldersAvailable, refetch: refetchFolders } = useComponentFolders();
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+    const [folderModalOpen, setFolderModalOpen] = useState(false);
+    const [folderEditing, setFolderEditing] = useState<ComponentFolderRow | null>(null);
+
     async function loadComponents() {
         setLoading(true);
         try {
@@ -167,6 +179,9 @@ export default function ComponentenPage() {
 
     const filtered = useMemo(() => {
         return components.filter(c => {
+            /* Folder-filter: bij currentFolderId=null tonen we ALLE componenten
+               (root + sub). Bij specifieke folder tonen we alleen die folder. */
+            if (currentFolderId !== null && c.folder_id !== currentFolderId) return false;
             if (typeFilter !== 'all' && c.type !== typeFilter) return false;
             if (search.trim().length > 0) {
                 const q = search.trim().toLowerCase();
@@ -176,7 +191,17 @@ export default function ComponentenPage() {
             }
             return true;
         });
-    }, [components, typeFilter, search]);
+    }, [components, currentFolderId, typeFilter, search]);
+
+    /* Counts per folder voor de FolderBar chips. */
+    const folderCounts = useMemo(() => {
+        const m: Record<string, number> = {};
+        for (const c of components) {
+            if (c.folder_id) m[c.folder_id] = (m[c.folder_id] ?? 0) + 1;
+        }
+        return m;
+    }, [components]);
+    const rootCount = useMemo(() => components.filter(c => c.folder_id === null).length, [components]);
 
     async function handleCreate(e: React.FormEvent) {
         e.preventDefault();
@@ -204,6 +229,8 @@ export default function ComponentenPage() {
                     base_unit: form.base_unit,
                     base_cost_cents: baseCostCents,
                     flavor_tags: tags,
+                    /* Nieuwe componenten landen in de huidige folder; root als geen folder geselecteerd. */
+                    folder_id: currentFolderId,
                 }),
             });
             const body = await res.json();
@@ -461,6 +488,21 @@ export default function ComponentenPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* S2-deel-3: FolderBar bovenaan. Verschijnt alleen als de folders-
+                    tabel beschikbaar is (migration gedraaid). Voor het MVP-niveau
+                    tonen we alleen root-folders + breadcrumb voor navigatie. */}
+                {foldersAvailable && (
+                    <FolderBar
+                        folders={folders}
+                        counts={folderCounts}
+                        rootCount={rootCount}
+                        currentFolderId={currentFolderId}
+                        onSelectFolder={setCurrentFolderId}
+                        onCreate={() => { setFolderEditing(null); setFolderModalOpen(true); }}
+                        onEdit={(f) => { setFolderEditing(f); setFolderModalOpen(true); }}
+                    />
+                )}
 
                 {/* Glass Filter Pill Bar — search + filter in één object */}
                 <div className="filter-bar">
@@ -970,6 +1012,14 @@ export default function ComponentenPage() {
                     op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
                 </div>
             </div>
+
+            <FolderModal
+                open={folderModalOpen}
+                editing={folderEditing}
+                parentId={currentFolderId}
+                onClose={() => { setFolderModalOpen(false); setFolderEditing(null); }}
+                onSaved={() => { refetchFolders(); }}
+            />
         </div>
     );
 }
