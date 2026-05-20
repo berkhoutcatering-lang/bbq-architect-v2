@@ -1,0 +1,19 @@
+{
+  "id": "case-018",
+  "description": "Minimale prompt — AI moet sensible defaults afleiden",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "BBQ 30",
+      "existing": [],
+      "options": { "gasten": 30, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "has_path", "path": "data.menu_naam" },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 18, "description": "AI moet niet onder kostprijs adviseren ook bij vage prompt" }
+  ]
+}

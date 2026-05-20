@@ -1,0 +1,19 @@
+{
+  "id": "case-012",
+  "description": "Grote bedrijfsboeking (250 gasten) met budget-druk",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Bedrijfsfeest TechCorp 250 gasten, buffet-stijl voor efficiency, budget €4500 totaal (€18 p.p.), inclusief vegetarisch alternatief",
+      "existing": [],
+      "options": { "gasten": 250, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_lte", "path": "data.adviesprijs_pp", "max": 25, "description": "moet onder budget-cap blijven" },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 12, "description": "niet onder kostprijs" }
+  ]
+}
