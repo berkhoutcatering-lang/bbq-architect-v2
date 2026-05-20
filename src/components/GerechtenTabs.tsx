@@ -1,19 +1,17 @@
 'use client';
 
-import { ChefHat, Boxes, ShieldCheck, BarChart3, Flame, Activity, Sparkles } from 'lucide-react';
+import { ChefHat, Boxes, ShieldCheck, BarChart3, Activity } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
-/* P0.22 — /bedenker als sub-tab onder Menu & Recepten. URL blijft `/bedenker`
-   (geen breaking-change voor bookmarks); de tab toont actief als pathname
-   met `/bedenker` start.
+/* S2-deel-2 — AI Bedenker en AI Pitmaster zijn uit de hoofdtabs gehaald:
+   - Bedenker → entry via prominente knop op /gerechten/componenten (URL blijft)
+   - Pitmaster → "Vraag Pitmaster" knop op event-hub (in-context)
+   Beide URLs blijven werken voor bookmarks.
 
-   S2.7 — Ingrediënten-tab verwijderd; pagina was een gateway naar /voorraad,
-   KPI's zijn verhuisd naar /gerechten/insights. */
+   S2.7 — Ingrediënten weg: pagina was gateway naar /voorraad, KPI's in insights. */
 const TABS: HubTab[] = [
     { href: '/gerechten',                  label: 'Gerechten',     icon: ChefHat },
     { href: '/gerechten/componenten',      label: 'Componenten',   icon: Boxes },
-    { href: '/bedenker',                   label: 'AI Bedenker',   icon: Sparkles },
-    { href: '/gerechten/ai-pitmaster',     label: 'AI Pitmaster',  icon: Flame },
     { href: '/gerechten/menu-analyse',     label: 'Menu-analyse',  icon: BarChart3 },
     { href: '/gerechten/insights',         label: 'Insights',      icon: Activity },
     { href: '/gerechten/allergen-queue',   label: 'Allergenen',    icon: ShieldCheck },

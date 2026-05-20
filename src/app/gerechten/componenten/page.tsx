@@ -381,6 +381,16 @@ export default function ComponentenPage() {
                                 >
                                     <Sparkles size={14} /> AI Genereer
                                 </button>
+                                {/* S2-deel-2: Bedenker is verhuisd uit de hoofdtabs; deze knop
+                                    is nu de prominente ingang voor de uitgebreide brainstorm-studio
+                                    (vrij / voorraad-gedreven / klant-context modes). */}
+                                <Link
+                                    href="/bedenker"
+                                    className="btn btn-ghost"
+                                    style={{ textDecoration: 'none' }}
+                                >
+                                    <Sparkles size={14} /> Bedenker Studio
+                                </Link>
                                 <button
                                     type="button"
                                     onClick={() => { setShowForm(v => !v); setShowAi(false); }}

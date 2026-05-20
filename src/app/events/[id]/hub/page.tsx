@@ -26,6 +26,7 @@ import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
+import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import type { PdfTemplate } from '@/types/template.types';
 import { useToast } from '@/components/Toast';
@@ -579,6 +580,7 @@ export default function EventHubPage() {
                 )}
                 <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
                 <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
+                <AskPitmasterButton event={{ id: event.id, name: event.name, date: event.date, guests: event.guests, location: event.location }} />
                 <button
                   className="btn btn-ghost"
                   onClick={() => router.push(`/administratie/rittenregistratie/nieuw?event=${event.id}`)}
