@@ -8,6 +8,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { trackOnce } from '@/lib/track';
 import { fmtNl, fmt as fmtUtil } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { upsertKlant, deleteKlant as deleteKlantAction } from './actions';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
@@ -26,7 +27,11 @@ export default function KlantenPage() {
 }
 
 function Klanten() {
-    const { data: klanten, loading: klantenLoading, insert, update, remove } = useSupabase<Klant>('klanten', []);
+    /* `insert` / `update` / `remove` worden niet meer direct vanuit Client-side
+       aangeroepen — mutaties lopen via Server Actions (`./actions.ts`) zodat
+       Zod-validatie + re-auth gegarandeerd zijn. `refetch` halen we wel uit
+       useSupabase voor live-refresh na een action. */
+    const { data: klanten, loading: klantenLoading, refetch } = useSupabase<Klant>('klanten', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
@@ -112,44 +117,46 @@ function Klanten() {
 
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
-    function saveKlant() {
+    async function saveKlant() {
         if (!validateAll({ naam: form!.naam })) return;
-        if (editing === 'new') {
-            insert(form!).then(function () {
-                showToast('Klant aangemaakt', 'success');
-                /* Activation tracking \u2014 `first_klant_created` (ux-master.md sectie 7). */
-                trackOnce('first_klant_created', 'first_klant');
-                setFollowUpActions([
-                    { icon: '\ud83d\udcc4', label: 'Offerte opstellen', href: '/offertes' },
-                    { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },
-                ]);
-                setFollowUpTitle('Klant aangemaakt!');
-                setEditing(null); setForm(null);
-            }).catch(function (e: any) {
-                console.error('[klanten] insert failed:', e);
-                showToast('Aanmaken mislukt: ' + (e?.message || 'onbekende fout'), 'error');
-            });
-        } else {
-            const { id, created_at, ...rest } = form!;
-            update(editing as number, rest).then(function () {
-                showToast('Klant bijgewerkt', 'success');
-                setEditing(null); setForm(null);
-            }).catch(function (e: any) {
-                console.error('[klanten] update failed:', e);
-                showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error');
-            });
+        const isNew = editing === 'new';
+        /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+        const { id: _existingId, created_at: _ca, ...rest } = form!;
+        const payload = isNew ? form! : { id: editing as number, ...rest };
+        const result = await upsertKlant(payload);
+        if (result.error) {
+            console.error('[klanten] upsert failed:', result.error, result.fields);
+            const fieldMsg = result.fields ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')' : '';
+            showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            return;
         }
+        await refetch();
+        showToast(isNew ? 'Klant aangemaakt' : 'Klant bijgewerkt', 'success');
+        if (isNew) {
+            /* Activation tracking \u2014 `first_klant_created` (ux-master.md sectie 7). */
+            trackOnce('first_klant_created', 'first_klant');
+            setFollowUpActions([
+                { icon: '\ud83d\udcc4', label: 'Offerte opstellen', href: '/offertes' },
+                { icon: '\ud83d\udcc5', label: 'Event aanmaken', href: '/events' },
+            ]);
+            setFollowUpTitle('Klant aangemaakt!');
+        }
+        setEditing(null);
+        setForm(null);
     }
 
     function deleteKlant() {
-        showConfirm('Weet je zeker dat je deze klant wilt verwijderen?', function () {
-            remove(editing as number).then(function () {
-                showToast('Klant verwijderd', 'success');
-                setEditing(null); setForm(null);
-            }).catch(function (e: any) {
-                console.error('[klanten] remove failed:', e);
-                showToast('Verwijderen mislukt: ' + (e?.message || 'onbekende fout'), 'error');
-            });
+        showConfirm('Weet je zeker dat je deze klant wilt verwijderen?', async function () {
+            const result = await deleteKlantAction(editing as number);
+            if (result.error) {
+                console.error('[klanten] delete failed:', result.error);
+                showToast('Verwijderen mislukt: ' + result.error, 'error');
+                return;
+            }
+            await refetch();
+            showToast('Klant verwijderd', 'success');
+            setEditing(null);
+            setForm(null);
         });
     }
 
