@@ -16,30 +16,9 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { GerechtSchema, type GerechtInput } from '@/lib/schemas/gerecht';
 
-const GerechtSchema = z.object({
-  id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
-  naam: z.string().min(1, 'Naam is verplicht').max(200),
-  categorie: z.string().max(100).optional(),
-  gang_slug: z.string().max(100).optional(),
-  beschrijving: z.string().max(5000).optional(),
-  kostprijs_pp: z.coerce.number().nonnegative().optional().default(0),
-  prijs_pp: z.coerce.number().nonnegative().optional().default(0),
-  yield_personen: z.coerce.number().int().positive().optional().default(1),
-  /* status = 'actief' | 'inactief' | 'concept'. Geen AI-gedreven enum-vals. */
-  status: z.enum(['actief', 'inactief', 'concept']).optional().default('actief'),
-  /* tags is een vrije string-array; AI mag voorstellen, mens bevestigt. */
-  tags: z.array(z.string().max(50)).optional().default([]),
-  /* Recipe-steps (P1.29 photo-per-step volgt). */
-  steps: z.array(z.object({
-    nr: z.coerce.number().int().positive(),
-    beschrijving: z.string().max(2000),
-    photo_url: z.string().url().optional(),
-    duration_min: z.coerce.number().int().nonnegative().optional(),
-  })).optional().default([]),
-});
-
-export type GerechtInput = z.input<typeof GerechtSchema>;
+export type { GerechtInput };
 
 export async function upsertGerecht(input: unknown): Promise<
   | { data: { id: string | number; naam: string } }
