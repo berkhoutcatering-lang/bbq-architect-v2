@@ -1,0 +1,212 @@
+/**
+ * Server Actions voor facturen-CRUD + status-mutatie met inventory-cascade.
+ *
+ * Hard rule 5 (BBQ Architect): Zod-validatie + re-auth in elke action.
+ * RLS doet tenant-isolatie via `organization_id` policies op `facturen`.
+ *
+ * Voorheen kon de Client direct een factuur op "verzonden" / "betaald"
+ * markeren en daarmee `drainInventory()` triggeren — een gemanipuleerde
+ * request kon dus zonder server-side checks de voorraad leegtrekken. Nu
+ * loopt de status-cascade + voorraad-aftrek server-side via
+ * `markFactuurStatus`.
+ */
+
+'use server';
+
+import { z } from 'zod';
+import { revalidatePath } from 'next/cache';
+import { createServerSupabase } from '@/lib/supabase-server';
+
+/* ─── Schemas ────────────────────────────────────────────────── */
+
+const FactuurItemSchema = z.object({
+    desc: z.string().max(500).optional().default(''),
+    qty: z.coerce.number().nonnegative().default(0),
+    prijs: z.coerce.number().nonnegative().default(0),
+    btw: z.coerce.number().min(0).max(100).optional().default(21),
+});
+
+const FACTUUR_STATUSES = [
+    'concept', 'verzonden', 'betaald', 'verlopen', 'vervallen', 'geannuleerd',
+] as const;
+
+const FactuurSchema = z.object({
+    id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
+    nummer: z.string().min(1).max(50),
+    client_naam: z.string().min(1, 'Klantnaam is verplicht').max(200),
+    client_adres: z.string().max(500).optional().default(''),
+    datum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    vervaldatum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    status: z.enum(FACTUUR_STATUSES).optional().default('concept'),
+    items: z.array(FactuurItemSchema).optional().default([]),
+});
+
+const StatusMutationSchema = z.object({
+    id: z.union([z.string().uuid(), z.coerce.number().int()]),
+    new_status: z.enum(FACTUUR_STATUSES),
+});
+
+export type FactuurInput = z.input<typeof FactuurSchema>;
+
+interface ActionResult<T = unknown> {
+    data?: T;
+    error?: string;
+    fields?: Record<string, string[]>;
+}
+
+/* ─── upsertFactuur ─────────────────────────────────────────── */
+
+export async function upsertFactuur(input: unknown): Promise<ActionResult<{ id: number | string; statusChanged: boolean }>> {
+    const parsed = FactuurSchema.safeParse(input);
+    if (!parsed.success) {
+        return {
+            error: 'validation',
+            fields: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+        };
+    }
+
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'unauthorized' };
+
+    const { id, ...rest } = parsed.data;
+
+    if (id) {
+        /* Detect of de status verandert — voor de UI om de inventory-cascade
+           trigger te kunnen aanroepen na succes. */
+        const { data: oldFactuur } = await supabase
+            .from('facturen').select('status').eq('id', id).maybeSingle();
+        const oldStatus = oldFactuur?.status ?? null;
+
+        const { data, error } = await supabase
+            .from('facturen').update(rest).eq('id', id)
+            .select('id, status').single();
+        if (error) return { error: error.message };
+
+        const statusChanged = oldStatus !== data.status && (data.status === 'verzonden' || data.status === 'betaald');
+        revalidatePath('/facturen');
+        revalidatePath('/financien');
+        return { data: { id: data.id, statusChanged } };
+    }
+
+    const { data, error } = await supabase
+        .from('facturen').insert(rest).select('id').single();
+    if (error) return { error: error.message };
+
+    revalidatePath('/facturen');
+    revalidatePath('/financien');
+    return { data: { id: data.id, statusChanged: false } };
+}
+
+/* ─── deleteFactuur ─────────────────────────────────────────── */
+
+export async function deleteFactuur(id: number | string): Promise<ActionResult<{ ok: true }>> {
+    const parsedId = z.union([z.string().uuid(), z.coerce.number().int()]).safeParse(id);
+    if (!parsedId.success) return { error: 'validation' };
+
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'unauthorized' };
+
+    /* Veilige delete-policy: alleen concept-facturen verwijderbaar.
+       Betaalde / verzonden facturen moeten gecrediteerd worden, niet
+       hard-deleted (BTW-audit trail). */
+    const { data: factuur } = await supabase
+        .from('facturen').select('status').eq('id', parsedId.data).maybeSingle();
+    if (factuur && factuur.status && factuur.status !== 'concept' && factuur.status !== 'geannuleerd') {
+        return { error: 'alleen concept- of geannuleerde facturen mogen worden verwijderd — credit de factuur i.p.v. te verwijderen' };
+    }
+
+    const { error } = await supabase.from('facturen').delete().eq('id', parsedId.data);
+    if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('foreign key') || msg.includes('violates')) {
+            return { error: 'factuur heeft gekoppelde mutaties — eerst ontkoppelen' };
+        }
+        return { error: error.message };
+    }
+    revalidatePath('/facturen');
+    revalidatePath('/financien');
+    return { data: { ok: true } };
+}
+
+/* ─── markFactuurStatus + server-side inventory-cascade ─────── */
+
+interface DrainedItem {
+    inventory_id: number;
+    naam: string;
+    delta: number;
+    resulting_stock: number;
+}
+
+/**
+ * Verander factuur-status en doe — bij overgang naar 'verzonden' of
+ * 'betaald' — een inventory-cascade voor regels waarvan de description
+ * matcht met een inventory.naam. Best-effort: faalt niet als individuele
+ * items niet matchen. Audit-trail via stock_movements.
+ */
+export async function markFactuurStatus(input: unknown): Promise<ActionResult<{ status: string; drained: DrainedItem[] }>> {
+    const parsed = StatusMutationSchema.safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'unauthorized' };
+
+    const { data: factuur, error: readErr } = await supabase
+        .from('facturen').select('id, status, items').eq('id', parsed.data.id).single();
+    if (readErr || !factuur) return { error: 'factuur niet gevonden' };
+
+    const oldStatus = factuur.status as string | null;
+    const newStatus = parsed.data.new_status;
+
+    if (oldStatus === newStatus) {
+        return { data: { status: newStatus, drained: [] } };
+    }
+
+    const { error: updateErr } = await supabase
+        .from('facturen').update({ status: newStatus }).eq('id', parsed.data.id);
+    if (updateErr) return { error: updateErr.message };
+
+    /* Inventory-cascade alleen bij eerste overgang naar verzonden/betaald.
+       Niet bij ongedaan-maken (concept → terug-revert) en niet bij
+       betaald → verlopen e.d. */
+    const shouldDrain = (newStatus === 'verzonden' || newStatus === 'betaald')
+        && (oldStatus === 'concept' || oldStatus === null);
+
+    const drained: DrainedItem[] = [];
+    if (shouldDrain && Array.isArray(factuur.items)) {
+        const { data: inventory } = await supabase
+            .from('inventory').select('id, naam, current_stock');
+
+        for (const lineItem of factuur.items as Array<{ desc?: string; qty?: number }>) {
+            const desc = (lineItem.desc || '').toLowerCase();
+            const qty = Number(lineItem.qty || 0);
+            if (!desc || qty <= 0) continue;
+
+            for (const inv of inventory ?? []) {
+                const naam = (inv.naam || '').toLowerCase();
+                if (!naam || !desc.includes(naam)) continue;
+                const newStock = Math.max(0, Number(inv.current_stock || 0) - qty);
+                const delta = newStock - Number(inv.current_stock || 0);
+                await supabase
+                    .from('inventory').update({ current_stock: newStock }).eq('id', inv.id);
+                /* Audit-trail naar stock_movements; best-effort. */
+                void supabase.from('stock_movements').insert({
+                    inventory_id: inv.id,
+                    type: 'usage',
+                    qty: delta,
+                    resulting_stock: newStock,
+                    note: `Factuur ${parsed.data.id} → ${newStatus}`,
+                }).then(() => null, () => null);
+                drained.push({ inventory_id: inv.id, naam: inv.naam, delta, resulting_stock: newStock });
+                break;  /* eén match per regel — voorkomt dubbele aftrek */
+            }
+        }
+    }
+
+    revalidatePath('/facturen');
+    revalidatePath('/financien');
+    revalidatePath('/voorraad');
+    return { data: { status: newStatus, drained } };
+}
