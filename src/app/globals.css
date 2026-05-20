@@ -1792,6 +1792,21 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   -webkit-overflow-scrolling: touch;
   margin: 0 -2px;
   padding: 0 2px;
+  /* Scroll-shadow indicators — pure CSS, geen JS. Wanneer de tabel
+     breder is dan de viewport, verschijnt aan beide kanten een
+     gradient-shadow die meeschuift met de scroll. Voorheen wist een
+     mobile-user niet dat er content rechts/links was; nu ziet hij een
+     subtiele "er is meer". Techniek: 4 backgrounds (2 covers + 2
+     shadows) met `background-attachment: local | scroll`. */
+  background:
+    linear-gradient(90deg, var(--bg, #121214) 30%, transparent),
+    linear-gradient(-90deg, var(--bg, #121214) 30%, transparent) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0)),
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0)) 100% 0;
+  background-repeat: no-repeat;
+  background-color: var(--bg, #121214);
+  background-size: 30px 100%, 30px 100%, 12px 100%, 12px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .tbl {

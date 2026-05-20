@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/Toast';
@@ -203,6 +203,20 @@ export default function FotoArchief() {
 
     function lightboxPrev() { setLightbox(function (i) { return i !== null && i > 0 ? i - 1 : filtered.length - 1; }); }
     function lightboxNext() { setLightbox(function (i) { return i !== null && i < filtered.length - 1 ? i + 1 : 0; }); }
+
+    /* Keyboard-nav in lightbox: ← / → bladeren, Escape sluit. Voorheen
+       muis-only — keyboard- en screen-reader-users konden alleen via
+       click op de X-knop sluiten. */
+    useEffect(function () {
+        if (lightbox === null) return;
+        function onKey(e: KeyboardEvent) {
+            if (e.key === 'ArrowLeft') { e.preventDefault(); lightboxPrev(); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); lightboxNext(); }
+            else if (e.key === 'Escape') { e.preventDefault(); setLightbox(null); }
+        }
+        document.addEventListener('keydown', onKey);
+        return function () { document.removeEventListener('keydown', onKey); };
+    }, [lightbox]);
 
     const activeLightboxFoto = lightbox !== null ? filtered[lightbox] : null;
 

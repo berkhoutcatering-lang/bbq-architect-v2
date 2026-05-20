@@ -1121,7 +1121,7 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                     <Hint tip="Par-level = wat je altijd op voorraad wilt hebben. Bestelpunt (gele streep in balk) = drempel waaronder we waarschuwen.">Par & bestelpunt</Hint>
                 </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
+            <div className="tbl-wrap">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                         <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
@@ -1983,7 +1983,7 @@ function InkooplijstView({ inventory, onClose, onExport }: { inventory: Inventor
                                         <BtnGhost icon={Download} onClick={onExport}>PDF</BtnGhost>
                                     </div>
                                 </div>
-                                <div style={{ overflowX: 'auto' }}>
+                                <div className="tbl-wrap">
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                         <thead>
                                             <tr style={{ background: 'rgba(130,130,130,.04)' }}>
