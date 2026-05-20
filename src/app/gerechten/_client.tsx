@@ -84,7 +84,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [view, setView] = useState<'gerechten' | 'menus'>('gerechten');
     /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
     const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
-    const [menuTemplates, setMenuTemplates] = useState<any[]>([]);
+    const [menuTemplates, setMenuTemplates] = useState<any[]>(initial?.menuTemplates ?? []);
     const [showMenuWizard, setShowMenuWizard] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<MenuTemplateInput | null>(null);
     /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).

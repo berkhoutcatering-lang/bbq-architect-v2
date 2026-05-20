@@ -7,10 +7,8 @@ import {
     Sparkles, BookOpen, Users, Leaf, ListChecks, Package, Grid3x3, ShieldCheck, Camera,
     Palette, HandPlatter, Undo2, Brush, Trash2, Edit3, Loader2, Download, X,
 } from 'lucide-react';
-import {
-    SERVICE_AI_DIRECTIVES,
-    type ServiceEvent, type Course, type CourseStatus, type CourseItem,
-} from './_data/serviceMockData';
+import type { ServiceEvent, Course, CourseStatus, CourseItem } from './_types/service';
+import { buildServiceDirectives } from './_lib/serviceDirectives';
 import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
 import { useSupabase } from '@/lib/useSupabase';
 import { dbEventToServiceEvent } from '@/lib/serviceData';
@@ -172,7 +170,7 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
                 )}
             </div>
 
-            <ServiceAIBar />
+            <ServiceAIBar event={event} />
 
             <div style={{ flex: 1, padding: '20px 22px', overflow: 'auto', marginRight: rookOffset }}>
                 <HelpNote title="Zo werkt het bord" tone="amber">
@@ -192,13 +190,20 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
     );
 }
 
-function ServiceAIBar() {
-    const directives = SERVICE_AI_DIRECTIVES;
+function ServiceAIBar({ event }: { event: ServiceEvent | null }) {
+    /* P0.5 — directives uit real event-data (course-aiNotes + allergie-tabel + status),
+       niet meer uit hardcoded mock-array. Lege state = bar verbergen. */
+    const directives = useMemo(() => buildServiceDirectives(event), [event]);
     const [activeIdx, setActiveIdx] = useState(0);
     useEffect(() => {
+        if (directives.length === 0) return;
         const t = setInterval(() => setActiveIdx(i => (i + 1) % directives.length), 6000);
         return () => clearInterval(t);
     }, [directives.length]);
+    /* Reset index als directives korter worden (bv. een directive resolved). */
+    useEffect(() => {
+        if (activeIdx >= directives.length) setActiveIdx(0);
+    }, [activeIdx, directives.length]);
     const d = directives[activeIdx];
     if (!d) return null;
     const sevColor = d.severity === 'critical' ? '#f87171' : d.severity === 'opportunity' ? BRAND : '#60a5fa';
