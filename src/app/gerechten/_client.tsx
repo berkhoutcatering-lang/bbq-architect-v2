@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
+import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { track, trackOnce } from '@/lib/track';
@@ -850,7 +850,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 <PageSection>
                     {menuTemplates.length === 0 ? (
                         <div style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 12, background: 'var(--card)' }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🍽️</div>
+                            <UtensilsCrossed size={28} style={{ color: 'var(--muted)', marginBottom: 12 }} />
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>Nog geen menu&rsquo;s opgeslagen</div>
                             <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
                                 Bouw een menu met de wizard en sla het op. Hergebruik het later in een offerte zodat je niet elke keer opnieuw begint.
@@ -1105,7 +1105,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                             tags: (form.tags && form.tags.length > 0) ? form.tags : (d.tags || []),
                                             kostprijs_pp: form.kostprijs_pp || d.geschatte_kostprijs_pp || 0,
                                         }));
-                                        showToast('✨ AI heeft ontbrekende velden ingevuld', 'success');
+                                        showToast('AI heeft ontbrekende velden ingevuld', 'success');
                                     } catch (e) {
                                         showToast('Fout: ' + (e.message || 'onbekend'), 'error');
                                     } finally {
@@ -1331,7 +1331,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         {(form.hardware_items || []).map(function (hw: any, idx: number) {
                                             return (
                                                 <div key={idx} className="hw-item-row">
-                                                    <span className="hw-item-cat">{hw.categorie === 'servies' ? '🍽️' : hw.categorie === 'apparatuur' ? '🔥' : hw.categorie === 'branding' ? '💡' : '🪑'}</span>
+                                                    <span className="hw-item-cat" aria-label={hw.categorie}>
+                                                        {hw.categorie === 'servies' ? <UtensilsCrossed size={12} />
+                                                            : hw.categorie === 'apparatuur' ? <Hammer size={12} />
+                                                            : hw.categorie === 'branding' ? <Lightbulb size={12} />
+                                                            : <Armchair size={12} />}
+                                                    </span>
                                                     <span className="hw-item-name">{hw.naam}</span>
                                                     <span className="hw-item-detail">×{hw.ratio}/gast</span>
                                                     <span className="hw-item-detail">+{hw.buffer_pct}%</span>

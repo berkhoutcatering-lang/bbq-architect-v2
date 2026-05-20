@@ -32,6 +32,8 @@ interface ComponentInput {
     flavor_tags?: string[];
     supplier_product_id?: number | null;
     ai_suggested?: boolean;
+    /* Optionele koppeling aan component_folders (S2-deel-3). NULL = root. */
+    folder_id?: string | null;
     /* Optionele nested writes (worden in join-tables opgeslagen) */
     allergens?: AllergenInput[];
     haccp_points?: HaccpPointInput[];
@@ -100,6 +102,8 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
             flavor_tags: Array.isArray(b.flavor_tags) ? b.flavor_tags.filter((t): t is string => typeof t === 'string') : [],
             supplier_product_id: typeof b.supplier_product_id === 'number' ? b.supplier_product_id : null,
             ai_suggested: typeof b.ai_suggested === 'boolean' ? b.ai_suggested : false,
+            /* folder_id: alleen accepteren als UUID-achtige string; anders null. */
+            folder_id: typeof b.folder_id === 'string' && /^[0-9a-f-]{36}$/i.test(b.folder_id) ? b.folder_id : null,
             allergens,
             haccp_points,
         },
