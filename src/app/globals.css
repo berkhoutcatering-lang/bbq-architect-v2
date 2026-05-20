@@ -133,6 +133,12 @@
   --danger: #ef4444;
   --danger-hover: #f87171;
   --warning: #f59e0b;
+  /* `--info` is de informatieve-blauw-equivalent van success/danger/warning.
+     Gebruikt voor "signed_up"-status, neutrale notificaties, blue dots, etc.
+     Voorheen werd hardcoded `bg-blue-500` / `text-blue-300` gebruikt — niet
+     white-label-veilig. */
+  --info: #3b82f6;
+  --info-tint: rgba(59, 130, 246, .12);
   --muted-weak: #5a5a5e;         /* disabled icon text */
   --hover: rgba(255, 255, 255, .05);
   --hover-strong: rgba(255, 255, 255, .09);

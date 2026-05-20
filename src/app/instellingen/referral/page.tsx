@@ -165,12 +165,14 @@ export default function ReferralPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  /* Statussen mappen op semantische tokens i.p.v. hardcoded Tailwind-
+     kleuren — werkt automatisch correct in white-label themes. */
   const map: Record<string, { label: string; cls: string }> = {
-    pending: { label: 'Wacht op signup', cls: 'bg-white/5 text-white/60' },
-    signed_up: { label: 'Gesigned-up', cls: 'bg-blue-500/15 text-blue-300' },
-    activated: { label: 'Trial actief', cls: 'bg-amber-500/15 text-amber-300' },
-    paid: { label: 'Uitbetaald', cls: 'bg-emerald-500/15 text-emerald-300' },
-    expired: { label: 'Verlopen', cls: 'bg-red-500/10 text-red-300' },
+    pending:   { label: 'Wacht op signup', cls: 'bg-white/5 text-white/60' },
+    signed_up: { label: 'Gesigned-up',     cls: 'bg-[color-mix(in_srgb,var(--info)_15%,transparent)] text-[var(--info)]' },
+    activated: { label: 'Trial actief',    cls: 'bg-[color-mix(in_srgb,var(--warning)_15%,transparent)] text-[var(--warning)]' },
+    paid:      { label: 'Uitbetaald',      cls: 'bg-[color-mix(in_srgb,var(--success)_15%,transparent)] text-[var(--success)]' },
+    expired:   { label: 'Verlopen',        cls: 'bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-[var(--danger)]' },
   };
   const m = map[status] || { label: status, cls: 'bg-white/5 text-white/60' };
   return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${m.cls}`}>{m.label}</span>;

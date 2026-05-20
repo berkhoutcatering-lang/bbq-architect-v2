@@ -753,7 +753,15 @@ function MenuTab({ gangen, gerechten, editId, form, f, cancelEdit, toggleActief,
                                         if (e.target.files?.[0] && editId !== -1) uploadFoto(e.target.files[0], { ...form, id: editId });
                                     }} />
                                 </label>
-                                {form.foto && <button className="text-red-400 text-xs hover:text-red-300" onClick={() => { if (editId !== -1) removeFoto({ ...form, id: editId }); }}>Verwijder foto</button>}
+                                {form.foto && <button className="text-[var(--danger)] text-xs hover:opacity-80" onClick={() => {
+                                    if (editId === -1) return;
+                                    /* Confirm-dialog vóór destructieve foto-delete — geen accidental clicks
+                                       meer (audit Bundel 8). Foto's terughalen is moeite, dus expliciete bevestiging
+                                       is laagdrempelig hier. */
+                                    showConfirm('Foto van dit gerecht verwijderen?', () => {
+                                        removeFoto({ ...form, id: editId });
+                                    });
+                                }}>Verwijder foto</button>}
                             </div>
                         </div>
 
