@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -9,6 +8,19 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useAuth } from '@/lib/AuthContext';
 import { calcMargeForOfferte, calcLineTotals, MAANDEN_KORT, plural } from '@/lib/utils';
 import { detectAllConflicts } from '@/lib/conflictDetection';
+import type {
+  DbEvent, Offerte, Factuur, InventoryItem, Klant, Bon, Leverancier,
+  DbCourse, DbEventAllergy, PrepTask, PrepSuggestion, Gerecht,
+} from '@/types/database.types';
+
+/* MargeAlert leeft in `marge_alerts`-tabel maar heeft (nog) geen export
+   in database.types.ts. Inline interface met de velden die /Vandaag leest. */
+interface MargeAlert {
+  id: number;
+  status: string;
+  pct_change?: number | string;
+  total_marge_impact_eur?: number | string;
+}
 import EventWizard from '@/components/EventWizard';
 import OnboardingChecklist, { type ChecklistData } from '@/components/onboarding/OnboardingChecklist';
 import PersonaQuiz from '@/components/onboarding/PersonaQuiz';
@@ -42,33 +54,33 @@ import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rule
 export default function DashboardPage() {
   const { user } = useAuth();
   const brand = useBrandLogo();
-  const ev = useSupabase('events', []);
-  const fac = useSupabase('facturen', []);
-  const off = useSupabase('offertes', []);
-  const inv = useSupabase('inventory', []);
-  const sug = useSupabase('prep_suggestions', []);
-  const ger = useSupabase('gerechten', []);
-  const pt = useSupabase('prep_tasks', []);
-  const kl = useSupabase('klanten', []);
-  const bnn = useSupabase('bonnen', []);
-  const lev = useSupabase('leveranciers', []);
-  const crs = useSupabase('courses', []);
-  const ealg = useSupabase('event_allergies', []);
-  const ma = useSupabase('marge_alerts', []);
+  const ev = useSupabase<DbEvent>('events', []);
+  const fac = useSupabase<Factuur>('facturen', []);
+  const off = useSupabase<Offerte>('offertes', []);
+  const inv = useSupabase<InventoryItem>('inventory', []);
+  const sug = useSupabase<PrepSuggestion>('prep_suggestions', []);
+  const ger = useSupabase<Gerecht>('gerechten', []);
+  const pt = useSupabase<PrepTask>('prep_tasks', []);
+  const kl = useSupabase<Klant>('klanten', []);
+  const bnn = useSupabase<Bon>('bonnen', []);
+  const lev = useSupabase<Leverancier>('leveranciers', []);
+  const crs = useSupabase<DbCourse>('courses', []);
+  const ealg = useSupabase<DbEventAllergy>('event_allergies', []);
+  const ma = useSupabase<MargeAlert>('marge_alerts', []);
 
-  const events: any[] = ev.data || [];
-  const facturen: any[] = fac.data || [];
-  const offertes: any[] = off.data || [];
-  const inventory: any[] = inv.data || [];
-  const suggestions: any[] = sug.data || [];
-  const gerechtenData: any[] = ger.data || [];
-  const prepTasks: any[] = pt.data || [];
-  const klanten: any[] = kl.data || [];
-  const bonnen: any[] = bnn.data || [];
-  const leveranciers: any[] = lev.data || [];
-  const courses: any[] = crs.data || [];
-  const eventAllergies: any[] = ealg.data || [];
-  const margeAlerts: any[] = (ma.data || []).filter((a: any) => a.status === 'open');
+  const events: DbEvent[] = ev.data || [];
+  const facturen: Factuur[] = fac.data || [];
+  const offertes: Offerte[] = off.data || [];
+  const inventory: InventoryItem[] = inv.data || [];
+  const suggestions: PrepSuggestion[] = sug.data || [];
+  const gerechtenData: Gerecht[] = ger.data || [];
+  const prepTasks: PrepTask[] = pt.data || [];
+  const klanten: Klant[] = kl.data || [];
+  const bonnen: Bon[] = bnn.data || [];
+  const leveranciers: Leverancier[] = lev.data || [];
+  const courses: DbCourse[] = crs.data || [];
+  const eventAllergies: DbEventAllergy[] = ealg.data || [];
+  const margeAlerts: MargeAlert[] = (ma.data || []).filter((a) => a.status === 'open');
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState('Welkom');
@@ -100,56 +112,56 @@ export default function DashboardPage() {
   const today7 = new Date(); today7.setDate(today7.getDate() + 7);
   const today7Iso = today7.toISOString().slice(0, 10);
 
-  const openFacturen = facturen.filter((f: any) => f.status !== 'betaald' && f.status !== 'geannuleerd');
+  const openFacturen = facturen.filter((f) => f.status !== 'betaald' && f.status !== 'geannuleerd');
   let openFacturenBedrag = 0;
-  openFacturen.forEach((f: any) => {
-    (f.items || []).forEach((it: any) => { openFacturenBedrag += (it.qty || 0) * (it.prijs || 0); });
+  openFacturen.forEach((f) => {
+    (f.items || []).forEach((it) => { openFacturenBedrag += (it.qty || 0) * (it.prijs || 0); });
   });
 
-  const lowStockItems = inventory.filter((i: any) => (i.current_stock || 0) < (i.min_stock || 0));
-  const pendingSuggestions = suggestions.filter((s: any) => s.status === 'pending');
+  const lowStockItems = inventory.filter((i) => (i.current_stock || 0) < (i.min_stock || 0));
+  const pendingSuggestions = suggestions.filter((s) => s.status === 'pending');
 
-  const openOffertes = offertes.filter((o: any) => o.status === 'concept' || o.status === 'verzonden');
-  const _calcMarge = (o: any) => calcMargeForOfferte(o, gerechtenData, inventory);
+  const openOffertes = offertes.filter((o) => o.status === 'concept' || o.status === 'verzonden');
+  const _calcMarge = (o) => calcMargeForOfferte(o, gerechtenData, inventory);
 
-  const lowMargeOffertes = offertes.filter((o: any) => {
+  const lowMargeOffertes = offertes.filter((o) => {
     if (!o.menu_selectie || (Array.isArray(o.menu_selectie) && o.menu_selectie.length === 0)) return false;
     return _calcMarge(o).margePct < 40;
   }).slice(0, 3);
 
   const nextEventsList = events
-    .filter((e: any) => e.date >= today && e.status !== 'geannuleerd')
-    .sort((a: any, b: any) => (a.date < b.date ? -1 : 1));
+    .filter((e) => e.date >= today && (e.status as string) !== 'geannuleerd')
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   const heroRow = nextEventsList[0] || null;
 
   const curMonthPrefix = new Date().toISOString().slice(0, 7);
-  const monthEvents = events.filter((e: any) => e.date?.startsWith(curMonthPrefix));
-  const monthRevenue = monthEvents.reduce((s: number, e: any) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
+  const monthEvents = events.filter((e) => e.date?.startsWith(curMonthPrefix));
+  const monthRevenue = monthEvents.reduce((s: number, e) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
   const heroRevenue = heroRow ? (heroRow.guests || 0) * (heroRow.ppp || 0) : 0;
 
   // ─── Command-center signalen ──────────────────────────────────────────
-  const upcomingForConflict = events.filter((e: any) =>
-    e.date >= today && e.status !== 'cancelled' && e.status !== 'geannuleerd',
+  const upcomingForConflict = events.filter((e) =>
+    e.date >= today && e.status !== 'cancelled' && (e.status as string) !== 'geannuleerd',
   );
   const conflictResult = detectAllConflicts(upcomingForConflict);
   const criticalConflicts = conflictResult.conflicts.filter((c) => c.severity === 'critical');
 
-  const verlopenFacturen = facturen.filter((f: any) =>
+  const verlopenFacturen = facturen.filter((f) =>
     f.status !== 'betaald' && f.status !== 'geannuleerd' && f.vervaldatum && f.vervaldatum < today,
   );
-  const binnenkortVervallen = facturen.filter((f: any) =>
+  const binnenkortVervallen = facturen.filter((f) =>
     f.status !== 'betaald' && f.status !== 'geannuleerd'
     && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso,
   );
-  const calcFactuurBedrag = (f: any) =>
-    (f.items || []).reduce((s: number, it: any) => s + (it.qty || 0) * (it.prijs || 0), 0);
-  const verlopenTotaal = verlopenFacturen.reduce((s: number, f: any) => s + calcFactuurBedrag(f), 0);
+  const calcFactuurBedrag = (f) =>
+    (f.items || []).reduce((s: number, it) => s + (it.qty || 0) * (it.prijs || 0), 0);
+  const verlopenTotaal = verlopenFacturen.reduce((s: number, f) => s + calcFactuurBedrag(f), 0);
 
   const heroCompletion = heroRow ? {
-    coursesIngevuld: courses.some((c: any) => c.event_id === heroRow.id),
-    allergiesIngevuld: eventAllergies.some((a: any) => a.event_id === heroRow.id),
-    prepIngeplannd: prepTasks.some((p: any) => p.event_id === heroRow.id),
+    coursesIngevuld: courses.some((c) => c.event_id === heroRow.id),
+    allergiesIngevuld: eventAllergies.some((a) => a.event_id === heroRow.id),
+    prepIngeplannd: prepTasks.some((p) => p.event_id === heroRow.id),
     confirmed: heroRow.status === 'confirmed',
   } : null;
 
@@ -169,36 +181,36 @@ export default function DashboardPage() {
   }
   const btwDeadline = nextBtwDeadline();
 
-  const conceptFacturenVoorAfgerondeEvents = facturen.filter((f: any) => {
+  const conceptFacturenVoorAfgerondeEvents = facturen.filter((f) => {
     if (f.status !== 'concept') return false;
-    const linkedEvent = events.find((e: any) => e.client_naam === f.client_naam || e.id === f.event_id);
+    const linkedEvent = events.find((e) => e.client_naam === f.client_naam || e.id === f.event_id);
     return linkedEvent && linkedEvent.date < today;
   });
 
-  const eventIdsMetPrep = new Set(prepTasks.map((t: any) => t.event_id));
-  const upcomingZonderPrep = events.filter((e: any) => {
+  const eventIdsMetPrep = new Set(prepTasks.map((t) => t.event_id));
+  const upcomingZonderPrep = events.filter((e) => {
     if (!e.date || e.date < today || e.date > today7Iso) return false;
-    if (e.status === 'geannuleerd') return false;
+    if ((e.status as string) === 'geannuleerd') return false;
     return !eventIdsMetPrep.has(e.id);
   });
 
-  const upcomingZonderPrepMonth = events.filter((e: any) => {
+  const upcomingZonderPrepMonth = events.filter((e) => {
     if (!e.date || e.date < today) return false;
-    if (e.status === 'geannuleerd') return false;
+    if ((e.status as string) === 'geannuleerd') return false;
     const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
     return daysAway <= 30 && !eventIdsMetPrep.has(e.id);
   });
 
-  const offertesMetMenu = offertes.filter((o: any) => o.menu_selectie);
-  const margins = offertesMetMenu.map((o: any) => _calcMarge(o).margePct || 0);
+  const offertesMetMenu = offertes.filter((o) => o.menu_selectie);
+  const margins = offertesMetMenu.map((o) => _calcMarge(o).margePct || 0);
   const avgMarge = margins.length > 0 ? margins.reduce((s, m) => s + m, 0) / margins.length : 0;
 
   const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const sixMonthsAgoIso = sixMonthsAgo.toISOString().slice(0, 10);
-  const klantenZonderRecentEvent = klanten.filter((k: any) => {
+  const klantenZonderRecentEvent = klanten.filter((k) => {
     const lastEvent = events
-      .filter((e: any) => e.client_naam === k.naam && e.date)
-      .sort((a: any, b: any) => b.date.localeCompare(a.date))[0];
+      .filter((e) => e.client_naam === k.naam && e.date)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
     return !lastEvent || lastEvent.date < sixMonthsAgoIso;
   }).slice(0, 5);
 
@@ -206,22 +218,22 @@ export default function DashboardPage() {
     hasLogo: !!brand?.logoUrl,
     hasOwnGerecht: gerechtenData.length > 0,
     hasRealOfferte: offertes.length > 0,
-    hasSentOfferte: offertes.some((o: any) => o.status === 'verzonden' || o.status === 'geaccepteerd'),
+    hasSentOfferte: offertes.some((o) => o.status === 'verzonden' || o.status === 'geaccepteerd'),
   };
 
-  const sentOffertesCount = offertes.filter((o: any) => o.status === 'verzonden' || o.status === 'geaccepteerd').length;
+  const sentOffertesCount = offertes.filter((o) => o.status === 'verzonden' || o.status === 'geaccepteerd').length;
   useEffect(() => {
     if (sentOffertesCount > 0) {
       trackOnce('first_offerte_sent', 'first_offerte_sent', { count: sentOffertesCount });
     }
   }, [sentOffertesCount]);
 
-  const unbookedReceiptsCount = bonnen.filter((b: any) => !b.processed_at).length;
+  const unbookedReceiptsCount = bonnen.filter((b) => !b.processed_at).length;
 
   // ─── EventHero data ────────────────────────────────────────────────────
   const heroEvent: EventHeroEvent | null = heroRow ? {
     id: heroRow.id,
-    name: heroRow.name || heroRow.title || 'Event',
+    name: heroRow.name || 'Event',
     date: heroRow.date,
     daysAway: Math.max(0, Math.ceil((new Date(heroRow.date).getTime() - new Date(today).getTime()) / 86400000)),
     guests: heroRow.guests || 0,
@@ -237,11 +249,18 @@ export default function DashboardPage() {
   const supplierRows = computeSupplierSpend(bonnen, leveranciers, 5);
 
   // ─── KPIStrip data ────────────────────────────────────────────────────
-  const pipelineEuro = openOffertes.reduce((s: number, o: any) => {
+  const pipelineEuro = openOffertes.reduce((s: number, o) => {
     return s + (calcLineTotals(o.items).totaal || (o.aantal_gasten || 0) * (o.basis_prijs_pp || 0));
   }, 0);
   const stockValue = inventory.reduce(
-    (s: number, i: any) => s + (i.current_stock || 0) * (i.prijs_per_unit || i.inkoop_prijs || 0),
+    (s: number, i) => {
+      /* Legacy DB-rijen kunnen `prijs_per_unit` of `inkoop_prijs` hebben
+         i.p.v. de nieuwe `purchase_price` kolom. Cast om beide pads te
+         kunnen lezen zonder de typed lookup te verliezen. */
+      const legacy = i as InventoryItem & { prijs_per_unit?: number; inkoop_prijs?: number };
+      const unitPrice = legacy.prijs_per_unit ?? legacy.inkoop_prijs ?? i.purchase_price ?? 0;
+      return s + (i.current_stock || 0) * unitPrice;
+    },
     0,
   );
 
@@ -258,7 +277,7 @@ export default function DashboardPage() {
     {
       id: 'events-week',
       label: 'Events deze week',
-      value: `${nextEventsList.filter((e: any) => e.date <= today7Iso).length}`,
+      value: `${nextEventsList.filter((e) => e.date <= today7Iso).length}`,
       sub: 'komende 7 dagen',
       tone: 'default',
       trend: trendEventsPerDay(events),
@@ -348,12 +367,12 @@ export default function DashboardPage() {
       prep: heroCompletion.prepIngeplannd,
       confirmed: heroCompletion.confirmed,
     } : null,
-    verlopenFacturen: verlopenFacturen.map((f: any) => ({
+    verlopenFacturen: verlopenFacturen.map((f) => ({
       client: f.client_naam || 'klant',
       bedrag: calcFactuurBedrag(f),
     })),
     verlopenTotaal,
-    binnenkortVervallen: binnenkortVervallen.map((f: any) => ({
+    binnenkortVervallen: binnenkortVervallen.map((f) => ({
       client: f.client_naam || 'klant',
       bedrag: calcFactuurBedrag(f),
       dagen: f.vervaldatum
@@ -361,39 +380,39 @@ export default function DashboardPage() {
         : 0,
     })),
     conflicts: criticalConflicts.length,
-    conceptFacturen: conceptFacturenVoorAfgerondeEvents.map((f: any) => ({
+    conceptFacturen: conceptFacturenVoorAfgerondeEvents.map((f) => ({
       client: f.client_naam || 'klant',
     })),
-    upcomingZonderPrep: upcomingZonderPrep.slice(0, 5).map((e: any) => ({
+    upcomingZonderPrep: upcomingZonderPrep.slice(0, 5).map((e) => ({
       id: e.id,
-      name: e.name || e.title || 'event',
+      name: e.name || 'event',
       daysAway: e.date
         ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
         : 0,
     })),
-    lowStockItems: lowStockItems.slice(0, 5).map((i: any) => ({
+    lowStockItems: lowStockItems.slice(0, 5).map((i) => ({
       naam: i.naam || 'item',
       categorie: (i.categorie || 'overig').toString().toLowerCase(),
     })),
     upcomingGuests: nextEventsList
-      .filter((e: any) => {
+      .filter((e) => {
         const d = e.date ? Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000) : 999;
         return d <= 7;
       })
-      .reduce((s: number, e: any) => s + (e.guests || 0), 0),
-    lowMargeOffertes: lowMargeOffertes.map((o: any) => ({
+      .reduce((s: number, e) => s + (e.guests || 0), 0),
+    lowMargeOffertes: lowMargeOffertes.map((o) => ({
       client: o.client_naam || 'klant',
       margePct: _calcMarge(o).margePct || 0,
     })),
     pipelineCount: openOffertes.length,
-    pipelineHighestEuro: openOffertes.reduce((m: number, o: any) =>
+    pipelineHighestEuro: openOffertes.reduce((m: number, o) =>
       Math.max(m, calcLineTotals(o.items).totaal || (o.aantal_gasten || 0) * (o.basis_prijs_pp || 0)), 0),
     pipelineHighestClient: openOffertes
-      .sort((a: any, b: any) =>
+      .sort((a, b) =>
         (calcLineTotals(b.items).totaal || (b.aantal_gasten || 0) * (b.basis_prijs_pp || 0)) -
         (calcLineTotals(a.items).totaal || (a.aantal_gasten || 0) * (a.basis_prijs_pp || 0)),
       )[0]?.client_naam || null,
-    oldestPipelineDays: openOffertes.reduce((m: number, o: any) => {
+    oldestPipelineDays: openOffertes.reduce((m: number, o) => {
       if (!o.created_at) return m;
       return Math.max(m, Math.ceil((Date.now() - new Date(o.created_at).getTime()) / 86400000));
     }, 0),
@@ -420,9 +439,9 @@ export default function DashboardPage() {
     verlopenTotaal,
     conceptFacturen: briefingInput.conceptFacturen,
     conflictsCount: briefingInput.conflicts,
-    upcomingZonderPrep: upcomingZonderPrepMonth.slice(0, 8).map((e: any) => ({
+    upcomingZonderPrep: upcomingZonderPrepMonth.slice(0, 8).map((e) => ({
       id: e.id,
-      name: e.name || e.title || 'event',
+      name: e.name || 'event',
       daysAway: e.date
         ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
         : 0,
@@ -449,19 +468,19 @@ export default function DashboardPage() {
       severity: lowStockItems.length > 3 ? 'high' : 'medium',
       icon: 'alert-triangle',
       title: `${plural(lowStockItems.length, 'item', 'items')} onder minimum`,
-      detail: lowStockItems.slice(0, 3).map((i: any) => i.naam).join(', '),
+      detail: lowStockItems.slice(0, 3).map((i) => i.naam).join(', '),
       cta: 'Open bestelling',
       href: '/voorraad?filter=below_min',
     });
   }
   if (verlopenFacturen.length > 0) {
-    const firstOverdueId = (verlopenFacturen[0] as any)?.id;
+    const firstOverdueId = verlopenFacturen[0]?.id;
     attentionItems.push({
       id: 'att-overdue',
       severity: 'high',
       icon: 'mail-warning',
       title: `${plural(verlopenFacturen.length, 'factuur', 'facturen')} > 30 dagen`,
-      detail: verlopenFacturen.slice(0, 2).map((f: any) =>
+      detail: verlopenFacturen.slice(0, 2).map((f) =>
         `${f.client_naam || 'klant'} € ${Math.round(calcFactuurBedrag(f)).toLocaleString('nl-NL')}`,
       ).join(' · '),
       cta: 'Stuur herinnering',
@@ -469,13 +488,13 @@ export default function DashboardPage() {
     });
   }
   if (lowMargeOffertes.length > 0) {
-    const firstLowMargeId = (lowMargeOffertes[0] as any)?.id;
+    const firstLowMargeId = lowMargeOffertes[0]?.id;
     attentionItems.push({
       id: 'att-marge',
       severity: 'medium',
       icon: 'percent',
       title: `${plural(lowMargeOffertes.length, 'offerte', 'offertes')} met lage marge`,
-      detail: lowMargeOffertes.map((o: any) => `${o.client_naam || 'klant'}`).join(' · '),
+      detail: lowMargeOffertes.map((o) => `${o.client_naam || 'klant'}`).join(' · '),
       cta: 'Open offerte',
       href: firstLowMargeId ? `/offertes?filter=lowmargin&edit=${firstLowMargeId}` : '/offertes?filter=lowmargin',
     });
@@ -494,10 +513,10 @@ export default function DashboardPage() {
   // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op
   // open offertes. Engine: scanMargeAlerts() in src/lib/dal/margeAlerts.ts.
   if (margeAlerts.length > 0) {
-    const worst = margeAlerts.reduce(function (a: any, b: any) {
+    const worst = margeAlerts.reduce(function (a, b) {
       return Math.abs(Number(b.pct_change) || 0) > Math.abs(Number(a.pct_change) || 0) ? b : a;
     });
-    const totalImpact = margeAlerts.reduce(function (s: number, a: any) {
+    const totalImpact = margeAlerts.reduce(function (s: number, a) {
       return s + (Number(a.total_marge_impact_eur) || 0);
     }, 0);
     const pct = Number(worst.pct_change) || 0;
@@ -714,7 +733,7 @@ export default function DashboardPage() {
 }
 
 /** Drawer: details van een event */
-function EventDetailDrawer({ event, onClose }: { event: any; onClose: () => void }) {
+function EventDetailDrawer({ event, onClose }: { event: DbEvent; onClose: () => void }) {
   const revenue = (event.guests || 0) * (event.ppp || 0);
   const days = Math.max(0, Math.ceil((new Date(event.date).getTime() - new Date().getTime()) / 86400000));
   const reduceMotion = useReducedMotion();
