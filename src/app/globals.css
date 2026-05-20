@@ -8021,6 +8021,15 @@ textarea:focus-visible,
   .agenda-legend__title { font-size: 11px !important; letter-spacing: .15em; text-transform: uppercase; color: var(--muted) !important; margin-bottom: 8px !important; }
 }
 
+/* /archief: filter-sidebar boven tafel op mobile, naast tafel op desktop.
+   Default grid-template komt uit inline-style; mobile-override schakelt
+   het naar één kolom zodat de tabel niet horizontaal gepropt wordt. */
+@media (max-width: 767px) {
+  .archief-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* FullCalendar dark-theme overrides — scoped binnen .agenda-fc-wrap zodat
    andere views (PDF-preview, klant-portal) niet geraakt worden. */
 .agenda-fc-wrap {

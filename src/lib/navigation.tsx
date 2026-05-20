@@ -114,7 +114,7 @@ export const navSections: NavSection[] = [
             { label: "Integraties", icon: <Settings size={16} />, href: "/instellingen/integraties", description: "Moneybird, Mollie, Google Calendar" },
             { label: "Mailbox", icon: <Inbox size={16} />, href: "/mailbox", description: "E-mail en templates" },
             { label: "Website", icon: <Globe size={16} />, href: "/website", description: "Publieke site beheren" },
-            { label: "Foto-archief", icon: <ImageIcon size={16} />, href: "/foto-archief", description: "Alle gescande bonnen, facturen en foto's terugvinden" },
+            { label: "Archief", icon: <ImageIcon size={16} />, href: "/archief", description: "Doorzoekbaar boekhoud-bonnenkistje — alle gescande bonnen en facturen op één plek" },
             { label: "Help Center", icon: <HelpCircle size={16} />, href: "/hulp", description: "Artikelen, FAQ, support" },
             { label: "Platform Beheer", icon: <Building2 size={16} />, href: "/admin", description: "Organisaties en klanten (admins)" },
         ],
