@@ -1752,6 +1752,16 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   letter-spacing: .5px;
 }
 
+/* Verplicht-veld indicator — voeg `data-required` toe op `.field` div.
+   Voorbeeld: <div className="field" data-required><label>Naam</label>...</div>
+   Geeft een ster in de brand-rode kleur zonder dat we de label-tekst
+   hoeven aan te passen. aria-hidden via ::after-content (decoratief). */
+.field[data-required] label::after {
+  content: ' *';
+  color: var(--red, #ef4444);
+  font-weight: 700;
+}
+
 .field input,
 .field select,
 .field textarea {

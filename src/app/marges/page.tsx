@@ -706,7 +706,7 @@ function BCGDrawer({ onClose, bcgAnalysis, bcgStats }: { onClose: () => void; bc
             <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400, color: 'var(--text)', margin: 0 }}>Winnaars & Verliezers</h2>
             <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, marginTop: 2 }}>Gerechten geclassificeerd op populariteit en marge</p>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+          <button onClick={onClose} aria-label="Sluiten" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
         </div>
 
         {bcgStats && (

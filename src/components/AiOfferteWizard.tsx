@@ -1,11 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import CarbonScoreCard from '@/components/CarbonScoreCard';
 import AiBadge from '@/components/ai/AiBadge';
 import { track } from '@/lib/track';
+
+/* localStorage key voor draft-autosave. TTL: 7 dagen — daarna stale draft
+   weggooien zodat een vergeten concept niet eeuwig blijft hangen. */
+const DRAFT_KEY = 'bbq_ai_offerte_wizard_draft';
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const GOLD = '#c4a35a';
 
@@ -60,17 +65,57 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
         });
     }, [open]);
 
+    /* Reset of restore bij open. Als er een verse draft (< 7 dagen) in
+       localStorage staat herstellen we het concept zonder pop-up — de
+       gebruiker ziet zijn eigen invoer terug en kan gewoon doorwerken. */
     useEffect(() => {
-        if (open) {
-            setStep('input');
-            setGenerated(null);
-            setError(null);
-            // Default event datum: 4 weken vooruit
-            const d = new Date();
-            d.setDate(d.getDate() + 28);
-            setEventDate(d.toISOString().slice(0, 10));
-        }
+        if (!open) return;
+        setStep('input');
+        setGenerated(null);
+        setError(null);
+
+        try {
+            const saved = localStorage.getItem(DRAFT_KEY);
+            if (saved) {
+                const d = JSON.parse(saved) as Record<string, unknown>;
+                const age = Date.now() - (Number(d.savedAt) || 0);
+                if (age < DRAFT_TTL_MS) {
+                    if (typeof d.clientName === 'string') setClientName(d.clientName);
+                    if (typeof d.clientAddress === 'string') setClientAddress(d.clientAddress);
+                    if (typeof d.eventDate === 'string' && d.eventDate) setEventDate(d.eventDate);
+                    if (typeof d.gasten === 'number') setGasten(d.gasten);
+                    if (typeof d.vegaCount === 'number') setVegaCount(d.vegaCount);
+                    if (typeof d.gangen === 'string') setGangen(d.gangen);
+                    if (typeof d.prompt === 'string') setPrompt(d.prompt);
+                    return;
+                }
+                /* Stale draft (> TTL) → verwijderen. */
+                localStorage.removeItem(DRAFT_KEY);
+            }
+        } catch { /* localStorage onbereikbaar (private mode, full disk) — negeren. */ }
+
+        /* Geen (geldige) draft — default event datum: 4 weken vooruit. */
+        const def = new Date();
+        def.setDate(def.getDate() + 28);
+        setEventDate(def.toISOString().slice(0, 10));
     }, [open]);
+
+    /* Autosave (debounced) — alleen in input-step, anders zou een vers
+       gegenereerd menu meteen overschreven worden door een lege save. */
+    const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (!open || step !== 'input') return;
+        if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = setTimeout(() => {
+            try {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                    clientName, clientAddress, eventDate, gasten, vegaCount, gangen, prompt,
+                    savedAt: Date.now(),
+                }));
+            } catch { /* ignore */ }
+        }, 500);
+        return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); };
+    }, [open, step, clientName, clientAddress, eventDate, gasten, vegaCount, gangen, prompt]);
 
     async function generate() {
         if (!clientName.trim()) { setError('Vul een klantnaam in'); return; }
@@ -171,6 +216,9 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                 await supabase.from('gerechten').insert(rows);
             }
 
+            /* Offerte is opgeslagen → draft is verbruikt, weggooien zodat
+               een volgende wizard-open met een schoon scherm begint. */
+            try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
             onSaved(data.id);
             setSaving(false);
             onClose();

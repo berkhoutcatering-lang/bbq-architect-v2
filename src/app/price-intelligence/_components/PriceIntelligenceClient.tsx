@@ -3569,7 +3569,7 @@ function MonthDetailDrawer({ monthKey, invoices, bonnen, onClose }: { monthKey: 
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Uitgaven {label}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{monthInvoices.length} factuur{monthInvoices.length === 1 ? '' : 'en'} · {monthBonnen.length} bon{monthBonnen.length === 1 ? '' : 'nen'} · totaal {fmt2(total)}</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Sluiten" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
                 </div>
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {monthInvoices.length === 0 && monthBonnen.length === 0 && (
@@ -3646,7 +3646,7 @@ function CategoryDetailDrawer({ category, invoices, onClose }: { category: strin
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Categorie: {category}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{products.length} product{products.length === 1 ? '' : 'en'} · totaal ingekocht {fmt2(totaal)}</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Sluiten" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
                 </div>
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {products.length === 0 && (
@@ -3735,7 +3735,7 @@ function SupplierComparisonDrawer({ invoices, onClose }: { invoices: any[]; onCl
                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300 }}>Leveranciersvergelijking</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{comparisons.length} product{comparisons.length === 1 ? '' : 'en'} bij meerdere leveranciers · potentiële besparing per eenheid: {fmt2(totaalPotentie)}</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Sluiten" style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}><X size={18} /></button>
                 </div>
                 <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {comparisons.length === 0 && (

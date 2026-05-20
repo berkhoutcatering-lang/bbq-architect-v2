@@ -37,6 +37,8 @@ export default function Facturen() {
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
+    /* Server Action validation-errors per veld — vervangt concat-in-toast. */
+    const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string[]>>({});
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [searchQuery, setSearchQuery] = useState('');
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
@@ -54,10 +56,20 @@ export default function Facturen() {
 
     function editFactuur(f: Factuur) { setEditing(f.id); setForm(JSON.parse(JSON.stringify(f))); }
 
-    function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
+    function setField(key: string, val: any) {
+        setForm(Object.assign({}, form, { [key]: val }));
+        if (serverFieldErrors[key]) {
+            setServerFieldErrors(function (prev) {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
+    }
 
     async function saveFactuur() {
         if (!validateAll({ client_naam: form!.client_naam })) return;
+        setServerFieldErrors({});
         const isNew = editing === 'new';
         const payload = isNew
             ? form!
@@ -68,10 +80,12 @@ export default function Facturen() {
             })();
         const result = await upsertFactuur(payload);
         if (result.error) {
-            const fieldMsg = result.fields
-                ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')'
-                : '';
-            showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            if (result.fields && Object.keys(result.fields).length > 0) {
+                setServerFieldErrors(result.fields);
+                showToast('Controleer de gemarkeerde velden', 'error');
+            } else {
+                showToast((isNew ? 'Aanmaken' : 'Opslaan') + ' mislukt: ' + result.error, 'error');
+            }
             return;
         }
 
@@ -148,16 +162,16 @@ export default function Facturen() {
                 </div>
                 <div className="panel-body">
                     <div className="form-grid">
-                        <div className="field"><label>Factuurnummer</label><input value={form.nummer} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('nummer', e.target.value); }} /></div>
+                        <div className="field" data-required><label>Factuurnummer</label><input value={form.nummer} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('nummer', e.target.value); }} style={serverFieldErrors.nummer ? { borderColor: 'var(--red)' } : undefined} /><FieldError name="nummer" fields={serverFieldErrors} /></div>
                         <div className="field"><label>Status</label>
                             <select value={form.status} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('status', e.target.value); }}>
                                 {['concept', 'verzonden', 'betaald', 'vervallen'].map(function (s) { return <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>; })}
                             </select>
                         </div>
-                        <div className="field"><label>Klantnaam</label><input name="client_naam" value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearError('client_naam'); setField('client_naam', e.target.value); }} {...fieldProps('client_naam', form.client_naam)} style={errors.client_naam ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.client_naam} fieldName="client_naam" /></div>
-                        <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); }} /></div>
-                        <div className="field"><label>Vervaldatum</label><input type="date" value={form.vervaldatum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('vervaldatum', e.target.value); }} /></div>
+                        <div className="field" data-required><label>Klantnaam</label><input name="client_naam" value={form.client_naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { clearError('client_naam'); setField('client_naam', e.target.value); }} {...fieldProps('client_naam', form.client_naam)} style={(errors.client_naam || serverFieldErrors.client_naam) ? { borderColor: 'var(--red)' } : undefined} /><FieldError message={errors.client_naam} name="client_naam" fields={serverFieldErrors} fieldName="client_naam" /></div>
+                        <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /><FieldError name="client_adres" fields={serverFieldErrors} /></div>
+                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); }} /><FieldError name="datum" fields={serverFieldErrors} /></div>
+                        <div className="field"><label>Vervaldatum</label><input type="date" value={form.vervaldatum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('vervaldatum', e.target.value); }} /><FieldError name="vervaldatum" fields={serverFieldErrors} /></div>
                     </div>
                     <div style={{ marginTop: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

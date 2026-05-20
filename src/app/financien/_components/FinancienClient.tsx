@@ -76,16 +76,18 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
     }
 
     /* Data sources — alle tabs delen deze. Initial-data uit Server Component
-       voorkomt empty-state flash bij first paint; useSupabase doet daarna
-       een refetch + realtime subscriber. */
-    const { data: offertes, loading: offertesLoading } = useSupabase<Offerte>('offertes', initial?.offertes ?? []);
-    const { data: facturen, loading: facturenLoading } = useSupabase<Factuur>('facturen', initial?.facturen ?? []);
-    const { data: events } = useSupabase<DbEvent>('events', initial?.events ?? []);
-    const { data: bonnen } = useSupabase<Bon>('bonnen', initial?.bonnen ?? []);
-    const { data: leveranciers } = useSupabase<Leverancier>('leveranciers', initial?.leveranciers ?? []);
-    const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', initial?.gerechten ?? []);
-    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
-    const { data: urenLogs } = useSupabase<TimeLog>('time_logs', initial?.timeLogs ?? []);
+       voorkomt empty-state flash bij first paint; useSupabase met
+       skipInitialFetch slaat de duplicate client-fetch over zodra Server-data
+       beschikbaar is. Realtime subscription blijft actief voor live updates. */
+    const skipFetch = { skipInitialFetch: !!initial };
+    const { data: offertes, loading: offertesLoading } = useSupabase<Offerte>('offertes', initial?.offertes ?? [], skipFetch);
+    const { data: facturen, loading: facturenLoading } = useSupabase<Factuur>('facturen', initial?.facturen ?? [], skipFetch);
+    const { data: events } = useSupabase<DbEvent>('events', initial?.events ?? [], skipFetch);
+    const { data: bonnen } = useSupabase<Bon>('bonnen', initial?.bonnen ?? [], skipFetch);
+    const { data: leveranciers } = useSupabase<Leverancier>('leveranciers', initial?.leveranciers ?? [], skipFetch);
+    const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', initial?.gerechten ?? [], skipFetch);
+    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? [], skipFetch);
+    const { data: urenLogs } = useSupabase<TimeLog>('time_logs', initial?.timeLogs ?? [], skipFetch);
     const { settings } = useSettings();
 
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());

@@ -49,7 +49,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                     <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[var(--brand)]' : 'group-hover:text-[var(--brand)]'}`}>
                         {section.icon}
                         {sectionBadgeCount > 0 && collapsed && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-[var(--danger)] text-white text-[8px] font-bold flex items-center justify-center px-0.5">
                                 {sectionBadgeCount}
                             </span>
                         )}
@@ -61,7 +61,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                         {section.title}
                     </span>
                     {sectionBadgeCount > 0 && !collapsed && (
-                        <span className="min-w-[18px] h-[18px] rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold flex items-center justify-center px-1">
+                        <span className="min-w-[18px] h-[18px] rounded-full bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] text-[var(--danger)] text-[10px] font-bold flex items-center justify-center px-1">
                             {sectionBadgeCount}
                         </span>
                     )}
@@ -86,7 +86,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                     </span>
                                     <span className="font-medium truncate flex-1">{item.label}</span>
                                     {badgeCount > 0 && (
-                                        <span className="min-w-[16px] h-[16px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                        <span className="min-w-[16px] h-[16px] rounded-full bg-[var(--danger)] text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
                                             {badgeCount}
                                         </span>
                                     )}
@@ -119,7 +119,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                     <span className={`shrink-0 relative transition-colors ${isActiveFolder ? 'text-[var(--brand)]' : 'text-[var(--muted)] group-hover:text-[var(--brand)]'}`}>
                         {section.icon}
                         {sectionBadgeCount > 0 && collapsed && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-[var(--danger)] text-white text-[8px] font-bold flex items-center justify-center px-0.5">
                                 {sectionBadgeCount}
                             </span>
                         )}
@@ -130,7 +130,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                 </div>
                 <div className="flex items-center gap-2">
                     {sectionBadgeCount > 0 && !collapsed && (
-                        <span className="min-w-[18px] h-[18px] rounded-full bg-red-500/15 text-red-400 text-[10px] font-bold flex items-center justify-center px-1">
+                        <span className="min-w-[18px] h-[18px] rounded-full bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] text-[var(--danger)] text-[10px] font-bold flex items-center justify-center px-1">
                             {sectionBadgeCount}
                         </span>
                     )}
@@ -164,7 +164,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 </span>
                                 <span className="text-[13px] font-medium truncate flex-1">{item.label}</span>
                                 {badgeCount > 0 && (
-                                    <span className="min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                    <span className="min-w-[18px] h-[18px] rounded-full bg-[var(--danger)] text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
                                         {badgeCount}
                                     </span>
                                 )}
@@ -374,7 +374,7 @@ export default function Sidebar() {
                                 <Settings className="w-4 h-4 shrink-0 text-[var(--muted)] hover:text-[var(--text)] cursor-pointer transition-colors" />
                             </Link>
                             <button onClick={signOut} title="Uitloggen" className="p-1 rounded bg-transparent border-none hover:bg-[var(--sidebar-bg-hover)] transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)] hover:text-red-400"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)] hover:text-[var(--danger)]"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                             </button>
                         </div>
                     </div>
