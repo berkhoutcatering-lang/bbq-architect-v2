@@ -22,6 +22,8 @@ export interface InsertArgs {
   end_time?: string | null;
   notes?: string | null;
   color?: string | null;
+  /* Koppeling met agenda_categories (NULL = system "Persoonlijk" cal). */
+  category_id?: string | null;
 }
 
 /* Persoonlijke agenda-items — privé per gebruiker. RLS in DB filtert op user_id;
@@ -84,6 +86,7 @@ export function useAgendaPersonal(): UseAgendaPersonalReturn {
         end_time: args.end_time ?? null,
         notes: args.notes ?? null,
         color: args.color ?? '#888888',
+        category_id: args.category_id ?? null,
       })
       .select('*')
       .single();
@@ -104,6 +107,7 @@ export function useAgendaPersonal(): UseAgendaPersonalReturn {
     if (args.end_time !== undefined) patch.end_time = args.end_time;
     if (args.notes !== undefined) patch.notes = args.notes;
     if (args.color !== undefined) patch.color = args.color;
+    if (args.category_id !== undefined) patch.category_id = args.category_id;
     const res = await supabase
       .from('agenda_personal')
       .update(patch)

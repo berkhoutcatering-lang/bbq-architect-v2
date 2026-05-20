@@ -379,6 +379,21 @@ export interface AgendaPersonal {
   end_time: string | null;
   notes: string | null;
   color: string | null;
+  /* Optionele koppeling naar agenda_categories — NULL = system "Persoonlijk". */
+  category_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgendaCategory {
+  id: string;
+  organization_id: string;
+  name: string;
+  color: string;
+  icon: string;
+  default_visible: boolean;
+  sort_order: number;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

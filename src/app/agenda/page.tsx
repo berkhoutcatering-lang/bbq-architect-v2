@@ -18,6 +18,12 @@ import PageGuideNote from '@/components/PageGuideNote';
 import ErrorCard from '@/components/ErrorCard';
 import { useAgendaPersonal } from './_components/useAgendaPersonal';
 import PersonalEventModal from './_components/PersonalEventModal';
+import CalendarView from './_components/CalendarView';
+import FilterPopover from './_components/FilterPopover';
+import AgendaCategoryModal from './_components/AgendaCategoryModal';
+import type { AgendaEvent as AgendaEventType, AgendaFilterState } from './_lib/types';
+import { useAgendaFilter, applyFilter } from './_lib/useAgendaFilter';
+import { useAgendaCategories, type AgendaCategoryRow } from './_lib/useAgendaCategories';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -39,38 +45,9 @@ const CALENDARS: CalendarMeta[] = [
     { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: Clock, synced: true, source: 'lokaal' },
 ];
 
-interface AgendaEvent {
-    id: string; calId: string; day: number; start: number; duration: number; title: string;
-    /* Optionele velden die de UI rendert — toegevoegd zodat ts-narrowing werkt
-       zonder dat we per gebruik een cast nodig hebben. */
-    client?: string;
-    guests?: number;
-    venue?: string;
-    revenue?: number;
-    package?: string;
-    cuts?: string;
-    target?: string;
-    wood?: string;
-    staff?: string[];
-    supplier?: string;
-    amount?: number;
-    kind?: string;
-    conflict?: { note?: string } | string;
-    conflictNote?: string;
-    notes?: string;
-    isPersonal?: boolean;
-    personalId?: string;
-    color?: string;
-    critical?: boolean;
-    warning?: boolean;
-    dbDate?: string;
-    for?: string;
-    done?: boolean;
-    /* extras uit `ev(... extras)` of `personalToAgendaEvent` mogen overige
-       velden hebben; we typeen dat als unknown ipv any zodat de eslint-disable
-       weg kan en consumers expliciet narrowen waar nodig. */
-    [key: string]: unknown;
-}
+/* AgendaEvent is verhuisd naar _lib/types.ts zodat sub-components (CalendarView,
+   FilterPopover) hetzelfde shape kunnen importeren zonder circular dep. */
+type AgendaEvent = AgendaEventType;
 
 const ev = (id: string, calId: string, day: number, start: number, duration: number, title: string, extras: Partial<AgendaEvent> = {}): AgendaEvent =>
     ({ id, calId, day, start, duration, title, ...extras });
@@ -172,15 +149,18 @@ function SyncBadge({ live }: { live: boolean }) {
    MONTH NAV
    ═══════════════════════════════════════════════════════════════════ */
 interface MonthNavProps {
-    view: string;
+    view: 'month' | 'week' | 'list';
     setView: (v: 'month' | 'week' | 'list') => void;
     monthLabel: string;
     onPrev: () => void;
     onNext: () => void;
     onToday: () => void;
     onAddPersonal: () => void;
+    filterCalendars: { id: string; label: string; color: string }[];
+    filterState: AgendaFilterState;
+    onFilterChange: (next: AgendaFilterState) => void;
 }
-function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday, onAddPersonal }: MonthNavProps) {
+function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday, onAddPersonal, filterCalendars, filterState, onFilterChange }: MonthNavProps) {
     return (
         <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -199,14 +179,16 @@ function MonthNav({ view, setView, monthLabel, onPrev, onNext, onToday, onAddPer
                 <button onClick={onAddPersonal} style={navPillStyle('#a78bfa')}>
                     <Plus size={11} /> Afspraak
                 </button>
-                <div style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
-                    <button onClick={() => setView('month')} style={viewTabStyle(view === 'month')}><Grid3x3 size={11} /> Maand</button>
-                    <button disabled title="Binnenkort beschikbaar" style={{ ...viewTabStyle(false), opacity: 0.35, cursor: 'not-allowed' }}><Columns3 size={11} /> Week</button>
-                    <button disabled title="Binnenkort beschikbaar" style={{ ...viewTabStyle(false), opacity: 0.35, cursor: 'not-allowed' }}><ListIcon size={11} /> Lijst</button>
+                <div role="tablist" aria-label="Weergave" style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: 'rgba(0,0,0,.3)', border: '1px solid var(--border)' }}>
+                    <button role="tab" aria-selected={view === 'month'} onClick={() => setView('month')} style={viewTabStyle(view === 'month')}><Grid3x3 size={11} /> Maand</button>
+                    <button role="tab" aria-selected={view === 'week'} onClick={() => setView('week')} style={viewTabStyle(view === 'week')}><Columns3 size={11} /> Week</button>
+                    <button role="tab" aria-selected={view === 'list'} onClick={() => setView('list')} style={viewTabStyle(view === 'list')}><ListIcon size={11} /> Lijst</button>
                 </div>
-                <button style={navPillStyle()}>
-                    <Filter size={11} /> Filter
-                </button>
+                <FilterPopover
+                    calendars={filterCalendars}
+                    value={filterState}
+                    onChange={onFilterChange}
+                />
             </div>
         </div>
     );
@@ -240,30 +222,114 @@ const viewTabStyle = (active: boolean): React.CSSProperties => ({
 /* ═══════════════════════════════════════════════════════════════════
    CALENDAR LEGEND
    ═══════════════════════════════════════════════════════════════════ */
-function CalendarLegend({ active, onToggle, counts }: { active: string[]; onToggle: (id: string) => void; counts: Record<string, number> }) {
+interface LegendRowMeta {
+    id: string;
+    label: string;
+    color: string;
+    isSystem: boolean;
+    customRow: AgendaCategoryRow | null;
+}
+function CalendarLegend({
+    rows, active, counts, canAdd, onToggle, onAddCustom, onEditCustom,
+}: {
+    rows: LegendRowMeta[];
+    active: string[];
+    counts: Record<string, number>;
+    canAdd: boolean;
+    onToggle: (id: string) => void;
+    onAddCustom: () => void;
+    onEditCustom: (row: AgendaCategoryRow) => void;
+}) {
     return (
         <MetalCard className="agenda-legend">
-            <div className="agenda-legend__title" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>Agenda&rsquo;s</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="agenda-legend__title" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Agenda&rsquo;s</div>
+                {canAdd && (
+                    <button
+                        onClick={onAddCustom}
+                        aria-label="Nieuwe agenda toevoegen"
+                        title="Nieuwe agenda"
+                        style={{
+                            width: 26, height: 26, borderRadius: 6,
+                            background: 'rgba(255,255,255,.04)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--muted)',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer',
+                        }}
+                        onMouseEnter={e => {
+                            (e.currentTarget as HTMLElement).style.color = '#FFBF00';
+                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,191,0,.4)';
+                        }}
+                        onMouseLeave={e => {
+                            (e.currentTarget as HTMLElement).style.color = 'var(--muted)';
+                            (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
+                        }}
+                    >
+                        <Plus size={14} />
+                    </button>
+                )}
+            </div>
             <div className="agenda-legend__items">
-                {CALENDARS.map(c => {
+                {rows.map(c => {
                     const isOn = active.includes(c.id);
                     const count = counts[c.id] || 0;
+                    const systemMeta = c.isSystem ? CALENDARS.find(s => s.id === c.id) : null;
                     return (
-                        <div key={c.id} onClick={() => onToggle(c.id)} className="agenda-legend__item" style={{
-                            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
-                            background: isOn ? `${c.color}10` : 'transparent', opacity: isOn ? 1 : 0.5,
-                            border: `1px solid ${isOn ? `${c.color}33` : 'transparent'}`,
-                        }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
-                            <c.Icon size={13} style={{ color: c.color, flexShrink: 0 }} />
-                            <div style={{ flex: 1, minWidth: 0 }} className="agenda-legend__label">
-                                <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
-                                <div className="agenda-legend__sub" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {c.source} · {count}
+                        <div
+                            key={c.id}
+                            className="agenda-legend__item agenda-legend__item--row"
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8,
+                                background: isOn ? `${c.color}10` : 'transparent', opacity: isOn ? 1 : 0.5,
+                                border: `1px solid ${isOn ? `${c.color}33` : 'transparent'}`,
+                            }}
+                        >
+                            <button
+                                onClick={() => onToggle(c.id)}
+                                aria-pressed={isOn}
+                                style={{
+                                    flex: 1, minWidth: 0,
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    background: 'transparent', border: 'none', padding: 0, color: 'inherit',
+                                    cursor: 'pointer', textAlign: 'left',
+                                }}
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
+                                {systemMeta ? <systemMeta.Icon size={13} style={{ color: c.color, flexShrink: 0 }} /> : <Calendar size={13} style={{ color: c.color, flexShrink: 0 }} />}
+                                <div style={{ flex: 1, minWidth: 0 }} className="agenda-legend__label">
+                                    <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
+                                    <div className="agenda-legend__sub" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {systemMeta ? `${systemMeta.source} · ${count}` : `eigen · ${count}`}
+                                    </div>
                                 </div>
-                            </div>
+                            </button>
                             <span className="agenda-legend__count-mobile" style={{ display: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{count}</span>
-                            {c.synced && <RefreshCw size={10} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />}
+                            {systemMeta?.synced && <RefreshCw size={10} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />}
+                            {!c.isSystem && c.customRow && (
+                                <button
+                                    onClick={() => onEditCustom(c.customRow!)}
+                                    aria-label={`Bewerk agenda ${c.label}`}
+                                    className="agenda-legend__edit-btn"
+                                    style={{
+                                        width: 22, height: 22, borderRadius: 5,
+                                        background: 'transparent', border: 'none',
+                                        color: 'var(--muted)', cursor: 'pointer',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        opacity: 0.6,
+                                    }}
+                                    onMouseEnter={e => {
+                                        (e.currentTarget as HTMLElement).style.opacity = '1';
+                                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.06)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        (e.currentTarget as HTMLElement).style.opacity = '0.6';
+                                        (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                    }}
+                                >
+                                    <Pencil size={11} />
+                                </button>
+                            )}
                         </div>
                     );
                 })}
@@ -419,12 +485,35 @@ interface UpcomingItem {
     dbId?: number;
     dbDate?: string;
 }
+/* "Komende events" widget — typografisch ipv emoji-blokjes. Linear/Notion-stijl
+   row: status-dot vooraan, naam + sub-tekst, bedrag rechts uitgelijnd. Live-events
+   krijgen subtiel gold-accent rechts (1px lijn) i.p.v. felle status-chip. */
+const NL_MONTHS_SHORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+function statusMeta(s: string): { tone: string; label: string; isLive: boolean } {
+    const x = (s || '').toLowerCase();
+    if (x === 'confirmed' || x === 'completed' || x === 'bevestigd' || x === 'live') {
+        return { tone: '#10b981', label: 'Bevestigd', isLive: true };
+    }
+    if (x === 'option' || x === 'optie' || x === 'tentative') {
+        return { tone: BRAND, label: 'Optie', isLive: false };
+    }
+    if (x === 'request' || x === 'aanvraag' || x === 'pending' || x === 'new') {
+        return { tone: GOLD, label: 'Aanvraag', isLive: false };
+    }
+    return { tone: 'var(--muted)', label: s || '—', isLive: false };
+}
+
 function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (it: UpcomingItem) => void }) {
     if (items.length === 0) {
         return (
             <MetalCard>
-                <Eyebrow style={{ marginBottom: 10 }}>Komende events</Eyebrow>
-                <div style={{ padding: '20px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, fontWeight: 400, letterSpacing: '-.005em', color: 'var(--text)' }}>
+                        Komende events
+                    </div>
+                </div>
+                <div style={{ padding: '24px 8px 12px', textAlign: 'center', color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
                     Nog geen events ingepland.
                 </div>
                 <Link href="/events" className="btn btn-brand" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
@@ -434,37 +523,94 @@ function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (i
         );
     }
     return (
-        <MetalCard>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <Eyebrow>Komende events</Eyebrow>
-                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{items.length}</span>
+        <MetalCard style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{
+                display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                padding: '16px 18px 12px', borderBottom: '1px solid var(--border)',
+            }}>
+                <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, fontWeight: 400, letterSpacing: '-.005em', color: 'var(--text)' }}>
+                    Komende events
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{items.length}</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {items.map((it, i) => (
-                    <div key={i} onClick={() => onSelect(it)} style={{
-                        display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 10, alignItems: 'center',
-                        padding: 10, borderRadius: 10, cursor: 'pointer',
-                        background: it.warning ? 'rgba(239,68,68,.04)' : 'rgba(28,28,32,.4)',
-                        border: `1px solid ${it.warning ? 'rgba(239,68,68,.2)' : 'transparent'}`,
-                    }}>
-                        <div style={{
-                            width: 36, height: 36, borderRadius: 8, background: 'rgba(0,0,0,.3)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, position: 'relative',
-                        }}>
-                            {it.emoji}
-                            <span style={{ position: 'absolute', bottom: -3, right: -3, fontSize: 9, padding: '1px 4px', borderRadius: 3, background: BRAND, color: '#000', fontWeight: 700 }}>{it.day}</span>
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{it.time} · {it.guests} gasten · {fmtEur(it.revenue)}</div>
-                        </div>
-                        <span style={{
-                            fontSize: 9, padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: '.08em',
-                            background: it.status === 'live' ? 'rgba(34,197,94,.15)' : it.status === 'optie' ? `${BRAND}1f` : `${GOLD}26`,
-                            color: it.status === 'live' ? 'var(--green)' : it.status === 'optie' ? BRAND : GOLD,
-                        }}>{it.status.toUpperCase()}</span>
-                    </div>
-                ))}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {items.map((it, i) => {
+                    const st = statusMeta(it.status);
+                    return (
+                        <button
+                            key={i}
+                            onClick={() => onSelect(it)}
+                            style={{
+                                position: 'relative',
+                                display: 'grid', gridTemplateColumns: '8px 56px 1fr auto', gap: 12, alignItems: 'center',
+                                padding: '12px 18px',
+                                background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer',
+                                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                                color: 'var(--text)',
+                            }}
+                            onMouseEnter={e => {
+                                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.025)';
+                            }}
+                            onMouseLeave={e => {
+                                (e.currentTarget as HTMLElement).style.background = 'transparent';
+                            }}
+                        >
+                            {/* status-dot links — vervangt felle chip */}
+                            <span
+                                aria-label={st.label}
+                                title={st.label}
+                                style={{ width: 8, height: 8, borderRadius: '50%', background: st.tone, alignSelf: 'center' }}
+                            />
+                            {/* datum-kolom: dag + maand-afkorting, tabular */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+                                <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                                    {it.day || '—'}
+                                </span>
+                                <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'lowercase', marginTop: 2 }}>
+                                    {(() => {
+                                        const m = (it.dbDate || '').split('-')[1];
+                                        return m ? NL_MONTHS_SHORT[parseInt(m, 10) - 1] : '';
+                                    })()}
+                                </span>
+                            </div>
+                            {/* hoofd-tekst: naam + sub */}
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
+                                    {it.name}
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {it.time} · {it.guests} gasten
+                                </div>
+                            </div>
+                            {/* bedrag rechts, tabular */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: st.isLive ? GOLD : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                                    {fmtEur(it.revenue)}
+                                </span>
+                                <span style={{ fontSize: 10, color: 'var(--muted-light)', marginTop: 2 }}>
+                                    {st.label.toLowerCase()}
+                                </span>
+                            </div>
+                            {/* live-events: dunne gold-lijn rechts */}
+                            {st.isLive && (
+                                <span style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 2, background: GOLD }} aria-hidden />
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+            <div style={{ padding: '10px 18px', borderTop: '1px solid var(--border)' }}>
+                <Link
+                    href="/events"
+                    style={{
+                        fontSize: 11, color: 'var(--muted)', textDecoration: 'none',
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+                >
+                    Bekijk alle events →
+                </Link>
             </div>
         </MetalCard>
     );
@@ -628,16 +774,19 @@ function mapDbEventToAgendaEvent(e: DbEvent): AgendaEvent {
     );
 }
 
-/* Map persoonlijke afspraak naar AgendaEvent. parseTimeToHours pakt HH:MM(:SS). */
+/* Map persoonlijke afspraak naar AgendaEvent. parseTimeToHours pakt HH:MM(:SS).
+   Als de afspraak aan een custom agenda_category hangt, gebruik die als calId
+   zodat filter + legend de afspraak in de juiste categorie tonen. */
 function mapPersonalToAgendaEvent(p: AgendaPersonal): AgendaEvent {
     const [, , dd] = (p.date || '').split('-');
     const day = parseInt(dd || '1', 10);
     const start = parseTimeToHours(p.start_time, 9);
     const end = p.end_time ? parseTimeToHours(p.end_time, start + 1) : start + 1;
     const duration = Math.max(0.25, end - start);
+    const calId = p.category_id ? `cat_${p.category_id}` : 'personal';
     return ev(
         'pers_' + p.id,
-        'personal',
+        calId,
         day,
         start,
         duration,
@@ -682,9 +831,51 @@ export default function Agenda() {
     const today = new Date();
     const [viewYear, setViewYear] = useState(today.getFullYear());
     const [viewMonth, setViewMonth] = useState(today.getMonth());
-    const [activeCals, setActiveCals] = useState<string[]>(CALENDARS.map(c => c.id));
     const [view, setView] = useState<'month' | 'week' | 'list'>('month');
     const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
+
+    /* Custom agenda-categorieën uit DB. Tabel kan ontbreken (migration nog niet
+       gedraaid) → hook returnt available=false en lege rows, we tonen dan alleen
+       de 3 system-categorieën zonder "+" knop. */
+    const { rows: customCategories, available: categoriesAvailable, refetch: refetchCategories } = useAgendaCategories();
+
+    /* State voor het category-CRUD-modaal: open-flag + editing-row. */
+    const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+    const [categoryEditing, setCategoryEditing] = useState<AgendaCategoryRow | null>(null);
+
+    /* Merged calendar-set: 3 system rows + custom rows uit DB. Custom krijgen
+       prefix `cat_${id}` zodat we ze never per ongeluk verwarren met system. */
+    const mergedCalendars = useMemo(() => {
+        const sys = CALENDARS.map(c => ({
+            id: c.id,
+            label: c.label,
+            color: c.color,
+            isSystem: true,
+            customRow: null as AgendaCategoryRow | null,
+        }));
+        const custom = customCategories.map(c => ({
+            id: `cat_${c.id}`,
+            label: c.name,
+            color: c.color,
+            isSystem: false,
+            customRow: c,
+        }));
+        return [...sys, ...custom];
+    }, [customCategories]);
+
+    /* Filter-state in URL — gedeeld tussen FilterPopover (rechts in MonthNav)
+       en CalendarLegend (links als sidebar). Eén bron van waarheid. */
+    const allCalIds = useMemo(() => mergedCalendars.map(c => c.id), [mergedCalendars]);
+    const { state: filterState, setState: setFilterState } = useAgendaFilter(allCalIds);
+    const filterCalendarOptions = useMemo(
+        () => mergedCalendars.map(c => ({ id: c.id, label: c.label, color: c.color })),
+        [mergedCalendars]
+    );
+    const calendarColorMap = useMemo(() => {
+        const m: Record<string, string> = {};
+        for (const c of mergedCalendars) m[c.id] = c.color;
+        return m;
+    }, [mergedCalendars]);
 
     /* Deep-link uit Vandaag-AttentionPanel: /agenda?conflict=<event-id>
        focust en scrollt naar het event in de calendar (Pillar 4 Vandaag-hub). */
@@ -724,7 +915,13 @@ export default function Agenda() {
         setPersonalModalOpen(true);
     };
 
-    const toggleCal = (id: string) => setActiveCals(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    /* Legend-toggle stuurt nu de filter-state aan zodat MonthGrid, CalendarView
+       en FilterPopover allemaal dezelfde "zichtbare agenda's"-set delen. */
+    const activeCals = filterState.cals;
+    const toggleCal = (id: string) => {
+        const next = activeCals.includes(id) ? activeCals.filter(x => x !== id) : [...activeCals, id];
+        setFilterState({ ...filterState, cals: next });
+    };
 
     /* Filter DB events op de zichtbare maand, map naar AgendaEvent shape. */
     const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
@@ -758,13 +955,22 @@ export default function Agenda() {
         return [...dbAgendaEvents, ...dbPrepEvents, ...monthPersonalEvents];
     }, [dbAgendaEvents, dbPrepEvents, monthPersonalEvents]);
 
-    /* Counts per calendar voor de legend — dynamisch uit live data deze maand. */
+    /* Filter alleEvents → visibleEvents via huidige filterState (cals + status + range).
+       MonthGrid, CalendarView en counts werken allemaal op deze gefilterde set. */
+    const visibleEvents: AgendaEvent[] = useMemo(
+        () => applyFilter(allEvents, filterState, viewYear, viewMonth),
+        [allEvents, filterState, viewYear, viewMonth]
+    );
+
+    /* Counts per calendar voor de legend — dynamisch uit live data deze maand.
+       Telt ALLE events (ongefilterd) zodat de legend laat zien hoeveel er
+       beschikbaar zijn, ook wanneer ze door filter zijn weggehaald. */
     const calendarCounts = useMemo(() => {
         const counts: Record<string, number> = {};
-        for (const cal of CALENDARS) counts[cal.id] = 0;
+        for (const cal of mergedCalendars) counts[cal.id] = 0;
         for (const e of allEvents) counts[e.calId] = (counts[e.calId] || 0) + 1;
         return counts;
-    }, [allEvents]);
+    }, [allEvents, mergedCalendars]);
 
     const isEmpty = dbEvents.length === 0 && personalRows.length === 0;
 
@@ -874,12 +1080,23 @@ export default function Agenda() {
                 onNext={() => shiftMonth(1)}
                 onToday={() => { const now = new Date(); setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }}
                 onAddPersonal={() => openPersonalModal()}
+                filterCalendars={filterCalendarOptions}
+                filterState={filterState}
+                onFilterChange={setFilterState}
             />
             <div style={{ height: 18 }} />
 
             <div className="agenda-grid">
                 <div>
-                    <CalendarLegend active={activeCals} onToggle={toggleCal} counts={calendarCounts} />
+                    <CalendarLegend
+                        rows={mergedCalendars}
+                        active={activeCals}
+                        counts={calendarCounts}
+                        canAdd={categoriesAvailable}
+                        onToggle={toggleCal}
+                        onAddCustom={() => { setCategoryEditing(null); setCategoryModalOpen(true); }}
+                        onEditCustom={(row) => { setCategoryEditing(row); setCategoryModalOpen(true); }}
+                    />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -888,21 +1105,23 @@ export default function Agenda() {
                             year={viewYear}
                             month={viewMonth}
                             activeCals={activeCals}
-                            events={allEvents}
+                            events={visibleEvents}
                             onSelectEvent={setSelectedEvent}
                             onQuickAddDay={(iso) => openPersonalModal({ date: iso })}
                             focusedEventId={focusedEventId}
                         />
                     )}
-                    {view !== 'month' && (
-                        <MetalCard style={{ padding: 60, textAlign: 'center' }}>
-                            {view === 'week' ? <Columns3 size={48} style={{ color: 'var(--muted-weak)' }} /> : <ListIcon size={48} style={{ color: 'var(--muted-weak)' }} />}
-                            <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 16, color: 'var(--text)' }}>
-                                {view === 'week' ? 'Week-view' : 'Lijst-view'}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                                Coming soon — focus deze ronde was de maand-grid
-                            </div>
+                    {(view === 'week' || view === 'list') && (
+                        <MetalCard style={{ padding: 0, overflow: 'hidden' }}>
+                            <CalendarView
+                                mode={view}
+                                year={viewYear}
+                                month={viewMonth}
+                                events={visibleEvents}
+                                calendarColors={calendarColorMap}
+                                onSelectEvent={setSelectedEvent}
+                                focusedEventId={focusedEventId}
+                            />
                         </MetalCard>
                     )}
                 </div>
@@ -946,6 +1165,7 @@ export default function Agenda() {
                 open={personalModalOpen}
                 initialDate={personalModalDate}
                 editing={personalModalEditing}
+                categories={customCategories}
                 onClose={() => { setPersonalModalOpen(false); setPersonalModalEditing(null); }}
                 onSave={async (args) => {
                     if (personalModalEditing) {
@@ -957,6 +1177,13 @@ export default function Agenda() {
                 onDelete={personalModalEditing ? async () => {
                     if (personalModalEditing) await removePersonal(personalModalEditing.id);
                 } : undefined}
+            />
+
+            <AgendaCategoryModal
+                open={categoryModalOpen}
+                editing={categoryEditing}
+                onClose={() => { setCategoryModalOpen(false); setCategoryEditing(null); }}
+                onSaved={() => { refetchCategories(); }}
             />
         </div>
     );
