@@ -13,6 +13,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/offertes', request.url), 308);
   }
 
+  // /gerechten/ingredienten was een gateway-pagina met 3 KPI-tiles die feitelijk
+  // naar /voorraad linkte. KPI's zijn in S2.7 verhuisd naar /gerechten/insights;
+  // de daadwerkelijke edit-flow zit in /voorraad. Redirect oude bookmarks.
+  if (pathname.startsWith('/gerechten/ingredienten')) {
+    return NextResponse.redirect(new URL('/voorraad', request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();

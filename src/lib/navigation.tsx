@@ -4,7 +4,7 @@ import {
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
-    Receipt, TrendingUp, Library, Boxes, BookOpen, Flame,
+    Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck,
 } from "lucide-react";
 
@@ -67,7 +67,6 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Wat je verkoopt: samengesteld uit componenten, met marge en allergenen-cascade" },
             { label: "Componenten", icon: <Boxes size={16} />, href: "/gerechten/componenten", description: "Atomaire bouwstenen — zelf-bereid of inkoop. Wijzig één keer, alle gerechten passen mee" },
-            { label: "Ingrediënten", icon: <Library size={16} />, href: "/gerechten/ingredienten", description: "Master-lijst gekoppeld aan voorraad — allergenen-bron voor de hele cascade" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
         ],
     },
