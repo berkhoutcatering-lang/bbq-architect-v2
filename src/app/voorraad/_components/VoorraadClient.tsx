@@ -19,6 +19,7 @@ import {
 import PageGuideNote from '@/components/PageGuideNote';
 import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
+import { upsertInventory, deleteInventory, adjustStock } from '../actions';
 
 const GOLD = '#c4a35a';
 
@@ -228,7 +229,12 @@ export interface VoorraadInitial {
 }
 
 export default function VoorraadClient({ initial }: { initial?: VoorraadInitial } = {}) {
-    const { data: inventory, insert, update, remove } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
+    /* `insert` / `update` / `remove` worden niet meer direct vanuit Client-side
+       aangeroepen — mutaties lopen via Server Actions (`../actions.ts`) zodat
+       Zod-validatie + re-auth + dedup-check + negative-stock-prevention server-
+       side gegarandeerd zijn. `refetch` halen we wel uit useSupabase voor live
+       refresh na een action. */
+    const { data: inventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
     const { data: recepten } = useSupabase<Recept>('recepten', initial?.recepten ?? []);
     const { data: supplierPrices } = useSupabase<any>('supplier_prices', initial?.supplierPrices ?? []);
     const { data: movements } = useSupabase<StockMovement>('stock_movements', initial?.movements ?? []);
@@ -295,29 +301,38 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
     }), [inventory, filter, search]);
 
     /* ───── stock actions ───── */
-    async function logMovement(item: InventoryItem, type: StockMovement['type'], qty: number, note?: string) {
-        try {
-            const newStock = Math.max(0, Number(item.current_stock || 0) + qty);
-            await fetch('/api/_supa/stock-movement', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inventory_id: item.id, type, qty, resulting_stock: newStock, note }),
-            }).catch(() => null);  /* logging is best-effort, blokkeert update niet */
-        } catch { /* idem */ }
-    }
+    /* Movement-log + stock-update verlopen nu samen via Server Action
+       `adjustStock` zodat negative-stock-prevention server-side gebeurt
+       en de movement-log niet uit sync kan lopen met de stock-mutatie. */
 
-    function quickAdjust(item: InventoryItem, amount: number) {
-        const newStock = Math.max(0, (item.current_stock || 0) + amount);
-        update(item.id, { current_stock: newStock } as any).then(() => {
-            showToast(item.naam + ': ' + newStock + ' ' + item.unit, 'success');
-            void logMovement(item, amount > 0 ? 'receive' : 'usage', amount);
+    async function quickAdjust(item: InventoryItem, amount: number) {
+        const result = await adjustStock({
+            inventory_id: item.id,
+            delta: amount,
+            type: amount > 0 ? 'receive' : 'usage',
         });
+        if (result.error) {
+            showToast('Bijwerken mislukt: ' + result.error, 'error');
+            return;
+        }
+        await refetchInventory();
+        showToast(`${item.naam}: ${result.data?.resulting_stock ?? '—'} ${item.unit}`, 'success');
     }
 
-    function setStock(item: InventoryItem, newStock: number) {
-        const delta = newStock - Number(item.current_stock || 0);
-        update(item.id, { current_stock: Math.max(0, newStock) } as any);
-        if (delta !== 0) void logMovement(item, 'count', delta, 'Telling-modus');
+    async function setStock(item: InventoryItem, newStock: number) {
+        const delta = Math.max(0, newStock) - Number(item.current_stock || 0);
+        if (delta === 0) return;
+        const result = await adjustStock({
+            inventory_id: item.id,
+            delta,
+            type: 'count',
+            note: 'Telling-modus',
+        });
+        if (result.error) {
+            showToast('Telling-mutatie mislukt: ' + result.error, 'error');
+            return;
+        }
+        await refetchInventory();
     }
 
     function openNewItem() { setAddOpen(true); }
@@ -327,45 +342,40 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         setEditing(item.id);
     }
 
-    function saveItem() {
+    async function saveItem() {
         if (!editForm.naam?.trim()) { showToast('Vul een naam in', 'error'); return; }
-        if (editing === 'new') {
-            /* Client-side dedup-check: voorkom dat user dubbel toevoegt.
-               DB heeft sinds migration 028 ook een UNIQUE-index als laatste vangnet. */
-            const naamNorm = (editForm.naam as string).trim().toLowerCase();
-            const dupe = inventory.find(i => (i.naam || '').trim().toLowerCase() === naamNorm);
-            if (dupe) {
-                showToast(`"${dupe.naam}" bestaat al in voorraad — bewerk dat item ipv nieuw toe te voegen`, 'error');
-                return;
-            }
-            insert(editForm).then(() => {
-                showToast('Item toegevoegd aan voorraad', 'success');
-                setEditing(null); setEditForm(null);
-            }).catch((e: any) => {
-                /* Vangnet voor DB-unique-violation (race-condition) */
-                if (String(e?.message || '').includes('ux_inventory_naam_org')) {
-                    showToast('Bestaat al — kon niet toevoegen', 'error');
-                } else {
-                    showToast('Toevoegen mislukt: ' + (e?.message || 'onbekend'), 'error');
-                }
-            });
-        } else {
-            const { id, created_at, ...rest } = editForm;
-            void id; void created_at;
-            update(editing as number, rest).then(() => {
-                showToast('Voorraad bijgewerkt', 'success');
-                setEditing(null); setEditForm(null);
-            });
+        const isNew = editing === 'new';
+        const payload = isNew
+            ? editForm
+            : (() => {
+                /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+                const { id: _id, created_at: _ca, ...rest } = editForm;
+                return { id: editing as number, ...rest };
+            })();
+        const result = await upsertInventory(payload);
+        if (result.error) {
+            const fieldMsg = result.fields
+                ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')'
+                : '';
+            showToast((isNew ? 'Toevoegen' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            return;
         }
+        await refetchInventory();
+        showToast(isNew ? 'Item toegevoegd aan voorraad' : 'Voorraad bijgewerkt', 'success');
+        setEditing(null); setEditForm(null);
     }
 
     function deleteItem() {
-        showConfirm('Dit item verwijderen uit de voorraad?', () => {
-            remove(editing as number).then(() => {
-                showToast('Item verwijderd', 'success');
-                setEditing(null); setEditForm(null);
-                setSelectedId(null);
-            });
+        showConfirm('Dit item verwijderen uit de voorraad?', async () => {
+            const result = await deleteInventory(editing as number);
+            if (result.error) {
+                showToast('Verwijderen mislukt: ' + result.error, 'error');
+                return;
+            }
+            await refetchInventory();
+            showToast('Item verwijderd', 'success');
+            setEditing(null); setEditForm(null);
+            setSelectedId(null);
         });
     }
 
@@ -611,11 +621,15 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                 {addOpen && (
                     <AddItemModal
                         onClose={() => setAddOpen(false)}
-                        onSave={(data: any) => {
-                            insert(data).then(() => {
-                                showToast('Item toegevoegd', 'success');
-                                setAddOpen(false);
-                            });
+                        onSave={async (data: any) => {
+                            const result = await upsertInventory(data);
+                            if (result.error) {
+                                showToast('Toevoegen mislukt: ' + result.error, 'error');
+                                return;
+                            }
+                            await refetchInventory();
+                            showToast('Item toegevoegd', 'success');
+                            setAddOpen(false);
                         }}
                     />
                 )}
