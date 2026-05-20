@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles } from 'lucide-react';
@@ -39,17 +38,50 @@ import {
   schatMarge,
   fmtSmokeTime,
 } from './_components/stats-helpers';
-import type { InventoryItem, Gang } from '@/types';
+import type { InventoryItem, Gang, Gerecht } from '@/types';
+
+/* Lokaal type voor menu-templates (geen export in database.types.ts).
+   menu_templates is een jsonb-tabel waar shape per template kan verschillen. */
+interface MenuTemplateRow {
+    id: number;
+    organization_id?: string;
+    naam: string;
+    is_default?: boolean;
+    template_data?: unknown;
+    created_at?: string;
+    updated_at?: string;
+    [key: string]: unknown;
+}
+
+/* Extended Gerecht-type met velden die in DB voorkomen maar (nog) niet
+   in database.types.ts staan. UI rendert deze, dus toevoegen voorkomt
+   `any`-casts per gebruik-site. `ingredient_costs` komt uit Gerecht zelf. */
+interface GerechtRow extends Gerecht {
+    gang_slug?: string;
+    foto_url?: string | null;
+    tags?: string[];
+    allergenen?: string[];
+    ingredienten?: Array<{ naam: string; qty?: number; unit?: string; [k: string]: unknown }>;
+    bron?: string;
+    kostprijs_pp?: number;
+    verkoopprijs?: number;
+}
+
+/* Extended Gang-type — UI gebruikt extra velden minimum + extra_prijs_pp. */
+interface GangRow extends Gang {
+    minimum?: number;
+    extra_prijs_pp?: number;
+}
 
 /* P0.19 — GerechtenClient is de Client-body; `<page.tsx>` Server Component
    prefetcht gangen + gerechten + inventory + menu_templates parallel zodat
    first paint geen waterfall toont. `loadData()` blijft als refetch zodat
    menu-templates en realtime updates blijven werken. */
 export interface GerechtenInitial {
-    gangen?: any[];
-    gerechten?: any[];
+    gangen?: GangRow[];
+    gerechten?: GerechtRow[];
     inventory?: InventoryItem[];
-    menuTemplates?: any[];
+    menuTemplates?: MenuTemplateRow[];
 }
 
 export default function Gerechten({ initial }: { initial?: GerechtenInitial } = {}) {
@@ -60,8 +92,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         naam: [{ required: 'Vul een naam in' }],
     });
     const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
-    const [gangen, setGangen] = useState<any[]>(initial?.gangen ?? []);
-    const [gerechten, setGerechten] = useState<any[]>(initial?.gerechten ?? []);
+    const [gangen, setGangen] = useState<GangRow[]>(initial?.gangen ?? []);
+    const [gerechten, setGerechten] = useState<GerechtRow[]>(initial?.gerechten ?? []);
     const [activeGang, setActiveGang] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any>>({});
@@ -84,7 +116,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [view, setView] = useState<'gerechten' | 'menus'>('gerechten');
     /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
     const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
-    const [menuTemplates, setMenuTemplates] = useState<any[]>(initial?.menuTemplates ?? []);
+    const [menuTemplates, setMenuTemplates] = useState<MenuTemplateRow[]>(initial?.menuTemplates ?? []);
     const [showMenuWizard, setShowMenuWizard] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<MenuTemplateInput | null>(null);
     /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).
@@ -133,7 +165,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setShowMenuWizard(true);
     }
 
-    function editMenuTemplate(t: any) {
+    function editMenuTemplate(t) {
         setEditingTemplate({
             id: t.id,
             naam: t.naam,
@@ -182,7 +214,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         });
     }
 
-    async function toggleDefaultTemplate(t: any) {
+    async function toggleDefaultTemplate(t) {
         if (t.is_default) {
             const { error } = await supabase.from('menu_templates').update({ is_default: false }).eq('id', t.id);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
@@ -201,7 +233,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setGangEditing('new');
         setGangForm({ naam: '', slug: '', minimum: 1, extra_prijs_pp: 0, volgorde: gangen.length + 1, actief: true });
     }
-    function editGang(g: any) {
+    function editGang(g) {
         setGangEditing(g.id);
         setGangForm({ naam: g.naam, slug: g.slug, minimum: g.minimum, extra_prijs_pp: g.extra_prijs_pp, volgorde: g.volgorde, actief: g.actief !== false });
     }
@@ -245,7 +277,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
         setStats(null);
     }
-    async function editGerecht(g: any) {
+    async function editGerecht(g) {
         setEditing(g.id);
 
         const rawIngs = g.ingredienten || [];
@@ -257,7 +289,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             gang_slug: g.gang_slug,
             volgorde: g.volgorde,
             foto_url: g.foto_url || '',
-            ingredienten: mappedIngs.map(function (i: any) {
+            ingredienten: mappedIngs.map(function (i) {
                 if (typeof i === 'object' && i !== null) return (i.hoeveelheid ? i.hoeveelheid + (i.eenheid ? ' ' + i.eenheid + ' ' : ' ') : '') + (i.naam || JSON.stringify(i));
                 return String(i);
             }),
@@ -287,11 +319,13 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         let offCount = 0;
         const offList: { naam: string; datum: string }[] = [];
         if (offRes.data) {
-            offRes.data.forEach(function (o: any) {
+            offRes.data.forEach(function (o) {
                 const sel = typeof o.menu_selectie === 'string' ? JSON.parse(o.menu_selectie) : o.menu_selectie;
                 let found = false;
-                Object.values(sel || {}).forEach(function (dishes: any) {
-                    if (dishes && dishes.indexOf(naam) >= 0) found = true;
+                Object.values(sel || {}).forEach(function (dishes) {
+                    /* dishes-shape varieert per offerte: kan string[] of object[] zijn.
+                       Runtime-check + cast naar string[] voor de indexOf-lookup. */
+                    if (Array.isArray(dishes) && (dishes as string[]).indexOf(naam) >= 0) found = true;
                 });
                 if (found) { offCount++; offList.push({ naam: o.client_naam, datum: o.datum }); }
             });
@@ -300,7 +334,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         const servRes = await supabase.from('service_logs').select('duration_seconds, gang_slug').not('served_at', 'is', null);
         let totalTime = 0; let timeCount = 0;
         if (servRes.data) {
-            servRes.data.forEach(function (log: any) {
+            servRes.data.forEach(function (log) {
                 if (log.duration_seconds) { totalTime += log.duration_seconds; timeCount++; }
             });
         }
@@ -320,7 +354,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     async function detectAllergensViaAi(saveData: Record<string, any>): Promise<string[]> {
         try {
             const fromCosts = Array.isArray(saveData.ingredient_costs)
-                ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
+                ? saveData.ingredient_costs.map((c) => c?.naam).filter(Boolean)
                 : [];
             const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
             const ingredients = (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
@@ -548,7 +582,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             const d = tune.details;
             setForm((f: any) => {
                 const items = (f.ingredient_costs || []).slice();
-                const idx = items.findIndex((i: any) =>
+                const idx = items.findIndex((i) =>
                     (i.naam || '').toLowerCase().trim() === d.from_naam.toLowerCase().trim()
                 );
                 const replacement = {
@@ -570,7 +604,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             const d = tune.details;
             setForm((f: any) => {
                 const items = (f.ingredient_costs || []).slice();
-                const idx = items.findIndex((i: any) =>
+                const idx = items.findIndex((i) =>
                     (i.naam || '').toLowerCase().trim() === d.ingredient_naam.toLowerCase().trim()
                 );
                 if (idx >= 0) {
@@ -626,7 +660,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         naam: form.naam || '',
         beschrijving: form.beschrijving,
         porties: form.porties || 10,
-        ingredient_costs: (form.ingredient_costs || []).map((i: any) => ({
+        ingredient_costs: (form.ingredient_costs || []).map((i) => ({
             naam: i.naam,
             qty_pp: Number(i.qty_pp) || 0,
             unit: i.unit || 'kg',
@@ -647,7 +681,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
         if (fix.addToInventory) {
             try {
-                const existing = (inventoryData || []).find((i: any) =>
+                const existing = (inventoryData || []).find((i) =>
                     (i.naam || '').toLowerCase().trim() === fix.naam.toLowerCase().trim()
                 );
                 if (existing) {
@@ -711,7 +745,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* Status-systeem: cards filteren op huidige gang + huidige status-filter.
        Status is single source of truth — `actief` blijft via DB-trigger in sync
        voor backwards-compat met oudere queries. */
-    function getStatus(g: any): 'concept' | 'review_nodig' | 'actief' | 'inactief' {
+    function getStatus(g): 'concept' | 'review_nodig' | 'actief' | 'inactief' {
         if (g.status) return g.status;
         return g.actief === false ? 'inactief' : 'actief';
     }
@@ -733,7 +767,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     };
 
     /* Compleetheid-meter: welke velden zijn nog niet ingevuld? */
-    function checklistVoor(g: any): { label: string; ok: boolean }[] {
+    function checklistVoor(g): { label: string; ok: boolean }[] {
         return [
             { label: 'Naam', ok: !!(g.naam && String(g.naam).trim()) },
             { label: 'Beschrijving', ok: !!(g.beschrijving && String(g.beschrijving).trim()) },
@@ -760,10 +794,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     // Count hoe vaak het signature-gerecht voorkomt in opgeslagen menu-templates.
     // menu_selectie heeft vorm: { gang_slug: [{ gerecht_id, naam }, ...], ... }
     const signatureInMenusCount = signatureDish
-        ? menuTemplates.reduce(function (acc: number, t: any) {
+        ? menuTemplates.reduce(function (acc: number, t) {
             const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
             const allItems: any[] = (Object.values(sel) as unknown[]).flatMap(function (list) { return Array.isArray(list) ? list : []; });
-            const found = allItems.some(function (i: any) {
+            const found = allItems.some(function (i) {
                 if (!i) return false;
                 if (i.gerecht_id != null && i.gerecht_id === signatureDish.id) return true;
                 if (i.naam && signatureDish.naam && i.naam === signatureDish.naam) return true;
@@ -773,8 +807,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
           }, 0)
         : 0;
 
-    const gangPills = gangen.map(function (g: any) {
-        const count = gerechten.filter(function (d: any) { return d.gang_slug === g.slug; }).length;
+    const gangPills = gangen.map(function (g) {
+        const count = gerechten.filter(function (d) { return d.gang_slug === g.slug; }).length;
         const icon = pickGlyph('', g.slug);
         return { slug: g.slug as string, label: g.naam as string, icon, count };
     });
@@ -855,7 +889,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                         </div>
                     ) : (
                         <div className="dish-grid">
-                            {menuTemplates.map(function (t: any) {
+                            {menuTemplates.map(function (t) {
                                 const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
                                 const dishCount: number = (Object.values(sel) as unknown[]).reduce<number>(function (a, list) { return a + (Array.isArray(list) ? list.length : 0); }, 0);
                                 return (
@@ -864,11 +898,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                             {t.is_default && <Star size={14} style={{ color: '#B48C14', fill: '#B48C14' }} />}
                                             <div className="dish-name" style={{ margin: 0, flex: 1 }}>{t.naam}</div>
                                         </div>
-                                        {t.beschrijving && <div className="dish-desc">{t.beschrijving}</div>}
+                                        {t.beschrijving ? <div className="dish-desc">{String(t.beschrijving)}</div> : null}
                                         <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
                                             {dishCount} gerechten over {Object.keys(sel).length} gangen
                                         </div>
-                                        {t.basis_prijs_pp > 0 && (
+                                        {Number(t.basis_prijs_pp) > 0 && (
                                             <div className="dish-kostprijs">€{Number(t.basis_prijs_pp).toFixed(2)} p.p.</div>
                                         )}
                                         <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1017,8 +1051,19 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
                             {g.ingredienten && g.ingredienten.length > 0 && (
                                 <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                                    {g.ingredienten.slice(0, 3).map(function (ing: any, i: number) {
-                                        const rawText = typeof ing === 'object' && ing !== null ? (ing.hoeveelheid ? ing.hoeveelheid + (ing.eenheid ? ' ' + ing.eenheid + ' ' : ' ') : '') + (ing.naam || JSON.stringify(ing)) : ing;
+                                    {g.ingredienten.slice(0, 3).map(function (ing, i: number) {
+                                        /* ingredienten kan string[] of object[] zijn (legacy + nieuw).
+                                           Cast naar string voor render — runtime String() vangt beide af. */
+                                        const ingRow = ing as Record<string, unknown> | string;
+                                        let rawText: string;
+                                        if (typeof ingRow === 'object' && ingRow !== null) {
+                                            const hoev = ingRow.hoeveelheid as string | number | undefined;
+                                            const eenheid = ingRow.eenheid as string | undefined;
+                                            const naam = ingRow.naam as string | undefined;
+                                            rawText = (hoev ? String(hoev) + (eenheid ? ' ' + eenheid + ' ' : ' ') : '') + (naam || JSON.stringify(ingRow));
+                                        } else {
+                                            rawText = String(ingRow);
+                                        }
                                         return <span key={i} className="ingredient-chip-small">{rawText}</span>;
                                     })}
                                     {g.ingredienten.length > 3 && <span className="ingredient-chip-small" style={{ opacity: 0.4 }}>+{g.ingredienten.length - 3}</span>}
@@ -1082,14 +1127,14 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         const d = body.data || {};
                                         setForm(Object.assign({}, form, {
                                             beschrijving: form.beschrijving || d.beschrijving || '',
-                                            ingredienten: (form.ingredienten && form.ingredienten.length > 0) ? form.ingredienten : (d.ingredienten || []).map(function (i: any) { return i.naam + ' ' + i.hoeveelheid + i.eenheid; }),
+                                            ingredienten: (form.ingredienten && form.ingredienten.length > 0) ? form.ingredienten : (d.ingredienten || []).map(function (i) { return i.naam + ' ' + i.hoeveelheid + i.eenheid; }),
                                             bereidingswijze: form.bereidingswijze || (Array.isArray(d.instructies) ? d.instructies.join('\n') : d.instructies) || '',
                                             allergenen: (form.allergenen && form.allergenen.length > 0) ? form.allergenen : (d.allergenen || []),
                                             tags: (form.tags && form.tags.length > 0) ? form.tags : (d.tags || []),
                                             kostprijs_pp: form.kostprijs_pp || d.geschatte_kostprijs_pp || 0,
                                         }));
                                         showToast('✨ AI heeft ontbrekende velden ingevuld', 'success');
-                                    } catch (e: any) {
+                                    } catch (e) {
                                         showToast('Fout: ' + (e.message || 'onbekend'), 'error');
                                     } finally {
                                         setAiEnriching(false);
@@ -1622,7 +1667,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     {stats.offList.length > 0 && (
                                         <div style={{ marginTop: 10 }}>
                                             <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Gebruikt in:</div>
-                                            {stats.offList.map(function (o: any, i: number) {
+                                            {stats.offList.map(function (o, i: number) {
                                                 return (
                                                     <div key={i} style={{ fontSize: 12, padding: '3px 0', display: 'flex', justifyContent: 'space-between' }}>
                                                         <span>{o.naam}</span>
