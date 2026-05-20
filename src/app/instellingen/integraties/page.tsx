@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   Calendar, Receipt, CreditCard, Webhook, ExternalLink, CheckCircle2,
   XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap,
+  BookOpen, Send, MessageCircle,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { Settings as SettingsIcon } from 'lucide-react';
@@ -15,13 +16,16 @@ interface Integration {
   id: string;
   naam: string;
   beschrijving: string;
-  categorie: 'agenda' | 'boekhouding' | 'betalingen' | 'webhooks';
+  categorie: 'agenda' | 'boekhouding' | 'betalingen' | 'webhooks' | 'email' | 'communicatie';
   icon: React.ReactNode;
   accentColor: string;
   envVars: string[];
   docsUrl: string;
   apiEndpoint: string;
   configuratie: string[];
+  /* "beta" verbergt de actie-knoppen en toont "Vraag toegang" — voor integraties
+     die we wel willen aankondigen maar nog niet hebben uitgewerkt. */
+  beta?: boolean;
 }
 
 const INTEGRATIES: Integration[] = [
@@ -125,6 +129,61 @@ const INTEGRATIES: Integration[] = [
       'Webhooks worden automatisch getriggerd bij app-events',
     ],
   },
+  // S5-deel-3: drie nieuwe integraties voor NL-cateraars. MVP = beta-listing
+  // met "Vraag toegang" — volledige OAuth-flow per provider volgt op vraag.
+  {
+    id: 'eboekhouden',
+    naam: 'e-Boekhouden.nl',
+    beschrijving: 'NL-boekhoudsoftware voor kleine ondernemers — populair als Moneybird-alternatief. Push facturen + bonnen automatisch naar je e-Boekhouden-administratie.',
+    categorie: 'boekhouding',
+    icon: <BookOpen size={20} />,
+    accentColor: '#0066cc',
+    envVars: ['EBOEKHOUDEN_USERNAME', 'EBOEKHOUDEN_SECURITY_CODE_1', 'EBOEKHOUDEN_SECURITY_CODE_2'],
+    docsUrl: 'https://www.e-boekhouden.nl/koppelingen/',
+    apiEndpoint: '/api/accounting/eboekhouden',
+    configuratie: [
+      'Vraag toegang aan via support — we koppelen via de officiële SOAP-API van e-Boekhouden',
+      'Toon je security codes in e-Boekhouden onder "Beheer → API"',
+      'Facturen + bonnen worden direct geboekt op de juiste grootboekrekening',
+    ],
+    beta: true,
+  },
+  {
+    id: 'resend',
+    naam: 'Resend',
+    beschrijving: 'Moderne email-API als alternatief voor SMTP. Stuur offerte-PDFs en factuur-herinneringen vanuit je eigen domein zonder Mailgun/SendGrid setup.',
+    categorie: 'email',
+    icon: <Send size={20} />,
+    accentColor: '#000000',
+    envVars: ['RESEND_API_KEY', 'RESEND_FROM_EMAIL'],
+    docsUrl: 'https://resend.com/docs',
+    apiEndpoint: '/api/email/resend',
+    configuratie: [
+      'Maak een gratis Resend account aan (3000 mails/maand gratis)',
+      'Verifieer je eigen domein via DNS — geen sender-spoofing',
+      'Voeg RESEND_API_KEY toe aan .env.local',
+      'Vraag toegang aan via support — we activeren de Resend-driver in plaats van SMTP',
+    ],
+    beta: true,
+  },
+  {
+    id: 'whatsapp',
+    naam: 'WhatsApp Business API',
+    beschrijving: 'Stuur klant-bevestigingen, betaalherinneringen en event-updates via WhatsApp ipv email. Voor NL-catering bewezen hogere open-rate dan email.',
+    categorie: 'communicatie',
+    icon: <MessageCircle size={20} />,
+    accentColor: '#25d366',
+    envVars: ['WHATSAPP_PHONE_ID', 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_VERIFY_TOKEN'],
+    docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+    apiEndpoint: '/api/whatsapp',
+    configuratie: [
+      'Maak een Meta Business account aan + verifieer je telefoonnummer',
+      'Genereer permanent access token + phone-number ID',
+      'Maak goedgekeurde message templates voor offerte/factuur/reminder flows',
+      'Vraag toegang aan via support — we wiren de templates naar de juiste flows',
+    ],
+    beta: true,
+  },
 ];
 
 // ── Status check component ──
@@ -200,6 +259,8 @@ export default function IntegratiesPage() {
     { key: 'agenda', label: 'Agenda & Planning', icon: <Calendar size={16} /> },
     { key: 'boekhouding', label: 'Boekhouding', icon: <Receipt size={16} /> },
     { key: 'betalingen', label: 'Betalingen', icon: <CreditCard size={16} /> },
+    { key: 'email', label: 'Email', icon: <Send size={16} /> },
+    { key: 'communicatie', label: 'Klant-communicatie', icon: <MessageCircle size={16} /> },
     { key: 'webhooks', label: 'Webhooks & Automatisering', icon: <Webhook size={16} /> },
   ];
 
