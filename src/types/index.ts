@@ -3,6 +3,7 @@
 // =============================================
 
 export * from './database.types';
+export * from './database.types.extensions';
 import type { DbEvent, Offerte, InventoryItem, Factuur } from './database.types';
 
 // ── Notification / Toast ──

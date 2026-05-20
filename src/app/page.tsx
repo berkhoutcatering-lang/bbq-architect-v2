@@ -11,16 +11,8 @@ import { detectAllConflicts } from '@/lib/conflictDetection';
 import type {
   DbEvent, Offerte, Factuur, InventoryItem, Klant, Bon, Leverancier,
   DbCourse, DbEventAllergy, PrepTask, PrepSuggestion, Gerecht,
-} from '@/types/database.types';
-
-/* MargeAlert leeft in `marge_alerts`-tabel maar heeft (nog) geen export
-   in database.types.ts. Inline interface met de velden die /Vandaag leest. */
-interface MargeAlert {
-  id: number;
-  status: string;
-  pct_change?: number | string;
-  total_marge_impact_eur?: number | string;
-}
+  MargeAlert,
+} from '@/types';
 import EventWizard from '@/components/EventWizard';
 import OnboardingChecklist, { type ChecklistData } from '@/components/onboarding/OnboardingChecklist';
 import PersonaQuiz from '@/components/onboarding/PersonaQuiz';
