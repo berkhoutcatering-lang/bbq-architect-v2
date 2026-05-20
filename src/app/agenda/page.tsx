@@ -15,6 +15,7 @@ import {
     Check, RefreshCw, Plus, Pencil,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import ErrorCard from '@/components/ErrorCard';
 import { useAgendaPersonal } from './_components/useAgendaPersonal';
 import PersonalEventModal from './_components/PersonalEventModal';
 
@@ -706,8 +707,9 @@ export default function Agenda() {
         return function () { clearTimeout(t); clearTimeout(clearT); };
     }, [conflictId]);
 
-    const { data: dbEvents } = useSupabase<DbEvent>('events', []);
-    const { data: prepTasks } = useSupabase<PrepTask>('prep_tasks', []);
+    const { data: dbEvents, error: eventsError, refetch: refetchEvents } = useSupabase<DbEvent>('events', []);
+    const { data: prepTasks, error: prepError } = useSupabase<PrepTask>('prep_tasks', []);
+    const fetchError = eventsError || prepError;
     const { rows: personalRows, insert: insertPersonal, update: updatePersonal, remove: removePersonal } = useAgendaPersonal();
 
     /* Modal-state voor persoonlijke afspraken — open met datum (klik op lege dag-cel),
@@ -847,6 +849,21 @@ export default function Agenda() {
                 ]}
             />
             <AgendaHero kpis={kpis} onAiClick={() => document.getElementById('ai-rail-anchor')?.scrollIntoView({ behavior: 'smooth' })} />
+
+            {/* Fetch-error op events + prep: alleen tonen als data leeg is —
+                bij stale-data (eerdere refetch was succesvol) blijft de
+                kalender zichtbaar zodat user niet plots een lege maand ziet.
+                Bundel 6b — ErrorCard uitrol over high-traffic pages. */}
+            {fetchError && dbEvents.length === 0 && prepTasks.length === 0 && (
+                <div style={{ marginTop: 16 }}>
+                    <ErrorCard
+                        title="Agenda kon niet worden geladen"
+                        message="Events of prep-taken konden niet worden opgehaald. Probeer opnieuw — werkt het nog niet, dan ligt het waarschijnlijk aan de internetverbinding."
+                        retry={refetchEvents}
+                        details={fetchError}
+                    />
+                </div>
+            )}
 
             <div style={{ height: 18 }} />
             <MonthNav

@@ -9,6 +9,7 @@ import {
     ComposedChart, Line, PieChart, Pie, Legend,
 } from 'recharts';
 import EmptyState from '@/components/EmptyState';
+import ErrorCard from '@/components/ErrorCard';
 import { LoadingState } from '@/components/LoadingState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
@@ -80,14 +81,24 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
        skipInitialFetch slaat de duplicate client-fetch over zodra Server-data
        beschikbaar is. Realtime subscription blijft actief voor live updates. */
     const skipFetch = { skipInitialFetch: !!initial };
-    const { data: offertes, loading: offertesLoading } = useSupabase<Offerte>('offertes', initial?.offertes ?? [], skipFetch);
-    const { data: facturen, loading: facturenLoading } = useSupabase<Factuur>('facturen', initial?.facturen ?? [], skipFetch);
-    const { data: events } = useSupabase<DbEvent>('events', initial?.events ?? [], skipFetch);
-    const { data: bonnen } = useSupabase<Bon>('bonnen', initial?.bonnen ?? [], skipFetch);
-    const { data: leveranciers } = useSupabase<Leverancier>('leveranciers', initial?.leveranciers ?? [], skipFetch);
-    const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', initial?.gerechten ?? [], skipFetch);
-    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? [], skipFetch);
-    const { data: urenLogs } = useSupabase<TimeLog>('time_logs', initial?.timeLogs ?? [], skipFetch);
+    const { data: offertes, loading: offertesLoading, error: offertesError, refetch: refetchOffertes } = useSupabase<Offerte>('offertes', initial?.offertes ?? [], skipFetch);
+    const { data: facturen, loading: facturenLoading, error: facturenError } = useSupabase<Factuur>('facturen', initial?.facturen ?? [], skipFetch);
+    const { data: events, error: eventsError } = useSupabase<DbEvent>('events', initial?.events ?? [], skipFetch);
+    const { data: bonnen, error: bonnenError } = useSupabase<Bon>('bonnen', initial?.bonnen ?? [], skipFetch);
+    const { data: leveranciers, error: leveranciersError } = useSupabase<Leverancier>('leveranciers', initial?.leveranciers ?? [], skipFetch);
+    const { data: gerechtenData, error: gerechtenError } = useSupabase<Gerecht>('gerechten', initial?.gerechten ?? [], skipFetch);
+    const { data: inventoryData, error: inventoryError } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? [], skipFetch);
+    const { data: urenLogs, error: urenError } = useSupabase<TimeLog>('time_logs', initial?.timeLogs ?? [], skipFetch);
+
+    /* Aggregate fetch-error voor financiën: als één van de 8 queries faalde
+       EN er staat geen data, toon ErrorCard met aggregate-bron. Voor stale-
+       data scenario blijft de pagina renderen — losse cards mogen zelf hun
+       error tonen als ze leeg zijn (verdere uitrol in Bundel 6c). */
+    const anyError = offertesError || facturenError || eventsError || bonnenError
+        || leveranciersError || gerechtenError || inventoryError || urenError;
+    const hasAnyData = offertes.length > 0 || facturen.length > 0 || events.length > 0
+        || bonnen.length > 0 || leveranciers.length > 0 || gerechtenData.length > 0
+        || inventoryData.length > 0 || urenLogs.length > 0;
     const { settings } = useSettings();
 
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -280,6 +291,26 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
     }
 
     const noData = forecast.totalOmzet === 0 && forecast.totalFoodcost === 0 && forecast.totalLabor === 0 && facturen.length === 0;
+
+    /* Bundel 6b — fetch-error prioriteit boven empty-state. Onderscheid:
+         - error + geen data anywhere = ErrorCard met retry
+         - geen error + geen data = EmptyState (nieuwe-tenant-flow)
+       Voorheen toonde nieuwe-tenant-EmptyState ook bij API-down — verwarrend
+       want het lijkt alsof er "nog niets is" terwijl het in feite een
+       connectivity-issue is. */
+    if (anyError && !hasAnyData) {
+        return (
+            <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
+                <PageHeader title="Financiën" />
+                <ErrorCard
+                    title="Financiële data kon niet worden geladen"
+                    message="Een of meerdere bronnen (offertes, facturen, voorraad...) waren niet bereikbaar. Probeer opnieuw."
+                    retry={refetchOffertes}
+                    details={anyError}
+                />
+            </div>
+        );
+    }
     if (noData) {
         return (
             <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
