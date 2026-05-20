@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useMemo } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
@@ -67,9 +66,14 @@ export default function Offertes() {
     const [followUpTitle, setFollowUpTitle] = useState('');
     const [cascadeSteps, setCascadeSteps] = useState<CascadeStep[] | null>(null);
 
-    function calcOfferteMargeData(offerte: Record<string, any>) {
+    function calcOfferteMargeData(offerte: Offerte | Record<string, unknown>) {
         try {
-            return calcOfferteMarge(offerte, gerechtenData as any, inventoryData as any);
+            /* Helper-signature gebruikt `Record<string, any>` om legacy en
+               geserialiseerde-shapes van offerte te accepteren. Onze typed
+               `Offerte` is structureel een superset; cast naar de helper-input
+               houdt runtime gedrag intact. gerechtenData / inventoryData zijn
+               structural-compatible met GerechtForCost[] / InventoryLookup[]. */
+            return calcOfferteMarge(offerte as Record<string, unknown>, gerechtenData, inventoryData);
         } catch (e) {
             console.error('[MARGE] calcOfferteMargeData error:', e);
             return { gasten: 0, prijsPP: 38.50, omzet: 0, foodcostPP: 0, foodcostTotaal: 0, vasteKosten: 0, nettoWinst: 0, margePct: 0 };
@@ -81,7 +85,7 @@ export default function Offertes() {
        écht veranderen. Belangrijk voor lijst met 50+ offertes. */
     const margeMap = useMemo(function () {
         const map: Record<string, ReturnType<typeof calcOfferteMargeData>> = {};
-        offertes.forEach(function (o: any) { map[String(o.id)] = calcOfferteMargeData(o); });
+        offertes.forEach(function (o) { map[String(o.id)] = calcOfferteMargeData(o); });
         return map;
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
     }, [offertes, gerechtenData, inventoryData]);
@@ -91,7 +95,7 @@ export default function Offertes() {
 
     function handleWizardComplete(result: any) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setShowWizard(false);
         setEditing('new');
         setForm({
@@ -130,7 +134,7 @@ export default function Offertes() {
 
     function newOfferte() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
     }
@@ -187,7 +191,7 @@ export default function Offertes() {
 
         let totalBedrag = 0;
         let estimatedGuests = quoteData.aantal_gasten || 0;
-        (quoteData.items || []).forEach(function (item: any) {
+        (quoteData.items || []).forEach(function (item) {
             totalBedrag += (item.qty || 0) * (item.prijs || 0);
             if (!estimatedGuests && (item.qty || 0) > estimatedGuests) estimatedGuests = item.qty || 0;
         });
@@ -268,7 +272,7 @@ export default function Offertes() {
                 showToast('📅 Agenda gesynchroniseerd — Optie toegevoegd!', 'success');
                 return newEventId;
             }
-        } catch (e: any) {
+        } catch (e) {
             console.error('[SYNC] Error:', e);
             showToast('Sync fout: kon events niet ophalen', 'error');
             return null;
@@ -296,7 +300,7 @@ export default function Offertes() {
                 offerteData: formData,
                 settings: settings,
                 facturenCount: facturen.data.length,
-                facturenNummers: facturen.data.map((f: any) => f.nummer)
+                facturenNummers: facturen.data.map((f) => f.nummer)
             });
 
             // Update cascade steps progressively
@@ -322,7 +326,7 @@ export default function Offertes() {
                     { icon: '📧', label: 'Stuur bevestiging', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
                 ]);
             }, 3000);
-        } catch (e: any) {
+        } catch (e) {
             console.error('[SAVE] Workflow error:', e);
             showToast('Workflow fout: ' + (e.message || ''), 'error');
             setCascadeSteps(function (prev) {
@@ -367,7 +371,7 @@ export default function Offertes() {
             await triggerWorkflowIfAccepted(eventId, form!);
 
             setEditing(null); setForm(null);
-        } catch (err: any) {
+        } catch (err) {
             console.error('[SAVE] Error:', err);
             showToast('Fout bij opslaan: ' + (err.message || ''), 'error');
         }
@@ -375,7 +379,7 @@ export default function Offertes() {
 
     function duplicateOfferte(o: Record<string, any>) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
-        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o: any) => o.nummer));
+        const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         const copy = JSON.parse(JSON.stringify(o));
         delete copy.id;
         delete copy.created_at;
@@ -394,7 +398,7 @@ export default function Offertes() {
                Vervangt directe Client-supabase delete. Event-koppeling
                (gekoppelde events bij offerte) blijft Client-side want dat
                is een aparte cleanup-stap die geen Zod-validatie vereist. */
-            await supabase.from('events').delete().eq('offerte_id', editing).then(function (res: any) {
+            await supabase.from('events').delete().eq('offerte_id', editing).then(function (res) {
                 if (res.error) console.error('[DELETE] Event delete error:', res.error);
             });
             const result = await deleteOfferteAction(editing as number);
@@ -410,7 +414,7 @@ export default function Offertes() {
 
     async function convertToFactuur() {
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
-        const factuurNum = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.data.map((f: any) => f.nummer));
+        const factuurNum = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.data.map((f) => f.nummer));
         const factuurData = {
             nummer: factuurNum,
             status: 'concept' as const,
@@ -434,10 +438,10 @@ export default function Offertes() {
 
     function addItem() { setField('items', (form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
     function updateItem(idx: number, key: string, val: any) {
-        const items = form!.items.map(function (item: any, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
+        const items = form!.items.map(function (item, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
         setField('items', items);
     }
-    function removeItem(idx: number) { setField('items', form!.items.filter(function (_: any, i: number) { return i !== idx; })); }
+    function removeItem(idx: number) { setField('items', form!.items.filter(function (_, i: number) { return i !== idx; })); }
 
     function downloadOfferte() {
         const totals = calcLineTotals(form!.items);
@@ -492,7 +496,7 @@ export default function Offertes() {
                         <table className="tbl">
                             <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%<FieldTooltip text="Standaard 21% voor catering. 9% voor bepaalde voedingsmiddelen." position="left" /></th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
                             <tbody>
-                                {(form.items || []).map(function (item: any, idx: number) {
+                                {(form.items || []).map(function (item, idx: number) {
                                     return <tr key={idx}>
                                         <td><input value={item.desc} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
                                         <td><input type="number" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
@@ -549,7 +553,7 @@ export default function Offertes() {
                         <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Vaste kosten</h4>
                         {(form.vaste_kosten || []).length > 0 && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-                                {(form.vaste_kosten || []).map(function (k: any, idx: number) {
+                                {(form.vaste_kosten || []).map(function (k, idx: number) {
                                     return (
                                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                                             <span style={{ flex: 1, fontSize: 13 }}>{k.naam}</span>
@@ -693,7 +697,7 @@ export default function Offertes() {
                                     Of starten met een opgeslagen menu
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                    {availableTemplates.map(function (t: any) {
+                                    {availableTemplates.map(function (t) {
                                         const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
                                         const dishCount: number = (Object.values(sel) as unknown[]).reduce<number>(function (a, list) { return a + (Array.isArray(list) ? list.length : 0); }, 0);
                                         return (
@@ -819,16 +823,20 @@ export default function Offertes() {
                         return sortDir === 'asc' ? (a.client_naam || '').localeCompare(b.client_naam || '') : (b.client_naam || '').localeCompare(a.client_naam || '');
                     }
                     if (sortField === 'totaal') {
-                        const ta = (a.items || []).reduce(function (s: number, i: any) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
-                        const tb = (b.items || []).reduce(function (s: number, i: any) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
+                        const ta = (a.items || []).reduce(function (s: number, i) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
+                        const tb = (b.items || []).reduce(function (s: number, i) { return s + (i.qty || 0) * (i.prijs || 0); }, 0);
                         return sortDir === 'asc' ? ta - tb : tb - ta;
                     }
                     return 0;
                 }).map(function (o) {
                     let total = 0;
-                    (o.items || []).forEach(function (item: any) { total += (item.qty || 0) * (item.prijs || 0); });
-                    const m = margeMap[String(o.id)] || calcOfferteMargeData(o as any);
-                    const hasMenu = (o.menu_selectie as any[] || []).length > 0;
+                    (o.items || []).forEach(function (item) { total += (item.qty || 0) * (item.prijs || 0); });
+                    const m = margeMap[String(o.id)] || calcOfferteMargeData(o);
+                    /* menu_selectie heeft 3 mogelijke shapes (array van string,
+                       array van object, of object met arrays) — runtime-check
+                       met type-assertion is veiliger dan de Offerte-type-def. */
+                    const menuSel = o.menu_selectie as unknown;
+                    const hasMenu = Array.isArray(menuSel) && menuSel.length > 0;
                     return (
                         <div key={o.id} className="ev-row" onClick={function () { editOfferte(o); }}>
                             <div style={{ flex: 1 }}>
