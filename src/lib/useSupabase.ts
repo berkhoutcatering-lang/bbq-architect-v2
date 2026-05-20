@@ -58,6 +58,13 @@ export function useSupabase<T extends { id: number }>(
 ): {
     data: T[];
     loading: boolean;
+    /**
+     * Laatste fetch-error als string, anders null. Consumer kan dit
+     * gebruiken om een `<ErrorCard retry={refetch} />` te tonen i.p.v.
+     * een lege data-array. Voorheen werd de error alleen via
+     * `console.warn` gelogd — onzichtbaar voor de gebruiker.
+     */
+    error: string | null;
     refetch: () => void;
     insert: (row: Partial<T>) => Promise<T | null>;
     update: (id: number, row: Partial<T>) => Promise<T | null>;
@@ -68,6 +75,7 @@ export function useSupabase<T extends { id: number }>(
     const [data, setData] = useState<T[]>(defaultVal || []);
     /* Loading start false als Server Component al data leverde — geen flash. */
     const [loading, setLoading] = useState(!skipInitialFetch);
+    const [error, setError] = useState<string | null>(null);
     const { orgId } = useOrg();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const activeOffline = useActiveOfflineState();
@@ -78,13 +86,16 @@ export function useSupabase<T extends { id: number }>(
         if (offlineMode && activeOffline) {
             const eventScoped = (EVENT_SCOPED_TABLES as readonly string[]).includes(table);
             setLoading(true);
+            setError(null);
             readLocal<T>(table as OfflineTable, eventScoped ? activeOffline.eventId : undefined)
                 .then(function (rows) {
                     setData(rows);
                     setLoading(false);
                 })
                 .catch(function (e) {
+                    const msg = e instanceof Error ? e.message : 'offline-data niet beschikbaar';
                     console.warn('[offline] readLocal failed for ' + table, e);
+                    setError(msg);
                     setLoading(false);
                 });
             return;
@@ -92,13 +103,24 @@ export function useSupabase<T extends { id: number }>(
 
         if (!supabase || !orgId) { setLoading(false); return; }
         setLoading(true);
+        setError(null);
         supabase
             .from(table)
             .select('*')
             .eq('organization_id', orgId)
             .order('id', { ascending: true })
             .then(function (res) {
-                if (res.error) { console.warn('[DB] Fetch warning on ' + table + ':', res.error.message || res.error.code || 'unknown'); }
+                if (res.error) {
+                    const msg = res.error.message || res.error.code || 'onbekende fout';
+                    console.warn('[DB] Fetch warning on ' + table + ':', msg);
+                    setError(msg);
+                    /* Bewaar bestaande data (b.v. server-prefetched of vorige
+                       fetch) zodat de page niet plots leeg wordt — consumer
+                       kan via `error` tonen "live-refresh mislukt" zonder de
+                       UI te wissen. */
+                } else {
+                    setError(null);
+                }
                 if (res.data) setData(res.data as T[]);
                 setLoading(false);
             });
@@ -300,7 +322,7 @@ export function useSupabase<T extends { id: number }>(
         });
     }, [table, orgId, offlineMode, activeOffline]);
 
-    return { data, loading, refetch: fetchData, insert, update, remove, setData };
+    return { data, loading, error, refetch: fetchData, insert, update, remove, setData };
 }
 
 // Single-row table (settings) — scoped by organization

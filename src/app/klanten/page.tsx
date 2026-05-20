@@ -13,6 +13,7 @@ import { useFormValidation } from '@/hooks/useFormValidation';
 import { useFormAutosave } from '@/hooks/useFormAutosave';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
+import ErrorCard from '@/components/ErrorCard';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
@@ -32,7 +33,7 @@ function Klanten() {
        aangeroepen — mutaties lopen via Server Actions (`./actions.ts`) zodat
        Zod-validatie + re-auth gegarandeerd zijn. `refetch` halen we wel uit
        useSupabase voor live-refresh na een action. */
-    const { data: klanten, loading: klantenLoading, refetch } = useSupabase<Klant>('klanten', []);
+    const { data: klanten, loading: klantenLoading, error: klantenError, refetch } = useSupabase<Klant>('klanten', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
@@ -404,7 +405,20 @@ function Klanten() {
             </div>
             <PageSection>
             <MetallicCard hover={false}>
-                {klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
+                {/* Toon ErrorCard alleen als er een fetch-error is EN er geen
+                    klanten zijn (= eerste-laad faalde). Bij stale-data + error
+                    op refresh tonen we de bestaande lijst gewoon door — fout
+                    zit dan in een transparante refresh-toast i.p.v. dat de
+                    page leeg wordt. */}
+                {klantenError && klanten.length === 0 && (
+                    <ErrorCard
+                        title="Klanten konden niet worden geladen"
+                        message="De verbinding met de database werkte even niet. Klik op Opnieuw, of mail support@bbqarchitect.nl als het blijft hangen."
+                        retry={refetch}
+                        details={klantenError}
+                    />
+                )}
+                {!klantenError && klanten.length === 0 && <EmptyState page="/klanten" onAction={newKlant} />}
                 {klanten.length > 0 && filtered.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
                         <Search size={24} style={{ display: 'block', opacity: 0.4 }} />
