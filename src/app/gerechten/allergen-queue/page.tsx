@@ -4,7 +4,7 @@ import PageHeader from '@/components/PageHeader';
 import AllergenQueueList, { type QueueItem } from './_components/AllergenQueueList';
 
 export const metadata = {
-    title: 'Allergenen-bevestiging · Menu & Recepten',
+    title: 'Allergenen-bevestiging — Menu',
     description: 'Bevestig AI-voorgestelde allergens voor EU 1169/2011 audit-evidence',
 };
 

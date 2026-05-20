@@ -373,7 +373,7 @@ function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) =>
                                         '0 1px 2px rgba(0,0,0,.06), 0 6px 16px -6px rgba(0,0,0,.22)',
                                 }}>
                                     <div style={{ fontSize: 9, color: t.primary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>Event</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>Hop &amp; Bites</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>{form?.bedrijfsnaam || 'Jouw bedrijf'}</div>
                                     <div style={{ display: 'flex', gap: 4 }}>
                                         <span style={{ padding: '3px 8px', borderRadius: 4, background: t.primary, color: t.card, fontSize: 9, fontWeight: 700 }}>OFFERTE</span>
                                         <span style={{ padding: '3px 8px', borderRadius: 4, background: 'transparent', border: '1px solid ' + t.accent, color: t.accent, fontSize: 9, fontWeight: 700 }}>FACTUUR</span>

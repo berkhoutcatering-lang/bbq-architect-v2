@@ -4,7 +4,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import PageHeader from '@/components/PageHeader';
 
 export const metadata = {
-    title: 'Ingrediënten — Menu & Recepten',
+    title: 'Ingrediënten — Menu',
     description: 'Master-lijst van ingrediënten, gekoppeld aan voorraad en allergenen-cascade',
 };
 

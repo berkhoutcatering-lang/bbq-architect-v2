@@ -5,6 +5,7 @@ import {
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
     Receipt, TrendingUp, Library, Boxes, BookOpen, Flame,
+    Hammer, Truck,
 } from "lucide-react";
 
 export interface NavChild {
@@ -57,7 +58,7 @@ export const navSections: NavSection[] = [
         ],
     },
     {
-        title: "Menu & Recepten",
+        title: "Menu",
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "gerechten",
@@ -75,12 +76,15 @@ export const navSections: NavSection[] = [
         icon: <Package size={18} />,
         type: "folder",
         slug: "voorraad",
-        description: "Voorraad, inkoop en leveranciers.",
+        description: "Voorraad, inkoop, leveranciers, materieel en logistiek.",
         hubHref: "/voorraad",
         children: [
             { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
             { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bon-scanner" },
             { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
+            { label: "Materieel", icon: <Hammer size={16} />, href: "/materieel", description: "Smoker, pannen, equipment — wat je meeneemt naar het event" },
+            { label: "Logistiek", icon: <Truck size={16} />, href: "/logistiek", description: "Routes, transport en planning" },
+            { label: "Prijsintelligentie", icon: <TrendingUp size={16} />, href: "/price-intelligence", description: "Prijstrends en leverancier-vergelijking" },
         ],
     },
     {
@@ -103,7 +107,6 @@ export const navSections: NavSection[] = [
         icon: <Settings size={18} />,
         type: "folder",
         slug: "systeem",
-        secondary: true,
         description: "Instellingen, gebruikers, mailbox, website en hulp.",
         hubHref: "/systeem",
         children: [

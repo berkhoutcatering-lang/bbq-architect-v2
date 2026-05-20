@@ -575,7 +575,7 @@ export default function DashboardPage() {
                 className="text-[9px] tracking-[0.25em] uppercase truncate"
                 style={{ color: 'var(--muted)' }}
               >
-                Hop &amp; Bites · Ambacht
+                {brand?.bedrijfsnaam || 'Catering'}
               </p>
             </div>
           </div>

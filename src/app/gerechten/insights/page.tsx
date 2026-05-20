@@ -7,7 +7,7 @@ import ReuseCounterChip from '@/components/chips/ReuseCounterChip';
 import AllergenSourceChainPopover from '@/components/chips/AllergenSourceChainPopover';
 
 export const metadata = {
-    title: 'Insights · Menu & Recepten',
+    title: 'Insights — Menu',
     description: 'Cross-tab metrics: marge-distributie, reuse-density, AI-status',
 };
 
