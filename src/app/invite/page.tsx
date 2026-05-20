@@ -13,38 +13,43 @@ export default function InvitePage() {
   const [error, setError] = useState('');
 
   useEffect(function () {
-    if (!token || !supabase) { setStatus('error'); return; }
+    if (!token) { setStatus('error'); return; }
 
-    // Fetch invitation details
-    supabase
-      .from('invitations')
-      .select('email, role, accepted_at, expires_at, organizations(name)')
-      .eq('token', token)
-      .single()
+    /* Server-side lookup via rate-limited endpoint — voorheen direct
+       Supabase-query vanaf Client, wat token-brute-force toeliet via
+       Realtime/REST. Endpoint heeft per-IP rate-limit + constant-time
+       response zodat existence-via-timing onmogelijk wordt. */
+    fetch('/api/invite/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, data: d }; }); })
       .then(function (res) {
-        if (res.error || !res.data) {
+        if (res.status === 429) {
           setStatus('error');
-          setError('Uitnodiging niet gevonden');
+          setError(res.data?.error || 'Te veel pogingen — probeer later opnieuw.');
           return;
         }
-
-        const data = res.data as Record<string, unknown>;
-        if (data.accepted_at) {
-          setStatus('accepted');
+        if (!res.ok || !res.data?.status) {
+          setStatus('error');
+          setError(res.data?.error || 'Uitnodiging niet gevonden');
           return;
         }
-        if (new Date(data.expires_at as string) < new Date()) {
-          setStatus('expired');
+        if (res.data.status === 'accepted') { setStatus('accepted'); return; }
+        if (res.data.status === 'expired') { setStatus('expired'); return; }
+        if (res.data.status === 'ready' && res.data.invite) {
+          setInvite(res.data.invite);
+          setStatus('ready');
           return;
         }
-
-        const org = data.organizations as Record<string, unknown> | null;
-        setInvite({
-          email: data.email as string,
-          role: data.role as string,
-          organization_name: org?.name as string || 'Onbekend',
-        });
-        setStatus('ready');
+        setStatus('error');
+        setError('Onbekende fout');
+      })
+      .catch(function (err) {
+        console.error('[invite] lookup failed:', err);
+        setStatus('error');
+        setError('Verbinding mislukt — probeer opnieuw.');
       });
   }, [token]);
 

@@ -122,8 +122,34 @@ export default function HelpCenter() {
   useEffect(function () { fetchArticles(); }, [fetchArticles]);
   useEffect(function () { fetchTickets(); }, [fetchTickets]);
 
+  /* Client-side rate-limit: max 5 tickets per 5 minuten, plus 10s
+     cooldown tussen submits. Echte enforcement hoort server-side
+     (/api/support), dit is alleen defensive-UX. */
+  const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+  const RATE_LIMIT_MAX = 5;
+  const COOLDOWN_MS = 10 * 1000;
+
   function handleSubmitTicket() {
     if (!ticketSubject.trim() || !ticketMessage.trim() || !orgId) return;
+
+    /* Rate-limit-check: leest recente timestamps uit localStorage. */
+    try {
+      const raw = localStorage.getItem('bbq_help_ticket_submits');
+      const now = Date.now();
+      const recent: number[] = raw
+        ? (JSON.parse(raw) as number[]).filter(function (t) { return now - t < RATE_LIMIT_WINDOW_MS; })
+        : [];
+      if (recent.length >= RATE_LIMIT_MAX) {
+        setSubmitMsg('Te veel tickets in korte tijd — wacht een paar minuten of mail support@bbqarchitect.nl rechtstreeks.');
+        return;
+      }
+      const last = recent[recent.length - 1];
+      if (last && now - last < COOLDOWN_MS) {
+        setSubmitMsg('Even geduld — wacht ' + Math.ceil((COOLDOWN_MS - (now - last)) / 1000) + ' sec voordat je opnieuw indient.');
+        return;
+      }
+    } catch { /* localStorage onbereikbaar — laat door, server is laatste vangnet */ }
+
     setSubmitting(true);
     setSubmitMsg('');
     fetch('/api/support', {
@@ -139,8 +165,20 @@ export default function HelpCenter() {
           setTicketSubject('');
           setTicketMessage('');
           fetchTickets();
+          /* Log submit-tijd voor rate-limit. */
+          try {
+            const raw = localStorage.getItem('bbq_help_ticket_submits');
+            const list: number[] = raw ? JSON.parse(raw) as number[] : [];
+            list.push(Date.now());
+            localStorage.setItem('bbq_help_ticket_submits', JSON.stringify(list.slice(-RATE_LIMIT_MAX)));
+          } catch { /* ignore */ }
         }
         setSubmitting(false);
+      })
+      .catch(function (err) {
+        setSubmitMsg('Verbinding mislukt — probeer opnieuw of mail support@bbqarchitect.nl');
+        setSubmitting(false);
+        console.error('[hulp] submit ticket failed:', err);
       });
   }
 
@@ -350,9 +388,33 @@ export default function HelpCenter() {
   );
 }
 
-// Simple markdown to HTML renderer
+/**
+ * XSS-veilige markdown-renderer.
+ *
+ * Strategie: eerst ALLE HTML escapen, dan markdown-tokens vervangen door
+ * eigen veilige tags. Een payload als `<img src=x onerror="alert(1)">`
+ * wordt na escapen `&lt;img src=x onerror=&quot;alert(1)&quot;&gt;` —
+ * renders als zichtbare tekst, voert geen script uit. Voorheen liet de
+ * regex-only-aanpak HTML-tags door, wat een XSS-vector was via CMS.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderMarkdown(md: string): string {
-  return md
+  /* Step 1 — escape alle HTML in de bron. Niets kan onbedoeld als tag
+     rendered worden vanaf hier. */
+  const safe = escapeHtml(md);
+
+  /* Step 2 — markdown-tokens vervangen door whitelisted tags. Alleen
+     deze 5 patterns produceren HTML, en alleen met statische attribuut-
+     waarden (geen user-input in attributen). */
+  return safe
     .replace(/^### (.+)$/gm, '<h3 style="font-size:16px;font-weight:700;color:var(--text);margin:20px 0 8px">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 style="font-size:18px;font-weight:700;color:var(--text);margin:24px 0 10px">$1</h2>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
