@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 import { RGS_CATERING_CATEGORIES, PURCHASE_CODES, rgsLookup } from '@/lib/rgsCategories';
 
 export const runtime = 'nodejs';
@@ -82,6 +83,10 @@ export async function POST(req: NextRequest) {
     const ids = Array.isArray(body.bon_ids) ? body.bon_ids.filter(n => Number.isInteger(n)) : [];
     if (ids.length === 0) return NextResponse.json({ error: 'bon_ids verplicht' }, { status: 400 });
     if (ids.length > 20) return NextResponse.json({ error: 'Max 20 bonnen per call' }, { status: 400 });
+
+    // AI hard-cap: Haiku tekst × max 20 bonnen ≈ €0.01-0.02 per batch.
+    const capRes = await enforceAiCap(orgId, 0.02);
+    if (capRes) return capRes;
 
     // Org-threshold ophalen
     const { data: orgRow } = await supabase

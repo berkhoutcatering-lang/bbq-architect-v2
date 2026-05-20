@@ -20,6 +20,7 @@ import {
     ListOrdered, FileUp, Inbox,
 } from 'lucide-react';
 import FolderInbox from './FolderInbox';
+import AiBadge from '@/components/ai/AiBadge';
 
 const GOLD = '#c4a35a';
 const FOLDER_KEY = 'pi_folder_v3';   // bumped: nieuwe 'inbox' optie
@@ -1292,7 +1293,11 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <BtnGhost icon={ArrowLeft} onClick={onCancel}>Annuleren</BtnGhost>
                 <div style={{ flex: 1 }}>
-                    <h2 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 24, margin: 0 }}>Controleer factuur</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <h2 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 300, fontSize: 24, margin: 0 }}>Controleer factuur</h2>
+                        {/* NL-15 AI Act transparency: factuur-data is AI-geëxtraheerd uit PDF */}
+                        <AiBadge model="claude-sonnet-4-6" />
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>AI heeft de gegevens gelezen — corrigeer waar nodig en klik opslaan.</div>
                 </div>
                 <BtnPrimary

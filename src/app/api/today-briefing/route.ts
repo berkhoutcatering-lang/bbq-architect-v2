@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 /**
  * AI-briefing endpoint voor /Vandaag.
@@ -175,6 +176,12 @@ export async function POST(req: NextRequest) {
       '',
       'Schrijf 3-5 bullets (1 voor all_clear). Behoud href en priority. Voeg samen als dat scherper is.',
     ].filter(Boolean).join('\n');
+
+    // AI hard-cap: Haiku tekst met caching ≈ €0.01 per briefing.
+    if (organizationId) {
+      const capRes = await enforceAiCap(organizationId, 0.01);
+      if (capRes) return capRes;
+    }
 
     /* Prompt-caching op de system prompt — TTL 5 min, dus herhaalde calls
        binnen die window kosten alleen de delta van de user-message. */
