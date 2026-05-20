@@ -20,6 +20,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/voorraad', request.url), 308);
   }
 
+  // /foto-archief was de oude "alle fotos" hub (gerecht-fotos + bonnen door
+  // elkaar). In S3-deel-2 vervangen door /archief: dedicated boekhoud-
+  // bonnenkistje met full-text search + filters + preview-modal.
+  if (pathname.startsWith('/foto-archief')) {
+    return NextResponse.redirect(new URL('/archief', request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();
