@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { supabase } from '@/lib/supabase';
+import { upsertMaterieel, deleteMaterieel as deleteMaterieelAction } from './actions';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { fmtNl, today } from '@/lib/utils';
@@ -24,7 +25,10 @@ interface NewLogEntry {
 }
 
 export default function Materieel() {
-    const { data: materieel, loading, insert, update, remove, refetch } = useSupabase<MatType>('materieel', []);
+    /* `insert/update/remove` worden niet meer gebruikt — mutaties lopen via
+       Server Actions (`./actions.ts`) voor Zod-validatie + re-auth (Bundel 7).
+       `refetch` halen we wel uit useSupabase voor live-refresh na een action. */
+    const { data: materieel, loading, refetch } = useSupabase<MatType>('materieel', []);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<number | string | null>(null);
@@ -68,23 +72,40 @@ export default function Materieel() {
     function editItem(m: any) { setEditing(m.id); setForm(JSON.parse(JSON.stringify({ ...m, fotos: m.fotos || [] }))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
-    function saveItem() {
+    async function saveItem() {
         if (!validateAll({ naam: form.naam })) return;
-        const payload = { ...form };
-        if (editing === 'new') {
-            insert(payload).then(() => { showToast('Materieel toegevoegd', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
-        } else {
-            const { id, created_at, ...rest } = payload;
-            update(editing as number, rest).then(() => { showToast('Materieel bijgewerkt', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+        const isNew = editing === 'new';
+        /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+        const { id: _existingId, created_at: _ca, ...rest } = form;
+        const payload = isNew ? form : { id: editing as number, ...rest };
+        const result = await upsertMaterieel(payload);
+        if (result.error) {
+            const fieldMsg = result.fields
+                ? ' (' + Object.entries(result.fields).map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`).join('; ') + ')'
+                : '';
+            showToast((isNew ? 'Toevoegen' : 'Opslaan') + ' mislukt: ' + result.error + fieldMsg, 'error');
+            return;
         }
+        await refetch();
+        showToast(isNew ? 'Materieel toegevoegd' : 'Materieel bijgewerkt', 'success');
+        setEditing(null);
+        setForm(null);
     }
 
     function deleteItem() {
-        showConfirm('Materieel verwijderen?', () => {
-            /* Verwijder ook de foto's uit storage */
+        showConfirm('Materieel verwijderen?', async () => {
+            /* Verwijder ook de foto's uit storage (best-effort, separate van de Server Action). */
             const paths = (form.fotos || []).map((url: string) => extractStoragePath(url)).filter(Boolean) as string[];
             if (paths.length > 0) supabase.storage.from(BUCKET).remove(paths).catch(() => { /* ignore */ });
-            remove(editing as number).then(() => { showToast('Verwijderd', 'success'); setEditing(null); setForm(null); refetch(); }).catch((err: any) => { showToast('Fout: ' + (err.message || 'onbekend'), 'error'); });
+            const result = await deleteMaterieelAction(editing as number);
+            if (result.error) {
+                showToast('Verwijderen mislukt: ' + result.error, 'error');
+                return;
+            }
+            await refetch();
+            showToast('Verwijderd', 'success');
+            setEditing(null);
+            setForm(null);
         });
     }
 
@@ -207,10 +228,14 @@ export default function Materieel() {
                 scan_source: scanPreview.scan_source,
                 scan_data: scanPreview.scan_data,
             };
-            await insert(payload);
+            const result = await upsertMaterieel(payload);
+            if (result.error) {
+                showToast('Opslaan mislukt: ' + result.error, 'error');
+                return;
+            }
             showToast('Toegevoegd via scan', 'success');
             closeScan();
-            refetch();
+            await refetch();
         } catch (err: any) {
             showToast('Opslaan mislukt: ' + (err.message || 'onbekend'), 'error');
         }
