@@ -8933,6 +8933,85 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   font-weight: 700;
 }
 
+/* Insights design-handoff: metal-card + metric + page-title utilities.
+   Geport uit /tmp/bonnen-handoff/.../app-styles.css zodat de 8 insights-
+   componenten dezelfde glass-card-look hebben als de rest van het design. */
+.metal {
+  background: var(--card, rgba(30, 30, 34, .7));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+}
+.metal.clickable {
+  cursor: pointer;
+  transition: border-color .15s, transform .15s;
+}
+.metal.clickable:hover {
+  border-color: var(--border-strong, rgba(130, 130, 130, .3));
+  transform: translateY(-1px);
+}
+.metal-body {
+  padding: 18px 20px;
+}
+.metric {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  color: var(--text);
+  line-height: 1.1;
+}
+.metric-lg {
+  font-size: 28px;
+}
+.page-title {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 32px;
+  letter-spacing: -.015em;
+  color: var(--text);
+  margin: 0;
+}
+.page-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* Insights responsive: 2-koloms grids stacken op tablet, KPI's worden 2-koloms
+   en op mobiel 1-koloms. */
+@media (max-width: 1024px) {
+  .insights-row-1,
+  .insights-row-2,
+  .insights-row-3 {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (max-width: 768px) {
+  .insights-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 480px) {
+  .insights-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Pill-variants gebruikt door LaunchChecklist (ok / danger). De .pill base-class
+   bestaat al; deze utilities geven de status-tint. */
+.pill.pill-ok {
+  background: rgba(34, 197, 94, .12);
+  color: var(--green);
+  border: 1px solid rgba(34, 197, 94, .3);
+}
+.pill.pill-danger {
+  background: rgba(239, 68, 68, .12);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, .3);
+}
+
 /* ─────────────────────── Prep-KDS — /keuken/board ───────────────────────
    Multi-event prep-board (Mise-en-place modus) bovenop dezelfde
    .kds-layout-grond als service-mode. Pillar #3 (Gloved-hand-first UI):
