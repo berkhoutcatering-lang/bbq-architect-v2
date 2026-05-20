@@ -27,6 +27,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/archief', request.url), 308);
   }
 
+  // /price-intelligence is hernoemd naar /voorraad/inkoop-checker (S5-deel-1).
+  // Sam vond "price intelligence" niet duidelijk voor de nuchtere Drent;
+  // "inkoop-checker" past beter bij wat de pagina doet (leverancier-prijzen
+  // tracken via email-inbox + factuur-extractie). Backend ongewijzigd.
+  if (pathname.startsWith('/price-intelligence')) {
+    return NextResponse.redirect(new URL('/voorraad/inkoop-checker', request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();

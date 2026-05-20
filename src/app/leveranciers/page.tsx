@@ -790,7 +790,7 @@ function AddWizard({ onClose, onCreated }: { onClose: () => void; onCreated: () 
                                         icon={Upload}
                                         title="Ik heb een CSV / Excel"
                                         tagline="Eenmalige import"
-                                        hint="Drag-drop in /price-intelligence → tab Pricelists."
+                                        hint="Drag-drop in /voorraad/inkoop-checker → tab Pricelists."
                                         onClick={() => createLeverancier('csv')}
                                         disabled={submitting}
                                     />

@@ -13,7 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
-import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
@@ -45,6 +45,45 @@ export default function Materieel() {
     const [scanPreview, setScanPreview] = useState<any>(null);
     const [scanImageDataUrl, setScanImageDataUrl] = useState<string | null>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
+    /* S5-deel-1: AI-scrape uit product-URL. Toont per edit-modal een sectie
+       met URL-input + "Haal specs op" knop; resultaten landen in form.specs
+       en form.foto_urls. */
+    const [scrapeUrl, setScrapeUrl] = useState('');
+    const [scraping, setScraping] = useState(false);
+    const [scrapeError, setScrapeError] = useState<string | null>(null);
+
+    async function handleScrape() {
+        const url = scrapeUrl.trim();
+        if (!url) return;
+        setScraping(true);
+        setScrapeError(null);
+        try {
+            const res = await fetch('/api/materieel/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            const body = await res.json();
+            if (!res.ok) {
+                setScrapeError(body.error || 'Scrape mislukt');
+                return;
+            }
+            /* Merge specs in form; bewaar foto_url als eerste in foto_urls als
+               de gebruiker er nog geen heeft. Vul naam alleen als hij leeg is
+               (we overschrijven nooit user-input). */
+            const next: Record<string, unknown> = { ...form, specs: body.specs, product_url: body.source_url, specs_fetched_at: new Date().toISOString() };
+            if (!form.naam && body.specs?.naam) next.naam = body.specs.naam;
+            if (body.foto_url && (!form.foto_urls || form.foto_urls.length === 0)) {
+                next.foto_urls = [body.foto_url];
+            }
+            setForm(next);
+            showToast('Specs opgehaald via AI', 'success');
+        } catch (e: any) {
+            setScrapeError(e?.message || 'Onbekende fout');
+        } finally {
+            setScraping(false);
+        }
+    }
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
@@ -67,9 +106,14 @@ export default function Materieel() {
     function newItem() {
         setEditing('new');
         setForm({ naam: '', type: 'BBQ', status: 'ok', aanschaf_datum: '', notitie: '', locatie: '', fotos: [], logboek: [] });
+        setScrapeUrl(''); setScrapeError(null);
     }
 
-    function editItem(m: any) { setEditing(m.id); setForm(JSON.parse(JSON.stringify({ ...m, fotos: m.fotos || [] }))); }
+    function editItem(m: any) {
+        setEditing(m.id);
+        setForm(JSON.parse(JSON.stringify({ ...m, fotos: m.fotos || [], foto_urls: m.foto_urls || [], specs: m.specs || null })));
+        setScrapeUrl(m.product_url || ''); setScrapeError(null);
+    }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     async function saveItem() {
@@ -302,6 +346,72 @@ export default function Materieel() {
                         <div className="field"><label>Aanschafdatum</label><input type="date" value={form.aanschaf_datum || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('aanschaf_datum', e.target.value)} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setField('notitie', e.target.value)} /></div>
                     </div>
+
+                    {/* S5-deel-1: AI-scrape sectie — plak een leverancier-URL, krijg specs + foto terug. */}
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Sparkles size={14} /> Specs ophalen via product-URL
+                    </h4>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>
+                        <div style={{ position: 'relative', flex: '1 1 320px', minWidth: 280 }}>
+                            <LinkIcon size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} aria-hidden />
+                            <input
+                                type="url"
+                                value={scrapeUrl}
+                                onChange={(e) => setScrapeUrl(e.target.value)}
+                                placeholder="https://www.yodersmokers.com/yoder-ys640s/"
+                                style={{ width: '100%', padding: '8px 10px 8px 30px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 13 }}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            className="btn btn-brand btn-sm"
+                            onClick={handleScrape}
+                            disabled={scraping || !scrapeUrl.trim()}
+                        >
+                            {scraping
+                                ? <><Loader2 size={12} className="animate-spin" /> Ophalen…</>
+                                : <><Sparkles size={12} /> Haal specs op</>}
+                        </button>
+                        {form.product_url && (
+                            <a
+                                href={form.product_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '8px 0' }}
+                            >
+                                <ExternalLink size={11} /> Bron
+                            </a>
+                        )}
+                    </div>
+                    {scrapeError && (
+                        <div role="alert" style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444', fontSize: 12, marginBottom: 12 }}>
+                            {scrapeError}
+                        </div>
+                    )}
+                    {form.specs && Object.keys(form.specs).length > 0 && (
+                        <div style={{ padding: 14, borderRadius: 10, background: 'rgba(255,191,0,.04)', border: '1px solid rgba(255,191,0,.2)', marginBottom: 16 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 8 }}>
+                                {form.specs.merk && <SpecField label="Merk" value={form.specs.merk} />}
+                                {form.specs.model && <SpecField label="Model" value={form.specs.model} />}
+                                {form.specs.afmetingen && <SpecField label="Afmetingen" value={form.specs.afmetingen} />}
+                                {form.specs.gewicht && <SpecField label="Gewicht" value={form.specs.gewicht} />}
+                                {form.specs.vermogen && <SpecField label="Vermogen" value={form.specs.vermogen} />}
+                                {typeof form.specs.prijs_eur === 'number' && <SpecField label="Prijs" value={`€ ${form.specs.prijs_eur.toFixed(2)}`} mono />}
+                            </div>
+                            {Array.isArray(form.specs.specs_bullets) && form.specs.specs_bullets.length > 0 && (
+                                <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+                                    {form.specs.specs_bullets.slice(0, 8).map((b: string, i: number) => <li key={i}>{b}</li>)}
+                                </ul>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setField('specs', null)}
+                                style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            >
+                                Wis AI-specs
+                            </button>
+                        </div>
+                    )}
 
                     <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', textTransform: 'uppercase', marginTop: 28, marginBottom: 12 }}>Onderhoudslogboek</h4>
                     {(form.logboek || []).map((entry: any, idx: number) => (
@@ -548,5 +658,15 @@ export default function Materieel() {
             )}
         </>
         </RequireTier>
+    );
+}
+
+/* Kleine helper voor de specs-preview grid in de edit-modal. */
+function SpecField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+    return (
+        <div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 700, marginBottom: 2 }}>{label}</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', fontVariantNumeric: mono ? 'tabular-nums' : undefined, fontWeight: mono ? 600 : 500 }}>{value}</div>
+        </div>
     );
 }
