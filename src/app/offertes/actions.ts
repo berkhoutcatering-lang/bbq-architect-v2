@@ -14,47 +14,9 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { OfferteSchema, type OfferteInput } from '@/lib/schemas/offerte';
 
-const OfferteItemSchema = z.object({
-  beschrijving: z.string().max(500),
-  qty: z.coerce.number().nonnegative(),
-  prijs: z.coerce.number().nonnegative(),
-  /* Optionele BTW-categorie-hint voor downstream factuur-generatie.
-     De daadwerkelijke rate komt uit BTW_RULES_2026 lookup. */
-  btw_category: z.enum([
-    'food_catering', 'food_takeaway', 'service_personnel',
-    'alcohol', 'soft_drinks', 'transport', 'equipment_rental',
-    'b2b_intra_eu_reverse', 'export_non_eu', 'exempt',
-  ]).optional(),
-});
-
-const VasteKostenSchema = z.object({
-  naam: z.string().max(200),
-  bedrag: z.coerce.number(),
-});
-
-const OfferteSchema = z.object({
-  id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
-  client_naam: z.string().min(1, 'Klantnaam is verplicht').max(200),
-  klant_id: z.union([z.string().uuid(), z.coerce.number().int()]).nullable().optional(),
-  datum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum moet YYYY-MM-DD zijn'),
-  aantal_gasten: z.coerce.number().int().min(0).optional().default(0),
-  basis_prijs_pp: z.coerce.number().nonnegative().optional().default(0),
-  status: z.enum([
-    'concept', 'verzonden', 'geaccepteerd', 'betaald', 'geannuleerd',
-    'goedgekeurd', 'voltooid',
-  ]).optional().default('concept'),
-  items: z.array(OfferteItemSchema).optional().default([]),
-  vaste_kosten: z.array(VasteKostenSchema).optional().default([]),
-  /* menu_selectie kan drie shapes hebben — daarom unknown. Validatie van
-     de inhoud gebeurt in calcOfferteMarge. */
-  menu_selectie: z.unknown().optional(),
-  notities: z.string().max(10_000).optional(),
-  /* Open extra velden — `nummer`, `geldig_tot`, `accepted_at`, `client_email`
-     etc. kunnen meekomen uit de form. Schema is liberal voor backwards-compat. */
-}).passthrough();
-
-export type OfferteInput = z.input<typeof OfferteSchema>;
+export type { OfferteInput };
 
 export async function upsertOfferte(input: unknown): Promise<
   | { data: { id: string | number; status: string } }
