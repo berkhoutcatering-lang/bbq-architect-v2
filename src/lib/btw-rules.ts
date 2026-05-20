@@ -89,15 +89,21 @@ export function categoryFromLegacyPct(pct: number, hint?: 'food' | 'service' | '
 
 /**
  * Validatie-helper: gegeven een AI-suggestie van btw_pct (zoals uit
- * bon-extract), normaliseer naar een toegestane rate of throw.
+ * bon-extract), normaliseer naar een toegestane rate.
  *
  * AI mag 8 / 9 / 21 / 22 / "laag" / "hoog" sturen; wij accepteren
  * alleen 0 / 9 / 21 als gevalideerd resultaat.
+ *
+ * Drempels gespiegeld aan de oude `bonProcessing.ts`-logica (die had
+ * dezelfde test-coverage):
+ *   <  5  → 0   (ongeldig NL-tarief, snap naar vrijgesteld)
+ *   5-14  → 9   (food / laag tarief)
+ *   ≥ 15  → 21  (algemeen tarief)
  */
 export function validateBtwPct(raw: unknown): 0 | 9 | 21 {
   const n = typeof raw === 'number' ? raw : Number(raw);
   if (!Number.isFinite(n)) return 0;
-  if (n <= 0) return 0;
+  if (n < 5) return 0;
   if (n < 15) return 9;
   return 21;
 }

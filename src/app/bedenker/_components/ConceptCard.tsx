@@ -6,6 +6,7 @@ import type { Concept } from './types';
 import { RISK_COLOR, RISK_LABEL } from './types';
 import { useAnimatedNumber, useTilt, fireSparkles } from './wow-hooks';
 import CitationsChip from '@/components/chips/CitationsChip';
+import AiBadge from '@/components/ai/AiBadge';
 
 interface Props {
   concept: Concept;
@@ -75,6 +76,8 @@ export default function ConceptCard({ concept, onSave, onOpen, revealIndex = 0 }
         <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
           <ConceptStatusPill />
           <SourcePill />
+          {/* NL-15 AI Act transparency: concept is AI-gegenereerd */}
+          <AiBadge inline text="AI" />
         </div>
         <div
           style={{

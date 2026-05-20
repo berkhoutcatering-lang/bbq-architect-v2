@@ -5,6 +5,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -256,6 +257,12 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     error: `Rate limit: max 20 parses per minuut. Probeer over ${rl.resetInSeconds}s opnieuw.`,
                 }, { status: 429 });
+            }
+
+            // AI hard-cap: Sonnet vision batch-25 ≈ €0.20 per pricelist-PDF.
+            if (orgId) {
+                const capRes = await enforceAiCap(orgId, 0.20);
+                if (capRes) return capRes;
             }
         }
 

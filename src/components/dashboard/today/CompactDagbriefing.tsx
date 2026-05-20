@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ChevronRight, Check } from 'lucide-react';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 import { useOrg } from '@/lib/OrgContext';
+import AiBadge from '@/components/ai/AiBadge';
 
 export interface CompactBullet {
   id: string;
@@ -151,6 +152,8 @@ export default function CompactDagbriefing({
         >
           AI DAGBRIEFING
         </span>
+        {/* NL-15 AI Act transparency: bullets zijn AI-gegenereerd */}
+        <AiBadge model="claude-haiku-4-5" inline text="AI" />
         <span
           style={{
             fontSize: 10,

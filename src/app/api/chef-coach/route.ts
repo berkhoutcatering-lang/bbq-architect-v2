@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCentsPure as estimateAiCostCents } from '@/lib/aiCostEstimate';
+import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
@@ -104,6 +105,12 @@ export async function POST(req: NextRequest) {
             .from('organization_members').select('organization_id')
             .eq('user_id', user.id).eq('status', 'active').limit(1);
         const orgId = memberData?.[0]?.organization_id || null;
+
+        // AI hard-cap: Haiku streaming ≈ €0.02 per chef-coach-call.
+        if (orgId) {
+            const capRes = await enforceAiCap(orgId, 0.02);
+            if (capRes) return capRes;
+        }
 
         const ctx = (await req.json()) as ChefContext;
 
