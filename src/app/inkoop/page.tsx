@@ -1,179 +1,39 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
-import { useConfirm } from '@/components/ConfirmDialog';
-import { parseActions } from '@/lib/ai-actions';
-import { fmt, resizeImage } from '@/lib/utils';
+import { fmt } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
-import { supabase } from '@/lib/supabase';
 import EmptyState from '@/components/EmptyState';
-import PageHint from '@/components/PageHint';
 import PageHeader from '@/components/PageHeader';
-import PageSection from '@/components/PageSection';
-import { Camera, FileText, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X, ShoppingCart } from 'lucide-react';
+import { FileText, Phone, PlusCircle, User, X } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import { ShoppingCart } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { LoadingState } from '@/components/LoadingState';
 import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 import BestelvoorstelLaan from '@/app/inkoop/_components/BestelvoorstelLaan';
+import Scanner from '@/app/inkoop/_components/Scanner';
 
 export default function Inkoop() {
-    const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
-    const { data: inkooplijsten, insert: insertInk, update: updateInk, remove: removeInk } = useSupabase<Inkooplijst>('inkooplijsten', []);
-    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
-    const { data: events } = useSupabase<DbEvent>('events', []);
+    const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev } = useSupabase<Leverancier>('leveranciers', []);
     const { data: offertes } = useSupabase<Offerte>('offertes', []);
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
-    const { data: bonnen, insert: insertBon } = useSupabase<Bon>('bonnen', []);
+    const { data: bonnen } = useSupabase<Bon>('bonnen', []);
     const { settings } = useSettings();
     const showToast = useToast();
-    const showConfirm = useConfirm();
-    const [tab, setTab] = useState('leveranciers');
+    /* Tab via URL: /inkoop?tab=bonnen opent direct de scanner — sidebar +
+       /factuur-lezer 308-redirect gebruiken dit. Valid tabs: leveranciers,
+       bonnen, archief. */
+    const searchParams = useSearchParams();
+    const tabParam = searchParams?.get('tab');
+    const initialTab = tabParam === 'bonnen' || tabParam === 'archief' ? tabParam : 'leveranciers';
+    const [tab, setTab] = useState(initialTab);
     const [editingLev, setEditingLev] = useState<string | number | null>(null);
     const [levForm, setLevForm] = useState<Record<string, any> | null>(null);
-    const [expandedInk, setExpandedInk] = useState<number | null>(null);
-    const [newInkEvent, setNewInkEvent] = useState('');
-    const [newInkItem, setNewInkItem] = useState({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' });
-    const [boodschappenOfferte, setBoodschappenOfferte] = useState('');
-
-    const [receiptScanning, setReceiptScanning] = useState(false);
-    const [pendingActions, setPendingActions] = useState<any[]>([]);
-    const [scanStatus, setScanStatus] = useState('');
-    const [scanInsight, setScanInsight] = useState('');
-    const [lastScanData, setLastScanData] = useState<any>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    async function handleReceiptUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setReceiptScanning(true);
-        setPendingActions([]);
-        setScanInsight('');
-        setScanStatus('FOTO OPTIMALISEREN...');
-
-        const reader = new FileReader();
-        reader.onload = async function (ev: ProgressEvent<FileReader>) {
-            const rawB64 = ev.target!.result as string;
-            const b64 = await resizeImage(rawB64, 1920, 2560, 0.92);
-
-            setScanStatus('FACTUUR LEZEN — ELKE REGEL...');
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pageContext: '/inkoop',
-                        contextData: { leveranciers: leveranciers },
-                        messages: [{
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'text',
-                                    text: 'Lees deze factuur regel voor regel van boven naar beneden. Voor ELKE productregel maak je ONE ACTION-blok. Neem de tijd. Sla geen enkele regel over. Begin direct met het eerste <<<ACTION>>> blok.'
-                                },
-                                { type: 'image_url', image_url: { url: b64, detail: 'high' } }
-                            ]
-                        }]
-                    })
-                });
-                const json = await res.json();
-                if (json.error) throw new Error(json.error);
-                const content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
-                if (!content) {
-                    setScanStatus('GEEN RESPONSE');
-                    showToast('AI gaf geen tekst terug. Is de foto te wazig?', 'info');
-                    setReceiptScanning(false);
-                    return;
-                }
-                const { actions, cleanText } = parseActions(content);
-                setScanInsight(cleanText);
-
-                if (actions.length > 0) {
-                    const aggregated: any[] = [];
-                    actions.forEach((action: any) => {
-                        if (action.type !== 'process_receipt') { aggregated.push(action); return; }
-                        const item = action.data.items?.[0];
-                        if (!item) { aggregated.push(action); return; }
-
-                        const key = `${item.naam.toLowerCase().trim()}_${item.prijs}_${item.eenheid}`;
-                        const existing = aggregated.find((a: any) => {
-                            const eItem = a.data.items?.[0];
-                            return eItem && `${eItem.naam.toLowerCase().trim()}_${eItem.prijs}_${eItem.eenheid}` === key;
-                        });
-
-                        if (existing) {
-                            existing.data.items[0].aantal += item.aantal;
-                            if (!existing.data.items[0].breakdown) existing.data.items[0].breakdown = [existing.data.items[0].aantal - item.aantal];
-                            existing.data.items[0].breakdown.push(item.aantal);
-                        } else {
-                            const newAction = JSON.parse(JSON.stringify(action));
-                            aggregated.push(newAction);
-                        }
-                    });
-
-                    setPendingActions(aggregated);
-                    setScanStatus('READY ✓ — ' + aggregated.length + ' GROEPEN');
-                    setLastScanData({ b64, actions: aggregated, cleanText });
-                    showToast('Bon geanalyseerd! ' + aggregated.length + ' groepen gevormd.', 'success');
-                } else {
-                    setScanStatus('GEEN ITEMS GEVONDEN');
-                    showToast('Geen items herkend. Is de foto scherp genoeg?', 'info');
-                }
-            } catch (err: any) {
-                setScanStatus('SCAN FOUT MET RECEPT');
-                showToast('Fout: ' + err.message, 'error');
-            }
-            setReceiptScanning(false);
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async function runAction(action: any) {
-        try {
-            await supabase.from(action.meta.table).insert(action.data);
-            setPendingActions(prev => prev.filter(a => a.id !== action.id));
-            showToast('Item ingeboekt: ' + action.description, 'success');
-        } catch (err: any) {
-            showToast('Fout bij inboeken: ' + err.message, 'error');
-        }
-    }
-
-    async function saveToArchive() {
-        if (!lastScanData) return;
-        setScanStatus('ARCHIVEREN...');
-
-        try {
-            const winkel = lastScanData.actions[0]?.data?.winkel || 'Groothandel';
-            const datum = lastScanData.actions[0]?.data?.datum || new Date().toISOString().split('T')[0];
-            const totaal = lastScanData.actions[0]?.data?.totaal_bedrag || 0;
-
-            const fileName = `bon_${Date.now()}.jpg`;
-            const blob = await (await fetch(lastScanData.b64)).blob();
-            const { data: uploadData, error: uploadError } = await supabase.storage.from('bonnen').upload(fileName, blob);
-
-            const imageUrl = uploadData ? supabase.storage.from('bonnen').getPublicUrl(fileName).data.publicUrl : lastScanData.b64;
-
-            await insertBon({
-                winkel,
-                datum,
-                totaal_bedrag: totaal,
-                image_url: imageUrl,
-                raw_analysis: lastScanData.actions,
-                notities: lastScanData.cleanText
-            });
-
-            showToast('Bon gearchiveerd in The Vault!', 'success');
-            setLastScanData(null);
-            setPendingActions([]);
-            setScanInsight('');
-        } catch (e: any) {
-            console.error(e);
-            showToast('Archiveren mislukt (Bucket "bonnen" bestaat wellicht niet)', 'warning');
-        }
-        setScanStatus('');
-    }
+    const [boodschappenOfferte] = useState('');
 
     async function downloadReceiptPDF(bon: any) {
         /* raw_analysis kan string-JSON of array zijn; eerste guarden, anders
@@ -285,116 +145,7 @@ export default function Inkoop() {
             )}
 
             {tab === 'bonnen' && (
-                <div style={{ maxWidth: 800, margin: '0 auto' }}>
-                    <div className="artisan-panel" style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
-                        <Receipt size={48} style={{ color: 'var(--brand)' }} />
-                        <h2 style={{ fontFamily: 'var(--font-artisan)', letterSpacing: 2, fontSize: 24, marginBottom: 16 }}>VISION INKOOP TRACKER</h2>
-                        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 8, maxWidth: 500, margin: '0 auto 8px' }}>
-                            Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen.
-                        </p>
-                        <p style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 900, letterSpacing: 1, marginBottom: 32 }}>
-                            <Info size={14} /> MOMENTEEL ENKEL FOTO'S & SCREENSHOTS (PDF WORDT NOG NIET ONDERSTEUND)
-                        </p>
-
-                        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleReceiptUpload} style={{ display: 'none' }} />
-
-                        <button className="btn-brand" style={{ padding: '16px 40px', fontSize: 16 }} onClick={() => fileInputRef.current!.click()} disabled={receiptScanning}>
-                            {receiptScanning ? (
-                                <><Loader2 size={14} className="animate-spin" /> ANALYSEREN...</>
-                            ) : (
-                                <><Camera size={14} /> SCAN KASSABON</>
-                            )}
-                        </button>
-
-                        {scanStatus && <div style={{ marginTop: 20, fontSize: 12, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
-                    </div>
-
-                    {scanInsight && (
-                        <div className="artisan-panel" style={{ marginBottom: 24, borderLeft: '4px solid var(--brand)', background: 'rgba(213, 178, 98, 0.05)' }}>
-                            <div className="panel-head"><h3><Wand2 size={14} /> PITMASTER INSIGHT</h3></div>
-                            <div className="panel-body" style={{ fontSize: 13, color: 'var(--white)', fontStyle: 'italic', lineHeight: 1.6 }}>
-                                {scanInsight}
-                            </div>
-                        </div>
-                    )}
-
-                    {pendingActions.length > 0 && (
-                        <div className="artisan-panel">
-                            <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                                <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 12, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
-                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 12, background: 'linear-gradient(180deg, var(--brand), #9e781c)', color: '#000', fontWeight: 700 }} onClick={async () => {
-                                        /* Volledig automatisch: leverancier + voorraad + prijs-historie + BTW + boekhouding allemaal in 1 call. */
-                                        if (!lastScanData) { showToast('Geen scan-data — scan eerst een bon', 'error'); return; }
-                                        setScanStatus('AUTOMATISCH VERWERKEN...');
-                                        try {
-                                            const res = await fetch('/api/bon-process', {
-                                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    raw_analysis: lastScanData.actions,
-                                                    /* Direct fields als raw_analysis bij summarizeBon faalt op shape — */
-                                                    winkel: lastScanData.actions[0]?.data?.winkel,
-                                                    datum: lastScanData.actions[0]?.data?.datum,
-                                                    totaal_bedrag: lastScanData.actions[0]?.data?.totaal_bedrag,
-                                                }),
-                                            });
-                                            const body = await res.json();
-                                            if (!res.ok || !body.success) {
-                                                showToast('Fout: ' + (body.error || 'onbekend'), 'error');
-                                                setScanStatus('FOUT');
-                                                return;
-                                            }
-                                            const created = body.items_results.filter((r: any) => r.action === 'created').length;
-                                            const updated = body.items_results.filter((r: any) => r.action === 'updated').length;
-                                            const skipped = body.items_results.filter((r: any) => r.action === 'skipped').length;
-                                            const levMsg = body.leverancier ? `Leverancier ${body.leverancier.naam}${body.leverancier.created ? ' (nieuw)' : ''} · ` : '';
-                                            const btwMsg = `BTW 9%: €${body.btw.laag.toFixed(2)} · 21%: €${body.btw.hoog.toFixed(2)}`;
-                                            showToast(
-                                                `${levMsg}${created} nieuw, ${updated} bijgewerkt${skipped > 0 ? ', ' + skipped + ' overgeslagen' : ''}. ${btwMsg}`,
-                                                'success',
-                                            );
-                                            setPendingActions([]);
-                                            setLastScanData(null);
-                                            setScanInsight('');
-                                            setScanStatus('');
-                                        } catch (e: any) {
-                                            console.error('[bon-process]', e);
-                                            showToast('Verwerkingsfout: ' + (e?.message || 'onbekend'), 'error');
-                                            setScanStatus('FOUT');
-                                        }
-                                    }}>⚡ VERWERK VOLLEDIG</button>
-                                </div>
-                            </div>
-                            <div className="panel-body">
-                                {pendingActions.map((action: any) => (
-                                    <div key={action.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                                                {(() => {
-                                                    const item = action.data.items?.[0] || {};
-                                                    const prijs = item.prijs || action.data.prijs || 0;
-                                                    const aantal = item.aantal || action.data.aantal || 1;
-                                                    const eenheid = item.eenheid || action.data.eenheid || 'stks';
-                                                    const totaal = prijs * aantal;
-                                                    const breakdown = item.breakdown ? `(${item.breakdown.join(' + ')}) ` : '';
-                                                    return `${breakdown}€${prijs.toFixed(2)}/${eenheid} × ${aantal.toFixed(3)} ${eenheid} = €${totaal.toFixed(2)}`;
-                                                })()}
-                                            </div>
-                                        </div>
-                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 12, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
-                                            try { await supabase.from(action.meta.table).insert(action.data); } catch (e) { console.error("Error inserting action:", e); }
-                                            setPendingActions(prev => prev.filter(a => a.id !== action.id));
-                                            showToast('Item ingeboekt', 'success');
-                                        }}>BEVESTIG</button>
-                                    </div>
-                                ))}
-                                <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 12 }} onClick={() => setPendingActions([])}>WISSEN</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                <Scanner leveranciers={leveranciers as Array<{ id: number | string; naam: string }>} />
             )}
 
             {tab === 'archief' && (

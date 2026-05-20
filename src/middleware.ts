@@ -20,6 +20,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/voorraad', request.url), 308);
   }
 
+  // /factuur-lezer was een hub-overzicht met 3 cards die naar bestaande pages
+  // wezen — de echte scanner zit op /inkoop?tab=bonnen. In S3-deel-1 is de
+  // scanner-tab top-tier gemaakt (multi-format, batch, drag-drop, paste,
+  // camera). Redirect oude bookmarks rechtstreeks naar de bron.
+  if (pathname.startsWith('/factuur-lezer')) {
+    return NextResponse.redirect(new URL('/inkoop?tab=bonnen', request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();
