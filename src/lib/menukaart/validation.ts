@@ -2,11 +2,17 @@
  * Server-side validatie van overrides tegen de allow-list per template.
  * Gebruikt door Server Actions zodat de client geen waardes buiten bereik
  * kan posten.
+ *
+ * Rule-types: color, font, size, weight, enum, text, email, url, toggle.
  */
 
 import type { Overrides, OverrideKey, Template, AllowList } from './registry';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+// Eenvoudige email-validatie — RFC 5321 strikt is overkill voor UI-input.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// URL — accept met of zonder protocol, normalize-vrij hier (client kan https:// prependen).
+const URL_LIKE = /^(https?:\/\/)?[a-zA-Z0-9][a-zA-Z0-9-]{0,62}(\.[a-zA-Z0-9][a-zA-Z0-9-]{0,62})+(\/.*)?$/;
 
 export type ValidationError = { key: string; reason: string };
 
@@ -35,8 +41,8 @@ export function validateOverrides(
                     errors.push({ key, reason: 'Moet een hex-kleur zijn (#RRGGBB)' });
                     break;
                 }
-                 
-                (clean as any)[key] = rawValue;
+
+                (clean as Record<string, unknown>)[key] = rawValue;
                 break;
             }
             case 'font': {
@@ -44,8 +50,8 @@ export function validateOverrides(
                     errors.push({ key, reason: `Font moet één van ${rule.options.join(', ')} zijn` });
                     break;
                 }
-                 
-                (clean as any)[key] = rawValue;
+
+                (clean as Record<string, unknown>)[key] = rawValue;
                 break;
             }
             case 'size': {
@@ -54,8 +60,8 @@ export function validateOverrides(
                     errors.push({ key, reason: `Moet tussen ${rule.min} en ${rule.max} liggen` });
                     break;
                 }
-                 
-                (clean as any)[key] = Math.round(n);
+
+                (clean as Record<string, unknown>)[key] = Math.round(n);
                 break;
             }
             case 'weight': {
@@ -64,8 +70,8 @@ export function validateOverrides(
                     errors.push({ key, reason: `Weight moet één van ${rule.options.join(', ')} zijn` });
                     break;
                 }
-                 
-                (clean as any)[key] = n;
+
+                (clean as Record<string, unknown>)[key] = n;
                 break;
             }
             case 'enum': {
@@ -73,8 +79,8 @@ export function validateOverrides(
                     errors.push({ key, reason: `Moet één van ${rule.options.join(', ')} zijn` });
                     break;
                 }
-                 
-                (clean as any)[key] = rawValue;
+
+                (clean as Record<string, unknown>)[key] = rawValue;
                 break;
             }
             case 'text': {
@@ -82,12 +88,51 @@ export function validateOverrides(
                     errors.push({ key, reason: 'Moet tekst zijn' });
                     break;
                 }
-                if (rawValue.length > rule.max) {
+                const trimmed = rawValue.trim();
+                if (trimmed.length > rule.max) {
                     errors.push({ key, reason: `Maximaal ${rule.max} tekens` });
                     break;
                 }
-                 
-                (clean as any)[key] = rawValue;
+                // Lege string = clear (val terug op brand/default via cascade)
+                if (trimmed.length === 0) break;
+
+                (clean as Record<string, unknown>)[key] = trimmed;
+                break;
+            }
+            case 'email': {
+                if (typeof rawValue !== 'string') {
+                    errors.push({ key, reason: 'Moet tekst zijn' });
+                    break;
+                }
+                const trimmed = rawValue.trim();
+                if (trimmed.length === 0) break;
+                if (trimmed.length > rule.max) {
+                    errors.push({ key, reason: `Maximaal ${rule.max} tekens` });
+                    break;
+                }
+                if (!EMAIL.test(trimmed)) {
+                    errors.push({ key, reason: 'Geen geldig e-mailadres' });
+                    break;
+                }
+                (clean as Record<string, unknown>)[key] = trimmed;
+                break;
+            }
+            case 'url': {
+                if (typeof rawValue !== 'string') {
+                    errors.push({ key, reason: 'Moet tekst zijn' });
+                    break;
+                }
+                const trimmed = rawValue.trim();
+                if (trimmed.length === 0) break;
+                if (trimmed.length > rule.max) {
+                    errors.push({ key, reason: `Maximaal ${rule.max} tekens` });
+                    break;
+                }
+                if (!URL_LIKE.test(trimmed)) {
+                    errors.push({ key, reason: 'Geen geldige URL (bv. vuurenvlam.nl of https://vuurenvlam.nl)' });
+                    break;
+                }
+                (clean as Record<string, unknown>)[key] = trimmed;
                 break;
             }
             case 'toggle': {
@@ -95,8 +140,8 @@ export function validateOverrides(
                     errors.push({ key, reason: 'Moet boolean zijn' });
                     break;
                 }
-                 
-                (clean as any)[key] = rawValue;
+
+                (clean as Record<string, unknown>)[key] = rawValue;
                 break;
             }
         }

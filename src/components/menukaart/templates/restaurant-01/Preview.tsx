@@ -2,36 +2,26 @@
  * Restaurant-01 — klassiek-restaurant template.
  *
  * Pure visual component. Accepteert resolved overrides (cascade flat) plus
- * `data` (gangen + tenant-info). Style-tokens hangen aan CSS-vars zodat
- * editor live re-render zonder volledige tree-rebuild.
+ * `data` (gangen + logo). Style-tokens hangen aan CSS-vars zodat de editor
+ * live re-renderen kan zonder volledige tree-rebuild.
  *
- * Geporte 1-op-1 vanaf /tmp/menukaart-editor-check/.../menu-preview.jsx
- * + bijbehorende a4-* CSS uit editor.css.
+ * Geport vanaf `templates/restaurant-01.html` uit het zip-prototype:
+ * Cormorant Garamond serif italic, gold ornamenten, centered, allergeen-
+ * codes inline na elk gerecht.
  */
 
 import type { Overrides, LogoPosition } from '@/lib/menukaart/registry';
-
-export type MenuGang = {
-    eyebrow?: string;
-    name: string;
-    description?: string;
-    dishes: Array<{ name: string; allergens?: string }>;
-};
-
-export type MenuData = {
-    gangen: MenuGang[];
-    allergenLegend?: string;
-    logoUrl?: string | null;
-};
+import {
+    type MenuData,
+    formatAllergenLegend,
+} from '@/lib/menukaart/menu-data';
 
 type Props = {
     overrides: Overrides;
     data: MenuData;
-    /** Frame size — 'normal' (480px) of 'small' (290px, voor compare-view). */
+    /** Frame-size — 'normal' (480px) of 'small' (290px, voor compare/gallery-view). */
     size?: 'normal' | 'small';
 };
-
-const DEFAULT_LEGEND = 'G = Gluten · L = Lactose · N = Noten · E = Ei · M = Mosterd · Sd = Sesam · Sf = Sulfiet · Sl = Selderij';
 
 function logoAlignment(pos: LogoPosition | undefined): 'left' | 'center' | 'right' {
     if (pos === 'top-left') return 'left';
@@ -40,21 +30,25 @@ function logoAlignment(pos: LogoPosition | undefined): 'left' | 'center' | 'righ
 }
 
 export default function Restaurant01Preview({ overrides, data, size = 'normal' }: Props) {
-    const accent = overrides.accent ?? '#8B5E3C';
+    const accent = overrides.accent ?? '#9e781c';
     const bg = overrides.bg ?? '#FAF6EF';
     const text = overrides.text ?? '#2A2520';
     const headingFont = overrides.headingFont ?? 'Cormorant Garamond';
     const bodyFont = overrides.bodyFont ?? 'Inter';
-    const headingSize = overrides.headingSize ?? 15;
+    const headingSize = overrides.headingSize ?? 22;
     const bodySize = overrides.bodySize ?? 10;
-    const headingWeight = overrides.headingWeight ?? 400;
-    const logoSize = overrides.logoSize ?? 36;
+    const headingWeight = overrides.headingWeight ?? 500;
+    const logoSize = overrides.logoSize ?? 56;
     const align = logoAlignment(overrides.logoPosition);
     const showOrnament = overrides.showOrnament !== false;
     const showDividers = overrides.showDividers !== false;
     const brandName = overrides.brandName ?? 'Vuur & Vlam';
-    const subtitle = overrides.subtitle ?? '';
+    const subtitle = overrides.subtitle ?? 'Ambachtelijke BBQ-catering';
     const footer = overrides.footer ?? '';
+    const eventTitle = overrides.eventTitle ?? '';
+    const eventMessage = overrides.eventMessage ?? '';
+    const eventPosition = overrides.eventMessagePosition ?? 'top';
+
     const logoInitials = brandName
         .split(/\s+/)
         .map(w => w[0] ?? '')
@@ -64,6 +58,47 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
 
     const isSmall = size === 'small';
     const sizeMult = isSmall ? 290 / 480 : 1;
+    const legend = formatAllergenLegend(data.gangen);
+
+    const eventBlock = (eventTitle || eventMessage) && (
+        <div
+            style={{
+                textAlign: 'center',
+                margin: `${8 * sizeMult}px auto ${12 * sizeMult}px`,
+                padding: `${8 * sizeMult}px ${12 * sizeMult}px`,
+                maxWidth: 360 * sizeMult,
+                borderTop: `0.5px solid ${accent}`,
+                borderBottom: `0.5px solid ${accent}`,
+            }}
+        >
+            {eventTitle && (
+                <div
+                    style={{
+                        fontFamily: `'${headingFont}', serif`,
+                        fontSize: 12 * sizeMult,
+                        fontStyle: 'italic',
+                        color: accent,
+                        marginBottom: 2 * sizeMult,
+                    }}
+                >
+                    {eventTitle}
+                </div>
+            )}
+            {eventMessage && (
+                <div
+                    style={{
+                        fontFamily: `'${bodyFont}', sans-serif`,
+                        fontSize: 8 * sizeMult,
+                        color: '#8A847B',
+                        fontStyle: 'italic',
+                        lineHeight: 1.55,
+                    }}
+                >
+                    {eventMessage}
+                </div>
+            )}
+        </div>
+    );
 
     return (
         <div
@@ -78,6 +113,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                 flexShrink: 0,
                 position: 'relative',
                 fontFamily: `'${bodyFont}', sans-serif`,
+                color: text,
             }}
         >
             <div
@@ -118,7 +154,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontFamily: `'${headingFont}', serif`,
-                                fontSize: 16 * sizeMult,
+                                fontSize: 18 * sizeMult,
                                 fontWeight: 500,
                                 color: accent,
                             }}
@@ -129,7 +165,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                     <div
                         style={{
                             fontFamily: `'${headingFont}', serif`,
-                            fontSize: 18 * sizeMult,
+                            fontSize: 22 * sizeMult,
                             fontWeight: 500,
                             color: text,
                             letterSpacing: '.03em',
@@ -141,11 +177,11 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                         <div
                             style={{
                                 fontFamily: `'${bodyFont}', sans-serif`,
-                                fontSize: 7 * sizeMult,
+                                fontSize: 8 * sizeMult,
                                 letterSpacing: '.18em',
                                 textTransform: 'uppercase',
                                 color: '#8A847B',
-                                marginTop: 2 * sizeMult,
+                                marginTop: 3 * sizeMult,
                             }}
                         >
                             {subtitle}
@@ -168,6 +204,8 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                     Menu
                 </div>
 
+                {eventPosition === 'top' && eventBlock}
+
                 {/* Gangen */}
                 {data.gangen.map((gang, gi) => (
                     <div key={gi}>
@@ -183,21 +221,19 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                             />
                         )}
                         <div style={{ textAlign: 'center', marginBottom: 4 * sizeMult }}>
-                            {gang.eyebrow && (
-                                <div
-                                    style={{
-                                        fontFamily: `'${bodyFont}', sans-serif`,
-                                        fontSize: 7 * sizeMult,
-                                        fontWeight: 500,
-                                        letterSpacing: '.18em',
-                                        textTransform: 'uppercase',
-                                        color: accent,
-                                        marginBottom: 1 * sizeMult,
-                                    }}
-                                >
-                                    {gang.eyebrow}
-                                </div>
-                            )}
+                            <div
+                                style={{
+                                    fontFamily: `'${bodyFont}', sans-serif`,
+                                    fontSize: 7 * sizeMult,
+                                    fontWeight: 500,
+                                    letterSpacing: '.18em',
+                                    textTransform: 'uppercase',
+                                    color: accent,
+                                    marginBottom: 1 * sizeMult,
+                                }}
+                            >
+                                {gang.eyebrow ?? `GANG ${String(gi + 1).padStart(2, '0')}`}
+                            </div>
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', serif`,
@@ -213,42 +249,66 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                                 <div
                                     style={{
                                         fontFamily: `'${headingFont}', serif`,
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 9 * sizeMult,
                                         fontStyle: 'italic',
                                         color: '#8A847B',
-                                        lineHeight: 1.5,
-                                        margin: `${2 * sizeMult}px auto ${8 * sizeMult}px`,
-                                        maxWidth: 320 * sizeMult,
+                                        lineHeight: 1.55,
+                                        margin: `${3 * sizeMult}px auto ${10 * sizeMult}px`,
+                                        maxWidth: 360 * sizeMult,
                                     }}
                                 >
                                     {gang.description}
                                 </div>
                             )}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 * sizeMult, maxWidth: 340 * sizeMult, margin: '0 auto' }}>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 6 * sizeMult,
+                                    maxWidth: 340 * sizeMult,
+                                    margin: '0 auto',
+                                }}
+                            >
                                 {gang.dishes.map((dish, di) => (
-                                    <div key={di} style={{ textAlign: 'center', marginBottom: 3 * sizeMult }}>
-                                        <span
-                                            style={{
-                                                fontFamily: `'${headingFont}', serif`,
-                                                fontSize: bodySize * sizeMult,
-                                                fontWeight: 500,
-                                                color: text,
-                                            }}
-                                        >
-                                            {dish.name}
-                                        </span>
-                                        {dish.allergens && (
+                                    <div key={di} style={{ textAlign: 'center' }}>
+                                        <div>
                                             <span
                                                 style={{
-                                                    fontFamily: `'${bodyFont}', sans-serif`,
-                                                    fontSize: 7 * sizeMult,
-                                                    color: accent,
-                                                    letterSpacing: '.04em',
-                                                    marginLeft: 4 * sizeMult,
+                                                    fontFamily: `'${headingFont}', serif`,
+                                                    fontSize: 13 * sizeMult,
+                                                    fontWeight: 500,
+                                                    color: text,
+                                                    letterSpacing: '.01em',
                                                 }}
                                             >
-                                                {dish.allergens}
+                                                {dish.name}
                                             </span>
+                                            {dish.allergens && dish.allergens.length > 0 && (
+                                                <span
+                                                    style={{
+                                                        fontFamily: `'${bodyFont}', sans-serif`,
+                                                        fontSize: 8 * sizeMult,
+                                                        color: accent,
+                                                        letterSpacing: '.06em',
+                                                        marginLeft: 5 * sizeMult,
+                                                    }}
+                                                >
+                                                    {dish.allergens.join(' ')}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {dish.description && (
+                                            <div
+                                                style={{
+                                                    fontFamily: `'${bodyFont}', sans-serif`,
+                                                    fontSize: bodySize * sizeMult,
+                                                    color: '#8A847B',
+                                                    lineHeight: 1.5,
+                                                    marginTop: 1 * sizeMult,
+                                                }}
+                                            >
+                                                {dish.description}
+                                            </div>
                                         )}
                                     </div>
                                 ))}
@@ -257,28 +317,30 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                     </div>
                 ))}
 
+                {eventPosition === 'bottom' && eventBlock}
+
                 {/* Legend */}
-                <div style={{ marginTop: 'auto', paddingTop: 12 * sizeMult, textAlign: 'center' }}>
+                <div style={{ marginTop: 'auto', paddingTop: 16 * sizeMult, textAlign: 'center' }}>
                     {showOrnament && (
                         <div
                             style={{
-                                width: 80 * sizeMult,
+                                width: 120 * sizeMult,
                                 height: 1,
                                 background: accent,
-                                margin: `${10 * sizeMult}px auto`,
-                                opacity: 0.45,
+                                margin: `0 auto ${8 * sizeMult}px`,
+                                opacity: 0.3,
                             }}
                         />
                     )}
                     <div
                         style={{
                             fontFamily: `'${bodyFont}', sans-serif`,
-                            fontSize: 7 * sizeMult,
+                            fontSize: 8 * sizeMult,
                             fontWeight: 500,
                             letterSpacing: '.15em',
                             textTransform: 'uppercase',
                             color: accent,
-                            marginBottom: 3 * sizeMult,
+                            marginBottom: 4 * sizeMult,
                         }}
                     >
                         Allergenen
@@ -286,21 +348,21 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
                     <div
                         style={{
                             fontFamily: `'${bodyFont}', sans-serif`,
-                            fontSize: 7 * sizeMult,
+                            fontSize: 8 * sizeMult,
                             color: '#8A847B',
-                            lineHeight: 1.7,
+                            lineHeight: 1.8,
                         }}
                     >
-                        {data.allergenLegend ?? DEFAULT_LEGEND}
+                        {legend || 'Geen allergenen aanwezig'}
                     </div>
                 </div>
                 {footer && (
                     <div
                         style={{
                             textAlign: 'center',
-                            marginTop: 8 * sizeMult,
+                            marginTop: 10 * sizeMult,
                             fontFamily: `'${bodyFont}', sans-serif`,
-                            fontSize: 7 * sizeMult,
+                            fontSize: 8 * sizeMult,
                             color: '#D0C8B8',
                         }}
                     >
@@ -311,49 +373,3 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
         </div>
     );
 }
-
-/** Demo-data voor de editor — gebruikt als de offerte nog geen menu-selectie heeft. */
-export const DEMO_MENU: MenuData = {
-    gangen: [
-        {
-            eyebrow: 'GANG 01',
-            name: 'Ontvangst',
-            description: 'Welkom met een selectie van huisgemaakte hapjes, vers van de grill.',
-            dishes: [
-                { name: 'Pulled Pork Brioche', allergens: 'G E Sd M' },
-                { name: 'Brisket Crostini', allergens: 'G E' },
-                { name: 'Gegrilde Watermeloen', allergens: 'L' },
-            ],
-        },
-        {
-            eyebrow: 'GANG 02',
-            name: 'Van de Smoker',
-            description: 'Het hart van ons menu — low & slow bereid op onze offset smokers.',
-            dishes: [
-                { name: 'Beef Brisket 14h', allergens: 'Sf Sl' },
-                { name: 'Pulled Pork Shoulder', allergens: 'M Sf' },
-                { name: 'Lamb Ribs', allergens: '' },
-                { name: 'Portobello uit de Smoker', allergens: 'L N' },
-            ],
-        },
-        {
-            eyebrow: 'GANG 03',
-            name: 'Bijgerechten',
-            description: 'Vers en huisgemaakt — de perfecte begeleiders.',
-            dishes: [
-                { name: 'Coleslaw Classic', allergens: 'E M' },
-                { name: 'Smoked Mac & Cheese', allergens: 'G L' },
-                { name: 'Cornbread', allergens: 'G L E' },
-            ],
-        },
-        {
-            eyebrow: 'GANG 04',
-            name: 'Dessert',
-            description: 'Zoete afsluiter met een vleugje rook.',
-            dishes: [
-                { name: 'Smoked Pecan Pie', allergens: 'G N E L' },
-                { name: 'Gegrilde Ananas', allergens: 'L' },
-            ],
-        },
-    ],
-};

@@ -8,7 +8,7 @@ import {
   Calendar, MessageCircle, Share2, CheckCheck, FileText, UtensilsCrossed,
   Eye, Download, Send, Printer, Receipt, ClipboardList, Truck, ShieldCheck,
   ChefHat, Edit3, Sparkles, Check, Users, Plus, MapPin, Mail, Phone, Navigation,
-  ArrowLeft, AlertTriangle, Flame, Thermometer, Star, Flag, Pencil, Car,
+  ArrowLeft, AlertTriangle, Flame, Thermometer, Star, Flag, Pencil, Car, Heart,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
@@ -19,26 +19,23 @@ import { displayEventName, titleCase } from '@/components/redesign/displayHelper
 import { useActiveResource } from '@/lib/ActiveResourceContext';
 /* EventMenuKaartBuilder verwijderd 2026-05-01 — menu wordt nu via de offerte
    aangepast (één plek voor menu-samenstelling). De event-hub toont menu
-   read-only en linkt naar de offerte voor wijzigingen. */
-import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
+   read-only en linkt naar de offerte voor wijzigingen.
+   MenuCard / TemplatePreview / PdfTemplate verwijderd 2026-05-21 — vervangen
+   door PreviewFor() registry + 10 templates. */
 import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
 import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
-import TemplatePreview from '@/components/template-editor/TemplatePreview';
 import MenukaartMissingNotice from '@/components/menukaart/MenukaartMissingNotice';
-import type { PdfTemplate } from '@/types/template.types';
+import EventMessageQuickEdit from '@/components/menukaart/EventMessageQuickEdit';
 import { useToast } from '@/components/Toast';
 import '@/components/redesign/redesign.css';
-
-const MENUKAART_STYLE_TO_NAME: Record<MenuCardTemplate, string> = {
-  ambacht: 'Menukaart — Ambacht',
-  modern: 'Menukaart — Modern',
-  slate: 'Menukaart — Slate',
-};
-type TplKey = MenuCardTemplate;
+import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides, type EventMessagePosition } from '@/lib/menukaart/registry';
+import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
+import { PreviewFor } from '@/components/menukaart/templates';
+import type { MenuData } from '@/lib/menukaart/menu-data';
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -77,11 +74,10 @@ export default function EventHubPage() {
   const [inkooplijst, setInkooplijst] = useState<any>(null);
   const [gangen, setGangen] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tpl, setTpl] = useState<TplKey>('ambacht');
+  const [eventMessageOpen, setEventMessageOpen] = useState(false);
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
   const [menuIds, setMenuIds] = useState<number[]>([]);
-  const [menuTemplates, setMenuTemplates] = useState<PdfTemplate[]>([]);
 
   useEffect(() => {
     if (event) setMenuIds(parseMenu(event.menu));
@@ -104,21 +100,6 @@ export default function EventHubPage() {
       meta: event.guests ? `${event.guests} gasten${event.ppp ? ` · €${event.ppp}/p` : ''}` : undefined,
     });
   }, [event, eventId, setActiveResource]);
-
-  // Laad opgeslagen menukaart-templates voor deze org zodat de 3 stijl-tabs
-  // de aangepaste template tonen (en niet alleen de hardcoded MenuCard-variant).
-  useEffect(() => {
-    if (!orgId) return;
-    fetch('/api/templates?type=menukaart&orgId=' + orgId)
-      .then(r => r.json())
-      .then(d => { setMenuTemplates(d.templates || []); })
-      .catch(() => { /* fall back to hardcoded MenuCards */ });
-  }, [orgId]);
-
-  const activeTemplate = useMemo(() => {
-    const expectedName = MENUKAART_STYLE_TO_NAME[tpl];
-    return menuTemplates.find(t => t.name === expectedName && (t.organization_id === orgId || !t.organization_id)) || null;
-  }, [menuTemplates, tpl, orgId]);
 
   /* saveMenu / toggleMenuItem verwijderd — menu wordt niet meer op event-niveau
      bewerkt. Menu komt uit de gekoppelde offerte (acceptance-workflow vult
@@ -301,30 +282,62 @@ export default function EventHubPage() {
   }, [event, offerte, factuur, prepTasks, prepState, prepDoneCount, serviceLogs, reflectie, derived]);
 
   const menuGroups = useMemo(() => {
-    if (!event) return [] as Array<{ title: string; items: Array<{ n: string; s?: string }> }>;
+    if (!event) return [] as Array<{ title: string; items: Array<{ n: string; s?: string; a?: string[] }> }>;
     const menuIds = parseMenu(event.menu);
     if (menuIds.length === 0) {
       return [{ title: 'Menu', items: [{ n: 'Nog geen menu gekoppeld', s: 'Voeg recepten toe via de event-editor' }] }];
     }
+    // Normalize allergenen-veld (kan array of comma-string zijn afhankelijk van bron)
+    function normaliseAllergens(raw: unknown): string[] {
+      if (Array.isArray(raw)) return (raw as unknown[]).map(String).filter(Boolean);
+      if (typeof raw === 'string') return raw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+      return [];
+    }
     // Zoek elk ID zowel in recepten als in gerechten — menu-builder slaat beide soorten op.
-    function resolveMenuItem(id: number): { naam: string; cat: string; omschrijving?: string } | null {
+    function resolveMenuItem(id: number): { naam: string; cat: string; omschrijving?: string; allergenen: string[] } | null {
       const rec = recepten.find((r: any) => r.id === id);
-      if (rec) return { naam: rec.naam || '—', cat: rec.categorie || 'Hoofdgerechten', omschrijving: rec.beschrijving };
+      if (rec) return { naam: rec.naam || '—', cat: rec.categorie || 'Hoofdgerechten', omschrijving: rec.beschrijving, allergenen: normaliseAllergens(rec.allergenen) };
       const ger = gerechten.find((g: any) => g.id === id);
-      if (ger) return { naam: ger.naam || '—', cat: ger.gang_slug || ger.categorie || 'Hoofdgerechten', omschrijving: ger.beschrijving };
+      if (ger) return { naam: ger.naam || '—', cat: ger.gang_slug || ger.categorie || 'Hoofdgerechten', omschrijving: ger.beschrijving, allergenen: normaliseAllergens(ger.allergenen) };
       return null;
     }
-    const resolved = menuIds.map(resolveMenuItem).filter(Boolean) as Array<{ naam: string; cat: string; omschrijving?: string }>;
+    const resolved = menuIds.map(resolveMenuItem).filter(Boolean) as Array<{ naam: string; cat: string; omschrijving?: string; allergenen: string[] }>;
     if (resolved.length === 0) {
       return [{ title: 'Menu', items: [{ n: 'Menu niet gevonden', s: 'Recepten of gerechten zijn mogelijk verwijderd' }] }];
     }
-    const groupsByCat: Record<string, Array<{ n: string; s?: string }>> = {};
+    const groupsByCat: Record<string, Array<{ n: string; s?: string; a?: string[] }>> = {};
     for (const r of resolved) {
       if (!groupsByCat[r.cat]) groupsByCat[r.cat] = [];
-      groupsByCat[r.cat].push({ n: r.naam, s: r.omschrijving });
+      groupsByCat[r.cat].push({ n: r.naam, s: r.omschrijving, a: r.allergenen });
     }
     return Object.entries(groupsByCat).map(([title, its]) => ({ title, items: its }));
   }, [event, recepten, gerechten]);
+
+  /* Sprint 4 fase 2: menukaart-cascade (template + overrides per offerte/tenant).
+     Wordt gebruikt door de Live-voorvertoning hieronder. menuGroups → MenuData
+     conversion: gangen worden 1-op-1 overgenomen, allergenen blijven voor nu
+     leeg (volgt in Sprint 4 fase 3 zodra recipe_allergens-join in event-hub komt). */
+  const menukaartTemplate = useMemo(() => {
+    const id = offerte?.menukaart_template_id || settings?.menukaart_template_id || DEFAULT_TEMPLATE_ID;
+    return getTemplate(id);
+  }, [offerte, settings]);
+
+  const menukaartFlat = useMemo(() => {
+    const brand: Overrides = (settings?.menukaart_overrides as Overrides) ?? {};
+    const custom: Overrides = (offerte?.menukaart_overrides as Overrides) ?? {};
+    const resolved = resolveCascade(menukaartTemplate, brand, custom);
+    return flatten(resolved) as Overrides;
+  }, [menukaartTemplate, offerte, settings]);
+
+  const menukaartData: MenuData = useMemo(() => ({
+    gangen: menuGroups.map((g) => ({
+      name: g.title,
+      dishes: g.items.map((it) => ({ name: it.n, description: it.s, allergens: it.a })),
+    })),
+    logoUrl: settings?.logo_url ?? null,
+  }), [menuGroups, settings]);
+
+  const MenukaartPreviewComponent = useMemo(() => PreviewFor(menukaartTemplate.id), [menukaartTemplate.id]);
 
   async function togglePrep(id: number) {
     const prev = prepState[id];
@@ -359,8 +372,20 @@ export default function EventHubPage() {
     if (!offerte) { showToast('Maak eerst een offerte aan.', 'warning'); return; }
     setDownloading('menukaart');
     try {
-      const branding = buildBrandingConfig(settings);
-      await generatePDF({ type: 'menukaart', form: offerte, settings, gerechten, branding, orgId: orgId || undefined });
+      const res = await fetch(`/api/menukaart/pdf/${offerte.id}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({ error: 'PDF-route niet bereikbaar' }));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `menukaart-${offerte.nummer || offerte.client_naam || offerte.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'onbekende fout';
       console.error('[EVENT-HUB] menukaart PDF failed:', msg);
@@ -456,10 +481,16 @@ export default function EventHubPage() {
   }
 
   function printMenukaart() {
-    /* Triggers browser print dialog.
-       CSS @media print rules in redesign.css hide everything except .mk-printable. */
+    /* Open de PDF-route inline in een nieuw tabblad — browser-print-dialog
+       komt vanzelf voor de PDF. Gebruikt @react-pdf-rendered output via
+       /api/menukaart/pdf/[offerId]?inline=1 zodat de print exact het
+       gekozen template-design volgt (niet de HTML-preview). */
     if (typeof window === 'undefined') return;
-    window.print();
+    if (!offerte) {
+      showToast('Maak eerst een offerte aan om de menukaart te printen.', 'warning');
+      return;
+    }
+    window.open(`/api/menukaart/pdf/${offerte.id}?inline=1`, '_blank', 'noopener,noreferrer');
   }
 
   async function markBevestigd() {
@@ -844,9 +875,19 @@ export default function EventHubPage() {
                 <div className="hstack"><ChefHat size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Menu &amp; automatische menukaart</span></div>
                 <div className="hstack" style={{ gap: 6 }}>
                     {event.offerte_id ? (
-                        <a href={`/offertes`} className="btn btn-ghost btn-sm" title="Open de offerte om het menu via de wizard aan te passen">
-                            <Edit3 size={14} />Menu aanpassen via offerte
-                        </a>
+                        <>
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => setEventMessageOpen(true)}
+                                title="Voeg een persoonlijke boodschap toe aan de menukaart — zonder de hele editor te openen"
+                            >
+                                <Heart size={14} />{menukaartFlat.eventTitle || menukaartFlat.eventMessage ? 'Boodschap bewerken' : '+ Persoonlijke boodschap'}
+                            </button>
+                            <a href={`/offertes`} className="btn btn-ghost btn-sm" title="Open de offerte om het menu via de wizard aan te passen">
+                                <Edit3 size={14} />Menu aanpassen via offerte
+                            </a>
+                        </>
                     ) : (
                         <span style={{ fontSize: 11, color: 'var(--muted)' }} title="Dit event heeft geen gekoppelde offerte. Maak een offerte op /offertes en koppel die aan dit event om het menu te wijzigen.">Geen gekoppelde offerte</span>
                     )}
@@ -872,55 +913,20 @@ export default function EventHubPage() {
                   ))}
                   <div style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Sparkles size={11} color="var(--brand-gold)" />
-                    Menukaart wordt automatisch gegenereerd · template <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{tpl === 'ambacht' ? 'Ambacht' : tpl === 'modern' ? 'Modern' : 'Slate'}</strong>
+                    Menukaart wordt automatisch gegenereerd · template <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{menukaartTemplate.name}</strong>
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
                   <div className="mk-preview-wrap">
-                    <div className="mk-preview-card mk-printable">
-                      {activeTemplate ? (
-                        <TemplatePreview
-                          blocks={activeTemplate.blocks}
-                          pageSettings={activeTemplate.page_settings}
-                          documentType="menukaart"
-                          branding={{
-                            primary: settings?.brand_primary || '#9e781c',
-                            accent: settings?.brand_accent || '#8b6914',
-                            logoUrl: settings?.logo_url || null,
-                            logoDarkUrl: settings?.logo_dark_url || null,
-                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
-                          }}
-                          variables={{
-                            event_naam: titleCase(displayEventName(event.name)),
-                            event_datum: dateUpper,
-                            aantal_gasten: String(event.guests || 0),
-                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
-                            ondertitel: settings?.ondertitel || '',
-                            bedrijf_email: settings?.email || '',
-                            bedrijf_telefoon: settings?.telefoon || '',
-                            bedrijf_adres: settings?.adres || '',
-                            website: settings?.website || '',
-                          }}
-                          menuGroups={menuGroups.map(g => ({ gang: g.title, dishes: g.items }))}
-                          width={300}
-                        />
-                      ) : (
-                        <MenuCard template={tpl} eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />
-                      )}
+                    <div className="mk-preview-card mk-printable" style={{ display: 'flex', justifyContent: 'center' }}>
+                      <MenukaartPreviewComponent
+                        overrides={menukaartFlat}
+                        data={menukaartData}
+                        size="small"
+                      />
                     </div>
-                    <div className="mk-template-tabs">
-                      <button className={tpl === 'ambacht' ? 'on' : ''} onClick={() => setTpl('ambacht')}>
-                        <span className="swatch" style={{ background: '#f5eedf' }}></span>Ambacht
-                      </button>
-                      <button className={tpl === 'modern' ? 'on' : ''} onClick={() => setTpl('modern')}>
-                        <span className="swatch" style={{ background: '#fff' }}></span>Modern
-                      </button>
-                      <button className={tpl === 'slate' ? 'on' : ''} onClick={() => setTpl('slate')}>
-                        <span className="swatch" style={{ background: '#1a1a1c' }}></span>Slate
-                      </button>
-                    </div>
-                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
                       {event.offerte_id ? (
                         <a href={`/offertes/${event.offerte_id}/menukaart-editor`}
                           style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
@@ -1234,6 +1240,28 @@ export default function EventHubPage() {
           </div>
         </div>
       </div>
+
+      {/* Quick-edit modal voor persoonlijke menukaart-boodschap.
+          Updatet alleen eventTitle/eventMessage/eventMessagePosition op
+          de offerte; rest van de menukaart-overrides blijft ongewijzigd. */}
+      {event.offerte_id && (
+        <EventMessageQuickEdit
+          open={eventMessageOpen}
+          onClose={() => setEventMessageOpen(false)}
+          offerId={event.offerte_id}
+          initialTitle={(menukaartFlat.eventTitle as string) ?? ''}
+          initialMessage={(menukaartFlat.eventMessage as string) ?? ''}
+          initialPosition={(menukaartFlat.eventMessagePosition as EventMessagePosition) ?? 'top'}
+          onSaved={async () => {
+            const { data: offRow } = await supabase
+              .from('offertes')
+              .select('*')
+              .eq('id', event.offerte_id)
+              .maybeSingle();
+            if (offRow) setOfferte(offRow);
+          }}
+        />
+      )}
     </div>
   );
 }
