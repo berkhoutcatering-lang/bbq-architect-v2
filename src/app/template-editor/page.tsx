@@ -2,7 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Palette, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import TemplateEditor from '@/components/template-editor/TemplateEditor';
 import { useOrg } from '@/lib/OrgContext';
 import { DEFAULT_TEMPLATES, STARTER_TEMPLATES } from '@/lib/templateDefaults';
@@ -17,10 +18,20 @@ export default function TemplateEditorPage() {
           <Loader2 size={24} style={{ color: 'var(--brand)', animation: 'spin 1s linear infinite' }} />
         </div>
       }>
-        <TemplateEditorInner />
+        <TemplateEditorRouter />
       </Suspense>
     </RequireTier>
   );
+}
+
+/* S4: menukaart-styling is verhuisd naar de per-offerte editor
+   (/offertes/[id]/menukaart-editor). Routing-check hier zodat de Inner-component
+   z'n hooks niet conditioneel hoeft te callen. */
+function TemplateEditorRouter() {
+  const searchParams = useSearchParams();
+  const documentType = (searchParams.get('type') || 'factuur') as PdfTemplate['document_type'];
+  if (documentType === 'menukaart') return <MenukaartRedirectNotice />;
+  return <TemplateEditorInner />;
 }
 
 function TemplateEditorInner() {
@@ -163,5 +174,56 @@ function TemplateEditorInner() {
       organizationId={scope === 'global' ? null : orgId}
       onSave={handleSave}
     />
+  );
+}
+
+/* Notice + CTA voor users die op de oude /template-editor?type=menukaart link
+   landen vanuit een bookmark of oude UI. Wijst naar de nieuwe per-offerte
+   editor of (als ze geen offerte voor ogen hebben) naar /offertes. */
+function MenukaartRedirectNotice() {
+  return (
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'var(--bg)' }}>
+      <div style={{
+        maxWidth: 480,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '32px 28px',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: 12,
+          background: 'rgba(158,120,28,.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 18px',
+          color: '#c4a35a',
+        }}>
+          <Palette size={26} />
+        </div>
+        <h2 style={{ fontSize: 19, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
+          Menukaart-styling werkt nu per offerte
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 24 }}>
+          Vroeger maakte je hier één losse menukaart-template. Nu pas je per offerte de kleuren, lettertypes en logo aan op een vaste template-structuur — met cascade vanaf je brand-instellingen.
+        </p>
+        <Link
+          href="/offertes"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '10px 18px', borderRadius: 6,
+            background: '#9e781c', color: '#fff',
+            fontSize: 13, fontWeight: 600,
+            border: '1px solid rgba(158,120,28,.5)',
+            boxShadow: '0 2px 8px rgba(158,120,28,.25)',
+            textDecoration: 'none',
+          }}
+        >
+          Naar offertes <ArrowRight size={14} />
+        </Link>
+        <div style={{ marginTop: 16, fontSize: 11, color: 'var(--muted-light)' }}>
+          Kies een offerte en klik op &ldquo;Menukaart&rdquo; om de styling te bewerken.
+        </div>
+      </div>
+    </div>
   );
 }
