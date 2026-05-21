@@ -20,25 +20,27 @@ import { useActiveResource } from '@/lib/ActiveResourceContext';
 /* EventMenuKaartBuilder verwijderd 2026-05-01 — menu wordt nu via de offerte
    aangepast (één plek voor menu-samenstelling). De event-hub toont menu
    read-only en linkt naar de offerte voor wijzigingen. */
-import { MenuCard, type MenuCardTemplate } from '@/components/redesign/MenuCards';
+/* MenuCard verwijderd 2026-05-21 — vervangen door Restaurant01Preview met
+   cascade vanaf settings + offertes.menukaart_overrides. */
 import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
 import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
-import TemplatePreview from '@/components/template-editor/TemplatePreview';
+/* TemplatePreview verwijderd 2026-05-21 — block-editor preview wordt niet meer
+   gebruikt voor menukaarten; offerte- en factuur-PDFs gebruiken hun eigen
+   templates via /template-editor. */
 import MenukaartMissingNotice from '@/components/menukaart/MenukaartMissingNotice';
-import type { PdfTemplate } from '@/types/template.types';
+import Restaurant01Preview, { DEMO_MENU } from '@/components/menukaart/templates/restaurant-01/Preview';
+import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides } from '@/lib/menukaart/registry';
+import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
+/* PdfTemplate import verwijderd — was alleen nodig voor de oude menuTemplates state. */
 import { useToast } from '@/components/Toast';
 import '@/components/redesign/redesign.css';
 
-const MENUKAART_STYLE_TO_NAME: Record<MenuCardTemplate, string> = {
-  ambacht: 'Menukaart — Ambacht',
-  modern: 'Menukaart — Modern',
-  slate: 'Menukaart — Slate',
-};
-type TplKey = MenuCardTemplate;
+/* MENUKAART_STYLE_TO_NAME + TplKey verwijderd — oude 3-templates aanpak,
+   vervangen door Restaurant01Preview + registry-cascade. */
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -77,11 +79,9 @@ export default function EventHubPage() {
   const [inkooplijst, setInkooplijst] = useState<any>(null);
   const [gangen, setGangen] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tpl, setTpl] = useState<TplKey>('ambacht');
   const [prepState, setPrepState] = useState<Record<number, boolean>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
   const [menuIds, setMenuIds] = useState<number[]>([]);
-  const [menuTemplates, setMenuTemplates] = useState<PdfTemplate[]>([]);
 
   useEffect(() => {
     if (event) setMenuIds(parseMenu(event.menu));
@@ -105,20 +105,10 @@ export default function EventHubPage() {
     });
   }, [event, eventId, setActiveResource]);
 
-  // Laad opgeslagen menukaart-templates voor deze org zodat de 3 stijl-tabs
-  // de aangepaste template tonen (en niet alleen de hardcoded MenuCard-variant).
-  useEffect(() => {
-    if (!orgId) return;
-    fetch('/api/templates?type=menukaart&orgId=' + orgId)
-      .then(r => r.json())
-      .then(d => { setMenuTemplates(d.templates || []); })
-      .catch(() => { /* fall back to hardcoded MenuCards */ });
-  }, [orgId]);
-
-  const activeTemplate = useMemo(() => {
-    const expectedName = MENUKAART_STYLE_TO_NAME[tpl];
-    return menuTemplates.find(t => t.name === expectedName && (t.organization_id === orgId || !t.organization_id)) || null;
-  }, [menuTemplates, tpl, orgId]);
+  /* S4-fase-1: menukaart-preview rendert nu via Restaurant01Preview met
+     cascade-resolve van offerte + tenant overrides. De oude opgeslagen
+     menukaart-templates (via /api/templates?type=menukaart) zijn verlaten;
+     gebruikers passen styling aan via /offertes/[id]/menukaart-editor. */
 
   /* saveMenu / toggleMenuItem verwijderd — menu wordt niet meer op event-niveau
      bewerkt. Menu komt uit de gekoppelde offerte (acceptance-workflow vult
@@ -872,62 +862,49 @@ export default function EventHubPage() {
                   ))}
                   <div style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Sparkles size={11} color="var(--brand-gold)" />
-                    Menukaart wordt automatisch gegenereerd · template <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{tpl === 'ambacht' ? 'Ambacht' : tpl === 'modern' ? 'Modern' : 'Slate'}</strong>
+                    {(() => {
+                      const tplId = (offerte as { menukaart_template_id?: string | null })?.menukaart_template_id ?? null;
+                      const resolvedName = getTemplate(tplId ?? DEFAULT_TEMPLATE_ID).name;
+                      return (
+                        <>Menukaart wordt automatisch gegenereerd · template <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{resolvedName}</strong></>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10, textAlign: 'center' }}>Live voorvertoning</div>
                   <div className="mk-preview-wrap">
-                    <div className="mk-preview-card mk-printable">
-                      {activeTemplate ? (
-                        <TemplatePreview
-                          blocks={activeTemplate.blocks}
-                          pageSettings={activeTemplate.page_settings}
-                          documentType="menukaart"
-                          branding={{
-                            primary: settings?.brand_primary || '#9e781c',
-                            accent: settings?.brand_accent || '#8b6914',
-                            logoUrl: settings?.logo_url || null,
-                            logoDarkUrl: settings?.logo_dark_url || null,
-                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
-                          }}
-                          variables={{
-                            event_naam: titleCase(displayEventName(event.name)),
-                            event_datum: dateUpper,
-                            aantal_gasten: String(event.guests || 0),
-                            bedrijfsnaam: settings?.bedrijfsnaam || 'Hop & Bites',
-                            ondertitel: settings?.ondertitel || '',
-                            bedrijf_email: settings?.email || '',
-                            bedrijf_telefoon: settings?.telefoon || '',
-                            bedrijf_adres: settings?.adres || '',
-                            website: settings?.website || '',
-                          }}
-                          menuGroups={menuGroups.map(g => ({ gang: g.title, dishes: g.items }))}
-                          width={300}
-                        />
-                      ) : (
-                        <MenuCard template={tpl} eventName={titleCase(displayEventName(event.name))} dateLabel={dateUpper} groups={menuGroups} />
-                      )}
+                    <div className="mk-preview-card mk-printable" style={{ display: 'flex', justifyContent: 'center' }}>
+                      {(() => {
+                        const offerteTplId = (offerte as { menukaart_template_id?: string | null })?.menukaart_template_id ?? null;
+                        const offerteOverrides = ((offerte as { menukaart_overrides?: Overrides })?.menukaart_overrides) ?? {};
+                        const brandOverrides = ((settings as { menukaart_overrides?: Overrides })?.menukaart_overrides) ?? {};
+                        const tenantTplId = (settings as { menukaart_template_id?: string | null })?.menukaart_template_id ?? null;
+                        const template = getTemplate(offerteTplId ?? tenantTplId ?? DEFAULT_TEMPLATE_ID);
+                        const resolved = resolveCascade(template, brandOverrides, offerteOverrides);
+                        const flat = flatten(resolved) as Overrides;
+                        const data = {
+                          ...DEMO_MENU,
+                          gangen: menuGroups.length > 0
+                            ? menuGroups.map((g) => ({
+                                eyebrow: g.title,
+                                name: g.title,
+                                dishes: g.items.map((it: { n: string; s?: string }) => ({ name: it.n, allergens: '' })),
+                              }))
+                            : DEMO_MENU.gangen,
+                          logoUrl: settings?.logo_url ?? null,
+                        };
+                        return <Restaurant01Preview overrides={flat} data={data} size="small" />;
+                      })()}
                     </div>
-                    <div className="mk-template-tabs">
-                      <button className={tpl === 'ambacht' ? 'on' : ''} onClick={() => setTpl('ambacht')}>
-                        <span className="swatch" style={{ background: '#f5eedf' }}></span>Ambacht
-                      </button>
-                      <button className={tpl === 'modern' ? 'on' : ''} onClick={() => setTpl('modern')}>
-                        <span className="swatch" style={{ background: '#fff' }}></span>Modern
-                      </button>
-                      <button className={tpl === 'slate' ? 'on' : ''} onClick={() => setTpl('slate')}>
-                        <span className="swatch" style={{ background: '#1a1a1c' }}></span>Slate
-                      </button>
-                    </div>
-                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
                       {event.offerte_id ? (
                         <a href={`/offertes/${event.offerte_id}/menukaart-editor`}
-                          style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
-                          <Pencil size={11} /> Menukaart aanpassen
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: '#9e781c', color: '#fff', border: '1px solid rgba(158,120,28,.5)', boxShadow: '0 2px 8px rgba(158,120,28,.25)', textDecoration: 'none' }}>
+                          <Pencil size={12} /> Menukaart aanpassen
                         </a>
                       ) : (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Eerst offerte koppelen om menukaart te bewerken</span>
+                        <span style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', maxWidth: 240 }}>Eerst offerte koppelen om de menukaart te bewerken</span>
                       )}
                     </div>
                   </div>
