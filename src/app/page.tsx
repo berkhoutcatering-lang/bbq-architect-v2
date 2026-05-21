@@ -28,7 +28,7 @@ import AIPromptDrawer, { type QuickPrompt } from '@/components/dashboard/today/A
 import BusinessCharts from '@/components/dashboard/today/BusinessCharts';
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
 import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';
-import AttentionPanel, { type AttentionItem } from '@/components/dashboard/today/AttentionPanel';
+import AttentionPanel, { type AttentionItem, type AttentionSeverity } from '@/components/dashboard/today/AttentionPanel';
 import QuickActions from '@/components/dashboard/today/QuickActions';
 import BriefingTimeline from '@/components/dashboard/today/BriefingTimeline';
 
@@ -207,6 +207,16 @@ export default function DashboardPage() {
     if (daysAway > 60) return false;
     const offerteId = (e as DbEvent & { offerte_id?: number }).offerte_id;
     return offerteId != null && offerteIdsZonderMenukaart.has(offerteId);
+  });
+
+  /* Events binnen 60d ZONDER gekoppelde offerte — kunnen technisch geen menukaart hebben.
+     Aparte attention-item: moet eerst offerte aanmaken voordat menukaart-design kan. */
+  const upcomingZonderOfferte = events.filter((e) => {
+    if (!e.date || e.date < today) return false;
+    if ((e.status as string) === 'geannuleerd') return false;
+    const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
+    if (daysAway > 60) return false;
+    return (e as DbEvent & { offerte_id?: number }).offerte_id == null;
   });
 
   const offertesMetMenu = offertes.filter((o) => o.menu_selectie);
@@ -519,16 +529,49 @@ export default function DashboardPage() {
     });
   }
   if (upcomingZonderMenukaart.length > 0) {
-    const first = upcomingZonderMenukaart[0];
+    // Sort op datum, pak het meest urgente (dichtsbij) event eerst
+    const sortedByDate = [...upcomingZonderMenukaart].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const first = sortedByDate[0];
     const firstOfferteId = (first as DbEvent & { offerte_id?: number }).offerte_id;
+    const firstDaysAway = first.date
+      ? Math.ceil((new Date(first.date).getTime() - new Date(today).getTime()) / 86400000)
+      : 999;
+    // Severity: ≤7 dagen = high, ≤21 dagen = medium, anders low
+    const severity: AttentionSeverity =
+      firstDaysAway <= 7 ? 'high' : firstDaysAway <= 21 ? 'medium' : 'low';
+    const eventLabels = sortedByDate.slice(0, 3).map((e) => {
+      const label = e.client_naam || e.name || 'event';
+      const days = e.date
+        ? Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000)
+        : null;
+      return days !== null ? `${label} (${days === 0 ? 'vandaag' : days === 1 ? 'morgen' : days + 'd'})` : label;
+    });
     attentionItems.push({
       id: 'att-menukaart',
-      severity: 'low',
+      severity,
       icon: 'palette',
-      title: `${upcomingZonderMenukaart.length} ${upcomingZonderMenukaart.length === 1 ? 'event' : 'events'} zonder menukaart`,
-      detail: upcomingZonderMenukaart.slice(0, 3).map((e) => e.client_naam || e.name || 'event').join(' · '),
-      cta: 'Open editor',
-      href: firstOfferteId ? `/offertes/${firstOfferteId}/menukaart-editor` : '/events',
+      title: `Menukaart-design ontbreekt voor ${upcomingZonderMenukaart.length} ${upcomingZonderMenukaart.length === 1 ? 'event' : 'events'}`,
+      detail: eventLabels.join(' · ') + (upcomingZonderMenukaart.length > 3 ? ` +${upcomingZonderMenukaart.length - 3}` : ''),
+      cta: 'Kies template',
+      href: firstOfferteId ? `/offertes/${firstOfferteId}/menukaart-editor` : '/offertes',
+    });
+  }
+  if (upcomingZonderOfferte.length > 0) {
+    const sortedByDate = [...upcomingZonderOfferte].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    const first = sortedByDate[0];
+    const firstDaysAway = first.date
+      ? Math.ceil((new Date(first.date).getTime() - new Date(today).getTime()) / 86400000)
+      : 999;
+    const severity: AttentionSeverity =
+      firstDaysAway <= 7 ? 'high' : firstDaysAway <= 21 ? 'medium' : 'low';
+    attentionItems.push({
+      id: 'att-no-offerte',
+      severity,
+      icon: 'palette',
+      title: `${upcomingZonderOfferte.length} ${upcomingZonderOfferte.length === 1 ? 'event' : 'events'} zonder offerte`,
+      detail: 'Koppel een offerte om de menukaart te kunnen designen.',
+      cta: 'Maak offerte',
+      href: '/offertes?new=1',
     });
   }
   // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op

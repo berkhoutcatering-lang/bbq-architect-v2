@@ -28,14 +28,14 @@ export default async function Page({ params }: Props) {
     const [{ data: offer }, { data: settings }] = await Promise.all([
         supabase
             .from('offertes')
-            .select('id, klant_naam, evenement_naam, menukaart_template_id, menukaart_overrides')
+            .select('id, nummer, client_naam, datum, menukaart_template_id, menukaart_overrides')
             .eq('id', id)
-            .single(),
+            .maybeSingle(),
         supabase
             .from('settings')
             .select('logo_url, menukaart_template_id, menukaart_overrides')
             .limit(1)
-            .single(),
+            .maybeSingle(),
     ]);
 
     if (!offer) notFound();
@@ -43,7 +43,7 @@ export default async function Page({ params }: Props) {
     const templateId = offer.menukaart_template_id || settings?.menukaart_template_id || DEFAULT_TEMPLATE_ID;
     const brandOverrides = (settings?.menukaart_overrides as Overrides) ?? {};
     const customOverrides = (offer.menukaart_overrides as Overrides) ?? {};
-    const offerLabel = offer.evenement_naam || offer.klant_naam || `Offerte ${offer.id}`;
+    const offerLabel = offer.nummer || offer.client_naam || `Offerte ${offer.id}`;
 
     return (
         <MenukaartEditor

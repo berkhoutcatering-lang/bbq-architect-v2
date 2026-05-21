@@ -1,28 +1,65 @@
 'use client';
 
 /**
- * MenukaartEditor — hoofdcomponent met cascade-aware state.
+ * MenukaartEditor — hoofdcomponent met cascade-aware state + 10 templates.
  *
  * State-model:
- *   - templateId         (huidige template, default uit settings)
+ *   - templateId         (muteerbaar — via TemplatePickerSheet)
  *   - brandOverrides     (read-only — uit settings.menukaart_overrides)
  *   - customOverrides    (local state — schrijven naar offertes.menukaart_overrides)
  *   - undoStack/redoStack van customOverrides snapshots
  *
  * Cascade-resolver pakt template-defaults → brand → custom in die volgorde.
  * Per-key reset = key uit customOverrides verwijderen (valt door naar brand).
+ *
+ * Sprint 4 fase 2: 10 templates beschikbaar via TemplatePickerSheet.
+ * "Persoonlijke boodschap"-sectie laat de caterer per-event een tekst
+ * meesturen aan de klant op de menukaart.
  */
 
 import { useState, useMemo, useTransition, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Palette, Type, Image as ImageIcon, TextCursorInput, Sparkles, Undo2, Redo2, Save, Layout, Columns, SlidersHorizontal } from 'lucide-react';
-import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides, type LogoPosition } from '@/lib/menukaart/registry';
-import { resolveCascade, flatten, sourceOf } from '@/lib/menukaart/cascade';
-import Restaurant01Preview, { DEMO_MENU, type MenuData } from '@/components/menukaart/templates/restaurant-01/Preview';
-import { Section, ColorControl, SizeControl, FontControl, WeightControl, TextControl, ToggleControl, PositionChips } from './controls';
+import {
+    Palette,
+    Type,
+    Image as ImageIcon,
+    TextCursorInput,
+    Sparkles,
+    Undo2,
+    Redo2,
+    Save,
+    Layout,
+    Columns,
+    SlidersHorizontal,
+    Heart,
+    AtSign,
+} from 'lucide-react';
+import {
+    getTemplate,
+    DEFAULT_TEMPLATE_ID,
+    type Overrides,
+    type LogoPosition,
+    type EventMessagePosition,
+} from '@/lib/menukaart/registry';
+import { resolveCascade, flatten, sourceOf, type Resolved, type CascadeSource } from '@/lib/menukaart/cascade';
+import { PreviewFor } from '@/components/menukaart/templates';
+import { DEMO_MENU, type MenuData } from '@/lib/menukaart/menu-data';
+import {
+    Section,
+    ColorControl,
+    SizeControl,
+    FontControl,
+    WeightControl,
+    TextControl,
+    ToggleControl,
+    PositionChips,
+} from './controls';
 import AICoach, { type Diff } from './AICoach';
+import TemplatePickerSheet from './TemplatePickerSheet';
+import EventMessageControl from './EventMessageControl';
 import { saveOfferOverrides, resetOfferKeys } from '@/app/offertes/[id]/menukaart-editor/actions';
+import type { Template } from '@/lib/menukaart/registry';
 import './editor.css';
 
 const ZOOM_STEPS = [50, 75, 100, 125] as const;
@@ -39,12 +76,16 @@ type Props = {
 };
 
 export default function MenukaartEditor({
-    offerId, offerLabel, templateId: initialTemplateId,
-    brandOverrides, customOverrides: initialCustom,
-    menuData, logoUrl,
+    offerId,
+    offerLabel,
+    templateId: initialTemplateId,
+    brandOverrides,
+    customOverrides: initialCustom,
+    menuData,
+    logoUrl,
 }: Props) {
     const router = useRouter();
-    const [templateId] = useState(initialTemplateId);
+    const [templateId, setTemplateId] = useState(initialTemplateId);
     const template = useMemo(() => getTemplate(templateId), [templateId]);
 
     const [custom, setCustom] = useState<Overrides>(initialCustom);
@@ -53,13 +94,14 @@ export default function MenukaartEditor({
     const [tab, setTab] = useState<'properties' | 'ai'>('properties');
     const [zoom, setZoom] = useState<ZoomStep>(75);
     const [compareMode, setCompareMode] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const [aiState, setAiState] = useState<'idle' | 'loading' | 'result'>('idle');
     const [aiPrompt, setAiPrompt] = useState('');
     const [diffs, setDiffs] = useState<Diff[]>([]);
 
     const [isPending, startTransition] = useTransition();
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'never'>(
-        Object.keys(initialCustom).length > 0 ? 'saved' : 'never'
+        Object.keys(initialCustom).length > 0 ? 'saved' : 'never',
     );
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
@@ -68,35 +110,42 @@ export default function MenukaartEditor({
     const flat = useMemo(() => flatten(resolved) as Overrides, [resolved]);
     const data: MenuData = useMemo(() => ({ ...(menuData ?? DEMO_MENU), logoUrl }), [menuData, logoUrl]);
 
+    const TemplatePreview = useMemo(() => PreviewFor(templateId), [templateId]);
+
     const overallStatus = Object.keys(custom).length > 0 ? 'custom' : 'brand';
 
     /* ── Mutations ──────────────────────────────────────────── */
-    const updateKey = useCallback(<K extends keyof Overrides>(key: K, value: Overrides[K]) => {
-        setUndoStack(s => [...s, custom]);
-        setRedoStack([]);
-        setCustom(prev => ({ ...prev, [key]: value }));
-        setSaveStatus('saving');
-    }, [custom]);
+    const updateKey = useCallback(
+        <K extends keyof Overrides>(key: K, value: Overrides[K]) => {
+            setUndoStack(s => [...s, custom]);
+            setRedoStack([]);
+            setCustom(prev => ({ ...prev, [key]: value }));
+            setSaveStatus('saving');
+        },
+        [custom],
+    );
 
-    const resetKey = useCallback((key: keyof Overrides) => {
-        setUndoStack(s => [...s, custom]);
-        setRedoStack([]);
-        setCustom(prev => {
-            const next = { ...prev };
-            delete next[key];
-            return next;
-        });
-        setSaveStatus('saving');
-        // server-side per-key reset zodat het persisteert
-        startTransition(async () => {
-            const result = await resetOfferKeys({ offerId, keys: [String(key)] });
-            if ('error' in result) setSaveStatus('error');
-            else {
-                setSaveStatus('saved');
-                setLastSavedAt(new Date());
-            }
-        });
-    }, [custom, offerId]);
+    const resetKey = useCallback(
+        (key: keyof Overrides) => {
+            setUndoStack(s => [...s, custom]);
+            setRedoStack([]);
+            setCustom(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+            setSaveStatus('saving');
+            startTransition(async () => {
+                const result = await resetOfferKeys({ offerId, keys: [String(key)] });
+                if ('error' in result) setSaveStatus('error');
+                else {
+                    setSaveStatus('saved');
+                    setLastSavedAt(new Date());
+                }
+            });
+        },
+        [custom, offerId],
+    );
 
     const undo = useCallback(() => {
         if (undoStack.length === 0) return;
@@ -137,21 +186,29 @@ export default function MenukaartEditor({
         const onKey = (e: KeyboardEvent) => {
             const meta = e.metaKey || e.ctrlKey;
             if (!meta) return;
-            if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-            else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); redo(); }
+            if (e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [undo, redo]);
 
     /* ── AI flow (UI-only voor S4-fase-1) ───────────────────── */
-    const applyDiff = useCallback((d: Diff) => {
-        setUndoStack(s => [...s, custom]);
-        setRedoStack([]);
-        setCustom(prev => ({ ...prev, ...d.apply }));
-        setSaveStatus('saving');
-        setDiffs(ds => ds.map(x => x.id === d.id ? { ...x, status: 'applied' } : x));
-    }, [custom]);
+    const applyDiff = useCallback(
+        (d: Diff) => {
+            setUndoStack(s => [...s, custom]);
+            setRedoStack([]);
+            setCustom(prev => ({ ...prev, ...d.apply }));
+            setSaveStatus('saving');
+            setDiffs(ds => ds.map(x => (x.id === d.id ? { ...x, status: 'applied' } : x)));
+        },
+        [custom],
+    );
 
     const applyAll = useCallback(() => {
         const merged: Overrides = { ...custom };
@@ -162,23 +219,46 @@ export default function MenukaartEditor({
         setRedoStack([]);
         setCustom(merged);
         setSaveStatus('saving');
-        setDiffs(ds => ds.map(d => d.status === 'open' ? { ...d, status: 'applied' } : d));
+        setDiffs(ds => ds.map(d => (d.status === 'open' ? { ...d, status: 'applied' } : d)));
         setCompareMode(false);
     }, [custom, diffs]);
 
+    /* ── Template switch — sluit compare-mode + accepteer server-side overrides reset ─ */
+    const handleTemplateSwitched = useCallback((newTemplateId: string) => {
+        setTemplateId(newTemplateId);
+        setUndoStack([]);
+        setRedoStack([]);
+        setCompareMode(false);
+        setDiffs([]);
+        setAiState('idle');
+        // Server heeft custom-overrides al gefilterd; we resetten local state na router refresh
+        router.refresh();
+        // Pull bevestiging — re-render zal updates oppikken
+    }, [router]);
+
     /* ── Section summaries ──────────────────────────────────── */
-    const colorCustom = ['accent', 'bg', 'text'].filter(k => sourceOf(resolved, k as keyof Overrides) === 'custom').length;
-    const colorBrand = ['accent', 'bg', 'text'].filter(k => sourceOf(resolved, k as keyof Overrides) === 'brand').length;
+    const colorCustom = (['accent', 'bg', 'text'] as const).filter(k => sourceOf(resolved, k) === 'custom').length;
+    const colorBrand = (['accent', 'bg', 'text'] as const).filter(k => sourceOf(resolved, k) === 'brand').length;
     const colorSummary = colorCustom > 0 ? `${colorCustom} custom · ${3 - colorCustom} brand` : `${colorBrand} brand`;
 
     const typoKeys: Array<keyof Overrides> = ['headingFont', 'bodyFont', 'headingSize', 'bodySize', 'headingWeight'];
     const typoCustom = typoKeys.filter(k => sourceOf(resolved, k) === 'custom').length;
     const typoSummary = typoCustom > 0 ? `${typoCustom} custom` : 'Brand-default';
 
-    const textCount = ['brandName', 'subtitle', 'footer'].filter(k => (flat[k as keyof Overrides] as string | undefined)?.length).length;
+    const textCount = (['brandName', 'subtitle', 'addressLine', 'email', 'website', 'footer'] as const).filter(
+        k => (flat[k] as string | undefined)?.length,
+    ).length;
     const textSummary = `${textCount} ingevuld`;
 
-    const decoCount = (flat.showOrnament ? 1 : 0) + (flat.showDividers ? 1 : 0) + (flat.showGhostNumbers ? 1 : 0);
+    const eventCount = (['eventTitle', 'eventMessage'] as const).filter(k => (flat[k] as string | undefined)?.length).length;
+    const eventSummary = eventCount > 0 ? `${eventCount} ingevuld` : 'Leeg';
+
+    const decoCount = [
+        flat.showOrnament ? 1 : 0,
+        flat.showDividers ? 1 : 0,
+        flat.showGhostNumbers ? 1 : 0,
+        flat.showFootnoteAllergens ? 1 : 0,
+    ].reduce((a, b) => a + b, 0);
     const decoSummary = `${decoCount} actief`;
 
     /* ── Render ─────────────────────────────────────────────── */
@@ -196,6 +276,7 @@ export default function MenukaartEditor({
                     onUndo={undo}
                     onRedo={redo}
                     onClose={() => router.push(`/offertes/${offerId}/view`)}
+                    onOpenPicker={() => setPickerOpen(true)}
                 />
 
                 <div className="mke-body">
@@ -227,19 +308,19 @@ export default function MenukaartEditor({
                                     <div className="mke-compare-col">
                                         <span className="mke-compare-label current">Huidig</span>
                                         <PreviewWrapper zoom={zoom}>
-                                            <Restaurant01Preview overrides={flat} data={data} size="small" />
+                                            <TemplatePreview overrides={flat} data={data} size="small" />
                                         </PreviewWrapper>
                                     </div>
                                     <div className="mke-compare-col">
                                         <span className="mke-compare-label proposal">Voorstel</span>
                                         <PreviewWrapper zoom={zoom}>
-                                            <Restaurant01Preview overrides={previewProposal(flat, diffs)} data={data} size="small" />
+                                            <TemplatePreview overrides={previewProposal(flat, diffs)} data={data} size="small" />
                                         </PreviewWrapper>
                                     </div>
                                 </div>
                             ) : (
                                 <PreviewWrapper zoom={zoom}>
-                                    <Restaurant01Preview overrides={flat} data={data} />
+                                    <TemplatePreview overrides={flat} data={data} />
                                 </PreviewWrapper>
                             )}
                         </div>
@@ -283,8 +364,16 @@ export default function MenukaartEditor({
                                     colorSummary={colorSummary}
                                     typoSummary={typoSummary}
                                     textSummary={textSummary}
+                                    eventSummary={eventSummary}
                                     decoSummary={decoSummary}
+                                    isPending={isPending}
                                     onChange={updateKey}
+                                    onChangeMany={(values) => {
+                                        setUndoStack(s => [...s, custom]);
+                                        setRedoStack([]);
+                                        setCustom(prev => ({ ...prev, ...values }));
+                                        setSaveStatus('saving');
+                                    }}
                                     onResetKey={resetKey}
                                 />
                             ) : (
@@ -293,15 +382,17 @@ export default function MenukaartEditor({
                                     prompt={aiPrompt}
                                     onPromptChange={setAiPrompt}
                                     onSubmit={() => {
-                                        // S4-fase-2: hier komt fetch naar /api/menukaart-editor/suggest
                                         setAiState('loading');
-                                        // demo-only voor S4-fase-1: na 1.2s een nep-result
                                         setTimeout(() => {
                                             setDiffs([
                                                 {
-                                                    id: 'd1', type: 'kleur', label: 'Kleur — primary accent',
-                                                    fromSwatch: flat.accent ?? '#8B5E3C', fromText: flat.accent ?? '#8B5E3C',
-                                                    toSwatch: '#9e781c', toText: '#9e781c',
+                                                    id: 'd1',
+                                                    type: 'kleur',
+                                                    label: 'Kleur — primary accent',
+                                                    fromSwatch: flat.accent ?? '#8B5E3C',
+                                                    fromText: flat.accent ?? '#8B5E3C',
+                                                    toSwatch: '#9e781c',
+                                                    toText: '#9e781c',
                                                     status: 'open',
                                                     apply: { accent: '#9e781c' },
                                                 },
@@ -310,7 +401,10 @@ export default function MenukaartEditor({
                                             setCompareMode(true);
                                         }, 1200);
                                     }}
-                                    onCancel={() => { setAiState('idle'); setDiffs([]); }}
+                                    onCancel={() => {
+                                        setAiState('idle');
+                                        setDiffs([]);
+                                    }}
                                     summary={
                                         aiState === 'result'
                                             ? 'Voorgesteld voorstel uit demo-mode. In S4-fase-2 koppelt dit aan Claude Sonnet 4.6 met tool-use.'
@@ -322,15 +416,28 @@ export default function MenukaartEditor({
                                         if (d) applyDiff(d);
                                     }}
                                     onSkipOne={(id) => {
-                                        setDiffs(ds => ds.map(x => x.id === id ? { ...x, status: 'skipped' } : x));
+                                        setDiffs(ds => ds.map(x => (x.id === id ? { ...x, status: 'skipped' } : x)));
                                     }}
                                     onApplyAll={applyAll}
-                                    onDiscardAll={() => { setDiffs([]); setAiState('idle'); setCompareMode(false); }}
+                                    onDiscardAll={() => {
+                                        setDiffs([]);
+                                        setAiState('idle');
+                                        setCompareMode(false);
+                                    }}
                                 />
                             )}
                         </div>
                     </div>
                 </div>
+
+                <TemplatePickerSheet
+                    open={pickerOpen}
+                    onClose={() => setPickerOpen(false)}
+                    offerId={offerId}
+                    currentTemplateId={templateId}
+                    currentAccent={flat.accent}
+                    onSwitched={handleTemplateSwitched}
+                />
             </div>
         </div>
     );
@@ -339,14 +446,29 @@ export default function MenukaartEditor({
 /* ── Sub-components ─────────────────────────── */
 
 function Header({
-    offerId, offerLabel, templateName, saveStatus, lastSavedAt,
-    canUndo, canRedo, onUndo, onRedo, onClose,
+    offerId,
+    offerLabel,
+    templateName,
+    saveStatus,
+    lastSavedAt,
+    canUndo,
+    canRedo,
+    onUndo,
+    onRedo,
+    onClose,
+    onOpenPicker,
 }: {
-    offerId: string; offerLabel: string; templateName: string;
+    offerId: string;
+    offerLabel: string;
+    templateName: string;
     saveStatus: 'saved' | 'saving' | 'error' | 'never';
     lastSavedAt: Date | null;
-    canUndo: boolean; canRedo: boolean;
-    onUndo: () => void; onRedo: () => void; onClose: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    onUndo: () => void;
+    onRedo: () => void;
+    onClose: () => void;
+    onOpenPicker: () => void;
 }) {
     return (
         <header className="mke-header">
@@ -371,7 +493,7 @@ function Header({
                     <Redo2 size={15} />
                 </button>
                 <div className="mke-header-divider" />
-                <button className="mke-btn-ghost" type="button" disabled>
+                <button className="mke-btn-ghost" type="button" onClick={onOpenPicker} title="Kies een andere template">
                     <Layout size={13} /> Wisselen van template
                 </button>
                 <button className="mke-btn-primary" onClick={onClose} type="button">
@@ -382,7 +504,13 @@ function Header({
     );
 }
 
-function AutosaveIndicator({ status, lastSavedAt }: { status: 'saved' | 'saving' | 'error' | 'never'; lastSavedAt: Date | null }) {
+function AutosaveIndicator({
+    status,
+    lastSavedAt,
+}: {
+    status: 'saved' | 'saving' | 'error' | 'never';
+    lastSavedAt: Date | null;
+}) {
     const [tick, setTick] = useState(0);
     useEffect(() => {
         const id = setInterval(() => setTick(t => t + 1), 5000);
@@ -393,7 +521,12 @@ function AutosaveIndicator({ status, lastSavedAt }: { status: 'saved' | 'saving'
     if (status === 'never') return <span className="mke-autosave" style={{ color: 'var(--mke-muted-light)' }}>Nog niet gewijzigd</span>;
     if (status === 'saving') return <span className="mke-autosave"><span className="mke-autosave-dot saving" /> Opslaan…</span>;
     if (status === 'error') return <span className="mke-autosave" style={{ color: '#ef4444' }}>Opslaan mislukt</span>;
-    return <span className="mke-autosave"><span className="mke-autosave-dot" /> {lastSavedAt ? `Automatisch opgeslagen · ${timeAgo(lastSavedAt)}` : 'Opgeslagen'}</span>;
+    return (
+        <span className="mke-autosave">
+            <span className="mke-autosave-dot" />
+            {lastSavedAt ? `Automatisch opgeslagen · ${timeAgo(lastSavedAt)}` : 'Opgeslagen'}
+        </span>
+    );
 }
 
 function timeAgo(d: Date): string {
@@ -424,9 +557,6 @@ function previewProposal(flat: Overrides, diffs: Diff[]): Overrides {
 
 /* ── Properties panel ─────────────────────────── */
 
-import type { Resolved, CascadeSource } from '@/lib/menukaart/cascade';
-import type { Template } from '@/lib/menukaart/registry';
-
 type PropertiesProps = {
     resolved: Record<keyof Overrides, Resolved<unknown>>;
     flat: Overrides;
@@ -434,97 +564,231 @@ type PropertiesProps = {
     colorSummary: string;
     typoSummary: string;
     textSummary: string;
+    eventSummary: string;
     decoSummary: string;
+    isPending: boolean;
     onChange: <K extends keyof Overrides>(key: K, value: Overrides[K]) => void;
+    onChangeMany: (values: Partial<Overrides>) => void;
     onResetKey: (key: keyof Overrides) => void;
 };
 
-function PropertiesPanel({ resolved, flat, template, colorSummary, typoSummary, textSummary, decoSummary, onChange, onResetKey }: PropertiesProps) {
+function PropertiesPanel({
+    resolved,
+    flat,
+    template,
+    colorSummary,
+    typoSummary,
+    textSummary,
+    eventSummary,
+    decoSummary,
+    onChange,
+    onChangeMany,
+    onResetKey,
+}: PropertiesProps) {
     const src = (k: keyof Overrides): CascadeSource => sourceOf(resolved, k);
 
     return (
         <>
             <Section icon={<Palette size={15} />} title="Kleuren" summary={colorSummary} defaultOpen>
-                <ColorControl label="Primary accent" value={flat.accent ?? '#8B5E3C'} source={src('accent')} onChange={v => onChange('accent', v)} onReset={() => onResetKey('accent')} />
-                <ColorControl label="Achtergrond" value={flat.bg ?? '#FAF6EF'} source={src('bg')} onChange={v => onChange('bg', v)} onReset={() => onResetKey('bg')} />
-                <ColorControl label="Tekst-kleur" value={flat.text ?? '#2A2520'} source={src('text')} onChange={v => onChange('text', v)} onReset={() => onResetKey('text')} />
+                <ColorControl
+                    label="Primary accent"
+                    value={flat.accent ?? template.defaults.accent}
+                    source={src('accent')}
+                    onChange={v => onChange('accent', v)}
+                    onReset={() => onResetKey('accent')}
+                />
+                <ColorControl
+                    label="Achtergrond"
+                    value={flat.bg ?? template.defaults.bg}
+                    source={src('bg')}
+                    onChange={v => onChange('bg', v)}
+                    onReset={() => onResetKey('bg')}
+                />
+                <ColorControl
+                    label="Tekst-kleur"
+                    value={flat.text ?? template.defaults.text}
+                    source={src('text')}
+                    onChange={v => onChange('text', v)}
+                    onReset={() => onResetKey('text')}
+                />
             </Section>
 
             <Section icon={<Type size={15} />} title="Typografie" summary={typoSummary}>
                 <FontControl
                     label="Heading-font"
-                    value={flat.headingFont ?? 'Cormorant Garamond'}
-                    options={template.allowList.headingFont?.options ?? []}
+                    value={flat.headingFont ?? template.defaults.headingFont}
+                    options={template.allowList.headingFont?.options ?? [template.defaults.headingFont]}
                     source={src('headingFont')}
                     onChange={v => onChange('headingFont', v)}
                 />
                 <FontControl
                     label="Body-font"
-                    value={flat.bodyFont ?? 'Inter'}
-                    options={template.allowList.bodyFont?.options ?? []}
+                    value={flat.bodyFont ?? template.defaults.bodyFont}
+                    options={template.allowList.bodyFont?.options ?? [template.defaults.bodyFont]}
                     source={src('bodyFont')}
                     onChange={v => onChange('bodyFont', v)}
                 />
                 <SizeControl
                     label="Heading-grootte"
-                    value={flat.headingSize ?? 15}
+                    value={flat.headingSize ?? template.defaults.headingSize}
                     min={template.allowList.headingSize?.min ?? 12}
-                    max={template.allowList.headingSize?.max ?? 22}
+                    max={template.allowList.headingSize?.max ?? 48}
                     source={src('headingSize')}
                     onChange={v => onChange('headingSize', v)}
                     onReset={() => onResetKey('headingSize')}
                 />
                 <SizeControl
                     label="Body-grootte"
-                    value={flat.bodySize ?? 10}
+                    value={flat.bodySize ?? template.defaults.bodySize}
                     min={template.allowList.bodySize?.min ?? 8}
-                    max={template.allowList.bodySize?.max ?? 14}
+                    max={template.allowList.bodySize?.max ?? 16}
                     source={src('bodySize')}
                     onChange={v => onChange('bodySize', v)}
                     onReset={() => onResetKey('bodySize')}
                 />
                 <WeightControl
                     label="Heading-weight"
-                    value={flat.headingWeight ?? 400}
-                    options={template.allowList.headingWeight?.options ?? [300, 400, 500, 600]}
+                    value={flat.headingWeight ?? template.defaults.headingWeight}
+                    options={template.allowList.headingWeight?.options ?? [300, 400, 500, 600, 700, 800]}
                     source={src('headingWeight')}
                     onChange={v => onChange('headingWeight', v)}
                 />
             </Section>
 
-            <Section icon={<ImageIcon size={15} />} title="Logo" summary={src('logoPosition') === 'custom' || src('logoSize') === 'custom' ? 'Custom' : 'Brand-default'}>
+            <Section
+                icon={<ImageIcon size={15} />}
+                title="Logo"
+                summary={src('logoPosition') === 'custom' || src('logoSize') === 'custom' ? 'Custom' : 'Brand-default'}
+            >
                 <div className="mke-row-stack">
                     <span className="mke-label">Positie</span>
-                    <PositionChips value={(flat.logoPosition as LogoPosition) ?? 'top-center'} onChange={v => onChange('logoPosition', v)} />
+                    <PositionChips
+                        value={(flat.logoPosition as LogoPosition) ?? template.defaults.logoPosition}
+                        onChange={v => onChange('logoPosition', v)}
+                    />
                 </div>
                 <SizeControl
                     label="Grootte"
-                    value={flat.logoSize ?? 36}
+                    value={flat.logoSize ?? template.defaults.logoSize}
                     min={template.allowList.logoSize?.min ?? 24}
-                    max={template.allowList.logoSize?.max ?? 72}
+                    max={template.allowList.logoSize?.max ?? 80}
                     source={src('logoSize')}
                     onChange={v => onChange('logoSize', v)}
                     onReset={() => onResetKey('logoSize')}
                 />
             </Section>
 
-            <Section icon={<TextCursorInput size={15} />} title="Teksten" summary={textSummary}>
-                <TextControl label="Bedrijfsnaam" value={flat.brandName ?? ''} max={template.allowList.brandName?.max ?? 40} source={src('brandName')} onChange={v => onChange('brandName', v)} />
-                <TextControl label="Ondertitel" value={flat.subtitle ?? ''} max={template.allowList.subtitle?.max ?? 60} source={src('subtitle')} onChange={v => onChange('subtitle', v)} />
-                <TextControl label="Footer-tekst" value={flat.footer ?? ''} max={template.allowList.footer?.max ?? 120} source={src('footer')} onChange={v => onChange('footer', v)} />
+            <Section icon={<TextCursorInput size={15} />} title="Bedrijfs-tekst" summary={textSummary}>
+                <TextControl
+                    label="Bedrijfsnaam"
+                    value={flat.brandName ?? ''}
+                    max={template.allowList.brandName?.max ?? 40}
+                    source={src('brandName')}
+                    onChange={v => onChange('brandName', v)}
+                />
+                <TextControl
+                    label="Ondertitel"
+                    value={flat.subtitle ?? ''}
+                    max={template.allowList.subtitle?.max ?? 60}
+                    source={src('subtitle')}
+                    onChange={v => onChange('subtitle', v)}
+                />
+                {template.allowList.addressLine && (
+                    <TextControl
+                        label="Adres"
+                        value={flat.addressLine ?? ''}
+                        max={template.allowList.addressLine.max}
+                        source={src('addressLine')}
+                        onChange={v => onChange('addressLine', v)}
+                    />
+                )}
+                {template.allowList.email && (
+                    <TextControl
+                        label="E-mail"
+                        value={flat.email ?? ''}
+                        max={template.allowList.email.max}
+                        source={src('email')}
+                        onChange={v => onChange('email', v)}
+                    />
+                )}
+                {template.allowList.website && (
+                    <TextControl
+                        label="Website"
+                        value={flat.website ?? ''}
+                        max={template.allowList.website.max}
+                        source={src('website')}
+                        onChange={v => onChange('website', v)}
+                    />
+                )}
+                <TextControl
+                    label="Footer-tekst"
+                    value={flat.footer ?? ''}
+                    max={template.allowList.footer?.max ?? 160}
+                    source={src('footer')}
+                    onChange={v => onChange('footer', v)}
+                />
+            </Section>
+
+            <Section icon={<Heart size={15} />} title="Persoonlijke boodschap" summary={eventSummary} defaultOpen={eventSummary !== 'Leeg'}>
+                <EventMessageControl
+                    title={flat.eventTitle ?? ''}
+                    message={flat.eventMessage ?? ''}
+                    position={(flat.eventMessagePosition as EventMessagePosition) ?? 'top'}
+                    titleMax={template.allowList.eventTitle?.max ?? 80}
+                    messageMax={template.allowList.eventMessage?.max ?? 300}
+                    hasCustomTitle={src('eventTitle') === 'custom'}
+                    hasCustomMessage={src('eventMessage') === 'custom'}
+                    hasCustomPosition={src('eventMessagePosition') === 'custom'}
+                    onChange={(next) => {
+                        const patch: Partial<Overrides> = {};
+                        if (next.title !== undefined) patch.eventTitle = next.title;
+                        if (next.message !== undefined) patch.eventMessage = next.message;
+                        if (next.position !== undefined) patch.eventMessagePosition = next.position;
+                        onChangeMany(patch);
+                    }}
+                    onResetField={(field) => onResetKey(field)}
+                />
             </Section>
 
             <Section icon={<Sparkles size={15} />} title="Decoraties" summary={decoSummary}>
                 {template.allowList.showOrnament && (
-                    <ToggleControl label="Toon ornament-randen" value={flat.showOrnament !== false} source={src('showOrnament')} onChange={v => onChange('showOrnament', v)} />
+                    <ToggleControl
+                        label="Toon ornament-randen"
+                        value={flat.showOrnament !== false}
+                        source={src('showOrnament')}
+                        onChange={v => onChange('showOrnament', v)}
+                    />
                 )}
                 {template.allowList.showDividers && (
-                    <ToggleControl label="Toon dividers tussen gangen" value={flat.showDividers !== false} source={src('showDividers')} onChange={v => onChange('showDividers', v)} />
+                    <ToggleControl
+                        label="Toon dividers tussen gangen"
+                        value={flat.showDividers !== false}
+                        source={src('showDividers')}
+                        onChange={v => onChange('showDividers', v)}
+                    />
                 )}
                 {template.allowList.showGhostNumbers && (
-                    <ToggleControl label="Toon ghost-cijfers" value={flat.showGhostNumbers === true} source={src('showGhostNumbers')} onChange={v => onChange('showGhostNumbers', v)} />
+                    <ToggleControl
+                        label="Toon ghost-cijfers"
+                        value={flat.showGhostNumbers !== false}
+                        source={src('showGhostNumbers')}
+                        onChange={v => onChange('showGhostNumbers', v)}
+                    />
+                )}
+                {template.allowList.showFootnoteAllergens && (
+                    <ToggleControl
+                        label="Allergenen onderaan elke gang"
+                        value={flat.showFootnoteAllergens !== false}
+                        source={src('showFootnoteAllergens')}
+                        onChange={v => onChange('showFootnoteAllergens', v)}
+                    />
                 )}
             </Section>
+
+            {/* Tenant-info hint */}
+            <div className="mke-section-footnote">
+                <AtSign size={11} /> Bedrijfs-tekst staat op tenant-niveau in Instellingen. Per-offerte overschrijven blijft alleen voor déze menukaart gelden.
+            </div>
         </>
     );
 }
