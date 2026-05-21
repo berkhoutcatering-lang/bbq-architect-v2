@@ -145,6 +145,10 @@ export interface Offerte {
   event_id?: number;
   public_token?: string;
   organization_id?: string;
+  /** S4-fase-1: gekozen menukaart-template. NULL = nog geen menukaart opgesteld. */
+  menukaart_template_id?: string | null;
+  /** S4-fase-1: per-offerte override-laag bovenop tenant brand-cascade. */
+  menukaart_overrides?: Record<string, unknown> | null;
   created_at: string;
 }
 

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  AlertTriangle, MailWarning, Clock, Percent, Thermometer, ChevronRight, ArrowRight, BellRing,
+  AlertTriangle, MailWarning, Clock, Percent, Thermometer, ChevronRight, ArrowRight, BellRing, Palette,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   clock: Clock,
   percent: Percent,
   thermometer: Thermometer,
+  palette: Palette,
 };
 
 export type AttentionSeverity = 'high' | 'medium' | 'low';
