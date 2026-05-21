@@ -11,7 +11,7 @@ import { detectAllConflicts } from '@/lib/conflictDetection';
 import type {
   DbEvent, Offerte, Factuur, InventoryItem, Klant, Bon, Leverancier,
   DbCourse, DbEventAllergy, PrepTask, PrepSuggestion, Gerecht,
-  MargeAlert,
+  MargeAlert, PackList, Rit,
 } from '@/types';
 import EventWizard from '@/components/EventWizard';
 import OnboardingChecklist, { type ChecklistData } from '@/components/onboarding/OnboardingChecklist';
@@ -59,6 +59,8 @@ export default function DashboardPage() {
   const crs = useSupabase<DbCourse>('courses', []);
   const ealg = useSupabase<DbEventAllergy>('event_allergies', []);
   const ma = useSupabase<MargeAlert>('marge_alerts', []);
+  const pl = useSupabase<PackList>('pack_lists', []);
+  const rt = useSupabase<Rit>('ritten', []);
 
   const events: DbEvent[] = ev.data || [];
   const facturen: Factuur[] = fac.data || [];
@@ -73,6 +75,8 @@ export default function DashboardPage() {
   const courses: DbCourse[] = crs.data || [];
   const eventAllergies: DbEventAllergy[] = ealg.data || [];
   const margeAlerts: MargeAlert[] = (ma.data || []).filter((a) => a.status === 'open');
+  const packLists: PackList[] = pl.data || [];
+  const ritten: Rit[] = rt.data || [];
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState('Welkom');
@@ -207,6 +211,42 @@ export default function DashboardPage() {
     if (daysAway > 60) return false;
     const offerteId = (e as DbEvent & { offerte_id?: number }).offerte_id;
     return offerteId != null && offerteIdsZonderMenukaart.has(offerteId);
+  });
+
+  /* Event-completeness checks (briefing). "Compleet" = elk onderdeel dat hoort
+     bij een event is afgevinkt zodat er niks vergeten wordt op event-dag. */
+  const eventIdsMetRit = new Set(ritten.filter((r) => r.event_id != null).map((r) => r.event_id));
+  const upcomingZonderRit = events.filter((e) => {
+    if (!e.date || e.date < today) return false;
+    if ((e.status as string) === 'geannuleerd') return false;
+    const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
+    if (daysAway > 14) return false;
+    return !eventIdsMetRit.has(e.id);
+  });
+
+  const eventIdsMetPacklist = new Set(packLists.filter((p) => p.event_id != null).map((p) => p.event_id));
+  const upcomingZonderPacklist = events.filter((e) => {
+    if (!e.date || e.date < today) return false;
+    if ((e.status as string) === 'geannuleerd') return false;
+    const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
+    if (daysAway > 7) return false;
+    return !eventIdsMetPacklist.has(e.id);
+  });
+
+  /* "Aanbetaling ontbreekt": geen betaalde factuur gekoppeld aan event.
+     Voor events ≤14 dagen weg signaleren we dat — cashflow-risico als
+     klant niks heeft betaald op event-dag. */
+  const eventIdsMetBetaaldeFactuur = new Set(
+    facturen
+      .filter((f) => (f.status as string) === 'betaald' && f.event_id != null)
+      .map((f) => f.event_id),
+  );
+  const upcomingZonderAanbetaling = events.filter((e) => {
+    if (!e.date || e.date < today) return false;
+    if ((e.status as string) === 'geannuleerd') return false;
+    const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
+    if (daysAway > 14) return false;
+    return !eventIdsMetBetaaldeFactuur.has(e.id);
   });
 
   const offertesMetMenu = offertes.filter((o) => o.menu_selectie);
@@ -410,6 +450,39 @@ export default function DashboardPage() {
           : 0,
         offerteId: (e as DbEvent & { offerte_id?: number }).offerte_id ?? 0,
       })),
+    upcomingZonderRit: upcomingZonderRit
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        name: e.name || 'event',
+        daysAway: e.date
+          ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
+          : 0,
+      })),
+    upcomingZonderPacklist: upcomingZonderPacklist
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        name: e.name || 'event',
+        daysAway: e.date
+          ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
+          : 0,
+      })),
+    upcomingZonderAanbetaling: upcomingZonderAanbetaling
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        name: e.name || 'event',
+        daysAway: e.date
+          ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
+          : 0,
+      })),
     lowStockItems: lowStockItems.slice(0, 5).map((i) => ({
       naam: i.naam || 'item',
       categorie: (i.categorie || 'overig').toString().toLowerCase(),
@@ -541,6 +614,48 @@ export default function DashboardPage() {
       detail: upcomingZonderMenukaart.slice(0, 3).map((e) => e.client_naam || e.name || 'event').join(' · '),
       cta: 'Open editor',
       href: firstOfferteId ? `/offertes/${firstOfferteId}/menukaart-editor` : '/events',
+    });
+  }
+  if (upcomingZonderAanbetaling.length > 0) {
+    const first = upcomingZonderAanbetaling[0];
+    const firstDays = first.date
+      ? Math.max(0, Math.ceil((new Date(first.date).getTime() - new Date(today).getTime()) / 86400000))
+      : 0;
+    attentionItems.push({
+      id: 'att-aanbetaling',
+      severity: firstDays <= 7 ? 'high' : 'medium',
+      icon: 'percent',
+      title: `${upcomingZonderAanbetaling.length} ${upcomingZonderAanbetaling.length === 1 ? 'event' : 'events'} zonder aanbetaling`,
+      detail: upcomingZonderAanbetaling.slice(0, 3).map((e) => e.client_naam || e.name || 'event').join(' · '),
+      cta: 'Open event',
+      href: `/events/${first.id}/hub`,
+    });
+  }
+  if (upcomingZonderRit.length > 0) {
+    const first = upcomingZonderRit[0];
+    const firstDays = first.date
+      ? Math.max(0, Math.ceil((new Date(first.date).getTime() - new Date(today).getTime()) / 86400000))
+      : 0;
+    attentionItems.push({
+      id: 'att-ritten',
+      severity: firstDays <= 3 ? 'high' : 'medium',
+      icon: 'clock',
+      title: `${upcomingZonderRit.length} ${upcomingZonderRit.length === 1 ? 'event' : 'events'} zonder rit`,
+      detail: upcomingZonderRit.slice(0, 3).map((e) => e.client_naam || e.name || 'event').join(' · '),
+      cta: 'Plan rit',
+      href: `/events/${first.id}/hub`,
+    });
+  }
+  if (upcomingZonderPacklist.length > 0) {
+    const first = upcomingZonderPacklist[0];
+    attentionItems.push({
+      id: 'att-packlist',
+      severity: 'medium',
+      icon: 'alert-triangle',
+      title: `${upcomingZonderPacklist.length} ${upcomingZonderPacklist.length === 1 ? 'event' : 'events'} zonder pack-list`,
+      detail: upcomingZonderPacklist.slice(0, 3).map((e) => e.client_naam || e.name || 'event').join(' · '),
+      cta: 'Maak checklist',
+      href: `/events/${first.id}/hub`,
     });
   }
   // Pillar #4 cross-hub cascade: leverancier-prijsshift → marge_alerts op

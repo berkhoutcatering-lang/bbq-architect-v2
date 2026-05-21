@@ -16,6 +16,9 @@ export type BriefingCandidateType =
   | 'allergie_gap'
   | 'prep_gap'
   | 'menukaart_missing'
+  | 'rit_missing'
+  | 'packlist_missing'
+  | 'aanbetaling_missing'
   | 'voorraad_event_link'
   | 'voorraad_low'
   | 'low_marge'
@@ -49,6 +52,12 @@ export interface BriefingInput {
   upcomingZonderPrep: { id: string | number; name: string; daysAway: number }[];
   /** S4: events met offerte_id maar offerte heeft nog geen menukaart_template_id. */
   upcomingZonderMenukaart: { id: string | number; name: string; daysAway: number; offerteId: string | number }[];
+  /** Event-completeness: geen rit gepland (transport). */
+  upcomingZonderRit: { id: string | number; name: string; daysAway: number }[];
+  /** Event-completeness: geen pack-list (materieel-checklist). */
+  upcomingZonderPacklist: { id: string | number; name: string; daysAway: number }[];
+  /** Event-completeness: geen betaalde factuur gekoppeld (aanbetaling-status). */
+  upcomingZonderAanbetaling: { id: string | number; name: string; daysAway: number }[];
   lowStockItems: { naam: string; categorie: string }[];
   upcomingGuests: number;
   lowMargeOffertes: { client: string; margePct: number }[];
@@ -140,6 +149,73 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       },
       href: `/events/${input.heroEvent.id}/hub`,
       fallbackText: `Vul ${missing.join(' en ')} aan voor ${input.heroEvent.name}`,
+    });
+  }
+
+  // 4c. Rit ontbreekt (transport-gap)
+  if (input.upcomingZonderRit.length > 0) {
+    const closest = input.upcomingZonderRit[0];
+    const veryClose = closest.daysAway <= 3;
+    const closeBy = closest.daysAway <= 7;
+    out.push({
+      id: 'rit_missing',
+      type: 'rit_missing',
+      priority: veryClose ? 'critical' : closeBy ? 'today' : 'opportunity',
+      defaultLabel: veryClose ? 'Nu' : closeBy ? 'Vandaag' : 'Daarna',
+      score: veryClose ? 88 : closeBy ? 62 : 38,
+      context: {
+        event: closest.name,
+        days: closest.daysAway,
+        count: input.upcomingZonderRit.length,
+      },
+      href: `/events/${closest.id}/hub`,
+      fallbackText: input.upcomingZonderRit.length === 1
+        ? `Geen rit gepland voor ${closest.name} (over ${closest.daysAway}d)`
+        : `${input.upcomingZonderRit.length} events zonder rit — start bij ${closest.name}`,
+    });
+  }
+
+  // 4d. Materieel-checklist (pack-list) ontbreekt
+  if (input.upcomingZonderPacklist.length > 0) {
+    const closest = input.upcomingZonderPacklist[0];
+    const veryClose = closest.daysAway <= 2;
+    out.push({
+      id: 'packlist_missing',
+      type: 'packlist_missing',
+      priority: veryClose ? 'critical' : 'today',
+      defaultLabel: veryClose ? 'Nu' : 'Vandaag',
+      score: veryClose ? 82 : 58,
+      context: {
+        event: closest.name,
+        days: closest.daysAway,
+        count: input.upcomingZonderPacklist.length,
+      },
+      href: `/events/${closest.id}/hub`,
+      fallbackText: input.upcomingZonderPacklist.length === 1
+        ? `Maak materieel-checklist voor ${closest.name}`
+        : `${input.upcomingZonderPacklist.length} events zonder pack-list`,
+    });
+  }
+
+  // 4e. Aanbetaling ontbreekt — cashflow-risico
+  if (input.upcomingZonderAanbetaling.length > 0) {
+    const closest = input.upcomingZonderAanbetaling[0];
+    const veryClose = closest.daysAway <= 7;
+    out.push({
+      id: 'aanbetaling_missing',
+      type: 'aanbetaling_missing',
+      priority: veryClose ? 'critical' : 'today',
+      defaultLabel: veryClose ? 'Nu' : 'Vandaag',
+      score: veryClose ? 90 : 60,
+      context: {
+        event: closest.name,
+        days: closest.daysAway,
+        count: input.upcomingZonderAanbetaling.length,
+      },
+      href: `/events/${closest.id}/hub`,
+      fallbackText: input.upcomingZonderAanbetaling.length === 1
+        ? `Geen aanbetaling voor ${closest.name} (over ${closest.daysAway}d)`
+        : `${input.upcomingZonderAanbetaling.length} events zonder aanbetaling`,
     });
   }
 
