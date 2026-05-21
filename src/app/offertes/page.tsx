@@ -26,7 +26,7 @@ import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import { calcOfferteMarge } from '@/lib/costCalculations';
-import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles, Palette } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
 import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
@@ -852,6 +852,23 @@ export default function Offertes() {
                                 })()}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={function (e) { e.stopPropagation(); window.location.href = '/offertes/' + o.id + '/menukaart-editor'; }}
+                                    title={o.menukaart_template_id ? 'Pas menukaart-styling aan' : 'Maak een menukaart voor deze offerte'}
+                                    style={{
+                                        padding: '6px 10px',
+                                        fontSize: 11.5,
+                                        letterSpacing: '.05em',
+                                        textTransform: 'uppercase',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        ...(o.menukaart_template_id ? {} : { borderColor: 'rgba(158,120,28,.4)', color: 'var(--brand-gold, #c4a35a)' }),
+                                    }}
+                                >
+                                    <Palette size={13} /> Menukaart
+                                </button>
                                 <button
                                     className="btn btn-ghost btn-sm"
                                     onClick={function (e) { e.stopPropagation(); window.location.href = '/offertes/' + o.id + '/view'; }}

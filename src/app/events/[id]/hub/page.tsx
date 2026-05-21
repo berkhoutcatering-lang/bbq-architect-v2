@@ -28,6 +28,7 @@ import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
 import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
 import TemplatePreview from '@/components/template-editor/TemplatePreview';
+import MenukaartMissingNotice from '@/components/menukaart/MenukaartMissingNotice';
 import type { PdfTemplate } from '@/types/template.types';
 import { useToast } from '@/components/Toast';
 import '@/components/redesign/redesign.css';
@@ -537,6 +538,14 @@ export default function EventHubPage() {
           </button>
         </div>
         <EventTabs eventId={event.id} eventName={event.name} />
+        {offerte && !offerte.menukaart_template_id && (
+          <div style={{ marginTop: 16 }}>
+            <MenukaartMissingNotice
+              eventName={titleCase(displayEventName(event.name))}
+              offerteId={offerte.id}
+            />
+          </div>
+        )}
         <div className="eh-hero">
           <div className="eh-hero-bg"></div>
           <div className="eh-hero-content">
