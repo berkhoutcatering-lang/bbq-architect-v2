@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   CircleDot, Eye, Download, Send, Copy, GitBranch, TrendingUp, Flame, Leaf,
   Users, Plus, Save, Sparkles, Target, ChevronRight, MessageCircle, ArrowLeft,
-  AlertTriangle,
+  AlertTriangle, Palette,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
@@ -542,6 +542,13 @@ export default function OfferteViewPage() {
               style={!offerte.public_token ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
             >
               <Eye size={14} />Preview
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => router.push(`/offertes/${offerte.id}/menukaart-editor`)}
+              title="Pas kleuren, lettertypes en logo van de menukaart aan"
+            >
+              <Palette size={14} />Menukaart
             </button>
             <button className="btn btn-ghost"><Download size={14} />PDF</button>
             <button className="btn btn-primary" onClick={() => router.push(`/offertes?edit=${offerte.id}`)}><Send size={14} />Bewerken</button>

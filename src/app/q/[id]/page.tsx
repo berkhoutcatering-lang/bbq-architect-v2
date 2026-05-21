@@ -6,6 +6,7 @@ import { Leaf } from 'lucide-react';
 import SignaturePad from '@/components/SignaturePad';
 import { useToast } from '@/components/Toast';
 import { formatCarbon, SCORE_LABELS } from '@/lib/carbonFootprint';
+import QuoteMenukaartSection from '@/components/menukaart/QuoteMenukaartSection';
 
 function formatEuro(n: number) { return '€' + n.toFixed(2).replace('.', ','); }
 
@@ -399,6 +400,16 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
                         </div>
                     )}
+
+                    {/* Menukaart — gerenderd via cascade (template default → tenant brand → offerte custom) */}
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        <QuoteMenukaartSection
+                            templateId={offer.menukaart_template_id ?? settings?.menukaart_template_id}
+                            brandOverrides={settings?.menukaart_overrides ?? {}}
+                            customOverrides={offer.menukaart_overrides ?? {}}
+                            logoUrl={brandLogoUrl}
+                        />
+                    </div>
 
                     {/* Status tracker (shown after acceptance) — compactere circles op phone zodat 4-stappen passen op 375px */}
                     {accepted && (
