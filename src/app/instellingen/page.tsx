@@ -225,7 +225,6 @@ export default function Instellingen() {
                         {[
                             { type: 'factuur', label: 'Factuur' },
                             { type: 'offerte', label: 'Offerte' },
-                            { type: 'menukaart', label: 'Menukaart' },
                             { type: 'haccp', label: 'HACCP Rapport' },
                             { type: 'bon', label: 'Bon / Kassaticket' },
                         ].map(function (doc) {
@@ -239,6 +238,17 @@ export default function Instellingen() {
                                 </a>
                             );
                         })}
+                        {/* Menukaart is verhuisd naar per-offerte editor (S4) */}
+                        <a href="/offertes"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg)', border: '1px solid color-mix(in srgb, var(--brand) 25%, transparent)', textDecoration: 'none', color: 'var(--text)', fontSize: 13, transition: 'border-color 0.15s' }}>
+                            <span style={{ fontWeight: 500 }}>
+                                Menukaart
+                                <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>per offerte</span>
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--brand)' }}>
+                                <Pen size={12} /> Via offerte aanpassen
+                            </span>
+                        </a>
                     </div>
                 </div>
             </div>

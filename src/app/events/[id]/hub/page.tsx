@@ -38,12 +38,6 @@ const MENUKAART_STYLE_TO_NAME: Record<MenuCardTemplate, string> = {
   modern: 'Menukaart — Modern',
   slate: 'Menukaart — Slate',
 };
-const MENUKAART_STYLE_TO_STARTER: Record<MenuCardTemplate, string> = {
-  ambacht: 'menukaart-ambacht',
-  modern: 'menukaart-modern',
-  slate: 'menukaart-slate',
-};
-
 type TplKey = MenuCardTemplate;
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -927,12 +921,14 @@ export default function EventHubPage() {
                       </button>
                     </div>
                     <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-                      <a href={activeTemplate?.id
-                        ? `/template-editor?id=${activeTemplate.id}`
-                        : `/template-editor?type=menukaart&start=${MENUKAART_STYLE_TO_STARTER[tpl]}`}
-                        style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
-                        <Pencil size={11} /> {activeTemplate ? 'Template aanpassen' : 'Template maken'}
-                      </a>
+                      {event.offerte_id ? (
+                        <a href={`/offertes/${event.offerte_id}/menukaart-editor`}
+                          style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
+                          <Pencil size={11} /> Menukaart aanpassen
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Eerst offerte koppelen om menukaart te bewerken</span>
+                      )}
                     </div>
                   </div>
                 </div>
