@@ -398,6 +398,18 @@ export default function DashboardPage() {
         ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
         : 0,
     })),
+    upcomingZonderMenukaart: upcomingZonderMenukaart
+      .slice()
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        name: e.name || 'event',
+        daysAway: e.date
+          ? Math.max(0, Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000))
+          : 0,
+        offerteId: (e as DbEvent & { offerte_id?: number }).offerte_id ?? 0,
+      })),
     lowStockItems: lowStockItems.slice(0, 5).map((i) => ({
       naam: i.naam || 'item',
       categorie: (i.categorie || 'overig').toString().toLowerCase(),

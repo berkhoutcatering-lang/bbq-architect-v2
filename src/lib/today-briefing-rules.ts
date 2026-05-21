@@ -15,6 +15,7 @@ export type BriefingCandidateType =
   | 'planning_conflict'
   | 'allergie_gap'
   | 'prep_gap'
+  | 'menukaart_missing'
   | 'voorraad_event_link'
   | 'voorraad_low'
   | 'low_marge'
@@ -46,6 +47,8 @@ export interface BriefingInput {
   conflicts: number;
   conceptFacturen: { client: string }[];
   upcomingZonderPrep: { id: string | number; name: string; daysAway: number }[];
+  /** S4: events met offerte_id maar offerte heeft nog geen menukaart_template_id. */
+  upcomingZonderMenukaart: { id: string | number; name: string; daysAway: number; offerteId: string | number }[];
   lowStockItems: { naam: string; categorie: string }[];
   upcomingGuests: number;
   lowMargeOffertes: { client: string; margePct: number }[];
@@ -137,6 +140,31 @@ export function computeCandidates(input: BriefingInput): BriefingCandidate[] {
       },
       href: `/events/${input.heroEvent.id}/hub`,
       fallbackText: `Vul ${missing.join(' en ')} aan voor ${input.heroEvent.name}`,
+    });
+  }
+
+  // 4b. Menukaart ontbreekt voor upcoming events (S4-fase-1).
+  // Caterende ondernemer moet bewust kiezen om brand-default te accepteren OF
+  // de menukaart aanpassen. NULL template_id = niet bewust gekozen.
+  if (input.upcomingZonderMenukaart.length > 0) {
+    const closest = input.upcomingZonderMenukaart[0];
+    const closeBy = closest.daysAway <= 14;
+    const veryClose = closest.daysAway <= 3;
+    out.push({
+      id: 'menukaart_missing',
+      type: 'menukaart_missing',
+      priority: veryClose ? 'today' : closeBy ? 'today' : 'opportunity',
+      defaultLabel: veryClose ? 'Nu' : closeBy ? 'Vandaag' : 'Daarna',
+      score: veryClose ? 75 : closeBy ? 55 : 35,
+      context: {
+        event: closest.name,
+        days: closest.daysAway,
+        count: input.upcomingZonderMenukaart.length,
+      },
+      href: `/offertes/${closest.offerteId}/menukaart-editor`,
+      fallbackText: input.upcomingZonderMenukaart.length === 1
+        ? `Menukaart maken voor ${closest.name}`
+        : `${input.upcomingZonderMenukaart.length} events zonder menukaart — start bij ${closest.name}`,
     });
   }
 
