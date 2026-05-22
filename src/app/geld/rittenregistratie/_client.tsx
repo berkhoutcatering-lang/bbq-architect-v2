@@ -118,7 +118,7 @@ export default function RittenregistratieClient() {
               Export {new Date().getFullYear()}
             </Button>
             <Link
-              href="/administratie/rittenregistratie/nieuw"
+              href="/geld/rittenregistratie/nieuw"
               style={{ textDecoration: 'none' }}
             >
               <Button variant="brand" size="sm" icon={<Plus size={14} />}>
@@ -154,7 +154,7 @@ export default function RittenregistratieClient() {
           <div style={{ fontSize: 13, color: 'var(--muted)', maxWidth: 460, margin: '0 auto 18px' }}>
             Begin met je eerste rit. Tip: je kunt ook automatisch een heen+retour rit toevoegen vanaf een event op de agenda.
           </div>
-          <Link href="/administratie/rittenregistratie/nieuw" style={{ textDecoration: 'none' }}>
+          <Link href="/geld/rittenregistratie/nieuw" style={{ textDecoration: 'none' }}>
             <Button variant="brand" icon={<Plus size={14} />}>
               Eerste rit toevoegen
             </Button>
@@ -168,7 +168,7 @@ export default function RittenregistratieClient() {
               markers={markers}
               activeRouteId={activeId !== null ? String(activeId) : null}
               height={460}
-              onRouteClick={(id) => router.push(`/administratie/rittenregistratie/${id}`)}
+              onRouteClick={(id) => router.push(`/geld/rittenregistratie/${id}`)}
             />
             <RittenTabel ritten={filtered} voertuigen={voertuigen} activeId={activeId} />
           </div>

@@ -48,9 +48,10 @@ const tabs: Tab[] = [
             p.startsWith("/gerechten/") ||
             p === "/bedenker" ||
             p.startsWith("/bedenker/") ||
-            p === "/marges" ||
             p.startsWith("/keuken/") ||
-            // Backwards-compat: /inspiratie redirect → /gerechten
+            // Backwards-compat: redirects naar /gerechten of /gerechten/menu-analyse
+            p === "/marges" ||
+            p === "/menu-engineering" ||
             p === "/inspiratie" ||
             p.startsWith("/inspiratie/"),
     },

@@ -22,7 +22,7 @@ export default function BewerkRitClient({ id }: { id: number }) {
     return (
       <div className="main-content" style={{ padding: 32 }}>
         <Link
-          href="/administratie/rittenregistratie"
+          href="/geld/rittenregistratie"
           style={{ color: 'var(--brand)', textDecoration: 'none' }}
         >
           ← Terug naar rittenoverzicht

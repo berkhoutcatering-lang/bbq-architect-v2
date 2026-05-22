@@ -35,7 +35,7 @@ export const PAGE_TOOL_WHITELIST: Record<string, string[]> = {
 
     '/gerechten': ['respond_with_blocks', 'propose_dish_concepts', 'develop_dishes', 'create_gerecht', 'update_gerecht', 'delete_gerecht'],
     '/bedenker': ['respond_with_blocks', 'propose_dish_concepts'],
-    '/marges': ['respond_with_blocks', 'propose_dish_concepts', 'develop_dishes'],
+    '/gerechten/menu-analyse': ['respond_with_blocks', 'propose_dish_concepts', 'develop_dishes'],
     '/recepten': ['respond_with_blocks', 'create_recept', 'update_recept'],
 
     '/archief': ['respond_with_blocks'],
@@ -80,22 +80,22 @@ export const PAGE_TOOL_WHITELIST: Record<string, string[]> = {
 // Pages met algemene bereik (bv /, /administratie) krijgen breed bereik;
 // veld-pages (service, field) krijgen alleen de directe sibling-pages.
 export const PAGE_ROUTE_WHITELIST: Record<string, string[]> = {
-    '/': ['/agenda', '/events', '/inkoop', '/voorraad', '/financien', '/offertes', '/facturen', '/gerechten', '/marges', '/uren', '/klanten'],
+    '/': ['/agenda', '/events', '/inkoop', '/voorraad', '/financien', '/offertes', '/facturen', '/gerechten', '/gerechten/menu-analyse', '/uren', '/klanten'],
     '/agenda': ['/events', '/events/', '/inkoop'],
     '/events': ['/events/', '/agenda', '/klanten', '/offertes'],
-    '/events/[id]': ['/events/', '/inkoop', '/offertes', '/facturen', '/gerechten', '/marges'],
-    '/events/[id]/hub': ['/events/', '/inkoop', '/offertes', '/facturen', '/gerechten', '/marges'],
-    '/events/[id]/klantgesprek': ['/gerechten', '/marges', '/events/'],
+    '/events/[id]': ['/events/', '/inkoop', '/offertes', '/facturen', '/gerechten', '/gerechten/menu-analyse'],
+    '/events/[id]/hub': ['/events/', '/inkoop', '/offertes', '/facturen', '/gerechten', '/gerechten/menu-analyse'],
+    '/events/[id]/klantgesprek': ['/gerechten', '/gerechten/menu-analyse', '/events/'],
     '/events/[id]/prep': ['/events/', '/inkoop'],
     '/events/[id]/haccp': ['/events/'],
     '/events/[id]/service': ['/events/'],
     '/events/[id]/reflectie': ['/events/'],
     '/events/[id]/field': ['/events/'],
 
-    '/gerechten': ['/marges', '/bedenker', '/recepten', '/inkoop'],
+    '/gerechten': ['/gerechten/menu-analyse', '/bedenker', '/recepten', '/inkoop'],
     '/bedenker': ['/gerechten'],
-    '/marges': ['/gerechten', '/inkoop'],
-    '/recepten': ['/gerechten', '/marges'],
+    '/gerechten/menu-analyse': ['/gerechten', '/inkoop'],
+    '/recepten': ['/gerechten', '/gerechten/menu-analyse'],
 
     '/archief': ['/inkoop', '/financien', '/leveranciers'],
 
@@ -107,8 +107,8 @@ export const PAGE_ROUTE_WHITELIST: Record<string, string[]> = {
     '/inkoop': ['/voorraad', '/events/', '/archief', '/financien'],
 
     '/offertes': ['/offertes/', '/klanten', '/mailbox', '/events/'],
-    '/offertes/[id]': ['/offertes', '/marges', '/financien'],
-    '/offertes/[id]/view': ['/offertes', '/marges', '/financien'],
+    '/offertes/[id]': ['/offertes', '/gerechten/menu-analyse', '/financien'],
+    '/offertes/[id]/view': ['/offertes', '/gerechten/menu-analyse', '/financien'],
     '/facturen': ['/offertes', '/financien', '/klanten', '/mailbox'],
 
     '/instellingen': ['/instellingen/integraties', '/website'],

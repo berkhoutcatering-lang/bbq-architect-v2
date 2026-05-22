@@ -617,7 +617,7 @@ export default function EventHubPage() {
                 <AskPitmasterButton event={{ id: event.id, name: event.name, date: event.date, guests: event.guests, location: event.location }} />
                 <button
                   className="btn btn-ghost"
-                  onClick={() => router.push(`/administratie/rittenregistratie/nieuw?event=${event.id}`)}
+                  onClick={() => router.push(`/geld/rittenregistratie/nieuw?event=${event.id}`)}
                   title="Voeg een rit toe gekoppeld aan dit event"
                 >
                   <Car size={14} />Rit toevoegen

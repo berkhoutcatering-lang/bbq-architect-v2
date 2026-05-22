@@ -631,7 +631,7 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const lastUserMsg = (rawLastUserContent.split('\n\n').pop() || '').toLowerCase();
         // Check via normalizedPage zodat hub-and-spoke routes (bv /inspiratie/gerechten)
         // dezelfde tool-forcing krijgen als hun stand-alone variant.
-        const isOnGerechten = normalizedPage === '/gerechten' || normalizedPage === '/marges' || normalizedPage === '/ai-chat' || normalizedPage === '/recepten';
+        const isOnGerechten = normalizedPage === '/gerechten' || normalizedPage === '/gerechten/menu-analyse' || normalizedPage === '/ai-chat' || normalizedPage === '/recepten';
         const wantsBrainstorm = isOnGerechten && (
             /\b(bedenk|brainstorm|maak|geef me|verzin|kom met|stel\s*samen|kom\s*op\s*met)\b/.test(lastUserMsg) &&
             /\b\d+\b/.test(lastUserMsg) &&

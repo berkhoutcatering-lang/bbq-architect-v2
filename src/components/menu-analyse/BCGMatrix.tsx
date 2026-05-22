@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, ZAxis } from 'recharts';
 import MetallicCard from '@/components/MetallicCard';
 import { safeJsonParse } from '@/lib/utils';
-import { getGang } from './GerechtKaart';
+import { getGang } from '@/lib/menu/gangen';
 
 export type Quadrant = 'star' | 'puzzle' | 'plowhorse' | 'dog';
 

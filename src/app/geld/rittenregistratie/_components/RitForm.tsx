@@ -141,7 +141,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
       const saved = rit ? await update(rit.id, payload) : await insert(payload);
       if (!saved) throw new Error('Opslaan mislukt');
       showToast({ type: 'success', message: rit ? 'Rit bijgewerkt' : 'Rit toegevoegd' });
-      router.push(`/administratie/rittenregistratie/${saved.id}`);
+      router.push(`/geld/rittenregistratie/${saved.id}`);
     } catch (e) {
       showToast({ type: 'error', title: 'Fout bij opslaan', message: (e as Error).message });
     } finally {
@@ -156,7 +156,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
     try {
       await remove(rit.id);
       showToast({ type: 'success', message: 'Rit verwijderd' });
-      router.push('/administratie/rittenregistratie');
+      router.push('/geld/rittenregistratie');
     } catch (e) {
       showToast({ type: 'error', title: 'Fout bij verwijderen', message: (e as Error).message });
     } finally {
@@ -197,7 +197,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
     <div className="main-content" style={{ maxWidth: 900 }}>
       <div style={{ marginBottom: 18 }}>
         <Link
-          href={rit ? `/administratie/rittenregistratie/${rit.id}` : '/administratie/rittenregistratie'}
+          href={rit ? `/geld/rittenregistratie/${rit.id}` : '/geld/rittenregistratie'}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -440,7 +440,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link
-            href={rit ? `/administratie/rittenregistratie/${rit.id}` : '/administratie/rittenregistratie'}
+            href={rit ? `/geld/rittenregistratie/${rit.id}` : '/geld/rittenregistratie'}
             style={{ textDecoration: 'none' }}
           >
             <Button variant="ghost">Annuleren</Button>

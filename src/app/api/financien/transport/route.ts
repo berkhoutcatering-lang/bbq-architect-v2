@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 /**
  * GET /api/financien/transport?year=YYYY
  * ──────────────────────────────────────
- * Cross-page koppeling: /financien → /administratie/rittenregistratie.
+ * Cross-page koppeling: /financien → /geld/rittenregistratie.
  *
  * Aggregeert zakelijke ritten voor het gevraagde jaar:
  *  - totaal_km, aftrekbaar_eur (€0.23/km)

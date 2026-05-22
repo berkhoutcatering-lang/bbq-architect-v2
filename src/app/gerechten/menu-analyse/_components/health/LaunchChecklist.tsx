@@ -4,7 +4,7 @@ import {
     Tag, Calculator, AlertTriangle, Link as LinkIcon, CircleDot, ShieldCheck,
     type LucideIcon,
 } from 'lucide-react';
-import type { LaunchChecklistItem } from '../_lib/types';
+import type { LaunchChecklistItem } from '../../_lib/health/types';
 
 interface Props {
     items: LaunchChecklistItem[];

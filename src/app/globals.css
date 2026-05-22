@@ -11,6 +11,10 @@
   --brand: #FFBF00;
   --brand-light: rgba(255, 191, 0, .12);
   --brand-gold: #c4a35a;
+  /* Default tekst-kleur voor knoppen met --brand als achtergrond.
+     ThemeProvider overschrijft dit op basis van per-tenant primary lightness. */
+  --brand-text-on: #0a0a0c;
+  --brand-text-on-accent: #0a0a0c;
 
   /* Backgrounds */
   --bg: #121214;

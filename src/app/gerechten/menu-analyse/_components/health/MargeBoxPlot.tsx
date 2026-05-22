@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { BarChart3, ArrowRight } from 'lucide-react';
-import type { MarginStats } from '../_lib/types';
+import type { MarginStats } from '../../_lib/health/types';
 
 interface Props {
     stats: MarginStats;

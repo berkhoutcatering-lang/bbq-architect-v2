@@ -96,7 +96,7 @@ export default function RittenTabel({ ritten, voertuigen, activeId }: Props) {
               return (
                 <Link
                   key={r.id}
-                  href={`/administratie/rittenregistratie/${r.id}`}
+                  href={`/geld/rittenregistratie/${r.id}`}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '32px 1fr 110px 110px 28px',

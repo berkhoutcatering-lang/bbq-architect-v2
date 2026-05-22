@@ -716,7 +716,7 @@ export default function DashboardPage() {
             daysToNextEvent={heroEvent ? heroEvent.daysAway : null}
           />
           <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-            <Link href="/administratie/rittenregistratie" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Link href="/geld/rittenregistratie" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Car size={14} /> Rit registreren
             </Link>
             <button onClick={() => setWizardOpen(true)} className="btn btn-brand">

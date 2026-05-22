@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ShieldCheck, ArrowRight, Clock } from 'lucide-react';
-import type { AllergenStats } from '../_lib/types';
+import type { AllergenStats } from '../../_lib/health/types';
 
 interface Props {
     stats: AllergenStats;

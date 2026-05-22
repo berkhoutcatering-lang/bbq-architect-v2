@@ -98,7 +98,7 @@ export const navSections: NavSection[] = [
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
             { label: "Boekhoud-archief", icon: <ScanLine size={16} />, href: "/archief", description: "Bonnen, facturen en pdf's — doorzoekbaar boekhoud-archief" },
             { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
-            { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
+            { label: "Rittenregistratie", icon: <Car size={16} />, href: "/geld/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
     },
     {

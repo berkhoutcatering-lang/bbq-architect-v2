@@ -4,7 +4,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import Sparkline from './Sparkline';
-import type { LibraryStat } from '../_lib/types';
+import type { LibraryStat } from '../../_lib/health/types';
 
 const ICONS: Record<string, LucideIcon> = {
     'utensils-crossed': UtensilsCrossed,

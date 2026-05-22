@@ -15,7 +15,7 @@ interface RichTab {
 const TABS: RichTab[] = [
   { href: '/gerechten', label: 'Gerechten', icon: ChefHat, eyebrow: 'Receptuur · Ingrediënten', color: '#FFBF00' },
   { href: '/bedenker', label: 'Bedenker', icon: Sparkles, eyebrow: 'AI · Brainstorm', color: '#a78bfa' },
-  { href: '/marges', label: 'Marges', icon: BarChart3, eyebrow: 'Kostprijs · Winst', color: '#22c55e' },
+  { href: '/gerechten/menu-analyse', label: 'Menu-analyse', icon: BarChart3, eyebrow: 'Marges · Health · BCG', color: '#22c55e' },
 ];
 
 export default function RichKeukenTabs() {

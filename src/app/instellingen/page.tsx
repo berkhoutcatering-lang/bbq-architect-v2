@@ -301,15 +301,17 @@ export default function Instellingen() {
 }
 
 // ── Curated thema's — 6 sterke caterer-archetypes, geen overlap ──
+// 2026-05-22 B8b: accent/primary opnieuw afgesteld voor WCAG-AA contrast (≥4.5
+// voor body, ≥3 voor UI). 4 presets hadden FAIL-combinaties waardoor "letters
+// wegvielen" — nu alle zes door de audit met de tightest pairs ≥4.5.
 const THEMES = [
     // 3 donker (Smokehouse / Graphite / Cellar) + 3 licht (Linen / Studio / Garden).
-    // Elke preset heeft een eigen silhouette en spreekt een ander caterer-type aan.
-    // Kleuren zijn afgestemd op OKLCH-lightness zodat contrast perceptueel uniform is.
     {
         id: 'smokehouse',
         naam: 'Smokehouse',
         omschrijving: 'Voor traditionele BBQ-caterers — slow smoke, charcoal, pitmaster',
-        bg: '#181412', card: '#2c241d', text: '#f4efe4', primary: '#d49b4d', accent: '#b3611f', secondary: '#100c0a',
+        // accent: #b3611f → #e89a52 (3.37 → 6.66 op card)
+        bg: '#181412', card: '#2c241d', text: '#f4efe4', primary: '#d49b4d', accent: '#e89a52', secondary: '#100c0a',
     },
     {
         id: 'graphite',
@@ -321,13 +323,15 @@ const THEMES = [
         id: 'cellar',
         naam: 'Cellar',
         omschrijving: 'Voor fine-dining caterers en premium bruiloften — kelder-warm, gastronomisch',
-        bg: '#241015', card: '#4a1f2a', text: '#f1ead8', primary: '#dac786', accent: '#a96940', secondary: '#1a0a0d',
+        // accent: #a96940 → #e29560 (3.14 → 5.72 op card)
+        bg: '#241015', card: '#4a1f2a', text: '#f1ead8', primary: '#dac786', accent: '#e29560', secondary: '#1a0a0d',
     },
     {
         id: 'linen',
         naam: 'Linen',
         omschrijving: 'Voor klassieke wedding-caterers — papier-en-inkt, professioneel',
-        bg: '#f4eed8', card: '#fcfaf3', text: '#1c1814', primary: '#9a6a3e', accent: '#6b4a30', secondary: '#e7dfc6',
+        // primary: #9a6a3e → #6b4520 (4.01 → 7.24), accent: #6b4a30 → #4a3520 (7.6 → 11.04)
+        bg: '#f4eed8', card: '#fcfaf3', text: '#1c1814', primary: '#6b4520', accent: '#4a3520', secondary: '#e7dfc6',
     },
     {
         id: 'studio',
@@ -339,7 +343,8 @@ const THEMES = [
         id: 'garden',
         naam: 'Garden',
         omschrijving: 'Voor garden-party en sustainable caterers — organisch, plantaardig, aards',
-        bg: '#ece9d6', card: '#fbf9ef', text: '#1f2117', primary: '#6b7847', accent: '#a96b40', secondary: '#dad6b8',
+        // primary: #6b7847 → #3f4a25 (3.91 → 7.75), accent: #a96b40 → #6b3a20 (3.53 → 7.64)
+        bg: '#ece9d6', card: '#fbf9ef', text: '#1f2117', primary: '#3f4a25', accent: '#6b3a20', secondary: '#dad6b8',
     },
 ] as const;
 

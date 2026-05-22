@@ -27,6 +27,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/archief', request.url), 308);
   }
 
+  // /administratie/rittenregistratie → /geld/rittenregistratie (B8 IA-cleanup
+  // 2026-05-22). Rittenregistratie hoort onder Geld, niet een aparte
+  // /administratie-hub die overlapt met /geld.
+  if (pathname.startsWith('/administratie/rittenregistratie')) {
+    const newPath = pathname.replace('/administratie/rittenregistratie', '/geld/rittenregistratie');
+    return NextResponse.redirect(new URL(newPath + request.nextUrl.search, request.url), 308);
+  }
+
   // Skip public routes
   if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
     return NextResponse.next();
