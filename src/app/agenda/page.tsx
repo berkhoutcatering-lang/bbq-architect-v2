@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useEffect, type ComponentType } from 'react';
+import { useState, useMemo, useEffect, useCallback, type ComponentType } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
@@ -20,13 +20,19 @@ import { useAgendaPersonal } from './_components/useAgendaPersonal';
 import PersonalEventModal from './_components/PersonalEventModal';
 import CalendarView from './_components/CalendarView';
 import FilterPopover from './_components/FilterPopover';
+import FilterPillsBar from './_components/FilterPillsBar';
 import AgendaCategoryModal from './_components/AgendaCategoryModal';
 import type { AgendaEvent as AgendaEventType, AgendaFilterState } from './_lib/types';
 import { useAgendaFilter, applyFilter } from './_lib/useAgendaFilter';
 import { useAgendaCategories, type AgendaCategoryRow } from './_lib/useAgendaCategories';
+import { useAgendaView, type AgendaViewMode } from './_lib/useAgendaView';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
+
+/* Module-scope timer voor de keyboard-shortcut toast. Single Agenda-instance,
+   dus geen race-conditions tussen mounts. */
+let agendaKbdTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ═══════════════════════════════════════════════════════════════════
    AGENDA — gevoed door echte DB events (tabel: events) + prep_tasks +
@@ -149,8 +155,8 @@ function SyncBadge({ live }: { live: boolean }) {
    MONTH NAV
    ═══════════════════════════════════════════════════════════════════ */
 interface MonthNavProps {
-    view: 'month' | 'week' | 'list';
-    setView: (v: 'month' | 'week' | 'list') => void;
+    view: AgendaViewMode;
+    setView: (v: AgendaViewMode) => void;
     monthLabel: string;
     onPrev: () => void;
     onNext: () => void;
@@ -240,38 +246,40 @@ function CalendarLegend({
     onAddCustom: () => void;
     onEditCustom: (row: AgendaCategoryRow) => void;
 }) {
+    const systemRows = rows.filter(r => r.isSystem);
+    const customRows = rows.filter(r => !r.isSystem);
+    const hasCustom = customRows.length > 0;
+    const allOff = rows.length > 0 && rows.every(r => !active.includes(r.id));
+
     return (
         <MetalCard className="agenda-legend">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div className="agenda-legend__title" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Agenda&rsquo;s</div>
-                {canAdd && (
-                    <button
-                        onClick={onAddCustom}
-                        aria-label="Nieuwe agenda toevoegen"
-                        title="Nieuwe agenda"
-                        style={{
-                            width: 26, height: 26, borderRadius: 6,
-                            background: 'rgba(255,255,255,.04)',
-                            border: '1px solid var(--border)',
-                            color: 'var(--muted)',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer',
-                        }}
-                        onMouseEnter={e => {
-                            (e.currentTarget as HTMLElement).style.color = '#FFBF00';
-                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,191,0,.4)';
-                        }}
-                        onMouseLeave={e => {
-                            (e.currentTarget as HTMLElement).style.color = 'var(--muted)';
-                            (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
-                        }}
-                    >
-                        <Plus size={14} />
-                    </button>
-                )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8 }}>
+                <div className="agenda-legend__title" style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '.15em', textTransform: 'uppercase' }}>
+                    Mijn agenda&rsquo;s
+                </div>
             </div>
+
+            {allOff && (
+                <div
+                    role="status"
+                    style={{
+                        padding: 12, borderRadius: 10,
+                        background: 'rgba(255,191,0,.06)',
+                        border: '1px solid rgba(255,191,0,.2)',
+                        marginBottom: 12, textAlign: 'center',
+                    }}
+                >
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>
+                        Geen agenda&rsquo;s zichtbaar
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+                        Vink minimaal één agenda aan om events te zien.
+                    </div>
+                </div>
+            )}
+
             <div className="agenda-legend__items">
-                {rows.map(c => {
+                {systemRows.map(c => {
                     const isOn = active.includes(c.id);
                     const count = counts[c.id] || 0;
                     const systemMeta = c.isSystem ? CALENDARS.find(s => s.id === c.id) : null;
@@ -334,6 +342,133 @@ function CalendarLegend({
                     );
                 })}
             </div>
+
+            {canAdd && (
+                <>
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        marginTop: 14, marginBottom: 8, paddingRight: 2,
+                    }}>
+                        <div style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: '.15em',
+                            textTransform: 'uppercase', color: 'var(--muted-light)',
+                        }}>
+                            Eigen agenda&rsquo;s
+                        </div>
+                        {hasCustom && (
+                            <button
+                                onClick={onAddCustom}
+                                aria-label="Nieuwe agenda toevoegen"
+                                className="agenda-legend__add-btn"
+                                style={{
+                                    minHeight: 32, padding: '4px 8px', borderRadius: 6,
+                                    background: 'transparent', border: 'none',
+                                    color: '#FFBF00', fontSize: 11, fontWeight: 600,
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    cursor: 'pointer',
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,191,0,.08)'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                            >
+                                <Plus size={12} aria-hidden /> Nieuwe agenda
+                            </button>
+                        )}
+                    </div>
+
+                    {hasCustom ? (
+                        <div className="agenda-legend__items">
+                            {customRows.map(c => {
+                                const isOn = active.includes(c.id);
+                                const count = counts[c.id] || 0;
+                                return (
+                                    <div
+                                        key={c.id}
+                                        className="agenda-legend__item agenda-legend__item--row"
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8,
+                                            background: isOn ? `${c.color}10` : 'transparent', opacity: isOn ? 1 : 0.5,
+                                            border: `1px solid ${isOn ? `${c.color}33` : 'transparent'}`,
+                                        }}
+                                    >
+                                        <button
+                                            onClick={() => onToggle(c.id)}
+                                            aria-pressed={isOn}
+                                            style={{
+                                                flex: 1, minWidth: 0,
+                                                display: 'flex', alignItems: 'center', gap: 10,
+                                                background: 'transparent', border: 'none', padding: 0, color: 'inherit',
+                                                cursor: 'pointer', textAlign: 'left',
+                                            }}
+                                        >
+                                            <div style={{ width: 10, height: 10, borderRadius: 2, background: c.color, flexShrink: 0 }} />
+                                            <Calendar size={13} style={{ color: c.color, flexShrink: 0 }} />
+                                            <div style={{ flex: 1, minWidth: 0 }} className="agenda-legend__label">
+                                                <div style={{ fontSize: 12, fontWeight: 500 }}>{c.label}</div>
+                                                <div className="agenda-legend__sub" style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    eigen · {count}
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <span className="agenda-legend__count-mobile" style={{ display: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{count}</span>
+                                        {c.customRow && (
+                                            <button
+                                                onClick={() => onEditCustom(c.customRow!)}
+                                                aria-label={`Bewerk agenda ${c.label}`}
+                                                className="agenda-legend__edit-btn"
+                                                style={{
+                                                    width: 22, height: 22, borderRadius: 5,
+                                                    background: 'transparent', border: 'none',
+                                                    color: 'var(--muted)', cursor: 'pointer',
+                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                    opacity: 0.6,
+                                                }}
+                                                onMouseEnter={e => {
+                                                    (e.currentTarget as HTMLElement).style.opacity = '1';
+                                                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.06)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    (e.currentTarget as HTMLElement).style.opacity = '0.6';
+                                                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                                }}
+                                            >
+                                                <Pencil size={11} />
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <button
+                            onClick={onAddCustom}
+                            aria-label="Maak je eerste eigen agenda"
+                            className="agenda-legend__empty"
+                            style={{
+                                padding: 14, borderRadius: 10,
+                                border: '1px dashed var(--border)',
+                                background: 'transparent', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                textAlign: 'left', color: 'var(--text)', width: '100%',
+                                minHeight: 60,
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,191,0,.4)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+                        >
+                            <div style={{
+                                width: 28, height: 28, borderRadius: 8,
+                                border: '1px dashed var(--border)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                            }}>
+                                <Plus size={14} aria-hidden style={{ color: 'var(--muted)' }} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 500 }}>Maak je eerste eigen agenda</div>
+                                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>bv. Inkoop, Personeel, Showroom</div>
+                            </div>
+                        </button>
+                    )}
+                </>
+            )}
         </MetalCard>
     );
 }
@@ -425,11 +560,25 @@ function DayCell({ day, isWeekend, isToday, events, isLastCol, onSelectEvent, on
             title={onQuickAdd ? 'Klik om afspraak toe te voegen' : undefined}
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{
-                    fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? BRAND : 'var(--text)',
-                    fontVariantNumeric: 'tabular-nums',
-                }}>{day}</span>
-                {isToday && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: BRAND, color: '#000', fontWeight: 700, letterSpacing: '.1em' }}>NU</span>}
+                <span
+                    aria-label={isToday ? `Vandaag, ${day}` : undefined}
+                    style={{
+                        fontFamily: 'Outfit, sans-serif',
+                        fontSize: isToday ? 14 : 12,
+                        fontWeight: isToday ? 600 : 500,
+                        color: isToday ? BRAND : 'var(--text)',
+                        fontVariantNumeric: 'tabular-nums',
+                        width: isToday ? 24 : 'auto',
+                        height: isToday ? 24 : 'auto',
+                        borderRadius: '50%',
+                        background: isToday ? 'rgba(255,191,0,.15)' : 'transparent',
+                        border: isToday ? `1.5px solid ${BRAND}` : 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        lineHeight: 1,
+                    }}
+                >{day}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {visible.map(ev => <EventChip key={ev.id} event={ev} onClick={() => onSelectEvent(ev)} focused={focusedEventId === ev.id} />)}
@@ -480,15 +629,41 @@ interface UpcomingItem {
     time: string;
     revenue: number;
     status: string;
-    emoji: string;
+    client?: string;
+    venue?: string;
     warning?: boolean;
     dbId?: number;
     dbDate?: string;
 }
-/* "Komende events" widget — typografisch ipv emoji-blokjes. Linear/Notion-stijl
-   row: status-dot vooraan, naam + sub-tekst, bedrag rechts uitgelijnd. Live-events
-   krijgen subtiel gold-accent rechts (1px lijn) i.p.v. felle status-chip. */
+
+type UpcomingBucket = 'today' | 'tomorrow' | 'thisWeek' | 'nextWeek' | 'later';
+
+const BUCKET_LABEL: Record<UpcomingBucket, string> = {
+    today: 'Vandaag',
+    tomorrow: 'Morgen',
+    thisWeek: 'Deze week',
+    nextWeek: 'Volgende week',
+    later: 'Later',
+};
+
 const NL_MONTHS_SHORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+/* Bereken in welke bucket een item valt. Week loopt ma → zo, conform NL-conventie. */
+function bucketFor(iso: string | undefined, todayIso: string): UpcomingBucket {
+    if (!iso) return 'later';
+    if (iso === todayIso) return 'today';
+    const today = new Date(todayIso + 'T00:00:00');
+    const target = new Date(iso + 'T00:00:00');
+    const diffMs = target.getTime() - today.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) return 'tomorrow';
+    if (diffDays < 0) return 'later';
+    const dowMon = (today.getDay() + 6) % 7; // 0=ma … 6=zo
+    const daysUntilSunday = 6 - dowMon;
+    if (diffDays <= daysUntilSunday) return 'thisWeek';
+    if (diffDays <= daysUntilSunday + 7) return 'nextWeek';
+    return 'later';
+}
 
 function statusMeta(s: string): { tone: string; label: string; isLive: boolean } {
     const x = (s || '').toLowerCase();
@@ -504,6 +679,9 @@ function statusMeta(s: string): { tone: string; label: string; isLive: boolean }
     return { tone: 'var(--muted)', label: s || '—', isLive: false };
 }
 
+/* "Komende events" widget — subgroups Vandaag / Morgen / Deze week / Volgende week / Later.
+   Per row: status-dot, dag-kolom, titel + klantnaam, locatie-chip, bedrag rechts.
+   Vandaag/Morgen-items krijgen een relatieve datum-pill voor extra urgentie. */
 function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (it: UpcomingItem) => void }) {
     if (items.length === 0) {
         return (
@@ -522,6 +700,16 @@ function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (i
             </MetalCard>
         );
     }
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const grouped: Record<UpcomingBucket, UpcomingItem[]> = {
+        today: [], tomorrow: [], thisWeek: [], nextWeek: [], later: [],
+    };
+    for (const it of items) {
+        grouped[bucketFor(it.dbDate, todayIso)].push(it);
+    }
+    const orderedBuckets: UpcomingBucket[] = ['today', 'tomorrow', 'thisWeek', 'nextWeek', 'later'];
+
     return (
         <MetalCard style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{
@@ -534,68 +722,142 @@ function UpcomingList({ items, onSelect }: { items: UpcomingItem[]; onSelect: (i
                 <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{items.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {items.map((it, i) => {
-                    const st = statusMeta(it.status);
+                {orderedBuckets.map(bucket => {
+                    const list = grouped[bucket];
+                    if (list.length === 0) return null;
+                    const isUrgent = bucket === 'today' || bucket === 'tomorrow';
                     return (
-                        <button
-                            key={i}
-                            onClick={() => onSelect(it)}
-                            style={{
-                                position: 'relative',
-                                display: 'grid', gridTemplateColumns: '8px 56px 1fr auto', gap: 12, alignItems: 'center',
-                                padding: '12px 18px',
-                                background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer',
-                                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                                color: 'var(--text)',
-                            }}
-                            onMouseEnter={e => {
-                                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.025)';
-                            }}
-                            onMouseLeave={e => {
-                                (e.currentTarget as HTMLElement).style.background = 'transparent';
-                            }}
-                        >
-                            {/* status-dot links — vervangt felle chip */}
-                            <span
-                                aria-label={st.label}
-                                title={st.label}
-                                style={{ width: 8, height: 8, borderRadius: '50%', background: st.tone, alignSelf: 'center' }}
-                            />
-                            {/* datum-kolom: dag + maand-afkorting, tabular */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-                                <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {it.day || '—'}
+                        <div key={bucket} className="agenda-upcoming__group">
+                            <div
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '10px 18px 6px',
+                                    background: 'rgba(0,0,0,.2)',
+                                    borderTop: '1px solid var(--border)',
+                                }}
+                            >
+                                <span style={{
+                                    fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase',
+                                    fontWeight: 700,
+                                    color: isUrgent ? BRAND : 'var(--muted)',
+                                }}>
+                                    {BUCKET_LABEL[bucket]}
                                 </span>
-                                <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'lowercase', marginTop: 2 }}>
-                                    {(() => {
-                                        const m = (it.dbDate || '').split('-')[1];
-                                        return m ? NL_MONTHS_SHORT[parseInt(m, 10) - 1] : '';
-                                    })()}
-                                </span>
+                                <span style={{ fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{list.length}</span>
                             </div>
-                            {/* hoofd-tekst: naam + sub */}
-                            <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
-                                    {it.name}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {it.time} · {it.guests} gasten
-                                </div>
-                            </div>
-                            {/* bedrag rechts, tabular */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: st.isLive ? GOLD : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {fmtEur(it.revenue)}
-                                </span>
-                                <span style={{ fontSize: 10, color: 'var(--muted-light)', marginTop: 2 }}>
-                                    {st.label.toLowerCase()}
-                                </span>
-                            </div>
-                            {/* live-events: dunne gold-lijn rechts */}
-                            {st.isLive && (
-                                <span style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 2, background: GOLD }} aria-hidden />
-                            )}
-                        </button>
+                            {list.map((it, i) => {
+                                const st = statusMeta(it.status);
+                                const stripeW = st.isLive ? 3 : 0;
+                                const isLiveNow = (it.status || '').toLowerCase() === 'live';
+                                return (
+                                    <button
+                                        key={`${bucket}-${i}`}
+                                        onClick={() => onSelect(it)}
+                                        className="agenda-upcoming__row"
+                                        style={{
+                                            position: 'relative',
+                                            display: 'grid',
+                                            gridTemplateColumns: `${stripeW}px 8px 56px 1fr auto`,
+                                            gap: 12, alignItems: 'center',
+                                            padding: '12px 18px 12px 15px',
+                                            background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer',
+                                            borderTop: '1px solid var(--border)',
+                                            color: 'var(--text)',
+                                            minHeight: 56,
+                                        }}
+                                        onMouseEnter={e => {
+                                            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,.025)';
+                                        }}
+                                        onMouseLeave={e => {
+                                            (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                        }}
+                                    >
+                                        {st.isLive && (
+                                            <span
+                                                aria-hidden
+                                                style={{ position: 'absolute', top: 8, bottom: 8, left: 4, width: 3, borderRadius: 2, background: GOLD }}
+                                            />
+                                        )}
+                                        <span aria-hidden />
+                                        <span
+                                            aria-label={st.label}
+                                            title={st.label}
+                                            style={{
+                                                width: 8, height: 8, borderRadius: '50%',
+                                                background: st.tone, alignSelf: 'center',
+                                                boxShadow: isLiveNow ? `0 0 8px ${st.tone}` : 'none',
+                                            }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+                                            <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                                                {it.day || '—'}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'lowercase', marginTop: 2 }}>
+                                                {(() => {
+                                                    const m = (it.dbDate || '').split('-')[1];
+                                                    return m ? NL_MONTHS_SHORT[parseInt(m, 10) - 1] : '';
+                                                })()}
+                                            </span>
+                                        </div>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                                                <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, fontWeight: 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '0 1 auto' }}>
+                                                    {it.name}
+                                                </span>
+                                                {isUrgent && (
+                                                    <span style={{
+                                                        padding: '1px 7px', borderRadius: 999,
+                                                        background: `${BRAND}1f`, color: BRAND,
+                                                        fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+                                                        flexShrink: 0,
+                                                    }}>
+                                                        {bucket === 'today' ? 'Vandaag' : 'Morgen'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {it.client && (
+                                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>
+                                                    {it.client}
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: 11, color: 'var(--muted-light)', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {it.time} · {it.guests} gasten
+                                                </span>
+                                                {it.venue && (
+                                                    <span
+                                                        style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                            padding: '1px 7px', borderRadius: 999,
+                                                            background: 'rgba(255,255,255,.04)',
+                                                            border: '1px solid var(--border)',
+                                                            fontSize: 10, color: 'var(--muted)',
+                                                            maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                        }}
+                                                        title={it.venue}
+                                                    >
+                                                        <MapPin size={9} aria-hidden /> {it.venue}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
+                                            <span style={{
+                                                fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
+                                                fontSize: 13, fontWeight: 500,
+                                                color: st.isLive ? GOLD : 'var(--text)',
+                                                fontVariantNumeric: 'tabular-nums',
+                                            }}>
+                                                {fmtEur(it.revenue)}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: 'var(--muted-light)', marginTop: 2 }}>
+                                                {st.label.toLowerCase()}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     );
                 })}
             </div>
@@ -831,7 +1093,9 @@ export default function Agenda() {
     const today = new Date();
     const [viewYear, setViewYear] = useState(today.getFullYear());
     const [viewMonth, setViewMonth] = useState(today.getMonth());
-    const [view, setView] = useState<'month' | 'week' | 'list'>('month');
+    /* View-state in URL — refresh op /agenda?view=week opent direct in week-view,
+       en links zijn shareable. Default 'month' is impliciet (geen ?view= param). */
+    const { view, setView } = useAgendaView();
     const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
 
     /* Custom agenda-categorieën uit DB. Tabel kan ontbreken (migration nog niet
@@ -1013,7 +1277,8 @@ export default function Agenda() {
         };
     }, [dbEvents, monthDbEvents, conflicts, viewYear, viewMonth, isEmpty, prepTasks]);
 
-    /* UPCOMING-rail uit live data — eerstvolgende 8 events. */
+    /* UPCOMING-rail uit live data — eerstvolgende 8 events. Subgroups in
+       UpcomingList (Vandaag/Morgen/Deze week/etc.) lezen uit dbDate. */
     const upcomingList: UpcomingItem[] = useMemo(() => {
         const todayIso = new Date().toISOString().slice(0, 10);
         return dbEvents
@@ -1027,7 +1292,8 @@ export default function Agenda() {
                 time: e.start_time ? e.start_time.slice(0, 5) : '—',
                 revenue: (e.guests || 0) * (e.ppp || 0),
                 status: e.status,
-                emoji: e.type?.toLowerCase().includes('bruiloft') ? '💍' : e.type?.toLowerCase().includes('bedrijf') ? '🏢' : '🍖',
+                client: e.client_naam || undefined,
+                venue: e.location || undefined,
                 dbId: e.id,
                 dbDate: e.date,
             }));
@@ -1040,6 +1306,48 @@ export default function Agenda() {
         if (m > 11) { m = 0; y++; }
         setViewMonth(m); setViewYear(y);
     }
+
+    function jumpToToday() {
+        const now = new Date();
+        setViewYear(now.getFullYear());
+        setViewMonth(now.getMonth());
+    }
+
+    /* Toast voor visuele feedback bij keyboard shortcut. We bewaren het timer-handle
+       op module-scope omdat useRef hier tijdelijk een Turbopack-cache bug triggert. */
+    const [kbdToast, setKbdToast] = useState<string | null>(null);
+    const flashToast = useCallback(function (msg: string) {
+        if (agendaKbdTimer) clearTimeout(agendaKbdTimer);
+        setKbdToast(msg);
+        agendaKbdTimer = setTimeout(() => setKbdToast(null), 1500);
+    }, []);
+
+    /* Keyboard shortcuts — m/w/l wisselt view, t = vandaag, ←/→ schuift maand.
+       Negeert input/textarea/contenteditable zodat typen niet hijackt. */
+    useEffect(function () {
+        function isTyping(target: EventTarget | null): boolean {
+            if (!(target instanceof HTMLElement)) return false;
+            const tag = target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            if (target.isContentEditable) return true;
+            return false;
+        }
+        function onKey(e: KeyboardEvent) {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (isTyping(e.target)) return;
+            switch (e.key) {
+                case 'm': case 'M': setView('month'); flashToast('Maand-view'); break;
+                case 'w': case 'W': setView('week'); flashToast('Week-view'); break;
+                case 'l': case 'L': setView('list'); flashToast('Lijst-view'); break;
+                case 't': case 'T': jumpToToday(); flashToast('Vandaag'); break;
+                case 'ArrowLeft': shiftMonth(-1); flashToast('Vorige maand'); break;
+                case 'ArrowRight': shiftMonth(1); flashToast('Volgende maand'); break;
+                default: return;
+            }
+        }
+        window.addEventListener('keydown', onKey);
+        return function () { window.removeEventListener('keydown', onKey); };
+    }, [setView, viewMonth, viewYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1600, margin: '0 auto' }}>
@@ -1078,13 +1386,19 @@ export default function Agenda() {
                 monthLabel={`${NL_MONTHS[viewMonth]} ${viewYear}`}
                 onPrev={() => shiftMonth(-1)}
                 onNext={() => shiftMonth(1)}
-                onToday={() => { const now = new Date(); setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); }}
+                onToday={jumpToToday}
                 onAddPersonal={() => openPersonalModal()}
                 filterCalendars={filterCalendarOptions}
                 filterState={filterState}
                 onFilterChange={setFilterState}
             />
             <div style={{ height: 18 }} />
+
+            <FilterPillsBar
+                calendars={filterCalendarOptions}
+                value={filterState}
+                onChange={setFilterState}
+            />
 
             <div className="agenda-grid">
                 <div>
@@ -1185,6 +1499,33 @@ export default function Agenda() {
                 onClose={() => { setCategoryModalOpen(false); setCategoryEditing(null); }}
                 onSaved={() => { refetchCategories(); }}
             />
+
+            {kbdToast && (
+                <div
+                    role="status"
+                    aria-live="polite"
+                    className="agenda-kbd-toast"
+                    style={{
+                        position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+                        background: 'var(--color-bg-elevated)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        padding: '8px 16px',
+                        fontSize: 12, color: 'var(--muted)',
+                        zIndex: 9990,
+                        boxShadow: '0 8px 32px rgba(0,0,0,.4)',
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <kbd style={{
+                        fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
+                        fontSize: 11, padding: '2px 7px',
+                        border: '1px solid var(--border)', borderRadius: 4,
+                        color: 'var(--text)', background: 'rgba(255,255,255,.06)',
+                    }}>{kbdToast}</kbd>
+                </div>
+            )}
         </div>
     );
 }

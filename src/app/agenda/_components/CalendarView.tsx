@@ -40,6 +40,20 @@ function toFcEvent(ev: AgendaEvent, year: number, month: number, colors: Record<
     };
 }
 
+/* Kies de datum waar FullCalendar in week/list moet starten. Als de
+   zichtbare maand de huidige maand is → spring naar vandaag. Anders
+   spring naar dag-1 van die maand. Dat lost de "Week-knop op een dag
+   in andere maand springt naar week-1 van huidige maand"-bug op. */
+function pickTargetIso(year: number, month: number): string {
+    const now = new Date();
+    if (now.getFullYear() === year && now.getMonth() === month) {
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${now.getFullYear()}-${m}-${d}`;
+    }
+    return `${year}-${String(month + 1).padStart(2, '0')}-01`;
+}
+
 export default function CalendarView({ mode, year, month, events, calendarColors, onSelectEvent, focusedEventId }: CalendarViewProps) {
     const ref = useRef<FullCalendar | null>(null);
 
@@ -48,14 +62,22 @@ export default function CalendarView({ mode, year, month, events, calendarColors
         [events, year, month, calendarColors]
     );
 
-    /* Wanneer Maand-NavBar van maand wisselt, springt FullCalendar mee.
-       FC heeft eigen state per instance, dus expliciet aansturen. */
+    /* Initial date is alleen voor de eerste mount; daarna stuurt het
+       useEffect hieronder de FC instance aan. */
+    const initialDate = useMemo(() => pickTargetIso(year, month), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    /* Houd FullCalendar in sync met (year, month, mode):
+       - maand-shift → gotoDate naar passende datum
+       - mode-wissel (week ↔ list) → changeView + gotoDate */
     useEffect(function () {
         const api = ref.current?.getApi();
         if (!api) return;
-        const targetIso = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        api.gotoDate(targetIso);
-    }, [year, month]);
+        const targetView = mode === 'week' ? 'timeGridWeek' : 'listMonth';
+        if (api.view.type !== targetView) {
+            api.changeView(targetView);
+        }
+        api.gotoDate(pickTargetIso(year, month));
+    }, [year, month, mode]);
 
     /* Highlight focused event uit ?conflict=<id> deep-link. */
     useEffect(function () {
@@ -82,7 +104,7 @@ export default function CalendarView({ mode, year, month, events, calendarColors
                 ref={ref}
                 plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
                 initialView={view}
-                initialDate={new Date(year, month, 1)}
+                initialDate={initialDate}
                 locale={nlLocale}
                 firstDay={1}
                 headerToolbar={false}

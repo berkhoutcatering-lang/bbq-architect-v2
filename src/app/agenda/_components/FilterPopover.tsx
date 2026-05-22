@@ -67,6 +67,7 @@ export default function FilterPopover({ calendars, value, onChange }: FilterPopo
                 onClick={() => setOpen(v => !v)}
                 aria-haspopup="dialog"
                 aria-expanded={open}
+                data-agenda-filter-trigger
                 style={{
                     padding: '7px 12px', borderRadius: 8,
                     background: activeCount > 0 ? 'rgba(255,191,0,.08)' : 'rgba(255,255,255,.04)',
