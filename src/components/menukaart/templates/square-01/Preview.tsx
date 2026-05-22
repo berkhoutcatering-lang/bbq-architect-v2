@@ -79,8 +79,8 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
 
     const logoInitial = brandName.charAt(0).toUpperCase();
     const isSmall = size === 'small';
-    const frameSize = isSmall ? 360 : 595;
-    const sizeMult = isSmall ? 360 / 595 : 1;
+    const frameSize = isSmall ? 290 : 480;
+    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#7A6E5E';
     const warm = '#FFF3E0';
     const bandText = contrastTextColor(accent);

@@ -82,7 +82,7 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
         .toUpperCase();
 
     const isSmall = size === 'small';
-    const sizeMult = isSmall ? 360 / 595 : 1;
+    const sizeMult = isSmall ? 290 / 480 : 1;
     const sideText = contrastTextColor(accent);
     const muted = '#777';
     const totalDishes = data.gangen.reduce((s, g) => s + g.dishes.length, 0);
@@ -129,7 +129,7 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
         <div
             style={{
                 background: bg,
-                width: isSmall ? 360 : 595,
+                width: isSmall ? 290 : 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.1)',
                 borderRadius: 3,
