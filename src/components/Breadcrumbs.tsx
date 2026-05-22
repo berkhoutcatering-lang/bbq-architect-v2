@@ -8,7 +8,6 @@ import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 /* Sub-routes voor /gerechten/* worden onderaan in subRouteLabels gemapt
    zodat de breadcrumb-tail leesbaar is ("Allergenen" i.p.v. "Allergen queue"). */
 const routeMap: Record<string, { label: string; section: string }> = {
-    '/marges': { label: 'Marges & analyse', section: 'Menu' },
     '/gerechten': { label: 'Gerechten', section: 'Menu' },
     '/recepten': { label: 'Recepten', section: 'Menu' },
     '/bedenker': { label: 'Bedenker', section: 'Menu' },
@@ -45,7 +44,6 @@ const subRouteLabels: Record<string, string> = {
     'componenten':      'Componenten',
     'ingredienten':     'Ingrediënten',
     'allergen-queue':   'Allergenen',
-    'insights':         'Insights',
     'menu-analyse':     'Menu-analyse',
     'ai-pitmaster':     'AI Pitmaster',
 };

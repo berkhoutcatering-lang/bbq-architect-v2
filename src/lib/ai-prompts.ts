@@ -129,8 +129,8 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '- mark_weak_dishes: bij vraag "zwakste eruit halen"',
     ].join('\n'),
 
-    '/marges': [
-        '**Menu Engineering** — BCG-analyse op alle Hop & Bites gerechten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair).',
+    '/gerechten/menu-analyse': [
+        '**Menu-analyse** — BCG-kwadranten op alle Hop & Bites gerechten: Stars (hoge marge + populair), Plowhorses (laag marge + populair), Puzzles (hoge marge + weinig populair), Dogs (laag marge + weinig populair). Sub-tab `?tab=health` toont library-health + launch-checklist.',
         'Operator denkt in food-cost%, omzetbijdrage, moeilijkheid, schaalbaarheid en marge-stoplichten (≥70% groen, 60-69% oranje, <60% rood).',
         '',
         '## TOOL-USE FORCING — geen vrije tekst',
@@ -436,7 +436,7 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '',
         '## Hoofdtaken',
         '- "60p, juli, €40 budget" → success-block "Adviesmenu €38pp" + bullets met 5 passende gerechten + nav_card naar /gerechten voor detail',
-        '- "Vega-alternatief?" → bullets per vega-gerecht + nav_card naar /marges voor marge-check',
+        '- "Vega-alternatief?" → bullets per vega-gerecht + nav_card naar /gerechten/menu-analyse voor marge-check',
         '- "Hoeveel vlees per persoon?" → metric-block (BBQ: 250-350g vlees, 100g salade, 150g brood)',
         '- "Sla menu op" → action_card (update_event met menu_items)',
         '',
@@ -510,7 +510,7 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '## Hoofdtaken',
         '- "Brainstorm Aziatisch zomermenu" → propose_dish_concepts (8 concepts) + nav_card "Open Gerechten om uit te werken" naar /gerechten',
         '- "Variaties op Pulled Pork" → bullets per variant + nav_card naar /gerechten',
-        '- "Wat zijn populaire BBQ-trends?" → bullets + info-block + nav_card naar /marges voor marge-check',
+        '- "Wat zijn populaire BBQ-trends?" → bullets + info-block + nav_card naar /gerechten/menu-analyse voor marge-check',
         '',
         'Wees ruim en creatief — dit is de speeltuin.',
     ].join('\n'),
@@ -569,7 +569,7 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         '- "Hoe is de marge?" → metric per regel + warning bij <60%',
         '- "Verbeter marge" → bullets met concrete suggesties (substitueer X door Y) + action_card per regel-update',
         '- "Vergelijk met klant-historie" → metric (vs avg) + bullets met afwijkingen',
-        '- "Wat scoort beter?" → nav_card naar /marges voor BCG-overzicht',
+        '- "Wat scoort beter?" → nav_card naar /gerechten/menu-analyse voor BCG-overzicht',
         '',
         'Stoplichten: 🟢 >70% | 🟠 60-70% | 🔴 <60%. Alleen tonen bij detail-vraag, niet ongevraagd.',
     ].join('\n'),

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Repeat2 } from 'lucide-react';
-import type { ReuseComponent } from '../_lib/types';
+import type { ReuseComponent } from '../../_lib/health/types';
 
 interface Props {
     top: ReuseComponent[];

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { AlignLeft } from 'lucide-react';
-import type { MarginBucket } from '../_lib/types';
+import type { MarginBucket } from '../../_lib/health/types';
 
 interface Props {
     buckets: MarginBucket[];

@@ -8,7 +8,7 @@ export const PAGE_CHIPS: Record<string, string[]> = {
   '/agenda': ['Maak een prep-lijst', 'Open taken afvinken', 'Taak toevoegen voor event', 'Planning komende week'],
   '/recepten': ['Bedenk nieuw signatuur-recept', 'Schaal recept naar 80 gasten', 'Dry rub voor brisket', 'Vergeten klassiekers herontdekken'],
   '/gerechten': ['20 gerechten met buikspek', 'Gerecht verwijderen', 'Vegetarische hapjes bedenken', 'Menubalans analyseren'],
-  '/marges': ['Welke gerechten hebben beste marge?', 'Menu-analyse uitleggen', 'Stars vs Dogs in mijn menu', 'Gerecht verbeteren voor marge'],
+  '/gerechten/menu-analyse': ['Welke gerechten hebben beste marge?', 'Menu-analyse uitleggen', 'Stars vs Dogs in mijn menu', 'Gerecht verbeteren voor marge'],
   '/offertes': ['Welke offertes lopen vast?', 'Verlopen binnenkort', 'Follow-up advies vandaag', 'Nieuwe offerte aanmaken'],
   '/facturen': ['Nieuwe factuur aanmaken', 'Welke facturen vervallen binnenkort?', 'Openstaand overzicht', 'Cashflow advies'],
   '/voorraad': ['Wat moet ik bestellen voor het volgende event?', 'Lage voorraad nu', 'Bestel-suggestie genereren', 'Nieuw voorraad item'],
@@ -125,7 +125,7 @@ export const EMPTY_STATE_CONFIG: Record<string, { icon: string; title: string; d
     description: 'Service Mode draait op de gangen die je in de Event Hub hebt gekoppeld. Voeg eerst een menu toe.',
     actionLabel: 'Naar event hub',
   },
-  '/marges': {
+  '/gerechten/menu-analyse': {
     icon: 'PieChart',
     title: 'Nog geen gerechten',
     description: 'Voeg gerechten toe om je menu te analyseren op marge, populariteit en winstgevendheid.',

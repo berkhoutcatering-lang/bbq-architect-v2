@@ -1,5 +1,5 @@
 import { Sparkles, Boxes, AlertTriangle, UtensilsCrossed, type LucideIcon } from 'lucide-react';
-import type { AiCoverage } from '../_lib/types';
+import type { AiCoverage } from '../../_lib/health/types';
 
 interface Props {
     coverage: AiCoverage;

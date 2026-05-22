@@ -57,7 +57,7 @@ const pages: SearchResult[] = [
     /* Keuken */
     { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Keuken', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
     { id: 'p_menus', type: 'pagina', title: 'Menu\u2019s', subtitle: 'Keuken \u00b7 opgeslagen menu-templates', href: '/gerechten?view=menus', icon: UtensilsCrossed, accent: HUB_ACCENT.keuken },
-    { id: 'p_marges', type: 'pagina', title: 'Marges & analyse', subtitle: 'Keuken \u00b7 BCG en foodcost', href: '/marges', icon: Sparkles, accent: HUB_ACCENT.keuken },
+    { id: 'p_menu_analyse', type: 'pagina', title: 'Menu-analyse', subtitle: 'Keuken \u00b7 marges, BCG en menu-health', href: '/gerechten/menu-analyse', icon: Sparkles, accent: HUB_ACCENT.keuken },
     { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Keuken \u00b7 AI chat (power)', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
 
     /* Voorraad & Beheer */

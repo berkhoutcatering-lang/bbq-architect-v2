@@ -46,7 +46,6 @@ export async function upsertGerecht(input: unknown): Promise<
 
   revalidatePath('/gerechten');
   revalidatePath('/gerechten/menu-analyse');
-  revalidatePath('/gerechten/insights');
   return { data: data! };
 }
 

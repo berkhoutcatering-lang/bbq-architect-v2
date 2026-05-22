@@ -1,5 +1,5 @@
 import { Cpu } from 'lucide-react';
-import type { AiCosts } from '../_lib/types';
+import type { AiCosts } from '../../_lib/health/types';
 
 interface Props {
     costs: AiCosts;
