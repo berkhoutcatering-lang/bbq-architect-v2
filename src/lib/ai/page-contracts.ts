@@ -38,8 +38,7 @@ export const PAGE_TOOL_WHITELIST: Record<string, string[]> = {
     '/marges': ['respond_with_blocks', 'propose_dish_concepts', 'develop_dishes'],
     '/recepten': ['respond_with_blocks', 'create_recept', 'update_recept'],
 
-    '/factuur-lezer': ['respond_with_blocks'],
-    '/foto-archief': ['respond_with_blocks'],
+    '/archief': ['respond_with_blocks'],
 
     '/administratie': ['respond_with_blocks'],
     '/financien': ['respond_with_blocks'],
@@ -98,15 +97,14 @@ export const PAGE_ROUTE_WHITELIST: Record<string, string[]> = {
     '/marges': ['/gerechten', '/inkoop'],
     '/recepten': ['/gerechten', '/marges'],
 
-    '/factuur-lezer': ['/foto-archief', '/inkoop', '/financien'],
-    '/foto-archief': ['/factuur-lezer', '/website'],
+    '/archief': ['/inkoop', '/financien', '/leveranciers'],
 
     '/administratie': ['/financien', '/uren', '/klanten', '/voorraad', '/inkoop', '/facturen'],
-    '/financien': ['/facturen', '/uren', '/klanten', '/inkoop'],
+    '/financien': ['/facturen', '/uren', '/klanten', '/inkoop', '/archief'],
     '/uren': ['/financien', '/admin'],
     '/klanten': ['/events', '/offertes', '/facturen', '/mailbox'],
-    '/voorraad': ['/inkoop', '/events/', '/factuur-lezer'],
-    '/inkoop': ['/voorraad', '/events/', '/factuur-lezer', '/financien'],
+    '/voorraad': ['/inkoop', '/events/', '/archief'],
+    '/inkoop': ['/voorraad', '/events/', '/archief', '/financien'],
 
     '/offertes': ['/offertes/', '/klanten', '/mailbox', '/events/'],
     '/offertes/[id]': ['/offertes', '/marges', '/financien'],

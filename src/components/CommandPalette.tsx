@@ -145,7 +145,7 @@ export default function CommandPalette() {
                     a: '/agenda',
                     e: '/events',
                     r: '/gerechten',         // Recepten (canonical URL = /gerechten)
-                    f: '/factuur-lezer',
+                    f: '/archief',
                     d: '/administratie',     // aDministratie
                     s: '/systeem',
                     // Veelgebruikte sub-pages

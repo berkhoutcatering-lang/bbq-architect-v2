@@ -63,7 +63,7 @@ const tabs: Tab[] = [
             p.startsWith("/financien/") ||
             p === "/uren" ||
             p.startsWith("/uren/") ||
-            p === "/factuur-lezer" ||
+            p === "/archief" ||
             p.startsWith("/geld/") ||
             p.startsWith("/administratie/"),
     },

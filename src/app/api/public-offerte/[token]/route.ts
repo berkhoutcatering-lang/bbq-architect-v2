@@ -51,7 +51,7 @@ export async function GET(
   if (offer.organization_id) {
     const { data } = await supabase
       .from('settings')
-      .select('bedrijfsnaam, ondertitel, email, telefoon, adres, website, betaalvoorwaarden, logo_url, brand_primary, menukaart_template_id, menukaart_overrides')
+      .select('bedrijfsnaam, ondertitel, email, telefoon, adres, website, betaalvoorwaarden, logo_url, brand_primary, brand_accent, brand_secondary, brand_background, brand_card, brand_text, menukaart_template_id, menukaart_overrides')
       .eq('organization_id', offer.organization_id)
       .single();
     settings = data ?? null;

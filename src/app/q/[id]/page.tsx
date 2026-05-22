@@ -28,6 +28,22 @@ function getStepIndex(status: string) {
     return 0;
 }
 
+/**
+ * Schat perceptuele lightness uit een hex-string (sRGB → CIE Y → L*).
+ * Gebruikt om light vs dark portal-themes te routeren voor overlay-direction.
+ */
+function perceivedHexLightness(hex: string): number {
+    const h = hex.replace('#', '');
+    if (h.length !== 6) return 0.2;
+    const num = parseInt(h, 16);
+    const r = ((num >> 16) & 0xff) / 255;
+    const g = ((num >> 8) & 0xff) / 255;
+    const b = (num & 0xff) / 255;
+    const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    const Y = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    return Math.cbrt(Y);
+}
+
 export default function QuotePage({ params }: { params: Promise<{ id: string }> }) {
     const showToast = useToast();
     const [offer, setOffer] = useState<any>(null);
@@ -214,17 +230,50 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     const brandLogoUrl = (settings as any)?.logo_url || null;
     const currentStep = getStepIndex(offer.status);
 
+    // ── White-label propagation: portal honors the caterer's chosen theme ──
+    // ThemeProvider draait niet op deze publieke route, dus injecteren we
+    // de brand-tokens hier als CSS-vars op de outer div. Alle nested code
+    // gebruikt `var(--text)` / `var(--card)` / `var(--color-bg-darker)` etc.
+    // — die worden door deze inline-style overschreven per tenant.
+    const portalBg = (settings as any)?.brand_background || '#0a0a0c';
+    const portalCard = (settings as any)?.brand_card || '#1e1e22';
+    const portalText = (settings as any)?.brand_text || '#f8f8f8';
+    // Detecteer light/dark voor hardcoded `rgba(0/255,…)` overlays
+    const isLightPortal = perceivedHexLightness(portalBg) > 0.5;
+    // Line/inset surfaces — direction-aware voor de paar overlays die nog inline-style zijn
+    const portalLine = isLightPortal
+        ? 'color-mix(in oklch, ' + portalText + ', transparent 92%)'
+        : 'rgba(255,255,255,0.06)';
+    const portalInset = isLightPortal
+        ? 'color-mix(in oklch, ' + portalBg + ', black 4%)'
+        : 'rgba(0,0,0,0.15)';
+    const portalTextColor = portalText;
+    const portalSubtleText = isLightPortal
+        ? 'color-mix(in oklch, ' + portalText + ' 75%, ' + portalBg + ')'
+        : '#e5e7eb';
+
     // Sticky CTA only appears when offerte not yet accepted AND user has not opened the signature step
     const showStickyCTA = !accepted && !signStep;
 
     return (
         <div style={{
             minHeight: '100vh',
-            background: 'linear-gradient(180deg, var(--color-bg-darker) 0%, #111 100%)',
-            color: '#e5e7eb',
+            background: 'linear-gradient(180deg, ' + portalBg + ' 0%, color-mix(in oklch, ' + portalBg + ', black 8%) 100%)',
+            color: portalTextColor,
             fontFamily: "'DM Sans', system-ui, sans-serif",
             padding: 'clamp(16px, 4vw, 28px) var(--space-mobile-edge) calc(' + (showStickyCTA ? 120 : 60) + 'px + env(safe-area-inset-bottom, 0px))',
-        }}>
+            // Override CSS-vars zodat geneste code (`var(--text)` etc.) zich aanpast aan de cateraar's theme
+            ['--bg' as string]: portalBg,
+            ['--text' as string]: portalText,
+            ['--card' as string]: portalCard,
+            ['--color-bg-darker' as string]: 'color-mix(in oklch, ' + portalBg + ', black 12%)',
+            ['--color-bg-deep' as string]: 'color-mix(in oklch, ' + portalBg + ', black 5%)',
+            ['--color-text-muted' as string]: portalSubtleText,
+            ['--muted' as string]: 'color-mix(in oklch, ' + portalText + ' 55%, ' + portalBg + ')',
+            ['--zinc' as string]: 'color-mix(in oklch, ' + portalText + ' 50%, ' + portalBg + ')',
+            ['--brand' as string]: brandColor,
+            ['--brand-background' as string]: portalBg,
+        } as React.CSSProperties}>
             <div style={{ maxWidth: 720, margin: '0 auto' }}>
 
                 {/* Company header */}
@@ -242,16 +291,18 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                 {/* Main card — lampion-effect met klant's brand-kleur */}
                 <div style={{
-                    background: 'radial-gradient(140% 60% at 50% 0%, ' + brandColor + '1f, transparent 65%), radial-gradient(120% 45% at 50% 100%, ' + brandColor + '12, transparent 55%), rgba(255,255,255,0.025)',
+                    background: 'radial-gradient(140% 60% at 50% 0%, ' + brandColor + '1f, transparent 65%), radial-gradient(120% 45% at 50% 100%, ' + brandColor + '12, transparent 55%), ' + portalCard,
                     backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    border: '1px solid ' + portalLine,
                     borderRadius: 'clamp(14px, 3vw, 20px)',
                     overflow: 'hidden',
-                    boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,.08), inset 0 0 32px 0 ' + brandColor + '14, 0 1px 2px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,.5)',
+                    boxShadow: isLightPortal
+                        ? 'inset 0 1px 0 0 rgba(255,255,255,.4), inset 0 0 32px 0 ' + brandColor + '0e, 0 1px 2px rgba(0,0,0,.06), 0 12px 32px -12px rgba(0,0,0,.18)'
+                        : 'inset 0 1px 0 0 rgba(255,255,255,.08), inset 0 0 32px 0 ' + brandColor + '14, 0 1px 2px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,.5)',
                 }}>
 
                     {/* Header section */}
-                    <div style={{ padding: 'clamp(20px, 5vw, 28px) clamp(18px, 4.5vw, 28px) clamp(16px, 4vw, 20px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ padding: 'clamp(20px, 5vw, 28px) clamp(18px, 4.5vw, 28px) clamp(16px, 4vw, 20px)', borderBottom: '1px solid ' + portalLine }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
                             <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Offerte {offer.nummer}</div>
@@ -268,7 +319,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     </div>
 
                     {/* Meta info — 2-cols op phone (grids van 2x2), auto-fit op breder scherm */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, background: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, background: portalLine }}>
                         {[
                             { label: 'Datum', value: formatDate(offer.datum) },
                             { label: 'Gasten', value: (offer.aantal_gasten || '—') + ' personen' },
@@ -276,9 +327,9 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                             { label: 'Prijs p.p.', value: offer.aantal_gasten ? formatEuro(totaal / offer.aantal_gasten) : '—' },
                         ].map(function (m) {
                             return (
-                                <div key={m.label} style={{ padding: '14px clamp(14px, 4vw, 28px)', background: 'rgba(0,0,0,0.15)' }}>
+                                <div key={m.label} style={{ padding: '14px clamp(14px, 4vw, 28px)', background: portalInset }}>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{m.label}</div>
-                                    <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{m.value}</div>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{m.value}</div>
                                 </div>
                             );
                         })}
@@ -286,7 +337,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Items */}
                     {items.length > 0 && (
-                        <div style={{ padding: 'clamp(20px, 5vw, 24px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 24px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid ' + portalLine }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Overzicht</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                                 {items.map(function (item: any, i: number) {
@@ -294,13 +345,13 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     return (
                                         <div key={i} style={{
                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                            padding: '12px 0', borderBottom: i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                            padding: '12px 0', borderBottom: i < items.length - 1 ? '1px solid ' + portalLine : 'none',
                                         }}>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{item.omschrijving || 'Item'}</div>
+                                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{item.omschrijving || 'Item'}</div>
                                                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{item.qty || 0} x {formatEuro(item.prijs || 0)}</div>
                                             </div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#e5e7eb' }}>{formatEuro(lineTotal)}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{formatEuro(lineTotal)}</div>
                                         </div>
                                     );
                                 })}
@@ -364,7 +415,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                     )}
 
                     {/* Totals — full-width op phone, max 320 op desktop right-aligned */}
-                    <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', background: portalInset, borderTop: '1px solid ' + portalLine }}>
                         <div className="qportal-totals" style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 320, marginLeft: 'auto' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)' }}>
                                 <span>Subtotaal</span>
@@ -386,7 +437,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 <span>BTW {defaultBtw}%</span>
                                 <span>{formatEuro(btwBedrag)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, color: 'var(--text)', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 4 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 17, fontWeight: 800, color: 'var(--text)', paddingTop: 8, borderTop: '1px solid ' + portalLine, marginTop: 4 }}>
                                 <span>Totaal</span>
                                 <span style={{ color: brandColor }}>{formatEuro(totaal)}</span>
                             </div>
@@ -395,14 +446,14 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Notes */}
                     {offer.notitie && (
-                        <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div style={{ padding: 'clamp(16px, 4vw, 20px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid ' + portalLine }}>
                             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Opmerkingen</div>
                             <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offer.notitie}</p>
                         </div>
                     )}
 
                     {/* Menukaart — gerenderd via cascade (template default → tenant brand → offerte custom) */}
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ borderTop: '1px solid ' + portalLine }}>
                         <QuoteMenukaartSection
                             templateId={offer.menukaart_template_id ?? settings?.menukaart_template_id}
                             brandOverrides={settings?.menukaart_overrides ?? {}}
@@ -413,7 +464,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Status tracker (shown after acceptance) — compactere circles op phone zodat 4-stappen passen op 375px */}
                     {accepted && (
-                        <div className="qportal-status" style={{ padding: 'clamp(20px, 5vw, 24px) clamp(14px, 4vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="qportal-status" style={{ padding: 'clamp(20px, 5vw, 24px) clamp(14px, 4vw, 28px)', borderTop: '1px solid ' + portalLine }}>
                             <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Voortgang</h3>
                             <div style={{ display: 'flex', gap: 0 }}>
                                 {STATUS_STEPS.map(function (step, i) {
@@ -425,26 +476,26 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                             {i > 0 && (
                                                 <div style={{
                                                     position: 'absolute', top: 16, left: 0, right: '50%',
-                                                    height: 2, background: done ? 'var(--amber)' : 'rgba(255,255,255,0.08)',
+                                                    height: 2, background: done ? 'var(--amber)' : portalLine,
                                                 }} />
                                             )}
                                             {i < STATUS_STEPS.length - 1 && (
                                                 <div style={{
                                                     position: 'absolute', top: 16, left: '50%', right: 0,
-                                                    height: 2, background: i < currentStep ? 'var(--amber)' : 'rgba(255,255,255,0.08)',
+                                                    height: 2, background: i < currentStep ? 'var(--amber)' : portalLine,
                                                 }} />
                                             )}
                                             {/* Circle */}
                                             <div style={{
                                                 width: 34, height: 34, borderRadius: '50%', margin: '0 auto 8px',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                background: done ? 'rgba(158,120,28,.15)' : 'rgba(255,255,255,0.04)',
-                                                border: isCurrent ? '2px solid var(--amber)' : '1px solid rgba(255,255,255,0.08)',
+                                                background: done ? 'color-mix(in oklch, ' + brandColor + ', transparent 80%)' : portalLine,
+                                                border: isCurrent ? '2px solid var(--amber)' : '1px solid ' + portalLine,
                                                 fontSize: 16, position: 'relative', zIndex: 1,
                                             }}>
                                                 {step.icon}
                                             </div>
-                                            <div style={{ fontSize: 12, fontWeight: 600, color: done ? '#e5e7eb' : 'var(--color-text-muted)', lineHeight: 1.3 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: done ? 'var(--text)' : 'var(--color-text-muted)', lineHeight: 1.3 }}>
                                                 {step.label}
                                             </div>
                                         </div>
@@ -464,7 +515,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Signature & Accept */}
                     {!accepted && !signStep && (
-                        <div style={{ padding: 'clamp(24px, 6vw, 32px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+                        <div style={{ padding: 'clamp(24px, 6vw, 32px) clamp(18px, 4.5vw, 28px)', borderTop: '1px solid ' + portalLine, textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(158,120,28,.06)', borderRadius: 16, border: '1px solid rgba(158,120,28,.12)' }}>
                                 <h3 style={{ color: 'var(--text)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Akkoord met deze offerte?</h3>
                                 <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
@@ -490,7 +541,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Signature step */}
                     {!accepted && signStep && (
-                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid ' + portalLine }}>
                             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Digitale handtekening</h3>
                             <p style={{ color: 'var(--zinc)', fontSize: 13, marginBottom: 20 }}>
                                 Vul uw naam in en plaats een handtekening om de offerte te bevestigen.
@@ -509,8 +560,8 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     placeholder="Uw volledige naam"
                                     style={{
                                         width: '100%', minHeight: 44, padding: '12px 14px', borderRadius: 10,
-                                        background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                                        color: '#e5e7eb', fontSize: 16, outline: 'none', // 16px voorkomt iOS auto-zoom op focus
+                                        background: portalInset, border: '1px solid ' + portalLine,
+                                        color: 'var(--text)', fontSize: 16, outline: 'none', // 16px voorkomt iOS auto-zoom op focus
                                         boxSizing: 'border-box',
                                     }}
                                 />
@@ -526,7 +577,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     onClick={function () { setSignStep(false); }}
                                     style={{
                                         minHeight: 44, padding: '12px 24px', borderRadius: 10,
-                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                                        background: portalLine, border: '1px solid ' + portalLine,
                                         color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
                                         touchAction: 'manipulation',
                                     }}
@@ -558,7 +609,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
 
                     {/* Post-acceptance */}
                     {accepted && !signStep && (
-                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+                        <div style={{ padding: 'clamp(20px, 5vw, 28px)', borderTop: '1px solid ' + portalLine, textAlign: 'center' }}>
                             <div style={{ padding: 24, background: 'rgba(16,185,129,.06)', borderRadius: 16, border: '1px solid rgba(16,185,129,.12)' }}>
                                 <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
                                 <h3 style={{ color: 'var(--emerald)', fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Offerte geaccepteerd!</h3>
@@ -571,14 +622,14 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                 </div>
 
                 {/* Company footer */}
-                <div style={{ textAlign: 'center', marginTop: 32, color: '#404040', fontSize: 12 }}>
+                <div style={{ textAlign: 'center', marginTop: 32, color: 'var(--color-text-muted)', fontSize: 12 }}>
                     {settings?.adres && <p style={{ margin: '0 0 4px' }}>{settings.adres}</p>}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
                         {settings?.telefoon && <span>{settings.telefoon}</span>}
                         {settings?.email && <span>{settings.email}</span>}
                         {settings?.website && <span>{settings.website}</span>}
                     </div>
-                    <p style={{ marginTop: 16, color: '#2a2a2a' }}>Powered by <strong>BBQ Architect</strong></p>
+                    <p style={{ marginTop: 16, opacity: 0.6 }}>Powered by <strong>BBQ Architect</strong></p>
                 </div>
             </div>
 
@@ -619,7 +670,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                         right: 0;
                         bottom: 0;
                         padding: 12px var(--space-mobile-edge) calc(12px + env(safe-area-inset-bottom, 0px));
-                        background: linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,.92) 30%, rgba(17,17,17,.98) 100%);
+                        background: linear-gradient(180deg, color-mix(in oklch, var(--bg), transparent 100%) 0%, color-mix(in oklch, var(--bg), transparent 10%) 30%, color-mix(in oklch, var(--bg), transparent 2%) 100%);
                         backdrop-filter: blur(8px);
                         z-index: 40;
                     }

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, Unlink, ChefHat, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair } from 'lucide-react';
+import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { track, trackOnce } from '@/lib/track';
@@ -17,26 +17,17 @@ import MargeBar from '@/components/chips/MargeBar';
 import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
 import KitchenModeStepper from '@/components/KitchenModeStepper';
 import AuditTrailTimeline from '@/components/AuditTrailTimeline';
-import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
-import GerechtenPageHero from './_components/GerechtenPageHero';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
-import SignatureSpotlight from './_components/SignatureSpotlight';
-import DietAllergensOverview from './_components/DietAllergensOverview';
 import GangFilterPills from './_components/GangFilterPills';
 import {
   computeKpiTiles,
-  computeDietAllergens,
-  pickSignatureDish,
   pickGlyph,
-  schatVerkoop,
-  schatMarge,
-  fmtSmokeTime,
 } from './_components/stats-helpers';
 import type { InventoryItem, Gang, Gerecht, MenuTemplateRow } from '@/types';
 
@@ -758,26 +749,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         return <LoadingState label="Gerechten laden" />;
     }
 
-    // Compute stats voor de hero
+    // Compute stats voor de KPI-tegels
     const kpiData = computeKpiTiles(gerechten);
-    const dietAllergensData = computeDietAllergens(gerechten);
-    const signatureDish = pickSignatureDish(gerechten);
-
-    // Count hoe vaak het signature-gerecht voorkomt in opgeslagen menu-templates.
-    // menu_selectie heeft vorm: { gang_slug: [{ gerecht_id, naam }, ...], ... }
-    const signatureInMenusCount = signatureDish
-        ? menuTemplates.reduce(function (acc: number, t) {
-            const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
-            const allItems: any[] = (Object.values(sel) as unknown[]).flatMap(function (list) { return Array.isArray(list) ? list : []; });
-            const found = allItems.some(function (i) {
-                if (!i) return false;
-                if (i.gerecht_id != null && i.gerecht_id === signatureDish.id) return true;
-                if (i.naam && signatureDish.naam && i.naam === signatureDish.naam) return true;
-                return false;
-            });
-            return acc + (found ? 1 : 0);
-          }, 0)
-        : 0;
 
     const gangPills = gangen.map(function (g) {
         const count = gerechten.filter(function (d) { return d.gang_slug === g.slug; }).length;
@@ -788,26 +761,58 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     return (
         <div className="main-content mobile-safe-bottom">
             {/* RichKeukenTabs verwijderd — vervangen door HubTabs in /gerechten/layout.tsx (Menu & Recepten unify). */}
-            <PageGuideNote
-                id="gerechten"
-                accent="#FFBF00"
-                icon={ChefHat}
-                intro="Hier staat je hele receptenbibliotheek — gangen, gerechten en complete menu's die je later in offertes hergebruikt."
-                actions={[
-                    { lead: 'Klik op een gerecht', text: 'om receptuur, allergenen en kostprijs te bewerken.' },
-                    { lead: 'Wissel naar Menu’s', text: 'om kant-en-klare menu-templates te bouwen die de wizard later voorstelt.' },
-                    { lead: 'Mist er een ingrediënt of allergen?', text: 'AI vult dat in zodra je op Verrijk klikt — jij blijft eindredacteur.' },
-                ]}
-            />
-            <GerechtenPageHero
-                onAddGerecht={view === 'gerechten' ? newGerecht : undefined}
-                onAddGang={view === 'menus' ? undefined : newGang}
-                onAddMenu={view === 'menus' ? newMenuTemplate : undefined}
-                view={view}
-                onViewChange={setView}
-                gerechtenCount={gerechten.length}
-                menusCount={menuTemplates.length}
-            />
+            {/* Compacte 1-line header: titel + view-toggle (Gerechten / Menu's) + add-CTA.
+                Vervangt PageGuideNote + GerechtenPageHero + SignatureSpotlight + DietAllergensOverview
+                — Sam's "te speels" feedback. Density-doel: gerechten boven de fold. */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '14px 0 12px',
+                marginBottom: 12,
+                borderBottom: '1px solid var(--border)',
+                flexWrap: 'wrap',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--text)' }}>
+                        {view === 'gerechten' ? 'Gerechten' : "Menu's"}
+                    </h1>
+                    <div role="tablist" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={view === 'gerechten'}
+                            onClick={function () { setView('gerechten'); }}
+                            className={view === 'gerechten' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
+                            style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
+                        >
+                            Gerechten <span style={{ opacity: 0.7, marginLeft: 4 }}>{gerechten.length}</span>
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={view === 'menus'}
+                            onClick={function () { setView('menus'); }}
+                            className={view === 'menus' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
+                            style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
+                        >
+                            Menu&rsquo;s <span style={{ opacity: 0.7, marginLeft: 4 }}>{menuTemplates.length}</span>
+                        </button>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    {view === 'gerechten' && (
+                        <>
+                            <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
+                            <button type="button" onClick={newGerecht} className="btn btn-brand btn-sm" style={{ minHeight: 32 }}>+ Gerecht</button>
+                        </>
+                    )}
+                    {view === 'menus' && (
+                        <button type="button" onClick={newMenuTemplate} className="btn btn-brand btn-sm" style={{ minHeight: 32 }}>+ Menu</button>
+                    )}
+                </div>
+            </div>
 
             {view === 'gerechten' && gerechten.length > 0 && (
                 <>
@@ -818,22 +823,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                         gemMargePct={kpiData.gemMargePct}
                         allergenenGedekt={kpiData.allergenenGedekt}
                         totaalGerechten={kpiData.totaalGerechten}
-                    />
-                    {signatureDish && (
-                        <SignatureSpotlight
-                            name={signatureDish.naam || 'Onbekend gerecht'}
-                            tagline={signatureDish.beschrijving}
-                            glyph={pickGlyph(signatureDish.naam || '', signatureDish.gang_slug)}
-                            verkoop={schatVerkoop(signatureDish)}
-                            margePct={schatMarge(signatureDish)}
-                            inMenus={signatureInMenusCount}
-                            smokeUur={fmtSmokeTime(signatureDish.target_prep_time)}
-                            onClick={function () { setEditing(signatureDish.id); }}
-                        />
-                    )}
-                    <DietAllergensOverview
-                        diet={dietAllergensData.diet}
-                        allergens={dietAllergensData.allergens}
                     />
                     {gangPills.length > 0 && (
                         <GangFilterPills

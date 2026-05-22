@@ -388,7 +388,7 @@ function BonRow({ row, expanded, onToggle, onPatch }: {
                 </button>
               )}
               {row.image_url && (
-                <Link href={`/factuur-lezer?bon=${row.id}`} className="bh-btn-secondary">
+                <Link href={`/archief?bon=${row.id}`} className="bh-btn-secondary">
                   <FileText size={12} /> Open bon
                 </Link>
               )}
