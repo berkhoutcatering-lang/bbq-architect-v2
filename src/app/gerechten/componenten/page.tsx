@@ -121,6 +121,9 @@ export default function ComponentenPage() {
     const confirm = useConfirm();
 
     const [components, setComponents] = useState<ComponentRow[]>([]);
+    /* A8: pending AI-suggested allergens per component_id voor inline orange-dashed chips.
+       Wordt parallel met components ingeladen; lege map = geen unconfirmed allergens. */
+    const [pendingAllergens, setPendingAllergens] = useState<Record<number, Array<{ code: string; label: string }>>>({});
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -152,10 +155,21 @@ export default function ComponentenPage() {
     async function loadComponents() {
         setLoading(true);
         try {
-            const res = await fetch('/api/components', { credentials: 'include' });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error || 'Laden mislukt');
-            setComponents(body.components ?? []);
+            const [componentsRes, pendingRes] = await Promise.all([
+                fetch('/api/components', { credentials: 'include' }),
+                fetch('/api/components/allergen-pending', { credentials: 'include' }),
+            ]);
+            const componentsBody = await componentsRes.json();
+            if (!componentsRes.ok) throw new Error(componentsBody.error || 'Laden mislukt');
+            setComponents(componentsBody.components ?? []);
+
+            // Pending allergens is best-effort: bij failure tonen we geen chips i.p.v. de hele page kapot te maken.
+            if (pendingRes.ok) {
+                const pendingBody = await pendingRes.json();
+                setPendingAllergens(pendingBody.pending ?? {});
+            } else {
+                setPendingAllergens({});
+            }
         } catch (e: any) {
             toast(e.message || 'Laden mislukt', 'error');
         } finally {
@@ -993,6 +1007,44 @@ export default function ComponentenPage() {
                                             {tag}
                                         </span>
                                     ))}
+                                </div>
+                            )}
+
+                            {/* A8: orange-dashed chips voor unconfirmed AI-suggested allergens.
+                                Klik op de hele card opent de edit-drawer waar bevestiging plaatsvindt. */}
+                            {(pendingAllergens[c.id]?.length ?? 0) > 0 && (
+                                <div
+                                    className="mt-2 flex flex-wrap items-center gap-1"
+                                    title="AI heeft allergens voorgesteld — bevestig in de edit-drawer of via Inzichten → Allergenen"
+                                >
+                                    <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: '#f59e0b' }}>
+                                        Bevestig
+                                    </span>
+                                    {pendingAllergens[c.id]!.slice(0, 5).map(a => (
+                                        <span
+                                            key={a.code}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                padding: '2px 6px',
+                                                borderRadius: 6,
+                                                background: 'rgba(245,158,11,.06)',
+                                                border: '1px dashed rgba(245,158,11,.35)',
+                                                color: '#fbbf24',
+                                                fontSize: 10,
+                                                fontWeight: 600,
+                                            }}
+                                        >
+                                            <span aria-hidden>{a.code}</span>
+                                            <span>{a.label}</span>
+                                        </span>
+                                    ))}
+                                    {pendingAllergens[c.id]!.length > 5 && (
+                                        <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 600 }}>
+                                            +{pendingAllergens[c.id]!.length - 5}
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </button>

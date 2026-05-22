@@ -66,7 +66,8 @@ export async function confirmComponentAllergen(
 
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath('/gerechten/allergen-queue');
+    revalidatePath('/gerechten/inzichten');
+    revalidatePath('/gerechten/componenten'); // chip-strip op componenten-page refresht ook
     return { ok: true };
 }
 
@@ -94,7 +95,8 @@ export async function rejectComponentAllergen(
 
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath('/gerechten/allergen-queue');
+    revalidatePath('/gerechten/inzichten');
+    revalidatePath('/gerechten/componenten'); // chip-strip op componenten-page refresht ook
     return { ok: true };
 }
 
@@ -116,6 +118,7 @@ export async function bulkConfirmComponent(componentId: number): Promise<ActionR
 
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath('/gerechten/allergen-queue');
+    revalidatePath('/gerechten/inzichten');
+    revalidatePath('/gerechten/componenten'); // chip-strip op componenten-page refresht ook
     return { ok: true };
 }
