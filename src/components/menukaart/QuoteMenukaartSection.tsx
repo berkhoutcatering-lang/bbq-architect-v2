@@ -20,6 +20,7 @@ import { DEMO_MENU, type MenuData } from '@/lib/menukaart/menu-data';
 const TEMPLATE_BASE_PX = 480;
 const A4_WIDTH_PX = 794;      // 210mm bij 96 CSS-px/inch
 const PREVIEW_WIDTH = 290;
+const PRINT_SCALE = A4_WIDTH_PX / TEMPLATE_BASE_PX;
 
 type Props = {
     templateId?: string | null;
@@ -45,13 +46,20 @@ export default function QuoteMenukaartSection({
     const data: MenuData = { ...(menuData ?? DEMO_MENU), logoUrl };
     const TemplateComponent = useMemo(() => PreviewFor(template.id), [template.id]);
 
-    const aspect = template.paper === 'square' ? 1 : 1.414;
+    const isSquare = template.paper === 'square';
+    const aspect = isSquare ? 1 : 1.414;
     const previewScale = PREVIEW_WIDTH / TEMPLATE_BASE_PX;
     const previewHeight = PREVIEW_WIDTH * aspect;
-    const printScale = A4_WIDTH_PX / TEMPLATE_BASE_PX;
+
+    // CSS var op de root → print-CSS kan via var(--menukaart-print-scale)
+    // zonder ${} interpolatie in de style-jsx body (Turbopack 16 hangt anders).
+    const rootStyle = {
+        padding: '24px clamp(18px, 4.5vw, 28px) 8px',
+        '--menukaart-print-scale': String(PRINT_SCALE),
+    } as React.CSSProperties;
 
     return (
-        <div style={{ padding: '24px clamp(18px, 4.5vw, 28px) 8px' }}>
+        <div style={rootStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Menukaart
@@ -100,12 +108,28 @@ export default function QuoteMenukaartSection({
                 </div>
             </div>
 
+            {/*
+              * Turbopack 16+ hangt op ${} interpolatie in style-jsx body.
+              * Daarom: paper-conditional via 2 statische blokken, scale via CSS-var.
+              */}
+            {isSquare ? (
+                <style jsx global>{`
+                    @media print {
+                        @page { size: 210mm 210mm; margin: 0; }
+                        .menukaart-viewport { height: 210mm !important; }
+                    }
+                `}</style>
+            ) : (
+                <style jsx global>{`
+                    @media print {
+                        @page { size: A4 portrait; margin: 0; }
+                        .menukaart-viewport { height: 297mm !important; }
+                    }
+                `}</style>
+            )}
+
             <style jsx global>{`
                 @media print {
-                    @page {
-                        size: ${template.paper === 'square' ? '210mm 210mm' : 'A4 portrait'};
-                        margin: 0;
-                    }
                     body * { visibility: hidden; }
                     .menukaart-printable, .menukaart-printable * { visibility: visible; }
                     .menukaart-printable {
@@ -119,11 +143,10 @@ export default function QuoteMenukaartSection({
                     }
                     .menukaart-viewport {
                         width: 210mm !important;
-                        height: ${template.paper === 'square' ? '210mm' : '297mm'} !important;
                         overflow: visible !important;
                     }
                     .menukaart-scale-wrapper {
-                        transform: scale(${printScale}) !important;
+                        transform: scale(var(--menukaart-print-scale)) !important;
                         transform-origin: top left !important;
                     }
                     .menukaart-print-btn { display: none !important; }
