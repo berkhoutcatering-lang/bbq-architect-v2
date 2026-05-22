@@ -12,7 +12,7 @@ import { Car, TrendingUp, ArrowRight, Loader2 } from 'lucide-react';
  * verborgen transport-kosten zichtbaar in de financiele view.
  *
  * Data uit /api/financien/transport. Klik door naar
- * /administratie/rittenregistratie voor detail.
+ * /geld/rittenregistratie voor detail.
  */
 
 interface TransportData {
@@ -65,7 +65,7 @@ export default function TransportBlock({ year }: { year?: number }) {
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: '8px 0' }}>
           Geen zakelijke ritten geregistreerd dit jaar.
         </p>
-        <Link href="/administratie/rittenregistratie" className="transport-block__cta">
+        <Link href="/geld/rittenregistratie" className="transport-block__cta">
           Open rittenregistratie <ArrowRight size={12} />
         </Link>
       </section>
@@ -78,7 +78,7 @@ export default function TransportBlock({ year }: { year?: number }) {
     <section className="transport-block">
       <header className="transport-block__header">
         <h2><Car size={16} /> Transport-kosten {data.year}</h2>
-        <Link href="/administratie/rittenregistratie" className="transport-block__cta">
+        <Link href="/geld/rittenregistratie" className="transport-block__cta">
           Open rittenregistratie <ArrowRight size={12} />
         </Link>
       </header>

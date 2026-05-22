@@ -88,7 +88,7 @@ export default function RitDetailClient({ id }: Props) {
   if (!rit) {
     return (
       <div className="main-content" style={{ padding: 32 }}>
-        <Link href="/administratie/rittenregistratie" style={{ color: 'var(--brand)', textDecoration: 'none' }}>
+        <Link href="/geld/rittenregistratie" style={{ color: 'var(--brand)', textDecoration: 'none' }}>
           ← Terug naar rittenoverzicht
         </Link>
         <div style={{ marginTop: 24, fontSize: 16, fontWeight: 600 }}>Rit niet gevonden</div>
@@ -132,7 +132,7 @@ export default function RitDetailClient({ id }: Props) {
         }}
       >
         <Link
-          href="/administratie/rittenregistratie"
+          href="/geld/rittenregistratie"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -155,7 +155,7 @@ export default function RitDetailClient({ id }: Props) {
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             disabled={!prev}
-            onClick={() => prev && router.push(`/administratie/rittenregistratie/${prev.id}`)}
+            onClick={() => prev && router.push(`/geld/rittenregistratie/${prev.id}`)}
             style={{
               width: 36,
               height: 36,
@@ -187,7 +187,7 @@ export default function RitDetailClient({ id }: Props) {
           </div>
           <button
             disabled={!next}
-            onClick={() => next && router.push(`/administratie/rittenregistratie/${next.id}`)}
+            onClick={() => next && router.push(`/geld/rittenregistratie/${next.id}`)}
             style={{
               width: 36,
               height: 36,
@@ -761,7 +761,7 @@ export default function RitDetailClient({ id }: Props) {
                 variant="ghost"
                 icon={<Edit3 size={14} />}
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={() => router.push(`/administratie/rittenregistratie/${rit.id}/bewerken`)}
+                onClick={() => router.push(`/geld/rittenregistratie/${rit.id}/bewerken`)}
               >
                 Bewerk rit
               </Button>
@@ -793,7 +793,7 @@ export default function RitDetailClient({ id }: Props) {
                     });
                     if (!created) throw new Error('Aanmaken mislukt');
                     showToast({ type: 'success', message: 'Retour-rit aangemaakt' });
-                    router.push(`/administratie/rittenregistratie/${created.id}`);
+                    router.push(`/geld/rittenregistratie/${created.id}`);
                   } catch (e) {
                     showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
                   } finally {
@@ -825,7 +825,7 @@ export default function RitDetailClient({ id }: Props) {
                   try {
                     await remove(rit.id);
                     showToast({ type: 'success', message: 'Rit verwijderd' });
-                    router.push('/administratie/rittenregistratie');
+                    router.push('/geld/rittenregistratie');
                   } catch (e) {
                     showToast({ type: 'error', title: 'Fout', message: (e as Error).message });
                     setActieBezig(null);
