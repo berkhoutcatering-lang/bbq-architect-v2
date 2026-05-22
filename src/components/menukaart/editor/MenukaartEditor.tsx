@@ -17,7 +17,7 @@
  * meesturen aan de klant op de menukaart.
  */
 
-import { useState, useMemo, useTransition, useEffect, useCallback } from 'react';
+import { useState, useMemo, useTransition, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -95,9 +95,14 @@ export default function MenukaartEditor({
     const [zoom, setZoom] = useState<ZoomStep>(75);
     const [compareMode, setCompareMode] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
-    const [aiState, setAiState] = useState<'idle' | 'loading' | 'result'>('idle');
+    const [aiState, setAiState] = useState<'idle' | 'loading' | 'result' | 'error'>('idle');
     const [aiPrompt, setAiPrompt] = useState('');
     const [diffs, setDiffs] = useState<Diff[]>([]);
+    const [aiSummary, setAiSummary] = useState<string | undefined>(undefined);
+    const [aiError, setAiError] = useState<string | undefined>(undefined);
+    const [aiCostCents, setAiCostCents] = useState<number | undefined>(undefined);
+    const [aiRateRemaining, setAiRateRemaining] = useState<number | undefined>(undefined);
+    const aiAbortRef = useRef<AbortController | null>(null);
 
     const [isPending, startTransition] = useTransition();
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'never'>(
@@ -381,36 +386,66 @@ export default function MenukaartEditor({
                                     state={aiState}
                                     prompt={aiPrompt}
                                     onPromptChange={setAiPrompt}
-                                    onSubmit={() => {
+                                    onSubmit={async () => {
+                                        if (!aiPrompt.trim()) return;
+                                        aiAbortRef.current?.abort();
+                                        const controller = new AbortController();
+                                        aiAbortRef.current = controller;
                                         setAiState('loading');
-                                        setTimeout(() => {
-                                            setDiffs([
-                                                {
-                                                    id: 'd1',
-                                                    type: 'kleur',
-                                                    label: 'Kleur — primary accent',
-                                                    fromSwatch: flat.accent ?? '#8B5E3C',
-                                                    fromText: flat.accent ?? '#8B5E3C',
-                                                    toSwatch: '#9e781c',
-                                                    toText: '#9e781c',
-                                                    status: 'open',
-                                                    apply: { accent: '#9e781c' },
-                                                },
-                                            ]);
+                                        setAiError(undefined);
+                                        try {
+                                            const res = await fetch('/api/menukaart-editor/suggest', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                signal: controller.signal,
+                                                body: JSON.stringify({
+                                                    offerId,
+                                                    templateId,
+                                                    prompt: aiPrompt,
+                                                    customOverrides: custom,
+                                                }),
+                                            });
+                                            if (!res.ok) {
+                                                const err = await res.json().catch(() => ({ error: 'Onbekende fout' }));
+                                                if (res.status === 429) {
+                                                    setAiError(err.error || 'Te veel verzoeken — wacht even.');
+                                                } else if (res.status === 503) {
+                                                    setAiError('AI niet geconfigureerd op deze omgeving.');
+                                                } else {
+                                                    setAiError(err.error || `Fout (${res.status})`);
+                                                }
+                                                setAiState('error');
+                                                return;
+                                            }
+                                            const data = await res.json() as {
+                                                summary: string;
+                                                diffs: Diff[];
+                                                costCents?: number;
+                                                rateLimitRemaining?: number;
+                                            };
+                                            setDiffs(data.diffs);
+                                            setAiSummary(data.summary);
+                                            setAiCostCents(data.costCents);
+                                            setAiRateRemaining(data.rateLimitRemaining);
                                             setAiState('result');
-                                            setCompareMode(true);
-                                        }, 1200);
+                                            if (data.diffs.length > 0) setCompareMode(true);
+                                        } catch (e) {
+                                            if ((e as Error).name === 'AbortError') return;
+                                            setAiError((e as Error).message || 'Netwerk-fout');
+                                            setAiState('error');
+                                        }
                                     }}
                                     onCancel={() => {
+                                        aiAbortRef.current?.abort();
                                         setAiState('idle');
                                         setDiffs([]);
+                                        setAiSummary(undefined);
                                     }}
-                                    summary={
-                                        aiState === 'result'
-                                            ? 'Voorgesteld voorstel uit demo-mode. In S4-fase-2 koppelt dit aan Claude Sonnet 4.6 met tool-use.'
-                                            : undefined
-                                    }
+                                    summary={aiState === 'result' ? aiSummary : undefined}
                                     diffs={diffs}
+                                    errorMessage={aiError}
+                                    costCents={aiCostCents}
+                                    rateLimitRemaining={aiRateRemaining}
                                     onApplyOne={(id) => {
                                         const d = diffs.find(x => x.id === id);
                                         if (d) applyDiff(d);
@@ -422,6 +457,7 @@ export default function MenukaartEditor({
                                     onDiscardAll={() => {
                                         setDiffs([]);
                                         setAiState('idle');
+                                        setAiSummary(undefined);
                                         setCompareMode(false);
                                     }}
                                 />
