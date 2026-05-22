@@ -30,7 +30,7 @@ export default function FAB() {
       {open && (
         <>
           <Link
-            href="/factuur-lezer"
+            href="/inkoop"
             onClick={() => setOpen(false)}
             style={{
               pointerEvents: 'auto',

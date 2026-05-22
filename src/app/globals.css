@@ -164,6 +164,51 @@
   --status-neutral-text: rgba(255, 255, 255, .85);
 }
 
+/* ───────── Light-mode overrides ─────────
+   Tokens die niet via text-direction OKLCH-mixing op te lossen zijn:
+   - shadows met rgba(0,0,0,X) worden te zwaar op licht → minder opacity
+   - hover-overlays gebaseerd op wit-alpha → op licht omdraaien naar zwart-alpha
+   - status-tints op 8% alpha zijn op licht-bg amper zichtbaar → bump naar 14%
+   - --card als rgba(30,30,34,.7) is een dark-only trick → gebruik solid card
+
+   data-theme-mode wordt door ThemeProvider gezet op basis van bg-luminance.
+   Voor dark themes blijft alles in :root van toepassing. */
+[data-theme-mode="light"] {
+  --lift-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, .1);
+  --overlay: rgba(0, 0, 0, .25);
+  --hover: rgba(0, 0, 0, .04);
+  --hover-strong: rgba(0, 0, 0, .08);
+  --glass-border: 1px solid rgba(0, 0, 0, .08);
+
+  /* Card-with-alpha is een dark-only effect — op licht gebruik solid card */
+  --card: var(--card-solid);
+
+  /* Status surface tints — bump op licht voor zichtbaarheid */
+  --status-success-bg: rgba(34, 197, 94, .14);
+  --status-success-border: rgba(34, 197, 94, .35);
+  --status-success-text: #15803d;
+  --status-warning-bg: rgba(245, 158, 11, .14);
+  --status-warning-border: rgba(245, 158, 11, .35);
+  --status-warning-text: #b45309;
+  --status-danger-bg: rgba(239, 68, 68, .14);
+  --status-danger-border: rgba(239, 68, 68, .35);
+  --status-danger-text: #b91c1c;
+  --status-info-bg: rgba(59, 130, 246, .14);
+  --status-info-border: rgba(59, 130, 246, .35);
+  --status-info-text: #1d4ed8;
+  --status-brand-bg: color-mix(in oklch, var(--brand), transparent 86%);
+  --status-brand-border: color-mix(in oklch, var(--brand), transparent 70%);
+  --status-neutral-bg: rgba(0, 0, 0, .04);
+  --status-neutral-border: rgba(0, 0, 0, .10);
+  --status-neutral-text: rgba(0, 0, 0, .80);
+
+  /* Brand-tint percentages — op licht moet het iets sterker zijn anders verdwijnt het in het wit */
+  --brand-tint-subtle: color-mix(in srgb, var(--brand) 10%, transparent);
+  --brand-tint-strong: color-mix(in srgb, var(--brand) 28%, transparent);
+  --brand-tint-border: color-mix(in srgb, var(--brand) 40%, transparent);
+}
+
 * {
   margin: 0;
   padding: 0;
