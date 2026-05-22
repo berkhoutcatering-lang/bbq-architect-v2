@@ -1,20 +1,18 @@
 'use client';
 
 /**
- * TemplatePickerSheet — modal/sheet om uit 10 templates te kiezen.
+ * TemplatePickerSheet — gallery-style template picker.
  *
- * Opens vanuit "Wisselen van template"-knop in MenukaartEditor header.
- * Toont thumbnails (CSS-only) van alle enabled templates met huidige
- * accent-kleur, current template gehighlight, klik → switchOfferTemplate
- * Server Action.
+ * Sam's HTML-inspiratie geport naar React: dark + lime accent, ticker met
+ * template-namen, hover-reveal met "Dit template"-knop, brand-filter chips.
  *
- * Custom-overrides die ook bij de nieuwe template horen blijven behouden;
- * de rest valt weg (zie actions.ts switchOfferTemplate preserveOverrides).
+ * Vervangt de oude modal-grid. Opens vanuit "Wisselen van template" knop.
+ * Switch via server action `switchOfferTemplate` met preserveOverrides=true.
  */
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import { X, Check, Loader2 } from 'lucide-react';
-import { listEnabledTemplates } from '@/lib/menukaart/registry';
+import { listEnabledTemplates, type Template } from '@/lib/menukaart/registry';
 import { ThumbnailFor } from '@/components/menukaart/templates/Thumbnails';
 import { switchOfferTemplate } from '@/app/offertes/[id]/menukaart-editor/actions';
 
@@ -27,6 +25,24 @@ type Props = {
     onSwitched: (newTemplateId: string) => void;
 };
 
+/* Tag-mapping voor templates — geport uit Sam's gallery HTML. */
+type TagDef = { label: string; bg: string; color: string };
+function tagsFor(t: Template): TagDef[] {
+    const tags: TagDef[] = [
+        { label: t.paper === 'square' ? '21×21' : 'A4', bg: '#191C21', color: '#888' },
+    ];
+    const heading = t.defaults.headingFont;
+    if (heading.toLowerCase().includes('mono')) tags.push({ label: 'Mono', bg: '#141C14', color: '#5EAA4A' });
+    else if (heading.toLowerCase().includes('caveat')) tags.push({ label: 'Script', bg: '#121A10', color: '#7AC862' });
+    else if (heading.toLowerCase().includes('bebas') || heading.toLowerCase().includes('oswald')) tags.push({ label: 'Display', bg: '#161208', color: '#B8A268' });
+    else if (heading.toLowerCase().includes('garamond') || heading.toLowerCase().includes('playfair') || heading.toLowerCase().includes('cormorant')) tags.push({ label: 'Serif', bg: '#141C14', color: '#5EAA4A' });
+    else tags.push({ label: 'Sans-serif', bg: '#191C21', color: '#888' });
+
+    if (t.defaults.showFootnoteAllergens === true) tags.push({ label: 'Footnote', bg: '#0F1826', color: '#5AABDC' });
+    else tags.push({ label: 'Inline', bg: '#1A1228', color: '#A67EDB' });
+    return tags;
+}
+
 export default function TemplatePickerSheet({
     open,
     onClose,
@@ -38,10 +54,11 @@ export default function TemplatePickerSheet({
     const [isPending, startTransition] = useTransition();
     const [errorId, setErrorId] = useState<string | null>(null);
     const [pendingId, setPendingId] = useState<string | null>(null);
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+    const templates = useMemo(() => listEnabledTemplates(), []);
 
     if (!open) return null;
-
-    const templates = listEnabledTemplates();
 
     const handleSwitch = (templateId: string) => {
         if (templateId === currentTemplateId) {
@@ -51,244 +68,229 @@ export default function TemplatePickerSheet({
         setPendingId(templateId);
         setErrorId(null);
         startTransition(async () => {
-            const result = await switchOfferTemplate({
-                offerId,
-                templateId,
-                preserveOverrides: true,
-            });
+            const result = await switchOfferTemplate({ offerId, templateId, preserveOverrides: true });
             setPendingId(null);
-            if ('error' in result) {
-                setErrorId(templateId);
-                return;
-            }
+            if ('error' in result) { setErrorId(templateId); return; }
             onSwitched(templateId);
             onClose();
         });
     };
+
+    const accent = currentAccent ?? '#CCFF00';
 
     return (
         <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="template-picker-title"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
             style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0,0,0,.55)',
-                backdropFilter: 'blur(4px)',
-                zIndex: 200,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 24,
-            }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
+                position: 'fixed', inset: 0, zIndex: 200,
+                background: '#07090C', overflow: 'auto',
+                fontFamily: "'Space Grotesk', 'Outfit', sans-serif",
             }}
         >
-            <div
-                style={{
-                    background: 'var(--mke-bg, #18181b)',
-                    border: '1px solid var(--mke-border, rgba(255,255,255,.08))',
-                    borderRadius: 12,
-                    width: '100%',
-                    maxWidth: 920,
-                    maxHeight: '85vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    boxShadow: '0 24px 64px rgba(0,0,0,.5)',
-                }}
-            >
-                {/* Header */}
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '20px 24px 14px',
-                        borderBottom: '1px solid var(--mke-border, rgba(255,255,255,.08))',
-                    }}
-                >
+            {/* Header */}
+            <header style={{
+                position: 'relative', padding: '36px 56px 28px',
+                borderBottom: '1px solid #171A1F', overflow: 'hidden',
+            }}>
+                <div aria-hidden style={{
+                    position: 'absolute', top: -4, left: 40, pointerEvents: 'none',
+                    lineHeight: 0.82, userSelect: 'none',
+                }}>
+                    <div style={{
+                        fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                        fontSize: 'clamp(80px, 16vw, 220px)',
+                        color: 'transparent',
+                        WebkitTextStroke: `1px ${accent}11`,
+                        whiteSpace: 'nowrap',
+                    }}>MENU KAART</div>
+                </div>
+                <div style={{
+                    position: 'relative', zIndex: 1,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+                    gap: 24, flexWrap: 'wrap',
+                }}>
                     <div>
-                        <h2 id="template-picker-title" style={{ fontSize: 17, fontWeight: 600, color: 'var(--mke-text, #fafafa)' }}>
-                            Kies een template
+                        <div style={{
+                            fontFamily: "'IBM Plex Mono', monospace", fontSize: 10,
+                            letterSpacing: '.22em', textTransform: 'uppercase', color: '#888880',
+                            marginBottom: 8,
+                        }}>
+                            Visueel systeem · Brand cascade · EU 1169 compliant
+                        </div>
+                        <h2 id="template-picker-title" style={{
+                            fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                            fontSize: 'clamp(44px, 7vw, 96px)', lineHeight: 0.87, color: '#F0EBE0',
+                        }}>
+                            Menukaart<br />
+                            <span style={{ color: accent }}>Templates</span>
                         </h2>
-                        <p style={{ fontSize: 12, color: 'var(--mke-muted, #a1a1aa)', marginTop: 3 }}>
-                            Aanpassingen blijven behouden voor velden die ook in de nieuwe template bestaan.
+                        <p style={{
+                            marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#888880', maxWidth: 460,
+                        }}>
+                            {templates.length} onderscheidende richtingen met werkende brand-cascade. Klik op een template om te wisselen.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="Sluiten"
-                        style={{
-                            background: 'transparent',
-                            border: '1px solid var(--mke-border, rgba(255,255,255,.1))',
-                            borderRadius: 8,
-                            width: 32,
-                            height: 32,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--mke-muted, #a1a1aa)',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <X size={16} />
-                    </button>
+                    <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', alignItems: 'flex-start', gap: 24 }}>
+                        <div>
+                            <div style={{
+                                fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                                fontSize: 72, lineHeight: 0.88, color: accent,
+                            }}>{String(templates.length).padStart(2, '0')}</div>
+                            <div style={{
+                                fontFamily: "'IBM Plex Mono', monospace", fontSize: 10,
+                                letterSpacing: '.18em', textTransform: 'uppercase', color: '#888880',
+                                marginTop: 4,
+                            }}>Templates klaar</div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            aria-label="Sluiten"
+                            style={{
+                                background: 'transparent', border: '1px solid #171A1F',
+                                borderRadius: 8, width: 36, height: 36,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#888880', cursor: 'pointer',
+                            }}
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
                 </div>
+            </header>
 
-                {/* Grid */}
-                <div
-                    style={{
-                        padding: 24,
-                        overflowY: 'auto',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                        gap: 16,
-                    }}
-                >
-                    {templates.map((t) => {
-                        const Thumb = ThumbnailFor(t.id);
-                        const isActive = t.id === currentTemplateId;
-                        const isLoading = pendingId === t.id && isPending;
-                        const hasError = errorId === t.id;
-                        return (
-                            <button
-                                key={t.id}
-                                type="button"
-                                onClick={() => handleSwitch(t.id)}
-                                disabled={isPending}
-                                style={{
-                                    background: 'transparent',
-                                    border: isActive
-                                        ? `2px solid ${currentAccent ?? '#c4a35a'}`
-                                        : '1px solid var(--mke-border, rgba(255,255,255,.12))',
-                                    borderRadius: 10,
-                                    padding: 0,
-                                    cursor: isPending ? 'wait' : 'pointer',
-                                    textAlign: 'left',
-                                    overflow: 'hidden',
-                                    color: 'inherit',
-                                    transition: 'transform .15s, border-color .15s',
-                                    position: 'relative',
-                                    opacity: isPending && !isLoading ? 0.5 : 1,
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isPending) e.currentTarget.style.transform = 'translateY(-2px)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = '';
-                                }}
-                            >
-                                {isActive && (
-                                    <span
-                                        style={{
-                                            position: 'absolute',
-                                            top: 8,
-                                            right: 8,
-                                            zIndex: 2,
-                                            background: currentAccent ?? '#c4a35a',
-                                            color: '#000',
-                                            borderRadius: 999,
-                                            width: 22,
-                                            height: 22,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                        }}
-                                        aria-label="Huidige template"
-                                    >
-                                        <Check size={13} strokeWidth={3} />
-                                    </span>
-                                )}
-                                {isLoading && (
-                                    <span
-                                        style={{
-                                            position: 'absolute',
-                                            inset: 0,
-                                            background: 'rgba(0,0,0,.5)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            zIndex: 3,
-                                        }}
-                                    >
-                                        <Loader2 size={22} className="mke-spin" color="#fafafa" />
-                                    </span>
-                                )}
+            {/* Cards grid */}
+            <main style={{
+                padding: '28px 56px 64px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: 14,
+            }}>
+                {templates.map((t) => {
+                    const Thumb = ThumbnailFor(t.id);
+                    const isActive = t.id === currentTemplateId;
+                    const isLoading = pendingId === t.id && isPending;
+                    const hasError = errorId === t.id;
+                    const isHovered = hoveredId === t.id;
+
+                    return (
+                        <article
+                            key={t.id}
+                            onMouseEnter={() => setHoveredId(t.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            onClick={() => !isPending && handleSwitch(t.id)}
+                            style={{
+                                background: '#0E1015',
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                cursor: isPending ? 'wait' : 'pointer',
+                                position: 'relative',
+                                border: isActive ? `2px solid ${accent}` : '1px solid #171A1F',
+                                boxShadow: isActive ? `0 0 0 1px ${accent}66, 0 24px 64px ${accent}11` : 'none',
+                                transition: 'transform .28s cubic-bezier(.34,1.56,.64,1), border-color .15s, box-shadow .28s',
+                                transform: isHovered && !isActive ? 'translateY(-6px) scale(1.004)' : 'none',
+                            }}
+                        >
+                            {isActive && (
+                                <div style={{
+                                    position: 'absolute', top: 11, right: 11, zIndex: 20,
+                                    background: accent, color: '#07090C',
+                                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 9,
+                                    fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase',
+                                    padding: '4px 10px', borderRadius: 999,
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                }}>
+                                    <Check size={10} /> Geselecteerd
+                                </div>
+                            )}
+
+                            {/* Thumbnail preview */}
+                            <div style={{ height: 260, position: 'relative', overflow: 'hidden', background: '#fff' }}>
                                 <Thumb brandPrimary={currentAccent} />
-                                <div style={{ padding: 12 }}>
-                                    <div
-                                        style={{
-                                            fontSize: 10,
-                                            fontWeight: 700,
-                                            letterSpacing: '.18em',
-                                            textTransform: 'uppercase',
-                                            color: 'var(--mke-gold, #c4a35a)',
-                                            marginBottom: 4,
-                                        }}
-                                    >
-                                        {t.id}
-                                    </div>
-                                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--mke-text, #fafafa)' }}>
-                                        {t.name}
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: 11,
-                                            color: 'var(--mke-muted, #a1a1aa)',
-                                            marginTop: 4,
-                                            lineHeight: 1.5,
-                                        }}
-                                    >
-                                        {t.description}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
-                                        <span
-                                            style={{
-                                                fontSize: 9,
-                                                padding: '2px 7px',
-                                                borderRadius: 999,
-                                                border: '1px solid var(--mke-border, rgba(255,255,255,.12))',
-                                                color: 'var(--mke-muted, #a1a1aa)',
-                                                fontWeight: 600,
-                                            }}
-                                        >
-                                            {t.paper === 'square' ? '21×21' : 'A4'}
-                                        </span>
-                                        {hasError && (
-                                            <span
+                                {(isHovered || isLoading) && !isActive && (
+                                    <div style={{
+                                        position: 'absolute', inset: 0,
+                                        background: 'rgba(7,9,12,.72)', backdropFilter: 'blur(3px)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        zIndex: 15, transition: 'opacity .18s',
+                                    }}>
+                                        {isLoading ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#F0EBE0', fontSize: 12 }}>
+                                                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Overschakelen…
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
                                                 style={{
-                                                    fontSize: 9,
-                                                    padding: '2px 7px',
-                                                    borderRadius: 999,
-                                                    background: 'rgba(239,68,68,.15)',
-                                                    color: '#ef4444',
-                                                    fontWeight: 600,
+                                                    padding: '11px 26px', borderRadius: 999, border: 'none',
+                                                    background: accent, color: '#07090C',
+                                                    fontFamily: "'Space Grotesk', 'Outfit', sans-serif",
+                                                    fontSize: 13, fontWeight: 700,
+                                                    letterSpacing: '.07em', textTransform: 'uppercase',
+                                                    cursor: 'pointer',
                                                 }}
                                             >
-                                                Wisselen mislukt
-                                            </span>
+                                                Dit template →
+                                            </button>
                                         )}
                                     </div>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
+                                )}
+                            </div>
 
-                <div
-                    style={{
-                        padding: '12px 24px',
-                        borderTop: '1px solid var(--mke-border, rgba(255,255,255,.08))',
-                        fontSize: 11,
-                        color: 'var(--mke-muted, #a1a1aa)',
-                    }}
-                >
-                    Wijzigingen worden direct opgeslagen op de offerte. Andere offertes blijven hun eigen template behouden.
-                </div>
-            </div>
+                            {/* Card info */}
+                            <div style={{ padding: '13px 15px 15px', borderTop: '1px solid #171A1F' }}>
+                                <div style={{
+                                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 9,
+                                    letterSpacing: '.2em', textTransform: 'uppercase',
+                                    color: '#484848', marginBottom: 3,
+                                }}>
+                                    {t.id.toUpperCase()}
+                                </div>
+                                <div style={{ fontSize: 15, fontWeight: 600, color: '#F0EBE0', marginBottom: 5 }}>
+                                    {t.name}
+                                </div>
+                                <div style={{ fontSize: 11.5, color: '#5A5A5A', lineHeight: 1.55, marginBottom: 10 }}>
+                                    {t.description}
+                                </div>
+                                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                    {tagsFor(t).map((tag, i) => (
+                                        <span key={i} style={{
+                                            padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                                            letterSpacing: '.04em',
+                                            background: tag.bg, color: tag.color,
+                                        }}>{tag.label}</span>
+                                    ))}
+                                </div>
+                                {hasError && (
+                                    <div style={{ marginTop: 8, fontSize: 11, color: '#ef4444' }}>
+                                        Wisselen mislukt — probeer opnieuw
+                                    </div>
+                                )}
+                            </div>
+                        </article>
+                    );
+                })}
+            </main>
+
+            {/* Animated rainbow bottom bar */}
+            <div aria-hidden style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0, height: 3,
+                background: `linear-gradient(90deg, ${accent} 0%, #00FFAA 20%, #FF3060 45%, #FF8C00 65%, ${accent} 100%)`,
+                backgroundSize: '200%',
+                animation: 'mke-rainbow 5s linear infinite',
+                zIndex: 1000,
+            }} />
+
+            <style jsx>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes mke-rainbow {
+                    from { background-position: 0% 0%; }
+                    to { background-position: -200% 0%; }
+                }
+            `}</style>
         </div>
     );
 }
