@@ -9,7 +9,7 @@
  *   - Auto-contrast tekst tegen brand-primary
  */
 
-import type { Overrides, LogoPosition } from '@/lib/menukaart/registry';
+import type { Overrides } from '@/lib/menukaart/registry';
 import {
     type MenuData,
     type MenuGang,
@@ -25,11 +25,8 @@ type Props = {
     size?: 'normal' | 'small';
 };
 
-function logoAlignment(pos: LogoPosition | undefined): 'left' | 'center' | 'right' {
-    if (pos === 'top-left') return 'left';
-    if (pos === 'top-right') return 'right';
-    return 'center';
-}
+/* Modern heeft logo vast in sidebar — geen positie-override (allowList drops
+   logoPosition na audit 2026-05-22). */
 
 function GangFootnote({ gang, bodyFont, mult, accent }: { gang: MenuGang; bodyFont: string; mult: number; accent: string }) {
     const used = gangAllergens(gang);
@@ -65,7 +62,6 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
     const bodySize = overrides.bodySize ?? 11;
     const headingWeight = overrides.headingWeight ?? 300;
     const logoSize = overrides.logoSize ?? 48;
-    void logoAlignment(overrides.logoPosition); // modern heeft logo vast in sidebar — geen positie-override
     const showDividers = overrides.showDividers !== false;
     const showFootnote = overrides.showFootnoteAllergens !== false;
     const brandName = overrides.brandName ?? 'Vuur & Vlam';
