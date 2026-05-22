@@ -109,24 +109,15 @@ export default function QuoteMenukaartSection({
             </div>
 
             {/*
-              * Turbopack 16+ hangt op ${} interpolatie in style-jsx body.
-              * Daarom: paper-conditional via 2 statische blokken, scale via CSS-var.
+              * Paper-conditional CSS via gewone <style> tag (geen styled-jsx).
+              * Reden: styled-jsx staat maar 1 <style jsx> per component toe;
+              * dynamische @page size kan niet via CSS-var.
               */}
-            {isSquare ? (
-                <style jsx global>{`
-                    @media print {
-                        @page { size: 210mm 210mm; margin: 0; }
-                        .menukaart-viewport { height: 210mm !important; }
-                    }
-                `}</style>
-            ) : (
-                <style jsx global>{`
-                    @media print {
-                        @page { size: A4 portrait; margin: 0; }
-                        .menukaart-viewport { height: 297mm !important; }
-                    }
-                `}</style>
-            )}
+            <style
+                dangerouslySetInnerHTML={{
+                    __html: `@media print { @page { size: ${isSquare ? '210mm 210mm' : 'A4 portrait'}; margin: 0; } .menukaart-viewport { height: ${isSquare ? '210mm' : '297mm'} !important; } }`,
+                }}
+            />
 
             <style jsx global>{`
                 @media print {
