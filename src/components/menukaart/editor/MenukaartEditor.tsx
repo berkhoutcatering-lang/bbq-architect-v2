@@ -34,6 +34,7 @@ import {
     SlidersHorizontal,
     Heart,
     AtSign,
+    Printer,
 } from 'lucide-react';
 import {
     getTemplate,
@@ -313,7 +314,9 @@ export default function MenukaartEditor({
                                     <div className="mke-compare-col">
                                         <span className="mke-compare-label current">Huidig</span>
                                         <PreviewWrapper zoom={zoom}>
-                                            <TemplatePreview overrides={flat} data={data} size="small" />
+                                            <div className="menukaart-printable">
+                                                <TemplatePreview overrides={flat} data={data} size="small" />
+                                            </div>
                                         </PreviewWrapper>
                                     </div>
                                     <div className="mke-compare-col">
@@ -325,11 +328,13 @@ export default function MenukaartEditor({
                                 </div>
                             ) : (
                                 <PreviewWrapper zoom={zoom}>
-                                    <TemplatePreview overrides={flat} data={data} />
+                                    <div className="menukaart-printable">
+                                        <TemplatePreview overrides={flat} data={data} />
+                                    </div>
                                 </PreviewWrapper>
                             )}
                         </div>
-                        <div className="mke-canvas-footer">
+                        <div className="mke-canvas-footer" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                             <button
                                 className="mke-btn-compare"
                                 onClick={() => setCompareMode(c => !c)}
@@ -338,7 +343,33 @@ export default function MenukaartEditor({
                             >
                                 <Columns size={14} /> {compareMode ? 'Sluit vergelijk' : 'Vergelijken'}
                             </button>
+                            <button
+                                className="mke-btn-compare"
+                                onClick={() => window.print()}
+                                type="button"
+                                title="Bekijk hoe het er in PDF uitziet (browser print-dialoog → opslaan als PDF)"
+                            >
+                                <Printer size={14} /> Bekijk PDF
+                            </button>
                         </div>
+                        <style jsx global>{`
+                            @media print {
+                                @page { size: A4 portrait; margin: 0; }
+                                body * { visibility: hidden; }
+                                .menukaart-printable, .menukaart-printable * { visibility: visible; }
+                                .menukaart-printable {
+                                    position: absolute !important;
+                                    left: 0 !important; top: 0 !important;
+                                    width: 210mm !important; height: 297mm !important;
+                                    transform: none !important;
+                                    overflow: visible !important;
+                                }
+                                .menukaart-printable > * {
+                                    width: 210mm !important; height: 297mm !important;
+                                    box-shadow: none !important; border-radius: 0 !important;
+                                }
+                            }
+                        `}</style>
                     </div>
 
                     {/* ── Right panel ── */}

@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronRight, RotateCcw, Plus, Minus } from 'lucide-react';
+import { ChevronRight, RotateCcw } from 'lucide-react';
 import type { CascadeSource } from '@/lib/menukaart/cascade';
 
 /* ── Section (collapsible) ────────────────────────────────────── */
@@ -79,7 +79,9 @@ export function ColorControl({ label, value, source, onChange, onReset }: ColorC
     );
 }
 
-/* ── SizeControl ────────────────────────────────────── */
+/* ── SizeControl — slider met live waarde + min/max labels ──────────
+   Range-slider geeft directe greep zonder 144× klikken voor logo 24→200.
+   Click op de waarde-pill = direct typen (toetsenbord-pad). */
 type SizeControlProps = {
     label: string;
     value: number;
@@ -91,35 +93,74 @@ type SizeControlProps = {
     onReset?: () => void;
 };
 export function SizeControl({ label, value, min, max, source, suffix = 'px', onChange, onReset }: SizeControlProps) {
+    const [typing, setTyping] = useState(false);
+    const [typedValue, setTypedValue] = useState(String(value));
+    useEffect(() => { if (!typing) setTypedValue(String(value)); }, [value, typing]);
+
+    function commitTyped() {
+        const n = parseInt(typedValue, 10);
+        if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n)));
+        setTyping(false);
+    }
+
     return (
-        <div className="mke-row">
-            <span className="mke-label">{label}</span>
-            <div className="mke-value">
-                <div className="mke-size">
+        <div className="mke-row-stack">
+            <div className="mke-row">
+                <span className="mke-label">{label}</span>
+                {typing ? (
+                    <input
+                        type="number"
+                        value={typedValue}
+                        min={min}
+                        max={max}
+                        autoFocus
+                        onChange={e => setTypedValue(e.target.value)}
+                        onBlur={commitTyped}
+                        onKeyDown={e => { if (e.key === 'Enter') commitTyped(); if (e.key === 'Escape') { setTyping(false); setTypedValue(String(value)); } }}
+                        style={{
+                            width: 56, padding: '2px 6px', fontFamily: 'var(--mke-font-mono)',
+                            fontSize: 11, color: 'var(--mke-text)',
+                            background: 'var(--mke-bg)', border: '1px solid var(--mke-brand)',
+                            borderRadius: 4, textAlign: 'center',
+                        }}
+                    />
+                ) : (
                     <button
-                        className="mke-size-btn"
-                        onClick={() => onChange(Math.max(min, value - 1))}
-                        disabled={value <= min}
+                        onClick={() => setTyping(true)}
+                        title="Klik om typen"
+                        style={{
+                            fontFamily: 'var(--mke-font-mono)', fontSize: 11,
+                            color: 'var(--mke-text)', background: 'var(--mke-bg)',
+                            border: '1px solid var(--mke-border)', borderRadius: 4,
+                            padding: '2px 8px', cursor: 'pointer',
+                        }}
                         type="button"
                     >
-                        <Minus size={12} />
+                        {value}{suffix}
                     </button>
-                    <span className="mke-size-val">{value}{suffix}</span>
-                    <button
-                        className="mke-size-btn"
-                        onClick={() => onChange(Math.min(max, value + 1))}
-                        disabled={value >= max}
-                        type="button"
-                    >
-                        <Plus size={12} />
-                    </button>
-                </div>
+                )}
                 <CascadeBadge source={source} />
                 {source !== 'default' && onReset && (
                     <button className="mke-reset" onClick={onReset} type="button" title="Reset">
                         <RotateCcw size={12} />
                     </button>
                 )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 9, color: 'var(--mke-muted-light)', fontFamily: 'var(--mke-font-mono)', minWidth: 16 }}>{min}</span>
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    value={value}
+                    onChange={e => onChange(parseInt(e.target.value, 10))}
+                    style={{
+                        flex: 1,
+                        accentColor: 'var(--mke-brand)',
+                        height: 4,
+                    }}
+                />
+                <span style={{ fontSize: 9, color: 'var(--mke-muted-light)', fontFamily: 'var(--mke-font-mono)', minWidth: 22 }}>{max}</span>
             </div>
         </div>
     );
