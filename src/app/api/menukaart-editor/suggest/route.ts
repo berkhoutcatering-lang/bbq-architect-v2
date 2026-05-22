@@ -1,19 +1,13 @@
 /**
  * POST /api/menukaart-editor/suggest
  *
- * AI-Coach endpoint voor de menukaart-editor. Neemt de huidige cascade-staat
- * + user-prompt en vraagt Claude Sonnet 4.6 om tool-calls te produceren die
- * één of meer template-tokens veranderen.
+ * AI-Coach endpoint. Few-shot examples + range-hints + temperature 0.7.
  *
- * Pillar #1: diff is altijd zichtbaar verschillend — output wordt server-side
- * gefilterd op `tool.value !== currentResolved[key]`. Pillar #2: allow-list
- * dwingt template-bound waardes af via validateOverrides. Pillar #3: rate-limit
- * 10/u per tenant + ai_usage logging.
- *
- * Hard rules:
- *  - Customer-input wrapped in delimiters + sanitization (OWASP LLM01)
- *  - cost_eur_cents berekend uit Anthropic usage block
- *  - Re-auth in body (niet alleen middleware)
+ * Pillars behouden:
+ *  #1: no-op filter in buildDiff
+ *  #2: allow-list via validateOverrides
+ *  #3: rate-limit + cost-tracking
+ *  OWASP LLM01: input delimiters + sanitization
  */
 
 import { NextResponse } from 'next/server';
@@ -33,28 +27,23 @@ const BodySchema = z.object({
     offerId: z.string().min(1),
     templateId: z.string().min(1),
     prompt: z.string().trim().min(3).max(500),
-    /** Huidige offerte-laag overrides (custom). */
     customOverrides: z.record(z.string(), z.unknown()).default({}),
 });
 
 const MODEL = 'claude-sonnet-4-5-20250929';
 const MAX_TOKENS = 800;
-const SAMPLE_PROMPTS_HASH_CACHE: Record<string, true> = {};
-void SAMPLE_PROMPTS_HASH_CACHE;
 
-/* ── Anthropic price (Sonnet 4.6, 2026-05) per 1M tokens ────────────────
-   Bron: https://www.anthropic.com/pricing — controleer maandelijks. */
-const PRICE_INPUT_CENTS = 0.30;          // €0.0030/1K input
-const PRICE_OUTPUT_CENTS = 1.50;         // €0.0150/1K output
-const PRICE_CACHE_WRITE_CENTS = 0.375;   // 1.25× input
-const PRICE_CACHE_READ_CENTS = 0.03;     // 0.1× input
+const PRICE_INPUT_CENTS = 0.30;
+const PRICE_OUTPUT_CENTS = 1.50;
+const PRICE_CACHE_WRITE_CENTS = 0.375;
+const PRICE_CACHE_READ_CENTS = 0.03;
 
-/* ── Tool-definities ─────────────────────────────────────────────── */
+/* ── Tools ─────────────────────────────────────────────────────────── */
 
 const TOOLS: Anthropic.Messages.Tool[] = [
     {
         name: 'set_color',
-        description: 'Wijzig een kleur in de menukaart. Gebruik hex-notatie #RRGGBB.',
+        description: 'Wijzig een kleur in de menukaart. Gebruik hex-notatie #RRGGBB. Verschuif MINSTENS 30% lightness bij "donkerder"/"lichter", of 20° hue bij "warmer"/"koeler".',
         input_schema: {
             type: 'object',
             properties: {
@@ -80,12 +69,12 @@ const TOOLS: Anthropic.Messages.Tool[] = [
     },
     {
         name: 'set_size',
-        description: 'Wijzig grootte van heading, body of logo (in pixels).',
+        description: 'Wijzig grootte van heading, body of logo (in pixels). BELANGRIJK: bij "groter" minstens ×1.5 van huidige waarde, bij "veel groter" richting 70-90% van max. "+5px" is NOOIT voldoende.',
         input_schema: {
             type: 'object',
             properties: {
                 target: { type: 'string', enum: ['headingSize', 'bodySize', 'logoSize'] },
-                px: { type: 'number', description: 'Nieuwe grootte in pixels.' },
+                px: { type: 'number', description: 'Nieuwe grootte in pixels. Gebruik de range-info uit huidige-styling.' },
                 reason: { type: 'string' },
             },
             required: ['target', 'px'],
@@ -93,11 +82,11 @@ const TOOLS: Anthropic.Messages.Tool[] = [
     },
     {
         name: 'set_weight',
-        description: 'Stel font-weight voor headings in (300-700, alleen toegestane opties).',
+        description: 'Stel font-weight voor headings in (alleen toegestane opties).',
         input_schema: {
             type: 'object',
             properties: {
-                weight: { type: 'number', description: 'Een van 300/400/500/600/700.' },
+                weight: { type: 'number', description: 'Een van de toegestane weight-waarden.' },
                 reason: { type: 'string' },
             },
             required: ['weight'],
@@ -130,18 +119,7 @@ const TOOLS: Anthropic.Messages.Tool[] = [
     },
 ];
 
-/* ── Tool-naam → override-key map (voor diff-type kleuring in UI) ────────────────── */
-
-const TOOL_TO_TYPE: Record<string, 'kleur' | 'typo' | 'logo' | 'deco' | 'text'> = {
-    set_color: 'kleur',
-    set_font: 'typo',
-    set_size: 'typo',
-    set_weight: 'typo',
-    set_logo_position: 'logo',
-    toggle_decoration: 'deco',
-};
-
-/* ── Response shape (matcht client AICoach.Diff) ─────────────────── */
+/* ── Types ──────────────────────────────────────────────────────────── */
 
 type DiffOut = {
     id: string;
@@ -162,7 +140,7 @@ type SuggestResponse = {
     costCents?: number;
 };
 
-/* ── Helper: tool-call → DiffOut ────────────────────────────────── */
+/* ── Helpers ────────────────────────────────────────────────────────── */
 
 function normalizeFont(s: string): string {
     return s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -177,21 +155,16 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
             const from = String((current as Record<string, unknown>)[target] || '').toLowerCase();
             if (!hex || hex === from) return null;
             return {
-                id,
-                type: 'kleur',
+                id, type: 'kleur',
                 label: `Kleur — ${target === 'accent' ? 'primary accent' : target === 'bg' ? 'achtergrond' : 'tekst'}`,
-                fromSwatch: from || undefined,
-                fromText: from || undefined,
-                toSwatch: hex,
-                toText: hex,
-                status: 'open',
-                apply: { [target]: hex },
+                fromSwatch: from || undefined, fromText: from || undefined,
+                toSwatch: hex, toText: hex,
+                status: 'open', apply: { [target]: hex },
             };
         }
         case 'set_font': {
             const target = input.target as 'headingFont' | 'bodyFont';
             const rawFont = String(input.font || '');
-            // Map terug naar canoniek-case uit allow-list
             const options = target === 'headingFont' ? allowFonts.heading : allowFonts.body;
             const canonical = options.find(o => normalizeFont(o) === normalizeFont(rawFont));
             if (!canonical) return null;
@@ -200,10 +173,8 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
             return {
                 id, type: 'typo',
                 label: `Typografie — ${target === 'headingFont' ? 'heading-font' : 'body-font'}`,
-                fromText: from || '—',
-                toText: canonical,
-                status: 'open',
-                apply: { [target]: canonical },
+                fromText: from || '—', toText: canonical,
+                status: 'open', apply: { [target]: canonical },
             };
         }
         case 'set_size': {
@@ -213,11 +184,10 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
             const from = Number((current as Record<string, unknown>)[target] || 0);
             if (px === from) return null;
             return {
-                id, type: 'typo',
+                id, type: target === 'logoSize' ? 'logo' : 'typo',
                 label: `${target === 'logoSize' ? 'Logo' : 'Typografie'} — ${target === 'headingSize' ? 'heading-grootte' : target === 'bodySize' ? 'body-grootte' : 'logo-grootte'}`,
                 fromText: `${from}px`, toText: `${px}px`,
-                status: 'open',
-                apply: { [target]: px },
+                status: 'open', apply: { [target]: px },
             };
         }
         case 'set_weight': {
@@ -228,8 +198,7 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
                 id, type: 'typo',
                 label: 'Typografie — heading-weight',
                 fromText: String(from || '—'), toText: String(weight),
-                status: 'open',
-                apply: { headingWeight: weight },
+                status: 'open', apply: { headingWeight: weight },
             };
         }
         case 'set_logo_position': {
@@ -241,8 +210,7 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
                 id, type: 'logo',
                 label: 'Logo — positie',
                 fromText: NL[from] || '—', toText: NL[pos] || pos,
-                status: 'open',
-                apply: { logoPosition: pos },
+                status: 'open', apply: { logoPosition: pos },
             };
         }
         case 'toggle_decoration': {
@@ -251,17 +219,12 @@ function buildDiff(toolName: string, input: Record<string, unknown>, current: Ov
             const fromVal = (current as Record<string, unknown>)[target];
             const fromBool = fromVal === undefined ? (target === 'showGhostNumbers' ? false : true) : Boolean(fromVal);
             if (on === fromBool) return null;
-            const LABELS: Record<string, string> = {
-                showOrnament: 'ornament-randen',
-                showDividers: 'dividers',
-                showGhostNumbers: 'ghost-cijfers',
-            };
+            const LABELS: Record<string, string> = { showOrnament: 'ornament-randen', showDividers: 'dividers', showGhostNumbers: 'ghost-cijfers' };
             return {
                 id, type: 'deco',
                 label: `Decoratie — ${LABELS[target]}`,
                 fromText: fromBool ? 'Aan' : 'Uit', toText: on ? 'Aan' : 'Uit',
-                status: 'open',
-                apply: { [target]: on },
+                status: 'open', apply: { [target]: on },
             };
         }
         default:
@@ -277,12 +240,10 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         return NextResponse.json({ error: 'Ongeldige body: ' + parsed.error.issues.map(i => i.message).join(', ') }, { status: 400 });
     }
 
-    // Auth-check
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
 
-    // Org-id voor logging + rate-limit
     const { data: orgRow } = await supabase
         .from('organization_members')
         .select('organization_id')
@@ -293,16 +254,11 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
     const organizationId = orgRow?.organization_id as string | undefined;
     if (!organizationId) return NextResponse.json({ error: 'Geen actieve organisatie' }, { status: 403 });
 
-    // Pillar #3 — rate-limit (10/min per tenant; impliciet ook ~10/uur ondergrens
-    // omdat niemand realistisch 10 suggesties per minuut aanvraagt).
     const rl = checkRateLimit(`menukaart-ai:${organizationId}`, 10);
     if (!rl.allowed) {
-        return NextResponse.json({
-            error: `Te veel AI-suggesties — wacht ${rl.resetInSeconds}s en probeer opnieuw.`,
-        }, { status: 429 });
+        return NextResponse.json({ error: `Te veel AI-suggesties — wacht ${rl.resetInSeconds}s en probeer opnieuw.` }, { status: 429 });
     }
 
-    // Verifieer offerte + behoort tot deze tenant (RLS doet dit ook, dubbel-check via service-client)
     const adminSb = createServiceSupabase();
     const { data: offerRow } = await adminSb
         .from('offertes')
@@ -312,7 +268,6 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         .single();
     if (!offerRow) return NextResponse.json({ error: 'Offerte niet gevonden' }, { status: 404 });
 
-    // Cascade-resolve naar huidige flat (template default → brand → custom)
     const template = getTemplate(parsed.data.templateId);
     const { data: settingsRow } = await adminSb
         .from('settings')
@@ -325,7 +280,6 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
     const resolved = resolveCascade(template, brandOverrides, customOverrides);
     const flat = flatten(resolved) as Overrides;
 
-    // System prompt — gecached prefix (1h cache)
     const allowFonts = {
         heading: template.allowList.headingFont?.options ?? [],
         body: template.allowList.bodyFont?.options ?? [],
@@ -346,46 +300,66 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         `Heading-weights: ${weights}`,
         ``,
         `REGELS:`,
-        `- Roep ALTIJD 2-4 tools aan, NOOIT tekst-alleen. Eén-tool-output telt als faal — combineer altijd minstens 2 wijzigingen.`,
-        `- Stel ALLEEN wijzigingen voor die anders zijn dan de huidige waarde — geen no-op suggesties.`,
+        `- Roep ALTIJD 2-4 tools aan. Eén-tool-output of tekst-alleen telt als FAAL.`,
+        `- Stel ALLEEN wijzigingen voor die ANDERS zijn dan de huidige waarde.`,
         `- Kleuren altijd als hex #RRGGBB.`,
-        `- Houd binnen de allow-list ranges; ga niet buiten min/max.`,
+        `- Houd binnen de allow-list ranges.`,
+        `- "reason" in NL, max 60 chars.`,
         ``,
-        `MAGNITUDE (zeer belangrijk):`,
-        `- "groter" / "kleiner" voor size betekent MINIMAAL 20% verandering, niet +/-2px. Bij logoSize: durf naar 80-160px te gaan als gebruiker "veel groter" of "imposant" vraagt.`,
-        `- "donkerder" / "lichter" betekent MINSTENS 30% lightness-verschuiving in het kleur-token.`,
-        `- "warmer" = oranje/rood/gele tint verschuiven (hue +20° naar warm). "koeler" = blauw/groen.`,
-        `- "strakker" = lager weight (-100 of -200), kleinere heading, minder decoraties uit.`,
-        `- "groffer" = hoger weight (+100 of +200), grotere heading.`,
-        `- Bij vage prompts ("iets warmer"): kies 2-3 tools voor zichtbaar effect, niet 1 minimal tweak.`,
+        `MAGNITUDE (cruciaal — minimale wijzigingen worden verworpen):`,
+        `- Size: "groter" = huidige × 1.5-2.0 (minstens +30px voor logo). "veel groter" = richting 70-90% van max. "+5px" wordt ALTIJD verworpen.`,
+        `- Kleur: "donkerder"/"lichter" = minstens 30% lightness-shift. "warmer" = hue +20-40° richting oranje/rood.`,
+        `- Bij vage prompts ("iets anders", "opfrissen"): 3 tools, duidelijk zichtbaar verschil.`,
         ``,
-        `- "reason" velden in NL, kort (max 60 chars).`,
+        `=== VOORBEELDEN VAN GOEDE TOOL-CALLS (volg dit patroon) ===`,
+        ``,
+        `Voorbeeld 1 — "logo veel groter en donkerder":`,
+        `Huidige: logoSize=56, bg=#FAF6EF, text=#2A2520`,
+        `Goede calls:`,
+        `  → set_size(target="logoSize", px=140) — van 56→140 (2.5×), NIET +5px`,
+        `  → set_color(target="bg", hex="#1A1610") — crème→donkerbruin`,
+        `  → set_color(target="text", hex="#F0E8D8") — donker→licht voor contrast`,
+        ``,
+        `Voorbeeld 2 — "strakker en moderner":`,
+        `Huidige: headingFont=Oswald, headingWeight=500, headingSize=18, showDividers=true`,
+        `Goede calls:`,
+        `  → set_font(target="headingFont", font="Bebas Neue")`,
+        `  → set_weight(weight=400) — lichter = strakker`,
+        `  → set_size(target="headingSize", px=26) — groter heading bij lichter weight`,
+        `  → toggle_decoration(target="showDividers", on=false) — minder = moderner`,
+        ``,
+        `Voorbeeld 3 — "warmer en uitnodigender":`,
+        `Huidige: accent=#1A1A1A, bg=#FFFFFF, logoSize=48`,
+        `Goede calls:`,
+        `  → set_color(target="accent", hex="#B8652A") — koud zwart→warm koper`,
+        `  → set_color(target="bg", hex="#FBF5ED") — wit→crème`,
+        `  → set_size(target="logoSize", px=76) — groter logo = persoonlijker`,
+        ``,
+        `=== EINDE VOORBEELDEN — volg altijd dit magnitude-niveau ===`,
     ].join('\n');
 
-    // Customer-input gedelimiteerd + gesanitiseerd (OWASP LLM01)
     const sanitizedPrompt = parsed.data.prompt.replace(/<\/?[a-z][^>]*>/gi, '').slice(0, 500);
     const currentJson = JSON.stringify({
-        accent: flat.accent, bg: flat.bg, text: flat.text,
-        headingFont: flat.headingFont, bodyFont: flat.bodyFont,
-        headingSize: flat.headingSize, bodySize: flat.bodySize,
+        accent: flat.accent,
+        bg: flat.bg,
+        text: flat.text,
+        headingFont: flat.headingFont,
+        bodyFont: flat.bodyFont,
+        headingSize: `${flat.headingSize}px (bereik ${headingSizeRange})`,
+        bodySize: `${flat.bodySize}px (bereik ${bodySizeRange})`,
         headingWeight: flat.headingWeight,
-        logoPosition: flat.logoPosition, logoSize: flat.logoSize,
+        logoPosition: flat.logoPosition,
+        logoSize: `${flat.logoSize}px (bereik ${logoSizeRange})`,
         showOrnament: flat.showOrnament !== false,
         showDividers: flat.showDividers !== false,
         showGhostNumbers: flat.showGhostNumbers === true,
     }, null, 2);
 
     const userMessage = [
-        `<huidige-styling>`,
-        currentJson,
-        `</huidige-styling>`,
-        ``,
-        `<instructie>`,
-        sanitizedPrompt,
-        `</instructie>`,
+        `<huidige-styling>`, currentJson, `</huidige-styling>`,
+        ``, `<instructie>`, sanitizedPrompt, `</instructie>`,
     ].join('\n');
 
-    // Anthropic call
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'AI niet geconfigureerd' }, { status: 503 });
 
@@ -395,6 +369,7 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         response = await client.messages.create({
             model: MODEL,
             max_tokens: MAX_TOKENS,
+            temperature: 0.7,
             system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: [{ role: 'user', content: userMessage }],
             tools: TOOLS,
@@ -405,12 +380,10 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         return NextResponse.json({ error: `AI fout: ${err.message}` }, { status: 502 });
     }
 
-    // Extract tool-calls
     const toolCalls = response.content.filter(
         (b): b is Anthropic.Messages.ToolUseBlock => b.type === 'tool_use',
     );
 
-    // Bouw diffs + filter no-ops + validate tegen allow-list
     const rawDiffs: DiffOut[] = [];
     for (let i = 0; i < toolCalls.length; i++) {
         const t = toolCalls[i];
@@ -418,14 +391,12 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         if (d) rawDiffs.push(d);
     }
 
-    // Allow-list validatie: gooi diffs weg die buiten bereik vallen
     const cleanDiffs: DiffOut[] = [];
     for (const d of rawDiffs) {
         const check = validateOverrides(template, d.apply as Record<string, unknown>);
         if (check.ok === true) cleanDiffs.push(d);
     }
 
-    // Cost-tracking
     const usage = response.usage;
     const costCents = Math.ceil(
         (usage.input_tokens * PRICE_INPUT_CENTS) / 1000 +
@@ -434,7 +405,6 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         ((usage.cache_read_input_tokens ?? 0) * PRICE_CACHE_READ_CENTS) / 1000,
     );
 
-    // Async log (non-blocking)
     void logAiUsageServer({
         organization_id: organizationId,
         user_id: user.id,
@@ -454,7 +424,6 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         },
     });
 
-    // Summary uit tool-reasons of fallback
     const reasons = toolCalls.map(t => (t.input as { reason?: string }).reason).filter(Boolean) as string[];
     const summary = cleanDiffs.length === 0
         ? 'Geen bruikbare wijzigingen — je menukaart staat al strak voor deze instructie.'

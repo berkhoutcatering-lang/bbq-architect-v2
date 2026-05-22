@@ -52,9 +52,6 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
         .join('')
         .slice(0, 2)
         .toUpperCase();
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#5E5850';
     const barText = contrastTextColor(accent);
     const legend = formatAllergenLegend(data.gangen);
@@ -62,8 +59,8 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
     const eventBlock = (eventTitle || eventMessage) && (
         <div
             style={{
-                margin: `${10 * sizeMult}px ${-4 * sizeMult}px ${12 * sizeMult}px ${-4 * sizeMult}px`,
-                padding: `${8 * sizeMult}px ${12 * sizeMult}px`,
+                margin: `${10}px ${-4}px ${12}px ${-4}px`,
+                padding: `${8}px ${12}px`,
                 border: `1px dashed ${muted}`,
                 textAlign: 'center',
             }}
@@ -72,12 +69,12 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 13 * sizeMult,
+                        fontSize: 13,
                         fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '.12em',
                         color: accent,
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -87,7 +84,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', monospace`,
-                        fontSize: 8 * sizeMult,
+                        fontSize: 8,
                         fontStyle: 'italic',
                         color: muted,
                         lineHeight: 1.5,
@@ -103,7 +100,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.5)',
                 borderRadius: 3,
@@ -121,14 +118,14 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                     left: 0,
                     top: 0,
                     bottom: 0,
-                    width: 4 * sizeMult,
+                    width: 4,
                     background: `linear-gradient(180deg, transparent 3%, ${accent} 10%, ${accent} 90%, transparent 97%)`,
                     zIndex: 2,
                 }}
             />
             <div
                 style={{
-                    padding: `${24 * sizeMult}px ${28 * sizeMult}px ${0}px ${32 * sizeMult}px`,
+                    padding: `${24}px ${28}px ${0}px ${32}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',
@@ -140,8 +137,8 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         position: 'relative',
-                        marginBottom: 8 * sizeMult,
-                        paddingBottom: 8 * sizeMult,
+                        marginBottom: 8,
+                        paddingBottom: 8,
                         borderBottom: `2px dashed ${muted}`,
                     }}
                 >
@@ -150,10 +147,10 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                             aria-hidden
                             style={{
                                 position: 'absolute',
-                                right: -8 * sizeMult,
-                                top: -20 * sizeMult,
+                                right: -8,
+                                top: -20,
                                 fontFamily: `'${headingFont}', sans-serif`,
-                                fontSize: 110 * sizeMult,
+                                fontSize: 110,
                                 fontWeight: 700,
                                 color: accent,
                                 opacity: 0.04,
@@ -165,15 +162,15 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                             SMOKE
                         </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 * sizeMult, justifyContent: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start', position: 'relative', zIndex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start', position: 'relative', zIndex: 1 }}>
                         {data.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                                 src={data.logoUrl}
                                 alt={brandName}
                                 style={{
-                                    width: logoSize * sizeMult,
-                                    height: logoSize * sizeMult,
+                                    width: logoSize,
+                                    height: logoSize,
                                     objectFit: 'contain',
                                     mixBlendMode: 'screen',
                                 }}
@@ -181,15 +178,15 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                         ) : (
                             <div
                                 style={{
-                                    width: logoSize * sizeMult,
-                                    height: logoSize * sizeMult,
+                                    width: logoSize,
+                                    height: logoSize,
                                     border: `2px solid ${accent}`,
                                     borderRadius: 3,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontFamily: `'${headingFont}', sans-serif`,
-                                    fontSize: 20 * sizeMult,
+                                    fontSize: 20,
                                     fontWeight: 700,
                                     color: accent,
                                     background: 'rgba(255,255,255,.03)',
@@ -202,7 +199,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', sans-serif`,
-                                    fontSize: 26 * sizeMult,
+                                    fontSize: 26,
                                     fontWeight: 600,
                                     textTransform: 'uppercase',
                                     letterSpacing: '.06em',
@@ -216,10 +213,10 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                 <div
                                     style={{
                                         fontFamily: `'${bodyFont}', monospace`,
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 8,
                                         color: muted,
                                         letterSpacing: '.06em',
-                                        marginTop: 2 * sizeMult,
+                                        marginTop: 2,
                                     }}
                                 >
                                     {subtitle}
@@ -232,13 +229,13 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 10 * sizeMult,
+                        fontSize: 10,
                         fontWeight: 300,
                         textTransform: 'uppercase',
                         letterSpacing: '.4em',
                         color: muted,
                         textAlign: 'center',
-                        margin: `${10 * sizeMult}px 0 ${8 * sizeMult}px`,
+                        margin: `${10}px 0 ${8}px`,
                     }}
                 >
                     Menu
@@ -252,9 +249,9 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                         <div
                             style={{
                                 display: 'grid',
-                                gridTemplateColumns: `${3 * sizeMult}px 1fr`,
-                                gap: `0 ${10 * sizeMult}px`,
-                                marginBottom: 10 * sizeMult,
+                                gridTemplateColumns: `${3}px 1fr`,
+                                gap: `0 ${10}px`,
+                                marginBottom: 10,
                             }}
                         >
                             <div style={{ background: accent, borderRadius: 1 }} />
@@ -262,7 +259,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                 <div
                                     style={{
                                         fontFamily: `'${headingFont}', sans-serif`,
-                                        fontSize: headingSize * sizeMult,
+                                        fontSize: headingSize,
                                         fontWeight: headingWeight,
                                         textTransform: 'uppercase',
                                         letterSpacing: '.1em',
@@ -275,25 +272,25 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                     <div
                                         style={{
                                             fontFamily: `'${bodyFont}', monospace`,
-                                            fontSize: 8 * sizeMult,
+                                            fontSize: 8,
                                             fontStyle: 'italic',
                                             color: muted,
                                             lineHeight: 1.5,
-                                            marginBottom: 4 * sizeMult,
+                                            marginBottom: 4,
                                         }}
                                     >
                                         {gang.description}
                                     </div>
                                 )}
                                 {gang.dishes.map((dish, di) => (
-                                    <div key={di} style={{ padding: `${2 * sizeMult}px 0` }}>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 * sizeMult }}>
-                                            <div style={{ width: 4 * sizeMult, height: 4 * sizeMult, borderRadius: '50%', background: accent, opacity: 0.4, flexShrink: 0 }} />
-                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 * sizeMult, flex: 1, flexWrap: 'wrap' }}>
+                                    <div key={di} style={{ padding: `${2}px 0` }}>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: accent, opacity: 0.4, flexShrink: 0 }} />
+                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, flexWrap: 'wrap' }}>
                                                 <span
                                                     style={{
                                                         fontFamily: `'${headingFont}', sans-serif`,
-                                                        fontSize: 13 * sizeMult,
+                                                        fontSize: 13,
                                                         fontWeight: 400,
                                                         color: text,
                                                         letterSpacing: '.02em',
@@ -305,7 +302,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                                     <span
                                                         style={{
                                                             fontFamily: `'${bodyFont}', monospace`,
-                                                            fontSize: 8 * sizeMult,
+                                                            fontSize: 8,
                                                             color: accent,
                                                             letterSpacing: '.04em',
                                                             opacity: 0.7,
@@ -320,11 +317,11 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                             <div
                                                 style={{
                                                     fontFamily: `'${bodyFont}', monospace`,
-                                                    fontSize: bodySize * sizeMult,
+                                                    fontSize: bodySize,
                                                     color: muted,
                                                     lineHeight: 1.4,
-                                                    marginTop: 1 * sizeMult,
-                                                    paddingLeft: 10 * sizeMult,
+                                                    marginTop: 1,
+                                                    paddingLeft: 10,
                                                 }}
                                             >
                                                 {dish.description}
@@ -339,7 +336,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                                 style={{
                                     border: 'none',
                                     borderTop: `1px dashed ${muted}`,
-                                    margin: `${6 * sizeMult}px 0`,
+                                    margin: `${6}px 0`,
                                     opacity: 0.3,
                                 }}
                             />
@@ -356,9 +353,9 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
             <div
                 style={{
                     background: accent,
-                    padding: `${8 * sizeMult}px ${28 * sizeMult}px`,
+                    padding: `${8}px ${28}px`,
                     display: 'flex',
-                    gap: 8 * sizeMult,
+                    gap: 8,
                     alignItems: 'baseline',
                     color: barText,
                     position: 'relative',
@@ -368,7 +365,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 10 * sizeMult,
+                        fontSize: 10,
                         letterSpacing: '.1em',
                         fontWeight: 600,
                         textTransform: 'uppercase',
@@ -380,7 +377,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', monospace`,
-                        fontSize: 7 * sizeMult,
+                        fontSize: 7,
                         opacity: 0.85,
                         lineHeight: 1.6,
                     }}
@@ -392,10 +389,10 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', monospace`,
-                        fontSize: 7 * sizeMult,
+                        fontSize: 7,
                         color: muted,
                         textAlign: 'center',
-                        padding: `${6 * sizeMult}px ${28 * sizeMult}px`,
+                        padding: `${6}px ${28}px`,
                         opacity: 0.6,
                         background: bg,
                         position: 'relative',

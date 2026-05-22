@@ -46,9 +46,6 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
         .join('')
         .slice(0, 2)
         .toUpperCase();
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#8A8478';
     const barText = contrastTextColor(accent);
     const legend = formatAllergenLegend(data.gangen);
@@ -56,8 +53,8 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
     const eventBlock = (eventTitle || eventMessage) && (
         <div
             style={{
-                padding: `${8 * sizeMult}px ${12 * sizeMult}px`,
-                margin: `${6 * sizeMult}px 0 ${10 * sizeMult}px`,
+                padding: `${8}px ${12}px`,
+                margin: `${6}px 0 ${10}px`,
                 background: `${accent}1A`,
                 borderLeft: `3px solid ${accent}`,
             }}
@@ -66,10 +63,10 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 16 * sizeMult,
+                        fontSize: 16,
                         color: accent,
                         letterSpacing: '.04em',
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -79,7 +76,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 9 * sizeMult,
+                        fontSize: 9,
                         color: muted,
                         lineHeight: 1.5,
                     }}
@@ -94,7 +91,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 6px 32px rgba(0,0,0,.5)',
                 borderRadius: 3,
@@ -106,7 +103,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             }}
         >
             {/* Top accent strip */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3 * sizeMult, background: accent, zIndex: 5 }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, zIndex: 5 }} />
 
             {/* Hero ghost letter "M" */}
             {showGhost && (
@@ -114,10 +111,10 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                     aria-hidden
                     style={{
                         position: 'absolute',
-                        right: -8 * sizeMult,
-                        top: -16 * sizeMult,
+                        right: -8,
+                        top: -16,
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 180 * sizeMult,
+                        fontSize: 180,
                         color: accent,
                         opacity: 0.06,
                         lineHeight: 0.75,
@@ -131,28 +128,28 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             )}
 
             {/* Hero */}
-            <div style={{ padding: `${22 * sizeMult}px ${30 * sizeMult}px 0`, position: 'relative', zIndex: 2 }}>
+            <div style={{ padding: `${22}px ${30}px 0`, position: 'relative', zIndex: 2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 * sizeMult }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {data.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                                 src={data.logoUrl}
                                 alt={brandName}
-                                style={{ maxHeight: logoSize * sizeMult, objectFit: 'contain', mixBlendMode: 'screen' }}
+                                style={{ maxHeight: logoSize, objectFit: 'contain', mixBlendMode: 'screen' }}
                             />
                         ) : (
                             <div
                                 style={{
-                                    width: logoSize * sizeMult,
-                                    height: logoSize * sizeMult,
+                                    width: logoSize,
+                                    height: logoSize,
                                     border: `2px solid ${accent}`,
                                     borderRadius: 3,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontFamily: `'${headingFont}', sans-serif`,
-                                    fontSize: 22 * sizeMult,
+                                    fontSize: 22,
                                     color: accent,
                                     background: 'rgba(255,255,255,.03)',
                                 }}
@@ -164,7 +161,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', sans-serif`,
-                                    fontSize: 28 * sizeMult,
+                                    fontSize: 28,
                                     color: accent,
                                     letterSpacing: '.06em',
                                     lineHeight: 1,
@@ -175,11 +172,11 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                             {subtitle && (
                                 <div
                                     style={{
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 8,
                                         color: muted,
                                         letterSpacing: '.12em',
                                         textTransform: 'uppercase',
-                                        marginTop: 2 * sizeMult,
+                                        marginTop: 2,
                                     }}
                                 >
                                     {subtitle}
@@ -190,7 +187,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                     <div
                         style={{
                             fontFamily: `'${headingFont}', sans-serif`,
-                            fontSize: 56 * sizeMult,
+                            fontSize: 56,
                             color: accent,
                             letterSpacing: '.06em',
                             lineHeight: 0.8,
@@ -204,7 +201,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                     style={{
                         height: 1,
                         background: `linear-gradient(90deg, ${accent}, transparent)`,
-                        marginTop: 10 * sizeMult,
+                        marginTop: 10,
                     }}
                 />
             </div>
@@ -212,7 +209,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             {/* Content */}
             <div
                 style={{
-                    padding: `${12 * sizeMult}px ${30 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${12}px ${30}px ${22}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',
@@ -229,25 +226,25 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                             key={gi}
                             style={{
                                 display: 'grid',
-                                gridTemplateColumns: `${42 * sizeMult}px 1fr`,
-                                gap: `0 ${12 * sizeMult}px`,
-                                padding: `${9 * sizeMult}px 0`,
-                                marginBottom: 4 * sizeMult,
+                                gridTemplateColumns: `${42}px 1fr`,
+                                gap: `0 ${12}px`,
+                                padding: `${9}px 0`,
+                                marginBottom: 4,
                                 borderBottom: showDividers && gi < data.gangen.length - 1 ? '1px solid rgba(255,255,255,.04)' : undefined,
                             }}
                         >
                             <div style={{ position: 'relative' }}>
                                 {showBar && (
-                                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 * sizeMult, background: accent, borderRadius: 1 }} />
+                                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, background: accent, borderRadius: 1 }} />
                                 )}
                                 <div
                                     style={{
                                         fontFamily: `'${headingFont}', sans-serif`,
-                                        fontSize: 40 * sizeMult,
+                                        fontSize: 40,
                                         lineHeight: 0.8,
                                         color: accent,
                                         opacity: showBar ? 1 : 0.2,
-                                        paddingLeft: showBar ? 6 * sizeMult : 0,
+                                        paddingLeft: showBar ? 6 : 0,
                                     }}
                                 >
                                     {num}
@@ -257,7 +254,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                                 <div
                                     style={{
                                         fontFamily: `'${headingFont}', sans-serif`,
-                                        fontSize: headingSize * 0.5 * sizeMult,
+                                        fontSize: headingSize * 0.5,
                                         letterSpacing: '.1em',
                                         color: accent,
                                     }}
@@ -268,22 +265,22 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                                     <div
                                         style={{
                                             fontFamily: `'${bodyFont}', sans-serif`,
-                                            fontSize: 8 * sizeMult,
+                                            fontSize: 8,
                                             color: muted,
                                             lineHeight: 1.5,
-                                            margin: `${2 * sizeMult}px 0 ${5 * sizeMult}px`,
+                                            margin: `${2}px 0 ${5}px`,
                                         }}
                                     >
                                         {gang.description}
                                     </div>
                                 )}
                                 {gang.dishes.map((dish, di) => (
-                                    <div key={di} style={{ marginBottom: 4 * sizeMult }}>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 * sizeMult, flexWrap: 'wrap' }}>
+                                    <div key={di} style={{ marginBottom: 4 }}>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
                                             <span
                                                 style={{
                                                     fontFamily: `'${bodyFont}', sans-serif`,
-                                                    fontSize: bodySize * sizeMult,
+                                                    fontSize: bodySize,
                                                     fontWeight: 500,
                                                     color: text,
                                                 }}
@@ -293,11 +290,11 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                                             {dish.allergens && dish.allergens.length > 0 && (
                                                 <span
                                                     style={{
-                                                        fontSize: 7 * sizeMult,
+                                                        fontSize: 7,
                                                         fontWeight: 600,
                                                         color: barText,
                                                         background: accent,
-                                                        padding: `${1 * sizeMult}px ${4 * sizeMult}px`,
+                                                        padding: `${1}px ${4}px`,
                                                         borderRadius: 2,
                                                         letterSpacing: '.04em',
                                                         whiteSpace: 'nowrap',
@@ -311,10 +308,10 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                                             <div
                                                 style={{
                                                     fontFamily: `'${bodyFont}', sans-serif`,
-                                                    fontSize: 8 * sizeMult,
+                                                    fontSize: 8,
                                                     color: muted,
                                                     lineHeight: 1.4,
-                                                    marginTop: 1 * sizeMult,
+                                                    marginTop: 1,
                                                 }}
                                             >
                                                 {dish.description}
@@ -336,7 +333,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             <div
                 style={{
                     background: accent,
-                    padding: `${8 * sizeMult}px ${30 * sizeMult}px`,
+                    padding: `${8}px ${30}px`,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -348,7 +345,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 11 * sizeMult,
+                        fontSize: 11,
                         letterSpacing: '.08em',
                     }}
                 >
@@ -357,9 +354,9 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 7 * sizeMult,
+                        fontSize: 7,
                         opacity: 0.7,
-                        maxWidth: 330 * sizeMult,
+                        maxWidth: 330,
                         textAlign: 'right',
                         lineHeight: 1.5,
                     }}
@@ -371,10 +368,10 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 7 * sizeMult,
+                        fontSize: 7,
                         color: muted,
                         textAlign: 'center',
-                        padding: `${4 * sizeMult}px ${30 * sizeMult}px ${8 * sizeMult}px`,
+                        padding: `${4}px ${30}px ${8}px`,
                         opacity: 0.5,
                         background: bg,
                         position: 'relative',

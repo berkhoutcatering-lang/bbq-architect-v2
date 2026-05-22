@@ -122,23 +122,21 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
     const eventPosition = overrides.eventMessagePosition ?? 'top';
 
     const logoInitial = brandName.charAt(0).toUpperCase();
-    const isSmall = size === 'small';
-    const frameSize = isSmall ? 290 : 480;
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const frameSize = 480;
     const muted = '#A09890';
     const light = '#D4CCB8';
     const legend = formatAllergenLegend(data.gangen);
 
     const eventBlock = (eventTitle || eventMessage) && (
-        <div style={{ textAlign: 'center', margin: `${4 * sizeMult}px 0 ${8 * sizeMult}px` }}>
+        <div style={{ textAlign: 'center', margin: `${4}px 0 ${8}px` }}>
             {eventTitle && (
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 13 * sizeMult,
+                        fontSize: 13,
                         fontStyle: 'italic',
                         color: accent,
-                        marginBottom: 1 * sizeMult,
+                        marginBottom: 1,
                     }}
                 >
                     {eventTitle}
@@ -148,11 +146,11 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', serif`,
-                        fontSize: 9 * sizeMult,
+                        fontSize: 9,
                         fontStyle: 'italic',
                         color: muted,
                         lineHeight: 1.55,
-                        maxWidth: 280 * sizeMult,
+                        maxWidth: 280,
                         margin: '0 auto',
                     }}
                 >
@@ -184,8 +182,8 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     position: 'absolute',
                     top: '50%',
                     left: '50%',
-                    width: 330 * sizeMult,
-                    height: 330 * sizeMult,
+                    width: 330,
+                    height: 330,
                     transform: 'translate(-50%, -50%)',
                     background: 'radial-gradient(ellipse, rgba(0,0,0,.018), transparent 70%)',
                     pointerEvents: 'none',
@@ -200,7 +198,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                         aria-hidden
                         style={{
                             position: 'absolute',
-                            inset: 10 * sizeMult,
+                            inset: 10,
                             border: `1px solid ${accent}`,
                             opacity: 0.2,
                             pointerEvents: 'none',
@@ -212,7 +210,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                         aria-hidden
                         style={{
                             position: 'absolute',
-                            inset: 14 * sizeMult,
+                            inset: 14,
                             border: `0.5px solid ${accent}`,
                             opacity: 0.5,
                             pointerEvents: 'none',
@@ -220,13 +218,13 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                             borderRadius: 1,
                         }}
                     />
-                    <CornerSvg accent={accent} mult={sizeMult} />
+                    <CornerSvg accent={accent} mult={1} />
                 </>
             )}
 
             <div
                 style={{
-                    padding: `${28 * sizeMult}px ${36 * sizeMult}px ${20 * sizeMult}px`,
+                    padding: `${28}px ${36}px ${20}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -237,14 +235,14 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                 }}
             >
                 {/* Header — monogram */}
-                <div style={{ marginBottom: 5 * sizeMult }}>
+                <div style={{ marginBottom: 5 }}>
                     <div
                         style={{
-                            width: logoSize * sizeMult,
-                            height: logoSize * sizeMult,
+                            width: logoSize,
+                            height: logoSize,
                             borderRadius: '50%',
                             border: `1.5px solid ${accent}`,
-                            margin: `0 auto ${4 * sizeMult}px`,
+                            margin: `0 auto ${4}px`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -254,15 +252,15 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     >
                         {data.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize * 0.72 * sizeMult, objectFit: 'contain' }} />
+                            <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize * 0.72, objectFit: 'contain' }} />
                         ) : (
-                            <span style={{ fontFamily: `'${headingFont}', serif`, fontSize: 22 * sizeMult, color: accent }}>{logoInitial}</span>
+                            <span style={{ fontFamily: `'${headingFont}', serif`, fontSize: 22, color: accent }}>{logoInitial}</span>
                         )}
                     </div>
                     <div
                         style={{
                             fontFamily: `'${headingFont}', serif`,
-                            fontSize: 18 * sizeMult,
+                            fontSize: 18,
                             fontWeight: 400,
                             color: text,
                             letterSpacing: '.04em',
@@ -274,11 +272,11 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                         <div
                             style={{
                                 fontFamily: `'${bodyFont}', serif`,
-                                fontSize: 9 * sizeMult,
+                                fontSize: 9,
                                 fontWeight: 300,
                                 fontStyle: 'italic',
                                 color: muted,
-                                marginTop: 2 * sizeMult,
+                                marginTop: 2,
                             }}
                         >
                             {subtitle}
@@ -286,16 +284,16 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     )}
                 </div>
 
-                <OrnDivider accent={accent} mult={sizeMult} />
+                <OrnDivider accent={accent} mult={1} />
 
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 12 * sizeMult,
+                        fontSize: 12,
                         fontStyle: 'italic',
                         color: accent,
                         letterSpacing: '.15em',
-                        marginBottom: 6 * sizeMult,
+                        marginBottom: 6,
                     }}
                 >
                     Menu
@@ -307,7 +305,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     style={{
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
-                        gap: `${5 * sizeMult}px ${22 * sizeMult}px`,
+                        gap: `${5}px ${22}px`,
                         flex: 1,
                         alignContent: 'start',
                         width: '100%',
@@ -318,11 +316,11 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', serif`,
-                                    fontSize: headingSize * 0.6 * sizeMult,
+                                    fontSize: headingSize * 0.6,
                                     fontWeight: headingWeight,
                                     fontStyle: 'italic',
                                     color: accent,
-                                    marginBottom: 2 * sizeMult,
+                                    marginBottom: 2,
                                 }}
                             >
                                 {gang.name}
@@ -331,24 +329,24 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                                 <div
                                     style={{
                                         fontFamily: `'${bodyFont}', serif`,
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 8,
                                         fontWeight: 300,
                                         fontStyle: 'italic',
                                         color: muted,
                                         lineHeight: 1.45,
-                                        marginBottom: 3 * sizeMult,
+                                        marginBottom: 3,
                                     }}
                                 >
                                     {gang.description}
                                 </div>
                             )}
-                            <div style={{ width: 18 * sizeMult, height: 0.5, background: accent, margin: `0 auto ${4 * sizeMult}px`, opacity: 0.4 }} />
+                            <div style={{ width: 18, height: 0.5, background: accent, margin: `0 auto ${4}px`, opacity: 0.4 }} />
                             {gang.dishes.map((dish, di) => (
-                                <div key={di} style={{ marginBottom: 2 * sizeMult }}>
+                                <div key={di} style={{ marginBottom: 2 }}>
                                     <div
                                         style={{
                                             fontFamily: `'${bodyFont}', serif`,
-                                            fontSize: bodySize * sizeMult,
+                                            fontSize: bodySize,
                                             fontWeight: 400,
                                             color: text,
                                         }}
@@ -359,7 +357,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                                         <div
                                             style={{
                                                 fontFamily: `'${bodyFont}', serif`,
-                                                fontSize: 8 * sizeMult,
+                                                fontSize: 8,
                                                 fontWeight: 300,
                                                 fontStyle: 'italic',
                                                 color: muted,
@@ -370,7 +368,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                                     )}
                                 </div>
                             ))}
-                            {showFootnote && <Footnote gang={gang} bodyFont={bodyFont} mult={sizeMult} />}
+                            {showFootnote && <Footnote gang={gang} bodyFont={bodyFont} mult={1} />}
                         </div>
                     ))}
                 </div>
@@ -378,11 +376,11 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                 {eventPosition === 'bottom' && eventBlock}
 
                 {/* Legend */}
-                <div style={{ marginTop: 'auto', paddingTop: 4 * sizeMult, width: '100%' }}>
+                <div style={{ marginTop: 'auto', paddingTop: 4, width: '100%' }}>
                     <div
                         style={{
                             fontFamily: `'${bodyFont}', serif`,
-                            fontSize: 8 * sizeMult,
+                            fontSize: 8,
                             fontWeight: 300,
                             color: muted,
                             fontStyle: 'italic',
@@ -394,8 +392,8 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     {(footer || website) && (
                         <div
                             style={{
-                                marginTop: 3 * sizeMult,
-                                fontSize: 8 * sizeMult,
+                                marginTop: 3,
+                                fontSize: 8,
                                 fontWeight: 300,
                                 color: light,
                             }}

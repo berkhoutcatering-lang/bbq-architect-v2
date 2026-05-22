@@ -68,24 +68,21 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
         .join('')
         .slice(0, 1)
         .toUpperCase();
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#8A8478';
     const light = '#C8C0B0';
     const tint = '#EDE8DA';
     const legend = formatAllergenLegend(data.gangen);
 
     const eventBlock = (eventTitle || eventMessage) && (
-        <div style={{ textAlign: 'center', margin: `${6 * sizeMult}px 0 ${10 * sizeMult}px` }}>
+        <div style={{ textAlign: 'center', margin: `${6}px 0 ${10}px` }}>
             {eventTitle && (
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 16 * sizeMult,
+                        fontSize: 16,
                         fontStyle: 'italic',
                         color: accent,
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -95,11 +92,11 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 9 * sizeMult,
+                        fontSize: 9,
                         fontStyle: 'italic',
                         color: muted,
                         lineHeight: 1.55,
-                        maxWidth: 340 * sizeMult,
+                        maxWidth: 340,
                         margin: '0 auto',
                     }}
                 >
@@ -113,7 +110,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.08)',
                 borderRadius: 3,
@@ -126,30 +123,30 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
         >
             <div
                 style={{
-                    padding: `${32 * sizeMult}px ${36 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${32}px ${36}px ${22}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',
                 }}
             >
                 {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: 10 * sizeMult }}>
+                <div style={{ textAlign: 'center', marginBottom: 10 }}>
                     {data.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize * sizeMult, objectFit: 'contain', marginBottom: 5 * sizeMult }} />
+                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize, objectFit: 'contain', marginBottom: 5 }} />
                     ) : (
                         <div
                             style={{
-                                width: logoSize * sizeMult,
-                                height: logoSize * sizeMult,
+                                width: logoSize,
+                                height: logoSize,
                                 borderRadius: '50%',
                                 border: `1.5px solid ${accent}`,
-                                margin: `0 auto ${5 * sizeMult}px`,
+                                margin: `0 auto ${5}px`,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontFamily: `'${headingFont}', serif`,
-                                fontSize: 20 * sizeMult,
+                                fontSize: 20,
                                 color: accent,
                             }}
                         >
@@ -159,7 +156,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                     <div
                         style={{
                             fontFamily: `'${headingFont}', serif`,
-                            fontSize: 12 * sizeMult,
+                            fontSize: 12,
                             fontWeight: 400,
                             letterSpacing: '.22em',
                             textTransform: 'uppercase',
@@ -172,20 +169,20 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                         <div
                             style={{
                                 fontFamily: `'${headingFont}', serif`,
-                                fontSize: 9 * sizeMult,
+                                fontSize: 9,
                                 fontStyle: 'italic',
                                 color: muted,
-                                marginTop: 2 * sizeMult,
+                                marginTop: 2,
                             }}
                         >
                             {subtitle}
                         </div>
                     )}
-                    <div style={{ width: 28 * sizeMult, height: 1, background: accent, margin: `${10 * sizeMult}px auto` }} />
+                    <div style={{ width: 28, height: 1, background: accent, margin: `${10}px auto` }} />
                     <div
                         style={{
                             fontFamily: `'${headingFont}', serif`,
-                            fontSize: headingSize * 0.7 * sizeMult,
+                            fontSize: headingSize * 0.7,
                             fontWeight: headingWeight,
                             fontStyle: 'italic',
                             color: accent,
@@ -204,7 +201,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                     style={{
                         position: 'relative',
                         flex: 1,
-                        padding: `${10 * sizeMult}px 0`,
+                        padding: `${10}px 0`,
                     }}
                 >
                     <div
@@ -227,10 +224,10 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                 key={gi}
                                 style={{
                                     display: 'flex',
-                                    marginBottom: 12 * sizeMult,
+                                    marginBottom: 12,
                                     position: 'relative',
-                                    paddingRight: isLeft ? `calc(50% + ${18 * sizeMult}px)` : 0,
-                                    paddingLeft: !isLeft ? `calc(50% + ${18 * sizeMult}px)` : 0,
+                                    paddingRight: isLeft ? `calc(50% + ${18}px)` : 0,
+                                    paddingLeft: !isLeft ? `calc(50% + ${18}px)` : 0,
                                     flexDirection: isLeft ? 'row' : 'row-reverse',
                                 }}
                             >
@@ -240,9 +237,9 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                     style={{
                                         position: 'absolute',
                                         left: '50%',
-                                        top: 8 * sizeMult,
-                                        width: 9 * sizeMult,
-                                        height: 9 * sizeMult,
+                                        top: 8,
+                                        width: 9,
+                                        height: 9,
                                         background: bg,
                                         border: `1.5px solid ${accent}`,
                                         transform: 'translateX(-50%) rotate(45deg)',
@@ -253,7 +250,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                     style={{
                                         background: tint,
                                         borderRadius: 3,
-                                        padding: `${8 * sizeMult}px ${10 * sizeMult}px`,
+                                        padding: `${8}px ${10}px`,
                                         border: '1px solid rgba(0,0,0,.04)',
                                         width: '100%',
                                         textAlign: isLeft ? 'right' : 'left',
@@ -262,11 +259,11 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                     <div
                                         style={{
                                             fontFamily: `'${headingFont}', serif`,
-                                            fontSize: 20 * sizeMult,
+                                            fontSize: 20,
                                             fontWeight: 300,
                                             color: accent,
                                             lineHeight: 0.8,
-                                            marginBottom: 2 * sizeMult,
+                                            marginBottom: 2,
                                         }}
                                     >
                                         {num}
@@ -274,7 +271,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                     <div
                                         style={{
                                             fontFamily: `'${headingFont}', serif`,
-                                            fontSize: 14 * sizeMult,
+                                            fontSize: 14,
                                             fontWeight: 400,
                                             fontStyle: 'italic',
                                             letterSpacing: '.03em',
@@ -287,23 +284,23 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                         <div
                                             style={{
                                                 fontFamily: `'${headingFont}', serif`,
-                                                fontSize: 8 * sizeMult,
+                                                fontSize: 8,
                                                 fontWeight: 300,
                                                 fontStyle: 'italic',
                                                 color: muted,
                                                 lineHeight: 1.55,
-                                                margin: `${2 * sizeMult}px 0 ${5 * sizeMult}px`,
+                                                margin: `${2}px 0 ${5}px`,
                                             }}
                                         >
                                             {gang.description}
                                         </div>
                                     )}
                                     {gang.dishes.map((dish, di) => (
-                                        <div key={di} style={{ marginBottom: 2 * sizeMult }}>
+                                        <div key={di} style={{ marginBottom: 2 }}>
                                             <div
                                                 style={{
                                                     fontFamily: `'${headingFont}', serif`,
-                                                    fontSize: bodySize * sizeMult,
+                                                    fontSize: bodySize,
                                                     fontWeight: 400,
                                                     letterSpacing: '.02em',
                                                     color: text,
@@ -315,7 +312,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                                 <div
                                                     style={{
                                                         fontFamily: `'${headingFont}', serif`,
-                                                        fontSize: 8 * sizeMult,
+                                                        fontSize: 8,
                                                         fontWeight: 300,
                                                         fontStyle: 'italic',
                                                         color: muted,
@@ -326,7 +323,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                                             )}
                                         </div>
                                     ))}
-                                    {showFootnote && <GangFootnote gang={gang} bodyFont={bodyFont} mult={sizeMult} />}
+                                    {showFootnote && <GangFootnote gang={gang} bodyFont={bodyFont} mult={1} />}
                                 </div>
                             </div>
                         );
@@ -336,23 +333,23 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                 {eventPosition === 'bottom' && eventBlock}
 
                 {/* Legend */}
-                <div style={{ textAlign: 'center', paddingTop: 8 * sizeMult }}>
-                    <div style={{ width: 28 * sizeMult, height: 1, background: accent, margin: `0 auto ${6 * sizeMult}px` }} />
+                <div style={{ textAlign: 'center', paddingTop: 8 }}>
+                    <div style={{ width: 28, height: 1, background: accent, margin: `0 auto ${6}px` }} />
                     <div
                         style={{
-                            fontSize: 8 * sizeMult,
+                            fontSize: 8,
                             fontWeight: 500,
                             letterSpacing: '.15em',
                             textTransform: 'uppercase',
                             color: accent,
-                            marginBottom: 3 * sizeMult,
+                            marginBottom: 3,
                         }}
                     >
                         Allergenen
                     </div>
                     <div
                         style={{
-                            fontSize: 8 * sizeMult,
+                            fontSize: 8,
                             fontWeight: 300,
                             color: muted,
                             lineHeight: 1.8,
@@ -363,9 +360,9 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                     {footer && (
                         <div
                             style={{
-                                fontSize: 7 * sizeMult,
+                                fontSize: 7,
                                 color: light,
-                                marginTop: 6 * sizeMult,
+                                marginTop: 6,
                             }}
                         >
                             {footer}

@@ -3,15 +3,11 @@
 /**
  * Menukaart-preview-sectie voor /q/[id].
  *
- * Resolved cascade van tenant brand-overrides + offerte custom-overrides
- * tegen de gekozen template. Klantkant ziet het eindresultaat zoals de
- * caterende ondernemer het heeft samengesteld, inclusief de eventueel
- * gevulde "Persoonlijke boodschap".
- *
- * "Download PDF"-knop = browser print-to-PDF van de HTML preview met
- * print-CSS. Dit garandeert dat klant exact dezelfde menukaart download
- * als wat de ondernemer in de editor heeft samengesteld — geen
- * react-pdf-renderer mismatch meer.
+ * Strategie: CSS transform-wrapper.
+ *   - Template rendert ALTIJD op 480px (size="normal"), nooit "small".
+ *   - On-screen: CSS transform: scale(290/480) past het in de preview.
+ *   - Print: CSS transform: scale(794/480) schaalt op naar A4.
+ *   - Dezelfde component, dezelfde pixels → preview = PDF gegarandeerd.
  */
 
 import { useMemo } from 'react';
@@ -20,6 +16,10 @@ import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides } from '@/lib/menukaar
 import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
 import { PreviewFor } from '@/components/menukaart/templates';
 import { DEMO_MENU, type MenuData } from '@/lib/menukaart/menu-data';
+
+const TEMPLATE_BASE_PX = 480;
+const A4_WIDTH_PX = 794;      // 210mm bij 96 CSS-px/inch
+const PREVIEW_WIDTH = 290;
 
 type Props = {
     templateId?: string | null;
@@ -43,21 +43,17 @@ export default function QuoteMenukaartSection({
     );
     const flat = useMemo(() => flatten(resolved) as Overrides, [resolved]);
     const data: MenuData = { ...(menuData ?? DEMO_MENU), logoUrl };
-
     const TemplateComponent = useMemo(() => PreviewFor(template.id), [template.id]);
+
+    const aspect = template.paper === 'square' ? 1 : 1.414;
+    const previewScale = PREVIEW_WIDTH / TEMPLATE_BASE_PX;
+    const previewHeight = PREVIEW_WIDTH * aspect;
+    const printScale = A4_WIDTH_PX / TEMPLATE_BASE_PX;
 
     return (
         <div style={{ padding: '24px clamp(18px, 4.5vw, 28px) 8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3
-                    style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: 'var(--zinc)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                    }}
-                >
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--zinc)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Menukaart
                 </h3>
                 <button
@@ -75,51 +71,62 @@ export default function QuoteMenukaartSection({
                     <Download size={13} /> Download PDF
                 </button>
             </div>
+
             <div
                 className="menukaart-printable"
-                style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    padding: '8px 0 16px',
-                    overflowX: 'auto',
-                }}
+                style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px' }}
             >
-                <TemplateComponent overrides={flat} data={data} size="small" />
+                <div
+                    className="menukaart-viewport"
+                    style={{
+                        width: PREVIEW_WIDTH,
+                        height: previewHeight,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        flexShrink: 0,
+                    }}
+                >
+                    <div
+                        className="menukaart-scale-wrapper"
+                        style={{
+                            transform: `scale(${previewScale})`,
+                            transformOrigin: 'top left',
+                            width: TEMPLATE_BASE_PX,
+                        }}
+                    >
+                        {/* ALTIJD size="normal" — schaling via CSS transform */}
+                        <TemplateComponent overrides={flat} data={data} size="normal" />
+                    </div>
+                </div>
             </div>
 
-            {/* Print-CSS: bij window.print() alleen de menukaart tonen op A4 */}
             <style jsx global>{`
                 @media print {
                     @page {
-                        size: A4 portrait;
+                        size: ${template.paper === 'square' ? '210mm 210mm' : 'A4 portrait'};
                         margin: 0;
                     }
-                    body * {
-                        visibility: hidden;
-                    }
-                    .menukaart-printable, .menukaart-printable * {
-                        visibility: visible;
-                    }
+                    body * { visibility: hidden; }
+                    .menukaart-printable, .menukaart-printable * { visibility: visible; }
                     .menukaart-printable {
                         position: absolute !important;
                         left: 0 !important;
                         top: 0 !important;
-                        width: 100% !important;
+                        width: 210mm !important;
                         padding: 0 !important;
                         overflow: visible !important;
                         display: block !important;
                     }
-                    .menukaart-printable > * {
-                        margin: 0 auto !important;
-                        box-shadow: none !important;
-                        border-radius: 0 !important;
+                    .menukaart-viewport {
                         width: 210mm !important;
-                        height: 297mm !important;
-                        transform: scale(1) !important;
+                        height: ${template.paper === 'square' ? '210mm' : '297mm'} !important;
+                        overflow: visible !important;
                     }
-                    .menukaart-print-btn {
-                        display: none !important;
+                    .menukaart-scale-wrapper {
+                        transform: scale(${printScale}) !important;
+                        transform-origin: top left !important;
                     }
+                    .menukaart-print-btn { display: none !important; }
                 }
             `}</style>
         </div>
