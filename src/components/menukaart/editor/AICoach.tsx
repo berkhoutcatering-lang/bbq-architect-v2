@@ -62,40 +62,96 @@ export default function AICoach({
     summary, diffs = [], onApplyOne, onSkipOne, onApplyAll, onDiscardAll,
     errorMessage, costCents, rateLimitRemaining,
 }: Props) {
-    if (state === 'idle') return <IdleView prompt={prompt} onPromptChange={onPromptChange} onSubmit={onSubmit} rateLimitRemaining={rateLimitRemaining} />;
     if (state === 'loading') return <LoadingView prompt={prompt} onCancel={onCancel} />;
-    if (state === 'error') return <ErrorView message={errorMessage ?? 'Onbekende fout'} onRetry={onSubmit} prompt={prompt} onPromptChange={onPromptChange} />;
-    return <ResultView summary={summary} diffs={diffs} costCents={costCents} rateLimitRemaining={rateLimitRemaining} onApplyOne={onApplyOne} onSkipOne={onSkipOne} onApplyAll={onApplyAll} onDiscardAll={onDiscardAll} />;
+    if (state === 'error') return (
+        <PromptInput
+            prompt={prompt}
+            onPromptChange={onPromptChange}
+            onSubmit={onSubmit}
+            rateLimitRemaining={rateLimitRemaining}
+            submitLabel="Opnieuw proberen"
+            errorMessage={errorMessage}
+        />
+    );
+    if (state === 'result') return (
+        <ResultView
+            prompt={prompt}
+            onPromptChange={onPromptChange}
+            onSubmit={onSubmit}
+            summary={summary}
+            diffs={diffs}
+            costCents={costCents}
+            rateLimitRemaining={rateLimitRemaining}
+            onApplyOne={onApplyOne}
+            onSkipOne={onSkipOne}
+            onApplyAll={onApplyAll}
+            onDiscardAll={onDiscardAll}
+        />
+    );
+    return (
+        <PromptInput
+            prompt={prompt}
+            onPromptChange={onPromptChange}
+            onSubmit={onSubmit}
+            rateLimitRemaining={rateLimitRemaining}
+        />
+    );
 }
 
-function IdleView({ prompt, onPromptChange, onSubmit, rateLimitRemaining }: { prompt: string; onPromptChange: (s: string) => void; onSubmit: () => void; rateLimitRemaining?: number }) {
+/**
+ * Gedeelde input-block voor idle / error / result-states. Door dezelfde
+ * component te hergebruiken kan de gebruiker ALTIJD een nieuwe vraag stellen,
+ * ook nadat een voorstel binnen is — geen "vastgelopen na 1 vraag" bug meer.
+ */
+function PromptInput({
+    prompt, onPromptChange, onSubmit, rateLimitRemaining,
+    submitLabel = 'Voorstel maken', errorMessage, compact = false,
+}: {
+    prompt: string;
+    onPromptChange: (s: string) => void;
+    onSubmit: () => void;
+    rateLimitRemaining?: number;
+    submitLabel?: string;
+    errorMessage?: string;
+    compact?: boolean;
+}) {
     return (
-        <div className="mke-ai">
+        <div className="mke-ai" style={compact ? { paddingBottom: 4 } : undefined}>
+            {errorMessage && (
+                <div style={{ padding: '12px', background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 'var(--mke-radius)', fontSize: 12, color: '#fca5a5', lineHeight: 1.5 }}>
+                    {errorMessage}
+                </div>
+            )}
             <textarea
                 className="mke-ai-textarea"
-                placeholder="Beschrijf wat je wil veranderen…"
+                placeholder={compact ? 'Vraag iets anders…' : 'Beschrijf wat je wil veranderen…'}
                 value={prompt}
                 onChange={e => onPromptChange(e.target.value)}
+                rows={compact ? 2 : undefined}
             />
-            <div className="mke-ai-chips">
-                {SAMPLE_PROMPTS.map(p => (
-                    <button key={p} className="mke-ai-chip" onClick={() => onPromptChange(p)} type="button">
-                        &ldquo;{p}&rdquo;
-                    </button>
-                ))}
-            </div>
+            {!compact && (
+                <div className="mke-ai-chips">
+                    {SAMPLE_PROMPTS.map(p => (
+                        <button key={p} className="mke-ai-chip" onClick={() => onPromptChange(p)} type="button">
+                            &ldquo;{p}&rdquo;
+                        </button>
+                    ))}
+                </div>
+            )}
             <button
                 className="mke-ai-submit"
                 onClick={onSubmit}
                 disabled={prompt.trim().length === 0}
                 type="button"
             >
-                <Sparkles size={15} /> Voorstel maken
+                <Sparkles size={15} /> {submitLabel}
             </button>
-            <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', padding: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
-                <span>~€0.003 per voorstel</span>
-                {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 over dit uur</span>}
-            </div>
+            {!compact && (
+                <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', padding: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>~€0.003 per voorstel</span>
+                    {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 dit minuut</span>}
+                </div>
+            )}
         </div>
     );
 }
@@ -121,63 +177,56 @@ function LoadingView({ prompt, onCancel }: { prompt: string; onCancel: () => voi
 }
 
 function ResultView({
+    prompt, onPromptChange, onSubmit,
     summary, diffs, costCents, rateLimitRemaining,
     onApplyOne, onSkipOne, onApplyAll, onDiscardAll,
 }: {
+    prompt: string;
+    onPromptChange: (s: string) => void;
+    onSubmit: () => void;
     summary?: string; diffs: Diff[];
     costCents?: number; rateLimitRemaining?: number;
     onApplyOne?: (id: string) => void; onSkipOne?: (id: string) => void;
     onApplyAll?: () => void; onDiscardAll?: () => void;
 }) {
     return (
-        <div className="mke-ai">
-            {summary && <div className="mke-ai-summary">{summary}</div>}
-            {diffs.length === 0 ? (
-                <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--mke-muted)', fontSize: 12, background: 'var(--mke-bg)', border: '1px solid var(--mke-border)', borderRadius: 'var(--mke-radius)' }}>
-                    Niks om voor te stellen — je menukaart staat al strak voor deze vraag.
-                    <div style={{ marginTop: 8 }}>
-                        <button className="mke-ai-cancel" onClick={onDiscardAll} type="button">Probeer een andere instructie</button>
-                    </div>
-                </div>
-            ) : (
-                <>
-                    <div className="mke-diffs">
-                        {diffs.map(d => <DiffRow key={d.id} diff={d} onApply={() => onApplyOne?.(d.id)} onSkip={() => onSkipOne?.(d.id)} />)}
-                    </div>
-                    <div className="mke-diff-footer">
-                        <button className="mke-btn-primary" onClick={onApplyAll} type="button">Alles toepassen</button>
-                        <button className="mke-btn-ghost" onClick={onDiscardAll} type="button">Alles weggooien</button>
-                    </div>
-                </>
-            )}
-            <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', display: 'flex', justifyContent: 'space-between' }}>
-                <span>{typeof costCents === 'number' ? `€${(costCents / 100).toFixed(3)} kosten` : ''}</span>
-                {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 over dit uur</span>}
-            </div>
-        </div>
-    );
-}
-
-function ErrorView({ message, onRetry, prompt, onPromptChange }: { message: string; onRetry: () => void; prompt: string; onPromptChange: (s: string) => void }) {
-    return (
-        <div className="mke-ai">
-            <div style={{ padding: '12px', background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 'var(--mke-radius)', fontSize: 12, color: '#fca5a5', lineHeight: 1.5 }}>
-                {message}
-            </div>
-            <textarea
-                className="mke-ai-textarea"
-                placeholder="Beschrijf wat je wil veranderen…"
-                value={prompt}
-                onChange={e => onPromptChange(e.target.value)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {/* Nieuwe vraag-input ALTIJD bovenaan zodat je oneindig kan
+                tweaken zonder eerst diffs te accepteren/weggooien. */}
+            <PromptInput
+                prompt={prompt}
+                onPromptChange={onPromptChange}
+                onSubmit={onSubmit}
+                rateLimitRemaining={rateLimitRemaining}
+                submitLabel="Nieuw voorstel maken"
+                compact
             />
-            <button
-                className="mke-ai-submit"
-                onClick={onRetry}
-                disabled={prompt.trim().length === 0}
-                type="button"
-            >
-                <Sparkles size={15} /> Opnieuw proberen
-            </button>
+            <div style={{ borderTop: '1px solid var(--mke-border)' }} />
+            <div className="mke-ai">
+                {summary && <div className="mke-ai-summary">{summary}</div>}
+                {diffs.length === 0 ? (
+                    <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--mke-muted)', fontSize: 12, background: 'var(--mke-bg)', border: '1px solid var(--mke-border)', borderRadius: 'var(--mke-radius)' }}>
+                        Niks om voor te stellen — je menukaart staat al strak voor deze vraag.
+                        <div style={{ marginTop: 8 }}>
+                            <button className="mke-ai-cancel" onClick={onDiscardAll} type="button">Wis voorstel</button>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div className="mke-diffs">
+                            {diffs.map(d => <DiffRow key={d.id} diff={d} onApply={() => onApplyOne?.(d.id)} onSkip={() => onSkipOne?.(d.id)} />)}
+                        </div>
+                        <div className="mke-diff-footer">
+                            <button className="mke-btn-primary" onClick={onApplyAll} type="button">Alles toepassen</button>
+                            <button className="mke-btn-ghost" onClick={onDiscardAll} type="button">Alles weggooien</button>
+                        </div>
+                    </>
+                )}
+                <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{typeof costCents === 'number' ? `€${(costCents / 100).toFixed(3)} kosten` : ''}</span>
+                    {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 dit minuut</span>}
+                </div>
+            </div>
         </div>
     );
 }
