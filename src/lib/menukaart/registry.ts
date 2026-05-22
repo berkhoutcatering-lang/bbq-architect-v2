@@ -148,13 +148,19 @@ const COMMON_COLORS: Pick<AllowList, 'accent' | 'bg' | 'text'> = {
 
 /* COMMON_LOGO_FULL = logoPosition + logoSize. Alleen gebruiken in templates
    die `overrides.logoPosition` daadwerkelijk gebruiken in Preview + Pdf.
-   COMMON_LOGO_SIZE = alleen logoSize. Voor templates met vaste positie. */
+   COMMON_LOGO_SIZE = alleen logoSize. Voor templates met vaste positie.
+
+   Range 24-200: vroege range 24-80 was te beperkt voor visuele impact —
+   logo van 80px op een A4 (480px breed in preview) is amper zichtbaar
+   verschil van default 48-56. Sam: "groter maken werkt niet". 200 is ruim
+   genoeg voor hero-logos en bewust laag genoeg om text van een gewone
+   header niet weg te drukken. */
 const COMMON_LOGO_FULL: Pick<AllowList, 'logoPosition' | 'logoSize'> = {
     logoPosition: { type: 'enum', options: ['top-left', 'top-center', 'top-right'] },
-    logoSize: { type: 'size', min: 24, max: 80 },
+    logoSize: { type: 'size', min: 24, max: 200 },
 };
 const COMMON_LOGO_SIZE: Pick<AllowList, 'logoSize'> = {
-    logoSize: { type: 'size', min: 24, max: 80 },
+    logoSize: { type: 'size', min: 24, max: 200 },
 };
 /* Back-compat: oude templates spreaden COMMON_LOGO. Hou de export beschikbaar
    maar elk template kiest expliciet welke variant past bij de Preview. */
@@ -162,9 +168,9 @@ const COMMON_LOGO = COMMON_LOGO_FULL;
 void COMMON_LOGO;
 
 const COMMON_SIZE: Pick<AllowList, 'headingSize' | 'bodySize' | 'headingWeight'> = {
-    headingSize: { type: 'size', min: 12, max: 48 },
-    bodySize: { type: 'size', min: 8, max: 16 },
-    headingWeight: { type: 'weight', options: [300, 400, 500, 600, 700, 800] },
+    headingSize: { type: 'size', min: 10, max: 72 },
+    bodySize: { type: 'size', min: 7, max: 20 },
+    headingWeight: { type: 'weight', options: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
 };
 
 /* ── Templates ─────────────────────────────────────────────────────────── */
