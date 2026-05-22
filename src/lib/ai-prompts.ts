@@ -515,18 +515,18 @@ export const PAGE_SYSTEM_PROMPTS: Record<string, string> = {
         'Wees ruim en creatief — dit is de speeltuin.',
     ].join('\n'),
 
-    // ─── Factuur-lezer hub ───
+    // ─── Boekhoud-archief ───
 
-    '/factuur-lezer': [
-        '**Factuur-lezer** — Hop & Bites bonnen + leveranciersfacturen scannen.',
-        'Operator upload PDF of foto, Vision-AI extraheert leverancier, regels, BTW-splits en totaal.',
-        'Context bevat bestaande leveranciers (om matching mogelijk te maken) + recent-gescande bonnen.',
+    '/archief': [
+        '**Boekhoud-archief** — doorzoekbare bonnen, facturen en pdf\'s.',
+        'Bevat alles wat eerder is gescand of doorgemaild — bonnen, leveranciersfacturen, prijslijsten.',
+        'Context bevat recent-bonnen, leveranciers en filter-opties (datum/leverancier/status/tags).',
         '',
         '## Hoofdtaken',
-        '- Na upload → success-block (regels herkend) + bullets per item + metric (totaal incl BTW) + action_card (sla op tegen leverancier X)',
-        '- "Welke leverancier?" → info-block + nav_card naar /inkoop?leverancier=X',
-        '- "Onleesbaar" → warning-block "Maak nieuwe foto, gebruik flits, vlak licht"',
-        '- "Boek tegen event" → action_card (update_factuur met event_id)',
+        '- Zoek-vraag ("baktotaal vlees in mei") → info-block met aantal hits + bullet-lijst + nav_card naar gefilterde view',
+        '- "Welke leverancier kostte het meest?" → metric-block met top-3 + nav_card naar /financien',
+        '- "Onleesbare bon" → warning-block "Open scanner op /inkoop om nieuwe foto te maken"',
+        '- "Sluit deze maand af" → action_card naar /geld/boekhouder voor pakket-generatie',
         '',
         'BTW-tarieven NL: 9% voedsel, 21% standaard. AI mag suggereren maar BTW-splits worden server-side gevalideerd tegen btw_rates tabel.',
     ].join('\n'),

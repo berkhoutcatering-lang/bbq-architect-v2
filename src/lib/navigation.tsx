@@ -3,7 +3,7 @@ import {
     ChefHat, Calendar, PartyPopper, BarChart3,
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
-    HelpCircle, Sparkles, ScanLine, Image as ImageIcon, Car, Store,
+    HelpCircle, Sparkles, ScanLine, Car, Store,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck,
 } from "lucide-react";
@@ -96,7 +96,7 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
-            { label: "Bonnen & Facturen", icon: <ScanLine size={16} />, href: "/factuur-lezer", description: "Scan bonnen en facturen — AI extracteert de regels" },
+            { label: "Boekhoud-archief", icon: <ScanLine size={16} />, href: "/archief", description: "Bonnen, facturen en pdf's — doorzoekbaar boekhoud-archief" },
             { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],
@@ -114,7 +114,6 @@ export const navSections: NavSection[] = [
             { label: "Integraties", icon: <Settings size={16} />, href: "/instellingen/integraties", description: "Moneybird, Mollie, Google Calendar" },
             { label: "Mailbox", icon: <Inbox size={16} />, href: "/mailbox", description: "E-mail en templates" },
             { label: "Website", icon: <Globe size={16} />, href: "/website", description: "Publieke site beheren" },
-            { label: "Archief", icon: <ImageIcon size={16} />, href: "/archief", description: "Doorzoekbaar boekhoud-bonnenkistje — alle gescande bonnen en facturen op één plek" },
             { label: "Help Center", icon: <HelpCircle size={16} />, href: "/hulp", description: "Artikelen, FAQ, support" },
             { label: "Platform Beheer", icon: <Building2 size={16} />, href: "/admin", description: "Organisaties en klanten (admins)" },
         ],
