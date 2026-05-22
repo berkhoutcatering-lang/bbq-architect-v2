@@ -42,7 +42,13 @@ const REGISTRY: Record<string, PreviewComponent> = {
 };
 
 export function PreviewFor(templateId: string): PreviewComponent {
-    return REGISTRY[templateId] ?? Restaurant01Preview;
+    const found = REGISTRY[templateId];
+    if (found) return found;
+    if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn(`[menukaart] PreviewFor("${templateId}") niet gevonden — terugval op restaurant-01. Voeg de template toe aan REGISTRY of fix de templateId-bron.`);
+    }
+    return Restaurant01Preview;
 }
 
 // Re-export voor backward-compat met bestaande imports.

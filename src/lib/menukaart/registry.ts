@@ -146,10 +146,20 @@ const COMMON_COLORS: Pick<AllowList, 'accent' | 'bg' | 'text'> = {
     text: { type: 'color' },
 };
 
-const COMMON_LOGO: Pick<AllowList, 'logoPosition' | 'logoSize'> = {
+/* COMMON_LOGO_FULL = logoPosition + logoSize. Alleen gebruiken in templates
+   die `overrides.logoPosition` daadwerkelijk gebruiken in Preview + Pdf.
+   COMMON_LOGO_SIZE = alleen logoSize. Voor templates met vaste positie. */
+const COMMON_LOGO_FULL: Pick<AllowList, 'logoPosition' | 'logoSize'> = {
     logoPosition: { type: 'enum', options: ['top-left', 'top-center', 'top-right'] },
     logoSize: { type: 'size', min: 24, max: 80 },
 };
+const COMMON_LOGO_SIZE: Pick<AllowList, 'logoSize'> = {
+    logoSize: { type: 'size', min: 24, max: 80 },
+};
+/* Back-compat: oude templates spreaden COMMON_LOGO. Hou de export beschikbaar
+   maar elk template kiest expliciet welke variant past bij de Preview. */
+const COMMON_LOGO = COMMON_LOGO_FULL;
+void COMMON_LOGO;
 
 const COMMON_SIZE: Pick<AllowList, 'headingSize' | 'bodySize' | 'headingWeight'> = {
     headingSize: { type: 'size', min: 12, max: 48 },
@@ -184,7 +194,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_FULL,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: {
@@ -225,7 +235,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_FULL,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Oswald', 'Bebas Neue', 'Antonio'] },
@@ -259,7 +269,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Space Grotesk', 'Inter', 'DM Sans', 'Work Sans'] },
@@ -292,7 +302,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['IBM Plex Mono', 'JetBrains Mono', 'Space Mono'] },
@@ -326,7 +336,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Caveat', 'Dancing Script', 'Sacramento'] },
@@ -361,7 +371,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Bebas Neue', 'Oswald', 'Antonio'] },
@@ -395,7 +405,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Cormorant', 'Crimson Pro', 'EB Garamond'] },
@@ -428,7 +438,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Cormorant', 'Cormorant Garamond', 'Playfair Display'] },
@@ -460,7 +470,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Rubik', 'DM Sans', 'Inter'] },
@@ -492,7 +502,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
-            ...COMMON_LOGO,
+            ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
             headingFont: { type: 'font', options: ['Playfair Display', 'Cormorant Garamond', 'EB Garamond'] },

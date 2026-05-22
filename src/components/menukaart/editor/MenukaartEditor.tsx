@@ -660,13 +660,15 @@ function PropertiesPanel({
                 title="Logo"
                 summary={src('logoPosition') === 'custom' || src('logoSize') === 'custom' ? 'Custom' : 'Brand-default'}
             >
-                <div className="mke-row-stack">
-                    <span className="mke-label">Positie</span>
-                    <PositionChips
-                        value={(flat.logoPosition as LogoPosition) ?? template.defaults.logoPosition}
-                        onChange={v => onChange('logoPosition', v)}
-                    />
-                </div>
+                {template.allowList.logoPosition && (
+                    <div className="mke-row-stack">
+                        <span className="mke-label">Positie</span>
+                        <PositionChips
+                            value={(flat.logoPosition as LogoPosition) ?? template.defaults.logoPosition}
+                            onChange={v => onChange('logoPosition', v)}
+                        />
+                    </div>
+                )}
                 <SizeControl
                     label="Grootte"
                     value={flat.logoSize ?? template.defaults.logoSize}
@@ -750,6 +752,7 @@ function PropertiesPanel({
                 />
             </Section>
 
+            {(template.allowList.showOrnament || template.allowList.showDividers || template.allowList.showGhostNumbers || template.allowList.showFootnoteAllergens) && (
             <Section icon={<Sparkles size={15} />} title="Decoraties" summary={decoSummary}>
                 {template.allowList.showOrnament && (
                     <ToggleControl
@@ -784,6 +787,7 @@ function PropertiesPanel({
                     />
                 )}
             </Section>
+            )}
 
             {/* Tenant-info hint */}
             <div className="mke-section-footnote">

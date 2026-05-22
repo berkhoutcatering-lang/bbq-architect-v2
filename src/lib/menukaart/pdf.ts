@@ -36,5 +36,11 @@ const PDF_REGISTRY: Record<string, PdfComponent> = {
 };
 
 export function PdfFor(templateId: string): PdfComponent {
-    return PDF_REGISTRY[templateId] ?? Restaurant01Pdf;
+    const found = PDF_REGISTRY[templateId];
+    if (found) return found;
+    if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn(`[menukaart] PdfFor("${templateId}") niet gevonden — terugval op restaurant-01.`);
+    }
+    return Restaurant01Pdf;
 }
