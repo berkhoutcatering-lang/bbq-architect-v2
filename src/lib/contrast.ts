@@ -95,3 +95,19 @@ export function meetsWCAG(
 ): boolean {
   return ratio >= WCAG_THRESHOLDS[level][size];
 }
+
+// Convert linear-sRGB [0..1] → 8-bit gamma-encoded sRGB [0..255]
+function linearToGamma(c: number): number {
+  const v = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(v * 255)));
+}
+
+// Convert any supported color (hex or oklch) to a 6-digit hex string.
+// Used at save-time to fill the existing brand_* settings columns from THEME_PRESETS' OKLCH tokens.
+export function toHex(color: string): string {
+  const linear = parseColor(color);
+  const r = linearToGamma(linear[0]).toString(16).padStart(2, '0');
+  const g = linearToGamma(linear[1]).toString(16).padStart(2, '0');
+  const b = linearToGamma(linear[2]).toString(16).padStart(2, '0');
+  return `#${r}${g}${b}`;
+}
