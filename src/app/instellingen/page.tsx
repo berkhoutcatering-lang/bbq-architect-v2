@@ -10,6 +10,8 @@ import PageHeader from '@/components/PageHeader';
 import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
+import ThemePresetPickerV2 from './_components/ThemePresetPickerV2';
+import type { ThemePreset } from '@/lib/themes';
 
 export default function Instellingen() {
     /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
@@ -56,9 +58,10 @@ export default function Instellingen() {
     // Track the brand colours we last loaded so we can detect changes and offer a cascade
     const [pendingCascade, setPendingCascade] = useState<null | { primary?: string; accent?: string }>(null);
 
-    async function saveSettings() {
+    async function saveSettings(overrideForm?: any) {
+        const source = overrideForm ?? form;
         /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-        const { id, created_at, updated_at, ...data } = form;
+        const { id, created_at, updated_at, ...data } = source;
         const beforePrimary = settings?.brand_primary as string | undefined;
         const beforeAccent = settings?.brand_accent as string | undefined;
 
@@ -106,6 +109,24 @@ export default function Instellingen() {
                 window.location.href = window.location.href.split('#')[0] + sep + '_t=' + Date.now();
             }, 600);
         }
+    }
+
+    async function applyPreset(preset: ThemePreset) {
+        /* PickerV2 callt deze functie wanneer de gebruiker op "Pas X toe" drukt.
+           We mergen de preset-tokens in de form-state én slaan ze direct op (geen
+           extra scroll naar de "Instellingen Opslaan"-knop onderaan nodig). De
+           bestaande save-flow detecteert vervolgens dat brand_primary/accent
+           gewijzigd is en opent de BrandCascadeDialog. */
+        const next = Object.assign({}, form, {
+            brand_background: preset.tokens.bg,
+            brand_card: preset.tokens.card,
+            brand_text: preset.tokens.text,
+            brand_primary: preset.tokens.primary,
+            brand_accent: preset.tokens.accent,
+            brand_secondary: preset.tokens.secondary,
+        });
+        setForm(next);
+        await saveSettings(next);
     }
 
     if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
@@ -186,8 +207,8 @@ export default function Instellingen() {
                         </div>
                     </div>
 
-                    {/* Curated thema-presets — geen eigen kleuren kiezen, alleen kant-en-klare combinaties */}
-                    <ThemePresetPicker form={form} setForm={setForm} />
+                    {/* Curated thema-presets — 2-koloms live preview + 8 cards (Sprint 3 C6) */}
+                    <ThemePresetPickerV2 form={form} onApply={applyPreset} />
                 </div>
             </div>
 
@@ -297,136 +318,6 @@ export default function Instellingen() {
                 />
             )}
         </>
-    );
-}
-
-// ── Curated thema's — 6 sterke caterer-archetypes, geen overlap ──
-const THEMES = [
-    // 3 donker (Smokehouse / Graphite / Cellar) + 3 licht (Linen / Studio / Garden).
-    // Elke preset heeft een eigen silhouette en spreekt een ander caterer-type aan.
-    // Kleuren zijn afgestemd op OKLCH-lightness zodat contrast perceptueel uniform is.
-    {
-        id: 'smokehouse',
-        naam: 'Smokehouse',
-        omschrijving: 'Voor traditionele BBQ-caterers — slow smoke, charcoal, pitmaster',
-        bg: '#181412', card: '#2c241d', text: '#f4efe4', primary: '#d49b4d', accent: '#b3611f', secondary: '#100c0a',
-    },
-    {
-        id: 'graphite',
-        naam: 'Graphite',
-        omschrijving: 'Voor moderne event-caterers — editorial, premium, tech-forward',
-        bg: '#0e1014', card: '#1f2128', text: '#f4f5f7', primary: '#d8c277', accent: '#a89d83', secondary: '#08090d',
-    },
-    {
-        id: 'cellar',
-        naam: 'Cellar',
-        omschrijving: 'Voor fine-dining caterers en premium bruiloften — kelder-warm, gastronomisch',
-        bg: '#241015', card: '#4a1f2a', text: '#f1ead8', primary: '#dac786', accent: '#a96940', secondary: '#1a0a0d',
-    },
-    {
-        id: 'linen',
-        naam: 'Linen',
-        omschrijving: 'Voor klassieke wedding-caterers — papier-en-inkt, professioneel',
-        bg: '#f4eed8', card: '#fcfaf3', text: '#1c1814', primary: '#9a6a3e', accent: '#6b4a30', secondary: '#e7dfc6',
-    },
-    {
-        id: 'studio',
-        naam: 'Studio',
-        omschrijving: 'Voor minimalistische caterers — magazine-clean, één scherpe rode accent',
-        bg: '#f6f6f6', card: '#ffffff', text: '#181818', primary: '#222222', accent: '#b73020', secondary: '#ebebeb',
-    },
-    {
-        id: 'garden',
-        naam: 'Garden',
-        omschrijving: 'Voor garden-party en sustainable caterers — organisch, plantaardig, aards',
-        bg: '#ece9d6', card: '#fbf9ef', text: '#1f2117', primary: '#6b7847', accent: '#a96b40', secondary: '#dad6b8',
-    },
-] as const;
-
-function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) => void }) {
-    function applyTheme(t: typeof THEMES[number]) {
-        setForm((prev: any) => Object.assign({}, prev, {
-            brand_background: t.bg, brand_text: t.text, brand_card: t.card,
-            brand_primary: t.primary, brand_accent: t.accent, brand_secondary: t.secondary,
-        }));
-    }
-    const currentId = THEMES.find(t => t.bg === form.brand_background && t.primary === form.brand_primary)?.id;
-    return (
-        <div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14 }}>
-                Kies een thema — we hebben elk zorgvuldig afgestemd zodat tekst goed leesbaar is, knoppen opvallen en het nergens kermis wordt. Klik &quot;Opslaan&quot; onderaan om toe te passen.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {THEMES.map(t => {
-                    const isCurrent = currentId === t.id;
-                    return (
-                        <button key={t.id} onClick={() => applyTheme(t)}
-                            style={{
-                                padding: 0, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-                                border: isCurrent ? '2px solid ' + t.primary : '1px solid var(--border)',
-                                background: 'transparent', textAlign: 'left', color: 'var(--text)',
-                                transition: 'transform .15s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
-                            {/* Visuele mini-preview van het thema */}
-                            <div style={{ padding: 14, background: t.bg, borderBottom: '1px solid ' + t.card }}>
-                                <div style={{
-                                    padding: 10, borderRadius: 8, marginBottom: 8,
-                                    background:
-                                        'radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, ' + t.primary + ', transparent 80%), transparent 65%), ' +
-                                        'radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, ' + t.primary + ', transparent 92%), transparent 55%), ' +
-                                        t.card,
-                                    boxShadow:
-                                        'inset 0 1px 0 0 color-mix(in oklch, ' + t.text + ', transparent 92%), ' +
-                                        'inset 0 0 20px 0 color-mix(in oklch, ' + t.primary + ', transparent 92%), ' +
-                                        '0 1px 2px rgba(0,0,0,.06), 0 6px 16px -6px rgba(0,0,0,.22)',
-                                }}>
-                                    <div style={{ fontSize: 9, color: t.primary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>Event</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>{form?.bedrijfsnaam || 'Jouw bedrijf'}</div>
-                                    <div style={{ display: 'flex', gap: 4 }}>
-                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: t.primary, color: t.card, fontSize: 9, fontWeight: 700 }}>OFFERTE</span>
-                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: 'transparent', border: '1px solid ' + t.accent, color: t.accent, fontSize: 9, fontWeight: 700 }}>FACTUUR</span>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 3 }}>
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.primary }} title="Primair" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.accent }} title="Accent" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.card, border: '1px solid ' + t.accent }} title="Kaart" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.bg, border: '1px solid ' + t.accent }} title="Achtergrond" />
-                                </div>
-                            </div>
-                            <div style={{ padding: '10px 14px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{t.naam}</span>
-                                    {isCurrent && <span style={{ fontSize: 9, fontWeight: 700, color: t.primary, letterSpacing: '.1em' }}>✓ ACTIEF</span>}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.3 }}>{t.omschrijving}</div>
-                            </div>
-                        </button>
-                    );
-                })}
-            </div>
-            <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)', fontSize: 11, color: 'var(--muted)' }}>
-                <strong style={{ color: 'var(--text)' }}>Belangrijk:</strong> rood/groen waarschuwingen (lage voorraad, bevestigd) blijven altijd hun betekenis houden — die veranderen niet mee met het gekozen thema.
-            </div>
-        </div>
-    );
-}
-
-// ── Herbruikbare kleur-picker met label, hex-input en omschrijving ──
-function ColorField({ label, sub, value, onChange, placeholder }: { label: string; sub?: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-    const colorValue = value || placeholder?.match(/#[0-9a-f]{6}/i)?.[0] || '#000000';
-    return (
-        <div className="field">
-            <label>{label}</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="color" value={colorValue} onChange={(e) => onChange(e.target.value)}
-                    style={{ width: 40, height: 36, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'transparent' }} />
-                <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || colorValue} style={{ flex: 1 }} />
-            </div>
-            {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>}
-        </div>
     );
 }
 

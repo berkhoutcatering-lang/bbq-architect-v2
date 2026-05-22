@@ -1,20 +1,17 @@
 'use client';
 
-import { ChefHat, Boxes, ShieldCheck, BarChart3, Activity } from 'lucide-react';
+import { ChefHat, Boxes, BarChart3 } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
-/* S2-deel-2 — AI Bedenker en AI Pitmaster zijn uit de hoofdtabs gehaald:
-   - Bedenker → entry via prominente knop op /gerechten/componenten (URL blijft)
-   - Pitmaster → "Vraag Pitmaster" knop op event-hub (in-context)
-   Beide URLs blijven werken voor bookmarks.
-
-   S2.7 — Ingrediënten weg: pagina was gateway naar /voorraad, KPI's in insights. */
+/* Sprint 3 A7 — 5 tabs zijn gemerged naar 3 hub-tabs:
+   - Menu-analyse → Inzichten?tab=marge
+   - Insights → Inzichten?tab=overzicht
+   - Allergen-queue → Inzichten?tab=allergenen (page killed via redirect)
+   Sub-tab strip op /gerechten/inzichten zelf, niet in de hub-tab-bar. */
 const TABS: HubTab[] = [
-    { href: '/gerechten',                  label: 'Gerechten',     icon: ChefHat },
-    { href: '/gerechten/componenten',      label: 'Componenten',   icon: Boxes },
-    { href: '/gerechten/menu-analyse',     label: 'Menu-analyse',  icon: BarChart3 },
-    { href: '/gerechten/insights',         label: 'Insights',      icon: Activity },
-    { href: '/gerechten/allergen-queue',   label: 'Allergenen',    icon: ShieldCheck },
+    { href: '/gerechten', label: 'Gerechten', icon: ChefHat },
+    { href: '/gerechten/componenten', label: 'Componenten', icon: Boxes },
+    { href: '/gerechten/inzichten', label: 'Inzichten', icon: BarChart3 },
 ];
 
 export default function GerechtenTabs() {

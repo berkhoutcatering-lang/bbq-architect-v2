@@ -72,7 +72,7 @@ export default async function AllergenQueueBanner() {
 
     return (
         <Link
-            href="/gerechten/allergen-queue"
+            href="/gerechten/inzichten?tab=allergenen"
             aria-label={`${title} — open queue`}
             style={{
                 display: 'flex',
