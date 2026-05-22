@@ -79,7 +79,10 @@ export function ColorControl({ label, value, source, onChange, onReset }: ColorC
     );
 }
 
-/* ── SizeControl ────────────────────────────────────── */
+/* ── SizeControl ──────────────────────────────────────
+   Step-size schaalt met range zodat logo (24-200) snel groter wordt en
+   body-size (7-20) nog steeds nauwkeurig blijft. Shift-click = 5× step
+   voor sprongen. Houdt vingertopen niet vermoeid. */
 type SizeControlProps = {
     label: string;
     value: number;
@@ -87,10 +90,21 @@ type SizeControlProps = {
     max: number;
     source: CascadeSource;
     suffix?: string;
+    /** Optional override step — anders auto-detected uit range (max-min)/30. */
+    step?: number;
     onChange: (n: number) => void;
     onReset?: () => void;
 };
-export function SizeControl({ label, value, min, max, source, suffix = 'px', onChange, onReset }: SizeControlProps) {
+function clampStep(min: number, max: number): number {
+    const range = max - min;
+    if (range >= 100) return 8;
+    if (range >= 50) return 4;
+    if (range >= 20) return 2;
+    return 1;
+}
+export function SizeControl({ label, value, min, max, source, suffix = 'px', step, onChange, onReset }: SizeControlProps) {
+    const autoStep = step ?? clampStep(min, max);
+    const fastStep = autoStep * 5;
     return (
         <div className="mke-row">
             <span className="mke-label">{label}</span>
@@ -98,18 +112,20 @@ export function SizeControl({ label, value, min, max, source, suffix = 'px', onC
                 <div className="mke-size">
                     <button
                         className="mke-size-btn"
-                        onClick={() => onChange(Math.max(min, value - 1))}
+                        onClick={e => onChange(Math.max(min, value - (e.shiftKey ? fastStep : autoStep)))}
                         disabled={value <= min}
                         type="button"
+                        title={`-${autoStep} · shift = -${fastStep}`}
                     >
                         <Minus size={12} />
                     </button>
                     <span className="mke-size-val">{value}{suffix}</span>
                     <button
                         className="mke-size-btn"
-                        onClick={() => onChange(Math.min(max, value + 1))}
+                        onClick={e => onChange(Math.min(max, value + (e.shiftKey ? fastStep : autoStep)))}
                         disabled={value >= max}
                         type="button"
+                        title={`+${autoStep} · shift = +${fastStep}`}
                     >
                         <Plus size={12} />
                     </button>

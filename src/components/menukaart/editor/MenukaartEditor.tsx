@@ -34,6 +34,8 @@ import {
     SlidersHorizontal,
     Heart,
     AtSign,
+    FileText,
+    X as XIcon,
 } from 'lucide-react';
 import {
     getTemplate,
@@ -95,6 +97,8 @@ export default function MenukaartEditor({
     const [zoom, setZoom] = useState<ZoomStep>(75);
     const [compareMode, setCompareMode] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
+    const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+    const [pdfPreviewKey, setPdfPreviewKey] = useState(0);
     const [aiState, setAiState] = useState<'idle' | 'loading' | 'result' | 'error'>('idle');
     const [aiPrompt, setAiPrompt] = useState('');
     const [diffs, setDiffs] = useState<Diff[]>([]);
@@ -329,7 +333,7 @@ export default function MenukaartEditor({
                                 </PreviewWrapper>
                             )}
                         </div>
-                        <div className="mke-canvas-footer">
+                        <div className="mke-canvas-footer" style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                             <button
                                 className="mke-btn-compare"
                                 onClick={() => setCompareMode(c => !c)}
@@ -337,6 +341,18 @@ export default function MenukaartEditor({
                                 type="button"
                             >
                                 <Columns size={14} /> {compareMode ? 'Sluit vergelijk' : 'Vergelijken'}
+                            </button>
+                            <button
+                                className="mke-btn-compare"
+                                onClick={() => {
+                                    setPdfPreviewKey(k => k + 1);
+                                    setPdfPreviewOpen(true);
+                                }}
+                                disabled={saveStatus === 'saving'}
+                                type="button"
+                                title={saveStatus === 'saving' ? 'Wacht op auto-save' : 'Bekijk de exacte PDF (wat klant downloadt)'}
+                            >
+                                <FileText size={14} /> Bekijk PDF
                             </button>
                         </div>
                     </div>
@@ -474,6 +490,54 @@ export default function MenukaartEditor({
                     currentAccent={flat.accent}
                     onSwitched={handleTemplateSwitched}
                 />
+
+                {pdfPreviewOpen && (
+                    <div
+                        style={{
+                            position: 'fixed', inset: 0, zIndex: 100,
+                            background: 'rgba(0,0,0,.85)', backdropFilter: 'blur(4px)',
+                            display: 'flex', flexDirection: 'column',
+                        }}
+                        onClick={(e) => { if (e.target === e.currentTarget) setPdfPreviewOpen(false); }}
+                    >
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '12px 24px', color: 'var(--mke-text)',
+                            background: 'rgba(12,12,12,.85)', borderBottom: '1px solid var(--mke-border)',
+                        }}>
+                            <div>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>Exacte PDF — wat klant downloadt</div>
+                                <div style={{ fontSize: 11, color: 'var(--mke-muted)', marginTop: 2 }}>
+                                    {template.name} · {Object.keys(custom).length > 0 ? 'Met jouw aanpassingen' : 'Brand-default'}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setPdfPreviewOpen(false)}
+                                style={{
+                                    background: 'transparent', border: '1px solid var(--mke-border)',
+                                    color: 'var(--mke-text)', padding: '6px 12px', borderRadius: 6,
+                                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    fontSize: 12,
+                                }}
+                                type="button"
+                            >
+                                <XIcon size={14} /> Sluiten
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, padding: 24, display: 'flex', justifyContent: 'center' }}>
+                            <iframe
+                                key={pdfPreviewKey}
+                                src={`/api/menukaart/pdf/${offerId}?inline=1&_=${pdfPreviewKey}`}
+                                style={{
+                                    width: '100%', maxWidth: 900, height: '100%',
+                                    border: '1px solid var(--mke-border)', borderRadius: 8,
+                                    background: '#fff',
+                                }}
+                                title="PDF preview"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
