@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * AI-Coach paneel (UI-only voor S4-fase-1).
+ * AI-Coach paneel — gekoppeld aan POST /api/menukaart-editor/suggest met
+ * Claude Sonnet 4.6 + tool-use (S4 fase-2).
  *
- * S4-fase-2 koppelt dit aan POST /api/menukaart-editor/suggest met Claude
- * Sonnet 4.6 + tool-use (set_color, set_font, set_size, etc.). De diff-lijst
- * shape past nu al bij de tool-call response zodat fase-2 niets hoeft te
- * herontwerpen.
+ * Tools: set_color, set_font, set_size, set_weight, set_logo_position,
+ * toggle_decoration. Server filtert no-op diffs (Pillar #1) en checkt
+ * allow-list (Pillar #2). Rate-limit 10/u per tenant + cost-tracking
+ * (Pillar #3).
  */
 
 import { Sparkles, Palette, Type, Image as ImageIcon, Check } from 'lucide-react';
-import type { ReactNode } from 'react';
 
 export type DiffType = 'kleur' | 'typo' | 'logo' | 'deco' | 'text';
 export type DiffStatus = 'open' | 'applied' | 'skipped';
@@ -41,7 +41,7 @@ function DiffIcon({ type }: { type: DiffType }) {
 }
 
 type Props = {
-    state: 'idle' | 'loading' | 'result';
+    state: 'idle' | 'loading' | 'result' | 'error';
     prompt: string;
     onPromptChange: (s: string) => void;
     onSubmit: () => void;
@@ -52,18 +52,23 @@ type Props = {
     onSkipOne?: (id: string) => void;
     onApplyAll?: () => void;
     onDiscardAll?: () => void;
+    errorMessage?: string;
+    costCents?: number;
+    rateLimitRemaining?: number;
 };
 
 export default function AICoach({
     state, prompt, onPromptChange, onSubmit, onCancel,
     summary, diffs = [], onApplyOne, onSkipOne, onApplyAll, onDiscardAll,
+    errorMessage, costCents, rateLimitRemaining,
 }: Props) {
-    if (state === 'idle') return <IdleView prompt={prompt} onPromptChange={onPromptChange} onSubmit={onSubmit} />;
+    if (state === 'idle') return <IdleView prompt={prompt} onPromptChange={onPromptChange} onSubmit={onSubmit} rateLimitRemaining={rateLimitRemaining} />;
     if (state === 'loading') return <LoadingView prompt={prompt} onCancel={onCancel} />;
-    return <ResultView summary={summary} diffs={diffs} onApplyOne={onApplyOne} onSkipOne={onSkipOne} onApplyAll={onApplyAll} onDiscardAll={onDiscardAll} />;
+    if (state === 'error') return <ErrorView message={errorMessage ?? 'Onbekende fout'} onRetry={onSubmit} prompt={prompt} onPromptChange={onPromptChange} />;
+    return <ResultView summary={summary} diffs={diffs} costCents={costCents} rateLimitRemaining={rateLimitRemaining} onApplyOne={onApplyOne} onSkipOne={onSkipOne} onApplyAll={onApplyAll} onDiscardAll={onDiscardAll} />;
 }
 
-function IdleView({ prompt, onPromptChange, onSubmit }: { prompt: string; onPromptChange: (s: string) => void; onSubmit: () => void }) {
+function IdleView({ prompt, onPromptChange, onSubmit, rateLimitRemaining }: { prompt: string; onPromptChange: (s: string) => void; onSubmit: () => void; rateLimitRemaining?: number }) {
     return (
         <div className="mke-ai">
             <textarea
@@ -87,7 +92,10 @@ function IdleView({ prompt, onPromptChange, onSubmit }: { prompt: string; onProm
             >
                 <Sparkles size={15} /> Voorstel maken
             </button>
-            <Note />
+            <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', padding: '4px 0', display: 'flex', justifyContent: 'space-between' }}>
+                <span>~€0.003 per voorstel</span>
+                {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 over dit uur</span>}
+            </div>
         </div>
     );
 }
@@ -113,24 +121,63 @@ function LoadingView({ prompt, onCancel }: { prompt: string; onCancel: () => voi
 }
 
 function ResultView({
-    summary, diffs, onApplyOne, onSkipOne, onApplyAll, onDiscardAll,
+    summary, diffs, costCents, rateLimitRemaining,
+    onApplyOne, onSkipOne, onApplyAll, onDiscardAll,
 }: {
     summary?: string; diffs: Diff[];
+    costCents?: number; rateLimitRemaining?: number;
     onApplyOne?: (id: string) => void; onSkipOne?: (id: string) => void;
     onApplyAll?: () => void; onDiscardAll?: () => void;
 }) {
     return (
         <div className="mke-ai">
             {summary && <div className="mke-ai-summary">{summary}</div>}
-            <div className="mke-diffs">
-                {diffs.map(d => <DiffRow key={d.id} diff={d} onApply={() => onApplyOne?.(d.id)} onSkip={() => onSkipOne?.(d.id)} />)}
-            </div>
-            {diffs.length > 0 && (
-                <div className="mke-diff-footer">
-                    <button className="mke-btn-primary" onClick={onApplyAll} type="button">Alles toepassen</button>
-                    <button className="mke-btn-ghost" onClick={onDiscardAll} type="button">Alles weggooien</button>
+            {diffs.length === 0 ? (
+                <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--mke-muted)', fontSize: 12, background: 'var(--mke-bg)', border: '1px solid var(--mke-border)', borderRadius: 'var(--mke-radius)' }}>
+                    Niks om voor te stellen — je menukaart staat al strak voor deze vraag.
+                    <div style={{ marginTop: 8 }}>
+                        <button className="mke-ai-cancel" onClick={onDiscardAll} type="button">Probeer een andere instructie</button>
+                    </div>
                 </div>
+            ) : (
+                <>
+                    <div className="mke-diffs">
+                        {diffs.map(d => <DiffRow key={d.id} diff={d} onApply={() => onApplyOne?.(d.id)} onSkip={() => onSkipOne?.(d.id)} />)}
+                    </div>
+                    <div className="mke-diff-footer">
+                        <button className="mke-btn-primary" onClick={onApplyAll} type="button">Alles toepassen</button>
+                        <button className="mke-btn-ghost" onClick={onDiscardAll} type="button">Alles weggooien</button>
+                    </div>
+                </>
             )}
+            <div style={{ fontSize: 10, color: 'var(--mke-muted-light)', textAlign: 'center', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{typeof costCents === 'number' ? `€${(costCents / 100).toFixed(3)} kosten` : ''}</span>
+                {typeof rateLimitRemaining === 'number' && <span>{rateLimitRemaining}/10 over dit uur</span>}
+            </div>
+        </div>
+    );
+}
+
+function ErrorView({ message, onRetry, prompt, onPromptChange }: { message: string; onRetry: () => void; prompt: string; onPromptChange: (s: string) => void }) {
+    return (
+        <div className="mke-ai">
+            <div style={{ padding: '12px', background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 'var(--mke-radius)', fontSize: 12, color: '#fca5a5', lineHeight: 1.5 }}>
+                {message}
+            </div>
+            <textarea
+                className="mke-ai-textarea"
+                placeholder="Beschrijf wat je wil veranderen…"
+                value={prompt}
+                onChange={e => onPromptChange(e.target.value)}
+            />
+            <button
+                className="mke-ai-submit"
+                onClick={onRetry}
+                disabled={prompt.trim().length === 0}
+                type="button"
+            >
+                <Sparkles size={15} /> Opnieuw proberen
+            </button>
         </div>
     );
 }
@@ -167,10 +214,3 @@ function DiffRow({ diff, onApply, onSkip }: { diff: Diff; onApply: () => void; o
     );
 }
 
-function Note() {
-    return (
-        <div style={{ fontSize: 11, color: 'var(--mke-muted-light)', textAlign: 'center', padding: '4px 0' }}>
-            AI-voorstel komt in S4-fase-2. Voor nu kan je alles handmatig tweaken in de Eigenschappen-tab.
-        </div>
-    );
-}
