@@ -48,7 +48,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
         .toUpperCase();
 
     const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const sizeMult = isSmall ? 360 / 595 : 1;
     const muted = '#8A8478';
     const barText = contrastTextColor(accent);
     const legend = formatAllergenLegend(data.gangen);
@@ -94,7 +94,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: isSmall ? 360 : 595,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 6px 32px rgba(0,0,0,.5)',
                 borderRadius: 3,

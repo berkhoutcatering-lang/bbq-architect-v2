@@ -57,7 +57,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
         .toUpperCase();
 
     const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const sizeMult = isSmall ? 360 / 595 : 1;
     const legend = formatAllergenLegend(data.gangen);
 
     const eventBlock = (eventTitle || eventMessage) && (
@@ -105,7 +105,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
             className="r01-frame"
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: isSmall ? 360 : 595,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03)',
                 borderRadius: 3,

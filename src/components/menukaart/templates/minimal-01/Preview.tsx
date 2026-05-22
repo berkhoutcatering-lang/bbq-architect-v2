@@ -41,7 +41,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
     const eventPosition = overrides.eventMessagePosition ?? 'top';
 
     const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const sizeMult = isSmall ? 360 / 595 : 1;
 
     const muted = '#888';
     const light = '#C0C0C0';
@@ -95,7 +95,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: isSmall ? 360 : 595,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.08)',
                 borderRadius: 3,

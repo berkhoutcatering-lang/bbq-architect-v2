@@ -74,7 +74,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
         .toUpperCase();
 
     const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const sizeMult = isSmall ? 360 / 595 : 1;
     const muted = '#6E6250';
     const light = '#B8AA8A';
     const legend = formatAllergenLegend(data.gangen);
@@ -116,7 +116,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
         <div
             style={{
                 background: `linear-gradient(170deg, ${bg} 0%, ${bgDark} 100%)`,
-                width: isSmall ? 290 : 480,
+                width: isSmall ? 360 : 595,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.25)',
                 borderRadius: 3,

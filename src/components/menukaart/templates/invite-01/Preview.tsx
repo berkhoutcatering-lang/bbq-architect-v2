@@ -123,8 +123,8 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
 
     const logoInitial = brandName.charAt(0).toUpperCase();
     const isSmall = size === 'small';
-    const frameSize = isSmall ? 290 : 480;
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const frameSize = isSmall ? 360 : 595;
+    const sizeMult = isSmall ? 360 / 595 : 1;
     const muted = '#A09890';
     const light = '#D4CCB8';
     const legend = formatAllergenLegend(data.gangen);
