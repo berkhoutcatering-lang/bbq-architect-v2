@@ -205,7 +205,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
             {/* Content */}
             <div
                 style={{
-                    padding: `${44 * sizeMult}px ${18 * sizeMult}px ${30 * sizeMult}px`,
+                    padding: `${48 * sizeMult}px ${28 * sizeMult}px ${48 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     height: '100%',

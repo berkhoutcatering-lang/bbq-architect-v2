@@ -143,7 +143,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                 <div
                     style={{
                         background: accent,
-                        padding: `${18 * sizeMult}px ${28 * sizeMult}px ${14 * sizeMult}px`,
+                        padding: `${48 * sizeMult}px ${28 * sizeMult}px ${48 * sizeMult}px`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-end',
@@ -219,7 +219,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                 {/* Content */}
                 <div
                     style={{
-                        padding: `${14 * sizeMult}px ${28 * sizeMult}px ${20 * sizeMult}px`,
+                        padding: `${48 * sizeMult}px ${28 * sizeMult}px ${48 * sizeMult}px`,
                         display: 'flex',
                         flexDirection: 'column',
                         flex: 1,

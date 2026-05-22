@@ -119,7 +119,7 @@ export default function Restaurant01Preview({ overrides, data, size = 'normal' }
             <div
                 className="r01-pad"
                 style={{
-                    padding: `${36 * sizeMult}px ${48 * sizeMult}px ${24 * sizeMult}px`,
+                    padding: `${60 * sizeMult}px ${48 * sizeMult}px ${60 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',

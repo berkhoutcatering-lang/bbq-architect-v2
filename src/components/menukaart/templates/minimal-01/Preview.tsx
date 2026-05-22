@@ -128,7 +128,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
             )}
             <div
                 style={{
-                    padding: `${36 * sizeMult}px ${42 * sizeMult}px ${20 * sizeMult}px`,
+                    padding: `${56 * sizeMult}px ${42 * sizeMult}px ${56 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',

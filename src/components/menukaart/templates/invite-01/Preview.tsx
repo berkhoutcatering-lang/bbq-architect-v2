@@ -226,7 +226,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
 
             <div
                 style={{
-                    padding: `${28 * sizeMult}px ${36 * sizeMult}px ${20 * sizeMult}px`,
+                    padding: `${48 * sizeMult}px ${36 * sizeMult}px ${48 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',

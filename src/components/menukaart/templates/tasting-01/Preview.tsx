@@ -126,7 +126,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
         >
             <div
                 style={{
-                    padding: `${32 * sizeMult}px ${36 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${56 * sizeMult}px ${36 * sizeMult}px ${56 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',

@@ -212,7 +212,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             {/* Content */}
             <div
                 style={{
-                    padding: `${12 * sizeMult}px ${30 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${48 * sizeMult}px ${30 * sizeMult}px ${56 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',

@@ -159,7 +159,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
 
             <div
                 style={{
-                    padding: `${28 * sizeMult}px ${34 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${56 * sizeMult}px ${34 * sizeMult}px ${56 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',

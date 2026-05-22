@@ -128,7 +128,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
             />
             <div
                 style={{
-                    padding: `${24 * sizeMult}px ${28 * sizeMult}px ${0}px ${32 * sizeMult}px`,
+                    padding: `${56 * sizeMult}px ${28 * sizeMult}px ${56 * sizeMult}px ${32 * sizeMult}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',

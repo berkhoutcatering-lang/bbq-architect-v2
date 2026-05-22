@@ -151,7 +151,7 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         background: accent,
-                        padding: `${28 * sizeMult}px ${14 * sizeMult}px ${20 * sizeMult}px`,
+                        padding: `${48 * sizeMult}px ${14 * sizeMult}px ${48 * sizeMult}px`,
                         display: 'flex',
                         flexDirection: 'column',
                         color: sideText,
@@ -222,7 +222,7 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
                 </div>
 
                 {/* Main */}
-                <div style={{ padding: `${28 * sizeMult}px ${22 * sizeMult}px ${20 * sizeMult}px`, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: `${48 * sizeMult}px ${22 * sizeMult}px ${48 * sizeMult}px`, display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 * sizeMult }}>
                         <div
                             style={{
