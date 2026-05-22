@@ -77,9 +77,6 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
         .join('')
         .slice(0, 2)
         .toUpperCase();
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#8E887E';
     const warm = '#EAE2D0';
     const headerText = contrastTextColor(accent);
@@ -90,18 +87,18 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
             style={{
                 background: warm,
                 borderLeft: `3px solid ${accent}`,
-                padding: `${8 * sizeMult}px ${12 * sizeMult}px`,
-                margin: `${4 * sizeMult}px 0 ${10 * sizeMult}px`,
+                padding: `${8}px ${12}px`,
+                margin: `${4}px 0 ${10}px`,
             }}
         >
             {eventTitle && (
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 14 * sizeMult,
+                        fontSize: 14,
                         fontWeight: 500,
                         color: accent,
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -111,7 +108,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                 <div
                     style={{
                         fontFamily: `'${headingFont}', serif`,
-                        fontSize: 10 * sizeMult,
+                        fontSize: 10,
                         fontStyle: 'italic',
                         color: text,
                         lineHeight: 1.55,
@@ -127,7 +124,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.1)',
                 borderRadius: 3,
@@ -143,33 +140,33 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                 <div
                     style={{
                         background: accent,
-                        padding: `${18 * sizeMult}px ${28 * sizeMult}px ${14 * sizeMult}px`,
+                        padding: `${18}px ${28}px ${14}px`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-end',
                         color: headerText,
                     }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 * sizeMult }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                         {data.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                                 src={data.logoUrl}
                                 alt={brandName}
-                                style={{ maxHeight: logoSize * sizeMult, objectFit: 'contain', mixBlendMode: 'screen' }}
+                                style={{ maxHeight: logoSize, objectFit: 'contain', mixBlendMode: 'screen' }}
                             />
                         ) : (
                             <div
                                 style={{
-                                    width: logoSize * 0.85 * sizeMult,
-                                    height: logoSize * 0.85 * sizeMult,
+                                    width: logoSize * 0.85,
+                                    height: logoSize * 0.85,
                                     borderRadius: '50%',
                                     border: '1.5px solid rgba(255,255,255,.35)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontFamily: `'${headingFont}', serif`,
-                                    fontSize: 16 * sizeMult,
+                                    fontSize: 16,
                                     background: 'rgba(255,255,255,.08)',
                                 }}
                             >
@@ -180,7 +177,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', serif`,
-                                    fontSize: 17 * sizeMult,
+                                    fontSize: 17,
                                     fontWeight: 400,
                                     letterSpacing: '.02em',
                                 }}
@@ -191,11 +188,11 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                 <div
                                     style={{
                                         fontFamily: `'${bodyFont}', sans-serif`,
-                                        fontSize: 7 * sizeMult,
+                                        fontSize: 7,
                                         opacity: 0.55,
                                         letterSpacing: '.12em',
                                         textTransform: 'uppercase',
-                                        marginTop: 2 * sizeMult,
+                                        marginTop: 2,
                                     }}
                                 >
                                     {subtitle}
@@ -206,7 +203,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                     <div
                         style={{
                             fontFamily: `'${headingFont}', serif`,
-                            fontSize: 26 * sizeMult,
+                            fontSize: 26,
                             fontWeight: 300,
                             fontStyle: 'italic',
                             opacity: 0.25,
@@ -219,7 +216,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                 {/* Content */}
                 <div
                     style={{
-                        padding: `${14 * sizeMult}px ${28 * sizeMult}px ${20 * sizeMult}px`,
+                        padding: `${14}px ${28}px ${20}px`,
                         display: 'flex',
                         flexDirection: 'column',
                         flex: 1,
@@ -233,11 +230,11 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                         const isLast = gi === data.gangen.length - 1;
                         return (
                             <div key={gi}>
-                                <div style={{ marginBottom: 10 * sizeMult }}>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 * sizeMult, marginBottom: 2 * sizeMult }}>
+                                <div style={{ marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
                                         <div
                                             style={{
-                                                fontSize: 8 * sizeMult,
+                                                fontSize: 8,
                                                 fontWeight: 600,
                                                 letterSpacing: '.2em',
                                                 textTransform: 'uppercase',
@@ -249,7 +246,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                         <div
                                             style={{
                                                 fontFamily: `'${headingFont}', serif`,
-                                                fontSize: headingSize * 0.75 * sizeMult,
+                                                fontSize: headingSize * 0.75,
                                                 fontWeight: headingWeight,
                                                 color: text,
                                             }}
@@ -262,14 +259,14 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                             width: '100%',
                                             height: 1,
                                             background: `linear-gradient(90deg, ${accent}, transparent 60%)`,
-                                            marginBottom: 5 * sizeMult,
+                                            marginBottom: 5,
                                         }}
                                     />
                                     <div
                                         style={{
                                             display: 'grid',
-                                            gridTemplateColumns: `${135 * sizeMult}px 1fr`,
-                                            gap: `0 ${14 * sizeMult}px`,
+                                            gridTemplateColumns: `${135}px 1fr`,
+                                            gap: `0 ${14}px`,
                                             alignItems: 'start',
                                         }}
                                     >
@@ -277,7 +274,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                             style={{
                                                 background: warm,
                                                 borderRadius: 2,
-                                                padding: `${8 * sizeMult}px ${10 * sizeMult}px`,
+                                                padding: `${8}px ${10}px`,
                                                 borderLeft: `3px solid ${accent}`,
                                             }}
                                         >
@@ -285,7 +282,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                                 <div
                                                     style={{
                                                         fontFamily: `'${headingFont}', serif`,
-                                                        fontSize: 9 * sizeMult,
+                                                        fontSize: 9,
                                                         fontWeight: 300,
                                                         fontStyle: 'italic',
                                                         color: text,
@@ -295,13 +292,13 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                                     <span
                                                         style={{
                                                             fontFamily: `'${headingFont}', serif`,
-                                                            fontSize: 32 * sizeMult,
+                                                            fontSize: 32,
                                                             fontWeight: 500,
                                                             color: accent,
                                                             float: 'left',
                                                             lineHeight: 0.75,
-                                                            marginRight: 4 * sizeMult,
-                                                            marginTop: 3 * sizeMult,
+                                                            marginRight: 4,
+                                                            marginTop: 3,
                                                         }}
                                                     >
                                                         {initial}
@@ -315,14 +312,14 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                                 <div
                                                     key={di}
                                                     style={{
-                                                        padding: `${3 * sizeMult}px 0`,
+                                                        padding: `${3}px 0`,
                                                         borderBottom: di < gang.dishes.length - 1 ? '1px solid rgba(0,0,0,.04)' : 'none',
                                                     }}
                                                 >
                                                     <div
                                                         style={{
                                                             fontFamily: `'${headingFont}', serif`,
-                                                            fontSize: bodySize * sizeMult,
+                                                            fontSize: bodySize,
                                                             fontWeight: 500,
                                                             color: text,
                                                         }}
@@ -333,7 +330,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                                         <div
                                                             style={{
                                                                 fontFamily: `'${headingFont}', serif`,
-                                                                fontSize: 8 * sizeMult,
+                                                                fontSize: 8,
                                                                 fontWeight: 300,
                                                                 color: muted,
                                                                 fontStyle: 'italic',
@@ -344,7 +341,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                                     )}
                                                 </div>
                                             ))}
-                                            {showFootnote && <GangFootnote gang={gang} bodyFont={bodyFont} mult={sizeMult} accent={accent} />}
+                                            {showFootnote && <GangFootnote gang={gang} bodyFont={bodyFont} mult={1} accent={accent} />}
                                         </div>
                                     </div>
                                 </div>
@@ -353,7 +350,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                                         style={{
                                             border: 'none',
                                             borderTop: '1px solid #D0C8BA',
-                                            margin: `${3 * sizeMult}px 0 ${10 * sizeMult}px`,
+                                            margin: `${3}px 0 ${10}px`,
                                         }}
                                     />
                                 )}
@@ -367,16 +364,16 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                     <div
                         style={{
                             marginTop: 'auto',
-                            paddingTop: 8 * sizeMult,
+                            paddingTop: 8,
                             borderTop: `2px solid ${accent}`,
                             display: 'flex',
-                            gap: 8 * sizeMult,
+                            gap: 8,
                             alignItems: 'baseline',
                         }}
                     >
                         <div
                             style={{
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 fontWeight: 600,
                                 letterSpacing: '.12em',
                                 textTransform: 'uppercase',
@@ -386,10 +383,10 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                         >
                             Allergenen
                         </div>
-                        <div style={{ fontSize: 8 * sizeMult, color: muted, lineHeight: 1.8 }}>{legend || '—'}</div>
+                        <div style={{ fontSize: 8, color: muted, lineHeight: 1.8 }}>{legend || '—'}</div>
                     </div>
                     {(footer || addressLine || email || website) && (
-                        <div style={{ marginTop: 6 * sizeMult, fontSize: 7 * sizeMult, color: '#D0C8BA' }}>
+                        <div style={{ marginTop: 6, fontSize: 7, color: '#D0C8BA' }}>
                             {footer || [addressLine, email, website].filter(Boolean).join(' · ')}
                         </div>
                     )}

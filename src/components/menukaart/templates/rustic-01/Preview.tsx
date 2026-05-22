@@ -72,23 +72,20 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
         .join('')
         .slice(0, 1)
         .toUpperCase();
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
     const muted = '#6E6250';
     const light = '#B8AA8A';
     const legend = formatAllergenLegend(data.gangen);
 
     const eventBlock = (eventTitle || eventMessage) && (
-        <div style={{ textAlign: 'center', margin: `${6 * sizeMult}px 0 ${10 * sizeMult}px` }}>
+        <div style={{ textAlign: 'center', margin: `${6}px 0 ${10}px` }}>
             {eventTitle && (
                 <div
                     style={{
                         fontFamily: `'${headingFont}', cursive`,
-                        fontSize: 18 * sizeMult,
+                        fontSize: 18,
                         fontWeight: 500,
                         color: accent,
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -98,11 +95,11 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', serif`,
-                        fontSize: 9 * sizeMult,
+                        fontSize: 9,
                         fontStyle: 'italic',
                         color: muted,
                         lineHeight: 1.5,
-                        maxWidth: 320 * sizeMult,
+                        maxWidth: 320,
                         margin: '0 auto',
                     }}
                 >
@@ -116,7 +113,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
         <div
             style={{
                 background: `linear-gradient(170deg, ${bg} 0%, ${bgDark} 100%)`,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.25)',
                 borderRadius: 3,
@@ -133,10 +130,10 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     aria-hidden
                     style={{
                         position: 'absolute',
-                        top: 14 * sizeMult,
-                        left: 16 * sizeMult,
-                        right: 16 * sizeMult,
-                        bottom: 14 * sizeMult,
+                        top: 14,
+                        left: 16,
+                        right: 16,
+                        bottom: 14,
                         border: `1.5px solid ${light}`,
                         borderRadius: 2,
                         pointerEvents: 'none',
@@ -146,10 +143,10 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     <div
                         style={{
                             position: 'absolute',
-                            top: 3 * sizeMult,
-                            left: 3 * sizeMult,
-                            right: 3 * sizeMult,
-                            bottom: 3 * sizeMult,
+                            top: 3,
+                            left: 3,
+                            right: 3,
+                            bottom: 3,
                             border: `0.5px solid ${light}`,
                             borderRadius: 1,
                         }}
@@ -159,7 +156,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
 
             <div
                 style={{
-                    padding: `${28 * sizeMult}px ${34 * sizeMult}px ${22 * sizeMult}px`,
+                    padding: `${28}px ${34}px ${22}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',
@@ -168,15 +165,15 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                 }}
             >
                 {/* Header — wax seal */}
-                <div style={{ textAlign: 'center', marginBottom: 8 * sizeMult }}>
+                <div style={{ textAlign: 'center', marginBottom: 8 }}>
                     <div
                         style={{
-                            width: logoSize * sizeMult,
-                            height: logoSize * sizeMult,
+                            width: logoSize,
+                            height: logoSize,
                             borderRadius: '50%',
                             background: accent,
                             margin: '0 auto',
-                            marginBottom: 6 * sizeMult,
+                            marginBottom: 6,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -184,14 +181,14 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                             boxShadow: '0 3px 8px rgba(0,0,0,.2), inset 0 1px 2px rgba(255,255,255,.2)',
                         }}
                     >
-                        <div style={{ position: 'absolute', inset: 4 * sizeMult, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,.25)' }} />
+                        <div style={{ position: 'absolute', inset: 4, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,.25)' }} />
                         {data.logoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                                 src={data.logoUrl}
                                 alt={brandName}
                                 style={{
-                                    maxHeight: logoSize * 0.55 * sizeMult,
+                                    maxHeight: logoSize * 0.55,
                                     objectFit: 'contain',
                                     borderRadius: '50%',
                                     mixBlendMode: 'screen',
@@ -201,7 +198,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                             <span
                                 style={{
                                     fontFamily: `'${headingFont}', cursive`,
-                                    fontSize: 26 * sizeMult,
+                                    fontSize: 26,
                                     fontWeight: 700,
                                     color: 'rgba(255,255,255,.9)',
                                 }}
@@ -213,7 +210,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     <div
                         style={{
                             fontFamily: `'${headingFont}', cursive`,
-                            fontSize: 32 * sizeMult,
+                            fontSize: 32,
                             fontWeight: 600,
                             color: text,
                             lineHeight: 1,
@@ -225,11 +222,11 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                         <div
                             style={{
                                 fontFamily: `'${bodyFont}', serif`,
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 fontStyle: 'italic',
                                 color: muted,
                                 letterSpacing: '.08em',
-                                marginTop: 2 * sizeMult,
+                                marginTop: 2,
                             }}
                         >
                             {subtitle}
@@ -237,18 +234,18 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     )}
                 </div>
 
-                {showDividers && <Vine accent={accent} mult={sizeMult} />}
+                {showDividers && <Vine accent={accent} mult={1} />}
 
                 {eventPosition === 'top' && eventBlock}
 
                 {/* Gangen */}
                 {data.gangen.map((gang, gi) => (
                     <div key={gi}>
-                        <div style={{ textAlign: 'center', marginBottom: 8 * sizeMult }}>
+                        <div style={{ textAlign: 'center', marginBottom: 8 }}>
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', cursive`,
-                                    fontSize: headingSize * 0.7 * sizeMult,
+                                    fontSize: headingSize * 0.7,
                                     fontWeight: headingWeight,
                                     color: accent,
                                 }}
@@ -259,12 +256,12 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                                 <div
                                     style={{
                                         fontFamily: `'${bodyFont}', serif`,
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 8,
                                         fontStyle: 'italic',
                                         color: muted,
                                         lineHeight: 1.55,
-                                        margin: `${2 * sizeMult}px auto ${6 * sizeMult}px`,
-                                        maxWidth: 320 * sizeMult,
+                                        margin: `${2}px auto ${6}px`,
+                                        maxWidth: 320,
                                     }}
                                 >
                                     {gang.description}
@@ -274,18 +271,18 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                                 style={{
                                     background: 'rgba(255,255,255,.12)',
                                     borderRadius: 4,
-                                    padding: `${8 * sizeMult}px ${12 * sizeMult}px`,
+                                    padding: `${8}px ${12}px`,
                                     margin: '0 auto',
-                                    maxWidth: 420 * sizeMult,
+                                    maxWidth: 420,
                                 }}
                             >
                                 {gang.dishes.map((dish, di) => (
-                                    <div key={di} style={{ marginBottom: 4 * sizeMult, textAlign: 'center' }}>
+                                    <div key={di} style={{ marginBottom: 4, textAlign: 'center' }}>
                                         <div>
                                             <span
                                                 style={{
                                                     fontFamily: `'${bodyFont}', serif`,
-                                                    fontSize: bodySize * sizeMult,
+                                                    fontSize: bodySize,
                                                     fontWeight: 500,
                                                     color: text,
                                                 }}
@@ -296,9 +293,9 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                                                 <span
                                                     style={{
                                                         fontFamily: `'${bodyFont}', serif`,
-                                                        fontSize: 8 * sizeMult,
+                                                        fontSize: 8,
                                                         color: accent,
-                                                        marginLeft: 3 * sizeMult,
+                                                        marginLeft: 3,
                                                     }}
                                                 >
                                                     ({dish.allergens.join(', ')})
@@ -309,11 +306,11 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                                             <div
                                                 style={{
                                                     fontFamily: `'${bodyFont}', serif`,
-                                                    fontSize: 8 * sizeMult,
+                                                    fontSize: 8,
                                                     fontStyle: 'italic',
                                                     color: muted,
                                                     lineHeight: 1.45,
-                                                    marginTop: 1 * sizeMult,
+                                                    marginTop: 1,
                                                 }}
                                             >
                                                 {dish.description}
@@ -323,24 +320,24 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                                 ))}
                             </div>
                         </div>
-                        {showDividers && gi < data.gangen.length - 1 && <Vine accent={accent} mult={sizeMult} />}
+                        {showDividers && gi < data.gangen.length - 1 && <Vine accent={accent} mult={1} />}
                     </div>
                 ))}
 
                 {eventPosition === 'bottom' && eventBlock}
 
                 {/* Legend */}
-                <div style={{ marginTop: 'auto', paddingTop: 8 * sizeMult, textAlign: 'center' }}>
-                    <div style={{ width: 50 * sizeMult, height: 1, background: light, margin: '0 auto', marginBottom: 5 * sizeMult }} />
+                <div style={{ marginTop: 'auto', paddingTop: 8, textAlign: 'center' }}>
+                    <div style={{ width: 50, height: 1, background: light, margin: '0 auto', marginBottom: 5 }} />
                     <div
                         style={{
                             fontFamily: `'${bodyFont}', serif`,
-                            fontSize: 8 * sizeMult,
+                            fontSize: 8,
                             fontWeight: 600,
                             letterSpacing: '.15em',
                             textTransform: 'uppercase',
                             color: accent,
-                            marginBottom: 3 * sizeMult,
+                            marginBottom: 3,
                         }}
                     >
                         Allergenen
@@ -348,7 +345,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     <div
                         style={{
                             fontFamily: `'${bodyFont}', serif`,
-                            fontSize: 8 * sizeMult,
+                            fontSize: 8,
                             fontStyle: 'italic',
                             color: muted,
                             lineHeight: 1.7,
@@ -359,9 +356,9 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     {footer && (
                         <div
                             style={{
-                                marginTop: 6 * sizeMult,
+                                marginTop: 6,
                                 fontFamily: `'${bodyFont}', serif`,
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 color: muted,
                                 opacity: 0.5,
                             }}

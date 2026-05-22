@@ -39,10 +39,6 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
     const eventTitle = overrides.eventTitle ?? '';
     const eventMessage = overrides.eventMessage ?? '';
     const eventPosition = overrides.eventMessagePosition ?? 'top';
-
-    const isSmall = size === 'small';
-    const sizeMult = isSmall ? 290 / 480 : 1;
-
     const muted = '#888';
     const light = '#C0C0C0';
     const ghost = '#F2F2F2';
@@ -52,10 +48,10 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
     const eventBlock = (eventTitle || eventMessage) && (
         <div
             style={{
-                margin: `${8 * sizeMult}px 0 ${14 * sizeMult}px`,
-                paddingTop: 8 * sizeMult,
+                margin: `${8}px 0 ${14}px`,
+                paddingTop: 8,
                 borderTop: `1px solid ${text}`,
-                paddingBottom: 8 * sizeMult,
+                paddingBottom: 8,
                 borderBottom: `1px solid ${text}`,
             }}
         >
@@ -63,12 +59,12 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${headingFont}', monospace`,
-                        fontSize: 11 * sizeMult,
+                        fontSize: 11,
                         fontWeight: 500,
                         textTransform: 'uppercase',
                         letterSpacing: '.18em',
                         color: text,
-                        marginBottom: 2 * sizeMult,
+                        marginBottom: 2,
                     }}
                 >
                     {eventTitle}
@@ -78,7 +74,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 <div
                     style={{
                         fontFamily: `'${bodyFont}', monospace`,
-                        fontSize: 8 * sizeMult,
+                        fontSize: 8,
                         fontWeight: 300,
                         fontStyle: 'italic',
                         color: muted,
@@ -95,7 +91,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
         <div
             style={{
                 background: bg,
-                width: isSmall ? 290 : 480,
+                width: 480,
                 aspectRatio: '1 / 1.414',
                 boxShadow: '0 4px 24px rgba(0,0,0,.08)',
                 borderRadius: 3,
@@ -111,9 +107,9 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                     aria-hidden
                     style={{
                         position: 'absolute',
-                        right: -12 * sizeMult,
-                        top: -24 * sizeMult,
-                        fontSize: 200 * sizeMult,
+                        right: -12,
+                        top: -24,
+                        fontSize: 200,
                         fontWeight: 500,
                         color: ghost,
                         lineHeight: 0.7,
@@ -128,7 +124,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
             )}
             <div
                 style={{
-                    padding: `${36 * sizeMult}px ${42 * sizeMult}px ${20 * sizeMult}px`,
+                    padding: `${36}px ${42}px ${20}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: '100%',
@@ -137,19 +133,19 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 }}
             >
                 {/* Header */}
-                <div style={{ marginBottom: 18 * sizeMult }}>
+                <div style={{ marginBottom: 18 }}>
                     {data.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize * sizeMult, marginBottom: 6 * sizeMult, objectFit: 'contain' }} />
+                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize, marginBottom: 6, objectFit: 'contain' }} />
                     ) : (
                         <div
                             style={{
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 fontWeight: 500,
                                 letterSpacing: '.15em',
                                 textTransform: 'uppercase',
                                 color: muted,
-                                marginBottom: 6 * sizeMult,
+                                marginBottom: 6,
                             }}
                         >
                             {brandName}
@@ -158,7 +154,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                     <div
                         style={{
                             fontFamily: `'${headingFont}', monospace`,
-                            fontSize: headingSize * sizeMult,
+                            fontSize: headingSize,
                             fontWeight: headingWeight,
                             letterSpacing: '.02em',
                             lineHeight: 0.85,
@@ -169,12 +165,12 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                     </div>
                     <div
                         style={{
-                            fontSize: 9 * sizeMult,
+                            fontSize: 9,
                             fontWeight: 400,
                             letterSpacing: '.15em',
                             textTransform: 'uppercase',
                             color: muted,
-                            marginTop: 5 * sizeMult,
+                            marginTop: 5,
                         }}
                     >
                         {brandName}
@@ -182,17 +178,17 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                     {subtitle && (
                         <div
                             style={{
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 fontWeight: 300,
                                 color: light,
                                 letterSpacing: '.04em',
-                                marginTop: 2 * sizeMult,
+                                marginTop: 2,
                             }}
                         >
                             {subtitle}
                         </div>
                     )}
-                    <div style={{ width: '100%', height: 1.5 * sizeMult, background: text, marginTop: 8 * sizeMult }} />
+                    <div style={{ width: '100%', height: 1.5, background: text, marginTop: 8 }} />
                 </div>
 
                 {eventPosition === 'top' && eventBlock}
@@ -201,15 +197,15 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 {data.gangen.map((gang, gi) => {
                     const num = String(gi + 1).padStart(2, '0');
                     return (
-                        <div key={gi} style={{ marginBottom: 14 * sizeMult, position: 'relative' }}>
+                        <div key={gi} style={{ marginBottom: 14, position: 'relative' }}>
                             {showGhost && (
                                 <div
                                     aria-hidden
                                     style={{
                                         position: 'absolute',
-                                        left: -4 * sizeMult,
-                                        top: -6 * sizeMult,
-                                        fontSize: 56 * sizeMult,
+                                        left: -4,
+                                        top: -6,
+                                        fontSize: 56,
                                         fontWeight: 500,
                                         color: ghost,
                                         lineHeight: 0.7,
@@ -220,30 +216,30 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                                     {num}
                                 </div>
                             )}
-                            <div style={{ position: 'relative', zIndex: 1, paddingLeft: 3 * sizeMult }}>
+                            <div style={{ position: 'relative', zIndex: 1, paddingLeft: 3 }}>
                                 <div
                                     style={{
-                                        fontSize: 10 * sizeMult,
+                                        fontSize: 10,
                                         fontWeight: 500,
                                         textTransform: 'uppercase',
                                         letterSpacing: '.2em',
-                                        marginBottom: 1 * sizeMult,
+                                        marginBottom: 1,
                                         color: text,
                                     }}
                                 >
                                     {gang.name}
                                 </div>
-                                <div style={{ width: 26 * sizeMult, height: 1.5 * sizeMult, background: accent, marginBottom: 4 * sizeMult }} />
+                                <div style={{ width: 26, height: 1.5, background: accent, marginBottom: 4 }} />
                                 {gang.description && (
                                     <div
                                         style={{
-                                            fontSize: 8 * sizeMult,
+                                            fontSize: 8,
                                             fontWeight: 300,
                                             fontStyle: 'italic',
                                             color: muted,
                                             lineHeight: 1.5,
-                                            marginBottom: 5 * sizeMult,
-                                            maxWidth: 320 * sizeMult,
+                                            marginBottom: 5,
+                                            maxWidth: 320,
                                         }}
                                     >
                                         {gang.description}
@@ -254,19 +250,19 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                                         key={di}
                                         style={{
                                             display: 'grid',
-                                            gridTemplateColumns: `${26 * sizeMult}px 1fr`,
-                                            gap: `0 ${6 * sizeMult}px`,
-                                            marginBottom: 3 * sizeMult,
+                                            gridTemplateColumns: `${26}px 1fr`,
+                                            gap: `0 ${6}px`,
+                                            marginBottom: 3,
                                             alignItems: 'baseline',
                                         }}
                                     >
                                         <div
                                             style={{
-                                                fontSize: 8 * sizeMult,
+                                                fontSize: 8,
                                                 fontWeight: 400,
                                                 color: light,
                                                 textAlign: 'right',
-                                                paddingRight: 3 * sizeMult,
+                                                paddingRight: 3,
                                                 borderRight: `1px solid ${ghost}`,
                                             }}
                                         >
@@ -274,14 +270,14 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                                         </div>
                                         <div>
                                             <div>
-                                                <span style={{ fontSize: bodySize * sizeMult, fontWeight: 500, color: text }}>{dish.name}</span>
+                                                <span style={{ fontSize: bodySize, fontWeight: 500, color: text }}>{dish.name}</span>
                                                 {dish.allergens && dish.allergens.length > 0 && (
                                                     <span
                                                         style={{
-                                                            fontSize: 8 * sizeMult,
+                                                            fontSize: 8,
                                                             color: accent,
                                                             letterSpacing: '.04em',
-                                                            marginLeft: 4 * sizeMult,
+                                                            marginLeft: 4,
                                                         }}
                                                     >
                                                         {dish.allergens.join(' ')}
@@ -291,11 +287,11 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                                             {dish.description && (
                                                 <div
                                                     style={{
-                                                        fontSize: 8 * sizeMult,
+                                                        fontSize: 8,
                                                         fontWeight: 300,
                                                         color: muted,
                                                         lineHeight: 1.45,
-                                                        marginTop: 1 * sizeMult,
+                                                        marginTop: 1,
                                                     }}
                                                 >
                                                     {dish.description}
@@ -309,10 +305,10 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                                 <div
                                     style={{
                                         textAlign: 'center',
-                                        fontSize: 8 * sizeMult,
+                                        fontSize: 8,
                                         color: light,
                                         letterSpacing: '.3em',
-                                        margin: `${4 * sizeMult}px 0 ${10 * sizeMult}px`,
+                                        margin: `${4}px 0 ${10}px`,
                                     }}
                                 >
                                     · · ·
@@ -325,12 +321,12 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 {eventPosition === 'bottom' && eventBlock}
 
                 {/* Legend */}
-                <div style={{ marginTop: 'auto', paddingTop: 8 * sizeMult }}>
-                    <div style={{ width: '100%', height: 1.5 * sizeMult, background: text, marginBottom: 6 * sizeMult }} />
+                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
+                    <div style={{ width: '100%', height: 1.5, background: text, marginBottom: 6 }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <div
                             style={{
-                                fontSize: 8 * sizeMult,
+                                fontSize: 8,
                                 fontWeight: 500,
                                 letterSpacing: '.15em',
                                 textTransform: 'uppercase',
@@ -339,7 +335,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                         >
                             Allergenen
                         </div>
-                        <div style={{ fontSize: 8 * sizeMult, fontWeight: 300, color: light }}>
+                        <div style={{ fontSize: 8, fontWeight: 300, color: light }}>
                             {used.length} allergenen · {totalDishes} gerechten
                         </div>
                     </div>
@@ -347,18 +343,18 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                         style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(4, 1fr)',
-                            gap: `${2 * sizeMult}px ${10 * sizeMult}px`,
-                            marginTop: 3 * sizeMult,
+                            gap: `${2}px ${10}px`,
+                            marginTop: 3,
                         }}
                     >
                         {used.map(a => (
-                            <div key={a} style={{ fontSize: 8 * sizeMult, fontWeight: 300, color: muted }}>
+                            <div key={a} style={{ fontSize: 8, fontWeight: 300, color: muted }}>
                                 <span style={{ fontWeight: 500, color: text }}>{a}</span> {ALLERGEN_MAP[a]}
                             </div>
                         ))}
                     </div>
                     {footer && (
-                        <div style={{ marginTop: 8 * sizeMult, fontSize: 8 * sizeMult, fontWeight: 300, color: light }}>{footer}</div>
+                        <div style={{ marginTop: 8, fontSize: 8, fontWeight: 300, color: light }}>{footer}</div>
                     )}
                 </div>
             </div>

@@ -78,9 +78,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
     const eventPosition = overrides.eventMessagePosition ?? 'top';
 
     const logoInitial = brandName.charAt(0).toUpperCase();
-    const isSmall = size === 'small';
-    const frameSize = isSmall ? 290 : 480;
-    const sizeMult = isSmall ? 290 / 480 : 1;
+    const frameSize = 480;
     const muted = '#7A6E5E';
     const warm = '#FFF3E0';
     const bandText = contrastTextColor(accent);
@@ -91,8 +89,8 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
             style={{
                 background: `${accent}14`,
                 borderRadius: 4,
-                padding: `${5 * sizeMult}px ${8 * sizeMult}px`,
-                margin: `${4 * sizeMult}px 0 ${8 * sizeMult}px`,
+                padding: `${5}px ${8}px`,
+                margin: `${4}px 0 ${8}px`,
                 borderLeft: `3px solid ${accent}`,
             }}
         >
@@ -100,17 +98,17 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 11 * sizeMult,
+                        fontSize: 11,
                         fontWeight: 700,
                         color: accent,
-                        marginBottom: 1 * sizeMult,
+                        marginBottom: 1,
                     }}
                 >
                     {eventTitle}
                 </div>
             )}
             {eventMessage && (
-                <div style={{ fontSize: 8 * sizeMult, color: muted, lineHeight: 1.45 }}>{eventMessage}</div>
+                <div style={{ fontSize: 8, color: muted, lineHeight: 1.45 }}>{eventMessage}</div>
             )}
         </div>
     );
@@ -135,10 +133,10 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 aria-hidden
                 style={{
                     position: 'absolute',
-                    top: -25 * sizeMult,
-                    left: -40 * sizeMult,
-                    width: 210 * sizeMult,
-                    height: 70 * sizeMult,
+                    top: -25,
+                    left: -40,
+                    width: 210,
+                    height: 70,
                     background: accent,
                     transform: 'rotate(-12deg)',
                     zIndex: 2,
@@ -147,21 +145,21 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
             <div
                 style={{
                     position: 'absolute',
-                    top: 12 * sizeMult,
-                    left: 16 * sizeMult,
+                    top: 12,
+                    left: 16,
                     zIndex: 3,
                     color: bandText,
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 * sizeMult }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     {data.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize * sizeMult, objectFit: 'contain' }} />
+                        <img src={data.logoUrl} alt={brandName} style={{ maxHeight: logoSize, objectFit: 'contain' }} />
                     ) : (
                         <div
                             style={{
-                                width: logoSize * sizeMult,
-                                height: logoSize * sizeMult,
+                                width: logoSize,
+                                height: logoSize,
                                 borderRadius: '50%',
                                 background: 'rgba(255,255,255,.18)',
                                 border: '1.5px solid rgba(255,255,255,.3)',
@@ -169,7 +167,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontFamily: `'${headingFont}', sans-serif`,
-                                fontSize: 14 * sizeMult,
+                                fontSize: 14,
                                 fontWeight: 700,
                             }}
                         >
@@ -179,7 +177,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                     <div
                         style={{
                             fontFamily: `'${headingFont}', sans-serif`,
-                            fontSize: 14 * sizeMult,
+                            fontSize: 14,
                             fontWeight: 700,
                             letterSpacing: '.02em',
                         }}
@@ -190,11 +188,11 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 {subtitle && (
                     <div
                         style={{
-                            fontSize: 7 * sizeMult,
+                            fontSize: 7,
                             letterSpacing: '.1em',
                             textTransform: 'uppercase',
                             opacity: 0.7,
-                            marginTop: 1 * sizeMult,
+                            marginTop: 1,
                         }}
                     >
                         {subtitle}
@@ -205,7 +203,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
             {/* Content */}
             <div
                 style={{
-                    padding: `${44 * sizeMult}px ${18 * sizeMult}px ${30 * sizeMult}px`,
+                    padding: `${44}px ${18}px ${30}px`,
                     display: 'flex',
                     flexDirection: 'column',
                     height: '100%',
@@ -216,11 +214,11 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: headingSize * sizeMult,
+                        fontSize: headingSize,
                         fontWeight: headingWeight,
                         color: text,
                         letterSpacing: '.02em',
-                        marginBottom: 5 * sizeMult,
+                        marginBottom: 5,
                     }}
                 >
                     Menu
@@ -232,39 +230,39 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                     style={{
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
-                        gap: `${3 * sizeMult}px ${10 * sizeMult}px`,
+                        gap: `${3}px ${10}px`,
                         flex: 1,
                     }}
                 >
                     {data.gangen.map((gang, gi) => (
-                        <div key={gi} style={{ marginBottom: 3 * sizeMult }}>
+                        <div key={gi} style={{ marginBottom: 3 }}>
                             <div
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: 3 * sizeMult,
+                                    gap: 3,
                                     background: accent,
                                     color: bandText,
-                                    padding: `${2 * sizeMult}px ${8 * sizeMult}px`,
+                                    padding: `${2}px ${8}px`,
                                     borderRadius: 9,
                                     fontFamily: `'${headingFont}', sans-serif`,
-                                    fontSize: 8 * sizeMult,
+                                    fontSize: 8,
                                     fontWeight: 700,
                                     letterSpacing: '.04em',
                                     textTransform: 'uppercase',
-                                    marginBottom: 3 * sizeMult,
+                                    marginBottom: 3,
                                 }}
                             >
-                                <GangIcon index={gi} color={bandText} mult={sizeMult} />
+                                <GangIcon index={gi} color={bandText} mult={1} />
                                 {gang.name}
                             </div>
                             {gang.description && (
                                 <div
                                     style={{
-                                        fontSize: 7 * sizeMult,
+                                        fontSize: 7,
                                         color: muted,
                                         lineHeight: 1.2,
-                                        marginBottom: 2 * sizeMult,
+                                        marginBottom: 2,
                                         fontStyle: 'italic',
                                     }}
                                 >
@@ -277,18 +275,18 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                                     style={{
                                         background: warm,
                                         borderRadius: 5,
-                                        padding: `${3 * sizeMult}px ${6 * sizeMult}px`,
-                                        marginBottom: 2 * sizeMult,
+                                        padding: `${3}px ${6}px`,
+                                        marginBottom: 2,
                                         border: '1px solid rgba(0,0,0,.04)',
-                                        paddingLeft: 9 * sizeMult,
+                                        paddingLeft: 9,
                                         borderLeft: `2px solid ${accent}`,
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 3 * sizeMult }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 3 }}>
                                         <span
                                             style={{
                                                 fontFamily: `'${headingFont}', sans-serif`,
-                                                fontSize: bodySize * 0.9 * sizeMult,
+                                                fontSize: bodySize * 0.9,
                                                 fontWeight: 600,
                                                 color: text,
                                             }}
@@ -296,14 +294,14 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                                             {dish.name}
                                         </span>
                                         {dish.allergens && dish.allergens.length > 0 && (
-                                            <span style={{ display: 'flex', gap: 1.5 * sizeMult, flexShrink: 0 }}>
+                                            <span style={{ display: 'flex', gap: 1.5, flexShrink: 0 }}>
                                                 {dish.allergens.map(a => (
                                                     <span
                                                         key={a}
                                                         style={{
-                                                            fontSize: 7 * sizeMult,
+                                                            fontSize: 7,
                                                             fontWeight: 700,
-                                                            padding: `${1 * sizeMult}px ${4 * sizeMult}px`,
+                                                            padding: `${1}px ${4}px`,
                                                             borderRadius: 6,
                                                             background: accent,
                                                             color: bandText,
@@ -317,7 +315,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                                         )}
                                     </div>
                                     {dish.description && (
-                                        <div style={{ fontSize: 7 * sizeMult, color: muted, lineHeight: 1.2, marginTop: 1 * sizeMult }}>
+                                        <div style={{ fontSize: 7, color: muted, lineHeight: 1.2, marginTop: 1 }}>
                                             {dish.description}
                                         </div>
                                     )}
@@ -337,20 +335,20 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    height: 24 * sizeMult,
+                    height: 24,
                     background: accent,
                     zIndex: 2,
                     display: 'flex',
                     alignItems: 'center',
-                    padding: `0 ${14 * sizeMult}px`,
-                    gap: 5 * sizeMult,
+                    padding: `0 ${14}px`,
+                    gap: 5,
                     color: bandText,
                 }}
             >
                 <span
                     style={{
                         fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 8 * sizeMult,
+                        fontSize: 8,
                         fontWeight: 700,
                         letterSpacing: '.08em',
                         flexShrink: 0,
@@ -361,7 +359,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 <span
                     style={{
                         fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 6.5 * sizeMult,
+                        fontSize: 6.5,
                         opacity: 0.65,
                         lineHeight: 1.3,
                     }}
@@ -373,9 +371,9 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                 <div
                     style={{
                         position: 'absolute',
-                        bottom: 28 * sizeMult,
-                        left: 18 * sizeMult,
-                        fontSize: 6.5 * sizeMult,
+                        bottom: 28,
+                        left: 18,
+                        fontSize: 6.5,
                         color: muted,
                         zIndex: 1,
                     }}
