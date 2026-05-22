@@ -75,6 +75,16 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
         root.style.setProperty('--color-bg-deep', `color-mix(in oklch, ${bg}, black 5%)`);
         root.style.setProperty('--color-bg-darker', `color-mix(in oklch, ${bg}, black 12%)`);
 
+        // ── Auto-contrast voor primary buttons (B8b 2026-05-22) ───────────
+        // Knoppen met `var(--brand)` als bg gebruiken `var(--brand-text-on)`
+        // als tekst-kleur. Op donkere primaries (Studio black, Linen deep
+        // brown) wordt dat wit; op lichte primaries (Smokehouse gold, Cellar
+        // champagne) wordt dat zwart. Geen handwerk meer per knop — één token.
+        const onPrimary = perceivedLightness(primary) > 0.55 ? '#0a0a0c' : '#ffffff';
+        const onAccent = perceivedLightness(accent) > 0.55 ? '#0a0a0c' : '#ffffff';
+        root.style.setProperty('--brand-text-on', onPrimary);
+        root.style.setProperty('--brand-text-on-accent', onAccent);
+
         // ── Theme mode flag voor globals.css selectors ────────────────────
         // [data-theme-mode="light"] overrides voor de paar tokens die niet
         // met simpele text-direction op te lossen zijn (shadows, status-tints).
