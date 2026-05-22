@@ -71,6 +71,10 @@ export const SettingsSchema = z.object({
     /* Huisstijl — logo URL's en thema-tokens (5×8 white-label) */
     logo_url: z.string().url().or(z.literal('')).nullable().optional(),
     logo_dark_url: z.string().url().or(z.literal('')).nullable().optional(),
+    /* theme_preset = id van een THEME_PRESETS entry (smokehouse-dark, linen, foundry, ...).
+       Server Action derive't deterministisch de brand_* hex-velden uit de preset's OKLCH tokens
+       via toHex() — geen AI-derive. */
+    theme_preset: z.string().max(50).regex(/^[a-z0-9-]+$/).nullable().optional(),
     brand_primary: HexColor.nullable().optional(),
     brand_accent: HexColor.nullable().optional(),
     brand_secondary: HexColor.nullable().optional(),
