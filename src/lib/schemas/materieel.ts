@@ -31,6 +31,21 @@ export const LogboekEntrySchema = z.object({
     notitie: z.string().max(2000).optional(),
 });
 
+/* S5-deel-1: AI-gescrapte specs uit product-URL. Niet AI-derived voor
+   kritische velden (BTW/allergenen/quantities) — alleen producteigenschappen
+   die als referentie dienen, niet als source-of-truth voor productie. */
+export const MaterieelSpecsSchema = z.object({
+    naam: z.string().max(200).optional(),
+    merk: z.string().max(200).optional(),
+    model: z.string().max(200).optional(),
+    afmetingen: z.string().max(200).optional(),
+    gewicht: z.string().max(100).optional(),
+    vermogen: z.string().max(100).optional(),
+    prijs_eur: z.number().nonnegative().max(999_999).optional(),
+    specs_bullets: z.array(z.string().max(500)).max(20).optional(),
+    notes: z.string().max(2000).optional(),
+}).passthrough();
+
 export const MaterieelSchema = z.object({
     id: z.coerce.number().int().optional(),
     naam: z.string().min(1, 'Naam is verplicht').max(200),
@@ -40,6 +55,10 @@ export const MaterieelSchema = z.object({
     notitie: z.string().max(5000).optional().default(''),
     locatie: z.string().max(200).nullable().optional(),
     fotos: z.array(z.string().url()).max(20, 'Max 20 foto\'s per item').nullable().optional(),
+    foto_urls: z.array(z.string().url()).max(20).nullable().optional(),
+    product_url: z.string().url().max(2048).nullable().optional(),
+    specs: MaterieelSpecsSchema.nullable().optional(),
+    specs_fetched_at: z.string().nullable().optional(),
     logboek: z.array(LogboekEntrySchema).max(200, 'Max 200 logboek-entries').optional().default([]),
 });
 

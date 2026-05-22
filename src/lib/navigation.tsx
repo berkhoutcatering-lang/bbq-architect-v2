@@ -83,7 +83,7 @@ export const navSections: NavSection[] = [
             { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
             { label: "Materieel", icon: <Hammer size={16} />, href: "/materieel", description: "Smoker, pannen, equipment — wat je meeneemt naar het event" },
             { label: "Logistiek", icon: <Truck size={16} />, href: "/logistiek", description: "Routes, transport en planning" },
-            { label: "Prijsintelligentie", icon: <TrendingUp size={16} />, href: "/price-intelligence", description: "Prijstrends en leverancier-vergelijking" },
+            { label: "Inkoop-checker", icon: <TrendingUp size={16} />, href: "/voorraad/inkoop-checker", description: "Slim controleren van leverancier-prijzen via email-inbox en factuur-extractie" },
         ],
     },
     {

@@ -593,7 +593,7 @@ export default function DashboardPage() {
         ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
         : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
       cta: 'Bekijk impact',
-      href: '/price-intelligence?filter=alerts',
+      href: '/voorraad/inkoop-checker?filter=alerts',
     });
   }
 
