@@ -1,0 +1,26 @@
+name: Theme contrast audit
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/themes.ts'
+      - 'src/lib/themeTokens.ts'
+      - 'src/lib/colorMath.ts'
+      - 'scripts/contrast-audit.ts'
+      - '.github/workflows/contrast.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/themes.ts'
+
+jobs:
+  contrast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint:contrast

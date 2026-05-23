@@ -7,9 +7,11 @@ import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
 import PageHeader from '@/components/PageHeader';
-import { Building2, CloudUpload, Database, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
+import { Building2, Check, CloudUpload, Database, Eye, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
+import { THEMES, type ThemePreset, type ThemeMode, findPresetBySignature } from '@/lib/themes';
+import { perceivedLightness } from '@/lib/colorMath';
 
 export default function Instellingen() {
     /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
@@ -300,116 +302,286 @@ export default function Instellingen() {
     );
 }
 
-// ── Curated thema's — 6 sterke caterer-archetypes, geen overlap ──
-const THEMES = [
-    // 3 donker (Smokehouse / Graphite / Cellar) + 3 licht (Linen / Studio / Garden).
-    // Elke preset heeft een eigen silhouette en spreekt een ander caterer-type aan.
-    // Kleuren zijn afgestemd op OKLCH-lightness zodat contrast perceptueel uniform is.
-    {
-        id: 'smokehouse',
-        naam: 'Smokehouse',
-        omschrijving: 'Voor traditionele BBQ-caterers — slow smoke, charcoal, pitmaster',
-        bg: '#181412', card: '#2c241d', text: '#f4efe4', primary: '#d49b4d', accent: '#b3611f', secondary: '#100c0a',
-    },
-    {
-        id: 'graphite',
-        naam: 'Graphite',
-        omschrijving: 'Voor moderne event-caterers — editorial, premium, tech-forward',
-        bg: '#0e1014', card: '#1f2128', text: '#f4f5f7', primary: '#d8c277', accent: '#a89d83', secondary: '#08090d',
-    },
-    {
-        id: 'cellar',
-        naam: 'Cellar',
-        omschrijving: 'Voor fine-dining caterers en premium bruiloften — kelder-warm, gastronomisch',
-        bg: '#241015', card: '#4a1f2a', text: '#f1ead8', primary: '#dac786', accent: '#a96940', secondary: '#1a0a0d',
-    },
-    {
-        id: 'linen',
-        naam: 'Linen',
-        omschrijving: 'Voor klassieke wedding-caterers — papier-en-inkt, professioneel',
-        bg: '#f4eed8', card: '#fcfaf3', text: '#1c1814', primary: '#9a6a3e', accent: '#6b4a30', secondary: '#e7dfc6',
-    },
-    {
-        id: 'studio',
-        naam: 'Studio',
-        omschrijving: 'Voor minimalistische caterers — magazine-clean, één scherpe rode accent',
-        bg: '#f6f6f6', card: '#ffffff', text: '#181818', primary: '#222222', accent: '#b73020', secondary: '#ebebeb',
-    },
-    {
-        id: 'garden',
-        naam: 'Garden',
-        omschrijving: 'Voor garden-party en sustainable caterers — organisch, plantaardig, aards',
-        bg: '#ece9d6', card: '#fbf9ef', text: '#1f2117', primary: '#6b7847', accent: '#a96b40', secondary: '#dad6b8',
-    },
-] as const;
+// ── Curated thema-presets — source of truth lives in src/lib/themes.ts.
+// The same 8 presets are consumed by: (1) ThemeProvider runtime hydration,
+// (2) the FOUC-fixing :root injector in app/layout.tsx, (3) the WCAG
+// contrast-audit CI job. Adding or editing a preset reruns the audit.
+
+function MiniDashboard({ preset }: { preset: ThemePreset }) {
+    const { bg, card, text, primary, accent, mode } = preset;
+    const wMuted = mode === 'light' ? '65%' : '55%';
+    const muted = `color-mix(in oklch, ${text} ${wMuted}, ${bg})`;
+    const border = `color-mix(in oklch, ${card}, ${text} 12%)`;
+    return (
+        <div style={{ background: bg, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6, minHeight: 130 }} aria-hidden>
+            <div style={{ display: 'flex', gap: 5 }}>
+                {[['Omzet', '€ 12,8k'], ['Marge', '68%'], ['Events', '7']].map(([label, val]) => (
+                    <div key={label} style={{ flex: 1, background: card, borderRadius: 4, padding: '5px 6px', border: `1px solid ${border}` }}>
+                        <div style={{ fontSize: 7, color: muted, letterSpacing: '.08em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 2 }}>{label}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: text, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+                    </div>
+                ))}
+            </div>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <div style={{ background: primary, color: mode === 'dark' ? bg : '#fff', fontSize: 7, fontWeight: 700, padding: '3px 8px', borderRadius: 3 }}>Nieuw event</div>
+                <div style={{ border: `1px solid ${border}`, color: muted, fontSize: 7, fontWeight: 600, padding: '3px 6px', borderRadius: 3 }}>Filters</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {[['Buurtfeest', 'Bevestigd'], ['Bruiloft V.D.', 'Optie']].map(([name, status], i) => (
+                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 5, background: card, borderRadius: 3, padding: '3px 6px', border: `1px solid ${border}` }}>
+                        <div style={{
+                            width: 14, height: 14, borderRadius: 3,
+                            background: `color-mix(in oklch, ${primary} 14%, transparent)`,
+                            border: `1px solid color-mix(in oklch, ${primary} 28%, transparent)`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 7, fontWeight: 700, color: primary, fontVariantNumeric: 'tabular-nums',
+                        }}>{['18', '20'][i]}</div>
+                        <span style={{ fontSize: 8, fontWeight: 600, color: text, flex: 1 }}>{name}</span>
+                        <span style={{
+                            fontSize: 7, padding: '1px 4px', borderRadius: 99, fontWeight: 700,
+                            background: i === 0 ? 'rgba(34,197,94,.14)' : `color-mix(in oklch, ${accent} 14%, transparent)`,
+                            color: i === 0 ? '#22c55e' : accent,
+                        }}>{status}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function PresetCard({ preset, isActive, onClick }: { preset: ThemePreset; isActive: boolean; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={isActive}
+            aria-label={`Thema ${preset.name} — ${preset.description}`}
+            style={{
+                position: 'relative', padding: 0,
+                borderRadius: 'var(--radius-lg, 12px)', overflow: 'hidden', cursor: 'pointer',
+                border: isActive ? `2px solid ${preset.primary}` : '1px solid var(--border)',
+                background: 'var(--card-solid)', textAlign: 'left', color: 'var(--text)',
+                transition: 'transform .15s, box-shadow .15s',
+                display: 'flex', flexDirection: 'column',
+                minHeight: 220,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 18px -8px ${preset.primary}55`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+        >
+            <MiniDashboard preset={preset} />
+            {isActive && (
+                <div style={{
+                    position: 'absolute', top: 8, right: 8,
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: preset.primary,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: `0 2px 8px color-mix(in oklch, ${preset.primary} 40%, transparent)`,
+                }} aria-hidden>
+                    <Check size={12} color={preset.mode === 'dark' ? preset.bg : '#ffffff'} strokeWidth={3} />
+                </div>
+            )}
+            <div style={{ padding: '10px 12px 12px', borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{preset.name}</span>
+                    <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase',
+                        color: 'var(--muted)', background: 'var(--sidebar-bg-hover)',
+                        padding: '2px 6px', borderRadius: 4,
+                    }}>
+                        {preset.mode === 'dark' ? 'Donker' : 'Licht'}
+                    </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>{preset.description}</div>
+            </div>
+        </button>
+    );
+}
+
+function ThemePreviewPane({ preset }: { preset: ThemePreset }) {
+    const { bg, card, text, primary, accent, mode } = preset;
+    const wMuted = mode === 'light' ? '65%' : '55%';
+    const muted = `color-mix(in oklch, ${text} ${wMuted}, ${bg})`;
+    const border = `color-mix(in oklch, ${card}, ${text} 12%)`;
+    const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+        <div style={{ background: card, borderRadius: 8, border: `1px solid ${border}`, overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', borderBottom: `1px solid ${border}`, fontSize: 10, fontWeight: 700, letterSpacing: '.15em', textTransform: 'uppercase', color: muted }}>{title}</div>
+            <div style={{ padding: 12 }}>{children}</div>
+        </div>
+    );
+    return (
+        <div
+            role="img"
+            aria-label={`Live voorbeeld van thema ${preset.name}`}
+            style={{
+                background: bg, color: text,
+                borderRadius: 12, padding: 12,
+                display: 'flex', flexDirection: 'column', gap: 10,
+                border: `1px solid ${border}`,
+                transition: 'background .25s, color .25s',
+            }}
+        >
+            <Section title="Dashboard">
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                    {[['Omzet', '€ 12.840', false], ['Marge', '68,4%', true], ['Events', '7', false]].map(([label, val, isOk]) => (
+                        <div key={label as string} style={{ flex: 1, background: bg, borderRadius: 6, padding: '8px 8px 6px', border: `1px solid ${border}` }}>
+                            <div style={{ fontSize: 8, color: muted, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>{label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: isOk ? '#22c55e' : text, fontVariantNumeric: 'tabular-nums' }}>{val}</div>
+                        </div>
+                    ))}
+                </div>
+                <div style={{ height: 48, borderRadius: 6, background: bg, border: `1px solid ${border}`, display: 'flex', alignItems: 'flex-end', padding: '0 6px 4px', gap: 3 }}>
+                    {[35, 55, 42, 68, 52, 74, 60, 48, 72, 65, 80, 58].map((h, i) => (
+                        <div key={i} style={{
+                            flex: 1,
+                            height: `${h * 0.5}px`,
+                            background: i === 11 ? primary : `color-mix(in oklch, ${primary} ${mode === 'dark' ? '22%' : '34%'}, transparent)`,
+                            borderRadius: '2px 2px 0 0',
+                        }} />
+                    ))}
+                </div>
+            </Section>
+            <Section title="Menukaart">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[
+                        { name: 'Pulled pork, 14u smoked', price: '€ 8,50', allergens: ['Gluten', 'Mosterd'] },
+                        { name: 'Brisket, oak-smoked 12u', price: '€ 12,00', allergens: ['Selderij'] },
+                    ].map(d => (
+                        <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', background: bg, borderRadius: 6, border: `1px solid ${border}` }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: text, marginBottom: 2 }}>{d.name}</div>
+                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                    {d.allergens.map(a => (
+                                        <span key={a} style={{
+                                            fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3,
+                                            background: `color-mix(in oklch, ${accent} 14%, transparent)`,
+                                            color: accent,
+                                        }}>{a}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{d.price}</div>
+                        </div>
+                    ))}
+                </div>
+            </Section>
+            <Section title="Offerte">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: text }}>Bruiloft Van Dijk</div>
+                        <div style={{ fontSize: 10, color: muted }}>OFF-2026-0142 · 120 gasten</div>
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'rgba(34,197,94,.14)', color: '#22c55e', border: '1px solid rgba(34,197,94,.28)' }}>Bevestigd</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ flex: 1, background: primary, color: mode === 'dark' ? bg : '#ffffff', fontSize: 10, fontWeight: 700, padding: '6px 0', borderRadius: 5, textAlign: 'center', letterSpacing: '.02em' }}>PDF downloaden</div>
+                    <div style={{ flex: 1, border: `1px solid ${border}`, color: text, fontSize: 10, fontWeight: 600, padding: '6px 0', borderRadius: 5, textAlign: 'center' }}>Follow-up</div>
+                </div>
+            </Section>
+        </div>
+    );
+}
 
 function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) => void }) {
-    function applyTheme(t: typeof THEMES[number]) {
-        setForm((prev: any) => Object.assign({}, prev, {
-            brand_background: t.bg, brand_text: t.text, brand_card: t.card,
-            brand_primary: t.primary, brand_accent: t.accent, brand_secondary: t.secondary,
+    function applyPreset(t: ThemePreset) {
+        setForm((prev: any) => ({
+            ...prev,
+            brand_background: t.bg,
+            brand_text: t.text,
+            brand_card: t.card,
+            brand_primary: t.primary,
+            brand_accent: t.accent,
+            brand_secondary: t.secondary,
         }));
     }
-    const currentId = THEMES.find(t => t.bg === form.brand_background && t.primary === form.brand_primary)?.id;
+
+    const currentId = findPresetBySignature(form.brand_background, form.brand_primary)?.id ?? null;
+
+    // Live preset reflects the in-memory form state so the preview pane updates
+    // the instant a card is clicked — no save round-trip, no full app reload.
+    // For custom-hex tenants (no signature match) we still build a valid preset
+    // from the raw values; mode is recomputed from bg lightness.
+    const liveBg = (form.brand_background as string | undefined) ?? '#121214';
+    const liveMode: ThemeMode = perceivedLightness(liveBg) > 0.5 ? 'light' : 'dark';
+    const livePreset: ThemePreset = {
+        id: currentId ?? 'custom',
+        name: currentId ?? 'Eigen kleuren',
+        description: '',
+        mode: liveMode,
+        bg: liveBg,
+        card: (form.brand_card as string | undefined) ?? '#1e1e22',
+        text: (form.brand_text as string | undefined) ?? '#f8f8f8',
+        primary: (form.brand_primary as string | undefined) ?? '#c4a35a',
+        accent: (form.brand_accent as string | undefined) ?? (form.brand_primary as string | undefined) ?? '#c4a35a',
+        secondary: (form.brand_secondary as string | undefined) ?? liveBg,
+    };
+
     return (
         <div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14 }}>
-                Kies een thema — we hebben elk zorgvuldig afgestemd zodat tekst goed leesbaar is, knoppen opvallen en het nergens kermis wordt. Klik &quot;Opslaan&quot; onderaan om toe te passen.
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                Kies een thema. Elke combinatie is afgestemd op leesbaarheid en kleurbalans — voorbeeld rechts toont je keuze live. Klik &quot;Instellingen opslaan&quot; onderaan om door te voeren.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {THEMES.map(t => {
-                    const isCurrent = currentId === t.id;
-                    return (
-                        <button key={t.id} onClick={() => applyTheme(t)}
-                            style={{
-                                padding: 0, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-                                border: isCurrent ? '2px solid ' + t.primary : '1px solid var(--border)',
-                                background: 'transparent', textAlign: 'left', color: 'var(--text)',
-                                transition: 'transform .15s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}>
-                            {/* Visuele mini-preview van het thema */}
-                            <div style={{ padding: 14, background: t.bg, borderBottom: '1px solid ' + t.card }}>
-                                <div style={{
-                                    padding: 10, borderRadius: 8, marginBottom: 8,
-                                    background:
-                                        'radial-gradient(140% 60% at 50% 0%, color-mix(in oklch, ' + t.primary + ', transparent 80%), transparent 65%), ' +
-                                        'radial-gradient(120% 45% at 50% 100%, color-mix(in oklch, ' + t.primary + ', transparent 92%), transparent 55%), ' +
-                                        t.card,
-                                    boxShadow:
-                                        'inset 0 1px 0 0 color-mix(in oklch, ' + t.text + ', transparent 92%), ' +
-                                        'inset 0 0 20px 0 color-mix(in oklch, ' + t.primary + ', transparent 92%), ' +
-                                        '0 1px 2px rgba(0,0,0,.06), 0 6px 16px -6px rgba(0,0,0,.22)',
-                                }}>
-                                    <div style={{ fontSize: 9, color: t.primary, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 3 }}>Event</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 6 }}>{form?.bedrijfsnaam || 'Jouw bedrijf'}</div>
-                                    <div style={{ display: 'flex', gap: 4 }}>
-                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: t.primary, color: t.card, fontSize: 9, fontWeight: 700 }}>OFFERTE</span>
-                                        <span style={{ padding: '3px 8px', borderRadius: 4, background: 'transparent', border: '1px solid ' + t.accent, color: t.accent, fontSize: 9, fontWeight: 700 }}>FACTUUR</span>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 3 }}>
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.primary }} title="Primair" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.accent }} title="Accent" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.card, border: '1px solid ' + t.accent }} title="Kaart" />
-                                    <span style={{ width: 18, height: 18, borderRadius: 3, background: t.bg, border: '1px solid ' + t.accent }} title="Achtergrond" />
-                                </div>
-                            </div>
-                            <div style={{ padding: '10px 14px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{t.naam}</span>
-                                    {isCurrent && <span style={{ fontSize: 9, fontWeight: 700, color: t.primary, letterSpacing: '.1em' }}>✓ ACTIEF</span>}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.3 }}>{t.omschrijving}</div>
-                            </div>
-                        </button>
-                    );
-                })}
+            <div className="theme-picker-layout">
+                <div className="theme-picker-grid">
+                    {THEMES.map(t => (
+                        <PresetCard
+                            key={t.id}
+                            preset={t}
+                            isActive={currentId === t.id}
+                            onClick={() => applyPreset(t)}
+                        />
+                    ))}
+                </div>
+                <aside className="theme-picker-preview">
+                    <div style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: '.15em',
+                        textTransform: 'uppercase', color: 'var(--muted)',
+                        marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                        <Eye size={12} /> Live voorbeeld
+                    </div>
+                    <ThemePreviewPane preset={livePreset} />
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+                        {currentId
+                            ? `Actief in voorbeeld: ${livePreset.name}`
+                            : 'Eigen kleuren (geen preset-match)'}
+                    </div>
+                </aside>
             </div>
-            <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)', fontSize: 11, color: 'var(--muted)' }}>
-                <strong style={{ color: 'var(--text)' }}>Belangrijk:</strong> rood/groen waarschuwingen (lage voorraad, bevestigd) blijven altijd hun betekenis houden — die veranderen niet mee met het gekozen thema.
+            <div style={{
+                marginTop: 14, padding: 10, borderRadius: 8,
+                background: 'color-mix(in oklch, var(--brand) 8%, transparent)',
+                border: '1px solid color-mix(in oklch, var(--brand) 22%, transparent)',
+                fontSize: 12, color: 'var(--muted)',
+            }}>
+                <strong style={{ color: 'var(--text)' }}>Belangrijk:</strong> rood/groen waarschuwingen (lage voorraad, bevestigd, urgent) blijven altijd hun betekenis houden — die kleuren veranderen niet mee met het thema.
             </div>
+            {/* Responsive layout — scoped to the picker, no globals.css touch.
+                Plain <style> with dangerouslySetInnerHTML (NOT styled-jsx) to
+                stay clear of Turbopack 16's styled-jsx hang on interpolation. */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                .theme-picker-layout {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 320px;
+                    gap: 20px;
+                    align-items: flex-start;
+                }
+                .theme-picker-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 10px;
+                }
+                .theme-picker-preview {
+                    position: sticky;
+                    top: 16px;
+                }
+                @media (max-width: 1100px) {
+                    .theme-picker-layout { grid-template-columns: 1fr; }
+                    .theme-picker-preview { position: static; max-width: 480px; margin: 0 auto; }
+                }
+                @media (max-width: 768px) {
+                    .theme-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                }
+            ` }} />
         </div>
     );
 }
