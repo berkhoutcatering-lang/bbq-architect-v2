@@ -7,11 +7,11 @@ import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
 import PageHeader from '@/components/PageHeader';
-import { Building2, Check, CloudUpload, Database, Eye, FileText, Layout, Loader2, Palette, Pen, Save, Settings } from 'lucide-react';
+import { Building2, Check, ChevronDown, CloudUpload, Database, Eye, FileText, Layout, Loader2, Palette, Pen, RotateCcw, Save, Settings, Sliders } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
 import { THEMES, type ThemePreset, type ThemeMode, findPresetBySignature } from '@/lib/themes';
-import { perceivedLightness } from '@/lib/colorMath';
+import { perceivedLightness, tintToward, contrastRatio, wcagLevel, autoFixContrast } from '@/lib/colorMath';
 
 export default function Instellingen() {
     /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
@@ -481,7 +481,344 @@ function ThemePreviewPane({ preset }: { preset: ThemePreset }) {
     );
 }
 
+// ── Advanced color editor ────────────────────────────────────────────
+// Tint sliders per token + direction toggle (lichter/donkerder) + live WCAG
+// audit + "Verbeter"-button per failing pair + "Herstel" naar preset-basis.
+// The base preset stays anchored — every slider value is interpreted as
+// "X% naar wit/zwart from this preset's hex", so the user always knows
+// where they're sliding away from.
+
+const TOKEN_LABELS: ReadonlyArray<{
+    key: 'bg' | 'card' | 'text' | 'primary' | 'accent' | 'secondary';
+    formKey: 'brand_background' | 'brand_card' | 'brand_text' | 'brand_primary' | 'brand_accent' | 'brand_secondary';
+    label: string;
+    sub: string;
+}> = [
+    { key: 'bg', formKey: 'brand_background', label: 'Achtergrond', sub: 'App canvas' },
+    { key: 'card', formKey: 'brand_card', label: 'Kaarten', sub: 'Panels, popovers' },
+    { key: 'text', formKey: 'brand_text', label: 'Tekst', sub: 'Body kleur' },
+    { key: 'primary', formKey: 'brand_primary', label: 'Primair', sub: 'Knoppen, accenten' },
+    { key: 'accent', formKey: 'brand_accent', label: 'Accent', sub: 'Counterpoint' },
+    { key: 'secondary', formKey: 'brand_secondary', label: 'Secundair', sub: 'Sidebar, deep bg' },
+];
+
+type Tints = Record<typeof TOKEN_LABELS[number]['key'], number>;
+const ZERO_TINTS: Tints = { bg: 0, card: 0, text: 0, primary: 0, accent: 0, secondary: 0 };
+
+function TintSlider({ label, sub, baseColor, value, target, targetLabel, onChange }: {
+    label: string;
+    sub: string;
+    baseColor: string;
+    value: number;
+    target: string;
+    targetLabel: string;
+    onChange: (v: number) => void;
+}) {
+    const currentHex = tintToward(baseColor, value, target);
+    // Compute 6 gradient stops via OKLCH so the track matches what the user gets.
+    const stops: string[] = [];
+    for (let i = 0; i <= 5; i++) {
+        const pct = (i / 5) * 100;
+        stops.push(`${tintToward(baseColor, pct, target)} ${pct}%`);
+    }
+    return (
+        <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+                <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>{label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--muted)' }}>{sub}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: 4, background: currentHex, border: '1px solid var(--border)', display: 'inline-block' }} aria-hidden />
+                    <code style={{ fontSize: 10, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)', minWidth: 64, textAlign: 'right' }}>{currentHex}</code>
+                </div>
+            </div>
+            <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
+                <div style={{
+                    position: 'absolute', left: 0, right: 0, height: 8, borderRadius: 4,
+                    background: `linear-gradient(to right, ${stops.join(', ')})`,
+                    border: '1px solid var(--border)',
+                    pointerEvents: 'none',
+                }} aria-hidden />
+                <input
+                    type="range"
+                    min={0} max={100} step={1}
+                    value={value}
+                    onChange={e => onChange(parseInt(e.target.value, 10))}
+                    aria-label={`${label}: ${value}% naar ${targetLabel}`}
+                    style={{
+                        width: '100%', height: 24, margin: 0, padding: 0,
+                        appearance: 'none', WebkitAppearance: 'none',
+                        background: 'transparent', position: 'relative', zIndex: 2,
+                        cursor: 'pointer',
+                    }}
+                />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--muted-light, var(--muted))', marginTop: 2 }}>
+                <span>Origineel</span>
+                <span>{value > 0 ? `${value}% naar ${targetLabel}` : ''}</span>
+                <span style={{ textTransform: 'capitalize' }}>{targetLabel}</span>
+            </div>
+        </div>
+    );
+}
+
+function AdvancedColorEditor({ activePreset, form, setForm }: {
+    activePreset: ThemePreset | null;
+    form: any;
+    setForm: (fn: any) => void;
+}) {
+    const [tints, setTints] = useState<Tints>(ZERO_TINTS);
+    const [direction, setDirection] = useState<'light' | 'dark'>(
+        activePreset?.mode === 'dark' ? 'light' : 'dark'
+    );
+
+    // Reset slider positions whenever the anchor preset changes — otherwise
+    // the percentages would compose with a new base and look chaotic.
+    useEffect(() => {
+        setTints(ZERO_TINTS);
+        if (activePreset) setDirection(activePreset.mode === 'dark' ? 'light' : 'dark');
+    }, [activePreset?.id]);
+
+    if (!activePreset) {
+        return (
+            <div style={{
+                padding: 16, borderRadius: 8,
+                background: 'var(--sidebar-bg-hover, var(--card))',
+                border: '1px solid var(--border)',
+                color: 'var(--muted)', fontSize: 12, textAlign: 'center',
+            }}>
+                Kies eerst een preset hierboven — daarna kun je de kleuren lichter of donkerder maken.
+            </div>
+        );
+    }
+
+    const target = direction === 'light' ? '#ffffff' : '#000000';
+    const targetLabel = direction === 'light' ? 'wit' : 'zwart';
+
+    function applyTint(key: typeof TOKEN_LABELS[number]['key'], formKey: typeof TOKEN_LABELS[number]['formKey'], value: number) {
+        const newTints = { ...tints, [key]: value };
+        setTints(newTints);
+        const newHex = tintToward(activePreset![key], value, target);
+        setForm((prev: any) => ({ ...prev, [formKey]: newHex }));
+    }
+
+    function flipDirection(newDir: 'light' | 'dark') {
+        if (newDir === direction) return;
+        setDirection(newDir);
+        // Re-apply current tints with the new target so the preview stays in sync.
+        const newTarget = newDir === 'light' ? '#ffffff' : '#000000';
+        const updates: Record<string, string> = {};
+        for (const { key, formKey } of TOKEN_LABELS) {
+            updates[formKey] = tintToward(activePreset![key], tints[key], newTarget);
+        }
+        setForm((prev: any) => ({ ...prev, ...updates }));
+    }
+
+    function reset() {
+        setTints(ZERO_TINTS);
+        setForm((prev: any) => ({
+            ...prev,
+            brand_background: activePreset!.bg,
+            brand_card: activePreset!.card,
+            brand_text: activePreset!.text,
+            brand_primary: activePreset!.primary,
+            brand_accent: activePreset!.accent,
+            brand_secondary: activePreset!.secondary,
+        }));
+    }
+
+    // Compute current tokens for the live WCAG audit. Mirrors what the
+    // actual app renders, including the mode-aware muted derivation.
+    const computed = {
+        bg: tintToward(activePreset.bg, tints.bg, target),
+        card: tintToward(activePreset.card, tints.card, target),
+        text: tintToward(activePreset.text, tints.text, target),
+        primary: tintToward(activePreset.primary, tints.primary, target),
+        accent: tintToward(activePreset.accent, tints.accent, target),
+        secondary: tintToward(activePreset.secondary, tints.secondary, target),
+    };
+    const computedMode: ThemeMode = perceivedLightness(computed.bg) > 0.5 ? 'light' : 'dark';
+    const wMuted = computedMode === 'light' ? 65 : 55;
+    const mutedOnBg = tintToward(computed.text, 100 - wMuted, computed.bg);
+    const mutedOnCard = tintToward(computed.text, 100 - wMuted, computed.card);
+
+    type AuditPair = { label: string; fg: string; bg: string; target: number; fixKey: 'primary' | 'accent' | null };
+    const pairs: AuditPair[] = [
+        { label: 'Tekst op achtergrond', fg: computed.text, bg: computed.bg, target: 4.5, fixKey: null },
+        { label: 'Tekst op kaart', fg: computed.text, bg: computed.card, target: 4.5, fixKey: null },
+        { label: 'Muted op achtergrond', fg: mutedOnBg, bg: computed.bg, target: 4.5, fixKey: null },
+        { label: 'Muted op kaart', fg: mutedOnCard, bg: computed.card, target: 4.5, fixKey: null },
+        { label: 'Primair op achtergrond', fg: computed.primary, bg: computed.bg, target: 3.0, fixKey: 'primary' },
+        { label: 'Accent op achtergrond', fg: computed.accent, bg: computed.bg, target: 3.0, fixKey: 'accent' },
+    ];
+
+    function autoFix(fixKey: 'primary' | 'accent', pairTarget: number) {
+        const fixed = autoFixContrast(computed[fixKey], computed.bg, pairTarget);
+        const formKey = fixKey === 'primary' ? 'brand_primary' : 'brand_accent';
+        // We bypass the slider math — the auto-fix sets an absolute hex.
+        // The slider position becomes "out of sync"; we zero it to avoid
+        // double-tinting on next direction-flip.
+        setTints(prev => ({ ...prev, [fixKey]: 0 }));
+        setForm((prev: any) => ({ ...prev, [formKey]: fixed }));
+    }
+
+    const anyChanged = Object.values(tints).some(v => v > 0);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Header: explanation + direction toggle + reset */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0, maxWidth: 460, lineHeight: 1.5 }}>
+                    Schuif om <strong style={{ color: 'var(--text)' }}>{activePreset.name}</strong> lichter of donkerder te maken. Contrast wordt live gecontroleerd.
+                </p>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', background: 'var(--bg)', borderRadius: 8, padding: 2, border: '1px solid var(--border)' }} role="radiogroup" aria-label="Richting">
+                        {(['light', 'dark'] as const).map(d => {
+                            const active = direction === d;
+                            return (
+                                <button
+                                    key={d}
+                                    type="button"
+                                    onClick={() => flipDirection(d)}
+                                    aria-pressed={active}
+                                    style={{
+                                        background: active ? 'var(--card-solid)' : 'transparent',
+                                        border: active ? '1px solid var(--border-strong)' : '1px solid transparent',
+                                        borderRadius: 6, padding: '4px 12px',
+                                        fontSize: 11, fontWeight: 600,
+                                        color: active ? 'var(--text)' : 'var(--muted)',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {d === 'light' ? 'Naar wit' : 'Naar zwart'}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {anyChanged && (
+                        <button
+                            type="button"
+                            onClick={reset}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 5,
+                                background: 'transparent', border: '1px solid var(--border)',
+                                borderRadius: 8, padding: '5px 10px',
+                                color: 'var(--muted)', fontSize: 11, fontWeight: 600,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <RotateCcw size={11} /> Herstel
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Sliders — 2 kolommen op desktop, 1 op smal */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px 24px' }}>
+                {TOKEN_LABELS.map(({ key, formKey, label, sub }) => (
+                    <TintSlider
+                        key={key + direction}
+                        label={label}
+                        sub={sub}
+                        baseColor={activePreset[key]}
+                        value={tints[key]}
+                        target={target}
+                        targetLabel={targetLabel}
+                        onChange={v => applyTint(key, formKey, v)}
+                    />
+                ))}
+            </div>
+
+            {/* WCAG live audit */}
+            <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                <div style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '.15em',
+                    textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8,
+                }}>
+                    Leesbaarheid (WCAG AA)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {pairs.map((p, i) => {
+                        const r = contrastRatio(p.fg, p.bg);
+                        const lvl = wcagLevel(r);
+                        const passesTarget = r >= p.target;
+                        return (
+                            <div
+                                key={i}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '5px 8px', borderRadius: 6, fontSize: 11,
+                                    background: passesTarget ? 'transparent' : 'rgba(239,68,68,.06)',
+                                    border: passesTarget ? '1px solid transparent' : '1px solid rgba(239,68,68,.18)',
+                                }}
+                            >
+                                <span style={{ color: passesTarget ? '#22c55e' : '#ef4444', fontWeight: 700, width: 12, textAlign: 'center' }}>
+                                    {passesTarget ? '✓' : '✗'}
+                                </span>
+                                <span style={{ flex: 1, color: 'var(--text)' }}>{p.label}</span>
+                                <span style={{ display: 'inline-flex', gap: 3 }} aria-hidden>
+                                    <span style={{ width: 10, height: 10, borderRadius: 3, background: p.fg, border: '1px solid var(--border)' }} />
+                                    <span style={{ width: 10, height: 10, borderRadius: 3, background: p.bg, border: '1px solid var(--border)' }} />
+                                </span>
+                                <span style={{
+                                    fontVariantNumeric: 'tabular-nums', fontWeight: 600,
+                                    color: passesTarget ? 'var(--text)' : '#ef4444',
+                                    minWidth: 44, textAlign: 'right', fontFamily: 'var(--font-mono, monospace)',
+                                }}>
+                                    {r.toFixed(2)}:1
+                                </span>
+                                <span style={{
+                                    fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+                                    background: passesTarget ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.12)',
+                                    color: passesTarget ? '#22c55e' : '#ef4444',
+                                    letterSpacing: '.04em',
+                                    minWidth: 56, textAlign: 'center',
+                                }}>
+                                    {passesTarget ? lvl.label : 'Faalt'}
+                                </span>
+                                {!passesTarget && p.fixKey ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => autoFix(p.fixKey!, p.target)}
+                                        style={{
+                                            background: 'color-mix(in oklch, var(--brand) 14%, transparent)',
+                                            border: '1px solid color-mix(in oklch, var(--brand) 32%, transparent)',
+                                            borderRadius: 5, padding: '2px 7px',
+                                            fontSize: 9, fontWeight: 700, color: 'var(--brand)',
+                                            cursor: 'pointer', whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        Verbeter
+                                    </button>
+                                ) : (
+                                    <span style={{ width: 60 }} />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) => void }) {
+    // ── Editor anchor ────────────────────────────────────────────────
+    // The advanced editor's sliders need a sticky "base" to tint from. The
+    // moment a user moves any slider, the form's brand_* hex drifts away
+    // from any preset signature → findPresetBySignature returns null. But
+    // the editor must still remember which preset it was sliding off of so
+    // the reset button works and the slider gradients show the right path.
+    const currentId = findPresetBySignature(form.brand_background, form.brand_primary)?.id ?? null;
+    const [editorBaseId, setEditorBaseId] = useState<string | null>(currentId);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    useEffect(() => {
+        // When the user's edits put them back on a preset (e.g. reset, or saved
+        // settings load), re-anchor the editor to that preset.
+        if (currentId) setEditorBaseId(currentId);
+    }, [currentId]);
+
     function applyPreset(t: ThemePreset) {
         setForm((prev: any) => ({
             ...prev,
@@ -492,9 +829,8 @@ function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) =>
             brand_accent: t.accent,
             brand_secondary: t.secondary,
         }));
+        setEditorBaseId(t.id);
     }
-
-    const currentId = findPresetBySignature(form.brand_background, form.brand_primary)?.id ?? null;
 
     // Live preset reflects the in-memory form state so the preview pane updates
     // the instant a card is clicked — no save round-trip, no full app reload.
@@ -555,6 +891,46 @@ function ThemePresetPicker({ form, setForm }: { form: any; setForm: (fn: any) =>
             }}>
                 <strong style={{ color: 'var(--text)' }}>Belangrijk:</strong> rood/groen waarschuwingen (lage voorraad, bevestigd, urgent) blijven altijd hun betekenis houden — die kleuren veranderen niet mee met het thema.
             </div>
+
+            {/* Advanced editor — collapsible. Sliders maken de gekozen preset
+                lichter of donkerder per token (achtergrond/kaarten/tekst/...).
+                Live WCAG-check toont meteen of het nog leesbaar blijft. */}
+            <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <button
+                    type="button"
+                    onClick={() => setAdvancedOpen(!advancedOpen)}
+                    aria-expanded={advancedOpen}
+                    style={{
+                        background: 'transparent', border: 'none', padding: 0,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        color: 'var(--text)', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', width: '100%',
+                    }}
+                >
+                    <Sliders size={14} style={{ color: 'var(--brand)' }} />
+                    <span>Kleuren aanpassen</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>(gevorderd)</span>
+                    <span style={{ flex: 1 }} />
+                    <ChevronDown
+                        size={16}
+                        style={{
+                            color: 'var(--muted)',
+                            transition: 'transform .2s ease',
+                            transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0)',
+                        }}
+                    />
+                </button>
+                {advancedOpen && (
+                    <div style={{ marginTop: 14 }}>
+                        <AdvancedColorEditor
+                            activePreset={THEMES.find(t => t.id === editorBaseId) ?? null}
+                            form={form}
+                            setForm={setForm}
+                        />
+                    </div>
+                )}
+            </div>
+
             {/* Responsive layout — scoped to the picker, no globals.css touch.
                 Plain <style> with dangerouslySetInnerHTML (NOT styled-jsx) to
                 stay clear of Turbopack 16's styled-jsx hang on interpolation. */}
