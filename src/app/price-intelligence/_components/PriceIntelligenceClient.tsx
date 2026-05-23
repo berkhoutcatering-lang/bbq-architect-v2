@@ -120,29 +120,38 @@ function ErrorBanner({ error, onRetry, onDismiss }: { error: string; onRetry?: (
 
 const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
     { id: 'inbox', label: 'Inbox', hint: 'Email-prijslijsten', Icon: Inbox },
-    { id: 'invoices', label: 'AI Factuur Lezen', hint: 'Scan & extract', Icon: FileScan },
+    { id: 'invoices', label: 'Facturen', hint: 'Scan & extract', Icon: FileScan },
     { id: 'receipts', label: 'Bonnen', hint: 'Kassabonnen · foto', Icon: Receipt },
-    { id: 'pricelists', label: 'Prijslijst Bulk', hint: '60+ PDFs → DB', Icon: ListOrdered },
-    { id: 'books', label: 'Boekhouding', hint: 'Inzichten & AI', Icon: PieChart },
+    { id: 'pricelists', label: 'Prijslijsten', hint: 'Bulk-PDF', Icon: ListOrdered },
+    { id: 'books', label: 'Boekhouding', hint: 'Inzichten', Icon: PieChart },
 ];
 
 function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder) => void }) {
     return (
-        <div className="responsive-grid-2" style={{
-            display: 'grid', gridTemplateColumns: `repeat(${TABS.length}, 1fr)`, gap: 0,
+        <div className="pi-folder-tabs" style={{
+            display: 'grid', gridTemplateColumns: `repeat(${TABS.length}, minmax(160px, 1fr))`, gap: 0,
             background: 'var(--color-bg-deep)', border: '1px solid var(--border)',
             borderRadius: '14px 14px 0 0', padding: 4, position: 'relative',
+            overflowX: 'auto',
         }}>
             {TABS.map(t => {
                 const isActive = active === t.id;
                 return (
-                    <button key={t.id} onClick={() => onChange(t.id)} style={{
-                        position: 'relative', display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '14px 16px', background: isActive ? 'linear-gradient(180deg, rgba(255,191,0,.08), rgba(196,163,90,.03))' : 'transparent',
-                        border: 'none', color: isActive ? 'var(--text)' : 'var(--muted)',
-                        cursor: 'pointer', borderRadius: 10, transition: 'all .18s ease', textAlign: 'left',
-                        boxShadow: isActive ? `inset 0 0 0 1px ${GOLD}40` : 'none',
-                    }}>
+                    <button
+                        key={t.id}
+                        onClick={() => onChange(t.id)}
+                        className="pi-folder-tab"
+                        aria-current={isActive ? 'page' : undefined}
+                        style={{
+                            position: 'relative', display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '14px 16px',
+                            background: isActive ? 'linear-gradient(180deg, rgba(255,191,0,.08), rgba(196,163,90,.03))' : 'transparent',
+                            border: 'none', color: isActive ? 'var(--text)' : 'var(--muted)',
+                            cursor: 'pointer', borderRadius: 10, transition: 'all .18s ease', textAlign: 'left',
+                            boxShadow: isActive ? `inset 0 0 0 1px ${GOLD}40` : 'none',
+                            minWidth: 0, fontFamily: 'inherit',
+                        }}
+                    >
                         <div style={{
                             width: 36, height: 36, borderRadius: 10,
                             background: isActive ? `${GOLD}26` : 'rgba(130,130,130,.08)',
@@ -154,8 +163,15 @@ function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder
                             <t.Icon size={18} />
                         </div>
                         <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.1 }}>{t.label}</div>
-                            <div style={{ fontSize: 9, color: 'var(--muted-light)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3, fontWeight: 600 }}>{t.hint}</div>
+                            <div style={{
+                                fontSize: 13, fontWeight: 600, lineHeight: 1.1,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>{t.label}</div>
+                            <div style={{
+                                fontSize: 9, color: 'var(--muted-light)', letterSpacing: '.08em',
+                                textTransform: 'uppercase', marginTop: 3, fontWeight: 600,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>{t.hint}</div>
                         </div>
                         {isActive && <div style={{ position: 'absolute', left: '10%', right: '10%', bottom: -5, height: 2, background: `linear-gradient(90deg, transparent, var(--brand), transparent)` }} />}
                     </button>
@@ -191,21 +207,16 @@ export default function PriceIntelligenceClient() {
 
     return (
         <RequireTier feature="price_intelligence">
-        <div className="page-container-compact mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: 0 }}>Price Intelligence</h1>
-                        <span style={{ padding: '2px 8px', borderRadius: 6, background: `${GOLD}20`, border: `1px solid ${GOLD}4D`, fontSize: 10, letterSpacing: '.2em', color: GOLD, fontWeight: 700 }}>AI POWERED</span>
-                    </div>
-                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        Facturen, bonnen en boekhouding — één systeem, AI leest mee.
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <a href="/voorraad" style={{ textDecoration: 'none' }}>
-                        <BtnGhost icon={Package} right={ArrowUpRight}>Voorraad</BtnGhost>
-                    </a>
+        <div className="page-container-compact mobile-safe-bottom pi-inkoopprijzen" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
+            <div style={{ marginBottom: 20, minWidth: 0 }}>
+                <h1 style={{
+                    fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200,
+                    fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px',
+                }}>
+                    Inkoopprijzen
+                </h1>
+                <div style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.5 }}>
+                    Mail je leveranciers-PDF naar één adres — wij lezen ′m uit.
                 </div>
             </div>
 

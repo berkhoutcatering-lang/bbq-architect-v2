@@ -66,7 +66,7 @@ const pages: SearchResult[] = [
     { id: 'p_logistiek', type: 'pagina', title: 'Logistiek', subtitle: 'Voorraad & Beheer', href: '/logistiek', icon: Truck, accent: HUB_ACCENT.voorraad },
     { id: 'p_materieel', type: 'pagina', title: 'Materieel', subtitle: 'Voorraad & Beheer', href: '/materieel', icon: Wrench, accent: HUB_ACCENT.voorraad },
     { id: 'p_haccp_field', type: 'pagina', title: 'HACCP Field (mobiel)', subtitle: 'Plannen & Events · power', href: '/haccp/field', icon: ShieldCheck, accent: HUB_ACCENT.plannen },
-    { id: 'p_prijzen', type: 'pagina', title: 'Prijsintelligentie', subtitle: 'Voorraad & Beheer', href: '/price-intelligence', icon: DollarSign, accent: HUB_ACCENT.voorraad },
+    { id: 'p_prijzen', type: 'pagina', title: 'Inkoopprijzen', subtitle: 'Voorraad & Beheer', href: '/price-intelligence', icon: DollarSign, accent: HUB_ACCENT.voorraad },
 
     /* Power-features (verstopt — vindbaar via ⌘K) */
     { id: 'p_sitemap', type: 'pagina', title: 'Sitemap (alle pagina\'s)', subtitle: 'Power · overzicht', href: '/hulp/sitemap', icon: Map, accent: '#c4a35a' },

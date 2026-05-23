@@ -28,7 +28,7 @@ const routeMap: Record<string, { label: string; section: string }> = {
     '/leveranciers': { label: 'Leveranciers', section: 'Voorraad' },
     '/logistiek': { label: 'Logistiek', section: 'Voorraad' },
     '/materieel': { label: 'Materieel', section: 'Voorraad' },
-    '/price-intelligence': { label: 'Prijsintelligentie', section: 'Voorraad' },
+    '/price-intelligence': { label: 'Inkoopprijzen', section: 'Voorraad' },
     '/foto-archief': { label: 'Foto-archief', section: 'Systeem' },
     '/gebruikers': { label: 'Gebruikers', section: 'Systeem' },
     '/instellingen': { label: 'Instellingen', section: 'Systeem' },

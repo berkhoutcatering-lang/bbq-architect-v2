@@ -40,7 +40,7 @@ const ROUTES: SitemapRoute[] = [
   { href: '/inkoop', label: 'Inkoop', desc: 'Inkooporders en leveranciers', hub: 'Voorraad' },
   { href: '/logistiek', label: 'Logistiek', desc: 'Transportplanning en bezorging', hub: 'Voorraad' },
   { href: '/materieel', label: 'Materieel', desc: 'Smoker, pannen, equipment', hub: 'Voorraad' },
-  { href: '/price-intelligence', label: 'Prijsintelligentie', desc: 'Prijsanalyse en marktinzichten', hub: 'Voorraad' },
+  { href: '/price-intelligence', label: 'Inkoopprijzen', desc: 'Email-prijslijsten, facturen en bonnen', hub: 'Voorraad' },
 
   // Geld
   { href: '/financien', label: 'Financiën', desc: 'Dashboard, W&V, uitgaven, BTW, top klanten (5 tabs)', hub: 'Geld' },

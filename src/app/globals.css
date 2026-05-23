@@ -10320,3 +10320,69 @@ html, body { max-width: 100vw; overflow-x: hidden; }
     background: var(--brand, #FFBF00);
     color: #0a0a0c;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   INKOOPPRIJZEN (price-intelligence) — responsive + hover states.
+   Toegevoegd voor canonical FolderTabs-pattern en mobile-drawer support.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pi-folder-tabs {
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.pi-folder-tabs::-webkit-scrollbar { display: none; }
+.pi-folder-tab { scroll-snap-align: start; }
+.pi-folder-tab:hover:not([aria-current="page"]) {
+    background: rgba(255, 255, 255, .03);
+    color: var(--text);
+}
+.pi-folder-tab:focus-visible {
+    outline: 2px solid var(--brand-gold);
+    outline-offset: 2px;
+}
+
+.pi-inbox-row:hover:not(:disabled) {
+    background: rgba(255, 255, 255, .02);
+    border-color: var(--border);
+}
+.pi-inbox-row:focus-visible {
+    outline: 2px solid var(--brand-gold);
+    outline-offset: 2px;
+}
+
+.pi-copy-btn:hover:not(:disabled) { filter: brightness(1.05); }
+.pi-copy-btn:active:not(:disabled) { transform: scale(.97); }
+
+@media (max-width: 767px) {
+    .pi-inbox { --pi-inbox-sticky-top: 4px; }
+    .pi-inbox-banner { padding: 14px !important; }
+    .pi-folder-tabs {
+        grid-template-columns: repeat(5, minmax(150px, 1fr)) !important;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        border-radius: 12px 12px 0 0 !important;
+    }
+    .pi-folder-tab { padding: 12px 14px !important; }
+}
+
+@media (max-width: 480px) {
+    .pi-inkoopprijzen h1 { font-size: 26px !important; }
+    .pi-folder-tab { min-width: 140px; }
+    .mail-filter-sheet { max-width: 100% !important; }
+}
+
+/* Shimmer voor SkeletonList — uit FolderInbox.tsx gemigreerd
+   omdat <style jsx> met variabelen Turbopack 16+ kan laten hangen. */
+@keyframes pi-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+.pi-skeleton {
+    height: 64px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: linear-gradient(90deg, var(--card), rgba(255,255,255,.04), var(--card));
+    background-size: 200% 100%;
+    animation: pi-shimmer 1.4s infinite;
+}
