@@ -283,9 +283,35 @@ export default function Instellingen() {
                 </div>
             </div>
 
-            <button className="btn btn-brand" onClick={saveSettings} style={{ width: '100%', justifyContent: 'center', padding: 14 }}>
-                <Save size={14} /> Instellingen Opslaan
-            </button>
+            {/* Spacer zodat de laatste page-content niet onder de fixed save bar valt. */}
+            <div style={{ height: 80 }} aria-hidden />
+            {/*
+              Fixed save bar — voorheen verdween de knop ver onder de fold zodra
+              de advanced color editor opengeklapt werd. position:sticky werkte niet
+              omdat <main> overflow:hidden heeft (geen scroll-container), dus we
+              gebruiken position:fixed met sidebar-offset via Tailwind responsive
+              (lg:left-[260px] = sidebar breedte op desktop, 0 op mobile waar de
+              sidebar verstopt zit). Padding-right houdt 'm vrij van de FAB.
+            */}
+            <div
+                className="fixed bottom-0 left-0 right-0 lg:left-[260px] z-30"
+                style={{
+                    padding: '12px 88px 12px 24px',
+                    background: 'color-mix(in oklch, var(--bg) 88%, transparent)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderTop: '1px solid var(--border)',
+                }}
+            >
+                <button
+                    type="button"
+                    className="btn btn-brand"
+                    onClick={saveSettings}
+                    style={{ width: '100%', justifyContent: 'center', padding: 14 }}
+                >
+                    <Save size={14} /> Instellingen Opslaan
+                </button>
+            </div>
 
             {pendingCascade && orgId && (
                 <BrandCascadeDialog
