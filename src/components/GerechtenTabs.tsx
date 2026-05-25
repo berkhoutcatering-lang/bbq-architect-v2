@@ -1,20 +1,19 @@
 'use client';
 
-import { ChefHat, Boxes, ShieldCheck, BarChart3, Activity } from 'lucide-react';
+import { ChefHat, Boxes, BarChart3 } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
-/* S2-deel-2 — AI Bedenker en AI Pitmaster zijn uit de hoofdtabs gehaald:
-   - Bedenker → entry via prominente knop op /gerechten/componenten (URL blijft)
-   - Pitmaster → "Vraag Pitmaster" knop op event-hub (in-context)
-   Beide URLs blijven werken voor bookmarks.
-
-   S2.7 — Ingrediënten weg: pagina was gateway naar /voorraad, KPI's in insights. */
+/* Bucket C (2026-05-25) — Menu & Recepten IA opschonen, 5 tabs → 3:
+   - /menu-analyse en /insights samengevoegd onder /analyse met view-toggle
+     (?view=performance toont BCG, ?view=health toont insights-grid)
+   - /allergen-queue → modal-flow via saveGerecht (banner blijft als fallback)
+   - AI Bedenker + Pitmaster → modals (knop in library-header + gerecht-detail)
+   - Kookbord blijft sidebar-child onder Menu (zoals in navigation.tsx)
+   Alle oude URLs blijven werken via middleware-redirects. */
 const TABS: HubTab[] = [
     { href: '/gerechten',                  label: 'Gerechten',     icon: ChefHat },
     { href: '/gerechten/componenten',      label: 'Componenten',   icon: Boxes },
-    { href: '/gerechten/menu-analyse',     label: 'Menu-analyse',  icon: BarChart3 },
-    { href: '/gerechten/insights',         label: 'Insights',      icon: Activity },
-    { href: '/gerechten/allergen-queue',   label: 'Allergenen',    icon: ShieldCheck },
+    { href: '/gerechten/analyse',          label: 'Analyse',       icon: BarChart3 },
 ];
 
 export default function GerechtenTabs() {

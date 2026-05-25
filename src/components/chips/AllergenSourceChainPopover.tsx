@@ -117,7 +117,7 @@ export default function AllergenSourceChainPopover({
                     </div>
                     {status !== 'confirmed' && (
                         <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border, rgba(255,255,255,.06))', fontSize: 10, color: 'var(--muted, #a1a1aa)' }}>
-                            Bevestig in /gerechten/allergen-queue
+                            Bevestig via de allergen-queue (banner bovenaan /gerechten)
                         </div>
                     )}
                 </div>

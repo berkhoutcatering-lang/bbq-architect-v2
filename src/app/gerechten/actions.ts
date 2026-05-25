@@ -45,8 +45,8 @@ export async function upsertGerecht(input: unknown): Promise<
   if (error) return { error: error.message };
 
   revalidatePath('/gerechten');
-  revalidatePath('/gerechten/menu-analyse');
-  revalidatePath('/gerechten/insights');
+  /* Bucket C (2026-05-25): /menu-analyse + /insights samengevoegd onder /analyse. */
+  revalidatePath('/gerechten/analyse');
   return { data: data! };
 }
 

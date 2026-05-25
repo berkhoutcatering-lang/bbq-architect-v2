@@ -44,3 +44,8 @@ supabase/.temp/
 next-env.d.ts
 .claude/launch.json
 .claude/settings.local.json
+
+# Bucket C (2026-05-25) — Claude Design ZIP-export voor menu-hub.
+# Reference-only materiaal (HTML prototypes + uploads), niet in git history
+# (40MB + 126 binaries). Lokaal extract via ZIP indien nodig.
+docs/claude-design/

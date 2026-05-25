@@ -412,7 +412,7 @@ export default function ComponentenPage() {
                                     is nu de prominente ingang voor de uitgebreide brainstorm-studio
                                     (vrij / voorraad-gedreven / klant-context modes). */}
                                 <Link
-                                    href="/bedenker"
+                                    href="/gerechten?modal=bedenker"
                                     className="btn btn-ghost"
                                     style={{ textDecoration: 'none' }}
                                 >

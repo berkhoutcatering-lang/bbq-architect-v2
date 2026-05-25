@@ -14,10 +14,31 @@ export async function middleware(request: NextRequest) {
   }
 
   // /gerechten/ingredienten was een gateway-pagina met 3 KPI-tiles die feitelijk
-  // naar /voorraad linkte. KPI's zijn in S2.7 verhuisd naar /gerechten/insights;
-  // de daadwerkelijke edit-flow zit in /voorraad. Redirect oude bookmarks.
+  // naar /voorraad linkte. Edit-flow zit in /voorraad. Bucket C (2026-05-25):
+  // sidebar-link wijst nu direct naar /voorraad?context=menu (zie navigation.tsx).
   if (pathname.startsWith('/gerechten/ingredienten')) {
-    return NextResponse.redirect(new URL('/voorraad', request.url), 308);
+    return NextResponse.redirect(new URL('/voorraad?context=menu', request.url), 308);
+  }
+
+  // Bucket C (2026-05-25) — Menu & Recepten IA opschonen: 5 tabs → 3 (Gerechten /
+  // Componenten / Analyse). De oude losse hubs zijn samengevoegd onder /analyse
+  // met een view-toggle (?view=performance toont BCG-matrix, ?view=health toont
+  // de insights-grid). Allergen-queue gaat via modal-flow op saveGerecht;
+  // banner blijft als fallback. AI Bedenker + Pitmaster zijn modals.
+  if (pathname === '/gerechten/menu-analyse' || pathname.startsWith('/gerechten/menu-analyse/')) {
+    return NextResponse.redirect(new URL('/gerechten/analyse?view=performance', request.url), 308);
+  }
+  if (pathname === '/gerechten/insights' || pathname.startsWith('/gerechten/insights/')) {
+    return NextResponse.redirect(new URL('/gerechten/analyse?view=health', request.url), 308);
+  }
+  if (pathname === '/gerechten/allergen-queue' || pathname.startsWith('/gerechten/allergen-queue/')) {
+    return NextResponse.redirect(new URL('/gerechten?queue=allergens', request.url), 308);
+  }
+  if (pathname === '/gerechten/ai-pitmaster' || pathname.startsWith('/gerechten/ai-pitmaster/')) {
+    return NextResponse.redirect(new URL('/gerechten?modal=pitmaster', request.url), 308);
+  }
+  if (pathname === '/bedenker' || pathname.startsWith('/bedenker/')) {
+    return NextResponse.redirect(new URL('/gerechten?modal=bedenker', request.url), 308);
   }
 
   // /foto-archief was de oude "alle fotos" hub (gerecht-fotos + bonnen door

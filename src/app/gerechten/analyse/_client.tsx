@@ -1,0 +1,77 @@
+/* ═══════════════════════════════════════════════════════════════
+   /gerechten/analyse — Client Component
+   Tab-toggle Performance (BCG) ↔ Health (insights-grid).
+   URL ?view=performance|health sync'd via router.replace.
+   ═══════════════════════════════════════════════════════════════ */
+
+'use client';
+
+import { useCallback } from 'react';
+import { HeartPulse, Target } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import type { Gerecht } from '@/types';
+import { BcgMatrix } from '@/components/menu/analyse/BcgMatrix';
+import { HealthView } from '@/components/menu/analyse/HealthView';
+import { MREyebrow } from '@/components/menu/atoms';
+
+type View = 'performance' | 'health';
+
+interface Props {
+    initialView: View;
+    gerechten: Gerecht[];
+    componentCount: number;
+}
+
+export default function AnalyseClient({ initialView, gerechten, componentCount }: Props) {
+    const router = useRouter();
+    const pathname = usePathname();
+    /* Server doet de eerste split, hier alleen UI-state. We schrijven URL
+       zodat back/forward + shareable links blijven werken (geen client-state
+       als source of truth). */
+    const view = initialView;
+
+    const setView = useCallback((next: View) => {
+        const qs = next === 'performance' ? '?view=performance' : '?view=health';
+        router.replace(`${pathname}${qs}`, { scroll: false });
+    }, [router, pathname]);
+
+    return (
+        <div className="mr-content" style={{ padding: '24px 32px 80px', maxWidth: 1500, width: '100%', margin: '0 auto' }}>
+            <h1 className="mr-page-title" style={{ marginBottom: 4 }}>Analyse</h1>
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
+                Hoe presteert je menu — populariteit, marge en data-kwaliteit op één plek.
+            </p>
+
+            {/* Sub-tabs */}
+            <div className="mr-analyse-tabs" role="tablist" aria-label="Analyse weergave">
+                <button
+                    role="tab"
+                    aria-selected={view === 'performance'}
+                    className={`mr-analyse-tab ${view === 'performance' ? 'active' : ''}`}
+                    onClick={() => setView('performance')}
+                >
+                    <Target size={14} /> Performance
+                </button>
+                <button
+                    role="tab"
+                    aria-selected={view === 'health'}
+                    className={`mr-analyse-tab ${view === 'health' ? 'active' : ''}`}
+                    onClick={() => setView('health')}
+                >
+                    <HeartPulse size={14} /> Health
+                </button>
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+                {view === 'performance' ? (
+                    <div>
+                        <MREyebrow style={{ marginBottom: 16 }}>BCG Matrix — Populariteit vs. Marge</MREyebrow>
+                        <BcgMatrix gerechten={gerechten} />
+                    </div>
+                ) : (
+                    <HealthView gerechten={gerechten} componentCount={componentCount} />
+                )}
+            </div>
+        </div>
+    );
+}

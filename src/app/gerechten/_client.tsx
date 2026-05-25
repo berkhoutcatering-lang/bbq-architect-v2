@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { track, trackOnce } from '@/lib/track';
@@ -24,7 +24,18 @@ import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
-import GangFilterPills from './_components/GangFilterPills';
+/* Bucket C (2026-05-25) — IA opschonen: nieuwe Menu-hub components vervangen
+   de oude card-grid en gerecht-detail flow. GangFilterPills blijft niet
+   meer in JSX (filtering via MRLibraryPage interne filter-pills) maar de
+   import stays voor evt. fallback. */
+import { MRViewToggle, MRSearchBar, MRButton, MRFilterPill } from '@/components/menu/atoms';
+import { MRLibraryView } from '@/components/menu/library-views';
+import { GerechtDetailDrawer } from '@/components/menu/drawer/GerechtDetailDrawer';
+import { MenuCommandPalette, useCmdKShortcut } from '@/components/menu/MenuCommandPalette';
+import { BedenkerModal } from '@/components/menu/BedenkerModal';
+import { AllergenConfirmModal, type AllergenRow } from '@/components/menu/AllergenConfirmModal';
+import { useMenuView } from '@/hooks/useMenuView';
+import { getGangKey, getGangLabel } from '@/components/menu/helpers';
 import {
   computeKpiTiles,
   pickGlyph,
@@ -85,6 +96,20 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).
        Dit object bewaart titel + stappen array voor de stepper. */
     const [kitchenMode, setKitchenMode] = useState<{ titel: string; stappen: string[] } | null>(null);
+
+    /* Bucket C (2026-05-25): nieuwe menu-hub state.
+       - inspectingGerecht = drawer open + welke gerecht erin staat
+       - cmdkOpen = ⌘K palette state
+       - bedenkerOpen = lokale BedenkerModal-open state (URL-driven flow loopt
+         via MenuHubModalMounts in /gerechten/layout.tsx)
+       - allergenModalRows = pending AI-rows na save; lege array = geen modal */
+    const [viewMode, setViewMode] = useMenuView();
+    const [inspectingGerecht, setInspectingGerecht] = useState<Gerecht | null>(null);
+    const [cmdkOpen, setCmdkOpen] = useState(false);
+    const [bedenkerOpen, setBedenkerOpen] = useState(false);
+    const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
+    const [gangFilter, setGangFilter] = useState<string>('all');
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const serviceImageRef = useRef<HTMLInputElement>(null);
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
@@ -92,6 +117,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const COST_UNITS = ['kg', 'g', 'L', 'ml', 'stuks'];
 
     useEffect(function () { loadData().finally(function () { setDataLoading(false); }); }, []);
+
+    /* Bucket C — ⌘K opent de Menu Command Palette. */
+    useCmdKShortcut(useCallback(() => setCmdkOpen(true), []));
 
     async function loadData() {
         const g = await supabase.from('gangen').select('*').order('volgorde');
@@ -712,13 +740,17 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (g.status) return g.status;
         return g.actief === false ? 'inactief' : 'actief';
     }
-    const gangGerechten = gerechten
-        .filter(function (g) { return g.gang_slug === activeGang; })
-        .filter(function (g) {
-            if (statusFilter === 'all') return true;
-            return getStatus(g) === statusFilter;
+    /* Bucket C — vervangt gangGerechten (single-gang activeGang) met multi-filter
+       op gangFilter (kan 'all' zijn). MRLibraryView krijgt de gefilterde lijst. */
+    const filteredGerechten = useMemo(() => {
+        return gerechten.filter(function (g) {
+            if (gangFilter !== 'all' && g.gang_slug !== gangFilter) return false;
+            if (statusFilter !== 'all' && getStatus(g) !== statusFilter) return false;
+            return true;
         });
-    const currentGang = gangen.find(function (g) { return g.slug === activeGang; });
+    }, [gerechten, gangFilter, statusFilter]);
+    /* currentGang blijft beschikbaar voor edit-modal (newGerecht zet gang_slug). */
+    const currentGang = gangen.find(function (g) { return g.slug === (gangFilter !== 'all' ? gangFilter : activeGang); });
 
     /* Tellingen per status voor de filter-pills bovenaan (over alle gangen). */
     const statusCounts = {
@@ -764,21 +796,18 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             {/* Compacte 1-line header: titel + view-toggle (Gerechten / Menu's) + add-CTA.
                 Vervangt PageGuideNote + GerechtenPageHero + SignatureSpotlight + DietAllergensOverview
                 — Sam's "te speels" feedback. Density-doel: gerechten boven de fold. */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                padding: '14px 0 12px',
-                marginBottom: 12,
-                borderBottom: '1px solid var(--border)',
-                flexWrap: 'wrap',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                    <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--text)' }}>
+            {/* Bucket C (2026-05-25) — nieuwe header: titel + tab-toggle + view-toggle
+                + ⌘K search + acties (Bedenk met AI + Nieuw). Bestaande Gerechten ↔
+                Menu's tab-toggle blijft als hoofdroute voor menu-templates view. */}
+            <div className="mr-page-header" style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+                    <h1 className="mr-page-title" style={{ fontSize: 22 }}>
                         {view === 'gerechten' ? 'Gerechten' : "Menu's"}
                     </h1>
-                    <div role="tablist" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 13, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                        {view === 'gerechten' ? `${gerechten.length} gerechten` : `${menuTemplates.length} menu's`}
+                    </span>
+                    <div role="tablist" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', marginLeft: 8 }}>
                         <button
                             type="button"
                             role="tab"
@@ -787,7 +816,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                             className={view === 'gerechten' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
                             style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
                         >
-                            Gerechten <span style={{ opacity: 0.7, marginLeft: 4 }}>{gerechten.length}</span>
+                            Gerechten
                         </button>
                         <button
                             type="button"
@@ -797,42 +826,48 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                             className={view === 'menus' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
                             style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
                         >
-                            Menu&rsquo;s <span style={{ opacity: 0.7, marginLeft: 4 }}>{menuTemplates.length}</span>
+                            Menu&rsquo;s
                         </button>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     {view === 'gerechten' && (
                         <>
-                            <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
-                            <button type="button" onClick={newGerecht} className="btn btn-brand btn-sm" style={{ minHeight: 32 }}>+ Gerecht</button>
+                            <MRSearchBar onCmdK={() => setCmdkOpen(true)} />
+                            <MRViewToggle mode={viewMode} onChange={setViewMode} />
                         </>
                     )}
-                    {view === 'menus' && (
-                        <button type="button" onClick={newMenuTemplate} className="btn btn-brand btn-sm" style={{ minHeight: 32 }}>+ Menu</button>
+                </div>
+            </div>
+
+            {/* Action-bar: AI-bedenker + Nieuw */}
+            <div className="mr-action-bar">
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {view === 'gerechten' ? (
+                        <>
+                            <MRButton variant="primary" icon={<Plus size={14} />} onClick={newGerecht}>Nieuw gerecht</MRButton>
+                            <MRButton variant="ai" icon={<Sparkles size={14} />} onClick={() => setBedenkerOpen(true)}>
+                                Bedenk met AI
+                            </MRButton>
+                            <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
+                        </>
+                    ) : (
+                        <MRButton variant="primary" icon={<Plus size={14} />} onClick={newMenuTemplate}>Nieuw menu</MRButton>
                     )}
                 </div>
             </div>
 
             {view === 'gerechten' && gerechten.length > 0 && (
-                <>
-                    <GerechtenKpiTiles
-                        totaal={kpiData.totaal}
-                        conceptCount={kpiData.conceptCount}
-                        gemVerkoop={kpiData.gemVerkoop}
-                        gemMargePct={kpiData.gemMargePct}
-                        allergenenGedekt={kpiData.allergenenGedekt}
-                        totaalGerechten={kpiData.totaalGerechten}
-                    />
-                    {gangPills.length > 0 && (
-                        <GangFilterPills
-                            gangen={gangPills}
-                            active={activeGang}
-                            onSelect={setActiveGang}
-                        />
-                    )}
-                </>
+                <GerechtenKpiTiles
+                    totaal={kpiData.totaal}
+                    conceptCount={kpiData.conceptCount}
+                    gemVerkoop={kpiData.gemVerkoop}
+                    gemMargePct={kpiData.gemMargePct}
+                    allergenenGedekt={kpiData.allergenenGedekt}
+                    totaalGerechten={kpiData.totaalGerechten}
+                />
             )}
+            {/* GangFilterPills weg — gang-filter loopt via MRFilterPill in de Bucket-C filter-bar. */}
 
 
             {view === 'menus' && (
@@ -886,173 +921,60 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             )}
 
             {view === 'gerechten' && (<>
-            {/* Status-filter pills — alleen tonen als er iets te filteren valt
-                (concept of review_nodig > 0). Anders: stille progressive disclosure. */}
-            {(statusCounts.concept > 0 || statusCounts.review_nodig > 0 || statusFilter !== 'all') && (
-                <div role="tablist" aria-label="Status-filter" style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                    {([
-                        { key: 'all', label: 'Alle', tone: 'neutral' },
-                        { key: 'actief', label: 'Actief', tone: 'green' },
-                        { key: 'concept', label: '✦ Concepten', tone: 'purple' },
-                        { key: 'review_nodig', label: 'Review nodig', tone: 'amber' },
-                        { key: 'inactief', label: 'Inactief', tone: 'gray' },
-                    ] as const).map(p => {
-                        const count = statusCounts[p.key];
-                        const isActive = statusFilter === p.key;
-                        const tones: Record<string, { bg: string; color: string; border: string }> = {
-                            neutral: { bg: 'rgba(255,255,255,.05)', color: 'var(--text)', border: 'var(--border)' },
-                            green: { bg: 'rgba(34,197,94,.08)', color: '#22c55e', border: 'rgba(34,197,94,.3)' },
-                            purple: { bg: 'rgba(167,139,250,.08)', color: '#a78bfa', border: 'rgba(167,139,250,.35)' },
-                            amber: { bg: 'rgba(245,158,11,.08)', color: '#f59e0b', border: 'rgba(245,158,11,.35)' },
-                            gray: { bg: 'rgba(130,130,130,.06)', color: 'var(--muted)', border: 'rgba(130,130,130,.2)' },
-                        };
-                        const t = tones[p.tone];
-                        return (
-                            <button
-                                key={p.key}
-                                role="tab"
-                                aria-selected={isActive}
-                                onClick={() => setStatusFilter(p.key)}
-                                style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 999,
-                                    border: '1px solid ' + (isActive ? t.color : t.border),
-                                    background: isActive ? t.color + '22' : t.bg,
-                                    color: t.color,
-                                    fontSize: 12,
-                                    fontWeight: isActive ? 700 : 500,
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                }}
-                            >
-                                {p.label}
-                                <span style={{ opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Old gang tab-bar removed — vervangen door GangFilterPills bovenaan */}
-
-            {currentGang && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
-                    <div>
-                        <span style={{ fontWeight: 600 }}>{currentGang.naam}</span>
-                        <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 10 }}>
-                            Min. {currentGang.minimum} selecteren
-                            {currentGang.extra_prijs_pp > 0 && ' • Extra: +€' + Number(currentGang.extra_prijs_pp).toFixed(2) + ' p.p.'}
-                        </span>
+                {/* Filter-pills bar — gang + status, beide met MRFilterPill */}
+                <div className="mr-filter-bar">
+                    <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 12, flexWrap: 'wrap' }}>
+                        <MRFilterPill label="Alle" count={gerechten.length} active={gangFilter === 'all'} onClick={() => setGangFilter('all')} />
+                        {gangen.map(g => (
+                            <MRFilterPill
+                                key={g.slug}
+                                label={g.naam}
+                                count={gerechten.filter(d => d.gang_slug === g.slug).length}
+                                active={gangFilter === g.slug}
+                                onClick={() => setGangFilter(g.slug)}
+                            />
+                        ))}
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={function () { editGang(currentGang); }}>Gang bewerken</button>
-                        <button className="btn btn-brand btn-sm" onClick={newGerecht}>+ Gerecht</button>
-                    </div>
-                </div>
-            )}
-
-            {gangGerechten.length === 0 && <EmptyState page="/gerechten" onAction={newGerecht} />}
-
-            <PageSection>
-            <div className="dish-grid">
-                {gangGerechten.map(function (g) {
-                    const status = getStatus(g);
-                    const isAi = g.bron === 'ai';
-                    /* Visuele state per status — AI-creaties krijgen daarbij een
-                       extra diagonal-stripe-rand zodat ze direct opvallen. */
-                    const cardOpacity = status === 'inactief' ? 0.55 : 1;
-                    const stripeBg = isAi ? 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(167,139,250,.06) 8px 16px)' : undefined;
-                    const cardBorder = status === 'concept'
-                        ? '1px solid rgba(167,139,250,.45)'
-                        : status === 'review_nodig'
-                            ? '1px solid rgba(245,158,11,.45)'
-                            : undefined;
-                    const statusPill = status === 'concept'
-                        ? { text: '✦ Concept', bg: 'rgba(167,139,250,.15)', color: '#a78bfa' }
-                        : status === 'review_nodig'
-                            ? { text: 'Review nodig', bg: 'rgba(245,158,11,.15)', color: '#f59e0b' }
-                            : status === 'inactief'
-                                ? { text: 'Inactief', bg: 'rgba(239,68,68,.15)', color: 'var(--red)' }
-                                : null;
-                    return (
-                        <div
-                            key={g.id}
-                            className="dish-card"
-                            onClick={function () { editGerecht(g); }}
-                            style={{ opacity: cardOpacity, backgroundImage: stripeBg, border: cardBorder, position: 'relative' }}
-                        >
-                            {isAi && (
-                                <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(167,139,250,.2)', color: '#a78bfa', fontWeight: 700, letterSpacing: '.05em' }} title="Door AI gegenereerd">
-                                    ✦ AI
-                                </span>
-                            )}
-                            {g.foto_url && (
-                                <div className="dish-foto-preview" style={{ backgroundImage: 'url(' + g.foto_url + ')' }}></div>
-                            )}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                <div className="dish-name" style={{ margin: 0, flex: 1 }}>{g.naam}</div>
-                                {statusPill && (
-                                    <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: statusPill.bg, color: statusPill.color, fontWeight: 700, flexShrink: 0 }}>
-                                        {statusPill.text}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="dish-desc">{g.beschrijving || '—'}</div>
-
-                            <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {(g.tags || []).map(function (tag: string, i: number) {
-                                    return <span key={'t' + i} className="dish-tag-chip">{tag}</span>;
-                                })}
-                                {(g.allergenen || []).map(function (a: string, i: number) {
-                                    return <span key={'a' + i} className="dish-allergen-chip">{a}</span>;
-                                })}
-                            </div>
-
-                            {g.ingredienten && g.ingredienten.length > 0 && (
-                                <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                                    {g.ingredienten.slice(0, 3).map(function (ing, i: number) {
-                                        /* ingredienten kan string[] of object[] zijn (legacy + nieuw).
-                                           Cast naar string voor render — runtime String() vangt beide af. */
-                                        const ingRow = ing as Record<string, unknown> | string;
-                                        let rawText: string;
-                                        if (typeof ingRow === 'object' && ingRow !== null) {
-                                            const hoev = ingRow.hoeveelheid as string | number | undefined;
-                                            const eenheid = ingRow.eenheid as string | undefined;
-                                            const naam = ingRow.naam as string | undefined;
-                                            rawText = (hoev ? String(hoev) + (eenheid ? ' ' + eenheid + ' ' : ' ') : '') + (naam || JSON.stringify(ingRow));
-                                        } else {
-                                            rawText = String(ingRow);
-                                        }
-                                        return <span key={i} className="ingredient-chip-small">{rawText}</span>;
-                                    })}
-                                    {g.ingredienten.length > 3 && <span className="ingredient-chip-small" style={{ opacity: 0.4 }}>+{g.ingredienten.length - 3}</span>}
-                                </div>
-                            )}
-
-                            {g.kostprijs_pp > 0 && (
-                                <div className="dish-kostprijs">€{Number(g.kostprijs_pp).toFixed(2)} p.p.</div>
-                            )}
-                            {/* Pillar #3 (One-glance margin-truth): MargeBar zichtbaar zodra
-                                kost+verkoop+positieve marge bekend zijn. */}
-                            {Number(g.kostprijs_pp || 0) > 0 && Number(g.verkoopprijs || 0) > Number(g.kostprijs_pp || 0) && (
-                                <div style={{ marginTop: 6 }}>
-                                    <MargeBar
-                                        margin={(Number(g.verkoopprijs) - Number(g.kostprijs_pp)) / Number(g.verkoopprijs)}
-                                    />
-                                </div>
-                            )}
+                    {(statusCounts.concept > 0 || statusCounts.review_nodig > 0 || statusFilter !== 'all') && (
+                        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 12 }}>
+                            <MRFilterPill label="Alle" active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
+                            <MRFilterPill label="Actief" count={statusCounts.actief} active={statusFilter === 'actief'} onClick={() => setStatusFilter('actief')} />
+                            {statusCounts.concept > 0 && <MRFilterPill label="✦ Concept" count={statusCounts.concept} active={statusFilter === 'concept'} onClick={() => setStatusFilter('concept')} />}
+                            {statusCounts.review_nodig > 0 && <MRFilterPill label="Review" count={statusCounts.review_nodig} active={statusFilter === 'review_nodig'} onClick={() => setStatusFilter('review_nodig')} />}
+                            {statusCounts.inactief > 0 && <MRFilterPill label="Inactief" count={statusCounts.inactief} active={statusFilter === 'inactief'} onClick={() => setStatusFilter('inactief')} />}
                         </div>
-                    );
-                })}
-                {gangGerechten.length === 0 && (
-                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
-                        Nog geen gerechten in deze gang. Klik <button className="link-btn" onClick={newGerecht}>+ Gerecht</button> om te beginnen.
+                    )}
+                </div>
+
+                {/* Gang-overzicht (alleen tonen als specifieke gang geselecteerd) */}
+                {gangFilter !== 'all' && currentGang && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16 }}>
+                        <div>
+                            <span style={{ fontWeight: 600 }}>{currentGang.naam}</span>
+                            <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 10 }}>
+                                Min. {currentGang.minimum} selecteren
+                                {(currentGang.extra_prijs_pp ?? 0) > 0 && ' • Extra: +€' + Number(currentGang.extra_prijs_pp).toFixed(2) + ' p.p.'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={function () { editGang(currentGang); }}>Gang bewerken</button>
+                        </div>
                     </div>
                 )}
-            </div>
-            </PageSection>
+
+                {/* MRLibraryView — Grid / List / Gallery dispatcher */}
+                {filteredGerechten.length === 0 ? (
+                    <EmptyState page="/gerechten" onAction={newGerecht} />
+                ) : (
+                    <MRLibraryView
+                        mode={viewMode}
+                        gerechten={filteredGerechten}
+                        gangen={gangen}
+                        onSelect={(g) => setInspectingGerecht(g)}
+                        density="comfortable"
+                        photoMode="mixed"
+                    />
+                )}
             </>)}
 
             {showMenuWizard && (
@@ -1788,6 +1710,108 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                     autoHideMs={15000}
                 />
             )}
+
+            {/* Bucket C (2026-05-25) — Detail drawer (klik op kaart).
+                key={inspectingGerecht?.id} dwingt remount zodat tab-state reset bij
+                nieuwe gerecht — vermijdt setState-in-effect. */}
+            <GerechtDetailDrawer
+                key={inspectingGerecht?.id ?? 'none'}
+                open={!!inspectingGerecht}
+                gerecht={inspectingGerecht}
+                gangen={gangen}
+                onClose={() => setInspectingGerecht(null)}
+                onEdit={(g) => { setInspectingGerecht(null); editGerecht(g); }}
+                onDuplicate={(g) => {
+                    setInspectingGerecht(null);
+                    /* Dupliceer-flow: vul form vanuit g, zet ID op 'new'. */
+                    setEditing('new');
+                    setForm({
+                        ...g,
+                        naam: g.naam + ' (kopie)',
+                        id: undefined,
+                    } as Record<string, any>);
+                }}
+                onDelete={(g) => { setInspectingGerecht(null); deleteGerecht(g.id); }}
+                onAllergenCheck={async (g) => {
+                    /* Bouw AllergenRow[] uit detected allergens en open modal. */
+                    const detected = await detectAllergensViaAi({
+                        naam: g.naam,
+                        ingredient_costs: (g as any).ingredient_costs,
+                        ingredienten: g.ingredienten,
+                    });
+                    const existing = g.allergenen ?? [];
+                    const newOnes = detected.filter((a) => !existing.includes(a));
+                    if (newOnes.length === 0) {
+                        showToast('Geen nieuwe allergenen gedetecteerd', 'success');
+                        return;
+                    }
+                    setAllergenModalRows(newOnes.map((a, i) => ({
+                        id: `recheck-${g.id}-${i}`,
+                        allergen: a,
+                        source: `AI-detectie via ingrediënten van "${g.naam}"`,
+                        confidence: 85,
+                    })));
+                }}
+            />
+
+            {/* AllergenConfirmModal — geactiveerd door drawer "Hercheck" of toekomstige
+                saveGerecht-hook. Bevestigde rijen worden in volgende sessie naar
+                Supabase componenten_allergens.confirmed_at gepatched. */}
+            <AllergenConfirmModal
+                open={allergenModalRows.length > 0}
+                rows={allergenModalRows}
+                onClose={() => setAllergenModalRows([])}
+                onSubmit={async ({ confirmed, rejected }) => {
+                    /* Voor nu: alleen toast — daadwerkelijke DB-write komt zodra
+                       AllergenQueueBanner-tabel wired is voor gerecht-level rows.
+                       Voor componenten-level allergens loopt het al via _components/AllergenQueueList. */
+                    showToast(`${confirmed.length} bevestigd, ${rejected.length} verworpen`, 'success');
+                    setAllergenModalRows([]);
+                }}
+            />
+
+            {/* Lokale BedenkerModal — voor de "+ Bedenk met AI" knop in header.
+                URL-driven flow (?modal=bedenker via middleware /bedenker redirect)
+                loopt via MenuHubModalMounts in /gerechten/layout.tsx. */}
+            <BedenkerModal
+                open={bedenkerOpen}
+                onClose={() => setBedenkerOpen(false)}
+                onAccept={(result) => {
+                    setBedenkerOpen(false);
+                    /* Maak gerecht-form aan met AI-resultaat als basis. */
+                    setEditing('new');
+                    setForm({
+                        naam: result.name,
+                        beschrijving: result.desc,
+                        gang_slug: activeGang ?? gangen[0]?.slug,
+                        kostprijs_pp: result.cost,
+                        verkoopprijs: result.price,
+                        bron: 'ai',
+                        status: 'concept',
+                        ingredienten: result.components,
+                        allergenen: [],
+                        tags: [],
+                        ingredient_costs: [],
+                    } as Record<string, any>);
+                }}
+            />
+
+            {/* MenuCommandPalette — ⌘K shortcut via useCmdKShortcut hook bovenin. */}
+            <MenuCommandPalette
+                open={cmdkOpen}
+                onClose={() => setCmdkOpen(false)}
+                gerechten={gerechten}
+                onSelectGerecht={(g) => { setCmdkOpen(false); setInspectingGerecht(g); }}
+                onAction={(id) => {
+                    setCmdkOpen(false);
+                    if (id === 'bedenker') setBedenkerOpen(true);
+                    if (id === 'allergens') {
+                        /* Open allergens-queue modal — voor nu navigeert hij naar de
+                           AllergenQueueBanner sectie via een toast-hint. */
+                        showToast('Allergen-queue: klik banner bovenaan om openstaande rijen te zien', 'info');
+                    }
+                }}
+            />
         </div>
     );
 }
