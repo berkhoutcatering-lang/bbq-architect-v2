@@ -108,6 +108,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [bedenkerOpen, setBedenkerOpen] = useState(false);
     const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
+    /* P0-A: saveData wacht in pending tot user op modal beslist. */
+    const [pendingAllergenSave, setPendingAllergenSave] = useState<Record<string, any> | null>(null);
     const [gangFilter, setGangFilter] = useState<string>('all');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -369,26 +371,13 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         }
     }
 
-    async function saveGerecht() {
-        if (!validateAll({ naam: form.naam })) return;
-        const saveData = Object.assign({}, form);
-        if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
-        else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
-
-        /* AI allergeen-detectie — merge zodat manuele codes blijven. */
-        const aiAllergens = await detectAllergensViaAi(saveData);
-        if (aiAllergens.length > 0) {
-            const existing = Array.isArray(saveData.allergenen) ? saveData.allergenen : [];
-            const merged = [...new Set([...existing, ...aiAllergens])];
-            saveData.allergenen = merged;
-            const added = aiAllergens.filter(a => !existing.includes(a));
-            if (added.length > 0) showToast('AI gedetecteerd: ' + added.join(', '), 'info');
-        }
-
+    /* Bucket-C P0-A (2026-05-25): saveGerecht splitst nu in 2 fases:
+       1. detect + check newOnes → modal openen (block save)
+       2. commitSave wordt door modal-onSubmit aangeroepen met user-decisions
+       Reden: zonder confirm zou een onbevestigde AI-allergeen direct in
+       /q/[id] zichtbaar worden — security/safety issue. */
+    async function commitSave(saveData: Record<string, any>) {
         const dbData: Record<string, any> = Object.assign({}, saveData);
-        /* Status-systeem (migratie 016): handmatig nieuw gerecht = direct actief
-           (de chef weet wat ie kookt, geen review-stap nodig). AI-creaties komen
-           via ai-tools binnen met status='concept' + bron='ai'. */
         if (editing === 'new') {
             if (!dbData.status) dbData.status = 'actief';
             if (!dbData.bron) dbData.bron = 'manual';
@@ -413,6 +402,34 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setEditing(null);
         loadData();
     }
+
+    /* P0-A entry-point: detect → modal of direct commit. */
+    async function saveGerecht() {
+        if (!validateAll({ naam: form.naam })) return;
+        const saveData = Object.assign({}, form) as Record<string, any>;
+        if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
+        else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
+
+        const aiAllergens = await detectAllergensViaAi(saveData);
+        const existing = Array.isArray(saveData.allergenen) ? saveData.allergenen : [];
+        const newOnes = aiAllergens.filter((a: string) => !existing.includes(a));
+
+        if (newOnes.length > 0) {
+            /* Block save, open modal. Modal-onSubmit roept commitSave aan met
+               de definitieve allergenen-merge op basis van user-decisions. */
+            setPendingAllergenSave(saveData);
+            setAllergenModalRows(newOnes.map((a: string, i: number) => ({
+                id: `save-${i}-${a}`,
+                allergen: a,
+                source: `AI-detectie via ${saveData.ingredient_costs?.length ?? saveData.ingredienten?.length ?? 0} ingrediënten`,
+                confidence: 90,
+            })));
+            return;
+        }
+
+        await commitSave(saveData);
+    }
+
     async function deleteGerecht(id: number | string) {
         showConfirm('Weet je zeker dat je dit gerecht wilt verwijderen?', async function () {
             await supabase.from('gerechten').delete().eq('id', id);
@@ -1760,13 +1777,39 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             <AllergenConfirmModal
                 open={allergenModalRows.length > 0}
                 rows={allergenModalRows}
-                onClose={() => setAllergenModalRows([])}
-                onSubmit={async ({ confirmed, rejected }) => {
-                    /* Voor nu: alleen toast — daadwerkelijke DB-write komt zodra
-                       AllergenQueueBanner-tabel wired is voor gerecht-level rows.
-                       Voor componenten-level allergens loopt het al via _components/AllergenQueueList. */
-                    showToast(`${confirmed.length} bevestigd, ${rejected.length} verworpen`, 'success');
+                onClose={() => {
+                    /* Sluiten zonder beslissing: pending-save annuleren zodat
+                       de oude form-state behouden blijft (user kan opnieuw save). */
                     setAllergenModalRows([]);
+                    setPendingAllergenSave(null);
+                }}
+                onSubmit={async ({ confirmed, rejected }) => {
+                    /* P0-A flow:
+                       - Pending = save in progress → merge confirmed allergens en commit
+                       - Geen pending = standalone "Hercheck" uit drawer → toast-only */
+                    if (pendingAllergenSave) {
+                        /* Extract de allergeen-namen uit de confirmed IDs (vorm: "save-{idx}-{allergen}") */
+                        const confirmedAllergens = confirmed
+                            .map(id => allergenModalRows.find(r => r.id === id)?.allergen)
+                            .filter((a): a is string => Boolean(a));
+                        const existing = Array.isArray(pendingAllergenSave.allergenen) ? pendingAllergenSave.allergenen : [];
+                        const merged = [...new Set([...existing, ...confirmedAllergens])];
+                        const finalSaveData = { ...pendingAllergenSave, allergenen: merged };
+                        if (confirmedAllergens.length > 0) {
+                            showToast(`${confirmedAllergens.length} allergeen${confirmedAllergens.length === 1 ? '' : 'en'} toegevoegd`, 'success');
+                        }
+                        if (rejected.length > 0) {
+                            showToast(`${rejected.length} verworpen`, 'info');
+                        }
+                        setAllergenModalRows([]);
+                        setPendingAllergenSave(null);
+                        await commitSave(finalSaveData);
+                    } else {
+                        /* Standalone hercheck uit drawer — voor nu toast-only.
+                           DB-write naar component_allergens.confirmed_at komt in volgende ronde. */
+                        showToast(`${confirmed.length} bevestigd, ${rejected.length} verworpen`, 'success');
+                        setAllergenModalRows([]);
+                    }
                 }}
             />
 
