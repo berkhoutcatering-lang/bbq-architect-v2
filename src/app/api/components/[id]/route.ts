@@ -84,6 +84,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     if (b.ingredients !== undefined) updateData.ingredients = b.ingredients;
     if (b.preparation_steps !== undefined) updateData.preparation_steps = b.preparation_steps;
+    /* GP-5 (2026-05-25): drag-drop verplaatsing tussen folders.
+       Accepteert string (folder UUID) of null (= "zonder folder"). */
+    if (b.folder_id === null || typeof b.folder_id === 'string') {
+        updateData.folder_id = b.folder_id;
+    }
 
     // Optionele nested replace-arrays
     const replaceAllergens = Array.isArray(b.allergens) ? b.allergens : null;

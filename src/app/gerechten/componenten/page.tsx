@@ -13,10 +13,15 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import '@/components/redesign/redesign.css';
 import { useComponentFolders, type ComponentFolderRow } from './_lib/useComponentFolders';
-import FolderBar from './_components/FolderBar';
+/* GP-5 (2026-05-25): FolderBar vervangen door FolderTree (Drive-style sidebar).
+   Import gehouden voor evt. fallback maar momenteel niet gerendered. */
 import FolderModal from './_components/FolderModal';
 /* GP-4 (2026-05-25): live foodcost-impact preview bij component-prijswijziging. */
 import { FoodcostImpactModal, type FoodcostImpactPayload } from '@/components/menu/FoodcostImpactModal';
+/* GP-5 (2026-05-25): Drive-style folder tree + drag-drop. */
+import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 
 interface AiProposal {
     name: string;
@@ -145,11 +150,58 @@ export default function ComponentenPage() {
     const [confirmedHaccp, setConfirmedHaccp] = useState<Set<number>>(new Set());
 
     /* S2-deel-3: folder-state. currentFolderId=null toont alle componenten;
-       als ingesteld → filter op components.folder_id. */
+       als ingesteld → filter op components.folder_id.
+       GP-5 (2026-05-25): currentFolderId kan ook '__root__' zijn = "zonder folder". */
     const { rows: folders, available: foldersAvailable, refetch: refetchFolders } = useComponentFolders();
     const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
     const [folderModalOpen, setFolderModalOpen] = useState(false);
     const [folderEditing, setFolderEditing] = useState<ComponentFolderRow | null>(null);
+
+    /* GP-5: drag-overlay state — toont een floating chip van het slepende
+       component zodat user weet wat hij verplaatst. */
+    const [draggingComp, setDraggingComp] = useState<ComponentRow | null>(null);
+    const dndSensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // 5px drag-threshold om click vs drag te onderscheiden
+    );
+
+    async function handleDragEnd(event: DragEndEvent) {
+        setDraggingComp(null);
+        const targetFolderId = parseDropId(event.over?.id as string | null | undefined);
+        if (targetFolderId === undefined) return; // niet boven een folder
+        const componentId = Number(event.active.id);
+        if (!Number.isInteger(componentId)) return;
+
+        const target = components.find(c => c.id === componentId);
+        if (!target) return;
+        if (target.folder_id === targetFolderId) return; // al in deze folder
+
+        /* Optimistic UI: update direct, rollback bij API-error. */
+        const previousFolderId = target.folder_id;
+        setComponents(prev => prev.map(c =>
+            c.id === componentId ? { ...c, folder_id: targetFolderId } : c
+        ));
+
+        try {
+            const res = await fetch(`/api/components/${componentId}`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder_id: targetFolderId }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Verplaatsen mislukt');
+            const folderName = targetFolderId === null
+                ? 'Zonder folder'
+                : folders.find(f => f.id === targetFolderId)?.name ?? 'folder';
+            toast(`"${target.name}" → ${folderName}`, 'success');
+        } catch (e: any) {
+            /* Rollback */
+            setComponents(prev => prev.map(c =>
+                c.id === componentId ? { ...c, folder_id: previousFolderId } : c
+            ));
+            toast(e.message || 'Verplaatsen mislukt', 'error');
+        }
+    }
 
     async function loadComponents() {
         setLoading(true);
@@ -373,6 +425,118 @@ export default function ComponentenPage() {
         : Math.round(components.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
     const circumference = 2 * Math.PI * 86;
 
+    /* GP-5: render-helper voor het card-grid-gebied (loading/empty/cards).
+       Wordt aangeroepen binnen DndContext (mr-comp-layout) of standalone
+       wanneer folders niet beschikbaar zijn. Cards wikkelen in
+       DraggableComponentCard die onClick passes door naar de wrapper-button. */
+    function renderComponentGridArea(): React.ReactElement {
+        if (loading) {
+            return (
+                <div className="flex items-center justify-center py-20 text-[var(--muted)]">
+                    <Loader2 size={18} className="mr-2 animate-spin" /> Componenten laden…
+                </div>
+            );
+        }
+        if (filtered.length === 0) {
+            return (
+                <div
+                    className="overflow-hidden rounded-2xl border border-dashed border-[var(--border)] p-14 text-center"
+                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                >
+                    <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/20">
+                        <Boxes size={24} className="text-[var(--brand)]" strokeWidth={1.5} />
+                    </div>
+                    <h3 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>
+                        {components.length === 0 ? 'Nog geen componenten' : 'Geen match'}
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
+                        {components.length === 0
+                            ? 'Begin met je eerste bouwsteen. Zelf-bereid (gegrilde ananas, kokos espuma) of inkoop (Hanos broodje). Of laat AI er een voorstellen.'
+                            : 'Geen component op deze filter of zoekterm.'}
+                    </p>
+                    {components.length === 0 && !showForm && !showAi && (
+                        <div className="mt-6 flex items-center justify-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowAi(true)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
+                            >
+                                <Sparkles size={12} /> AI Genereer
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowForm(true)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90"
+                            >
+                                <Plus size={12} /> Handmatig
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        return (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map(c => (
+                    <DraggableComponentCard key={c.id} componentId={c.id} disabled={!foldersAvailable}>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedComponentId(c.id)}
+                            className="group relative w-full h-full overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition hover:border-[var(--brand)]/40"
+                            style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                                    {c.type === 'prepared'
+                                        ? <><Package size={10} /> Zelf-bereid</>
+                                        : <><ShoppingBag size={10} /> Inkoop</>}
+                                    {c.ai_suggested && (
+                                        <span className="inline-flex items-center gap-0.5 rounded bg-[var(--brand)]/10 px-1 py-0.5 text-[9px] text-[var(--brand)]">
+                                            <Sparkles size={8} /> AI
+                                        </span>
+                                    )}
+                                </div>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label={`Verwijder ${c.name}`}
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); handleDelete(c); } }}
+                                    className="rounded p-1 text-[var(--muted)] opacity-0 transition hover:bg-[var(--red)]/10 hover:text-[var(--red)] group-hover:opacity-100"
+                                >
+                                    {deletingId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                </span>
+                            </div>
+                            <h3 className="mt-3 line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
+                                {c.name}
+                            </h3>
+                            {c.description && (
+                                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
+                            )}
+                            <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-2.5">
+                                <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
+                                    €{(c.base_cost_cents / 100).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                                    /{c.base_quantity}{c.base_unit}
+                                </span>
+                            </div>
+                            {c.flavor_tags && c.flavor_tags.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                    {c.flavor_tags.slice(0, 4).map(tag => (
+                                        <span key={tag} className="rounded-md bg-[var(--bg)] px-1.5 py-0.5 text-[10px] text-[var(--muted-light)]">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </button>
+                    </DraggableComponentCard>
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div className="redesign-root">
             <div className="main" style={{ padding: '24px 0 40px' }}>
@@ -501,19 +665,15 @@ export default function ComponentenPage() {
                     </div>
                 </div>
 
-                {/* S2-deel-3: FolderBar bovenaan. Verschijnt alleen als de folders-
-                    tabel beschikbaar is (migration gedraaid). Voor het MVP-niveau
-                    tonen we alleen root-folders + breadcrumb voor navigatie. */}
-                {foldersAvailable && (
-                    <FolderBar
-                        folders={folders}
-                        counts={folderCounts}
-                        rootCount={rootCount}
-                        currentFolderId={currentFolderId}
-                        onSelectFolder={setCurrentFolderId}
-                        onCreate={() => { setFolderEditing(null); setFolderModalOpen(true); }}
-                        onEdit={(f) => { setFolderEditing(f); setFolderModalOpen(true); }}
-                    />
+                {/* GP-5 (2026-05-25): FolderBar (horizontale chips) vervangen door
+                    FolderTree (Drive-style sidebar) + DndContext voor drag-drop.
+                    Tree mount onder de hero, de filter-bar + grid binnen DndContext
+                    zodat cards naar folder-items kunnen sleep. Fallback naar FolderBar
+                    als foldersAvailable=false (migration niet gedraaid). */}
+                {!foldersAvailable && (
+                    <div style={{ padding: 10, fontSize: 12, color: 'var(--muted)', fontStyle: 'italic', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 8, marginBottom: 10 }}>
+                        Folders niet beschikbaar — draai migration component_folders om Drive-style organisatie te activeren.
+                    </div>
                 )}
 
                 {/* Glass Filter Pill Bar — search + filter in één object */}
@@ -900,108 +1060,58 @@ export default function ComponentenPage() {
             )}
 
             {/* Lijst */}
-            {loading ? (
-                <div className="flex items-center justify-center py-20 text-[var(--muted)]">
-                    <Loader2 size={18} className="mr-2 animate-spin" /> Componenten laden…
-                </div>
-            ) : filtered.length === 0 ? (
-                <div
-                    className="overflow-hidden rounded-2xl border border-dashed border-[var(--border)] p-14 text-center"
-                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+            {/* GP-5 (2026-05-25): wrap content in DndContext + mr-comp-layout grid
+                wanneer folders beschikbaar. FolderTree links (sticky), cards rechts.
+                @dnd-kit verwerkt drag-drop met 5px activation-constraint zodat normale
+                klik op een card nog steeds de edit-drawer opent. */}
+            {foldersAvailable ? (
+                <DndContext
+                    sensors={dndSensors}
+                    onDragStart={(e) => {
+                        const c = components.find(comp => String(comp.id) === e.active.id);
+                        if (c) setDraggingComp(c);
+                    }}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={() => setDraggingComp(null)}
                 >
-                    <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--brand)]/10 ring-1 ring-[var(--brand)]/20">
-                        <Boxes size={24} className="text-[var(--brand)]" strokeWidth={1.5} />
-                    </div>
-                    <h3 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>
-                        {components.length === 0 ? 'Nog geen componenten' : 'Geen match'}
-                    </h3>
-                    <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
-                        {components.length === 0
-                            ? 'Begin met je eerste bouwsteen. Zelf-bereid (gegrilde ananas, kokos espuma) of inkoop (Hanos broodje). Of laat AI er een voorstellen.'
-                            : 'Geen component op deze filter of zoekterm.'}
-                    </p>
-                    {components.length === 0 && !showForm && !showAi && (
-                        <div className="mt-6 flex items-center justify-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowAi(true)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
-                            >
-                                <Sparkles size={12} /> AI Genereer
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowForm(true)}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90"
-                            >
-                                <Plus size={12} /> Handmatig
-                            </button>
+                    <div className="mr-comp-layout">
+                        <FolderTree
+                            folders={folders}
+                            counts={folderCounts}
+                            rootCount={rootCount}
+                            currentFolderId={currentFolderId}
+                            onSelectFolder={setCurrentFolderId}
+                            onCreate={() => { setFolderEditing(null); setFolderModalOpen(true); }}
+                            onEdit={(f) => { setFolderEditing(f); setFolderModalOpen(true); }}
+                        />
+                        <div>
+                            {renderComponentGridArea()}
                         </div>
-                    )}
-                </div>
+                    </div>
+                    <DragOverlay>
+                        {draggingComp && (
+                            <div style={{
+                                padding: '8px 12px', borderRadius: 10,
+                                background: 'var(--card, var(--bg-subtle))',
+                                border: '1px solid var(--brand)',
+                                fontSize: 13, fontWeight: 500, color: 'var(--text)',
+                                boxShadow: '0 12px 32px rgba(0,0,0,.4)',
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                pointerEvents: 'none', maxWidth: 280,
+                            }}>
+                                {draggingComp.type === 'prepared'
+                                    ? <Package size={12} color="var(--brand-gold, #c4a35a)" />
+                                    : <ShoppingBag size={12} color="var(--muted)" />}
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {draggingComp.name}
+                                </span>
+                            </div>
+                        )}
+                    </DragOverlay>
+                </DndContext>
             ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {filtered.map(c => (
-                        <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => setSelectedComponentId(c.id)}
-                            className="group relative overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition hover:border-[var(--brand)]/40"
-                            style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                    {c.type === 'prepared'
-                                        ? <><Package size={10} /> Zelf-bereid</>
-                                        : <><ShoppingBag size={10} /> Inkoop</>}
-                                    {c.ai_suggested && (
-                                        <span className="inline-flex items-center gap-0.5 rounded bg-[var(--brand)]/10 px-1 py-0.5 text-[9px] text-[var(--brand)]">
-                                            <Sparkles size={8} /> AI
-                                        </span>
-                                    )}
-                                </div>
-                                <span
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`Verwijder ${c.name}`}
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); handleDelete(c); } }}
-                                    className="rounded p-1 text-[var(--muted)] opacity-0 transition hover:bg-[var(--red)]/10 hover:text-[var(--red)] group-hover:opacity-100"
-                                >
-                                    {deletingId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                                </span>
-                            </div>
-
-                            <h3 className="mt-3 line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
-                                {c.name}
-                            </h3>
-                            {c.description && (
-                                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
-                            )}
-
-                            <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-2.5">
-                                <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
-                                    €{(c.base_cost_cents / 100).toFixed(2)}
-                                </span>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                                    /{c.base_quantity}{c.base_unit}
-                                </span>
-                            </div>
-
-                            {c.flavor_tags && c.flavor_tags.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                    {c.flavor_tags.slice(0, 4).map(tag => (
-                                        <span key={tag} className="rounded-md bg-[var(--bg)] px-1.5 py-0.5 text-[10px] text-[var(--muted-light)]">
-                                            {tag}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                renderComponentGridArea()
             )}
-
             {selectedComponentId !== null && (
                 <ComponentEditDrawer
                     componentId={selectedComponentId}
@@ -1355,6 +1465,44 @@ function ComponentEditDrawer({
                 onConfirm={handleImpactConfirm}
                 committing={committingImpact}
             />
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   GP-5 (2026-05-25): DraggableComponentCard — wraps de bestaande card-knop
+   met dnd-kit useDraggable zodat hij naar een FolderTree-folder kan slepen.
+   PointerSensor met 5px activationConstraint zorgt dat een normale klik
+   nog steeds de onClick van de button bereikt (geen drag-start).
+   ────────────────────────────────────────────────────────────────────────── */
+
+function DraggableComponentCard({
+    componentId, disabled, children,
+}: {
+    componentId: number;
+    disabled?: boolean;
+    children: React.ReactNode;
+}) {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+        id: String(componentId),
+        disabled,
+    });
+    return (
+        <div
+            ref={setNodeRef}
+            {...attributes}
+            {...listeners}
+            style={{
+                transform: CSS.Translate.toString(transform),
+                opacity: isDragging ? 0.4 : 1,
+                cursor: disabled ? 'default' : 'grab',
+                /* Volledig de cel vullen zodat het grid niet shrinkt op
+                   een lege wrapper-div. */
+                width: '100%',
+                height: '100%',
+            }}
+        >
+            {children}
         </div>
     );
 }
