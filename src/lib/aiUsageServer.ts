@@ -143,3 +143,74 @@ export async function checkAiCapServer(organizationId: string): Promise<CapStatu
  *     cost_eur_cents: estimateAiCostCents({ ... }),
  *   });
  */
+
+/* ── COST-BASED CAP (in cents) ──────────────────────────────────────────────
+ *
+ * Aparte cap-check op €-cents in plaats van actie-count. Komt naast `checkAiCapServer`
+ * (die telt acties); deze telt cumulatieve cost_eur_cents in de huidige maand.
+ *
+ * Mapping spec → real tier-namen:
+ *   free → starter        (€5,00 / maand)
+ *   pro → professional    (€50,00 / maand)
+ *   enterprise → enterprise (€500,00 / maand)
+ *
+ * Soft-cap (100%): caller voegt X-Cost-Warning header toe.
+ * Hard-cap (150%): caller returnt 429.
+ */
+
+const COST_CAP_CENTS_PER_TIER: Record<Tier, number> = {
+    starter: 500,
+    professional: 5000,
+    enterprise: 50000,
+};
+
+export interface CostCapStatus {
+    allowed: boolean;
+    usedCents: number;
+    capCents: number;
+    tier: Tier;
+    reason?: 'over_cap' | 'throttled' | 'no_org';
+}
+
+/**
+ * Som van `cost_eur_cents` voor de org in de huidige maand. Vergelijkt met
+ * per-tier cents-cap. Tolerant bij DB-errors (returnt allowed:true om AI-flow
+ * niet te breken — net als checkAiCapServer).
+ */
+export async function checkAiCostCapServer(organizationId: string): Promise<CostCapStatus> {
+    const sb = getAdminClient();
+    if (!sb) return { allowed: true, usedCents: 0, capCents: -1, tier: 'starter' };
+
+    try {
+        const orgRes = await sb.from('organizations').select('plan').eq('id', organizationId).single();
+        const tier = (orgRes.data?.plan as Tier) || 'starter';
+        const capCents = COST_CAP_CENTS_PER_TIER[tier];
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { data } = await sb
+            .from('ai_usage')
+            .select('cost_eur_cents')
+            .eq('organization_id', organizationId)
+            .gte('created_at', startOfMonth.toISOString());
+
+        const usedCents = (data ?? []).reduce(
+            (sum: number, row: { cost_eur_cents: number | null }) => sum + (row.cost_eur_cents ?? 0),
+            0,
+        );
+        const hardLimit = Math.floor(capCents * 1.5);
+
+        if (usedCents >= hardLimit) {
+            return { allowed: false, usedCents, capCents, tier, reason: 'over_cap' };
+        }
+        if (usedCents >= capCents) {
+            return { allowed: true, usedCents, capCents, tier, reason: 'throttled' };
+        }
+        return { allowed: true, usedCents, capCents, tier };
+    } catch (e) {
+        console.warn('[AI Cost-Cap Server] Check failed — allowing:', (e as Error).message);
+        return { allowed: true, usedCents: 0, capCents: -1, tier: 'starter' };
+    }
+}

@@ -126,7 +126,7 @@ export default function Restaurant01Preview({ overrides, data }: Props) {
                 {eventPosition === 'top' && eventBlock}
 
                 {data.gangen.map((gang, gi) => (
-                    <div key={gi}>
+                    <div key={gi} className="menukaart-gang-wrap">
                         {showDividers && (
                             <div style={{ width: 120, height: 1, background: accent, margin: '10px auto', opacity: 0.45 }} />
                         )}

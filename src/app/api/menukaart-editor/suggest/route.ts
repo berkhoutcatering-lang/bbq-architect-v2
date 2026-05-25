@@ -18,7 +18,7 @@ import { getTemplate, type Overrides, type OverrideKey } from '@/lib/menukaart/r
 import { validateOverrides } from '@/lib/menukaart/validation';
 import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { logAiUsageServer } from '@/lib/aiUsageServer';
+import { logAiUsageServer, checkAiCostCapServer } from '@/lib/aiUsageServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -259,6 +259,30 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
         return NextResponse.json({ error: `Te veel AI-suggesties — wacht ${rl.resetInSeconds}s en probeer opnieuw.` }, { status: 429 });
     }
 
+    /* Cost-cap per tier (P0-8): hard-block bij >150% van de maandcap zodat
+       een runaway-flow geen ongelimiteerde Anthropic-kosten kan maken.
+       Soft-throttle (>100% maar <150%) zet alleen een X-Cost-Warning header
+       op het response zodat de UI kan waarschuwen, maar de call gaat door. */
+    const cap = await checkAiCostCapServer(organizationId);
+    if (!cap.allowed && cap.reason === 'over_cap') {
+        return NextResponse.json(
+            {
+                error: `AI-budget voor deze maand op (€${(cap.usedCents / 100).toFixed(2)} van €${(cap.capCents / 100).toFixed(2)} cap, hard-limit op 150%). Upgrade je abonnement of wacht tot volgende maand.`,
+            },
+            {
+                status: 429,
+                headers: {
+                    'X-Cost-Cap-Status': 'over_cap',
+                    'X-Cost-Used-Cents': String(cap.usedCents),
+                    'X-Cost-Cap-Cents': String(cap.capCents),
+                },
+            },
+        );
+    }
+    const costWarning = cap.reason === 'throttled'
+        ? `100% of monthly AI budget used (${cap.usedCents}/${cap.capCents} cents) — hard-block at 150%`
+        : null;
+
     const adminSb = createServiceSupabase();
     const { data: offerRow } = await adminSb
         .from('offertes')
@@ -421,6 +445,7 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
             prompt_length: sanitizedPrompt.length,
             diffs_emitted: cleanDiffs.length,
             tools_called: toolCalls.length,
+            endpoint: '/api/menukaart-editor/suggest',
         },
     });
 
@@ -431,10 +456,22 @@ export async function POST(request: Request): Promise<NextResponse<SuggestRespon
             ? `Voorgesteld: ${reasons[0]}` + (reasons.length > 1 ? ` (+${reasons.length - 1} meer)` : '')
             : `${cleanDiffs.length} aanpassing${cleanDiffs.length === 1 ? '' : 'en'} voorgesteld.`;
 
-    return NextResponse.json({
-        summary,
-        diffs: cleanDiffs,
-        rateLimitRemaining: rl.remaining,
-        costCents,
-    });
+    /* Soft-cap waarschuwing → X-Cost-Warning header zodat client een banner
+       kan tonen ("Je nadert je AI-budget"). Hard-cap is hierboven al afgevangen. */
+    const headers: HeadersInit = {};
+    if (costWarning) {
+        headers['X-Cost-Warning'] = costWarning;
+        headers['X-Cost-Used-Cents'] = String(cap.usedCents);
+        headers['X-Cost-Cap-Cents'] = String(cap.capCents);
+    }
+
+    return NextResponse.json(
+        {
+            summary,
+            diffs: cleanDiffs,
+            rateLimitRemaining: rl.remaining,
+            costCents,
+        },
+        { headers },
+    );
 }

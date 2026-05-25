@@ -74,6 +74,11 @@ export interface Settings {
   logo_dark_url: string | null;
   brand_primary: string | null;
   brand_accent: string | null;
+  /* Menukaart tenant-brand-cascade (migration 20260521150000) — propageert
+     als default naar elke nieuwe offerte; per-offerte overrides in
+     offertes.menukaart_overrides overschrijven deze. */
+  menukaart_template_id: string | null;
+  menukaart_overrides: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

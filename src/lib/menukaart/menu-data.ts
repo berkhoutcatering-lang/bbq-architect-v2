@@ -36,6 +36,8 @@ export type MenuData = {
     gangen: MenuGang[];
     /** Tenant-logo URL — komt uit settings.logo_url. */
     logoUrl?: string | null;
+    /** Donker-logo URL voor templates met donkere achtergrond (smokehouse, duotone). Komt uit settings.logo_dark_url. */
+    logoUrlDonker?: string | null;
 };
 
 /**
@@ -117,9 +119,32 @@ export function contrastTextColor(hex: string): '#1A1A1A' | '#FFFFFF' {
 }
 
 /**
- * Demo-menu — gebruikt door de editor wanneer er nog geen `menuData` is voor
- * de offerte. 4 gangen, 12 gerechten, mix van allergenen — dekt alle render-
- * paden af (inline allergens, footnote-style, dish.description, gang.description).
+ * Empty-state menu — gebruikt in productie-PDF wanneer een event nog geen
+ * gerechten heeft gekoppeld. NOOIT DEMO_MENU naar productie laten lekken
+ * (klant zou Hop & Bites-demo zien onder hun eigen logo).
+ */
+export function emptyMenu(logoUrl: string | null = null, logoUrlDonker: string | null = null): MenuData {
+    return {
+        gangen: [
+            {
+                eyebrow: '',
+                name: 'Menu nog niet ingesteld',
+                description: 'Voeg gerechten toe aan het event om de menukaart te vullen.',
+                dishes: [],
+            },
+        ],
+        logoUrl,
+        logoUrlDonker,
+    };
+}
+
+/**
+ * Demo-menu — gebruikt door de EDITOR (offerte-pagina + /q/[id] preview) wanneer
+ * de offerte nog geen menu heeft. 4 gangen, 12 gerechten, mix van allergenen —
+ * dekt alle render-paden af (inline allergens, footnote-style, dish.description,
+ * gang.description).
+ *
+ * NOOIT gebruiken in de productie-PDF — daar is `emptyMenu()` de fallback.
  */
 export const DEMO_MENU: MenuData = {
     gangen: [

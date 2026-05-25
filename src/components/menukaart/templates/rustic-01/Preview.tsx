@@ -240,7 +240,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
 
                 {/* Gangen */}
                 {data.gangen.map((gang, gi) => (
-                    <div key={gi}>
+                    <div key={gi} className="menukaart-gang-wrap">
                         <div style={{ textAlign: 'center', marginBottom: 8 }}>
                             <div
                                 style={{

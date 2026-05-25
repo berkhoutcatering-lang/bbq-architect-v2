@@ -229,7 +229,7 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                         const rest = gang.description ? gang.description.slice(1) : '';
                         const isLast = gi === data.gangen.length - 1;
                         return (
-                            <div key={gi}>
+                            <div key={gi} className="menukaart-gang-wrap">
                                 <div style={{ marginBottom: 10 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
                                         <div

@@ -222,6 +222,7 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
                         return (
                             <div
                                 key={gi}
+                                className="menukaart-gang-wrap"
                                 style={{
                                     display: 'flex',
                                     marginBottom: 12,

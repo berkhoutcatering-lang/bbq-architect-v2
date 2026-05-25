@@ -51,11 +51,21 @@ export default function QuoteMenukaartSection({
     const previewScale = PREVIEW_WIDTH / TEMPLATE_BASE_PX;
     const previewHeight = PREVIEW_WIDTH * aspect;
 
-    // CSS var op de root → print-CSS kan via var(--menukaart-print-scale)
-    // zonder ${} interpolatie in de style-jsx body (Turbopack 16 hangt anders).
+    // Paper-vars + print-scale op de wrapper-div. We zetten ze óók in :root
+    // via de <style dangerouslySetInnerHTML> hieronder, omdat @page-rules in
+    // CSS alléén :root-scoped custom properties zien — niet die van descendant-
+    // elementen. De wrapper-vars zorgen dat de transform via CSS-var werkt
+    // (descendant inheritance), de :root-vars dat @page de juiste papier-maat
+    // krijgt. Vermijdt ${} interpolatie in `<style jsx>` body (Turbopack 16 hangt
+    // anders — zie memory project_turbopack_styled_jsx_hang.md).
+    const paperSize = isSquare ? '210mm 210mm' : 'A4 portrait';
+    const paperHeight = isSquare ? '210mm' : '297mm';
+    const printScaleStr = String(PRINT_SCALE);
     const rootStyle = {
         padding: '24px clamp(18px, 4.5vw, 28px) 8px',
-        '--menukaart-print-scale': String(PRINT_SCALE),
+        '--paper-size': paperSize,
+        '--paper-height': paperHeight,
+        '--print-scale': printScaleStr,
     } as React.CSSProperties;
 
     return (
@@ -109,40 +119,18 @@ export default function QuoteMenukaartSection({
             </div>
 
             {/*
-              * Paper-conditional CSS via gewone <style> tag (geen styled-jsx).
-              * Reden: styled-jsx staat maar 1 <style jsx> per component toe;
-              * dynamische @page size kan niet via CSS-var.
+              * Alle print-CSS in één <style> tag (geen styled-jsx — Turbopack 16+
+              * hangt op ${} interpolation in styled-jsx body). De :root-vars
+              * worden ge-interpoleerd vanuit JS, maar binnen een normale
+              * <style dangerouslySetInnerHTML> blok dat Turbopack niet door de
+              * styled-jsx-pipeline duwt. Alle @media print rules zelf gebruiken
+              * alleen var(--...) — die hoeven niet meer geïnterpoleerd te worden.
               */}
             <style
                 dangerouslySetInnerHTML={{
-                    __html: `@media print { @page { size: ${isSquare ? '210mm 210mm' : 'A4 portrait'}; margin: 0; } .menukaart-viewport { height: ${isSquare ? '210mm' : '297mm'} !important; } }`,
+                    __html: `:root{--paper-size:${paperSize};--paper-height:${paperHeight};--print-scale:${printScaleStr};}.menukaart-gang-wrap{break-inside:avoid;page-break-inside:avoid;}@media print{@page{size:var(--paper-size);margin:0;}body *{visibility:hidden;}.menukaart-printable,.menukaart-printable *{visibility:visible;}.menukaart-printable{position:absolute!important;left:0!important;top:0!important;width:210mm!important;padding:0!important;overflow:visible!important;display:block!important;}.menukaart-viewport{width:210mm!important;height:var(--paper-height)!important;overflow:visible!important;}.menukaart-scale-wrapper{transform:scale(var(--print-scale))!important;transform-origin:top left!important;}.menukaart-print-btn{display:none!important;}.menukaart-gang-wrap{break-inside:avoid!important;page-break-inside:avoid!important;}}`,
                 }}
             />
-
-            <style jsx global>{`
-                @media print {
-                    body * { visibility: hidden; }
-                    .menukaart-printable, .menukaart-printable * { visibility: visible; }
-                    .menukaart-printable {
-                        position: absolute !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        width: 210mm !important;
-                        padding: 0 !important;
-                        overflow: visible !important;
-                        display: block !important;
-                    }
-                    .menukaart-viewport {
-                        width: 210mm !important;
-                        overflow: visible !important;
-                    }
-                    .menukaart-scale-wrapper {
-                        transform: scale(var(--menukaart-print-scale)) !important;
-                        transform-origin: top left !important;
-                    }
-                    .menukaart-print-btn { display: none !important; }
-                }
-            `}</style>
         </div>
     );
 }

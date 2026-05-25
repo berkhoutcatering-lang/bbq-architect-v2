@@ -235,7 +235,7 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                     }}
                 >
                     {data.gangen.map((gang, gi) => (
-                        <div key={gi} style={{ marginBottom: 3 }}>
+                        <div key={gi} className="menukaart-gang-wrap" style={{ marginBottom: 3 }}>
                             <div
                                 style={{
                                     display: 'inline-flex',

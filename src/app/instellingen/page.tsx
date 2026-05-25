@@ -12,6 +12,8 @@ import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
 import { THEMES, type ThemePreset, type ThemeMode, findPresetBySignature } from '@/lib/themes';
 import { perceivedLightness, tintToward, contrastRatio, wcagLevel, autoFixContrast } from '@/lib/colorMath';
+import MenukaartStijl from './_components/MenukaartStijl';
+import type { Overrides } from '@/lib/menukaart/registry';
 
 export default function Instellingen() {
     /* `save` van useSettings doet directe Supabase update zonder Zod/re-auth.
@@ -192,6 +194,15 @@ export default function Instellingen() {
                     <ThemePresetPicker form={form} setForm={setForm} />
                 </div>
             </div>
+
+            {/* Menukaart-stijl — tenant-brand-cascade voor de menukaart-templates.
+                Aparte save (saveTenantBrandOverrides) want het schrijft naar
+                settings.menukaart_template_id + settings.menukaart_overrides; de
+                main save-knop onderaan schrijft alleen brand_* en logo URLs. */}
+            <MenukaartStijl
+                initialTemplateId={(settings?.menukaart_template_id as string | null) ?? null}
+                initialOverrides={(settings?.menukaart_overrides as Overrides | null) ?? {}}
+            />
 
             <div className="panel" style={{ marginBottom: 20 }}>
                 <div className="panel-head"><h3><FileText size={14} className="mr-1.5" style={{ color: 'var(--brand)' }} />Facturatie</h3></div>
