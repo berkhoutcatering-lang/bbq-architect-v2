@@ -15,6 +15,8 @@ import '@/components/redesign/redesign.css';
 import { useComponentFolders, type ComponentFolderRow } from './_lib/useComponentFolders';
 import FolderBar from './_components/FolderBar';
 import FolderModal from './_components/FolderModal';
+/* GP-4 (2026-05-25): live foodcost-impact preview bij component-prijswijziging. */
+import { FoodcostImpactModal, type FoodcostImpactPayload } from '@/components/menu/FoodcostImpactModal';
 
 interface AiProposal {
     name: string;
@@ -1109,41 +1111,102 @@ function ComponentEditDrawer({
         setHaccpRows(prev => prev.filter((_, i) => i !== idx));
     }
 
-    async function handleSave() {
-        if (!name.trim()) { toast('Naam verplicht', 'error'); return; }
+    /* GP-4 (2026-05-25): foodcost-impact preview-state.
+       Bij base_cost_cents-wijziging fetchen we eerst de impact en tonen
+       een modal voordat we daadwerkelijk saven. */
+    const [impactPayload, setImpactPayload] = useState<FoodcostImpactPayload | null>(null);
+    const [showImpactModal, setShowImpactModal] = useState(false);
+    const [committingImpact, setCommittingImpact] = useState(false);
+
+    function validateForm() {
+        if (!name.trim()) return { ok: false as const, reason: 'Naam verplicht' };
         const qty = Number(baseQty);
-        if (!Number.isFinite(qty) || qty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
+        if (!Number.isFinite(qty) || qty <= 0) return { ok: false as const, reason: 'Basis-hoeveelheid > 0' };
         const cost = Number(costEuros);
-        if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig', 'error'); return; }
+        if (!Number.isFinite(cost) || cost < 0) return { ok: false as const, reason: 'Kostprijs ongeldig' };
         const baseCostCents = Math.round(cost * 100);
         const tags = flavorTags.split(',').map(t => t.trim()).filter(Boolean);
+        return { ok: true as const, qty, baseCostCents, tags };
+    }
 
+    async function commitSave(qty: number, baseCostCents: number, tags: string[]) {
+        const res = await fetch(`/api/components/${componentId}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name.trim(),
+                description: description.trim() || null,
+                base_quantity: qty,
+                base_unit: baseUnit,
+                base_cost_cents: baseCostCents,
+                flavor_tags: tags,
+                allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: false })),
+                haccp_points: haccpRows.filter(r => r.type),
+            }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+        const recompMsg = body.recomputed_gerechten ? ` (${body.recomputed_gerechten} gerechten herrekend)` : '';
+        toast(`Component bijgewerkt${recompMsg}`, 'success');
+        if (body.warnings) toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
+        onSaved();
+    }
+
+    async function handleSave() {
+        const v = validateForm();
+        if (!v.ok) { toast(v.reason, 'error'); return; }
+
+        /* GP-4: detecteer of base_cost_cents wijzigt. Anders → direct save (huidige flow). */
+        const oldBaseCostCents = comp?.base_cost_cents ?? null;
+        const costChanged = oldBaseCostCents !== null && oldBaseCostCents !== v.baseCostCents;
+
+        if (!costChanged) {
+            setSaving(true);
+            try { await commitSave(v.qty, v.baseCostCents, v.tags); }
+            catch (e: any) { toast(e.message || 'Opslaan mislukt', 'error'); }
+            finally { setSaving(false); }
+            return;
+        }
+
+        /* Cost-change: eerst preview ophalen, modal tonen. */
         setSaving(true);
         try {
-            const res = await fetch(`/api/components/${componentId}`, {
-                method: 'PATCH',
+            const previewRes = await fetch(`/api/components/${componentId}/preview-impact`, {
+                method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name.trim(),
-                    description: description.trim() || null,
-                    base_quantity: qty,
-                    base_unit: baseUnit,
-                    base_cost_cents: baseCostCents,
-                    flavor_tags: tags,
-                    allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: false })),
-                    haccp_points: haccpRows.filter(r => r.type),
-                }),
+                body: JSON.stringify({ new_base_cost_cents: v.baseCostCents }),
             });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
-            toast('Component bijgewerkt — wijzigingen propageren naar alle gerechten', 'success');
-            if (body.warnings) toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
-            onSaved();
+            const previewBody = await previewRes.json();
+            if (!previewRes.ok) throw new Error(previewBody.error || 'Impact-preview mislukt');
+
+            if (previewBody.affected_count === 0) {
+                /* Geen gerechten geraakt → direct doorgaan zonder modal. */
+                await commitSave(v.qty, v.baseCostCents, v.tags);
+            } else {
+                setImpactPayload(previewBody as FoodcostImpactPayload);
+                setShowImpactModal(true);
+            }
+        } catch (e: any) {
+            toast(e.message || 'Preview mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleImpactConfirm() {
+        const v = validateForm();
+        if (!v.ok) { toast(v.reason, 'error'); return; }
+        setCommittingImpact(true);
+        try {
+            await commitSave(v.qty, v.baseCostCents, v.tags);
+            setShowImpactModal(false);
+            setImpactPayload(null);
         } catch (e: any) {
             toast(e.message || 'Opslaan mislukt', 'error');
         } finally {
-            setSaving(false);
+            setCommittingImpact(false);
         }
     }
 
@@ -1282,6 +1345,16 @@ function ComponentEditDrawer({
                     </div>
                 )}
             </div>
+
+            {/* GP-4: foodcost-impact modal — verschijnt vóór commit als
+                base_cost_cents wijzigt en er getroffen gerechten zijn. */}
+            <FoodcostImpactModal
+                open={showImpactModal}
+                payload={impactPayload}
+                onClose={() => { if (!committingImpact) { setShowImpactModal(false); setImpactPayload(null); } }}
+                onConfirm={handleImpactConfirm}
+                committing={committingImpact}
+            />
         </div>
     );
 }
