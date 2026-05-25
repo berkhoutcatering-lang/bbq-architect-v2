@@ -1,0 +1,71 @@
+name: Visual regression — menukaart templates
+
+# Draait alleen wanneer een menukaart-template of de PDF-pipeline gewijzigd is.
+# Voorkomt dat elke onrelated PR een trage Playwright-run triggert.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/menukaart/**'
+      - 'src/lib/menukaart/**'
+      - 'src/app/api/menukaart/**'
+      - 'src/app/e2e-test/menukaart/**'
+      - 'tests/menukaart/**'
+      - 'public/fonts/menukaart/**'
+      - 'playwright.config.ts'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/menukaart/**'
+      - 'src/lib/menukaart/**'
+      - 'src/app/api/menukaart/**'
+      - 'src/app/e2e-test/menukaart/**'
+      - 'tests/menukaart/**'
+      - 'public/fonts/menukaart/**'
+      - 'playwright.config.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: visual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NEXT_PUBLIC_E2E: '1'
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Next.js
+        run: npm run build
+
+      - name: Run visual regression (10 templates)
+        run: npm run test:visual
+
+      - name: Upload diff artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

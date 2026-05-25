@@ -70,8 +70,9 @@ export default function Duotone01Pdf({ overrides, data }: PdfTemplateProps) {
 
                 <View style={styles.hero}>
                     <View style={styles.heroLeft}>
-                        {data.logoUrl ? (
-                            <Image src={data.logoUrl} style={{ width: 50, height: 50, marginRight: 12, objectFit: 'contain' }} />
+                        {/* Donker bg → prefer logo-donker (witte variant) als die geüpload is */}
+                        {(data.logoUrlDonker ?? data.logoUrl) ? (
+                            <Image src={(data.logoUrlDonker ?? data.logoUrl) as string} style={{ width: 50, height: 50, marginRight: 12, objectFit: 'contain' }} />
                         ) : (
                             <View style={styles.logoBox}>
                                 <Text style={styles.logoLetter}>{initials}</Text>

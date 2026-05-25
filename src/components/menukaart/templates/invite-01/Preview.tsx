@@ -312,7 +312,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                     }}
                 >
                     {data.gangen.map((gang, gi) => (
-                        <div key={gi} style={{ textAlign: 'center' }}>
+                        <div key={gi} className="menukaart-gang-wrap" style={{ textAlign: 'center' }}>
                             <div
                                 style={{
                                     fontFamily: `'${headingFont}', serif`,

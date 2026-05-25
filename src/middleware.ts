@@ -32,6 +32,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Skip /e2e-test/* paths wanneer NEXT_PUBLIC_E2E=1 — gebruikt door Playwright
+  // visual-regression tests om templates renderen zonder auth/DB. De page-
+  // handler zelf doet een tweede NEXT_PUBLIC_E2E-check + notFound() voor de
+  // zekerheid; deze allow-list voorkomt alleen de redirect-naar-login.
+  // (Folder heet `e2e-test` ipv `_test` want App Router negeert `_`-prefix
+  // folders bij routing — private folder convention.)
+  if (pathname.startsWith('/e2e-test/') && process.env.NEXT_PUBLIC_E2E === '1') {
+    return NextResponse.next();
+  }
+
   // Skip static assets
   if (pathname.startsWith('/_next') || pathname.startsWith('/icons') || pathname === '/manifest.json' || pathname === '/favicon.ico') {
     return NextResponse.next();

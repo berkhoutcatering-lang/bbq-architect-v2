@@ -163,10 +163,11 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                         </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start', position: 'relative', zIndex: 1 }}>
-                        {data.logoUrl ? (
+                        {/* Donker bg → prefer logo-donker (witte variant) als die geüpload is */}
+                        {(data.logoUrlDonker ?? data.logoUrl) ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                src={data.logoUrl}
+                                src={(data.logoUrlDonker ?? data.logoUrl) as string}
                                 alt={brandName}
                                 style={{
                                     width: logoSize,
@@ -245,7 +246,7 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
 
                 {/* Gangen */}
                 {data.gangen.map((gang, gi) => (
-                    <div key={gi}>
+                    <div key={gi} className="menukaart-gang-wrap">
                         <div
                             style={{
                                 display: 'grid',

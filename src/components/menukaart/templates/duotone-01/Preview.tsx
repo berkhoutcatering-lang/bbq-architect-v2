@@ -131,10 +131,11 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             <div style={{ padding: `${22}px ${30}px 0`, position: 'relative', zIndex: 2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {data.logoUrl ? (
+                        {/* Donker bg → prefer logo-donker (witte variant) als die geüpload is */}
+                        {(data.logoUrlDonker ?? data.logoUrl) ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                src={data.logoUrl}
+                                src={(data.logoUrlDonker ?? data.logoUrl) as string}
                                 alt={brandName}
                                 style={{ maxHeight: logoSize, objectFit: 'contain', mixBlendMode: 'screen' }}
                             />
@@ -224,6 +225,7 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
                     return (
                         <div
                             key={gi}
+                            className="menukaart-gang-wrap"
                             style={{
                                 display: 'grid',
                                 gridTemplateColumns: `${42}px 1fr`,

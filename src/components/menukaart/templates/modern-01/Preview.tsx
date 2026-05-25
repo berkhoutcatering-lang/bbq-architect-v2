@@ -249,7 +249,7 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
                     {eventPosition === 'top' && eventBlock}
 
                     {data.gangen.map((gang, gi) => (
-                        <div key={gi}>
+                        <div key={gi} className="menukaart-gang-wrap">
                             <div style={{ marginBottom: 14 }}>
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 2 }}>
                                     <div

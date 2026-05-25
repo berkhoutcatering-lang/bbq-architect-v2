@@ -197,7 +197,7 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
                 {data.gangen.map((gang, gi) => {
                     const num = String(gi + 1).padStart(2, '0');
                     return (
-                        <div key={gi} style={{ marginBottom: 14, position: 'relative' }}>
+                        <div key={gi} className="menukaart-gang-wrap" style={{ marginBottom: 14, position: 'relative' }}>
                             {showGhost && (
                                 <div
                                     aria-hidden

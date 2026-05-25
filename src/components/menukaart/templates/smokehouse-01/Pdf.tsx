@@ -74,8 +74,9 @@ export default function Smokehouse01Pdf({ overrides, data }: PdfTemplateProps) {
                 <View style={styles.stripe} />
                 <View style={styles.content}>
                     <View style={styles.headerRow}>
-                        {data.logoUrl ? (
-                            <Image src={data.logoUrl} style={{ width: 50, height: 50, objectFit: 'contain', marginRight: 12 }} />
+                        {/* Donker bg → prefer logo-donker (witte variant) als die geüpload is */}
+                        {(data.logoUrlDonker ?? data.logoUrl) ? (
+                            <Image src={(data.logoUrlDonker ?? data.logoUrl) as string} style={{ width: 50, height: 50, objectFit: 'contain', marginRight: 12 }} />
                         ) : (
                             <View style={styles.logoBox}>
                                 <Text style={styles.logoLetter}>{initials}</Text>
