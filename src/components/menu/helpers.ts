@@ -15,25 +15,38 @@ export interface GangVisual {
 }
 
 export const GANG_VISUALS: Record<string, GangVisual> = {
-    bite:    { gradient: 'linear-gradient(135deg, #B55720 0%, #8A3E14 100%)', icon: 'Drumstick' },
-    voor:    { gradient: 'linear-gradient(135deg, #C4B07A 0%, #9E8A56 100%)', icon: 'Salad' },
-    hoofd:   { gradient: 'linear-gradient(135deg, #6B1F1F 0%, #3D0F0F 100%)', icon: 'Beef' },
-    bij:     { gradient: 'linear-gradient(135deg, #9A612B 0%, #6E451C 100%)', icon: 'Wheat' },
-    dessert: { gradient: 'linear-gradient(135deg, #E8B5A2 0%, #B57858 100%)', icon: 'IceCream2' },
-    veggie:  { gradient: 'linear-gradient(135deg, #697734 0%, #4C5621 100%)', icon: 'Leaf' },
+    bite:      { gradient: 'linear-gradient(135deg, #B55720 0%, #8A3E14 100%)', icon: 'Drumstick' },
+    voor:      { gradient: 'linear-gradient(135deg, #C4B07A 0%, #9E8A56 100%)', icon: 'Salad' },
+    hoofd:     { gradient: 'linear-gradient(135deg, #6B1F1F 0%, #3D0F0F 100%)', icon: 'Beef' },
+    bij:       { gradient: 'linear-gradient(135deg, #9A612B 0%, #6E451C 100%)', icon: 'Wheat' },
+    dessert:   { gradient: 'linear-gradient(135deg, #E8B5A2 0%, #B57858 100%)', icon: 'IceCream2' },
+    veggie:    { gradient: 'linear-gradient(135deg, #697734 0%, #4C5621 100%)', icon: 'Leaf' },
+    /* Sam-eigen gangen — Hop & Bites dataset gebruikt deze slugs naast de
+       6 default-categorieën. Eigen tinten zodat de filter-bar in 1 oogopslag
+       toont welke categorie waar zit. */
+    borrelhap: { gradient: 'linear-gradient(135deg, #D67A3A 0%, #A05A1F 100%)', icon: 'Cookie' },
+    hapje:     { gradient: 'linear-gradient(135deg, #C49A4E 0%, #8E6D2D 100%)', icon: 'Sandwich' },
+    anders:    { gradient: 'linear-gradient(135deg, #5B6470 0%, #3A4148 100%)', icon: 'Soup' },
     /* Fallback */
-    default: { gradient: 'linear-gradient(135deg, #2a2024 0%, #1a1a1e 100%)', icon: 'UtensilsCrossed' },
+    default:   { gradient: 'linear-gradient(135deg, #2a2024 0%, #1a1a1e 100%)', icon: 'UtensilsCrossed' },
 };
 
-/* Bepaal gang-key uit Gerecht (probeert gang_slug, gang.slug, of categorie). */
+/* Bepaal gang-key uit Gerecht (probeert gang_slug, gang.slug, of categorie).
+   Volgorde van checks is belangrijk: meer-specifieke slugs eerst (borrelhap
+   bevat ook 'hap' = potential conflict met 'hapje'). */
 export function getGangKey(gerecht: Gerecht | { gang_slug?: string; categorie?: string }, gangen?: Gang[]): string {
     if (gerecht.gang_slug) {
         const slug = gerecht.gang_slug.toLowerCase();
+        /* Specifieke matches eerst */
+        if (slug === 'borrelhap' || slug.startsWith('borrel')) return 'borrelhap';
+        if (slug === 'hapje' || slug === 'hapjes') return 'hapje';
+        if (slug === 'anders' || slug === 'overig') return 'anders';
+        /* Algemene matches */
         if (slug.includes('bite')) return 'bite';
         if (slug.includes('voor')) return 'voor';
         if (slug.includes('hoofd')) return 'hoofd';
         if (slug.includes('bij')) return 'bij';
-        if (slug.includes('dessert')) return 'dessert';
+        if (slug.includes('dessert') || slug.includes('zoet')) return 'dessert';
         if (slug.includes('veg')) return 'veggie';
         return slug;
     }
@@ -57,6 +70,7 @@ export function getGangLabel(key: string, gangen?: Gang[]): string {
     const labels: Record<string, string> = {
         bite: 'Bite', voor: 'Voorgerecht', hoofd: 'Hoofdgerecht',
         bij: 'Bijgerecht', dessert: 'Dessert', veggie: 'Vegetarisch',
+        borrelhap: 'Borrelhap', hapje: 'Hapje', anders: 'Anders',
     };
     return labels[key] ?? key;
 }

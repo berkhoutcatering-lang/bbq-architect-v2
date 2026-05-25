@@ -9,17 +9,18 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import {
     AlertTriangle, Beef, ChefHat, Cookie, Drumstick, IceCream2,
     Image as ImageIcon, Leaf, LayoutGrid, List as ListIcon, Salad,
-    Search, UtensilsCrossed, Wheat,
+    Sandwich, Search, Soup, UtensilsCrossed, Wheat,
 } from 'lucide-react';
 import {
     GANG_VISUALS, getGangVisual, getGangKey, marginTone, shouldShowPhoto,
     type GangVisual, type PhotoMode,
 } from './helpers';
 
-/* Icon name → component map (zodat helpers strings kunnen teruggeven). */
+/* Icon name → component map (zodat helpers strings kunnen teruggeven).
+   Sandwich + Soup zijn voor Sam-eigen gangen (Hapje + Anders). */
 const GANG_ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
     Drumstick, Salad, Beef, Wheat, IceCream2, Leaf,
-    Cookie, UtensilsCrossed, ChefHat,
+    Cookie, Sandwich, Soup, UtensilsCrossed, ChefHat,
 };
 
 /* ═══ MRStatusPill ═══════════════════════════════════════════ */

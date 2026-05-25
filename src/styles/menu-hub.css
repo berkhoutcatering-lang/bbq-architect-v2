@@ -17,14 +17,20 @@
 .mr-filter-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
 
 /* ── Grid cards ────────────────────────────────── */
-.mr-grid-wrap { display:flex; flex-wrap:wrap; gap:16px; }
-.mr-grid-card { border-radius:14px; background:var(--card,var(--bg-subtle)); backdrop-filter:blur(12px); border:1px solid rgba(130,130,130,.12); overflow:hidden; cursor:pointer; transition:transform .2s, box-shadow .2s; position:relative; }
+.mr-grid-wrap { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+/* Bucket C fix (2026-05-25): flex-column layout zodat photo niet body wegduwt;
+   box-sizing:border-box voor consistente width/height met inline styles;
+   flex-shrink:0 op card-zelf zodat ze niet uitrekken in flex-wrap. */
+.mr-grid-card { display:flex; flex-direction:column; flex-shrink:0; box-sizing:border-box;
+    border-radius:14px; background:var(--card,var(--bg-subtle)); backdrop-filter:blur(12px);
+    border:1px solid rgba(130,130,130,.12); overflow:hidden; cursor:pointer;
+    transition:transform .2s, box-shadow .2s; position:relative; }
 .mr-grid-card::before { content:''; position:absolute; inset:0 0 auto 0; height:1px; background:linear-gradient(90deg,transparent,rgba(196,163,90,.4),transparent); z-index:1; }
 .mr-grid-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.4); }
-.mr-grid-card-photo { position:relative; overflow:hidden; }
+.mr-grid-card-photo { position:relative; overflow:hidden; flex-shrink:0; }
 .mr-grid-card-img { display:block; width:100%; height:100%; object-fit:cover; }
-.mr-grid-card-status { position:absolute; top:8px; right:8px; }
-.mr-grid-card-body { padding:10px 12px 12px; display:flex; flex-direction:column; gap:4px; }
+.mr-grid-card-status { position:absolute; top:8px; right:8px; z-index:2; }
+.mr-grid-card-body { padding:10px 12px 12px; display:flex; flex-direction:column; gap:4px; flex:1; min-height:0; }
 .mr-grid-card-name { font-family:var(--font-display); font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.3; }
 .mr-grid-card-gang { font-size:11.5px; color:var(--muted); }
 .mr-grid-card-footer { display:flex; justify-content:space-between; align-items:center; margin-top:2px; }
