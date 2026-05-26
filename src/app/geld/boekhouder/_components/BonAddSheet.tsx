@@ -91,24 +91,70 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
       setImage(resized);
       setImageOrig(dataUrl);
 
-      const r = await fetch('/api/boekhouder/bon-extract', {
+      /* Bucket E P0-6 — gebruik unified /api/bonnen/extract.
+         Het endpoint geeft een licht andere shape (unit ipv eenheid,
+         prijs ipv prijs_per_eenheid, geen rgs_code). We mappen client-
+         side terug naar de Suggestion-shape die de rest van deze sheet
+         verwacht — zo blijft commit-flow ongewijzigd. */
+      const r = await fetch('/api/bonnen/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ image_data_url: resized }),
+        body: JSON.stringify({
+          source_type: 'photo',
+          file_data_url: resized,
+          filename: file.name,
+        }),
       });
-      const j = await r.json();
-      if (!r.ok || !j.ok) {
-        setError(j.error || 'AI kon de bon niet lezen');
+      if (r.status === 409) {
+        const dup = await r.json();
+        setError(`Deze bon staat al in je archief${dup.duplicate_winkel ? ` (${dup.duplicate_winkel})` : ''}.`);
         setPhase('error');
         return;
       }
-      setPreview(j.bon_preview);
-      setItems(j.items_with_suggestions || []);
-      setDatumOverride(j.bon_preview.datum || new Date().toISOString().slice(0, 10));
-      setRgsOverride(j.bon_preview.rgs_code || '');
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        setError(j.message || j.error || 'AI kon de bon niet lezen');
+        setPhase('error');
+        return;
+      }
+      const adaptedPreview: Preview = {
+        leverancier_naam: j.bon_preview.leverancier_naam,
+        datum: j.bon_preview.datum,
+        totaal_bedrag: j.bon_preview.totaal_bedrag,
+        btw_laag_bedrag: j.bon_preview.btw_laag_bedrag,
+        btw_hoog_bedrag: j.bon_preview.btw_hoog_bedrag,
+        netto_bedrag: j.bon_preview.netto_bedrag,
+        /* RGS wordt niet meer door extract gezet — user kiest 'm zelf in
+           dropdown. Hou dropdown leeg zodat user bewust selecteert. */
+        rgs_code: null,
+        rgs_label: null,
+      };
+      const rawItems = (j.items_with_suggestions || []) as Array<any>;
+      const adaptedItems: Suggestion[] = rawItems.map(it => {
+        /* qty_in_inventory_unit: conversie g→kg, ml→L (zoals oude route deed). */
+        let qty = Number(it.aantal) || 0;
+        if (it.unit === 'g') qty = qty / 1000;
+        else if (it.unit === 'ml') qty = qty / 1000;
+        return {
+          naam: it.naam,
+          aantal: Number(it.aantal) || 0,
+          eenheid: it.unit || 'stuks',
+          prijs_per_eenheid: Number(it.prijs) || 0,
+          totaal: Number(it.totaal) || 0,
+          btw_pct: Number(it.btw_pct) || 21,
+          inventory_id: it.inventory_id,
+          inventory_naam: it.inventory_naam,
+          match_confidence: it.match_confidence,
+          qty_in_inventory_unit: qty,
+        };
+      });
+      setPreview(adaptedPreview);
+      setItems(adaptedItems);
+      setDatumOverride(adaptedPreview.datum || new Date().toISOString().slice(0, 10));
+      setRgsOverride('');
       // Default per item: add_to_inventory aan als match >= medium
-      setChoices((j.items_with_suggestions || []).map((it: Suggestion) => ({
+      setChoices(adaptedItems.map((it: Suggestion) => ({
         add: it.match_confidence === 'high' || it.match_confidence === 'medium',
         create_new: false,
       })));

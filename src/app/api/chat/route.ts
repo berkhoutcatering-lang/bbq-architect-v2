@@ -7,6 +7,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_PERSONA, MODE_INSTRUCTIONS, BRAINSTORM_INSTRUCTIONS, normalizePagePath } from '@/lib/ai-prompts';
 import { getMode, isThinkingMode, type ThinkingMode } from '@/lib/ai-modes';
 import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
+import { checkAiCap } from '@/lib/aiCostCap';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { BLOCK_TOOL_SCHEMA, isBlock } from '@/lib/ai/blocks';
 import { buildBlockDirective, isRouteAllowed, PAGE_TOOL_WHITELIST } from '@/lib/ai/page-contracts';
@@ -307,6 +308,26 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
                     cap: cap.cap,
                     tier: cap.tier,
                 }, { status: 429 });
+            }
+
+            // ── Bucket E P0-5 — extra €-cap voor image-uploads ────────────
+            // Image-content uit /inkoop bon-scan tikt €0.03/call (Haiku Vision).
+            // De action-count cap hierboven dekt aantal acties; deze tweede
+            // check dekt €-spend zodat een dure Vision-call bij hoge MTD-spend
+            // alsnog geblokkeerd wordt. Hard-block returnt 429 (zelfde shape
+            // als nieuwe /api/bonnen/extract route).
+            const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+            if (hasAttachments) {
+                const costCap = await checkAiCap(orgId, 0.03);
+                if (costCap.status === 'hard_block') {
+                    return NextResponse.json({
+                        error: 'ai_cap_exceeded',
+                        message: costCap.message,
+                        used_eur: costCap.used_eur,
+                        hard_eur: costCap.hard_eur,
+                        tier: costCap.tier,
+                    }, { status: 429 });
+                }
             }
         }
 

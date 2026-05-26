@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { parseActions } from '@/lib/ai-actions';
 import { fmt, resizeImage } from '@/lib/utils';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { supabase } from '@/lib/supabase';
@@ -60,70 +59,86 @@ export default function Inkoop() {
 
             setScanStatus('FACTUUR LEZEN — ELKE REGEL...');
             try {
-                const res = await fetch('/api/chat', {
+                /* Bucket E — gebruik unified /api/bonnen/extract. Geeft direct
+                   gestructureerde items + leverancier-match terug; we wrappen
+                   het naar de legacy pendingActions-shape zodat de bestaande
+                   UI ongewijzigd blijft. */
+                const res = await fetch('/api/bonnen/extract', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        pageContext: '/inkoop',
-                        contextData: { leveranciers: leveranciers },
-                        messages: [{
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'text',
-                                    text: 'Lees deze factuur regel voor regel van boven naar beneden. Voor ELKE productregel maak je ONE ACTION-blok. Neem de tijd. Sla geen enkele regel over. Begin direct met het eerste <<<ACTION>>> blok.'
-                                },
-                                { type: 'image_url', image_url: { url: b64, detail: 'high' } }
-                            ]
-                        }]
-                    })
+                        source_type: 'photo',
+                        file_data_url: b64,
+                        filename: file.name,
+                    }),
                 });
-                const json = await res.json();
-                if (json.error) throw new Error(json.error);
-                const content = (json.choices && json.choices[0] && json.choices[0].message.content) || '';
-                if (!content) {
-                    setScanStatus('GEEN RESPONSE');
-                    showToast('AI gaf geen tekst terug. Is de foto te wazig?', 'info');
+
+                if (res.status === 409) {
+                    const dup = await res.json();
+                    setScanStatus('AL IN ARCHIEF');
+                    showToast({
+                        message: `Deze bon staat al in je archief${dup.duplicate_winkel ? ` (${dup.duplicate_winkel})` : ''}.`,
+                        type: 'warning',
+                        action: {
+                            label: 'Open',
+                            onClick: () => { window.location.href = `/archief?bon=${dup.duplicate_bon_id}`; },
+                        },
+                    });
                     setReceiptScanning(false);
                     return;
                 }
-                const { actions, cleanText } = parseActions(content);
-                setScanInsight(cleanText);
 
-                if (actions.length > 0) {
-                    const aggregated: any[] = [];
-                    actions.forEach((action: any) => {
-                        if (action.type !== 'process_receipt') { aggregated.push(action); return; }
-                        const item = action.data.items?.[0];
-                        if (!item) { aggregated.push(action); return; }
+                const json = await res.json();
+                if (!res.ok || json.error) throw new Error(json.message || json.error || 'onbekende fout');
 
-                        const key = `${item.naam.toLowerCase().trim()}_${item.prijs}_${item.eenheid}`;
-                        const existing = aggregated.find((a: any) => {
-                            const eItem = a.data.items?.[0];
-                            return eItem && `${eItem.naam.toLowerCase().trim()}_${eItem.prijs}_${eItem.eenheid}` === key;
-                        });
+                const items = (json.items_with_suggestions ?? []) as any[];
+                const winkel = json.bon_preview?.leverancier_naam || 'Groothandel';
+                const datum = json.bon_preview?.datum || new Date().toISOString().slice(0, 10);
+                const totaal = json.bon_preview?.totaal_bedrag || 0;
 
-                        if (existing) {
-                            existing.data.items[0].aantal += item.aantal;
-                            if (!existing.data.items[0].breakdown) existing.data.items[0].breakdown = [existing.data.items[0].aantal - item.aantal];
-                            existing.data.items[0].breakdown.push(item.aantal);
-                        } else {
-                            const newAction = JSON.parse(JSON.stringify(action));
-                            aggregated.push(newAction);
-                        }
-                    });
-
-                    setPendingActions(aggregated);
-                    setScanStatus('READY ✓ — ' + aggregated.length + ' GROEPEN');
-                    setLastScanData({ b64, actions: aggregated, cleanText });
-                    showToast('Bon geanalyseerd! ' + aggregated.length + ' groepen gevormd.', 'success');
-                } else {
+                if (items.length === 0) {
                     setScanStatus('GEEN ITEMS GEVONDEN');
                     showToast('Geen items herkend. Is de foto scherp genoeg?', 'info');
+                    setReceiptScanning(false);
+                    return;
                 }
+
+                /* Wrap nieuwe shape → legacy pendingActions. Eén action per item;
+                   action.data.items[0] is wat de UI verwacht. */
+                const aggregated = items.map((it: any, idx: number) => ({
+                    id: `extract-${Date.now()}-${idx}`,
+                    type: 'process_receipt',
+                    description: `${it.aantal} ${it.unit} ${it.naam} – €${(it.prijs || 0).toFixed(2)}`,
+                    data: {
+                        winkel,
+                        datum,
+                        totaal_bedrag: totaal,
+                        items: [{
+                            naam: it.naam,
+                            aantal: it.aantal,
+                            eenheid: it.unit,
+                            prijs: it.prijs,
+                            totaal: it.totaal,
+                            btw_pct: it.btw_pct,
+                            inventory_id: it.inventory_id,
+                            inventory_naam: it.inventory_naam,
+                        }],
+                    },
+                    meta: { table: 'inventory' },
+                }));
+
+                setPendingActions(aggregated);
+                setScanStatus('READY ✓ — ' + aggregated.length + ' REGELS');
+                setLastScanData({ b64, actions: aggregated, cleanText: '', extractMeta: {
+                    image_hash: json.image_hash,
+                    ocr_engine: json.ocr_engine,
+                    confidence: json.confidence,
+                    source_type: json.source_type,
+                } });
+                showToast('Bon uitgelezen! ' + aggregated.length + ' regels.', 'success');
             } catch (err: any) {
-                setScanStatus('SCAN FOUT MET RECEPT');
-                showToast('Fout: ' + err.message, 'error');
+                setScanStatus('SCAN FOUT');
+                showToast('Fout: ' + (err?.message || 'onbekend'), 'error');
             }
             setReceiptScanning(false);
         };
@@ -149,19 +164,48 @@ export default function Inkoop() {
             const datum = lastScanData.actions[0]?.data?.datum || new Date().toISOString().split('T')[0];
             const totaal = lastScanData.actions[0]?.data?.totaal_bedrag || 0;
 
-            const fileName = `bon_${Date.now()}.jpg`;
-            const blob = await (await fetch(lastScanData.b64)).blob();
-            const { data: uploadData, error: uploadError } = await supabase.storage.from('bonnen').upload(fileName, blob);
+            // P0.5 — upload naar org-folder zodat strict storage-RLS werkt
+            // (bucket bonnen is private na 20260525132000). Folder-conventie:
+            // {organization_id}/{yyyy-mm}/{uuid}.{ext}
+            const { data: { user } } = await supabase.auth.getUser();
+            const { data: member } = await supabase
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user?.id ?? '')
+                .eq('status', 'active')
+                .limit(1)
+                .single();
+            const orgId = member?.organization_id;
+            const yyyyMm = new Date().toISOString().slice(0, 7);
+            const uuid = crypto.randomUUID();
+            const fileName = orgId ? `${orgId}/${yyyyMm}/${uuid}.jpg` : `legacy/bon_${Date.now()}.jpg`;
 
-            const imageUrl = uploadData ? supabase.storage.from('bonnen').getPublicUrl(fileName).data.publicUrl : lastScanData.b64;
+            const blob = await (await fetch(lastScanData.b64)).blob();
+            const { data: uploadData } = await supabase.storage.from('bonnen').upload(fileName, blob);
+
+            // P0.5 — bewaar file_path (voor signed-URL) ipv publieke URL.
+            // image_url blijft gevuld voor legacy-clients tot background-job draait.
+            const filePath = uploadData?.path ?? fileName;
+
+            // P0.1 — extracted_text voor search_vec
+            const extractedText = [
+                lastScanData.cleanText ?? '',
+                winkel,
+                datum,
+                new Date(datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }),
+            ].filter(Boolean).join(' ').trim();
 
             await insertBon({
                 winkel,
                 datum,
                 totaal_bedrag: totaal,
-                image_url: imageUrl,
+                file_path: filePath,             // P0.5 — nieuw veld voor signed-URL flow
+                file_mime: blob.type || 'image/jpeg',
+                image_url: lastScanData.b64,     // legacy fallback voor oude clients
                 raw_analysis: lastScanData.actions,
-                notities: lastScanData.cleanText
+                notities: lastScanData.cleanText,
+                source: 'upload',                // P0.1 — bron-flag
+                extracted_text: extractedText,   // P0.1 — vul search_vec direct
             });
 
             showToast('Bon gearchiveerd in The Vault!', 'success');

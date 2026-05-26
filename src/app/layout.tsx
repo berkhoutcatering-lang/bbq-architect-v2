@@ -1,6 +1,7 @@
 import './globals.css';
 import React from 'react';
 import { cookies } from 'next/headers';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { AuthProvider } from "@/lib/AuthContext";
 import { OrgProvider } from "@/lib/OrgContext";
 import ToastProvider from "@/components/Toast";
@@ -57,22 +58,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>
-        <AuthProvider>
-          <OrgProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                <ThemeProvider>
-                  <AppShell>
-                    {children}
-                  </AppShell>
-                </ThemeProvider>
-                <GlobalToast />
-                <ServiceWorkerRegistrar />
-                <InstallPrompt />
-              </ConfirmProvider>
-            </ToastProvider>
-          </OrgProvider>
-        </AuthProvider>
+        {/* NuqsAdapter wrapt het hele tree zodat useQueryState() in client
+            components werkt (URL-state-management voor o.a. /archief filters). */}
+        <NuqsAdapter>
+          <AuthProvider>
+            <OrgProvider>
+              <ToastProvider>
+                <ConfirmProvider>
+                  <ThemeProvider>
+                    <AppShell>
+                      {children}
+                    </AppShell>
+                  </ThemeProvider>
+                  <GlobalToast />
+                  <ServiceWorkerRegistrar />
+                  <InstallPrompt />
+                </ConfirmProvider>
+              </ToastProvider>
+            </OrgProvider>
+          </AuthProvider>
+        </NuqsAdapter>
       </body>
     </html>
   );

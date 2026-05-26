@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
         image_url: dataUrl,        // data URL — bon-process pakt dit op
         datum: new Date().toISOString().slice(0, 10),
         status: 'pending',
+        source: 'scan',            // P0.1 — onderscheid camera-scan van email/upload
         notities: 'Quick-scan via FAB',
+        // P0.1 — placeholder zodat search_vec niet leeg blijft tot bon-process draait.
+        // De echte extracted_text wordt later geupdate door extractPdfText() in bon-process.
+        extracted_text: `Quick-scan ${new Date().toLocaleDateString('nl-NL')}`,
       })
       .select('id')
       .single();

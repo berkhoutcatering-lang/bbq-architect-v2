@@ -5,7 +5,7 @@ import {
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Car, Store,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
-    Hammer, Truck,
+    Hammer, Truck, Archive,
 } from "lucide-react";
 
 export interface NavChild {
@@ -97,7 +97,8 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
             { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
-            { label: "Boekhoud-archief", icon: <ScanLine size={16} />, href: "/archief", description: "Bonnen, facturen en pdf's — doorzoekbaar boekhoud-archief" },
+            { label: "Bonnen scannen", icon: <ScanLine size={16} />, href: "/bonnen", description: "Sleep foto's, PDFs, screenshots of UBL-XML naar binnen — wij lezen ze uit" },
+            { label: "Bonnenkistje", icon: <Archive size={16} />, href: "/archief", description: "Doorzoekbaar boekhoud-archief — typ baktotaal, vind elke bon over 7 jaar heen tot op het woord" },
             { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
         ],

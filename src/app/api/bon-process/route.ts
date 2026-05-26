@@ -272,6 +272,21 @@ export async function POST(req: NextRequest) {
 
         /* Stap 3: bon-rij updaten met BTW-breakdown + processed_at */
         let savedBonId: number | undefined = bonRow?.id;
+
+        /* P0.1 — bouw searchable extracted_text uit items + winkel + datum.
+           Voedt search_vec (Dutch tsvector) + pg_trgm (fuzzy) zodat zoeken
+           op item-naam ("baktotaal", "spareribs") direct werkt. */
+        const itemsText = summary.items
+            .map((i: any) => [i.naam, i.eenheid, i.prijs].filter(Boolean).join(' '))
+            .join(' ');
+        const datumNl = summary.datum
+            ? new Date(summary.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+            : '';
+        const extractedText = [itemsText, summary.winkel ?? '', summary.datum ?? '', datumNl]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+
         if (bonRow?.id) {
             await supabase.from('bonnen').update({
                 leverancier_id: leverancier?.id || null,
@@ -280,6 +295,7 @@ export async function POST(req: NextRequest) {
                 btw_hoog_bedrag: summary.btw.btw_hoog_bedrag,
                 netto_bedrag: summary.btw.netto_bedrag,
                 processed_at: new Date().toISOString(),
+                extracted_text: extractedText,           // P0.1
             }).eq('id', bonRow.id);
         } else if (summary.winkel) {
             /* Geen bestaande bon — maak er nu één aan zodat de FKs op
@@ -298,6 +314,8 @@ export async function POST(req: NextRequest) {
                     processed_at: new Date().toISOString(),
                     raw_analysis: body.raw_analysis || [],
                     organization_id: orgId,
+                    source: 'upload',                    // P0.1
+                    extracted_text: extractedText,       // P0.1
                 })
                 .select('id')
                 .single();

@@ -1,12 +1,34 @@
-import { Suspense } from 'react';
+/**
+ * /archief = Bonnenkistje hoofdpagina.
+ *
+ * Server Component:
+ *   1. Auth + tenant resolve
+ *   2. URL searchParams → SearchInput (filters)
+ *   3. DAL: searchBonnen + listLeveranciersWithCounts + tags + rgs + inbox
+ *   4. Loader-actions voor lazy-loaded tab content (audit, stock per bon)
+ *   5. ArchiefClient orchestrator
+ *
+ * Server-action loaders worden inline gebruikt voor BonPreview-tabs
+ * zodat audit/stock-data alleen geladen wordt als de tab wordt geopend.
+ */
 import { createServerSupabase } from '@/lib/supabase-server';
-import PageHeader from '@/components/PageHeader';
-import ArchiefClient from './_components/ArchiefClient';
-import type { ArchiefBon, ArchiefFilters } from './_lib/types';
+import {
+    searchBonnen,
+    listLeveranciersWithCounts,
+    listDistinctTags,
+    listDistinctRgs,
+    listInboxFacturen,
+    listBonAuditLog,
+    listStockMovementsForBon,
+    type SearchInput,
+    type BonStatus,
+} from '@/lib/dal/bonnen';
+import { ArchiefClient } from './_client';
+import { expandFilterStatus, type DisplayStatus } from './_lib/statusMap';
 
 export const metadata = {
-    title: 'Archief — Boekhoud-bonnenkistje',
-    description: 'Zoek door al je gescande bonnen en facturen — op woord, datum, leverancier of tag',
+    title: 'Bonnenkistje — BBQ Architect',
+    description: 'Doorzoekbaar boekhoud-archief. Typ baktotaal, vind elke bon over 7 jaar heen, tot op het woord.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -14,118 +36,157 @@ export const dynamic = 'force-dynamic';
 interface PageProps {
     searchParams: Promise<{
         q?: string;
-        from?: string;
-        to?: string;
+        view?: string;
+        tab?: string;
+        datum?: string;
+        dateFrom?: string;
+        dateTo?: string;
         leverancier?: string;
         status?: string;
+        type?: string;
         tags?: string;
+        rgs?: string;
+        bedrag?: string;
+        bedragMin?: string;
+        bedragMax?: string;
     }>;
 }
 
-async function loadBonnen(filters: ArchiefFilters): Promise<{ bonnen: ArchiefBon[]; totaal: number; error?: string }> {
-    try {
-        const sb = await createServerSupabase();
-        const { data: { user } } = await sb.auth.getUser();
-        if (!user) return { bonnen: [], totaal: 0, error: 'Niet ingelogd' };
-
-        let query = sb
-            .from('bonnen')
-            .select('id, winkel, datum, totaal_bedrag, image_url, status, categorie, btw_pct, tags, leverancier_id, notities, created_at')
-            .order('datum', { ascending: false, nullsFirst: false })
-            .limit(200);
-
-        /* tsvector-zoek via plainto-tsquery — accepteert woord-input,
-           bouwt zelf de query (geen tsquery-syntax-validatie nodig). */
-        if (filters.q && filters.q.trim().length >= 2) {
-            const term = filters.q.trim().replace(/[!&|()'"\\]/g, ' ');
-            query = query.textSearch('search_vec', term, { type: 'plain', config: 'dutch' });
-        }
-        if (filters.from) query = query.gte('datum', filters.from);
-        if (filters.to) query = query.lte('datum', filters.to);
-        if (filters.leverancier_id) query = query.eq('leverancier_id', filters.leverancier_id);
-        if (filters.status) query = query.eq('status', filters.status);
-        if (filters.tags && filters.tags.length > 0) query = query.contains('tags', filters.tags);
-
-        const { data, error } = await query;
-        if (error) return { bonnen: [], totaal: 0, error: error.message };
-
-        const bonnen = (data ?? []) as ArchiefBon[];
-        const totaal = bonnen.reduce((s, b) => s + Number(b.totaal_bedrag ?? 0), 0);
-        return { bonnen, totaal };
-    } catch (e) {
-        return { bonnen: [], totaal: 0, error: e instanceof Error ? e.message : 'Onbekende fout' };
-    }
+function parseList(v?: string): string[] | undefined {
+    if (!v) return undefined;
+    const arr = v.split(',').filter(Boolean);
+    return arr.length ? arr : undefined;
 }
 
-async function loadLeveranciers(): Promise<Array<{ id: number; naam: string }>> {
-    try {
-        const sb = await createServerSupabase();
-        const { data } = await sb.from('leveranciers').select('id, naam').order('naam');
-        return (data ?? []) as Array<{ id: number; naam: string }>;
-    } catch {
-        return [];
-    }
-}
+function parseDateRange(
+    datum?: string,
+    dateFrom?: string,
+    dateTo?: string,
+): { from?: string; to?: string } {
+    if (dateFrom || dateTo) return { from: dateFrom, to: dateTo };
+    if (!datum) return {};
 
-async function loadTagSuggestions(): Promise<string[]> {
-    try {
-        const sb = await createServerSupabase();
-        const { data } = await sb.from('bonnen').select('tags').not('tags', 'is', null).limit(500);
-        const set = new Set<string>();
-        for (const row of data ?? []) {
-            for (const t of (row.tags as string[] | null) ?? []) set.add(t);
+    const now = new Date();
+    switch (datum) {
+        case 'month': {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { from: start.toISOString().slice(0, 10) };
         }
-        return Array.from(set).sort();
-    } catch {
-        return [];
+        case 'quarter': {
+            const q = Math.floor(now.getMonth() / 3);
+            const start = new Date(now.getFullYear(), (q - 1) * 3, 1);
+            const end = new Date(now.getFullYear(), q * 3, 0);
+            return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+        }
+        case '2025': {
+            return { from: '2025-01-01', to: '2025-12-31' };
+        }
+        case 'all':
+        default:
+            return {};
     }
 }
 
 export default async function ArchiefPage({ searchParams }: PageProps) {
     const sp = await searchParams;
-    const filters: ArchiefFilters = {
+    const sb = await createServerSupabase();
+
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) {
+        return (
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <p className="text-[13px] text-[var(--muted)]">Niet ingelogd</p>
+            </div>
+        );
+    }
+
+    const { data: member } = await sb
+        .from('organization_members')
+        .select('organization_id, organizations(slug)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+
+    if (!member) {
+        return (
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <p className="text-[13px] text-[var(--muted)]">Geen actieve organisatie</p>
+            </div>
+        );
+    }
+
+    const orgId = member.organization_id as string;
+    const orgSlug =
+        (member as unknown as { organizations?: { slug?: string } }).organizations?.slug ?? 'tenant';
+    const orgEmail = `bonnen@${orgSlug}.bbq-architect.nl`;
+
+    // Parse filters uit URL
+    const { from, to } = parseDateRange(sp.datum, sp.dateFrom, sp.dateTo);
+
+    // Status: display-level → DB-aliases (review/processed compat)
+    const statusList = parseList(sp.status) as DisplayStatus[] | undefined;
+    const expandedStatus = statusList ? statusList.flatMap((s) => expandFilterStatus(s)) : undefined;
+
+    // Leverancier-filter: name → id resolve
+    const leveranciersAll = await listLeveranciersWithCounts(sb, orgId);
+    const leverancierNamesFilter = parseList(sp.leverancier);
+    const leverancierIds = leverancierNamesFilter
+        ? leveranciersAll
+              .filter((l) => leverancierNamesFilter.includes(l.naam))
+              .map((l) => l.id)
+        : undefined;
+
+    const filters: SearchInput = {
         q: sp.q,
-        from: sp.from,
-        to: sp.to,
-        leverancier_id: sp.leverancier ? Number(sp.leverancier) : undefined,
-        status: sp.status,
-        tags: sp.tags ? sp.tags.split(',').filter(Boolean) : undefined,
+        status: expandedStatus as BonStatus[] | undefined,
+        leverancier_ids: leverancierIds,
+        tags: parseList(sp.tags),
+        rgs: parseList(sp.rgs),
+        source: parseList(sp.type)?.filter((t) => t === 'email') as 'email'[] | undefined,
+        from,
+        to,
+        bedragMin: sp.bedragMin ? parseInt(sp.bedragMin, 10) : undefined,
+        bedragMax: sp.bedragMax ? parseInt(sp.bedragMax, 10) : undefined,
+        bedragRange: sp.bedrag as 'lt50' | '50-500' | 'gt500' | undefined,
+        limit: 200,
     };
 
-    const [bonnenResult, leveranciers, tagSuggestions] = await Promise.all([
-        loadBonnen(filters),
-        loadLeveranciers(),
-        loadTagSuggestions(),
+    const [searchResult, tags, rgs, inboxItems, totalCount] = await Promise.all([
+        searchBonnen(sb, orgId, filters),
+        listDistinctTags(sb, orgId),
+        listDistinctRgs(sb, orgId),
+        listInboxFacturen(sb, orgId, { onlyNew: false }),
+        sb.from('bonnen').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     ]);
 
+    const isEmpty = (totalCount.count ?? 0) === 0;
+
+    // Inline server-action loaders voor lazy tab-content in BonPreview.
+    const loadAudit = async (bonId: number) => {
+        'use server';
+        const sb2 = await createServerSupabase();
+        return listBonAuditLog(sb2, bonId);
+    };
+    const loadStock = async (bonId: number) => {
+        'use server';
+        const sb2 = await createServerSupabase();
+        return listStockMovementsForBon(sb2, bonId);
+    };
+
     return (
-        <div style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1600, margin: '0 auto' }}>
-            <PageHeader
-                title="Archief"
-                description="Je digitale bonnen-kistje. Doorzoek elke gescande bon op woord, leverancier, datum of tag — terug te vinden voor de boekhouder of NVWA."
-            />
-
-            {bonnenResult.error && (
-                <div role="alert" style={{
-                    padding: '12px 16px', marginTop: 16, borderRadius: 10,
-                    background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)',
-                    color: '#ef4444', fontSize: 13,
-                }}>
-                    {bonnenResult.error.includes('search_vec') || bonnenResult.error.includes('extracted_text')
-                        ? 'Archief-zoek nog niet beschikbaar — run de migration `supabase/migrations/20260520220000_bonnen_archief_search.sql` in Supabase Studio.'
-                        : bonnenResult.error}
-                </div>
-            )}
-
-            <Suspense fallback={<div style={{ padding: 24, color: 'var(--muted)' }}>Bonnen laden…</div>}>
-                <ArchiefClient
-                    initialBonnen={bonnenResult.bonnen}
-                    initialTotaal={bonnenResult.totaal}
-                    leveranciers={leveranciers}
-                    tagSuggestions={tagSuggestions}
-                    initialFilters={filters}
-                />
-            </Suspense>
-        </div>
+        <ArchiefClient
+            bonnen={searchResult.bonnen}
+            bedragTotaal={searchResult.bedragTotaal}
+            leveranciers={leveranciersAll}
+            tags={tags}
+            rgs={rgs}
+            inboxItems={inboxItems}
+            orgSlug={orgSlug}
+            orgEmail={orgEmail}
+            isEmpty={isEmpty}
+            loadAudit={loadAudit}
+            loadStock={loadStock}
+        />
     );
 }

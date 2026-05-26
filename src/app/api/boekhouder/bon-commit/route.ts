@@ -109,6 +109,19 @@ export async function POST(req: NextRequest) {
 
     // Insert bon
     const cat = data.rgs_code ? RGS_BY_CODE[data.rgs_code] : null;
+
+    // P0.1 — bouw searchable text uit alle bekende velden zodat search_vec
+    // (Dutch tsvector) direct gevuld is. extracted_text voedt ook pg_trgm
+    // similarity voor typo-tolerante zoek ("baktoaal" → "baktotaal").
+    const extractedTextParts = [
+      data.notities ?? '',
+      cat?.label ?? '',
+      data.datum ?? '',
+      data.datum
+        ? new Date(data.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+        : '',
+    ].filter(Boolean);
+
     const bonPayload: Record<string, unknown> = {
       organization_id: orgId,
       datum: data.datum,
@@ -125,8 +138,10 @@ export async function POST(req: NextRequest) {
       classified_by_user_id: user.id,
       processed_at: new Date().toISOString(),
       status: 'processed',
+      source: 'upload',                                // P0.1 — bron-flag
       notities: data.notities ?? null,
       image_url: data.image_data_url ?? null,
+      extracted_text: extractedTextParts.join(' ').trim(),  // P0.1
     };
     const { data: bonRow, error: bonErr } = await supabase
       .from('bonnen')

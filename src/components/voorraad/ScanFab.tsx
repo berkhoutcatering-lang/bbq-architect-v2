@@ -36,17 +36,49 @@ export default function ScanFab() {
       });
       const resized = await resizeImage(dataUrl, 1920, 2560, 0.9);
 
-      // Slaat bon op in 'bonnen' table — minimum payload, bon-process verrijkt later.
-      const res = await fetch('/api/bonnen/quick-upload', {
+      /* Bucket E P0-6 — upload+extract in één call.
+         Veld-modus: cateraar wil snel resultaat. Endpoint /api/bonnen/extract
+         leest direct + retourneert preview; we sturen door naar /bonnen waar
+         het card-overzicht klaar staat. Bij duplicate (409) sturen we direct
+         naar /archief?bon=... om de bestaande te openen. */
+      const res = await fetch('/api/bonnen/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ image_data_url: resized }),
+        body: JSON.stringify({
+          source_type: 'camera',
+          file_data_url: resized,
+          filename: file.name || `camera-${Date.now()}.jpg`,
+        }),
       });
+
+      if (res.status === 409) {
+        const dup = await res.json();
+        showToast({
+          message: `Deze bon staat al in je archief.`,
+          type: 'warning',
+          action: {
+            label: 'Open',
+            onClick: () => router.push(`/archief?bon=${dup.duplicate_bon_id}`),
+          },
+        });
+        return;
+      }
+
       const json = await res.json();
-      if (!res.ok || !json.bon_id) throw new Error(json.error || 'Upload mislukt');
-      // Naar /inkoop met scan-id, daar kan cateraar bevestigen
-      router.push(`/inkoop?bon=${json.bon_id}`);
+      if (!res.ok || !json.ok) throw new Error(json.message || json.error || 'Upload mislukt');
+
+      const itemCount = (json.items_with_suggestions || []).length;
+      const lev = json.bon_preview?.leverancier_naam || 'bon';
+      showToast({
+        message: `${lev} — ${itemCount} regel${itemCount === 1 ? '' : 's'} uitgelezen.`,
+        type: 'success',
+        action: {
+          label: 'Open',
+          onClick: () => router.push('/bonnen'),
+        },
+      });
+      router.push('/bonnen');
     } catch (err: any) {
       showToast('Scan-fout: ' + (err?.message || 'onbekend'), 'error');
     } finally {

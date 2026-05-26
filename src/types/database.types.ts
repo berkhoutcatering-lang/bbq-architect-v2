@@ -630,6 +630,29 @@ export interface Bon {
   categorie?: string | null;
   status?: string | null;
   foto_url?: string | null;
+  /* Migratie 20260525131000 — bon-archief velden. */
+  organization_id?: string | null;
+  file_path?: string | null;
+  file_mime?: string | null;
+  source?: 'upload' | 'email' | 'scan' | 'api' | null;
+  extracted_text?: string | null;
+  tags?: string[] | null;
+  rgs_code?: string | null;
+  rgs_category_label?: string | null;
+  locked_at?: string | null;
+  locked_by?: string | null;
+  updated_at?: string | null;
+  /* Migratie 20260526120000 — bucket E hash + source-type + Moneybird-koppeling. */
+  image_hash?: string | null;
+  content_hash?: string | null;
+  source_type?: string | null;
+  mime_type?: string | null;
+  pages?: number | null;
+  ocr_engine?: string | null;
+  confidence?: number | null;
+  original_storage_path?: string | null;
+  processing_status?: string | null;
+  moneybird_attachment_ids?: Record<string, string> | null;
 }
 
 export interface AiConversationFolder {
