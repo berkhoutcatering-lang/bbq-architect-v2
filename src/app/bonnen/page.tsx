@@ -17,6 +17,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageGuideNote from '@/components/PageGuideNote';
@@ -25,17 +26,90 @@ import MultiFormatDropZone, {
     type ExtractResult,
 } from '@/app/bonnen/_components/MultiFormatDropZone';
 import { fmt } from '@/lib/utils';
-import { ArrowRight, Check, Archive, ExternalLink } from 'lucide-react';
+import { ArrowRight, Check, Archive, ExternalLink, Loader2 } from 'lucide-react';
 
 interface CompletedExtract {
     id: string;
     file_name: string;
     result: ExtractResult;
+    /** Locale state — has 'm al doorgepushed naar /archief? */
+    committed?: boolean;
+    committing?: boolean;
+    commitError?: string | null;
+    archiefBonId?: number;
 }
 
 export default function BonnenPage() {
     const showToast = useToast();
+    const router = useRouter();
     const [completed, setCompleted] = useState<CompletedExtract[]>([]);
+
+    /* Commit een scan-result naar de bonnen-tabel (POST /api/bonnen/commit).
+       Voorheen was "Bevestig in archief" een Link en kwam de bon nooit in DB.
+       Nu: POST → 200 redirect naar /archief, of 409 duplicate (al gesaved). */
+    async function commitToArchief(entryId: string) {
+        const entry = completed.find((c) => c.id === entryId);
+        if (!entry) return;
+        if (entry.committed || entry.committing) return;
+
+        // Optimistic UI
+        setCompleted((prev) =>
+            prev.map((c) =>
+                c.id === entryId ? { ...c, committing: true, commitError: null } : c,
+            ),
+        );
+
+        try {
+            const res = await fetch('/api/bonnen/commit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bon_preview: entry.result.bon_preview,
+                    items: entry.result.items_with_suggestions,
+                    image_hash: entry.result.image_hash,
+                    mime_type: entry.result.mime_type,
+                    source_type: entry.result.source_type,
+                    ocr_engine: entry.result.ocr_engine,
+                    confidence: entry.result.confidence,
+                    ai_cost_eur_cents: entry.result.ai_cost_eur_cents,
+                }),
+            });
+            const data = await res.json();
+
+            if (res.status === 409 && data.bon_id) {
+                // Al eerder ge-committed — gewoon doorlinken
+                showToast({
+                    message: 'Deze bon stond al in je archief.',
+                    type: 'warning',
+                });
+                router.push(`/archief?bon=${data.bon_id}`);
+                return;
+            }
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+            }
+
+            setCompleted((prev) =>
+                prev.map((c) =>
+                    c.id === entryId
+                        ? { ...c, committing: false, committed: true, archiefBonId: data.bon_id }
+                        : c,
+                ),
+            );
+
+            showToast({ message: 'Bon in archief gezet', type: 'success', title: 'Klaar' });
+            router.push(data.redirect || `/archief?bon=${data.bon_id}`);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Onbekende fout';
+            setCompleted((prev) =>
+                prev.map((c) =>
+                    c.id === entryId ? { ...c, committing: false, commitError: msg } : c,
+                ),
+            );
+            showToast({ message: `Opslaan mislukt: ${msg}`, type: 'error' });
+        }
+    }
 
     function handleExtracted(result: ExtractResult, originalFile: File) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -121,7 +195,7 @@ export default function BonnenPage() {
                     </h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {completed.map(c => (
-                            <ResultCard key={c.id} entry={c} />
+                            <ResultCard key={c.id} entry={c} onCommit={commitToArchief} />
                         ))}
                     </div>
                 </PageSection>
@@ -130,7 +204,13 @@ export default function BonnenPage() {
     );
 }
 
-function ResultCard({ entry }: { entry: CompletedExtract }) {
+function ResultCard({
+    entry,
+    onCommit,
+}: {
+    entry: CompletedExtract;
+    onCommit: (entryId: string) => void;
+}) {
     const r = entry.result;
     const lev = r.bon_preview.leverancier_naam || '(onbekend)';
     const datum = r.bon_preview.datum || '—';
@@ -277,18 +357,45 @@ function ResultCard({ entry }: { entry: CompletedExtract }) {
             </details>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                <Link
-                    href="/archief"
-                    className="btn btn-brand"
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        minHeight: 36,
-                    }}
-                >
-                    Bevestig in archief <ArrowRight size={14} />
-                </Link>
+                {entry.committed ? (
+                    <Link
+                        href={`/archief?bon=${entry.archiefBonId ?? ''}`}
+                        className="btn btn-brand"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            minHeight: 36,
+                        }}
+                    >
+                        <Check size={14} /> In archief — open
+                    </Link>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => onCommit(entry.id)}
+                        disabled={entry.committing}
+                        className="btn btn-brand"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            minHeight: 36,
+                            opacity: entry.committing ? 0.6 : 1,
+                            cursor: entry.committing ? 'wait' : 'pointer',
+                        }}
+                    >
+                        {entry.committing ? (
+                            <>
+                                <Loader2 size={14} className="animate-spin" /> Opslaan…
+                            </>
+                        ) : (
+                            <>
+                                Bevestig in archief <ArrowRight size={14} />
+                            </>
+                        )}
+                    </button>
+                )}
                 <Link
                     href="/geld/boekhouder"
                     className="btn btn-ghost"
@@ -301,6 +408,17 @@ function ResultCard({ entry }: { entry: CompletedExtract }) {
                 >
                     Naar boekhouder <ExternalLink size={14} />
                 </Link>
+                {entry.commitError && (
+                    <span
+                        style={{
+                            fontSize: 12,
+                            color: 'var(--red, #ef4444)',
+                            alignSelf: 'center',
+                        }}
+                    >
+                        {entry.commitError}
+                    </span>
+                )}
             </div>
         </div>
     );
