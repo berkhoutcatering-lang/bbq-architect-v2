@@ -1020,6 +1020,53 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 onClick={async function () {
                                     setAiEnriching(true);
                                     try {
+                                        /* Vision-pad: als er een foto is, gebruik de nieuwe
+                                           /api/gerecht-vision-fill endpoint die de foto analyseert
+                                           én suggesties teruggeeft. Anders fallback op de bestaande
+                                           tekst-only /api/recipe-generate enrich-flow. */
+                                        if (form.foto_url) {
+                                            const res = await fetch('/api/gerecht-vision-fill', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    naam: form.naam,
+                                                    beschrijving: form.beschrijving || '',
+                                                    foto_url: form.foto_url,
+                                                    bereidings_modus: form.bereidings_modus || null,
+                                                }),
+                                            });
+                                            const body = await res.json();
+                                            if (!res.ok) { showToast('AI fout: ' + (body.error || 'onbekend'), 'error'); return; }
+                                            const d = body.data || {};
+                                            // Allergenen + kostprijs zijn server-side gefilterd (compliance).
+                                            // Convert vision-output naar form-shape.
+                                            const ingredientenStrings = (d.ingredienten || []).map(function (i: any) {
+                                                return `${i.naam} ${i.qty_pp}${i.eenheid}`;
+                                            });
+                                            setForm(Object.assign({}, form, {
+                                                beschrijving: form.beschrijving || d.beschrijving || '',
+                                                gang_slug: form.gang_slug || d.gangcategorie || '',
+                                                bereidings_modus: form.bereidings_modus || d.bereidings_modus || 'prepared',
+                                                ingredienten: (form.ingredienten && form.ingredienten.length > 0) ? form.ingredienten : ingredientenStrings,
+                                                bereidingswijze: form.bereidingswijze || (Array.isArray(d.preparation_steps) ? d.preparation_steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n') : ''),
+                                                wijn_suggestie: form.wijn_suggestie || d.wijn_suggestie || '',
+                                                bier_suggestie: form.bier_suggestie || d.bier_suggestie || '',
+                                                service_tip: form.service_tip || d.service_tip || '',
+                                                ai_suggested: true,
+                                                bron: 'ai',
+                                            }));
+                                            // Vision-vertrouwen + inline vragen tonen als de AI er om vraagt
+                                            const conf = d.vision_confidence || 'middel';
+                                            const questions = Array.isArray(d.inline_questions) ? d.inline_questions : [];
+                                            if (questions.length > 0) {
+                                                showToast(`AI vraagt: ${questions.join(' · ')}`, 'info');
+                                            } else {
+                                                showToast(`AI heeft velden ingevuld (zekerheid: ${conf}) — check ingrediënten en stappen`, 'success');
+                                            }
+                                            return;
+                                        }
+
+                                        // Fallback: tekst-only enrich (oude pad zonder foto)
                                         const existing = gerechten.map(function (g) { return { naam: g.naam, gang: g.gang_slug, tags: g.tags }; });
                                         const res = await fetch('/api/recipe-generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'enrich', prompt: 'enrich', existing: existing, options: { currentDish: form } }) });
                                         const body = await res.json();
@@ -1041,7 +1088,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     }
                                 }}
                                 style={{ padding: '8px 14px', borderRadius: 8, background: form.naam && !aiEnriching ? 'rgba(196,163,90,.15)' : 'rgba(255,255,255,.05)', border: '1px solid ' + (form.naam ? 'rgba(196,163,90,.35)' : 'rgba(255,255,255,.1)'), color: form.naam ? '#c4a35a' : 'rgba(255,255,255,.3)', fontSize: 11, fontWeight: 700, cursor: form.naam && !aiEnriching ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                ✦ {aiEnriching ? 'Claude schrijft...' : 'AI vul velden in'}
+                                ✦ {aiEnriching ? (form.foto_url ? 'Claude analyseert foto...' : 'Claude schrijft...') : (form.foto_url ? 'AI: foto analyseren' : 'AI vul velden in')}
                             </button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
