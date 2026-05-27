@@ -18,7 +18,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { randomUUID } from 'crypto';
+import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -52,6 +53,10 @@ const BodySchema = z.object({
     ocr_engine: z.string().max(40).optional(),
     confidence: z.number().min(0).max(1).optional(),
     ai_cost_eur_cents: z.number().nullable().optional(),
+    /** Optional: originele file als data-URL. Wordt naar Storage geupload
+        zodat Preview-tab in /archief de file kan tonen via signed URL. */
+    file_data_url: z.string().max(15_000_000).optional(),
+    file_name: z.string().max(255).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -129,6 +134,38 @@ export async function POST(req: NextRequest) {
     // Determine PDF/image type voor file_mime
     const fileMime = body.mime_type || null;
 
+    // ── File upload naar Storage (Pillar #3) ──────────────────────────
+    // Folder-conventie matched storage-RLS uit migratie 132000:
+    //   {organization_uuid}/{yyyy-mm}/{uuid}.{ext}
+    // Service-role client want auth-RLS heeft moeite met first-write.
+    let filePath: string | null = null;
+    if (body.file_data_url) {
+        try {
+            const parsed = parseDataUrl(body.file_data_url);
+            if (parsed) {
+                const ext = mimeToExt(parsed.mediaType) ?? guessExtFromFilename(body.file_name);
+                const yyyyMm = new Date().toISOString().slice(0, 7);
+                const objectName = `${orgId}/${yyyyMm}/${randomUUID()}.${ext}`;
+
+                const serviceSb = createServiceSupabase();
+                const { error: upErr } = await serviceSb.storage
+                    .from('bonnen')
+                    .upload(objectName, Buffer.from(parsed.base64, 'base64'), {
+                        contentType: parsed.mediaType,
+                        upsert: false,
+                    });
+                if (!upErr) {
+                    filePath = objectName;
+                } else {
+                    console.error('[bonnen/commit] storage upload failed:', upErr);
+                    // Niet-fataal — bon wordt nog steeds gesaved zonder file
+                }
+            }
+        } catch (e) {
+            console.error('[bonnen/commit] file parse error:', e);
+        }
+    }
+
     const payload = {
         organization_id: orgId,
         winkel: body.bon_preview.leverancier_naam,
@@ -142,11 +179,10 @@ export async function POST(req: NextRequest) {
         raw_analysis: body.items,  // backwards-compat (search_vec backfill leest dit pad)
         extracted_text: extractedText,
         image_hash: body.image_hash,
+        file_path: filePath,
         file_mime: fileMime,
         source,
         status: 'pending',
-        // image_url + file_path blijven null in v1 — background-job kan later
-        // de originele scan-file uit AI-extract-cache halen en naar Storage uploaden.
     };
 
     const { data: inserted, error } = await supabase
@@ -185,4 +221,35 @@ function safeNlDate(d: string): string {
     } catch {
         return '';
     }
+}
+
+/** Parse data:<mime>;base64,<data> URL. Returnt mediaType + base64-body. */
+function parseDataUrl(dataUrl: string): { mediaType: string; base64: string } | null {
+    const match = dataUrl.match(/^data:([^;,]+)(?:;[^,]+)?(?:;base64)?,(.+)$/);
+    if (!match) return null;
+    return { mediaType: match[1], base64: match[2] };
+}
+
+function mimeToExt(mime: string): string | null {
+    const map: Record<string, string> = {
+        'application/pdf': 'pdf',
+        'image/jpeg': 'jpg',
+        'image/jpg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/heic': 'heic',
+        'image/heif': 'heif',
+        'image/gif': 'gif',
+        'application/xml': 'xml',
+        'text/xml': 'xml',
+        'application/ubl+xml': 'xml',
+    };
+    return map[mime.toLowerCase()] ?? null;
+}
+
+function guessExtFromFilename(filename?: string): string {
+    if (!filename) return 'bin';
+    const dot = filename.lastIndexOf('.');
+    if (dot < 0) return 'bin';
+    return filename.slice(dot + 1).toLowerCase().slice(0, 6);
 }

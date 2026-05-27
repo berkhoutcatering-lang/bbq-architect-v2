@@ -32,6 +32,9 @@ interface CompletedExtract {
     id: string;
     file_name: string;
     result: ExtractResult;
+    /** Originele File-object voor upload naar Storage bij commit.
+        Bewaard in memory tot commit lukt; daarna gecleared (memory hygiene). */
+    originalFile: File;
     /** Locale state — has 'm al doorgepushed naar /archief? */
     committed?: boolean;
     committing?: boolean;
@@ -43,6 +46,17 @@ export default function BonnenPage() {
     const showToast = useToast();
     const router = useRouter();
     const [completed, setCompleted] = useState<CompletedExtract[]>([]);
+
+    /* FileReader-promise wrapper. Gebruikt door commit-flow om de originele
+       scan-file als data-URL naar de server te sturen voor Storage-upload. */
+    function fileToDataUrl(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error('Kon bestand niet lezen'));
+            reader.readAsDataURL(file);
+        });
+    }
 
     /* Commit een scan-result naar de bonnen-tabel (POST /api/bonnen/commit).
        Voorheen was "Bevestig in archief" een Link en kwam de bon nooit in DB.
@@ -60,6 +74,10 @@ export default function BonnenPage() {
         );
 
         try {
+            // Read originele file als base64 zodat backend 'm naar Storage kan uploaden.
+            // Pas op commit-klik (lazy) — file blijft niet permanent in client-state.
+            const fileDataUrl = await fileToDataUrl(entry.originalFile);
+
             const res = await fetch('/api/bonnen/commit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -72,6 +90,8 @@ export default function BonnenPage() {
                     ocr_engine: entry.result.ocr_engine,
                     confidence: entry.result.confidence,
                     ai_cost_eur_cents: entry.result.ai_cost_eur_cents,
+                    file_data_url: fileDataUrl,
+                    file_name: entry.file_name,
                 }),
             });
             const data = await res.json();
@@ -113,7 +133,7 @@ export default function BonnenPage() {
 
     function handleExtracted(result: ExtractResult, originalFile: File) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        setCompleted(prev => [{ id, file_name: originalFile.name, result }, ...prev]);
+        setCompleted(prev => [{ id, file_name: originalFile.name, result, originalFile }, ...prev]);
 
         const lev = result.bon_preview.leverancier_naam || 'onbekende leverancier';
         const totaal = result.bon_preview.totaal_bedrag;
