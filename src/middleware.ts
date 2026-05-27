@@ -114,6 +114,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  /* Hub 1 — onboarding-redirect. Een net-bevestigde user via magic-link landt
+     op /auth/callback?next=/onboarding, maar als iemand later via een diep-
+     gelinkte url binnenkomt (bv. /agenda) voordat onboarding klaar is, willen
+     we 'm alsnog naar de wizard sturen. Geen redirect voor:
+     - /onboarding zelf (anders infinite loop)
+     - /api/* (server-to-server)
+     - /auth/* (callback-flow)
+     Uitvoeren als best-effort: bij DB-fout gewoon doorlaten. */
+  if (!pathname.startsWith('/onboarding')
+      && !pathname.startsWith('/api/')
+      && !pathname.startsWith('/auth/')) {
+    try {
+      const { data: member } = await supabase
+        .from('organization_members')
+        .select('organizations(onboarding_completed)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      const completed = (member?.organizations as { onboarding_completed?: boolean } | null)
+        ?.onboarding_completed;
+      if (member && completed === false) {
+        return NextResponse.redirect(new URL('/onboarding', request.url));
+      }
+    } catch {
+      /* DB-fout mag de pagina niet blokkeren */
+    }
+  }
+
   return response;
 }
 

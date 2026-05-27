@@ -13,11 +13,20 @@ import Link from 'next/link';
 import {
   Flame, ArrowRight, ArrowLeft, Check, Building2, Palette,
   Database, Sparkles, LayoutDashboard, Link2, SkipForward,
+  Truck, Briefcase, Heart, Layers,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { logActivationEvent } from '@/lib/activation';
-import { insertDemoData } from '@/lib/demoData';
+
+type BusinessType = 'foodtruck' | 'bedrijfsevents' | 'bruiloften' | 'mix';
+
+const BUSINESS_TYPES: { key: BusinessType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
+  { key: 'foodtruck', label: 'Foodtruck / mobiel', icon: Truck, desc: 'Festivals, markten, evenementen' },
+  { key: 'bedrijfsevents', label: 'Bedrijfsevents', icon: Briefcase, desc: 'Personeelsfeesten, lunches, borrels' },
+  { key: 'bruiloften', label: 'Bruiloften & feesten', icon: Heart, desc: 'Particuliere events met persoonlijke touch' },
+  { key: 'mix', label: 'Mix van alles', icon: Layers, desc: 'Combinatie van bovenstaande' },
+];
 
 type StepKey = 'bedrijf' | 'data' | 'offerte' | 'tour' | 'integraties';
 
@@ -154,6 +163,7 @@ function BedrijfStep({ onNext }: { onNext: () => void }) {
   const [btw, setBtw] = useState('');
   const [kvk, setKvk] = useState('');
   const [adres, setAdres] = useState('');
+  const [businessType, setBusinessType] = useState<BusinessType | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,6 +178,7 @@ function BedrijfStep({ onNext }: { onNext: () => void }) {
         kvk_number: kvk || null,
         btw_number: btw || null,
         address: adres || null,
+        business_type: businessType, // Pillar #4: persona-routing
       })
       .eq('id', orgId);
     setSaving(false);
@@ -191,6 +202,38 @@ function BedrijfStep({ onNext }: { onNext: () => void }) {
           <Field label="BTW-nummer" value={btw} onChange={setBtw} placeholder="NL123456789B01" />
         </div>
         <Field label="Vestigingsadres" value={adres} onChange={setAdres} placeholder="Straat 1, 1234 AB Plaats" />
+
+        {/* Pillar #4 — persona-aware: business_type drijft straks de Vandaag-widgets */}
+        <div>
+          <label className="block text-[11px] uppercase tracking-[0.15em] font-bold text-[var(--muted)] mb-1.5">
+            Type catering
+          </label>
+          <div role="radiogroup" className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {BUSINESS_TYPES.map(({ key, label, icon: Icon, desc }) => {
+              const selected = businessType === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setBusinessType(key)}
+                  className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                    selected
+                      ? 'border-[var(--color-accent-gold)] bg-[var(--color-accent-gold)]/[0.06]'
+                      : 'border-[var(--card-solid)] bg-[var(--card)] hover:border-white/20'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${selected ? 'text-[var(--color-accent-gold)]' : 'text-white/60'}`} />
+                  <div>
+                    <div className="text-[13px] font-bold text-[var(--text)]">{label}</div>
+                    <div className="text-[11px] text-[var(--muted)]">{desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <div className="p-4 rounded-lg bg-[var(--color-bg-deep)] border border-[var(--card-solid)]">
           <div className="flex items-center gap-2 mb-3">
@@ -231,15 +274,29 @@ function DataStep({ onNext }: { onNext: () => void }) {
 
   async function handleNext() {
     if (!choice) return;
-    if (choice === 'demo' && orgId) {
+    if (choice === 'demo') {
       setLoading(true);
       setError(null);
-      const { ok, error: demoErr } = await insertDemoData(orgId);
-      setLoading(false);
-      if (!ok) {
-        setError(demoErr || 'Onbekende fout');
+      try {
+        const res = await fetch('/api/onboarding/seed-demo', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        });
+        const json = await res.json();
+        // Idempotent route returnt 200 met status 'already_seeded' — niet als fout behandelen
+        if (!res.ok && json.status !== 'already_seeded') {
+          setLoading(false);
+          setError(json.error || 'Demo-data laden mislukt');
+          return;
+        }
+      } catch (e) {
+        setLoading(false);
+        setError(e instanceof Error ? e.message : 'Netwerk-fout');
         return;
       }
+      setLoading(false);
+    } else if (choice === 'blank' && orgId) {
+      logActivationEvent(orgId, 'demo_data_skipped');
     }
     onNext();
   }
@@ -308,7 +365,7 @@ function OfferteStep({ onNext }: { onNext: () => void }) {
 
       <div className="flex flex-col gap-2">
         <Link
-          href="/offertes?wizard=true"
+          href="/offertes?wizard=true&seedEvent=demo"
           onClick={onNext}
           className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
         >

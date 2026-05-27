@@ -27,6 +27,7 @@ import AIQuickPrompts from '@/components/dashboard/today/AIQuickPrompts';
 import AIPromptDrawer, { type QuickPrompt } from '@/components/dashboard/today/AIPromptDrawer';
 import BusinessCharts from '@/components/dashboard/today/BusinessCharts';
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
+import KPIStripEmpty from '@/components/dashboard/today/KPIStripEmpty';
 import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';
 import AttentionPanel, { type AttentionItem, type AttentionSeverity } from '@/components/dashboard/today/AttentionPanel';
 import QuickActions from '@/components/dashboard/today/QuickActions';
@@ -247,6 +248,12 @@ export default function DashboardPage() {
   }, [sentOffertesCount]);
 
   const unbookedReceiptsCount = bonnen.filter((b) => !b.processed_at).length;
+
+  /* Pillar #5 — Empty-state never blank. Fresh tenant = nieuwe Pro-tier user
+     die noch demo-data heeft ingeladen noch zelf data heeft toegevoegd.
+     Bestaat uit lege events/offertes/klanten — alle drie nodig zodat we niet
+     per ongeluk hide-en bij iemand die alleen klanten heeft toegevoegd. */
+  const isFreshTenant = events.length === 0 && offertes.length === 0 && klanten.length === 0;
 
   // ─── EventHero data ────────────────────────────────────────────────────
   const heroEvent: EventHeroEvent | null = heroRow ? {
@@ -738,39 +745,51 @@ export default function DashboardPage() {
         {/* ── 2. AIQuickPrompts ── Pillar 2 Vandaag: context-aware prompts obv heroEvent */}
         <AIQuickPrompts onPrompt={setAiPrompt} heroEvent={heroEvent} />
 
-        {/* ── 3. BusinessCharts ── */}
-        <BusinessCharts
-          revenueMix={revenueMix}
-          monthBuckets={monthBuckets}
-          suppliers={supplierRows}
-          monthLabel={MAANDEN_KORT?.[new Date().getMonth()] || ''}
-          updatedAt={currentTime.toISOString()}
-          onOpenFinancien={() => { window.location.href = '/financien'; }}
-        />
+        {/* Pillar #5 — Empty-state never blank. Voor een nieuwe tenant zonder
+           events/offertes/klanten verbergen we lege grafieken, KPI's en de
+           dagbriefing — die helpen pas zodra er data is. KPIStripEmpty geeft
+           3 actie-tegels om mee te starten. */}
+        {isFreshTenant ? (
+          <KPIStripEmpty />
+        ) : (
+          <>
+            {/* ── 3. BusinessCharts ── alleen tonen als er events zijn */}
+            {events.length > 0 && (
+              <BusinessCharts
+                revenueMix={revenueMix}
+                monthBuckets={monthBuckets}
+                suppliers={supplierRows}
+                monthLabel={MAANDEN_KORT?.[new Date().getMonth()] || ''}
+                updatedAt={currentTime.toISOString()}
+                onOpenFinancien={() => { window.location.href = '/financien'; }}
+              />
+            )}
 
-        {/* ── 4. KPIStrip ── */}
-        <KPIStrip kpis={kpis} updatedAt={currentTime.toISOString()} />
+            {/* ── 4. KPIStrip ── */}
+            <KPIStrip kpis={kpis} updatedAt={currentTime.toISOString()} />
 
-        {/* ── 5. CompactDagbriefing + Attention/QuickActions ── */}
-        <div
-          className="dagbrief-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1.5fr 1fr',
-            gap: 16,
-            marginBottom: 18,
-          }}
-        >
-          <CompactDagbriefing candidates={briefingCandidates} firstName={firstName} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <AttentionPanel items={attentionItems} />
-          </div>
-        </div>
+            {/* ── 5. CompactDagbriefing + Attention ── */}
+            <div
+              className="dagbrief-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1.5fr 1fr',
+                gap: 16,
+                marginBottom: 18,
+              }}
+            >
+              <CompactDagbriefing candidates={briefingCandidates} firstName={firstName} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <AttentionPanel items={attentionItems} />
+              </div>
+            </div>
+          </>
+        )}
 
         <QuickActions />
 
-        {/* ── 6. BriefingTimeline ── */}
-        <BriefingTimeline items={timelineItems} />
+        {/* ── 6. BriefingTimeline ── alleen tonen voor tenants met data */}
+        {!isFreshTenant && <BriefingTimeline items={timelineItems} />}
 
         <style>{`
           @media (max-width: 1024px) {
