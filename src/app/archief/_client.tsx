@@ -14,6 +14,7 @@
 import { useState, useMemo } from 'react';
 import { useQueryState, parseAsStringEnum } from 'nuqs';
 import { Archive, Inbox as InboxIcon, LayoutGrid, List, Share2, FileArchive, SlidersHorizontal } from 'lucide-react';
+import { fmtEur } from './_components/format';
 import type { BonRow, InboxItem, AuditLogEntry, StockMovementForBon } from '@/lib/dal/bonnen';
 import { BonSearchBar } from './_components/BonSearchBar';
 import { ActiveFilterPills } from './_components/ActiveFilterPills';
@@ -39,6 +40,72 @@ interface Props {
     isEmpty: boolean;
     loadAudit: (bonId: number) => Promise<AuditLogEntry[]>;
     loadStock: (bonId: number) => Promise<StockMovementForBon[]>;
+}
+
+/* Stats-strip — toont totaal + BTW splits voor de huidige zichtbare set.
+   Pillar 3: rust + goud accent op het belangrijkste cijfer (totaal). */
+function BonStatsStrip({
+    bonnen,
+    totaal,
+}: {
+    bonnen: BonRow[];
+    totaal: number;
+}) {
+    const btw9 = bonnen.reduce((s, b) => s + Number(b.btw_laag_bedrag ?? 0), 0);
+    const btw21 = bonnen.reduce((s, b) => s + Number(b.btw_hoog_bedrag ?? 0), 0);
+    const netto = totaal - btw9 - btw21;
+
+    if (bonnen.length === 0) return null;
+
+    return (
+        <div
+            className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4"
+            aria-label="BTW-overzicht zichtbare bonnen"
+        >
+            <StatTile label="Totaal" value={fmtEur(totaal)} accent="gold" />
+            <StatTile label="Netto" value={fmtEur(netto)} />
+            <StatTile label="BTW 9%" value={fmtEur(btw9)} subtle />
+            <StatTile label="BTW 21%" value={fmtEur(btw21)} subtle />
+        </div>
+    );
+}
+
+function StatTile({
+    label,
+    value,
+    accent,
+    subtle,
+}: {
+    label: string;
+    value: string;
+    accent?: 'gold';
+    subtle?: boolean;
+}) {
+    return (
+        <div
+            className="rounded-[10px] border px-3 py-2.5 transition"
+            style={{
+                background: accent === 'gold' ? 'rgba(196,163,90,0.06)' : 'var(--card)',
+                borderColor:
+                    accent === 'gold'
+                        ? 'rgba(196,163,90,0.22)'
+                        : 'var(--border)',
+                backdropFilter: 'var(--glass-blur)',
+            }}
+        >
+            <div className="mb-0.5 text-[9px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
+                {label}
+            </div>
+            <div
+                className={`font-mono text-[15px] font-semibold tabular-nums ${subtle ? 'text-[var(--muted)]' : ''}`}
+                style={{
+                    color: accent === 'gold' ? 'var(--brand-gold)' : undefined,
+                }}
+            >
+                {value}
+            </div>
+        </div>
+    );
 }
 
 export function ArchiefClient({
@@ -121,7 +188,8 @@ export function ArchiefClient({
                             Bonnenkistje
                         </h1>
                         <p className="mt-1 text-[13px] text-[var(--muted)]">
-                            Digitaal boekhoudarchief · doorzoekbaar tot op het woord
+                            Typ <strong className="font-mono text-[var(--brand-gold)]">baktotaal</strong> —
+                            vind elke bon over 7 jaar heen, tot op het woord.
                         </p>
                     </div>
 
@@ -236,7 +304,11 @@ export function ArchiefClient({
                     <InboxList items={inboxItems} orgEmail={orgEmail} />
                 ) : (
                     <>
-                        <BonSearchBar autoFocus={false} />
+                        <BonSearchBar autoFocus={true} />
+
+                        {/* Stats-strip: totaal + BTW splits voor zichtbare set */}
+                        <BonStatsStrip bonnen={bonnen} totaal={bedragTotaal} />
+
                         <ActiveFilterPills filteredCount={bonnen.length} filteredTotal={bedragTotaal} />
 
                         {isSearch && (

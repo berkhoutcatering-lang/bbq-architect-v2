@@ -166,7 +166,13 @@ export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
                 {/* Tab content */}
                 <div className="flex-1 overflow-y-auto">
                     {tab === 'preview' && (
-                        <PreviewTab url={signedUrl} mime={mime} highlight={q} error={urlError} />
+                        <PreviewTab
+                            url={signedUrl}
+                            mime={mime}
+                            highlight={q}
+                            error={urlError}
+                            bonId={bon.id}
+                        />
                     )}
                     {tab === 'details' && <DetailsTab bon={bon} />}
                     {tab === 'voorraad' && <VoorraadTab bonId={bon.id} loader={onStockLoad} />}
@@ -225,19 +231,41 @@ function PreviewTab({
     mime,
     highlight,
     error,
+    bonId,
 }: {
     url: string | null;
     mime: string | null;
     highlight: string | null;
     error: string | null;
+    bonId: number;
 }) {
+    // Error of leeg = "no file" state — niet alarmerend, wel uitnodigend.
     if (error) {
-        return <EmptyTabState message={`Kon bon-bestand niet laden: ${error}`} />;
+        // Specifieke "geen file in DB" detectie (uit DAL).
+        const isMissingFile = /niet gevonden|not found|geen bestand/i.test(error);
+        return isMissingFile ? (
+            <NoFileState
+                bonId={bonId}
+                title="Geen bestand bewaard"
+                description="Deze bon is gemaakt vóór de file-upload-flow live ging, of de file is later verwijderd. Scan opnieuw om de PDF toe te voegen."
+                showScanCta
+            />
+        ) : (
+            <NoFileState
+                bonId={bonId}
+                title="Kon bestand niet ophalen"
+                description={`Er ging iets mis met laden: ${error}. Probeer 't opnieuw of scan de bon nog eens.`}
+                showScanCta
+            />
+        );
     }
+
     if (!url) {
+        // Loading state — skeleton ipv spinner (Doherty)
         return (
-            <div className="flex h-full items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--brand)] border-t-transparent" />
+            <div className="flex h-full flex-col gap-3 p-6">
+                <div className="h-4 w-32 animate-pulse rounded bg-white/5" />
+                <div className="flex-1 animate-pulse rounded-lg bg-white/5" />
             </div>
         );
     }
@@ -273,7 +301,70 @@ function PreviewTab({
         );
     }
 
-    return <EmptyTabState message="Onbekend bestandstype" />;
+    return <NoFileState bonId={bonId} title="Onbekend bestandstype" description={`MIME: ${mime ?? 'onbekend'}`} />;
+}
+
+/* Vriendelijke "geen bestand" state — design DNA: gold-tinted, niet rood/alarm.
+   Bevat: illustratie + uitleg + duidelijke CTA (scan opnieuw). */
+function NoFileState({
+    bonId,
+    title,
+    description,
+    showScanCta = true,
+}: {
+    bonId: number;
+    title: string;
+    description: string;
+    showScanCta?: boolean;
+}) {
+    return (
+        <div className="flex h-full flex-col items-center justify-center gap-4 px-8 py-12 text-center">
+            {/* Subtle line-art icon ipv groot blok */}
+            <svg
+                width="80"
+                height="80"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--brand-gold)"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ opacity: 0.6 }}
+                aria-hidden="true"
+            >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="9" y1="13" x2="15" y2="13" strokeDasharray="2 2" />
+                <line x1="9" y1="17" x2="13" y2="17" strokeDasharray="2 2" />
+            </svg>
+            <div>
+                <div
+                    className="mb-1 text-[16px] font-light tracking-tight"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                >
+                    {title}
+                </div>
+                <p className="max-w-[320px] text-[12px] leading-[1.55] text-[var(--muted)]">
+                    {description}
+                </p>
+            </div>
+            {showScanCta && (
+                <a
+                    href={`/bonnen?prefill=${bonId}`}
+                    className="inline-flex items-center gap-2 rounded-[10px] border px-3.5 py-2 text-[12px] font-semibold text-[var(--text)] transition hover:bg-white/[0.05]"
+                    style={{
+                        borderColor: 'rgba(196,163,90,0.3)',
+                        background: 'rgba(196,163,90,0.05)',
+                    }}
+                >
+                    Scan opnieuw om PDF toe te voegen →
+                </a>
+            )}
+            <p className="text-[10px] text-[var(--muted-light)]">
+                Bon-data (datum, leverancier, bedrag, BTW) blijft bewaard in de Details-tab.
+            </p>
+        </div>
+    );
 }
 
 // ── Details Tab ──────────────────────────────────────────────────────

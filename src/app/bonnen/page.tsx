@@ -210,9 +210,41 @@ export default function BonnenPage() {
 
             {completed.length > 0 && (
                 <PageSection>
-                    <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-                        Net gescand ({completed.length})
-                    </h2>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 14,
+                        flexWrap: 'wrap',
+                        gap: 8,
+                    }}>
+                        <h2 style={{ fontSize: 16, fontWeight: 600 }}>
+                            Net gescand ({completed.length})
+                        </h2>
+                        {/* Batch-Bevestig knop bovenaan bij meerdere bonnen (Pillar 1) */}
+                        {completed.filter(c => !c.committed && !c.committing).length > 1 && (
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const toCommit = completed.filter(c => !c.committed && !c.committing);
+                                    for (const c of toCommit) {
+                                        await commitToArchief(c.id);
+                                    }
+                                }}
+                                className="btn btn-brand"
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    minHeight: 36,
+                                }}
+                            >
+                                <Check size={14} /> Bevestig alle{' '}
+                                {completed.filter(c => !c.committed && !c.committing).length} →
+                                archief
+                            </button>
+                        )}
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {completed.map(c => (
                             <ResultCard key={c.id} entry={c} onCommit={commitToArchief} />

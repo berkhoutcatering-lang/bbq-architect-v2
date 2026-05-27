@@ -245,8 +245,32 @@ function BonMasonryCard({ bon, selected, onSelect, onClick, delay }: CardProps) 
                         >
                             {bon.categorie}
                         </span>
+                    ) : bon.source === 'email' ? (
+                        <span
+                            className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{
+                                background: 'rgba(168,85,247,0.14)',
+                                color: '#c084fc',
+                                border: '1px solid rgba(168,85,247,0.25)',
+                            }}
+                        >
+                            via email
+                        </span>
+                    ) : bon.source === 'scan' ? (
+                        <span
+                            className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{
+                                background: 'rgba(196,163,90,0.10)',
+                                color: 'var(--brand-gold)',
+                                border: '1px solid rgba(196,163,90,0.22)',
+                            }}
+                        >
+                            camera-scan
+                        </span>
                     ) : (
-                        <span />
+                        <span className="text-[10px] text-[var(--muted-light)]">
+                            geen categorie
+                        </span>
                     )}
                     <div className="flex items-center gap-1.5">
                         {bon.locked_at && (
