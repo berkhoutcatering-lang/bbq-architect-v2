@@ -90,26 +90,49 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    // Server-side dedup op image_hash
+    // Server-side dedup op image_hash. BIJ DUPLICATE: als bestaande bon nog
+    // geen file_path heeft, gaan we wel door en upload'en de file alsnog
+    // (UPDATE ipv INSERT). Lost een veelvoorkomende UX-fout op: gebruiker
+    // scant 'n bon, knop faalt of upload werd geskipped, scant opnieuw —
+    // verwacht dat 't gewoon werkt.
+    let existingBonId: number | null = null;
+    let existingHasFile = false;
     if (body.image_hash) {
         const { data: dup } = await supabase
             .from('bonnen')
-            .select('id, winkel, datum, totaal_bedrag')
+            .select('id, file_path, locked_at')
             .eq('organization_id', orgId)
             .eq('image_hash', body.image_hash)
             .limit(1)
             .maybeSingle();
         if (dup) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    error: 'duplicate',
-                    message: 'Deze bon staat al in je archief.',
-                    bon_id: dup.id,
-                    duplicate: dup,
-                },
-                { status: 409 },
-            );
+            if (dup.locked_at) {
+                // Vergrendeld → niet aanraken
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        error: 'locked',
+                        message: 'Deze bon is vergrendeld voor aangifte en kan niet meer ge-update worden.',
+                        bon_id: dup.id,
+                    },
+                    { status: 409 },
+                );
+            }
+            if (dup.file_path) {
+                // Heeft al een file → echt duplicate, redirect naar bestaande
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        error: 'duplicate',
+                        message: 'Deze bon staat al in je archief.',
+                        bon_id: dup.id,
+                    },
+                    { status: 409 },
+                );
+            }
+            // Bestaat wel maar mist file → "fix-up" pad
+            existingBonId = dup.id;
+            existingHasFile = false;
         }
     }
 
@@ -185,6 +208,43 @@ export async function POST(req: NextRequest) {
         status: 'pending',
     };
 
+    // ── Fix-up pad: bestaande bon zonder file → UPDATE met nieuwe file_path ──
+    if (existingBonId && !existingHasFile) {
+        const { error: updErr } = await supabase
+            .from('bonnen')
+            .update({
+                file_path: filePath,
+                file_mime: fileMime,
+                // Verrijken alleen velden die mogelijk leeg waren bij eerdere insert
+                extracted_text: extractedText,
+                bon_items: body.items,
+            })
+            .eq('id', existingBonId);
+
+        if (updErr) {
+            console.error('[bonnen/commit] update failed:', updErr);
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: 'update_failed',
+                    detail: updErr.message,
+                    code: updErr.code,
+                    bon_id: existingBonId,
+                },
+                { status: 500 },
+            );
+        }
+
+        return NextResponse.json({
+            ok: true,
+            bon_id: existingBonId,
+            updated: true,
+            file_uploaded: !!filePath,
+            redirect: `/archief?bon=${existingBonId}`,
+        });
+    }
+
+    // ── Normale INSERT-pad voor nieuwe bonnen ─────────────────────────
     const { data: inserted, error } = await supabase
         .from('bonnen')
         .insert(payload)
@@ -207,6 +267,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
         ok: true,
         bon_id: inserted.id,
+        file_uploaded: !!filePath,
         redirect: `/archief?bon=${inserted.id}`,
     });
 }
