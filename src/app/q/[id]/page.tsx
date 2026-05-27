@@ -159,11 +159,26 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     if (loading) {
         return (
             <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-darker)' }}>
-                <div style={{ textAlign: 'center' }}>
+                <div style={{ textAlign: 'center', padding: 20 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(158,120,28,.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                         <span style={{ fontSize: 24 }}>🔥</span>
                     </div>
                     <p style={{ color: 'var(--zinc)', fontSize: 14 }}>Offerte laden...</p>
+                    {/* Hub 2 P1 — no-JS fallback. Initial HTML toont deze noscript-block
+                       voor klanten die JS hebben uitgeschakeld of in een webview zonder
+                       JS-support openen. Volledig progressive-enhancement vergt RSC
+                       refactor (P2 follow-up). */}
+                    <noscript>
+                        <div style={{ marginTop: 20, padding: 16, background: 'rgba(255,255,255,.05)', borderRadius: 8, maxWidth: 360, textAlign: 'left', color: 'var(--text)' }}>
+                            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>JavaScript vereist</h2>
+                            <p style={{ fontSize: 13, color: 'var(--zinc)', lineHeight: 1.5, margin: 0 }}>
+                                Deze offerte-pagina werkt met digitale handtekening en iDEAL-betaling — daarvoor is JavaScript nodig. Open de link in een moderne browser (Chrome, Safari, Firefox, Edge) en zet JavaScript aan.
+                            </p>
+                            <p style={{ fontSize: 12, color: 'var(--zinc)', marginTop: 12, marginBottom: 0 }}>
+                                Lukt het niet? Vraag je caterier om een PDF-versie van de offerte.
+                            </p>
+                        </div>
+                    </noscript>
                 </div>
             </div>
         );
