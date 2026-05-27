@@ -839,6 +839,63 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             },
         };
 
+        // /financien Finance Copilot tools — propose_finance_ideas + compute_kia_scenario
+        // Beide schemas zijn ook server-side endpoints (api/financien/idea + kia-scenario).
+        // Hier in chat-route forceren we NIET — tool_choice='auto' zodat AI zelf kiest tussen
+        // blocks-response en tool-call. Pillar #2 (source_refs verplicht via minItems:1).
+        const proposeFinanceIdeasTool = {
+            name: 'propose_finance_ideas',
+            description: 'Lever 1-3 finance-ideeën met VERPLICHTE source_refs (bon-/factuur-/event-IDs). Gebruik alleen op /financien bij vragen als "wat zie je?", "kansen?", "wat is opvallend?".',
+            input_schema: {
+                type: 'object' as const,
+                properties: {
+                    ideas: {
+                        type: 'array',
+                        minItems: 1,
+                        maxItems: 3,
+                        items: {
+                            type: 'object',
+                            properties: {
+                                gap: { type: 'string', description: 'Probleem in 1 zin.' },
+                                opportunity: { type: 'string', description: 'Actie in 1 zin. Eindig met [Boekhouder beslist] bij fiscaal.' },
+                                opportunity_ref: {
+                                    type: 'array',
+                                    minItems: 1,
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            kind: { type: 'string', enum: ['bon', 'factuur', 'event', 'margelek_maand', 'investering'] },
+                                            id: { type: 'string' },
+                                            label: { type: 'string' },
+                                        },
+                                        required: ['kind', 'id'],
+                                    },
+                                },
+                                kind: { type: 'string', enum: ['cost_optimization', 'btw_check', 'investering', 'klant_concentratie', 'margelek', 'cashflow'] },
+                                severity: { type: 'string', enum: ['low', 'medium', 'high'] },
+                            },
+                            required: ['gap', 'opportunity', 'opportunity_ref', 'kind', 'severity'],
+                        },
+                    },
+                },
+                required: ['ideas'],
+            },
+        };
+
+        const computeKiaScenarioTool = {
+            name: 'compute_kia_scenario',
+            description: 'Vraag de server om 3 KIA-scenarios te berekenen voor een gegeven investeringsbedrag. Gebruik bij vragen over "kan ik investeren?", "KIA?", of bonnen >€450 in Apparatuur. Server rekent — AI rekent NIET zelf.',
+            input_schema: {
+                type: 'object' as const,
+                properties: {
+                    investment_amount: { type: 'number', description: 'Cumulatief investeringsbedrag in euro in het lopende jaar.' },
+                },
+                required: ['investment_amount'],
+            },
+        };
+
+        const isOnFinancien = normalizedPage === '/financien';
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const streamParams: any = {
             model: selectedModel,
@@ -888,6 +945,12 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             // is ~2k tokens. Voor 3 gerechten = ~6k. Bump naar minimaal 8000.
             if ((streamParams.max_tokens || 0) < 8000) streamParams.max_tokens = 8000;
             console.log('[chat] Tool-use forced: develop_dishes (uitwerking intent)');
+        } else if (isOnFinancien) {
+            // Finance Copilot — AI kiest zelf tussen blocks/propose-ideas/compute-kia.
+            // tool_choice='auto' (default) zodat het model context-driven beslist.
+            streamParams.tools = [respondWithBlocksTool, proposeFinanceIdeasTool, computeKiaScenarioTool];
+            // GEEN tool_choice forced — laat AI kiezen.
+            console.log('[chat] Tool-use auto: /financien with [respond_with_blocks, propose_finance_ideas, compute_kia_scenario]');
         } else if (forceBlocks) {
             streamParams.tools = [respondWithBlocksTool];
             streamParams.tool_choice = { type: 'tool', name: 'respond_with_blocks' };

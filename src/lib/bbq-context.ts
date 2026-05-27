@@ -148,11 +148,109 @@ async function loadLogistiekContext(sb: SupabaseClient): Promise<Record<string, 
 }
 
 async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: offertes } = await sb.from('offertes').select('datum,status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').order('datum', { ascending: false }).limit(100);
-    const { data: facturen } = await sb.from('facturen').select('datum,status,items,korting,vaste_kosten').order('datum', { ascending: false }).limit(100);
     const nu = new Date();
+    const jaarHuidig = nu.getFullYear();
+    const jaarVorig = jaarHuidig - 1;
     const kwartaal = Math.floor(nu.getMonth() / 3) + 1;
-    return { offertes: offertes || [], facturen: facturen || [], kwartaal, jaar: nu.getFullYear() };
+    const startHuidig = `${jaarHuidig}-01-01`;
+    const startVorig = `${jaarVorig}-01-01`;
+    const eindVorig = `${jaarVorig}-12-31`;
+
+    /* Parallel — beide jaren tegelijk laden voor YoY-delta. Plus bonnen met
+       rgs_code WAfsInv voor investeringen-bucket (KIA-context). */
+    const [
+        offertesRes, facturenRes, facturenVorigRes, bonnenInvRes, bonnenAllRes,
+    ] = await Promise.all([
+        sb.from('offertes')
+            .select('datum,status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten')
+            .gte('datum', startHuidig)
+            .order('datum', { ascending: false }).limit(100),
+        sb.from('facturen')
+            .select('datum,status,items,korting,vaste_kosten')
+            .gte('datum', startHuidig)
+            .order('datum', { ascending: false }).limit(100),
+        sb.from('facturen')
+            .select('datum,status,items,korting,vaste_kosten')
+            .gte('datum', startVorig).lte('datum', eindVorig)
+            .order('datum', { ascending: false }).limit(100),
+        sb.from('bonnen')
+            .select('id,datum,totaal_bedrag,rgs_code,winkel,omschrijving')
+            .eq('rgs_code', 'WAfsInv')
+            .gte('datum', startHuidig)
+            .order('datum', { ascending: false }).limit(30),
+        sb.from('bonnen')
+            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code')
+            .gte('datum', startHuidig)
+            .limit(500),
+    ]);
+
+    const facturen = facturenRes.data || [];
+    const facturenVorig = facturenVorigRes.data || [];
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const sumFacturen = (rows: any[]) => rows
+        .filter(f => f.status === 'betaald')
+        .reduce((sum, f) => sum + (f.items || []).reduce((s: number, it: any) =>
+            s + ((it.qty || 0) * (it.prijs || 0)), 0), 0);
+
+    const omzetHuidig = sumFacturen(facturen);
+    const omzetVorig = sumFacturen(facturenVorig);
+    const yoyDelta = omzetVorig > 0
+        ? { absoluut: omzetHuidig - omzetVorig, pct: ((omzetHuidig - omzetVorig) / omzetVorig) * 100 }
+        : null;
+
+    /* Margelek-alerts: maanden in huidige jaar waar marge_pct < 30% obv
+       betaalde facturen, gegroepeerd per maand. Heuristisch — accurate marge
+       vereist food-cost-koppeling die hier te zwaar zou worden. */
+    const margePerMaand: Record<string, { omzet: number; korting: number; vk: number }> = {};
+    for (const f of facturen) {
+        const f2 = f as any;
+        if (f2.status !== 'betaald' || !f2.datum) continue;
+        const m = f2.datum.slice(0, 7);
+        if (!margePerMaand[m]) margePerMaand[m] = { omzet: 0, korting: 0, vk: 0 };
+        const omz = (f2.items || []).reduce((s: number, it: any) =>
+            s + ((it.qty || 0) * (it.prijs || 0)), 0);
+        margePerMaand[m].omzet += omz;
+        margePerMaand[m].korting += Number(f2.korting) || 0;
+        margePerMaand[m].vk += (Array.isArray(f2.vaste_kosten)
+            ? f2.vaste_kosten.reduce((s: number, k: any) => s + (Number(k.bedrag) || 0), 0)
+            : 0);
+    }
+    const margelek_alerts = Object.entries(margePerMaand)
+        .filter(([, v]) => v.omzet > 0 && (v.korting / v.omzet) > 0.20)
+        .map(([maand, v]) => ({ maand, omzet: Math.round(v.omzet), korting_pct: Math.round((v.korting / v.omzet) * 100) }));
+
+    /* Investeringen-bucket: bonnen met WAfsInv (KIA-relevant). Aggregaat +
+       de top-10 voor context. Houd zo klein mogelijk. */
+    const bonnenInv = (bonnenInvRes.data || []) as any[];
+    const investeringen_jaar = {
+        totaal: bonnenInv.reduce((s, b) => s + (Number(b.totaal_bedrag) || 0), 0),
+        aantal: bonnenInv.length,
+        top: bonnenInv.slice(0, 10).map(b => ({
+            id: b.id,
+            datum: b.datum,
+            bedrag: Number(b.totaal_bedrag) || 0,
+            omschrijving: (b.omschrijving || b.winkel || '').slice(0, 40),
+        })),
+    };
+
+    /* Voorbelasting-totaal (alle bonnen, niet alleen WAfsInv). Voor BTW-tab. */
+    const bonnenAll = (bonnenAllRes.data || []) as any[];
+    const voorbelasting = bonnenAll.reduce((s, b) =>
+        s + (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0), 0);
+
+    return {
+        offertes: offertesRes.data || [],
+        facturen,
+        kwartaal,
+        jaar: jaarHuidig,
+        yoyDelta,
+        margelek_alerts,
+        investeringen_jaar,
+        voorbelasting_jaar: Math.round(voorbelasting),
+        omzet_jaar: Math.round(omzetHuidig),
+        omzet_vorig_jaar: omzetVorig > 0 ? Math.round(omzetVorig) : null,
+    };
 }
 
 async function loadDashboardContext(sb: SupabaseClient): Promise<Record<string, unknown>> {

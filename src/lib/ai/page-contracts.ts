@@ -41,7 +41,7 @@ export const PAGE_TOOL_WHITELIST: Record<string, string[]> = {
     '/archief': ['respond_with_blocks'],
 
     '/administratie': ['respond_with_blocks'],
-    '/financien': ['respond_with_blocks'],
+    '/financien': ['respond_with_blocks', 'propose_finance_ideas', 'compute_kia_scenario'],
     '/uren': ['respond_with_blocks', 'create_urenlog', 'update_urenlog'],
     '/klanten': ['respond_with_blocks', 'create_klant', 'update_klant'],
     '/voorraad': ['respond_with_blocks', 'update_voorraad', 'create_inkooplijst'],
@@ -100,7 +100,7 @@ export const PAGE_ROUTE_WHITELIST: Record<string, string[]> = {
     '/archief': ['/inkoop', '/financien', '/leveranciers'],
 
     '/administratie': ['/financien', '/uren', '/klanten', '/voorraad', '/inkoop', '/facturen'],
-    '/financien': ['/facturen', '/uren', '/klanten', '/inkoop', '/archief'],
+    '/financien': ['/facturen', '/uren', '/klanten', '/inkoop', '/archief', '/geld/boekhouder'],
     '/uren': ['/financien', '/admin'],
     '/klanten': ['/events', '/offertes', '/facturen', '/mailbox'],
     '/voorraad': ['/inkoop', '/events/', '/archief'],

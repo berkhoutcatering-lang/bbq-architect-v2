@@ -23,6 +23,8 @@ import PageGuideNote from '@/components/PageGuideNote';
 import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
+import FinanceSummaryStrip from './FinanceSummaryStrip';
+import KiaScenarioModal from '@/components/finance-copilot/KiaScenarioModal';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
@@ -102,6 +104,44 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
     const { settings } = useSettings();
 
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+    /* Bucket J — Finance Copilot state */
+    const [kiaModalOpen, setKiaModalOpen] = useState(false);
+    const [kiaInitialAmount, setKiaInitialAmount] = useState(0);
+
+    function handleSummaryChipClick(chip: { action: 'kia_modal' | 'send_bookkeeper' | 'chat'; prompt: string }) {
+        if (chip.action === 'kia_modal') {
+            // Calculeer huidige investering uit bonnen met WAfsInv code (kosten >€450 inventaris).
+            // Fallback: alle bonnen >€450 wanneer rgs_code nog niet gezet is.
+            const ytdInv = bonnen
+                .filter((b: any) => {
+                    if (b.rgs_code === 'WAfsInv') return true;
+                    if (!b.rgs_code && Number(b.totaal_bedrag) > 450) return true;
+                    return false;
+                })
+                .filter((b: any) => (b.datum || '').startsWith(String(selectedYear)))
+                .reduce((sum: number, b: any) => sum + (Number(b.totaal_bedrag) || 0), 0);
+            setKiaInitialAmount(Math.round(ytdInv));
+            setKiaModalOpen(true);
+            return;
+        }
+        if (chip.action === 'send_bookkeeper') {
+            // Voor v1: link naar boekhouder-page met prefill-prompt in URL
+            router.push('/geld/boekhouder?from=finance_copilot');
+            return;
+        }
+        // chat: dispatch custom event zodat de globale ChatPanel opent met de prompt
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('open-chat-panel', { detail: { prompt: chip.prompt, page: '/financien' } }));
+        }
+    }
+
+    async function handleSendScenarioToBookkeeper(_scenario: unknown) {
+        // KIA-scenario doorsturen — voor v1 redirect naar boekhouder-page met prefill
+        router.push('/geld/boekhouder?from=finance_copilot&intent=kia_scenario');
+        setKiaModalOpen(false);
+    }
+
     /* P0.34 — labor-rate komt uit settings.accounting_config (per-tenant
        configureerbaar via /instellingen/integraties/accounting). Bestaande
        time_logs met uurtarief_snapshot blijven leidend; nieuwe / lege logs
@@ -333,6 +373,9 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                     </div>
                 ) : undefined}
             />
+
+            {/* Bucket J — Finance Copilot Summary Strip (sticky, dismissable) */}
+            <FinanceSummaryStrip onChipClick={handleSummaryChipClick} />
 
             <PageGuideNote
                 id="financien"
@@ -719,6 +762,14 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                     </MetallicCard>
                 </PageSection>
             )}
+
+            {/* Bucket J — KIA Scenario Modal */}
+            <KiaScenarioModal
+                open={kiaModalOpen}
+                onClose={() => setKiaModalOpen(false)}
+                initialAmount={kiaInitialAmount}
+                onSendToBookkeeper={handleSendScenarioToBookkeeper}
+            />
         </div>
     );
 }
