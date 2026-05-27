@@ -57,6 +57,11 @@ const BodySchema = z.object({
         zodat Preview-tab in /archief de file kan tonen via signed URL. */
     file_data_url: z.string().max(15_000_000).optional(),
     file_name: z.string().max(255).optional(),
+    /** Optional: bon-id om aan te attachen (uit /bonnen?prefill=ID flow).
+        Wanneer gezet: UPDATE deze bon ipv INSERT van een nieuwe. Image-hash
+        dedup wordt overgeslagen omdat de gebruiker expliciet zegt: "deze
+        nieuwe file hoort bij die bestaande bon-row". */
+    attach_to_bon_id: z.number().int().positive().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -90,14 +95,66 @@ export async function POST(req: NextRequest) {
         );
     }
 
+    // ── Expliciete attach_to_bon_id pad ───────────────────────────────
+    // Wanneer de UI ?prefill=ID doorgeeft (uit "Scan opnieuw"-link in
+    // BonPreview), willen we de nieuwe scan koppelen aan die specifieke
+    // bon-id. Validatie:
+    //   1. Bon bestaat + binnen huidige org (RLS-check via .eq)
+    //   2. Bon is niet vergrendeld
+    //   3. Bon heeft geen file_path (anders zou Sam ongewild een file overschrijven)
+    let existingBonId: number | null = null;
+    let existingHasFile = false;
+    if (body.attach_to_bon_id) {
+        const { data: target } = await supabase
+            .from('bonnen')
+            .select('id, file_path, locked_at')
+            .eq('organization_id', orgId)
+            .eq('id', body.attach_to_bon_id)
+            .maybeSingle();
+
+        if (!target) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: 'attach_target_missing',
+                    message: 'De bon waaraan je wilt koppelen bestaat niet (meer).',
+                },
+                { status: 404 },
+            );
+        }
+        if (target.locked_at) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: 'locked',
+                    message: 'Deze bon is vergrendeld voor de aangifte.',
+                    bon_id: target.id,
+                },
+                { status: 409 },
+            );
+        }
+        if (target.file_path) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: 'attach_target_has_file',
+                    message:
+                        'Deze bon heeft al een bestand. Verwijder eerst de PDF voor je opnieuw kunt scannen.',
+                    bon_id: target.id,
+                },
+                { status: 409 },
+            );
+        }
+        existingBonId = target.id;
+        existingHasFile = false;
+    }
+
     // Server-side dedup op image_hash. BIJ DUPLICATE: als bestaande bon nog
     // geen file_path heeft, gaan we wel door en upload'en de file alsnog
     // (UPDATE ipv INSERT). Lost een veelvoorkomende UX-fout op: gebruiker
     // scant 'n bon, knop faalt of upload werd geskipped, scant opnieuw —
     // verwacht dat 't gewoon werkt.
-    let existingBonId: number | null = null;
-    let existingHasFile = false;
-    if (body.image_hash) {
+    if (!existingBonId && body.image_hash) {
         const { data: dup } = await supabase
             .from('bonnen')
             .select('id, file_path, locked_at')
@@ -215,9 +272,13 @@ export async function POST(req: NextRequest) {
             .update({
                 file_path: filePath,
                 file_mime: fileMime,
+                image_hash: body.image_hash,
                 // Verrijken alleen velden die mogelijk leeg waren bij eerdere insert
                 extracted_text: extractedText,
                 bon_items: body.items,
+                raw_analysis: body.items,
+                // Status bij her-scan terug op 'pending' zodat AI-output opnieuw bevestigd kan
+                status: 'pending',
             })
             .eq('id', existingBonId);
 

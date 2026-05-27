@@ -13,14 +13,15 @@
  */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { X, Eye, FileText, Package, Clock, Download, ExternalLink, Tag, Share2, Lock, Calendar, ZoomIn, ZoomOut, Search, ArrowDownRight, ArrowRight } from 'lucide-react';
+import { X, Eye, FileText, Package, Clock, Download, ExternalLink, Share2, Lock, Calendar, Search, ArrowDownRight, ArrowRight, Trash2, FileX2, ScanLine } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import type { BonRow, AuditLogEntry, StockMovementForBon } from '@/lib/dal/bonnen';
 import { getStatusVisual } from '../_lib/statusMap';
 import { fmtEur, fmtDate, fmtDateTime, fmtDateShort } from './format';
-import { getSignedUrlAction } from '../actions';
+import { getSignedUrlAction, removeBonFileAction, deleteBonAction } from '../actions';
 
 const PdfViewerInner = dynamic(() => import('./PdfViewerInner'), {
     ssr: false,
@@ -41,10 +42,13 @@ interface Props {
 }
 
 export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
+    const router = useRouter();
     const [tab, setTab] = useState<Tab>('preview');
     const [signedUrl, setSignedUrl] = useState<string | null>(null);
     const [mime, setMime] = useState<string | null>(null);
     const [urlError, setUrlError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [pending, startTransition] = useTransition();
     const [q] = useQueryState('q');
 
     useEffect(() => {
@@ -54,6 +58,7 @@ export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
             return;
         }
         setUrlError(null);
+        setActionError(null);
         getSignedUrlAction({ bonId: bon.id }).then((r) => {
             if (r.ok) {
                 setSignedUrl(r.url);
@@ -64,9 +69,48 @@ export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
         });
     }, [bon]);
 
+    /* PDF wegwerken zodat opnieuw scannen mogelijk wordt. Bon-record blijft. */
+    const removeFile = () => {
+        if (!bon) return;
+        if (!confirm('PDF verwijderen? De bon-data (datum, leverancier, bedrag) blijft staan, alleen het bestand wordt weggegooid zodat je opnieuw kunt scannen.')) {
+            return;
+        }
+        setActionError(null);
+        startTransition(async () => {
+            const r = await removeBonFileAction({ bonId: bon.id });
+            if (r.ok) {
+                setSignedUrl(null);
+                setMime(null);
+                router.refresh();
+                // Drawer blijft open zodat user de "Scan opnieuw"-CTA in NoFileState ziet
+            } else {
+                setActionError(r.error);
+            }
+        });
+    };
+
+    /* Hele bon weggooien — clean slate voor opnieuw scannen. */
+    const deleteBon = () => {
+        if (!bon) return;
+        if (!confirm('Deze bon helemaal verwijderen? Dit verwijdert ook de geschiedenis (audit-log, voorraadkoppelingen). Kan niet ongedaan worden gemaakt.')) {
+            return;
+        }
+        setActionError(null);
+        startTransition(async () => {
+            const r = await deleteBonAction({ bonId: bon.id });
+            if (r.ok) {
+                onClose();
+                router.refresh();
+            } else {
+                setActionError(r.error);
+            }
+        });
+    };
+
     if (!bon) return null;
 
     const status = getStatusVisual(bon.status);
+    const hasFile = !!bon.file_path;
 
     return (
         <div
@@ -179,38 +223,97 @@ export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
                     {tab === 'activiteit' && <ActiviteitTab bonId={bon.id} loader={onAuditLoad} />}
                 </div>
 
+                {/* Action error banner — boven de bottom bar */}
+                {actionError && (
+                    <div
+                        role="alert"
+                        className="border-t px-6 py-2 text-[12px]"
+                        style={{
+                            background: 'rgba(239,68,68,.08)',
+                            borderColor: 'rgba(239,68,68,.25)',
+                            color: 'var(--red)',
+                        }}
+                    >
+                        {actionError}
+                    </div>
+                )}
+
                 {/* Bottom action bar */}
                 <div
-                    className="flex flex-wrap gap-2 border-t px-6 py-3.5"
+                    className="flex flex-wrap items-center gap-1.5 border-t px-6 py-3.5"
                     style={{ borderColor: 'var(--border)' }}
                 >
+                    {/* PDF re-scan / delete cluster — links */}
+                    {hasFile ? (
+                        <button
+                            type="button"
+                            onClick={removeFile}
+                            disabled={pending || !!bon.locked_at}
+                            title={
+                                bon.locked_at
+                                    ? 'Vergrendeld — eerst ontgrendelen'
+                                    : 'PDF weggooien zodat je opnieuw kunt scannen (bon-data blijft staan)'
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium transition hover:bg-[rgba(239,68,68,.08)] hover:text-[var(--red)] disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ color: 'var(--muted)' }}
+                        >
+                            <FileX2 size={14} />
+                            PDF verwijderen
+                        </button>
+                    ) : (
+                        <a
+                            href={`/bonnen?prefill=${bon.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] border px-2.5 py-1.5 text-[12px] font-semibold transition hover:bg-white/[0.04]"
+                            style={{
+                                borderColor: 'rgba(196,163,90,0.35)',
+                                background: 'rgba(196,163,90,0.06)',
+                                color: 'var(--brand-gold)',
+                            }}
+                        >
+                            <ScanLine size={14} />
+                            Scan opnieuw
+                        </a>
+                    )}
+
                     {signedUrl && (
                         <a
                             href={signedUrl}
                             download
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--text)] transition hover:bg-white/[0.05]"
+                            className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)]"
                         >
                             <Download size={14} />
                             Download
                         </a>
                     )}
+
                     <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--text)] transition hover:bg-white/[0.05]"
+                        onClick={deleteBon}
+                        disabled={pending || !!bon.locked_at}
+                        title={
+                            bon.locked_at
+                                ? 'Vergrendeld — eerst ontgrendelen'
+                                : 'Hele bon verwijderen (kan niet ongedaan worden gemaakt)'
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-medium transition hover:bg-[rgba(239,68,68,.10)] hover:text-[var(--red)] disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ color: 'var(--muted)' }}
+                    >
+                        <Trash2 size={14} />
+                        Bon verwijderen
+                    </button>
+
+                    <div className="flex-1" />
+
+                    <a
+                        href={`/geld/boekhouder?bon=${bon.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)]"
                     >
                         <ExternalLink size={14} />
                         Open in Geld
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--text)] transition hover:bg-white/[0.05]"
-                    >
-                        <Tag size={14} />
-                        Hertaggen
-                    </button>
-                    <div className="flex-1" />
+                    </a>
+
                     <button
                         type="button"
                         className="inline-flex items-center gap-1.5 rounded-[8px] bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:bg-[var(--brand-hover)]"

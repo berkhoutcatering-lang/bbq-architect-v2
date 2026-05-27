@@ -254,6 +254,154 @@ export async function revokeShareTokenAction(input: unknown) {
     }
 }
 
+// ── PDF verwijderen / Bon verwijderen ─────────────────────────────────
+
+const bonIdSchema = z.object({ bonId: z.number().int().positive() });
+
+/**
+ * removeBonFileAction — gooit het bestand achter een bon weg (Storage + DB).
+ *
+ * Use case: Sam wil opnieuw scannen ("nieuwe AI-functies sinds vorige scan")
+ * zonder dat hij de bon-record met al z'n metadata kwijt is. De bon blijft
+ * staan, file_path/file_mime/image_hash worden NULL, status reset naar
+ * 'pending' zodat 'ie weer in het inkomende-werk-vakje valt.
+ *
+ * Wat behouden blijft:
+ *   - audit_log entries
+ *   - voorraadkoppelingen (stock_movements.bon_id)
+ *   - share tokens
+ *   - bon_items / raw_analysis (zodat extracted_text doorzoekbaar blijft
+ *     tot er nieuwe scan-resultaten komen)
+ *
+ * Storage cleanup gebruikt service-role client (RLS strikt op bonnen-bucket).
+ */
+export async function removeBonFileAction(input: unknown) {
+    try {
+        const { bonId } = bonIdSchema.parse(input);
+        const { sb, user, orgId } = await getAuthContext();
+
+        // 1. Lees bon (RLS valideert ownership + locked-check)
+        const { data: bon, error: readErr } = await sb
+            .from('bonnen')
+            .select('id, file_path, locked_at, organization_id')
+            .eq('id', bonId)
+            .eq('organization_id', orgId)
+            .single();
+
+        if (readErr || !bon) {
+            return { ok: false as const, error: 'Bon niet gevonden' };
+        }
+        if (bon.locked_at) {
+            return {
+                ok: false as const,
+                error:
+                    'Deze bon is vergrendeld voor de aangifte. Eerst ontgrendelen voor je het bestand kunt verwijderen.',
+            };
+        }
+        if (!bon.file_path) {
+            return { ok: false as const, error: 'Aan deze bon hangt geen bestand.' };
+        }
+
+        // 2. Verwijder uit Storage (service-role, RLS-bypass nodig voor delete)
+        const { createServiceSupabase } = await import('@/lib/supabase-server');
+        const serviceSb = createServiceSupabase();
+        const { error: storageErr } = await serviceSb.storage
+            .from('bonnen')
+            .remove([bon.file_path as string]);
+
+        if (storageErr) {
+            // Niet-fataal: log en ga door met DB cleanup. Beter een orphaned
+            // storage-blob dan een halve state in DB.
+            console.warn('[removeBonFile] storage remove failed:', storageErr.message);
+        }
+
+        // 3. DB: file-velden op NULL, status terug naar pending
+        const { error: updErr } = await sb
+            .from('bonnen')
+            .update({
+                file_path: null,
+                file_mime: null,
+                image_hash: null,
+                status: 'pending',
+            })
+            .eq('id', bonId);
+
+        if (updErr) throw new Error(updErr.message);
+
+        // 4. Audit-log entry
+        await logBonAction(
+            sb,
+            bonId,
+            'update',
+            'PDF verwijderd — klaar voor nieuwe scan',
+            { user_id: user.id, removed_file_path: bon.file_path },
+        ).catch(() => { /* audit-trigger doet de hoofdwerk */ });
+
+        revalidatePath('/archief');
+        return { ok: true as const };
+    } catch (e) {
+        return {
+            ok: false as const,
+            error: e instanceof Error ? e.message : 'Kon bestand niet verwijderen',
+        };
+    }
+}
+
+/**
+ * deleteBonAction — hard delete van een bon (DB + Storage).
+ *
+ * Verwijdert ALLE data: bon-record, file, audit (via cascade), stock-koppelingen.
+ * Geen soft-delete: Sam wil "clean slate" voor het opnieuw scannen.
+ *
+ * Beveiliging:
+ *   - vergrendelde bonnen kunnen niet weg (RLS-check + applicatie-check)
+ *   - audit-trigger uit migratie 138000 is delete-safe (NULL user_id okay)
+ */
+export async function deleteBonAction(input: unknown) {
+    try {
+        const { bonId } = bonIdSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+
+        // 1. Lees bon voor file_path + lock-check
+        const { data: bon, error: readErr } = await sb
+            .from('bonnen')
+            .select('id, file_path, locked_at, organization_id')
+            .eq('id', bonId)
+            .eq('organization_id', orgId)
+            .single();
+
+        if (readErr || !bon) {
+            return { ok: false as const, error: 'Bon niet gevonden' };
+        }
+        if (bon.locked_at) {
+            return {
+                ok: false as const,
+                error: 'Vergrendelde bonnen kunnen niet verwijderd worden. Eerst ontgrendelen.',
+            };
+        }
+
+        // 2. Verwijder file uit Storage (service-role)
+        if (bon.file_path) {
+            const { createServiceSupabase } = await import('@/lib/supabase-server');
+            const serviceSb = createServiceSupabase();
+            await serviceSb.storage.from('bonnen').remove([bon.file_path as string]);
+        }
+
+        // 3. DELETE bon-record. Audit-trigger logt 'delete' automatisch.
+        const { error: delErr } = await sb.from('bonnen').delete().eq('id', bonId);
+
+        if (delErr) throw new Error(delErr.message);
+
+        revalidatePath('/archief');
+        return { ok: true as const };
+    } catch (e) {
+        return {
+            ok: false as const,
+            error: e instanceof Error ? e.message : 'Kon bon niet verwijderen',
+        };
+    }
+}
+
 // ── getSignedUrl (voor BonPreview client) ─────────────────────────────
 
 const signedUrlSchema = z.object({ bonId: z.number().int().positive() });

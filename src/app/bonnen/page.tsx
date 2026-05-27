@@ -15,9 +15,9 @@
  *   3. Acties: → /archief openen, of meteen weer een nieuwe scan
  */
 
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageGuideNote from '@/components/PageGuideNote';
@@ -26,7 +26,7 @@ import MultiFormatDropZone, {
     type ExtractResult,
 } from '@/app/bonnen/_components/MultiFormatDropZone';
 import { fmt } from '@/lib/utils';
-import { ArrowRight, Check, Archive, ExternalLink, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Archive, ExternalLink, Loader2, Link2 } from 'lucide-react';
 
 interface CompletedExtract {
     id: string;
@@ -43,9 +43,23 @@ interface CompletedExtract {
 }
 
 export default function BonnenPage() {
+    return (
+        <Suspense fallback={null}>
+            <BonnenPageInner />
+        </Suspense>
+    );
+}
+
+function BonnenPageInner() {
     const showToast = useToast();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [completed, setCompleted] = useState<CompletedExtract[]>([]);
+
+    /* ?prefill=ID — opent flow als "attach aan bestaande bon" (uit BonPreview
+       "Scan opnieuw"-link). Eén attach-target per page-load, niet per scan. */
+    const prefillRaw = searchParams.get('prefill');
+    const attachToBonId = prefillRaw ? Number.parseInt(prefillRaw, 10) || null : null;
 
     /* FileReader-promise wrapper. Gebruikt door commit-flow om de originele
        scan-file als data-URL naar de server te sturen voor Storage-upload. */
@@ -92,6 +106,9 @@ export default function BonnenPage() {
                     ai_cost_eur_cents: entry.result.ai_cost_eur_cents,
                     file_data_url: fileDataUrl,
                     file_name: entry.file_name,
+                    // Wanneer ?prefill=ID actief is: koppel deze scan aan
+                    // die specifieke bon-id ipv nieuwe INSERT.
+                    attach_to_bon_id: attachToBonId ?? undefined,
                 }),
             });
             const data = await res.json();
@@ -174,18 +191,69 @@ export default function BonnenPage() {
     return (
         <div className="container" style={{ paddingBottom: 80 }}>
             <PageHeader
-                title="Bonnen scannen"
-                description="Drop foto's, PDFs, screenshots of UBL-XML. Wij lezen ze uit en zetten ze klaar voor je archief."
+                title={attachToBonId ? 'Opnieuw inscannen' : 'Bonnen scannen'}
+                description={
+                    attachToBonId
+                        ? `De volgende scan wordt gekoppeld aan bon #${attachToBonId} in je archief. Bon-data (datum, leverancier, bedrag) wordt overschreven met de nieuwe AI-extractie.`
+                        : "Drop foto's, PDFs, screenshots of UBL-XML. Wij lezen ze uit en zetten ze klaar voor je archief."
+                }
                 actions={
                     <Link
-                        href="/archief"
+                        href={attachToBonId ? `/archief?bon=${attachToBonId}` : '/archief'}
                         className="btn btn-ghost"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
-                        <Archive size={16} /> Open archief
+                        <Archive size={16} /> {attachToBonId ? 'Terug naar bon' : 'Open archief'}
                     </Link>
                 }
             />
+
+            {attachToBonId && (
+                <div
+                    role="status"
+                    style={{
+                        marginBottom: 20,
+                        padding: '12px 16px',
+                        borderRadius: 10,
+                        background: 'rgba(196,163,90,.06)',
+                        border: '1px solid rgba(196,163,90,.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <Link2 size={16} style={{ color: 'var(--brand-gold)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: 'var(--text)', flex: 1, minWidth: 0 }}>
+                        <strong style={{ color: 'var(--brand-gold)' }}>Attach-modus actief</strong>
+                        {' — '}
+                        nieuwe scan wordt gekoppeld aan{' '}
+                        <Link
+                            href={`/archief?bon=${attachToBonId}`}
+                            style={{
+                                color: 'var(--brand-gold)',
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dotted',
+                            }}
+                        >
+                            bon #{attachToBonId}
+                        </Link>
+                        .
+                    </span>
+                    <Link
+                        href="/bonnen"
+                        replace
+                        style={{
+                            fontSize: 12,
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            color: 'var(--muted)',
+                        }}
+                    >
+                        Annuleren
+                    </Link>
+                </div>
+            )}
 
             <PageGuideNote
                 id="bonnen"
