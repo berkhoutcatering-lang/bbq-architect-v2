@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Users, Check, CircleDot, Send, Filter, Plus, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Users, Check, CircleDot, Send, Filter, Plus, ChevronLeft, ChevronRight, AlertTriangle, PartyPopper, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { displayEventName, titleCase } from './displayHelpers';
 import { detectAllConflicts, highestSeverity, type Conflict } from '@/lib/conflictDetection';
@@ -394,8 +394,50 @@ export default function EventsTimeline({ events, offertes = [], prepTasks = [], 
         )}
 
         {view === 'timeline' && (weekBuckets.length === 0 ? (
-          <div className="metal" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--muted)' }}>
-            Geen aankomende events. Klik &quot;Nieuw event&quot; om te beginnen.
+          /* Pillar #4 Hub 3: empty-state geeft richting, niet alleen "geen events".
+             Twee paden — direct event aanmaken óf via offerte-wizard (Hub 2 handoff). */
+          <div
+            className="metal"
+            style={{
+              padding: '40px 24px',
+              textAlign: 'center',
+              maxWidth: 520,
+              margin: '0 auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: 'color-mix(in srgb, var(--brand-gold) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--brand-gold) 22%, transparent)',
+                marginBottom: 14,
+              }}
+            >
+              <PartyPopper size={24} style={{ color: 'var(--brand-gold)' }} />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
+              Nog geen events gepland
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--muted)', maxWidth: 380, margin: '0 auto 18px', lineHeight: 1.55 }}>
+              Maak je eerste event handmatig aan, of start vanaf een offerte zodat menu, klant en datum direct mee-springen.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={onNew} className="btn btn-brand" style={{ padding: '10px 18px', fontSize: 13 }}>
+                <Plus size={14} /> Nieuw event
+              </button>
+              <a
+                href="/offertes?wizard=true"
+                className="btn btn-ghost"
+                style={{ padding: '10px 18px', fontSize: 13, textDecoration: 'none' }}
+              >
+                <Sparkles size={14} /> Start met AI-offerte
+              </a>
+            </div>
           </div>
         ) : (
           weekBuckets.map(bucket => {
