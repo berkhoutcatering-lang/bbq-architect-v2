@@ -1,24 +1,56 @@
 /**
- * BonFilters — collapsible filter-sidebar voor Bonnenkistje (P0.1).
+ * BonFilters — collapsible filter-sidebar voor het Bonnenkistje.
  *
- * Design DNA uit Claude archief-filter.jsx (240px sidebar).
+ * Visuele DNA: secties krijgen elk een eigen goud-getinte header met
+ * icoon, ruimere padding en duidelijke scheiding. Status- en Type-chips
+ * dragen hun semantische kleur al in rust (groen/blauw/amber/grijs),
+ * niet pas wanneer geselecteerd. Filtersamenstelling is identiek aan
+ * eerdere versie — alleen layout en visuele richness veranderen.
  *
- * Secties:
- *   1. Datum  (chips: maand/kwartaal/jaar/alles + date-range)
- *   2. Leverancier (search + checkboxes met counts)
- *   3. Status (chips: pending/bevestigd/twijfel/vergrendeld)
- *   4. Type (chips: PDF/Foto/E-mail)
- *   5. Tags (chips top-10)
- *   6. Geavanceerd (collapse): RGS-categorie + Bedrag range
- *   7. Footer: Art. 52 AWR bewaarplicht
+ * Secties (van boven naar onder):
+ *   – "Wis alles" header (alleen zichtbaar als 1+ filter actief)
+ *   – Periode  (kalender-icoon)        chips + datumrange
+ *   – Status   (activity-icoon)        vertikale lijst met colored pills
+ *   – Type     (file-icoon)            3 chips met semantische kleuren
+ *   – Leverancier (building-icoon)     search + checkbox-lijst
+ *   – Tags     (tag-icoon)             flex-wrap chips, top-12 + "meer"
+ *   – RGS      (book-icoon, collapse)  checkbox-lijst
+ *   – Bedrag   (euro-icoon)            chips + min/max
+ *   – Footer   (gold callout)          Art. 52 AWR
  *
- * Alle state via nuqs (URL share-baar).
+ * URL-state via nuqs, share-baar.
  */
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, ShieldCheck, X, FileText, Image as ImageIcon, Mail, Clock, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
-import { useQueryStates, parseAsString, parseAsArrayOf, parseAsStringEnum, parseAsInteger } from 'nuqs';
+import { useMemo, useState } from 'react';
+import {
+    Calendar,
+    Activity,
+    FileText,
+    Building2,
+    Tag as TagIcon,
+    BookOpen,
+    Euro,
+    ChevronDown,
+    ChevronUp,
+    ShieldCheck,
+    X,
+    Search,
+    Image as ImageIcon,
+    Mail,
+    Clock,
+    CheckCircle2,
+    AlertTriangle,
+    Lock,
+    Trash2,
+} from 'lucide-react';
+import {
+    useQueryStates,
+    parseAsString,
+    parseAsArrayOf,
+    parseAsStringEnum,
+    parseAsInteger,
+} from 'nuqs';
 import { FILTER_STATUS_OPTIONS, STATUS_VISUAL, type DisplayStatus } from '../_lib/statusMap';
 
 interface Leverancier {
@@ -48,9 +80,37 @@ const STATUS_ICON_MAP: Record<DisplayStatus, React.ComponentType<{ size?: number
     vergrendeld: Lock,
 };
 
+/* Semantische kleuren voor Type-chips — match badge-kleuren in BonReceiptThumb. */
+const TYPE_VISUAL: Record<
+    'pdf' | 'image' | 'email',
+    { label: string; bg: string; color: string; border: string; Icon: React.ComponentType<{ size?: number }> }
+> = {
+    pdf: {
+        label: 'PDF',
+        bg: 'rgba(59,130,246,.10)',
+        color: 'var(--blue)',
+        border: 'rgba(59,130,246,.30)',
+        Icon: FileText,
+    },
+    image: {
+        label: 'Foto',
+        bg: 'rgba(249,115,22,.10)',
+        color: 'var(--orange)',
+        border: 'rgba(249,115,22,.30)',
+        Icon: ImageIcon,
+    },
+    email: {
+        label: 'E-mail',
+        bg: 'rgba(168,85,247,.10)',
+        color: '#c084fc',
+        border: 'rgba(168,85,247,.30)',
+        Icon: Mail,
+    },
+};
+
 export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props) {
-    // Design ordering: Datum / Leverancier / Status / Type / Tags / RGS (collapsible) / Bedrag / footer
     const [rgsOpen, setRgsOpen] = useState(false);
+    const [allTagsOpen, setAllTagsOpen] = useState(false);
     const [leverancierSearch, setLeverancierSearch] = useState('');
 
     const [filters, setFilters] = useQueryStates({
@@ -76,13 +136,45 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
         void setFilters({ [key]: next.length ? next : null } as Record<string, string[] | null>);
     };
 
-    const filteredLev = leveranciers.filter((l) =>
-        l.naam.toLowerCase().includes(leverancierSearch.toLowerCase()),
+    const clearAll = () =>
+        void setFilters({
+            datum: null,
+            dateFrom: null,
+            dateTo: null,
+            leverancier: null,
+            status: null,
+            type: null,
+            tags: null,
+            rgs: null,
+            bedrag: null,
+            bedragMin: null,
+            bedragMax: null,
+        });
+
+    const filteredLev = useMemo(
+        () =>
+            leveranciers.filter((l) =>
+                l.naam.toLowerCase().includes(leverancierSearch.toLowerCase()),
+            ),
+        [leveranciers, leverancierSearch],
     );
 
+    const activeCount =
+        (filters.datum ? 1 : 0) +
+        (filters.dateFrom ? 1 : 0) +
+        (filters.dateTo ? 1 : 0) +
+        filters.leverancier.length +
+        filters.status.length +
+        filters.type.length +
+        filters.tags.length +
+        filters.rgs.length +
+        (filters.bedrag ? 1 : 0) +
+        (filters.bedragMin != null ? 1 : 0) +
+        (filters.bedragMax != null ? 1 : 0);
+
     const wrapperClass = isMobile
-        ? 'h-full overflow-y-auto px-5 py-5'
-        : 'sticky top-14 h-[calc(100vh-56px)] w-[240px] flex-shrink-0 overflow-y-auto border-r px-4';
+        ? 'h-full overflow-y-auto px-4 py-5'
+        : 'sticky top-14 h-[calc(100vh-56px)] w-[260px] flex-shrink-0 overflow-y-auto border-r px-3 py-1';
 
     return (
         <aside
@@ -90,7 +182,7 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
             style={isMobile ? { background: 'var(--bg-elevated)' } : { borderColor: 'var(--border)' }}
         >
             {isMobile && (
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex items-center justify-between px-1">
                     <span className="text-[16px] font-semibold">Filters</span>
                     <button
                         type="button"
@@ -103,8 +195,34 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                 </div>
             )}
 
-            {/* DATUM */}
-            <FilterSection title="Datum">
+            {/* ── Header: 'Wis alles' wanneer 1+ filter actief ─────────── */}
+            {activeCount > 0 && (
+                <div
+                    className="mb-2 flex items-center justify-between rounded-[10px] border px-3 py-2"
+                    style={{
+                        background: 'rgba(255,191,0,.06)',
+                        borderColor: 'rgba(255,191,0,.25)',
+                    }}
+                >
+                    <span
+                        className="text-[11px] font-semibold"
+                        style={{ color: 'var(--brand)' }}
+                    >
+                        {activeCount} {activeCount === 1 ? 'filter actief' : 'filters actief'}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={clearAll}
+                        className="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[11px] font-semibold text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)]"
+                    >
+                        <Trash2 size={11} />
+                        Wis alles
+                    </button>
+                </div>
+            )}
+
+            {/* ── PERIODE ──────────────────────────────────────────────── */}
+            <FilterSection title="Periode" icon={Calendar} activeCount={(filters.datum ? 1 : 0) + (filters.dateFrom || filters.dateTo ? 1 : 0)}>
                 <div className="flex flex-wrap gap-1.5">
                     {[
                         { id: 'month', label: 'Deze maand' },
@@ -115,7 +233,9 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                         <Chip
                             key={d.id}
                             active={filters.datum === d.id}
-                            onClick={() => void setFilters({ datum: filters.datum === d.id ? null : d.id })}
+                            onClick={() =>
+                                void setFilters({ datum: filters.datum === d.id ? null : d.id })
+                            }
                         >
                             {d.label}
                         </Chip>
@@ -136,47 +256,9 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                 </div>
             </FilterSection>
 
-            {/* LEVERANCIER */}
-            <FilterSection title="Leverancier">
-                <input
-                    type="search"
-                    placeholder="Zoek leverancier…"
-                    value={leverancierSearch}
-                    onChange={(e) => setLeverancierSearch(e.target.value)}
-                    className="mb-2 w-full rounded-[6px] border bg-transparent px-2.5 py-1.5 text-[12px] text-[var(--text)] outline-none focus:border-[var(--brand)]"
-                    style={{ borderColor: 'var(--border)' }}
-                />
-                <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
-                    {filteredLev.map((l) => {
-                        const active = filters.leverancier.includes(l.naam);
-                        return (
-                            <label
-                                key={l.id}
-                                className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1 text-[12px] transition hover:bg-white/[0.03]"
-                                style={{ color: active ? 'var(--text)' : 'var(--muted)' }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={active}
-                                    onChange={() => toggle('leverancier', l.naam)}
-                                    style={{ accentColor: 'var(--brand)' }}
-                                />
-                                <span className="flex-1">{l.naam}</span>
-                                <span className="font-mono text-[10px] tabular-nums text-[var(--muted-light)]">
-                                    {l.count}
-                                </span>
-                            </label>
-                        );
-                    })}
-                    {filteredLev.length === 0 && (
-                        <span className="px-1.5 py-1 text-[11px] text-[var(--muted-light)]">Geen treffers</span>
-                    )}
-                </div>
-            </FilterSection>
-
-            {/* STATUS */}
-            <FilterSection title="Status">
-                <div className="flex flex-wrap gap-1.5">
+            {/* ── STATUS — vertikale lijst met semantische kleuren ─────── */}
+            <FilterSection title="Status" icon={Activity} activeCount={filters.status.length}>
+                <div className="flex flex-col gap-1">
                     {FILTER_STATUS_OPTIONS.map((key) => {
                         const visual = STATUS_VISUAL[key];
                         const Icon = STATUS_ICON_MAP[key];
@@ -186,50 +268,131 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                                 type="button"
                                 key={key}
                                 onClick={() => toggle('status', key)}
-                                className={`inline-flex items-center gap-1 rounded-[6px] border px-2 py-1 text-[11px] font-semibold transition ${active ? visual.pillClass : ''}`}
-                                style={
-                                    active
-                                        ? undefined
-                                        : {
-                                              background: 'rgba(130,130,130,.06)',
-                                              color: 'var(--muted)',
-                                              borderColor: 'var(--border)',
-                                          }
-                                }
+                                className="group flex w-full items-center gap-2 rounded-[8px] border px-2.5 py-2 text-left transition"
+                                style={{
+                                    background: active
+                                        ? 'rgba(255,255,255,.04)'
+                                        : 'transparent',
+                                    borderColor: active
+                                        ? 'rgba(255,191,0,.35)'
+                                        : 'transparent',
+                                }}
                             >
-                                <Icon size={11} />
-                                {visual.label}
+                                <span
+                                    aria-hidden="true"
+                                    className={`inline-flex h-5 w-5 items-center justify-center rounded-[5px] border ${visual.pillClass}`}
+                                >
+                                    <Icon size={11} />
+                                </span>
+                                <span
+                                    className="flex-1 text-[12px] font-semibold"
+                                    style={{ color: active ? 'var(--text)' : 'var(--muted)' }}
+                                >
+                                    {visual.label}
+                                </span>
+                                {active && (
+                                    <span
+                                        aria-hidden="true"
+                                        className="inline-flex h-4 w-4 items-center justify-center rounded-full"
+                                        style={{ background: 'var(--brand)', color: '#000' }}
+                                    >
+                                        <CheckCircle2 size={11} />
+                                    </span>
+                                )}
                             </button>
                         );
                     })}
                 </div>
             </FilterSection>
 
-            {/* TYPE */}
-            <FilterSection title="Type">
-                <div className="flex gap-1.5">
-                    {[
-                        { id: 'pdf', label: 'PDF', icon: FileText },
-                        { id: 'image', label: 'Foto', icon: ImageIcon },
-                        { id: 'email', label: 'E-mail', icon: Mail },
-                    ].map((t) => (
-                        <Chip
-                            key={t.id}
-                            active={filters.type.includes(t.id)}
-                            onClick={() => toggle('type', t.id)}
-                            icon={<t.icon size={11} />}
-                        >
-                            {t.label}
-                        </Chip>
-                    ))}
+            {/* ── TYPE — chips met semantische kleuren ─────────────────── */}
+            <FilterSection title="Type" icon={FileText} activeCount={filters.type.length}>
+                <div className="grid grid-cols-3 gap-1.5">
+                    {(['pdf', 'image', 'email'] as const).map((t) => {
+                        const v = TYPE_VISUAL[t];
+                        const active = filters.type.includes(t);
+                        return (
+                            <button
+                                type="button"
+                                key={t}
+                                onClick={() => toggle('type', t)}
+                                className="inline-flex items-center justify-center gap-1 rounded-[8px] border px-2 py-1.5 text-[11px] font-semibold transition"
+                                style={{
+                                    background: active ? v.bg : 'rgba(130,130,130,.04)',
+                                    color: active ? v.color : 'var(--muted)',
+                                    borderColor: active ? v.border : 'var(--border)',
+                                }}
+                            >
+                                <v.Icon size={11} />
+                                {v.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </FilterSection>
 
-            {/* TAGS */}
+            {/* ── LEVERANCIER ──────────────────────────────────────────── */}
+            <FilterSection title="Leverancier" icon={Building2} activeCount={filters.leverancier.length}>
+                <div
+                    className="mb-2 flex items-center gap-1.5 rounded-[8px] border px-2.5 py-1.5"
+                    style={{
+                        background: 'rgba(130,130,130,.04)',
+                        borderColor: 'var(--border)',
+                    }}
+                >
+                    <Search size={12} className="text-[var(--muted-light)]" />
+                    <input
+                        type="search"
+                        placeholder="Zoek leverancier…"
+                        value={leverancierSearch}
+                        onChange={(e) => setLeverancierSearch(e.target.value)}
+                        className="flex-1 border-none bg-transparent text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--muted-light)]"
+                    />
+                </div>
+                <div className="flex max-h-44 flex-col gap-0.5 overflow-y-auto pr-1">
+                    {filteredLev.map((l) => {
+                        const active = filters.leverancier.includes(l.naam);
+                        return (
+                            <label
+                                key={l.id}
+                                className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-[12px] transition hover:bg-white/[0.03]"
+                                style={{
+                                    color: active ? 'var(--text)' : 'var(--muted)',
+                                    background: active ? 'rgba(255,191,0,.04)' : undefined,
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={active}
+                                    onChange={() => toggle('leverancier', l.naam)}
+                                    style={{ accentColor: 'var(--brand)' }}
+                                />
+                                <span className="flex-1 truncate">{l.naam}</span>
+                                <span
+                                    className="rounded-[4px] px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+                                    style={{
+                                        background: 'rgba(130,130,130,.08)',
+                                        color: 'var(--muted-light)',
+                                    }}
+                                >
+                                    {l.count}
+                                </span>
+                            </label>
+                        );
+                    })}
+                    {filteredLev.length === 0 && (
+                        <span className="px-1.5 py-1.5 text-[11px] text-[var(--muted-light)]">
+                            Geen treffers
+                        </span>
+                    )}
+                </div>
+            </FilterSection>
+
+            {/* ── TAGS ─────────────────────────────────────────────────── */}
             {tags.length > 0 && (
-                <FilterSection title="Tags">
+                <FilterSection title="Tags" icon={TagIcon} activeCount={filters.tags.length}>
                     <div className="flex flex-wrap gap-1">
-                        {tags.slice(0, 12).map((tag) => (
+                        {(allTagsOpen ? tags : tags.slice(0, 10)).map((tag) => (
                             <Chip
                                 key={tag}
                                 active={filters.tags.includes(tag)}
@@ -240,29 +403,63 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                             </Chip>
                         ))}
                     </div>
+                    {tags.length > 10 && (
+                        <button
+                            type="button"
+                            onClick={() => setAllTagsOpen((v) => !v)}
+                            className="mt-1.5 text-[10px] font-semibold text-[var(--brand-gold)] underline decoration-dotted underline-offset-2 hover:text-[var(--brand)]"
+                        >
+                            {allTagsOpen ? 'Minder' : `+${tags.length - 10} meer`}
+                        </button>
+                    )}
                 </FilterSection>
             )}
 
-            {/* RGS-categorie — design heeft 'm als collapsible top-level sectie */}
+            {/* ── RGS — collapsible ────────────────────────────────────── */}
             {rgs.length > 0 && (
-                <div className="border-b border-[var(--border)] py-3.5">
+                <div className="border-b border-[var(--border)] py-3">
                     <button
                         type="button"
                         onClick={() => setRgsOpen((v) => !v)}
-                        className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]"
+                        className="flex w-full items-center justify-between gap-2 px-1 py-0.5"
                     >
-                        RGS-categorie
-                        {rgsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        <span className="inline-flex items-center gap-1.5">
+                            <BookOpen size={12} style={{ color: 'var(--brand-gold)' }} />
+                            <span className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
+                                RGS-categorie
+                            </span>
+                            {filters.rgs.length > 0 && (
+                                <span
+                                    className="rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold"
+                                    style={{
+                                        background: 'rgba(255,191,0,.14)',
+                                        color: 'var(--brand)',
+                                    }}
+                                >
+                                    {filters.rgs.length}
+                                </span>
+                            )}
+                        </span>
+                        {rgsOpen ? (
+                            <ChevronUp size={12} className="text-[var(--muted-light)]" />
+                        ) : (
+                            <ChevronDown size={12} className="text-[var(--muted-light)]" />
+                        )}
                     </button>
                     {rgsOpen && (
-                        <div className="mt-2.5 flex flex-col gap-0.5">
+                        <div className="mt-2 flex flex-col gap-0.5">
                             {rgs.map((r) => {
                                 const active = filters.rgs.includes(r.code);
                                 return (
                                     <label
                                         key={r.code}
-                                        className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1 text-[11px]"
-                                        style={{ color: active ? 'var(--text)' : 'var(--muted)' }}
+                                        className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-[11px]"
+                                        style={{
+                                            color: active ? 'var(--text)' : 'var(--muted)',
+                                            background: active
+                                                ? 'rgba(255,191,0,.04)'
+                                                : undefined,
+                                        }}
                                     >
                                         <input
                                             type="checkbox"
@@ -271,7 +468,13 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                                             style={{ accentColor: 'var(--brand)' }}
                                         />
                                         <span className="flex-1">{r.label ?? r.code}</span>
-                                        <span className="font-mono text-[10px] tabular-nums text-[var(--muted-light)]">
+                                        <span
+                                            className="rounded-[4px] px-1.5 py-0.5 font-mono text-[9px] tabular-nums"
+                                            style={{
+                                                background: 'rgba(130,130,130,.08)',
+                                                color: 'var(--muted-light)',
+                                            }}
+                                        >
                                             {r.count}
                                         </span>
                                     </label>
@@ -282,8 +485,12 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                 </div>
             )}
 
-            {/* Bedrag */}
-            <FilterSection title="Bedrag">
+            {/* ── BEDRAG ───────────────────────────────────────────────── */}
+            <FilterSection
+                title="Bedrag"
+                icon={Euro}
+                activeCount={(filters.bedrag ? 1 : 0) + (filters.bedragMin != null ? 1 : 0) + (filters.bedragMax != null ? 1 : 0)}
+            >
                 <div className="flex flex-wrap gap-1.5">
                     {[
                         { id: 'lt50' as const, label: '< €50' },
@@ -293,7 +500,9 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                         <Chip
                             key={b.id}
                             active={filters.bedrag === b.id}
-                            onClick={() => void setFilters({ bedrag: filters.bedrag === b.id ? null : b.id })}
+                            onClick={() =>
+                                void setFilters({ bedrag: filters.bedrag === b.id ? null : b.id })
+                            }
                         >
                             {b.label}
                         </Chip>
@@ -314,26 +523,59 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                 </div>
             </FilterSection>
 
-            {/* FOOTER: Art. 52 AWR */}
-            <div className="flex items-start gap-2 pt-4 pb-2">
-                <ShieldCheck size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--brand-gold)' }} />
+            {/* ── FOOTER: Art. 52 AWR (gold callout) ───────────────────── */}
+            <div
+                className="mt-3 mb-1 flex items-start gap-2 rounded-[10px] border px-3 py-2.5"
+                style={{
+                    background: 'rgba(196,163,90,.06)',
+                    borderColor: 'rgba(196,163,90,.18)',
+                }}
+            >
+                <ShieldCheck
+                    size={14}
+                    className="mt-0.5 flex-shrink-0"
+                    style={{ color: 'var(--brand-gold)' }}
+                />
                 <div className="text-[10px] leading-[1.5] text-[var(--muted-light)]">
-                    7-jaar bewaarplicht
+                    <strong style={{ color: 'var(--brand-gold)' }}>7-jaar bewaarplicht</strong>
                     <br />
-                    <span className="text-[var(--muted)]">Art. 52 AWR</span>
+                    Art. 52 AWR — bonnen blijven veilig tot mei 2033.
                 </div>
             </div>
         </aside>
     );
 }
 
-// ── helpers ────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────
 
-function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
+interface SectionProps {
+    title: string;
+    icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+    activeCount?: number;
+    children: React.ReactNode;
+}
+
+/* Sectie-wrapper met goud-iconen header + count-badge bij actieve filters.
+   Hairline-border onderaan ipv blokkerige cards = rust + ritme. */
+function FilterSection({ title, icon: Icon, activeCount = 0, children }: SectionProps) {
     return (
-        <div className="border-b border-[var(--border)] py-3.5">
-            <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
-                {title}
+        <div className="border-b border-[var(--border)] py-3">
+            <div className="mb-2 flex items-center gap-1.5 px-1">
+                <Icon size={12} style={{ color: 'var(--brand-gold)' }} />
+                <span className="text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
+                    {title}
+                </span>
+                {activeCount > 0 && (
+                    <span
+                        className="rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold"
+                        style={{
+                            background: 'rgba(255,191,0,.14)',
+                            color: 'var(--brand)',
+                        }}
+                    >
+                        {activeCount}
+                    </span>
+                )}
             </div>
             {children}
         </div>
@@ -344,11 +586,10 @@ interface ChipProps {
     active: boolean;
     onClick: () => void;
     children: React.ReactNode;
-    icon?: React.ReactNode;
     small?: boolean;
 }
 
-function Chip({ active, onClick, children, icon, small }: ChipProps) {
+function Chip({ active, onClick, children, small }: ChipProps) {
     return (
         <button
             type="button"
@@ -359,18 +600,17 @@ function Chip({ active, onClick, children, icon, small }: ChipProps) {
             style={
                 active
                     ? {
-                          background: 'rgba(255,191,0,.1)',
+                          background: 'rgba(255,191,0,.10)',
                           color: 'var(--brand)',
-                          borderColor: 'rgba(255,191,0,.3)',
+                          borderColor: 'rgba(255,191,0,.30)',
                       }
                     : {
-                          background: 'rgba(130,130,130,.06)',
+                          background: 'rgba(130,130,130,.04)',
                           color: 'var(--muted)',
                           borderColor: 'var(--border)',
                       }
             }
         >
-            {icon}
             {children}
         </button>
     );
@@ -420,3 +660,4 @@ function NumberInput({
         />
     );
 }
+

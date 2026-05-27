@@ -20,45 +20,48 @@ export interface StatusVisual {
     label: string;
     display: DisplayStatus;
     icon: 'clock' | 'check-circle-2' | 'alert-triangle' | 'lock';
-    color: 'amber' | 'green' | 'orange' | 'slate';
+    color: 'amber' | 'green' | 'orange' | 'slate' | 'blue';
     /* Tailwind classes voor pill rendering. */
     pillClass: string;
     /* Border / dot accent class. */
     dotClass: string;
 }
 
+/* Pill-kleuren matchen Claude Design (archief-atoms.jsx STATUS_MAP):
+   pending=draft (grijs) · bevestigd=ok (groen) · twijfel=optie (amber/brand)
+   · vergrendeld=send (blauw). */
 export const STATUS_VISUAL: Record<DisplayStatus, StatusVisual> = {
     pending: {
         label: 'Pending',
         display: 'pending',
         icon: 'clock',
-        color: 'amber',
-        pillClass: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-        dotClass: 'bg-amber-500',
+        color: 'slate',
+        pillClass: 'bg-[rgba(130,130,130,.14)] text-[var(--muted)] border-[var(--border)]',
+        dotClass: 'bg-[var(--muted)]',
     },
     bevestigd: {
         label: 'Bevestigd',
         display: 'bevestigd',
         icon: 'check-circle-2',
         color: 'green',
-        pillClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-        dotClass: 'bg-emerald-500',
+        pillClass: 'bg-[rgba(34,197,94,.12)] text-[var(--green)] border-[rgba(34,197,94,.25)]',
+        dotClass: 'bg-[var(--green)]',
     },
     twijfel: {
         label: 'Twijfel',
         display: 'twijfel',
         icon: 'alert-triangle',
-        color: 'orange',
-        pillClass: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-        dotClass: 'bg-orange-500',
+        color: 'amber',
+        pillClass: 'bg-[rgba(255,191,0,.12)] text-[var(--brand)] border-[rgba(255,191,0,.3)]',
+        dotClass: 'bg-[var(--brand)]',
     },
     vergrendeld: {
         label: 'Vergrendeld',
         display: 'vergrendeld',
         icon: 'lock',
-        color: 'slate',
-        pillClass: 'bg-slate-500/10 text-slate-300 border-slate-500/30',
-        dotClass: 'bg-slate-500',
+        color: 'blue',
+        pillClass: 'bg-[rgba(59,130,246,.12)] text-[var(--blue)] border-[rgba(59,130,246,.25)]',
+        dotClass: 'bg-[var(--blue)]',
     },
 };
 
