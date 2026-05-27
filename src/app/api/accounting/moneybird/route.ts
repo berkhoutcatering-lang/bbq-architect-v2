@@ -301,6 +301,21 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      /* Idempotency-tracking: schrijf moneybird_invoice_id + synced_at zodat
+         acceptance-workflow weet dat deze factuur al gepushed is en niet
+         opnieuw probeert. Migration 20260528010000 voegt deze kolommen toe. */
+      await sb
+        .from('facturen')
+        .update({
+          moneybird_invoice_id: String(invoice.id),
+          moneybird_synced_at: new Date().toISOString(),
+        })
+        .eq('id', factuurId)
+        .then(() => undefined, (e: unknown) => {
+          // Best-effort: kolom kan ontbreken als migratie nog niet draait
+          console.warn('[MONEYBIRD] kon tracking niet schrijven:', (e as Error).message);
+        });
+
       return NextResponse.json({
         success: true,
         action: 'sent',
@@ -309,6 +324,18 @@ export async function POST(req: NextRequest) {
         message: `Factuur ${factuur.nummer} aangemaakt en verstuurd via Moneybird`,
       });
     }
+
+    /* Idempotency-tracking ook bij 'created' (zonder send). */
+    await sb
+      .from('facturen')
+      .update({
+        moneybird_invoice_id: String(invoice.id),
+        moneybird_synced_at: new Date().toISOString(),
+      })
+      .eq('id', factuurId)
+      .then(() => undefined, (e: unknown) => {
+        console.warn('[MONEYBIRD] kon tracking niet schrijven:', (e as Error).message);
+      });
 
     return NextResponse.json({
       success: true,

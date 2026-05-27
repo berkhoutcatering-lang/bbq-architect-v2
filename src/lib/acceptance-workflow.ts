@@ -41,6 +41,9 @@ export interface WorkflowResult {
        om de cap-budget niet bij acceptance al op te nemen voor events die
        nooit gereviewd worden. */
     logistics: { success: boolean; message: string };
+    /* Hub 6 P1: auto-push naar Moneybird na factuur-creatie. Best-effort —
+       fail blokkeert workflow nooit, tenant zonder Moneybird-config silent skip. */
+    moneybird: { success: boolean; message: string };
 }
 
 // ── 0. Sync events.menu ← offertes.menu_selectie ──
@@ -625,6 +628,79 @@ async function autoGenerateLogisticsChecklist(supabase: Supa, params: WorkflowPa
     }
 }
 
+// ── 7. Auto-push factuur naar Moneybird ──
+//
+// Pro-tier-belofte: als tenant Moneybird heeft gekoppeld, wordt elke factuur
+// automatisch gepushed na acceptatie. Idempotent via moneybird_invoice_id
+// (migration 20260528010000) — herhaalde workflow-runs voor dezelfde
+// offerte pushen niet opnieuw.
+//
+// Best-effort fire-and-forget: Moneybird-fout blokkeert de workflow nooit.
+// De gebruiker ziet hooguit "factuur niet automatisch gepushed" en kan
+// handmatig pushen via /facturen knop.
+//
+// Trigger-voorwaarden:
+//  - Factuur is nieuw aangemaakt (niet "bestond al")
+//  - Tenant heeft settings.accounting_config.moneybird_administration_id gezet
+//  - Factuur is nog niet eerder gepushed (moneybird_invoice_id IS NULL)
+async function autoPushFactuurToMoneybird(
+    supabase: Supa,
+    params: WorkflowParams,
+    factuurCreated: boolean,
+): Promise<{ success: boolean; message: string }> {
+    try {
+        if (!supabase) return { success: false, message: 'Geen database verbinding' };
+        if (!factuurCreated) return { success: true, message: 'Factuur bestond al — skip Moneybird push' };
+        if (!params.offerteId) return { success: true, message: 'Geen offerteId — skip Moneybird push' };
+
+        // Vind de net-aangemaakte factuur via offerte-FK
+        const { data: factuur } = await supabase
+            .from('facturen')
+            .select('id, organization_id, moneybird_invoice_id')
+            .eq('offerte_id', params.offerteId)
+            .limit(1)
+            .maybeSingle();
+        if (!factuur) return { success: false, message: 'Factuur niet gevonden voor push' };
+        if (factuur.moneybird_invoice_id) {
+            return { success: true, message: 'Factuur was al gepushed' };
+        }
+
+        // Tenant-config check: heeft deze tenant Moneybird gekoppeld?
+        const { data: settingsRow } = await supabase
+            .from('settings')
+            .select('accounting_config')
+            .eq('organization_id', factuur.organization_id)
+            .maybeSingle();
+        const cfg = settingsRow?.accounting_config as { moneybird_administration_id?: string } | null;
+        if (!cfg?.moneybird_administration_id) {
+            return { success: true, message: 'Geen Moneybird-config — silent skip (Starter-tier of nog niet gekoppeld)' };
+        }
+
+        // Origin-resolve: browser gebruikt relatief, server heeft absolute URL nodig
+        const origin = typeof window !== 'undefined'
+            ? window.location.origin
+            : (process.env.NEXT_PUBLIC_APP_URL
+                || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'));
+
+        // Fire-and-forget: await fetch maar fail mag workflow niet breken
+        const res = await fetch(`${origin}/api/accounting/moneybird`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ factuurId: factuur.id, action: 'send' }),
+        });
+
+        if (!res.ok) {
+            // Lees body voor diagnostiek, maar gooi niet
+            const errText = await res.text().catch(() => '');
+            return { success: false, message: `Moneybird push faalde (${res.status}): ${errText.slice(0, 200)}` };
+        }
+
+        return { success: true, message: 'Factuur naar Moneybird gepushed + verstuurd' };
+    } catch (e: any) {
+        return { success: false, message: 'Moneybird push fout: ' + (e?.message || 'onbekend') };
+    }
+}
+
 // ── Main Workflow Runner ──
 //
 // Twee export-vormen voor backwards-compat:
@@ -669,6 +745,12 @@ export async function runAcceptanceWorkflow(
     const coursesResult = results[4].status === 'fulfilled' ? results[4].value : { success: false, message: 'Courses onverwachte fout', count: 0 };
     const logisticsResult = results[5].status === 'fulfilled' ? results[5].value : { success: false, message: 'Logistiek onverwachte fout' };
 
+    /* Sequentieel ná de parallel-batch: Moneybird push heeft de net-aangemaakte
+       factuur nodig. "aangemaakt" in de message betekent nieuwe factuur,
+       "bestond al" = skip push (was al eerder geprobeerd). */
+    const factuurCreated = factuurResult.success && /aangemaakt/i.test(factuurResult.message);
+    const moneybirdResult = await autoPushFactuurToMoneybird(supabase, params, factuurCreated);
+
     const result: WorkflowResult = {
         factuur: factuurResult,
         prep: prepResult,
@@ -676,6 +758,7 @@ export async function runAcceptanceWorkflow(
         haccp: haccpResult,
         courses: coursesResult,
         logistics: logisticsResult,
+        moneybird: moneybirdResult,
     };
 
     /* P0-3 post-process coupling: prep + courses lopen parallel via Promise.allSettled
