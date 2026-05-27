@@ -1,21 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Oswald:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ───────── Button reset ─────────
+   Tailwind preflight is disabled in tailwind.config.ts. Zonder reset
+   krijgen <button>-elementen browser-default styling (lichtgrijs bg op
+   macOS). Dat botst met dark-mode UI. Reset hier expliciet — inherit
+   color, transparent bg, geen border, geen padding, normal font. Custom
+   styling via Tailwind utilities/style-attr blijft werken (specificiteit
+   van utilities is hoger). */
+button {
+  background-color: transparent;
+  color: inherit;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
 
 :root {
   /* Brand & primary */
   --brand: #FFBF00;
   --brand-light: rgba(255, 191, 0, .12);
   --brand-gold: #c4a35a;
+  --brand-gold-deep: #9e781c;
 
-  /* Backgrounds */
+  /* Backgrounds — Bonnenkistje design tokens (zelfde palette als app-styles.css uit Claude design) */
   --bg: #121214;
+  --bg-card: #111113;
+  --bg-elevated: #151518;
+  --bg-deep: #0a0a0c;
+  --bg-primary: #121215;
   --card: rgba(30, 30, 34, .7);
   --card-solid: #1e1e22;
+
+  /* Font stacks — Bonnenkistje gebruikt 4 distinct: sans/display/artisan/mono.
+     --font-display = Outfit (extra-light hero titels)
+     --font-artisan = Playfair Display (italic accents, niet voor headings)
+     --font-mono = IBM Plex Mono (bedragen, dates, codes)
+     --font-sans = DM Sans (UI default body) */
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Outfit', 'DM Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Borders */
   --border: rgba(130, 130, 130, .15);

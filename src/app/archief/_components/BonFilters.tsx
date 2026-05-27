@@ -49,7 +49,8 @@ const STATUS_ICON_MAP: Record<DisplayStatus, React.ComponentType<{ size?: number
 };
 
 export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props) {
-    const [advancedOpen, setAdvancedOpen] = useState(false);
+    // Design ordering: Datum / Leverancier / Status / Type / Tags / RGS (collapsible) / Bedrag / footer
+    const [rgsOpen, setRgsOpen] = useState(false);
     const [leverancierSearch, setLeverancierSearch] = useState('');
 
     const [filters, setFilters] = useQueryStates({
@@ -242,88 +243,76 @@ export function BonFilters({ leveranciers, tags, rgs, onClose, isMobile }: Props
                 </FilterSection>
             )}
 
-            {/* GEAVANCEERD (collapse) — RGS + Bedrag */}
-            <div className="border-b border-[var(--border)] py-3.5">
-                <button
-                    type="button"
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                    className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]"
-                >
-                    Geavanceerd
-                    {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-
-                {advancedOpen && (
-                    <div className="mt-3 space-y-4">
-                        {/* RGS */}
-                        {rgs.length > 0 && (
-                            <div>
-                                <div className="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
-                                    RGS-categorie
-                                </div>
-                                <div className="flex flex-col gap-0.5">
-                                    {rgs.map((r) => {
-                                        const active = filters.rgs.includes(r.code);
-                                        return (
-                                            <label
-                                                key={r.code}
-                                                className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1 text-[11px]"
-                                                style={{ color: active ? 'var(--text)' : 'var(--muted)' }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={active}
-                                                    onChange={() => toggle('rgs', r.code)}
-                                                    style={{ accentColor: 'var(--brand)' }}
-                                                />
-                                                <span className="flex-1">{r.label ?? r.code}</span>
-                                                <span className="font-mono text-[10px] tabular-nums text-[var(--muted-light)]">
-                                                    {r.count}
-                                                </span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Bedrag */}
-                        <div>
-                            <div className="mb-2 text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]">
-                                Bedrag
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {[
-                                    { id: 'lt50' as const, label: '< €50' },
-                                    { id: '50-500' as const, label: '€50 – €500' },
-                                    { id: 'gt500' as const, label: '> €500' },
-                                ].map((b) => (
-                                    <Chip
-                                        key={b.id}
-                                        active={filters.bedrag === b.id}
-                                        onClick={() => void setFilters({ bedrag: filters.bedrag === b.id ? null : b.id })}
+            {/* RGS-categorie — design heeft 'm als collapsible top-level sectie */}
+            {rgs.length > 0 && (
+                <div className="border-b border-[var(--border)] py-3.5">
+                    <button
+                        type="button"
+                        onClick={() => setRgsOpen((v) => !v)}
+                        className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-[.15em] text-[var(--muted)]"
+                    >
+                        RGS-categorie
+                        {rgsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                    {rgsOpen && (
+                        <div className="mt-2.5 flex flex-col gap-0.5">
+                            {rgs.map((r) => {
+                                const active = filters.rgs.includes(r.code);
+                                return (
+                                    <label
+                                        key={r.code}
+                                        className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1 text-[11px]"
+                                        style={{ color: active ? 'var(--text)' : 'var(--muted)' }}
                                     >
-                                        {b.label}
-                                    </Chip>
-                                ))}
-                            </div>
-                            <div className="mt-2 flex items-center gap-1.5">
-                                <NumberInput
-                                    placeholder="Min"
-                                    value={filters.bedragMin ?? ''}
-                                    onChange={(v) => void setFilters({ bedragMin: v ?? null })}
-                                />
-                                <span className="text-[11px] text-[var(--muted)]">—</span>
-                                <NumberInput
-                                    placeholder="Max"
-                                    value={filters.bedragMax ?? ''}
-                                    onChange={(v) => void setFilters({ bedragMax: v ?? null })}
-                                />
-                            </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={active}
+                                            onChange={() => toggle('rgs', r.code)}
+                                            style={{ accentColor: 'var(--brand)' }}
+                                        />
+                                        <span className="flex-1">{r.label ?? r.code}</span>
+                                        <span className="font-mono text-[10px] tabular-nums text-[var(--muted-light)]">
+                                            {r.count}
+                                        </span>
+                                    </label>
+                                );
+                            })}
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
+
+            {/* Bedrag */}
+            <FilterSection title="Bedrag">
+                <div className="flex flex-wrap gap-1.5">
+                    {[
+                        { id: 'lt50' as const, label: '< €50' },
+                        { id: '50-500' as const, label: '€50 – €500' },
+                        { id: 'gt500' as const, label: '> €500' },
+                    ].map((b) => (
+                        <Chip
+                            key={b.id}
+                            active={filters.bedrag === b.id}
+                            onClick={() => void setFilters({ bedrag: filters.bedrag === b.id ? null : b.id })}
+                        >
+                            {b.label}
+                        </Chip>
+                    ))}
+                </div>
+                <div className="mt-2 flex items-center gap-1.5">
+                    <NumberInput
+                        placeholder="Min"
+                        value={filters.bedragMin ?? ''}
+                        onChange={(v) => void setFilters({ bedragMin: v ?? null })}
+                    />
+                    <span className="text-[11px] text-[var(--muted)]">—</span>
+                    <NumberInput
+                        placeholder="Max"
+                        value={filters.bedragMax ?? ''}
+                        onChange={(v) => void setFilters({ bedragMax: v ?? null })}
+                    />
+                </div>
+            </FilterSection>
 
             {/* FOOTER: Art. 52 AWR */}
             <div className="flex items-start gap-2 pt-4 pb-2">
