@@ -60,6 +60,10 @@ export interface ExtractResult {
     confidence: number;
     ai_cost_eur_cents: number;
     processing_status: string;
+    /* Leverancier-approval state — bepaalt welke UI Sam te zien krijgt
+       voor de leverancier-stap voordat 'ie bevestigt naar archief. */
+    leverancier_state?: 'auto_matched' | 'needs_approval' | 'new_suggested' | 'no_leverancier';
+    leverancier_candidates?: Array<{ id: number; naam: string; score: number }>;
 }
 
 interface DuplicateError {

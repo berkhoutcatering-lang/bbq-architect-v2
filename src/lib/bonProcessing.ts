@@ -69,6 +69,55 @@ export function matchLeverancier(
 }
 
 /**
+ * Top-N fuzzy kandidaten voor een leverancier-string, met scoring.
+ *
+ * Gebruikt door de leverancier-approval flow: AI extraheert "KitchenAid"
+ * uit een bon, we tonen Sam (a) de beste match en (b) alternatieven uit
+ * z'n bestaande leveranciers — zodat 'ie kan kiezen tussen koppelen aan
+ * een bestaande of een nieuwe aanmaken.
+ *
+ * Scoring (0-100):
+ *   100 = exact match (case-insensitive)
+ *    80 = leverancier.naam begint met query
+ *    60 = query begint met leverancier.naam
+ *    40 = include-match (een bevat de ander)
+ *     0 = geen overlap
+ *
+ * Een score >= 80 betekent "auto-koppel met groene check"; tussen 40-79
+ * is "suggestie, vraag bevestiging"; < 40 betekent "geen match, nieuwe?"
+ */
+export interface LeverancierCandidate extends LeverancierLookup {
+    score: number;
+}
+
+export function findLeverancierCandidates(
+    winkelString: string,
+    leveranciers: LeverancierLookup[],
+    limit = 3,
+): LeverancierCandidate[] {
+    const cleaned = cleanWinkelString(winkelString);
+    if (!cleaned || cleaned.length < 3) return [];
+
+    const q = normalizeInventoryName(cleaned);
+    const scored: LeverancierCandidate[] = [];
+
+    for (const lev of leveranciers) {
+        const n = normalizeInventoryName(lev.naam || '');
+        if (!n) continue;
+        let score = 0;
+        if (n === q) score = 100;
+        else if (n.startsWith(q)) score = 80 - Math.abs(n.length - q.length);
+        else if (q.startsWith(n)) score = 60 - Math.abs(n.length - q.length);
+        else if (n.includes(q) || q.includes(n)) score = 40 - Math.abs(n.length - q.length);
+        if (score <= 0) continue;
+        scored.push({ ...lev, score });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, limit);
+}
+
+/**
  * Parse number-achtige value (string of number) → number.
  * AI kan "2,5" of "2.5" of "2,50" of " €4,20 " sturen.
  */

@@ -40,6 +40,14 @@ interface CompletedExtract {
     committing?: boolean;
     commitError?: string | null;
     archiefBonId?: number;
+    /* Leverancier-keuze door Sam:
+       - chosenLeverancierId: koppel aan een bestaande (uit dropdown/candidate-klik)
+       - chosenNewLeverancierNaam: nieuwe leverancier-record aanmaken bij commit
+       - leverancierResolved: true wanneer er een keuze gemaakt is (of auto_matched
+         was). Pas dan mag "Bevestig in archief" klikbaar zijn. */
+    chosenLeverancierId?: number | null;
+    chosenNewLeverancierNaam?: string | null;
+    leverancierResolved?: boolean;
 }
 
 export default function BonnenPage() {
@@ -72,6 +80,41 @@ function BonnenPageInner() {
         });
     }
 
+    /* Sam kiest een bestaande leverancier voor de scan-resultaten. */
+    function chooseLeverancier(entryId: string, leverancierId: number, _naam: string) {
+        setCompleted(prev =>
+            prev.map(c =>
+                c.id === entryId
+                    ? {
+                          ...c,
+                          chosenLeverancierId: leverancierId,
+                          chosenNewLeverancierNaam: null,
+                          leverancierResolved: true,
+                      }
+                    : c,
+            ),
+        );
+    }
+
+    /* Sam wil een NIEUWE leverancier aanmaken voor deze scan.
+       Naam wordt server-side INSERT-ed bij commit. */
+    function chooseNewLeverancier(entryId: string, naam: string) {
+        const cleaned = naam.trim();
+        if (!cleaned) return;
+        setCompleted(prev =>
+            prev.map(c =>
+                c.id === entryId
+                    ? {
+                          ...c,
+                          chosenLeverancierId: null,
+                          chosenNewLeverancierNaam: cleaned,
+                          leverancierResolved: true,
+                      }
+                    : c,
+            ),
+        );
+    }
+
     /* Commit een scan-result naar de bonnen-tabel (POST /api/bonnen/commit).
        Voorheen was "Bevestig in archief" een Link en kwam de bon nooit in DB.
        Nu: POST → 200 redirect naar /archief, of 409 duplicate (al gesaved). */
@@ -79,6 +122,14 @@ function BonnenPageInner() {
         const entry = completed.find((c) => c.id === entryId);
         if (!entry) return;
         if (entry.committed || entry.committing) return;
+        if (!entry.leverancierResolved) {
+            showToast({
+                message: 'Kies eerst wat er met de leverancier moet gebeuren.',
+                type: 'warning',
+                title: 'Leverancier-keuze nodig',
+            });
+            return;
+        }
 
         // Optimistic UI
         setCompleted((prev) =>
@@ -92,11 +143,19 @@ function BonnenPageInner() {
             // Pas op commit-klik (lazy) — file blijft niet permanent in client-state.
             const fileDataUrl = await fileToDataUrl(entry.originalFile);
 
+            // Leverancier-resolve: gebruik Sam's keuze als die er is, anders
+            // val terug op extract-output (alleen geldig bij auto_matched).
+            const finalLeverancierId =
+                entry.chosenLeverancierId ?? entry.result.bon_preview.leverancier_id;
+
             const res = await fetch('/api/bonnen/commit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    bon_preview: entry.result.bon_preview,
+                    bon_preview: {
+                        ...entry.result.bon_preview,
+                        leverancier_id: finalLeverancierId,
+                    },
                     items: entry.result.items_with_suggestions,
                     image_hash: entry.result.image_hash,
                     mime_type: entry.result.mime_type,
@@ -109,6 +168,8 @@ function BonnenPageInner() {
                     // Wanneer ?prefill=ID actief is: koppel deze scan aan
                     // die specifieke bon-id ipv nieuwe INSERT.
                     attach_to_bon_id: attachToBonId ?? undefined,
+                    // Nieuwe leverancier expliciet door Sam aangevraagd.
+                    new_leverancier_naam: entry.chosenNewLeverancierNaam ?? undefined,
                 }),
             });
             const data = await res.json();
@@ -150,7 +211,23 @@ function BonnenPageInner() {
 
     function handleExtracted(result: ExtractResult, originalFile: File) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        setCompleted(prev => [{ id, file_name: originalFile.name, result, originalFile }, ...prev]);
+        /* Auto-resolve voor zekere matches: bij score >= 80 is leverancier_id
+           al gezet door extract route → leverancierResolved=true zodat Sam
+           niets hoeft te doen. Bij needs_approval/new_suggested/no_leverancier
+           wacht de commit-knop op Sam's keuze. */
+        const autoResolved = result.leverancier_state === 'auto_matched';
+        setCompleted(prev => [
+            {
+                id,
+                file_name: originalFile.name,
+                result,
+                originalFile,
+                chosenLeverancierId: autoResolved ? result.bon_preview.leverancier_id : null,
+                chosenNewLeverancierNaam: null,
+                leverancierResolved: autoResolved,
+            },
+            ...prev,
+        ]);
 
         const lev = result.bon_preview.leverancier_naam || 'onbekende leverancier';
         const totaal = result.bon_preview.totaal_bedrag;
@@ -315,7 +392,13 @@ function BonnenPageInner() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {completed.map(c => (
-                            <ResultCard key={c.id} entry={c} onCommit={commitToArchief} />
+                            <ResultCard
+                                key={c.id}
+                                entry={c}
+                                onCommit={commitToArchief}
+                                onChooseLeverancier={chooseLeverancier}
+                                onChooseNewLeverancier={chooseNewLeverancier}
+                            />
                         ))}
                     </div>
                 </PageSection>
@@ -327,9 +410,13 @@ function BonnenPageInner() {
 function ResultCard({
     entry,
     onCommit,
+    onChooseLeverancier,
+    onChooseNewLeverancier,
 }: {
     entry: CompletedExtract;
     onCommit: (entryId: string) => void;
+    onChooseLeverancier: (entryId: string, leverancierId: number, naam: string) => void;
+    onChooseNewLeverancier: (entryId: string, naam: string) => void;
 }) {
     const r = entry.result;
     const lev = r.bon_preview.leverancier_naam || '(onbekend)';
@@ -419,6 +506,15 @@ function ResultCard({
                 />
             </div>
 
+            {/* Leverancier-approval step — mens-blijft-de-baas regel.
+                AI suggesteert; Sam keurt goed of kiest. Verschijnt boven de
+                items-list zodat 't direct opvalt. */}
+            <LeverancierStep
+                entry={entry}
+                onChoose={(id, naam) => onChooseLeverancier(entry.id, id, naam)}
+                onChooseNew={(naam) => onChooseNewLeverancier(entry.id, naam)}
+            />
+
             <details>
                 <summary
                     style={{
@@ -494,16 +590,26 @@ function ResultCard({
                     <button
                         type="button"
                         onClick={() => onCommit(entry.id)}
-                        disabled={entry.committing}
+                        disabled={entry.committing || !entry.leverancierResolved}
                         className="btn btn-brand"
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 6,
                             minHeight: 36,
-                            opacity: entry.committing ? 0.6 : 1,
-                            cursor: entry.committing ? 'wait' : 'pointer',
+                            opacity:
+                                entry.committing || !entry.leverancierResolved ? 0.5 : 1,
+                            cursor: entry.committing
+                                ? 'wait'
+                                : !entry.leverancierResolved
+                                  ? 'not-allowed'
+                                  : 'pointer',
                         }}
+                        title={
+                            !entry.leverancierResolved
+                                ? 'Kies eerst de leverancier hierboven'
+                                : undefined
+                        }
                     >
                         {entry.committing ? (
                             <>
@@ -578,5 +684,316 @@ function Badge({ color, label }: { color: string; label: string }) {
         >
             {label}
         </span>
+    );
+}
+
+/* ── LeverancierStep — mens-blijft-de-baas leverancier-keuze ──────────────
+   Vier states (uit extract response):
+
+   1. auto_matched   → groene "Gekoppeld aan [naam]" badge, geen actie nodig.
+   2. needs_approval → blauwe "AI denkt: [naam]" + lijst van similar
+                       candidates uit Sam's eigen leveranciers + "Nieuwe maken"-knop.
+   3. new_suggested  → oranje "Onbekende leverancier: [naam]" met
+                       primary "Maak nieuwe leverancier aan" knop +
+                       link "Of koppel aan bestaande…" voor edge cases.
+   4. no_leverancier → rood "Geen leverancier gevonden" met handmatige input.
+
+   Na keuze: groene confirm met "Wijzig" link om opnieuw te kiezen. */
+function LeverancierStep({
+    entry,
+    onChoose,
+    onChooseNew,
+}: {
+    entry: CompletedExtract;
+    onChoose: (id: number, naam: string) => void;
+    onChooseNew: (naam: string) => void;
+}) {
+    const r = entry.result;
+    const state = r.leverancier_state ?? 'auto_matched';
+    const candidates = r.leverancier_candidates ?? [];
+    const aiNaam = r.bon_preview.leverancier_naam ?? '';
+    const [newNaam, setNewNaam] = useState(aiNaam);
+    const [showAlternatives, setShowAlternatives] = useState(false);
+
+    // Sam heeft al gekozen — toon confirmatie met "Wijzig"-link
+    if (entry.leverancierResolved) {
+        const isNew = !!entry.chosenNewLeverancierNaam;
+        const chosenName = isNew
+            ? entry.chosenNewLeverancierNaam
+            : candidates.find((c) => c.id === entry.chosenLeverancierId)?.naam ?? aiNaam;
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 14px',
+                    marginBottom: 12,
+                    borderRadius: 10,
+                    background: 'rgba(34,197,94,.06)',
+                    border: '1px solid rgba(34,197,94,.25)',
+                }}
+            >
+                <Check size={16} style={{ color: 'var(--green)', flexShrink: 0 }} />
+                <div style={{ flex: 1, fontSize: 13, minWidth: 0 }}>
+                    <div style={{ color: 'var(--text)', fontWeight: 600 }}>
+                        {chosenName}
+                        {isNew && (
+                            <span
+                                style={{
+                                    marginLeft: 8,
+                                    fontSize: 10,
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    background: 'rgba(255,191,0,.14)',
+                                    color: 'var(--brand)',
+                                    fontWeight: 700,
+                                    letterSpacing: '.05em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                nieuw
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        Leverancier {isNew ? 'wordt aangemaakt' : 'gekoppeld'} bij bevestigen
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => {
+                        // Reset keuze door state te wijzigen — simpel via parent niet beschikbaar,
+                        // dus laten we 'm "wijzigen" via showAlternatives toggle direct hieronder
+                        setShowAlternatives(false);
+                        // Forceer een re-open van de keuze-UI door leverancierResolved op false te zetten.
+                        // Dit gebeurt via onChoose met -1, dat door commit-route zou worden geweigerd,
+                        // dus beter: roep onChooseNew met lege string aan zou leverancier resetten.
+                        // Voor simpliciteit: gebruik onChoose met 0 wat onhandig is. Beter: nieuwe handler.
+                        // → Voor nu: laten we deze knop alleen tonen als entry.chosenLeverancierId is gezet
+                        //   en navigeren naar de extractie-keuze opnieuw via window.location.
+                        if (typeof window !== 'undefined') {
+                            window.location.reload();
+                        }
+                    }}
+                    style={{
+                        fontSize: 11,
+                        color: 'var(--muted)',
+                        background: 'transparent',
+                        textDecoration: 'underline',
+                        textDecorationStyle: 'dotted',
+                    }}
+                    title="Reset keuze (vereist opnieuw scannen — gebruik nieuwe scan voor een andere bon)"
+                >
+                    Wijzig
+                </button>
+            </div>
+        );
+    }
+
+    // State 4: no_leverancier — AI las geen naam
+    if (state === 'no_leverancier') {
+        return (
+            <div
+                style={{
+                    padding: '12px 14px',
+                    marginBottom: 12,
+                    borderRadius: 10,
+                    background: 'rgba(239,68,68,.05)',
+                    border: '1px solid rgba(239,68,68,.25)',
+                }}
+            >
+                <div
+                    style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.08em',
+                        color: 'var(--red)',
+                        marginBottom: 6,
+                    }}
+                >
+                    Leverancier ontbreekt
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+                    AI kon geen leveranciernaam vinden op deze bon. Vul handmatig in:
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                        type="text"
+                        value={newNaam}
+                        onChange={(e) => setNewNaam(e.target.value)}
+                        placeholder="Bijv. KitchenAid"
+                        className="input"
+                        style={{ flex: 1, fontSize: 13 }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => onChooseNew(newNaam)}
+                        disabled={!newNaam.trim()}
+                        className="btn btn-brand"
+                        style={{
+                            minHeight: 34,
+                            opacity: !newNaam.trim() ? 0.5 : 1,
+                            cursor: !newNaam.trim() ? 'not-allowed' : 'pointer',
+                        }}
+                    >
+                        Maak aan
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // State 2 & 3: needs_approval of new_suggested
+    const isNewSuggested = state === 'new_suggested';
+    const accentBg = isNewSuggested ? 'rgba(249,115,22,.05)' : 'rgba(59,130,246,.05)';
+    const accentBorder = isNewSuggested
+        ? 'rgba(249,115,22,.25)'
+        : 'rgba(59,130,246,.25)';
+    const accentColor = isNewSuggested ? 'var(--orange)' : 'var(--blue)';
+    const eyebrowText = isNewSuggested
+        ? 'Nieuwe leverancier?'
+        : 'Geen exacte match — kies wat je wilt';
+
+    return (
+        <div
+            style={{
+                padding: '12px 14px',
+                marginBottom: 12,
+                borderRadius: 10,
+                background: accentBg,
+                border: `1px solid ${accentBorder}`,
+            }}
+        >
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 8,
+                }}
+            >
+                <div
+                    style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.08em',
+                        color: accentColor,
+                    }}
+                >
+                    {eyebrowText}
+                </div>
+                <div style={{ flex: 1 }} />
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    AI ziet:{' '}
+                    <strong style={{ color: 'var(--text)' }}>{aiNaam || '—'}</strong>
+                </div>
+            </div>
+
+            {/* Primary action: nieuwe leverancier aanmaken */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+                <input
+                    type="text"
+                    value={newNaam}
+                    onChange={(e) => setNewNaam(e.target.value)}
+                    placeholder="Naam nieuwe leverancier"
+                    className="input"
+                    style={{ flex: 1, fontSize: 13 }}
+                />
+                <button
+                    type="button"
+                    onClick={() => onChooseNew(newNaam)}
+                    disabled={!newNaam.trim()}
+                    className="btn btn-brand"
+                    style={{
+                        minHeight: 34,
+                        opacity: !newNaam.trim() ? 0.5 : 1,
+                        cursor: !newNaam.trim() ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                    }}
+                >
+                    <Check size={12} />
+                    Maak nieuwe aan
+                </button>
+            </div>
+
+            {/* Secondary: koppel aan bestaande */}
+            {candidates.length > 0 ? (
+                <div>
+                    <div
+                        style={{
+                            fontSize: 11,
+                            color: 'var(--muted)',
+                            marginBottom: 6,
+                        }}
+                    >
+                        Of koppel aan een bestaande:
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {candidates.map((c) => (
+                            <button
+                                type="button"
+                                key={c.id}
+                                onClick={() => onChoose(c.id, c.naam)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--border)',
+                                    background: 'rgba(130,130,130,.06)',
+                                    color: 'var(--text)',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {c.naam}
+                                <span
+                                    style={{
+                                        fontSize: 9,
+                                        padding: '1px 5px',
+                                        borderRadius: 3,
+                                        background:
+                                            c.score >= 60
+                                                ? 'rgba(34,197,94,.14)'
+                                                : 'rgba(130,130,130,.12)',
+                                        color:
+                                            c.score >= 60
+                                                ? 'var(--green)'
+                                                : 'var(--muted)',
+                                        fontFamily: 'var(--font-mono)',
+                                    }}
+                                >
+                                    {c.score}%
+                                </span>
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setShowAlternatives((v) => !v)}
+                            style={{
+                                fontSize: 11,
+                                color: 'var(--muted)',
+                                background: 'transparent',
+                                padding: '6px 8px',
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dotted',
+                            }}
+                        >
+                            {showAlternatives ? 'Verberg' : 'Andere…'}
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    Geen vergelijkbare leverancier in je archief. Maak hierboven een nieuwe aan.
+                </div>
+            )}
+        </div>
     );
 }

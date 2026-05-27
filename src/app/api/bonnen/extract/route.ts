@@ -47,7 +47,7 @@ import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkAiCap } from '@/lib/aiCostCap';
 import { matchInventory } from '@/lib/inventoryDeduction';
-import { matchLeverancier, normalizeBonItem, parseBonBtw } from '@/lib/bonProcessing';
+import { matchLeverancier, findLeverancierCandidates, normalizeBonItem, parseBonBtw } from '@/lib/bonProcessing';
 import { isUsableText } from '@/lib/pdfTextExtract';
 import { parseUbl, isLikelyUbl } from '@/lib/ublIngress';
 import type { BonItemRow } from '@/types';
@@ -602,13 +602,23 @@ function buildAiResponse(args: BuildArgs): NextResponse {
         };
     });
 
-    /* Leverancier match via fuzzy lookup op de AI-string. */
+    /* Leverancier match via fuzzy lookup op de AI-string.
+       AUTO-MATCH alleen bij hoge score (≥80, "naam begint met query");
+       lagere scores zijn suggesties die Sam expliciet moet bevestigen.
+       Mens-blijft-de-baas regel: AI mag nooit zelf een nieuwe leverancier
+       aanmaken, alleen voorstellen + similar candidates leveren. */
     const leverancier_naam: string | null = parsed.leverancier
         ? String(parsed.leverancier).trim()
         : null;
-    const matchedLev = leverancier_naam
-        ? matchLeverancier(leverancier_naam, args.leveranciers)
+    const candidates = leverancier_naam
+        ? findLeverancierCandidates(leverancier_naam, args.leveranciers, 3)
+        : [];
+    /* Strikte auto-match drempel: score >= 80. Anders: keuze aan gebruiker. */
+    const autoMatchedLev = candidates.length > 0 && candidates[0].score >= 80
+        ? candidates[0]
         : null;
+    /* Backwards-compat: oude callers verwachten ook matchLeverancier-resultaat. */
+    const matchedLev = autoMatchedLev ?? (leverancier_naam ? matchLeverancier(leverancier_naam, args.leveranciers) : null);
 
     /* BTW: niet vertrouwen op AI-totalen — herbereken uit gevalideerde regels. */
     const btw = parseBonBtw(normalized);
@@ -639,6 +649,19 @@ function buildAiResponse(args: BuildArgs): NextResponse {
         source_type: args.source_type,
         bon_preview: preview,
         items_with_suggestions,
+        /* Leverancier-state voor de UI:
+           - 'auto_matched'    → AI vond zekere match (score >= 80), Sam ziet groen vinkje
+           - 'needs_approval'  → er zijn similar leveranciers (score 40-79), Sam kiest
+           - 'new_suggested'   → AI las een naam maar geen kandidaten — voorstel: nieuwe maken
+           - 'no_leverancier'  → AI las geen naam, Sam moet handmatig invullen */
+        leverancier_state: !leverancier_naam
+            ? 'no_leverancier'
+            : autoMatchedLev
+              ? 'auto_matched'
+              : candidates.length > 0
+                ? 'needs_approval'
+                : 'new_suggested',
+        leverancier_candidates: candidates.map(c => ({ id: c.id, naam: c.naam, score: c.score })),
         confidence_per_field: {
             leverancier: matchedLev ? aiConfidence : aiConfidence * 0.6,
             datum: datum ? aiConfidence : 0,

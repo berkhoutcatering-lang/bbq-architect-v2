@@ -62,6 +62,12 @@ const BodySchema = z.object({
         dedup wordt overgeslagen omdat de gebruiker expliciet zegt: "deze
         nieuwe file hoort bij die bestaande bon-row". */
     attach_to_bon_id: z.number().int().positive().optional(),
+    /** Optional: naam van een NIEUWE leverancier die Sam expliciet wil
+        aanmaken voor deze bon. Wordt server-side INSERT-ed in leveranciers
+        en aan deze bon gelinkt. Negeert leverancier_id wanneer gezet.
+        Mens-blijft-de-baas regel: AI mag nooit zelf aanmaken — alleen
+        via deze expliciete user-action. */
+    new_leverancier_naam: z.string().min(2).max(120).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -246,6 +252,52 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    /* ── Leverancier-resolve ──────────────────────────────────────────
+       Sam wil mens-blijft-de-baas: AI mag een nieuwe leverancier alleen
+       AANMAKEN als de UI expliciet `new_leverancier_naam` doorgeeft (dwz.
+       Sam heeft op "Nieuwe leverancier aanmaken" geklikt). Anders gebruiken
+       we de bon_preview.leverancier_id die uit auto-match komt. */
+    let resolvedLeverancierId = body.bon_preview.leverancier_id;
+    if (body.new_leverancier_naam) {
+        const naam = body.new_leverancier_naam.trim();
+        // Check eerst of er al een leverancier met deze naam bestaat
+        // (dedup binnen org — voorkomt dat Sam per ongeluk dubbele aanmaakt)
+        const { data: existing } = await supabase
+            .from('leveranciers')
+            .select('id')
+            .eq('organization_id', orgId)
+            .ilike('naam', naam)
+            .limit(1)
+            .maybeSingle();
+
+        if (existing) {
+            resolvedLeverancierId = existing.id;
+        } else {
+            const { data: newLev, error: levErr } = await supabase
+                .from('leveranciers')
+                .insert({
+                    organization_id: orgId,
+                    naam,
+                    type: 'inkoop',
+                })
+                .select('id')
+                .single();
+
+            if (levErr || !newLev) {
+                console.error('[bonnen/commit] leverancier insert failed:', levErr);
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        error: 'leverancier_insert_failed',
+                        detail: levErr?.message,
+                    },
+                    { status: 500 },
+                );
+            }
+            resolvedLeverancierId = newLev.id;
+        }
+    }
+
     const payload = {
         organization_id: orgId,
         winkel: body.bon_preview.leverancier_naam,
@@ -254,7 +306,7 @@ export async function POST(req: NextRequest) {
         netto_bedrag: body.bon_preview.netto_bedrag,
         btw_laag_bedrag: body.bon_preview.btw_laag_bedrag,
         btw_hoog_bedrag: body.bon_preview.btw_hoog_bedrag,
-        leverancier_id: body.bon_preview.leverancier_id,
+        leverancier_id: resolvedLeverancierId,
         bon_items: body.items,
         raw_analysis: body.items,  // backwards-compat (search_vec backfill leest dit pad)
         extracted_text: extractedText,
@@ -267,6 +319,12 @@ export async function POST(req: NextRequest) {
 
     // ── Fix-up pad: bestaande bon zonder file → UPDATE met nieuwe file_path ──
     if (existingBonId && !existingHasFile) {
+        // Bij her-scan: alleen leverancier_id overschrijven als er nu een
+        // nieuwe leverancier expliciet aangemaakt is (mens-keuze). Anders
+        // behoudt de bestaande bon z'n vorige leverancier-koppeling.
+        const levUpdate = body.new_leverancier_naam
+            ? { leverancier_id: resolvedLeverancierId }
+            : {};
         const { error: updErr } = await supabase
             .from('bonnen')
             .update({
@@ -279,6 +337,7 @@ export async function POST(req: NextRequest) {
                 raw_analysis: body.items,
                 // Status bij her-scan terug op 'pending' zodat AI-output opnieuw bevestigd kan
                 status: 'pending',
+                ...levUpdate,
             })
             .eq('id', existingBonId);
 
