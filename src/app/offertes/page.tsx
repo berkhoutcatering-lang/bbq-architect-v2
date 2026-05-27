@@ -1,5 +1,6 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -32,7 +33,33 @@ import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
 
+/* localStorage key matchend met AiOfferteWizard's DRAFT_KEY. Wordt door de
+   wizard automatisch ingelezen wanneer `open` true wordt — zo kunnen we
+   prefill-data via een query-param doorgeven zonder de wizard te wijzigen. */
+const AI_WIZARD_DRAFT_KEY = 'bbq_ai_offerte_wizard_draft';
+
+/* Demo-seed event uit /api/onboarding/seed-demo dat we als prefill gebruiken
+   wanneer de gebruiker vanuit /onboarding stap 3 hier landt. Matcht het
+   meest "klassieke" event uit de demo-data. Pillar #1 Hub 1: ≤10 min naar
+   eerste offerte. */
+const DEMO_SEED_PREFILL = {
+    clientName: 'Bedrijf Noordzee Logistics',
+    clientAddress: 'Industrieweg 3, Hoogeveen',
+    eventDate: (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 28);
+        return d.toISOString().slice(0, 10);
+    })(),
+    gasten: 60,
+    vegaCount: 5,
+    gangen: '3',
+    prompt: 'Bedrijfsfeest met BBQ-buffet voor 60 personen. Mix van pulled pork en vegetarische opties.',
+    savedAt: Date.now(),
+};
+
 export default function Offertes() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const { data: offertes, insert, update, remove, refetch: loadOffertes } = useSupabase<Offerte>('offertes', []);
     const facturen = useSupabase<Factuur>('facturen', []);
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
@@ -65,6 +92,27 @@ export default function Offertes() {
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
     const [cascadeSteps, setCascadeSteps] = useState<CascadeStep[] | null>(null);
+
+    /* Hub 1 → Hub 2 handoff: open de AI-wizard direct als de URL `?wizard=true`
+       bevat. Bij `&seedEvent=demo` schrijven we eerst een prefill-draft naar
+       localStorage zodat de wizard die meeneemt. Daarna URL schoon-replacen
+       zodat refresh/back niet opnieuw triggert. */
+    useEffect(() => {
+        const wantsWizard = searchParams?.get('wizard') === 'true';
+        if (!wantsWizard) return;
+        const seedEvent = searchParams?.get('seedEvent');
+        if (seedEvent === 'demo') {
+            try {
+                localStorage.setItem(
+                    AI_WIZARD_DRAFT_KEY,
+                    JSON.stringify({ ...DEMO_SEED_PREFILL, savedAt: Date.now() }),
+                );
+            } catch { /* private mode / full disk — wizard valt gewoon terug op defaults */ }
+        }
+        setShowAiWizard(true);
+        router.replace('/offertes');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     function calcOfferteMargeData(offerte: Offerte | Record<string, unknown>) {
         try {

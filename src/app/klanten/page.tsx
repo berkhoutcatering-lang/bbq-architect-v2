@@ -17,7 +17,8 @@ import ErrorCard from '@/components/ErrorCard';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import PageHint from '@/components/PageHint';
-import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, Phone, Plus, Save, Search, Trash2, Users } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, BarChart3, Flame, Mail, MapPin, MessageCircle, MessageSquare, Phone, Plus, Save, Search, Trash2, Users } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { LoadingState } from '@/components/LoadingState';
 import MetallicCard from '@/components/MetallicCard';
@@ -377,7 +378,18 @@ function Klanten() {
         <div className="mobile-safe-bottom">
             <PageHeader
                 title={`Klanten (${filtered.length}${filtered.length !== klanten.length ? ' / ' + klanten.length : ''})`}
-                actions={<button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>}
+                actions={
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <Link
+                            href="/klantgesprek"
+                            className="btn btn-ghost"
+                            style={{ textDecoration: 'none' }}
+                        >
+                            <MessageSquare size={14} /> Intakegesprek
+                        </Link>
+                        <button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>
+                    </div>
+                }
             />
             <PageGuideNote
                 id="klanten"
