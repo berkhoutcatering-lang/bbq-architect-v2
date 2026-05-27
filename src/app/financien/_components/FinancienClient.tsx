@@ -25,21 +25,28 @@ import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEven
 import { calcDishCostPP } from '@/lib/costCalculations';
 import FinanceSummaryStrip from './FinanceSummaryStrip';
 import KiaScenarioModal from '@/components/finance-copilot/KiaScenarioModal';
+import CashflowTab from './tabs/CashflowTab';
+import AangifteTab from './tabs/AangifteTab';
+import AgingPanel from './sections/AgingPanel';
+import ConcentrationBanner from './sections/ConcentrationBanner';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
-type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'clients';
+type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'aangifte' | 'cashflow' | 'clients';
 const TAB_LABELS: Record<Tab, string> = {
     dashboard: 'Dashboard',
     wv: 'Winst & Verlies',
     uitgaven: 'Uitgaven',
     btw: 'BTW',
+    aangifte: 'Aangifte',
+    cashflow: 'Cashflow',
     clients: 'Top Klanten',
 };
-const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'clients'];
+const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'cashflow', 'clients'];
 
+const VALID_TABS: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'cashflow', 'clients'];
 function parseTab(value: string | null): Tab {
-    if (value === 'wv' || value === 'uitgaven' || value === 'btw' || value === 'clients') return value;
+    if (value && (VALID_TABS as string[]).includes(value)) return value as Tab;
     return 'dashboard';
 }
 
@@ -583,6 +590,9 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                             </MetallicCard>
                         )}
                     </div>
+
+                    {/* Pillar #2 — Aging + DSO panel */}
+                    <AgingPanel facturen={facturen as any} />
                 </PageSection>
             )}
 
@@ -721,9 +731,31 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                 </PageSection>
             )}
 
+            {/* ── AANGIFTE: Q-deadline + checklist + BTW-concept (Pillar #3) ── */}
+            {tab === 'aangifte' && (
+                <PageSection>
+                    <AangifteTab facturen={facturen as any} bonnen={bonnen as any} />
+                </PageSection>
+            )}
+
+            {/* ── CASHFLOW: 13-weken prognose (Pillar #1) ── */}
+            {tab === 'cashflow' && (
+                <PageSection>
+                    <CashflowTab
+                        offertes={offertes as any}
+                        facturen={facturen as any}
+                        events={events as any}
+                        bonnen={bonnen as any}
+                    />
+                </PageSection>
+            )}
+
             {/* ── TOP KLANTEN ── */}
             {tab === 'clients' && (
                 <PageSection>
+                    {/* Pillar #4 — klant-concentratie warning */}
+                    <ConcentrationBanner facturen={facturen as any} />
+
                     <MetallicCard hover={false} className="mt-4">
                         <div className="panel-head">
                             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
