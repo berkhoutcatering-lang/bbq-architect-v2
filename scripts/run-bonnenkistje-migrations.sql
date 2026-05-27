@@ -16,39 +16,106 @@
 -- Pre-check verifieert deze dependencies vooraf.
 -- ════════════════════════════════════════════════════════════════════════
 
--- ── PRE-CHECK: alle dependencies aanwezig? ─────────────────────────────
-DO $$
+-- ── DEPENDENCIES: defensive create wat missend is ─────────────────────
+-- We veronderstellen dat organizations, organization_members, bonnen,
+-- leveranciers, stock_movements al bestaan (basis-schema). Alleen helpers
+-- en audit_log infra defensief opzetten als ze missen.
+
+-- 1. auth.user_org_ids() — helper voor RLS policies (zou uit 001 komen)
+CREATE OR REPLACE FUNCTION public.user_org_ids()
+RETURNS SETOF UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+    SELECT organization_id
+    FROM public.organization_members
+    WHERE user_id = auth.uid()
+      AND status = 'active';
+$$;
+
+GRANT EXECUTE ON FUNCTION public.user_org_ids() TO authenticated, service_role, anon;
+
+-- 2. audit_log tabel — als 'ie niet bestaat (017 niet gerund)
+CREATE TABLE IF NOT EXISTS audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    record_table TEXT NOT NULL,
+    record_id BIGINT NOT NULL,
+    action TEXT NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    changes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_record ON audit_log(record_table, record_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_org ON audit_log(organization_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, changed_at DESC);
+
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "audit_log_select" ON audit_log;
+DROP POLICY IF EXISTS "audit_log_insert" ON audit_log;
+
+CREATE POLICY "audit_log_select" ON audit_log
+    FOR SELECT TO authenticated
+    USING (organization_id IS NULL OR organization_id IN (SELECT public.user_org_ids()));
+
+CREATE POLICY "audit_log_insert" ON audit_log
+    FOR INSERT TO authenticated
+    WITH CHECK (organization_id IS NULL OR organization_id IN (SELECT public.user_org_ids()));
+
+-- 3. audit_log_changes() trigger function — generieke diff-logger (uit 017)
+CREATE OR REPLACE FUNCTION audit_log_changes()
+RETURNS TRIGGER AS $$
 DECLARE
-    v_missing TEXT[] := ARRAY[]::TEXT[];
+    v_changes JSONB := '{}'::jsonb;
+    v_org_id UUID;
+    v_user_id UUID;
+    v_record_id BIGINT;
+    v_key TEXT;
+    v_old_val JSONB;
+    v_new_val JSONB;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='organizations') THEN
-        v_missing := array_append(v_missing, 'organizations (uit 001_multi_tenant)');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='organization_members') THEN
-        v_missing := array_append(v_missing, 'organization_members (uit 001_multi_tenant)');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='bonnen') THEN
-        v_missing := array_append(v_missing, 'bonnen (uit 004_supplier_invoices)');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='leveranciers') THEN
-        v_missing := array_append(v_missing, 'leveranciers');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='audit_log') THEN
-        v_missing := array_append(v_missing, 'audit_log (uit 017_audit_log)');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname='audit_log_changes' AND pronamespace=(SELECT oid FROM pg_namespace WHERE nspname='public')) THEN
-        v_missing := array_append(v_missing, 'audit_log_changes() function (uit 017_audit_log)');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname='user_org_ids' AND pronamespace=(SELECT oid FROM pg_namespace WHERE nspname='auth')) THEN
-        v_missing := array_append(v_missing, 'auth.user_org_ids() helper (uit 001_multi_tenant)');
+    BEGIN
+        v_user_id := auth.uid();
+    EXCEPTION WHEN OTHERS THEN
+        v_user_id := NULL;
+    END;
+
+    IF TG_OP = 'DELETE' THEN
+        v_record_id := OLD.id;
+        v_org_id := OLD.organization_id;
+        v_changes := to_jsonb(OLD) - 'created_at' - 'updated_at' - 'id';
+    ELSIF TG_OP = 'INSERT' THEN
+        v_record_id := NEW.id;
+        v_org_id := NEW.organization_id;
+        v_changes := to_jsonb(NEW) - 'created_at' - 'updated_at' - 'id';
+    ELSE
+        v_record_id := NEW.id;
+        v_org_id := NEW.organization_id;
+        FOR v_key IN SELECT jsonb_object_keys(to_jsonb(NEW)) LOOP
+            IF v_key IN ('created_at', 'updated_at', 'id') THEN CONTINUE; END IF;
+            v_old_val := to_jsonb(OLD) -> v_key;
+            v_new_val := to_jsonb(NEW) -> v_key;
+            IF v_old_val IS DISTINCT FROM v_new_val THEN
+                v_changes := v_changes || jsonb_build_object(v_key, jsonb_build_object('before', v_old_val, 'after', v_new_val));
+            END IF;
+        END LOOP;
+        IF v_changes = '{}'::jsonb THEN RETURN NEW; END IF;
     END IF;
 
-    IF array_length(v_missing, 1) > 0 THEN
-        RAISE EXCEPTION 'Ontbrekende dependencies — run eerst: %', array_to_string(v_missing, ', ');
-    END IF;
+    INSERT INTO audit_log (organization_id, record_table, record_id, action, user_id, changes)
+    VALUES (v_org_id, TG_TABLE_NAME, v_record_id, lower(TG_OP), v_user_id, v_changes);
 
-    RAISE NOTICE '✅ Alle dependencies aanwezig — door met migraties...';
-END $$;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DO $$ BEGIN RAISE NOTICE '✅ Dependencies klaar — door met migraties...'; END $$;
 
 -- ════════════════════════════════════════════════════════════════════════
 -- ALLES IN 1 TRANSACTIE — fout = alles terugrollen, geen halve staat.
@@ -81,20 +148,35 @@ ALTER TABLE bonnen DROP COLUMN IF EXISTS leverancier_id_temp;
 ALTER TABLE bonnen
     ADD COLUMN IF NOT EXISTS extracted_text TEXT;
 
+-- IMMUTABLE wrapper voor Postgres 15+ strict generated-column mode.
+CREATE OR REPLACE FUNCTION bonnen_compute_search_vec(
+    p_winkel TEXT,
+    p_categorie TEXT,
+    p_notities TEXT,
+    p_tags TEXT[],
+    p_extracted_text TEXT
+)
+RETURNS tsvector
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+    SELECT
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_winkel, '') || ' ' || coalesce(p_categorie, '')
+        ), 'A') ||
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_notities, '') || ' ' || coalesce(array_to_string(p_tags, ' '), '')
+        ), 'B') ||
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_extracted_text, '')
+        ), 'C')
+$$;
+
 ALTER TABLE bonnen
     ADD COLUMN IF NOT EXISTS search_vec tsvector
     GENERATED ALWAYS AS (
-        setweight(to_tsvector('dutch',
-            coalesce(winkel, '') || ' ' ||
-            coalesce(categorie, '')
-        ), 'A') ||
-        setweight(to_tsvector('dutch',
-            coalesce(notities, '') || ' ' ||
-            coalesce(array_to_string(tags, ' '), '')
-        ), 'B') ||
-        setweight(to_tsvector('dutch',
-            coalesce(extracted_text, '')
-        ), 'C')
+        bonnen_compute_search_vec(winkel, categorie, notities, tags, extracted_text)
     ) STORED;
 
 CREATE INDEX IF NOT EXISTS bonnen_search_idx ON bonnen USING gin(search_vec);
@@ -171,6 +253,22 @@ CREATE INDEX IF NOT EXISTS bonnen_org_source_idx ON bonnen(organization_id, sour
 -- DEEL 3/8 — 20260525132000 — Bucket private + storage policies
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Defensive: zorg dat auth.user_org_ids() bestaat (zou uit 001 komen).
+CREATE OR REPLACE FUNCTION public.user_org_ids()
+RETURNS SETOF UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+    SELECT organization_id
+    FROM public.organization_members
+    WHERE user_id = auth.uid()
+      AND status = 'active';
+$$;
+
+GRANT EXECUTE ON FUNCTION public.user_org_ids() TO authenticated, service_role, anon;
+
 UPDATE storage.buckets SET public = false WHERE id = 'bonnen';
 
 DROP POLICY IF EXISTS bonnen_public_read           ON storage.objects;
@@ -186,32 +284,32 @@ CREATE POLICY bonnen_storage_select_own_org ON storage.objects
     FOR SELECT TO authenticated
     USING (
         bucket_id = 'bonnen'
-        AND (storage.foldername(name))[1]::uuid IN (SELECT auth.user_org_ids())
+        AND (storage.foldername(name))[1]::uuid IN (SELECT public.user_org_ids())
     );
 
 CREATE POLICY bonnen_storage_insert_own_org ON storage.objects
     FOR INSERT TO authenticated
     WITH CHECK (
         bucket_id = 'bonnen'
-        AND (storage.foldername(name))[1]::uuid IN (SELECT auth.user_org_ids())
+        AND (storage.foldername(name))[1]::uuid IN (SELECT public.user_org_ids())
     );
 
 CREATE POLICY bonnen_storage_update_own_org ON storage.objects
     FOR UPDATE TO authenticated
     USING (
         bucket_id = 'bonnen'
-        AND (storage.foldername(name))[1]::uuid IN (SELECT auth.user_org_ids())
+        AND (storage.foldername(name))[1]::uuid IN (SELECT public.user_org_ids())
     )
     WITH CHECK (
         bucket_id = 'bonnen'
-        AND (storage.foldername(name))[1]::uuid IN (SELECT auth.user_org_ids())
+        AND (storage.foldername(name))[1]::uuid IN (SELECT public.user_org_ids())
     );
 
 CREATE POLICY bonnen_storage_delete_own_org ON storage.objects
     FOR DELETE TO authenticated
     USING (
         bucket_id = 'bonnen'
-        AND (storage.foldername(name))[1]::uuid IN (SELECT auth.user_org_ids())
+        AND (storage.foldername(name))[1]::uuid IN (SELECT public.user_org_ids())
     );
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -232,27 +330,27 @@ DROP POLICY IF EXISTS "org_delete"          ON bonnen;
 -- SELECT — eigen org
 CREATE POLICY "org_select" ON bonnen
     FOR SELECT TO authenticated
-    USING (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()));
 
 -- INSERT — eigen org
 CREATE POLICY "org_insert" ON bonnen
     FOR INSERT TO authenticated
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 -- UPDATE — eigen org EN niet vergrendeld
 CREATE POLICY "org_update" ON bonnen
     FOR UPDATE TO authenticated
     USING (
-        organization_id IN (SELECT auth.user_org_ids())
+        organization_id IN (SELECT public.user_org_ids())
         AND locked_at IS NULL
     )
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 -- DELETE — eigen org EN niet vergrendeld
 CREATE POLICY "org_delete" ON bonnen
     FOR DELETE TO authenticated
     USING (
-        organization_id IN (SELECT auth.user_org_ids())
+        organization_id IN (SELECT public.user_org_ids())
         AND locked_at IS NULL
     );
 
@@ -341,24 +439,24 @@ DROP POLICY IF EXISTS share_tokens_delete ON bon_share_tokens;
 
 CREATE POLICY share_tokens_select ON bon_share_tokens
     FOR SELECT TO authenticated
-    USING (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()));
 
 CREATE POLICY share_tokens_insert ON bon_share_tokens
     FOR INSERT TO authenticated
     WITH CHECK (
-        organization_id IN (SELECT auth.user_org_ids())
+        organization_id IN (SELECT public.user_org_ids())
         AND created_by = auth.uid()
     );
 
 CREATE POLICY share_tokens_update ON bon_share_tokens
     FOR UPDATE TO authenticated
-    USING (organization_id IN (SELECT auth.user_org_ids()))
-    WITH CHECK (organization_id IN (SELECT auth.user_org_ids()));
+    USING (organization_id IN (SELECT public.user_org_ids()))
+    WITH CHECK (organization_id IN (SELECT public.user_org_ids()));
 
 CREATE POLICY share_tokens_delete ON bon_share_tokens
     FOR DELETE TO authenticated
     USING (
-        organization_id IN (SELECT auth.user_org_ids())
+        organization_id IN (SELECT public.user_org_ids())
         AND access_count = 0
     );
 

@@ -30,20 +30,39 @@ ALTER TABLE bonnen
 
 -- 4. Search vector — Dutch text-search, samengevoegd uit alle searchable velden.
 --    Generated column → automatic update bij elke insert/update, geen trigger nodig.
+--
+--    Postgres 15+ vereist een IMMUTABLE expression voor STORED generated columns.
+--    `to_tsvector('dutch', ...)` wordt als STABLE gezien (impliciete regconfig-cast),
+--    dus we wrappen in een eigen IMMUTABLE function met expliciete `::regconfig`-cast.
+
+CREATE OR REPLACE FUNCTION bonnen_compute_search_vec(
+    p_winkel TEXT,
+    p_categorie TEXT,
+    p_notities TEXT,
+    p_tags TEXT[],
+    p_extracted_text TEXT
+)
+RETURNS tsvector
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+    SELECT
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_winkel, '') || ' ' || coalesce(p_categorie, '')
+        ), 'A') ||
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_notities, '') || ' ' || coalesce(array_to_string(p_tags, ' '), '')
+        ), 'B') ||
+        setweight(to_tsvector('dutch'::regconfig,
+            coalesce(p_extracted_text, '')
+        ), 'C')
+$$;
+
 ALTER TABLE bonnen
     ADD COLUMN IF NOT EXISTS search_vec tsvector
     GENERATED ALWAYS AS (
-        setweight(to_tsvector('dutch',
-            coalesce(winkel, '') || ' ' ||
-            coalesce(categorie, '')
-        ), 'A') ||
-        setweight(to_tsvector('dutch',
-            coalesce(notities, '') || ' ' ||
-            coalesce(array_to_string(tags, ' '), '')
-        ), 'B') ||
-        setweight(to_tsvector('dutch',
-            coalesce(extracted_text, '')
-        ), 'C')
+        bonnen_compute_search_vec(winkel, categorie, notities, tags, extracted_text)
     ) STORED;
 
 -- 5. Indexes voor sub-100ms zoek + filter

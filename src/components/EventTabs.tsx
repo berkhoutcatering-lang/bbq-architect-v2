@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Calendar, MessageSquare, ClipboardList, ShieldCheck, ChefHat, Star } from 'lucide-react';
+import { Calendar, MessageSquare, ClipboardList, ShieldCheck, ChefHat, Star, Truck } from 'lucide-react';
 
 interface Props {
   eventId: number | string;
@@ -44,6 +44,12 @@ export default function EventTabs({ eventId, eventName }: Props) {
       label: 'HACCP',
       icon: ShieldCheck,
       active: pathname === '/haccp' && inSameEventQs,
+    },
+    {
+      href: `/events/${eventId}/logistiek`,
+      label: 'Logistiek',
+      icon: Truck,
+      active: pathname.startsWith(`/events/${eventId}/logistiek`),
     },
     {
       href: `/events/${eventId}/service`,

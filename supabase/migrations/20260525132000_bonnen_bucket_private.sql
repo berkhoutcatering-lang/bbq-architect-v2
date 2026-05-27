@@ -14,6 +14,23 @@
 -- Hergebruik auth.user_org_ids() helper uit 001_multi_tenant.sql.
 -- ════════════════════════════════════════════════════════════════════════
 
+-- 0. Defensive: zorg dat auth.user_org_ids() bestaat (zou uit 001 komen, maar
+--    kan in sommige DB-historien ontbreken). Idempotent CREATE OR REPLACE.
+CREATE OR REPLACE FUNCTION auth.user_org_ids()
+RETURNS SETOF UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+    SELECT organization_id
+    FROM public.organization_members
+    WHERE user_id = auth.uid()
+      AND status = 'active';
+$$;
+
+GRANT EXECUTE ON FUNCTION auth.user_org_ids() TO authenticated, service_role, anon;
+
 -- 1. Maak de bucket private.
 UPDATE storage.buckets
 SET public = false

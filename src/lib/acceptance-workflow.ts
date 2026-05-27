@@ -37,6 +37,10 @@ export interface WorkflowResult {
     inkoop: { success: boolean; message: string };
     haccp: { success: boolean; message: string; count: number };
     courses: { success: boolean; message: string; count: number };
+    /* P0.3 — placeholder-row + notification, AI-call gebeurt pas bij modal-open
+       om de cap-budget niet bij acceptance al op te nemen voor events die
+       nooit gereviewd worden. */
+    logistics: { success: boolean; message: string };
 }
 
 // ── 0. Sync events.menu ← offertes.menu_selectie ──
@@ -544,6 +548,83 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
     }
 }
 
+// ── 6. Auto-generate logistics-checklist placeholder ──
+//
+// Doel: meteen na acceptance een placeholder-rij in event_checklist_items
+// neerleggen + een notificatie dispatchen, zodat Mathijs in /vandaag
+// en /logistiek een "AI-voorstel klaar" toast ziet. De echte AI-call
+// gebeurt PAS wanneer hij de modal opent (kostenbewust — events die niet
+// gereviewd worden kosten dan ook geen Anthropic-tokens).
+//
+// Idempotent: bestaat er al een ai_pending placeholder voor dit event,
+// niets doen. Bestaan er al non-pending checks (eerder geaccepteerd),
+// ook niets doen — voorkomt dubbele toasts bij re-runs.
+async function autoGenerateLogisticsChecklist(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
+    try {
+        if (!supabase) return { success: false, message: 'Geen database verbinding' };
+
+        const orgId = params.offerteData?.organization_id;
+        if (!orgId) return { success: false, message: 'organization_id ontbreekt op offerte' };
+
+        /* Idempotent guard: bestaande checks → skippen. */
+        const { data: existing } = await supabase
+            .from('event_checklist_items')
+            .select('id, ai_pending')
+            .eq('event_id', params.eventId)
+            .limit(1);
+        if (existing && existing.length > 0) {
+            return { success: true, message: 'Logistiek-checklist bestond al — niet overschreven' };
+        }
+
+        /* Placeholder-row: laat /logistiek meteen iets tonen ("AI-voorstel
+           klaar") zonder dat we al een Anthropic-call hebben gedaan.
+           Verdwijnt zodra de echte checks na modal-confirm worden ingestort. */
+        const { error: insErr } = await supabase
+            .from('event_checklist_items')
+            .insert({
+                event_id: params.eventId,
+                organization_id: orgId,
+                category: 'materieel',
+                label: 'AI-voorstel wordt klaargezet…',
+                source: 'ai',
+                ai_pending: true,
+                sort_order: 0,
+            });
+        if (insErr) {
+            /* Pre-migratie 016 → tabel bestaat niet. Niet-fataal: rest van
+               de workflow loopt door, toast zal niet verschijnen. */
+            if (/relation .* does not exist/i.test(insErr.message)) {
+                return { success: false, message: 'event_checklist_items ontbreekt (migratie 016 nog niet gedraaid)' };
+            }
+            return { success: false, message: 'Logistiek-placeholder fout: ' + insErr.message };
+        }
+
+        /* Notification dispatch — gebruikt de nieuwe notifications-tabel
+           uit migration 016. Bij ontbreken van die tabel: silent fail. */
+        const eventNaam = params.offerteData?.client_naam || 'Nieuw event';
+        const { error: notifErr } = await supabase
+            .from('notifications')
+            .insert({
+                organization_id: orgId,
+                user_id: null,           // broadcast naar hele org
+                type: 'ai_proposal_ready',
+                title: 'AI-voorstel klaar — logistiek',
+                body: `${eventNaam}: AI heeft een logistiek-checklist voor je klaargezet. Bekijken?`,
+                link: `/logistiek?proposal=${params.eventId}`,
+                metadata: { event_id: params.eventId, feature: 'logistics_proposal' },
+            });
+        if (notifErr && !/relation .* does not exist/i.test(notifErr.message)) {
+            /* DB-fout anders dan ontbrekende tabel — loggen, maar workflow
+               niet breken. /logistiek polled toch periodiek op ai_pending. */
+            console.warn('[acceptance] logistics notification dispatch faalde:', notifErr.message);
+        }
+
+        return { success: true, message: 'Logistiek AI-voorstel klaar — toast in /vandaag' };
+    } catch (e: any) {
+        return { success: false, message: 'Logistiek fout: ' + (e.message || '') };
+    }
+}
+
 // ── Main Workflow Runner ──
 //
 // Twee export-vormen voor backwards-compat:
@@ -578,6 +659,7 @@ export async function runAcceptanceWorkflow(
         autoGenerateInkooplijst(supabase, params),
         autoCreateHaccpTemplates(supabase, params),
         autoCreateCourses(supabase, params),
+        autoGenerateLogisticsChecklist(supabase, params),
     ]);
 
     const factuurResult = results[0].status === 'fulfilled' ? results[0].value : { success: false, message: 'Factuur onverwachte fout' };
@@ -585,6 +667,7 @@ export async function runAcceptanceWorkflow(
     const inkoopResult = results[2].status === 'fulfilled' ? results[2].value : { success: false, message: 'Inkoop onverwachte fout' };
     const haccpResult = results[3].status === 'fulfilled' ? results[3].value : { success: false, message: 'HACCP onverwachte fout', count: 0 };
     const coursesResult = results[4].status === 'fulfilled' ? results[4].value : { success: false, message: 'Courses onverwachte fout', count: 0 };
+    const logisticsResult = results[5].status === 'fulfilled' ? results[5].value : { success: false, message: 'Logistiek onverwachte fout' };
 
     const result: WorkflowResult = {
         factuur: factuurResult,
@@ -592,6 +675,7 @@ export async function runAcceptanceWorkflow(
         inkoop: inkoopResult,
         haccp: haccpResult,
         courses: coursesResult,
+        logistics: logisticsResult,
     };
 
     /* P0-3 post-process coupling: prep + courses lopen parallel via Promise.allSettled
