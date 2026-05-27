@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bonnenkistje · Archief — BBQ Architect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@200;300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app-styles.css" />
+<style>
+:root {
+  --brand:#FFBF00; --brand-light:rgba(255,191,0,.12); --brand-tint:rgba(255,191,0,.14);
+  --brand-hover:#ffd24d; --brand-gold:#c4a35a; --brand-gold-deep:#9e781c;
+  --bg:#121214; --bg-subtle:#0e0e10; --bg-deep:#0a0a0c; --bg-elevated:#151518;
+  --bg-card:#111113; --bg-primary:#121215;
+  --card:rgba(30,30,34,.7); --card-solid:#1e1e22; --surface:#1e1e22;
+  --sidebar-bg:#151518; --sidebar-bg-hover:#1a1a20; --sidebar-border:#1e1e22;
+  --border:rgba(130,130,130,.15); --border-strong:rgba(130,130,130,.3);
+  --glass-border:1px solid rgba(130,130,130,.12);
+  --text:#f8f8f8; --text-primary:#fff; --muted:#949494;
+  --muted-light:rgba(130,130,130,.4); --muted-weak:#5a5a5e;
+  --muted-extra-light:rgba(130,130,130,.1);
+  --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --blue:#3b82f6;
+  --purple:#a78bfa; --cyan:#4ECDC4; --orange:#f97316;
+  --glass-blur:blur(18px); --lift-shadow:0 8px 24px rgba(0,0,0,.4);
+  --hover:rgba(255,255,255,.05); --hover-strong:rgba(255,255,255,.09);
+  --radius-sm:8px; --radius-md:10px; --radius-lg:12px; --radius-xl:14px; --radius-2xl:16px;
+  --font-sans:'DM Sans',ui-sans-serif,system-ui,sans-serif;
+  --font-display:'Outfit','DM Sans',sans-serif;
+  --font-artisan:'Playfair Display',ui-serif,serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --nav-h:48px;
+}
+
+/* ── Screen Nav ─────────────────────────── */
+.screen-nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:center;gap:2px;padding:8px 16px;background:rgba(10,10,12,.94);backdrop-filter:blur(18px);border-bottom:1px solid var(--border)}
+.screen-nav-label{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--brand-gold);margin-right:16px;white-space:nowrap}
+.screen-tab{padding:6px 14px;border-radius:8px;border:none;font-family:var(--font-sans);font-size:12px;font-weight:500;color:var(--muted);background:transparent;transition:.15s;display:flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
+.screen-tab:hover{color:var(--text);background:var(--hover)}
+.screen-tab.active{color:var(--text);background:rgba(255,191,0,.08)}
+.screen-tab-num{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(130,130,130,.2);color:var(--muted);flex-shrink:0}
+.screen-tab.active .screen-tab-num{background:var(--brand);color:#000}
+.screen-content{padding-top:var(--nav-h)}
+
+/* ── Masonry responsive ──────────────────── */
+@media(max-width:1100px){ .ar-masonry{columns:2!important} }
+@media(max-width:768px){ .ar-masonry{columns:1!important} }
+
+/* ── Hover styles ────────────────────────── */
+.ar-search-row:hover{background:rgba(255,255,255,.02);border-color:var(--border)!important}
+.ar-table-row:hover{background:rgba(255,191,0,.02)!important}
+.ar-inbox-row:hover{background:rgba(255,255,255,.02);border-color:var(--border)!important}
+
+/* ── Animations ──────────────────────────── */
+@keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+/* ── Scrollbar ───────────────────────────── */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(130,130,130,.2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(130,130,130,.35)}
+
+/* ── Mobile overrides ────────────────────── */
+@media(max-width:768px){
+  .app-shell{grid-template-columns:1fr!important}
+  .sidebar{display:none!important}
+  .content{padding:16px!important}
+  .page-title{font-size:24px!important}
+  .screen-nav{overflow-x:auto;justify-content:flex-start}
+  .topbar{padding:0 16px}
+}
+</style>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Component scripts -->
+<script type="text/babel" src="tweaks-panel.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-data.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-atoms.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-filter.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-kistje.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-tabel.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-detail.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-modals.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-inbox.jsx" data-presets="react"></script>
+<script type="text/babel" src="archief-app.jsx" data-presets="react"></script>
+
+<script type="text/babel" data-presets="react">
+  ReactDOM.createRoot(document.getElementById('root')).render(<ArchiefApp />);
+</script>
+</body>
+</html>

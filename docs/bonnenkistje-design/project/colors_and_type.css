@@ -1,0 +1,235 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   BBQ Architect — Design Tokens
+   Source of truth: src/app/globals.css (bbq-architect-v2), normalized.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600&display=swap');
+
+:root {
+  /* ── Brand ───────────────────────────────────────── */
+  --brand: #FFBF00;              /* punch amber — CTAs, active states */
+  --brand-light: rgba(255, 191, 0, .12);
+  --brand-tint: rgba(255, 191, 0, .14);
+  --brand-hover: #ffd24d;
+  --brand-gold: #c4a35a;         /* ambient brand — logo, hairlines */
+  --brand-gold-deep: #9e781c;    /* PDF/print primary */
+
+  /* ── Backgrounds ─────────────────────────────────── */
+  --bg: #121214;
+  --bg-subtle: #0e0e10;
+  --bg-deep: #0a0a0c;
+  --bg-primary: #121215;
+  --bg-card: #111113;
+  --bg-elevated: #151518;
+
+  --card: rgba(30, 30, 34, .7);  /* glass */
+  --card-solid: #1e1e22;
+  --surface: #1e1e22;
+
+  --sidebar-bg: #151518;
+  --sidebar-bg-hover: #1a1a20;
+  --sidebar-border: #1e1e22;
+
+  /* ── Borders ─────────────────────────────────────── */
+  --border: rgba(130, 130, 130, .15);
+  --border-strong: rgba(130, 130, 130, .3);
+  --border-steel: rgba(130, 130, 130, .3);
+  --border-hover: #2a2a30;
+  --glass-border: 1px solid rgba(130, 130, 130, .12);
+
+  /* ── Text ────────────────────────────────────────── */
+  --text: #f8f8f8;
+  --text-primary: #ffffff;
+  --text-secondary: #888888;
+  --muted: #949494;
+  --muted-light: rgba(130, 130, 130, .4);
+  --muted-weak: #5a5a5e;
+  --muted-extra-light: rgba(130, 130, 130, .1);
+  --text-muted: #555558;
+  --text-ghost: #333338;
+
+  /* ── Status semantic ─────────────────────────────── */
+  --green: #22c55e;
+  --emerald: #10b981;
+  --red: #ef4444;
+  --danger: #ef4444;
+  --danger-hover: #f87171;
+  --amber: #f59e0b;
+  --warning: #f59e0b;
+  --cyan: #4ECDC4;
+  --purple: #a78bfa;
+  --blue: #3b82f6;
+  --sky: #38bdf8;
+  --pink: #ec4899;
+  --orange: #f97316;
+  --slate: #64748b;
+  --zinc: #71717a;
+  --indigo: #8b8bf0;
+  --success: #22c55e;
+  --success-tint: rgba(34, 197, 94, .15);
+
+  /* ── Accents (Mercedes aliases) ──────────────────── */
+  --color-accent-gold: #c4a35a;
+  --color-accent-silver: #8b8b8f;
+
+  /* ── Effects ─────────────────────────────────────── */
+  --glass-blur: blur(18px);
+  --lift-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, .3);
+  --overlay: rgba(0, 0, 0, .5);
+  --hover: rgba(255, 255, 255, .05);
+  --hover-strong: rgba(255, 255, 255, .09);
+
+  /* ── Radii ───────────────────────────────────────── */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;    /* buttons */
+  --radius-lg: 12px;    /* rows, pills-container */
+  --radius-xl: 14px;    /* panels */
+  --radius-2xl: 16px;   /* modals */
+  --radius-pill: 999px;
+
+  /* ── Typography ──────────────────────────────────── */
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Outfit', 'DM Sans', sans-serif;
+  --font-artisan: 'Playfair Display', ui-serif, serif;
+  --font-condensed: 'Oswald', 'DM Sans', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --text-3xl: 36px;
+
+  --tracking-eyebrow: 0.15em;
+  --tracking-wordmark: 0.08em;
+  --tracking-overline: 0.2em;
+  --tracking-tight: -0.01em;
+
+  /* ── Layout ──────────────────────────────────────── */
+  --header-h: 56px;
+  --sidebar-w: 260px;
+  --sidebar-w-collapsed: 80px;
+  --content-max: 1400px;
+  --content-narrow: 1000px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Semantic type styles — apply these as classes in preview & UI kits
+   ────────────────────────────────────────────────────────────────────────── */
+
+.ds-h1 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 200;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+  line-height: 1.1;
+}
+.ds-h1 em, .ds-h1 .accent { font-weight: 400; font-style: normal; }
+
+.ds-h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.ds-h3 {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ds-wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wordmark);
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.ds-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ds-overline-tight {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted-light);
+}
+
+.ds-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.ds-small {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ds-caption {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ds-metric {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.ds-metric-lg {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--brand-gold);
+}
+
+.ds-quote {
+  font-family: var(--font-artisan);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.ds-button-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ds-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
