@@ -1,493 +1,117 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-'use client';
-import React, { useState, useRef, useEffect } from 'react';
-import { useSupabase, useSettings } from '@/lib/useSupabase';
-import { useToast } from '@/components/Toast';
-import { useConfirm } from '@/components/ConfirmDialog';
-import { fmt, resizeImage } from '@/lib/utils';
-import { generatePDF } from '@/lib/pdfGenerator';
-import { supabase } from '@/lib/supabase';
-import EmptyState from '@/components/EmptyState';
-import PageHint from '@/components/PageHint';
+/**
+ * /inkoop — full-page InkoopLijst (bucket D · P0-1)
+ * ─────────────────────────────────────────────────
+ * Strip: het oude tab-systeem (leveranciers/bonnen/archief) is dood.
+ *  - Bon-scanner → /bonnen (bucket E)
+ *  - Leveranciers-CRUD → /leveranciers (eigen pagina)
+ *  - Bon-archief → /archief
+ *
+ * Wat blijft: één doel — "wat moet ik vandaag bestellen, per leverancier".
+ * Server-side data fetch via buildBestelvoorstel (math is deterministisch);
+ * de UI doet alleen presentatie + optimistic overrides via Server Actions.
+ */
+import { redirect } from 'next/navigation';
+import { createServerSupabase } from '@/lib/supabase-server';
+import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
+import { getInventoryWithDemand } from '@/lib/dal/inventoryDemand';
 import PageHeader from '@/components/PageHeader';
-import PageSection from '@/components/PageSection';
-import { Camera, FileText, Info, Loader2, Phone, PlusCircle, Receipt, User, Wand2, X, ShoppingCart } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
-import { LoadingState } from '@/components/LoadingState';
-import type { Leverancier, Inkooplijst, InventoryItem, Event as DbEvent, Offerte, Gerecht, Bon } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
-import BestelvoorstelLaan from '@/app/inkoop/_components/BestelvoorstelLaan';
+import InkoopLijst from './_components/InkoopLijst';
 
-export default function Inkoop() {
-    const { data: leveranciers, loading: levLoading, insert: insertLev, update: updateLev, remove: removeLev } = useSupabase<Leverancier>('leveranciers', []);
-    const { data: inkooplijsten, insert: insertInk, update: updateInk, remove: removeInk } = useSupabase<Inkooplijst>('inkooplijsten', []);
-    const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
-    const { data: events } = useSupabase<DbEvent>('events', []);
-    const { data: offertes } = useSupabase<Offerte>('offertes', []);
-    const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
-    const { data: bonnen, insert: insertBon } = useSupabase<Bon>('bonnen', []);
-    const { settings } = useSettings();
-    const showToast = useToast();
-    const showConfirm = useConfirm();
-    const [tab, setTab] = useState('leveranciers');
-    const [editingLev, setEditingLev] = useState<string | number | null>(null);
-    const [levForm, setLevForm] = useState<Record<string, any> | null>(null);
-    const [expandedInk, setExpandedInk] = useState<number | null>(null);
-    const [newInkEvent, setNewInkEvent] = useState('');
-    const [newInkItem, setNewInkItem] = useState({ desc: '', qty: 1, eenheid: 'kg', leverancier: '' });
-    const [boodschappenOfferte, setBoodschappenOfferte] = useState('');
+export const dynamic = 'force-dynamic';
 
-    const [receiptScanning, setReceiptScanning] = useState(false);
-    const [pendingActions, setPendingActions] = useState<any[]>([]);
-    const [scanStatus, setScanStatus] = useState('');
-    const [scanInsight, setScanInsight] = useState('');
-    const [lastScanData, setLastScanData] = useState<any>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+export default async function InkoopPage() {
+    const sb = await createServerSupabase();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) redirect('/login?next=/inkoop');
 
-    async function handleReceiptUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setReceiptScanning(true);
-        setPendingActions([]);
-        setScanInsight('');
-        setScanStatus('FOTO OPTIMALISEREN...');
+    const { data: member } = await sb
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
 
-        const reader = new FileReader();
-        reader.onload = async function (ev: ProgressEvent<FileReader>) {
-            const rawB64 = ev.target!.result as string;
-            const b64 = await resizeImage(rawB64, 1920, 2560, 0.92);
+    const orgId = member?.organization_id;
+    if (!orgId) redirect('/onboarding');
 
-            setScanStatus('FACTUUR LEZEN — ELKE REGEL...');
-            try {
-                /* Bucket E — gebruik unified /api/bonnen/extract. Geeft direct
-                   gestructureerde items + leverancier-match terug; we wrappen
-                   het naar de legacy pendingActions-shape zodat de bestaande
-                   UI ongewijzigd blijft. */
-                const res = await fetch('/api/bonnen/extract', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        source_type: 'photo',
-                        file_data_url: b64,
-                        filename: file.name,
-                    }),
-                });
+    // Parallel fetch — bestelvoorstel + leveranciers + events-meta voor empty-state.
+    const [summary, leveranciersRes, demandSnapshot] = await Promise.all([
+        buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true }).catch((e) => {
+            console.error('[/inkoop] buildBestelvoorstel failed', e);
+            return null;
+        }),
+        sb.from('leveranciers')
+            .select('id, naam, type, email, tel')
+            .eq('organization_id', orgId)
+            .order('naam', { ascending: true }),
+        getInventoryWithDemand(sb, orgId, 14).catch(() => null),
+    ]);
 
-                if (res.status === 409) {
-                    const dup = await res.json();
-                    setScanStatus('AL IN ARCHIEF');
-                    showToast({
-                        message: `Deze bon staat al in je archief${dup.duplicate_winkel ? ` (${dup.duplicate_winkel})` : ''}.`,
-                        type: 'warning',
-                        action: {
-                            label: 'Open',
-                            onClick: () => { window.location.href = `/archief?bon=${dup.duplicate_bon_id}`; },
-                        },
-                    });
-                    setReceiptScanning(false);
-                    return;
-                }
+    const leveranciers = (leveranciersRes.data || []) as Array<{
+        id: number;
+        naam: string;
+        type: string;
+        email: string | null;
+        tel: string | null;
+    }>;
 
-                const json = await res.json();
-                if (!res.ok || json.error) throw new Error(json.message || json.error || 'onbekende fout');
+    const events_count = demandSnapshot?.events_in_window?.length ?? 0;
+    const has_menu_items = (demandSnapshot?.rows?.some((r) => r.reserved_qty > 0)) ?? false;
 
-                const items = (json.items_with_suggestions ?? []) as any[];
-                const winkel = json.bon_preview?.leverancier_naam || 'Groothandel';
-                const datum = json.bon_preview?.datum || new Date().toISOString().slice(0, 10);
-                const totaal = json.bon_preview?.totaal_bedrag || 0;
-
-                if (items.length === 0) {
-                    setScanStatus('GEEN ITEMS GEVONDEN');
-                    showToast('Geen items herkend. Is de foto scherp genoeg?', 'info');
-                    setReceiptScanning(false);
-                    return;
-                }
-
-                /* Wrap nieuwe shape → legacy pendingActions. Eén action per item;
-                   action.data.items[0] is wat de UI verwacht. */
-                const aggregated = items.map((it: any, idx: number) => ({
-                    id: `extract-${Date.now()}-${idx}`,
-                    type: 'process_receipt',
-                    description: `${it.aantal} ${it.unit} ${it.naam} – €${(it.prijs || 0).toFixed(2)}`,
-                    data: {
-                        winkel,
-                        datum,
-                        totaal_bedrag: totaal,
-                        items: [{
-                            naam: it.naam,
-                            aantal: it.aantal,
-                            eenheid: it.unit,
-                            prijs: it.prijs,
-                            totaal: it.totaal,
-                            btw_pct: it.btw_pct,
-                            inventory_id: it.inventory_id,
-                            inventory_naam: it.inventory_naam,
-                        }],
-                    },
-                    meta: { table: 'inventory' },
-                }));
-
-                setPendingActions(aggregated);
-                setScanStatus('READY ✓ — ' + aggregated.length + ' REGELS');
-                setLastScanData({ b64, actions: aggregated, cleanText: '', extractMeta: {
-                    image_hash: json.image_hash,
-                    ocr_engine: json.ocr_engine,
-                    confidence: json.confidence,
-                    source_type: json.source_type,
-                } });
-                showToast('Bon uitgelezen! ' + aggregated.length + ' regels.', 'success');
-            } catch (err: any) {
-                setScanStatus('SCAN FOUT');
-                showToast('Fout: ' + (err?.message || 'onbekend'), 'error');
-            }
-            setReceiptScanning(false);
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async function runAction(action: any) {
-        try {
-            await supabase.from(action.meta.table).insert(action.data);
-            setPendingActions(prev => prev.filter(a => a.id !== action.id));
-            showToast('Item ingeboekt: ' + action.description, 'success');
-        } catch (err: any) {
-            showToast('Fout bij inboeken: ' + err.message, 'error');
-        }
-    }
-
-    async function saveToArchive() {
-        if (!lastScanData) return;
-        setScanStatus('ARCHIVEREN...');
-
-        try {
-            const winkel = lastScanData.actions[0]?.data?.winkel || 'Groothandel';
-            const datum = lastScanData.actions[0]?.data?.datum || new Date().toISOString().split('T')[0];
-            const totaal = lastScanData.actions[0]?.data?.totaal_bedrag || 0;
-
-            // P0.5 — upload naar org-folder zodat strict storage-RLS werkt
-            // (bucket bonnen is private na 20260525132000). Folder-conventie:
-            // {organization_id}/{yyyy-mm}/{uuid}.{ext}
-            const { data: { user } } = await supabase.auth.getUser();
-            const { data: member } = await supabase
-                .from('organization_members')
-                .select('organization_id')
-                .eq('user_id', user?.id ?? '')
-                .eq('status', 'active')
-                .limit(1)
-                .single();
-            const orgId = member?.organization_id;
-            const yyyyMm = new Date().toISOString().slice(0, 7);
-            const uuid = crypto.randomUUID();
-            const fileName = orgId ? `${orgId}/${yyyyMm}/${uuid}.jpg` : `legacy/bon_${Date.now()}.jpg`;
-
-            const blob = await (await fetch(lastScanData.b64)).blob();
-            const { data: uploadData } = await supabase.storage.from('bonnen').upload(fileName, blob);
-
-            // P0.5 — bewaar file_path (voor signed-URL) ipv publieke URL.
-            // image_url blijft gevuld voor legacy-clients tot background-job draait.
-            const filePath = uploadData?.path ?? fileName;
-
-            // P0.1 — extracted_text voor search_vec
-            const extractedText = [
-                lastScanData.cleanText ?? '',
-                winkel,
-                datum,
-                new Date(datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }),
-            ].filter(Boolean).join(' ').trim();
-
-            await insertBon({
-                winkel,
-                datum,
-                totaal_bedrag: totaal,
-                file_path: filePath,             // P0.5 — nieuw veld voor signed-URL flow
-                file_mime: blob.type || 'image/jpeg',
-                image_url: lastScanData.b64,     // legacy fallback voor oude clients
-                raw_analysis: lastScanData.actions,
-                notities: lastScanData.cleanText,
-                source: 'upload',                // P0.1 — bron-flag
-                extracted_text: extractedText,   // P0.1 — vul search_vec direct
-            });
-
-            showToast('Bon gearchiveerd in The Vault!', 'success');
-            setLastScanData(null);
-            setPendingActions([]);
-            setScanInsight('');
-        } catch (e: any) {
-            console.error(e);
-            showToast('Archiveren mislukt (Bucket "bonnen" bestaat wellicht niet)', 'warning');
-        }
-        setScanStatus('');
-    }
-
-    async function downloadReceiptPDF(bon: any) {
-        /* raw_analysis kan string-JSON of array zijn; eerste guarden, anders
-           crasht .flatMap. */
-        let raw: any = bon.raw_analysis;
-        if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
-        const items = Array.isArray(raw) ? raw.flatMap((a: any) => (a?.data?.items || [])) : [];
-        await generatePDF({
-            type: 'receipt',
-            winkel: bon.winkel || '—',
-            datum: bon.datum,
-            totaal_bedrag: bon.totaal_bedrag,
-            items: items,
-            imageData: bon.image_url,
-            settings: settings || {}
-        });
-    }
-
-    function newLeverancier() { setEditingLev('new'); setLevForm({ naam: '', type: 'Overig', contact: '', email: '', tel: '' }); }
-    function editLeverancier(l: Leverancier) { setEditingLev(l.id); setLevForm(JSON.parse(JSON.stringify(l))); }
-    function saveLeverancier() {
-        if (!levForm!.naam) { showToast('Vul een naam in', 'error'); return; }
-        if (editingLev === 'new') {
-            insertLev(levForm!).then(function () { showToast('Leverancier toegevoegd', 'success'); setEditingLev(null); })
-                .catch(function (e: any) { console.error('[inkoop] insertLev:', e); showToast('Toevoegen mislukt: ' + (e?.message || 'onbekende fout'), 'error'); });
-        } else {
-            const { id, ...rest } = levForm!;
-            updateLev(editingLev as number, rest).then(function () { showToast('Bijgewerkt', 'success'); setEditingLev(null); })
-                .catch(function (e: any) { console.error('[inkoop] updateLev:', e); showToast('Opslaan mislukt: ' + (e?.message || 'onbekende fout'), 'error'); });
-        }
-    }
-
-    const boodOfferte = offertes.find(function (o) { return String(o.id) === boodschappenOfferte; });
-    const winkelGroepen: Record<string, string[]> = { Sligro: [], Crisp: [], PLUS: [], Overig: [] };
-    if (boodOfferte && boodOfferte.menu_selectie) {
-        /* menu_selectie kan in DB string-JSON óf object zijn; ingredienten kan
-           legacy als string staan i.p.v. array. Beide cases hard guarden zodat
-           page niet meer crasht bij oude offerte-data. */
-        let menuSel: any = boodOfferte.menu_selectie;
-        if (typeof menuSel === 'string') { try { menuSel = JSON.parse(menuSel); } catch { menuSel = null; } }
-        const menuValues = menuSel && typeof menuSel === 'object' ? Object.values(menuSel) : [];
-        menuValues.forEach(function (dishes: any) {
-            const dishArr = Array.isArray(dishes) ? dishes : [];
-            dishArr.forEach(function (dishName: string) {
-                const dish: any = gerechtenData.find(function (g) { return g.naam === dishName; });
-                if (!dish) return;
-                const ingredienten = Array.isArray(dish.ingredienten) ? dish.ingredienten : [];
-                const winkels = dish.ingredienten_winkels || {};
-                ingredienten.forEach(function (ing: string) {
-                    const winkel = winkels[ing] || 'Overig';
-                    if (!winkelGroepen[winkel]) winkelGroepen[winkel] = [];
-                    if (winkelGroepen[winkel].indexOf(ing) < 0) winkelGroepen[winkel].push(ing);
-                });
-            });
-        });
-    }
-
-    if (levLoading) {
-        return <LoadingState label="Inkoop laden" />;
+    if (!summary) {
+        return (
+            <RequireTier feature="inkoop">
+                <div className="artisan-page inkoop-page">
+                    <PageHeader title="Inkoop" description="Bestellen voor de events" />
+                    <div
+                        style={{
+                            background: 'var(--card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 14,
+                            padding: 24,
+                            color: 'var(--muted)',
+                        }}
+                    >
+                        Kon bestelvoorstel niet laden. Probeer de pagina te herladen.
+                    </div>
+                </div>
+            </RequireTier>
+        );
     }
 
     return (
         <RequireTier feature="inkoop">
-        <div className="artisan-page inkoop-page">
-            <PageHeader title="Inkoop & Logistiek" description="Beheer leveranciers, boodschappen en bonnen" />
+            <div className="artisan-page inkoop-page">
+                <PageHeader
+                    title="Inkoop"
+                    description={`Bestellen voor de events komende ${summary.totals.window_days} dagen`}
+                />
 
-            <PageGuideNote
-                id="inkoop"
-                accent="#6366f1"
-                icon={ShoppingCart}
-                intro="Beheer je leveranciers en scan bonnen na een inkooprit — alles komt automatisch in voorraad terecht."
-                actions={[
-                    { lead: 'Leveranciers', text: '— voeg je vaste toeleveranciers toe met contactgegevens en prijzen.' },
-                    { lead: 'Scan een bon', text: 'na een ritje naar de Makro en de regels worden automatisch in voorraad bijgeschreven.' },
-                    { lead: 'Archief', text: '— alle gescande bonnen terugvinden, ook voor de boekhouding.' },
-                ]}
-            />
+                {/* icon-prop bewust niet gezet — Lucide-components mogen niet
+                    van een Server Component naar een Client Component (React 19);
+                    PageGuideNote valt terug op de default Compass-icon. */}
+                <PageGuideNote
+                    id="inkoop"
+                    accent="#6366f1"
+                    intro="Per leverancier zie je precies wat er besteld moet worden voor je events. Pas hoeveelheden aan, kies een andere leverancier, of stuur direct een bestelling met PDF."
+                    actions={[
+                        { lead: 'Pas een aantal aan', text: '— klik op de hoeveelheid om bij te schuiven; we onthouden je wijziging.' },
+                        { lead: 'Verstuur de lijst', text: 'naar je leverancier per e-mail met PDF in de bijlage.' },
+                        { lead: 'Geen leverancier?', text: 'kies er één in de gele banner bovenaan zodat de bestelling compleet is.' },
+                    ]}
+                />
 
-            <BestelvoorstelLaan />
-
-            <div className="tab-bar mb-24">
-                <button className={'tab-btn' + (tab === 'leveranciers' ? ' active' : '')} onClick={() => setTab('leveranciers')}>LEVERANCIERS</button>
-                <button className={'tab-btn' + (tab === 'bonnen' ? ' active' : '')} onClick={() => setTab('bonnen')}>BON-SCANNER</button>
-                <button className={'tab-btn' + (tab === 'archief' ? ' active' : '')} onClick={() => setTab('archief')}>ARCHIEF</button>
+                <InkoopLijst
+                    initialSummary={summary}
+                    leveranciers={leveranciers}
+                    events_count={events_count}
+                    has_menu_items={has_menu_items}
+                />
             </div>
-
-            {tab === 'leveranciers' && (
-                <>
-                {leveranciers.length === 0 && <EmptyState page="/inkoop" onAction={newLeverancier} />}
-                <div className="grid-3">
-                    <div className="artisan-panel" style={{ cursor: 'pointer', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 140 }} onClick={newLeverancier}>
-                        <div style={{ textAlign: 'center' }}>
-                            <PlusCircle size={24} style={{ color: 'var(--brand)' }} />
-                            <div style={{ fontWeight: 800, fontSize: 12 }}>NIEUWE LEVERANCIER</div>
-                        </div>
-                    </div>
-                    {leveranciers.map((l: any) => (
-                        <div key={l.id} className="artisan-panel" onClick={() => editLeverancier(l)} style={{ cursor: 'pointer' }}>
-                            <div style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 900, letterSpacing: 1, marginBottom: 8 }}>{l.type?.toUpperCase()}</div>
-                            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>{l.naam.toUpperCase()}</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                {l.contact && <div><User size={14} /> {l.contact}</div>}
-                                {l.tel && <div><Phone size={14} /> {l.tel}</div>}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                </>
-            )}
-
-            {tab === 'bonnen' && (
-                <div style={{ maxWidth: 800, margin: '0 auto' }}>
-                    <div className="artisan-panel" style={{ textAlign: 'center', padding: 48, marginBottom: 24 }}>
-                        <Receipt size={48} style={{ color: 'var(--brand)' }} />
-                        <h2 style={{ fontFamily: 'var(--font-artisan)', letterSpacing: 2, fontSize: 24, marginBottom: 16 }}>VISION INKOOP TRACKER</h2>
-                        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 8, maxWidth: 500, margin: '0 auto 8px' }}>
-                            Scan je Sligro of Makro bon. De AI herkent items, hoeveelheden en prijzen.
-                        </p>
-                        <p style={{ color: 'var(--brand)', fontSize: 12, fontWeight: 900, letterSpacing: 1, marginBottom: 32 }}>
-                            <Info size={14} /> MOMENTEEL ENKEL FOTO'S & SCREENSHOTS (PDF WORDT NOG NIET ONDERSTEUND)
-                        </p>
-
-                        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleReceiptUpload} style={{ display: 'none' }} />
-
-                        <button className="btn-brand" style={{ padding: '16px 40px', fontSize: 16 }} onClick={() => fileInputRef.current!.click()} disabled={receiptScanning}>
-                            {receiptScanning ? (
-                                <><Loader2 size={14} className="animate-spin" /> ANALYSEREN...</>
-                            ) : (
-                                <><Camera size={14} /> SCAN KASSABON</>
-                            )}
-                        </button>
-
-                        {scanStatus && <div style={{ marginTop: 20, fontSize: 12, fontWeight: 900, color: 'var(--brand)', letterSpacing: 2 }}>{scanStatus}</div>}
-                    </div>
-
-                    {scanInsight && (
-                        <div className="artisan-panel" style={{ marginBottom: 24, borderLeft: '4px solid var(--brand)', background: 'rgba(213, 178, 98, 0.05)' }}>
-                            <div className="panel-head"><h3><Wand2 size={14} /> PITMASTER INSIGHT</h3></div>
-                            <div className="panel-body" style={{ fontSize: 13, color: 'var(--white)', fontStyle: 'italic', lineHeight: 1.6 }}>
-                                {scanInsight}
-                            </div>
-                        </div>
-                    )}
-
-                    {pendingActions.length > 0 && (
-                        <div className="artisan-panel">
-                            <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                                <h3>GEVONDEN ITEMS ({pendingActions.length})</h3>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <button className="tab-btn" style={{ padding: '6px 12px', fontSize: 12, borderColor: 'var(--brand)', color: 'var(--brand)' }} onClick={saveToArchive}>SLA OP IN ARCHIEF</button>
-                                    <button className="btn-brand" style={{ padding: '6px 12px', fontSize: 12, background: 'linear-gradient(180deg, var(--brand), #9e781c)', color: '#000', fontWeight: 700 }} onClick={async () => {
-                                        /* Volledig automatisch: leverancier + voorraad + prijs-historie + BTW + boekhouding allemaal in 1 call. */
-                                        if (!lastScanData) { showToast('Geen scan-data — scan eerst een bon', 'error'); return; }
-                                        setScanStatus('AUTOMATISCH VERWERKEN...');
-                                        try {
-                                            const res = await fetch('/api/bon-process', {
-                                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    raw_analysis: lastScanData.actions,
-                                                    /* Direct fields als raw_analysis bij summarizeBon faalt op shape — */
-                                                    winkel: lastScanData.actions[0]?.data?.winkel,
-                                                    datum: lastScanData.actions[0]?.data?.datum,
-                                                    totaal_bedrag: lastScanData.actions[0]?.data?.totaal_bedrag,
-                                                }),
-                                            });
-                                            const body = await res.json();
-                                            if (!res.ok || !body.success) {
-                                                showToast('Fout: ' + (body.error || 'onbekend'), 'error');
-                                                setScanStatus('FOUT');
-                                                return;
-                                            }
-                                            const created = body.items_results.filter((r: any) => r.action === 'created').length;
-                                            const updated = body.items_results.filter((r: any) => r.action === 'updated').length;
-                                            const skipped = body.items_results.filter((r: any) => r.action === 'skipped').length;
-                                            const levMsg = body.leverancier ? `Leverancier ${body.leverancier.naam}${body.leverancier.created ? ' (nieuw)' : ''} · ` : '';
-                                            const btwMsg = `BTW 9%: €${body.btw.laag.toFixed(2)} · 21%: €${body.btw.hoog.toFixed(2)}`;
-                                            showToast(
-                                                `${levMsg}${created} nieuw, ${updated} bijgewerkt${skipped > 0 ? ', ' + skipped + ' overgeslagen' : ''}. ${btwMsg}`,
-                                                'success',
-                                            );
-                                            setPendingActions([]);
-                                            setLastScanData(null);
-                                            setScanInsight('');
-                                            setScanStatus('');
-                                        } catch (e: any) {
-                                            console.error('[bon-process]', e);
-                                            showToast('Verwerkingsfout: ' + (e?.message || 'onbekend'), 'error');
-                                            setScanStatus('FOUT');
-                                        }
-                                    }}>⚡ VERWERK VOLLEDIG</button>
-                                </div>
-                            </div>
-                            <div className="panel-body">
-                                {pendingActions.map((action: any) => (
-                                    <div key={action.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, marginBottom: 8, border: '1px solid var(--border)' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--brand)' }}>{action.description.split(':').pop()?.trim().toUpperCase() || 'ITEM'}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                                                {(() => {
-                                                    const item = action.data.items?.[0] || {};
-                                                    const prijs = item.prijs || action.data.prijs || 0;
-                                                    const aantal = item.aantal || action.data.aantal || 1;
-                                                    const eenheid = item.eenheid || action.data.eenheid || 'stks';
-                                                    const totaal = prijs * aantal;
-                                                    const breakdown = item.breakdown ? `(${item.breakdown.join(' + ')}) ` : '';
-                                                    return `${breakdown}€${prijs.toFixed(2)}/${eenheid} × ${aantal.toFixed(3)} ${eenheid} = €${totaal.toFixed(2)}`;
-                                                })()}
-                                            </div>
-                                        </div>
-                                        <button className="tab-btn" style={{ padding: '6px 16px', fontSize: 12, border: '1px solid var(--brand)', color: 'var(--brand)' }} onClick={async () => {
-                                            try { await supabase.from(action.meta.table).insert(action.data); } catch (e) { console.error("Error inserting action:", e); }
-                                            setPendingActions(prev => prev.filter(a => a.id !== action.id));
-                                            showToast('Item ingeboekt', 'success');
-                                        }}>BEVESTIG</button>
-                                    </div>
-                                ))}
-                                <button className="tab-btn w-full mt-16" style={{ opacity: 0.5, fontSize: 12 }} onClick={() => setPendingActions([])}>WISSEN</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {tab === 'archief' && (
-                <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
-                        {(bonnen || []).map((bon: any) => (
-                            <div key={bon.id} className="artisan-panel" style={{ padding: 16 }}>
-                                <div style={{ height: 120, background: 'rgba(0,0,0,0.2)', borderRadius: 8, marginBottom: 12, overflow: 'hidden', cursor: 'pointer' }} onClick={() => window.open(bon.image_url, '_blank')}>
-                                    <img src={bon.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Bon" />
-                                </div>
-                                <div style={{ fontWeight: 900, fontSize: 14 }}>{(bon.winkel || '—').toUpperCase()}</div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{bon.datum} • {fmt(bon.totaal_bedrag)}</div>
-                                <button className="btn-brand w-full" style={{ padding: '8px', fontSize: 12 }} onClick={() => downloadReceiptPDF(bon)}>
-                                    <FileText size={14} /> DOWNLOAD PDF RAPPORT
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {editingLev && (
-                <div className="architect-modal-overlay">
-                    <div className="architect-modal" style={{ maxWidth: 500 }}>
-                        <div className="modal-head">
-                            <h3>{editingLev === 'new' ? 'NIEUWE LEVERANCIER' : 'LEVERANCIER BEWERKEN'}</h3>
-                            <button className="close-btn" onClick={() => setEditingLev(null)} aria-label="Sluiten"><X size={14} /></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="field mb-16"><label>NAAM</label><input value={levForm!.naam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, naam: e.target.value })} /></div>
-                            <div className="field mb-16">
-                                <label>TYPE</label>
-                                <select value={levForm!.type} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLevForm({ ...levForm!, type: e.target.value })}>
-                                    {['Vlees', 'Groente', 'Dranken', 'Overig'].map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
-                                </select>
-                            </div>
-                            <div className="field mb-16"><label>CONTACTPERSOON</label><input value={levForm!.contact} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, contact: e.target.value })} /></div>
-                            <div className="field mb-16"><label>TELEFOON</label><input value={levForm!.tel} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, tel: e.target.value })} /></div>
-                            <div className="field mb-24"><label>EMAIL</label><input value={levForm!.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLevForm({ ...levForm!, email: e.target.value })} /></div>
-
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <button className="btn-brand flex-1" onClick={saveLeverancier}>OPSLAAN</button>
-                                <button className="tab-btn" onClick={() => setEditingLev(null)}>ANNULEREN</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
         </RequireTier>
     );
 }
