@@ -110,11 +110,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
         }
 
-        // Cost-cap check vóór de Claude-call
-        const capCheck = await enforceAiCap(sb, orgId);
-        if (!capCheck.allowed) {
-            return NextResponse.json({ error: capCheck.message ?? 'AI-budget op' }, { status: 402 });
-        }
+        // Cost-cap check vóór de Claude-call. enforceAiCap(orgId, estEur) returnt
+        // een NextResponse als de cap bereikt is, anders null. Vision ~€0.05/call.
+        const capRes = await enforceAiCap(orgId, 0.05);
+        if (capRes) return capRes;
 
         const body: BodyShape = await req.json();
         if (!isString(body.naam, 200)) {
@@ -195,34 +194,38 @@ ${SCHEMA_PROMPT}`,
             delete parsed.cost;
         }
 
-        // Log AI-usage met cost-tracking
+        // Log AI-usage met cost-tracking — helper-signatures matchen recipe-generate.
+        const u = response.usage;
         const costCents = estimateAiCostCents({
             model: MODEL,
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-            cachedInputTokens: (response.usage as any).cache_read_input_tokens ?? 0,
+            tokens_input: u.input_tokens,
+            tokens_output: u.output_tokens,
+            tokens_cache_read: (u as any).cache_read_input_tokens ?? 0,
+            tokens_cache_creation: (u as any).cache_creation_input_tokens ?? 0,
         });
 
-        await logAiUsageServer(sb, {
+        // action_type is een enum (offerte_wizard|chat|prep_suggestion|menu_suggestion|other);
+        // vision-fill valt onder 'other'. Fire-and-forget — nooit de flow blokkeren.
+        logAiUsageServer({
             organization_id: orgId,
             user_id: user.id,
-            endpoint: '/api/gerecht-vision-fill',
+            action_type: 'other',
             model: MODEL,
-            input_tokens: response.usage.input_tokens,
-            output_tokens: response.usage.output_tokens,
-            cache_read_tokens: (response.usage as any).cache_read_input_tokens ?? 0,
-            cost_cents: costCents,
-            duration_ms: Date.now() - t0,
-            metadata: { naam, has_foto: true, vision_confidence: parsed.vision_confidence },
-        });
+            tokens_input: u.input_tokens,
+            tokens_output: u.output_tokens,
+            tokens_cache_read: (u as any).cache_read_input_tokens ?? 0,
+            tokens_cache_creation: (u as any).cache_creation_input_tokens ?? 0,
+            cost_eur_cents: costCents,
+            metadata: { feature: 'gerecht_vision_fill', naam, vision_confidence: parsed.vision_confidence },
+        }).catch(function () { /* non-blocking */ });
 
         return NextResponse.json({
             success: true,
             data: parsed,
             usage: {
-                input_tokens: response.usage.input_tokens,
-                output_tokens: response.usage.output_tokens,
-                cost_cents: costCents,
+                tokens_input: u.input_tokens,
+                tokens_output: u.output_tokens,
+                cost_eur_cents: costCents,
                 duration_ms: Date.now() - t0,
             },
         });

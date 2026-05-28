@@ -9,7 +9,7 @@ import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { supabase } from '@/lib/supabase';
 import type {
-    PrepTask, KitchenStation, DbEvent, Personeel,
+    PrepTask, KitchenStation, DbEvent, Personeel, Gerecht,
 } from '@/types/database.types';
 import type { Allergen } from '@/lib/allergenDetect';
 
@@ -44,8 +44,9 @@ export default function KookbordClient() {
     const { data: events } = useSupabase<DbEvent>('events');
     /* Gerechten laden voor de receptuur-weergave in de task-sheet. Sam's KDS-
        model: klik op taak (gekoppeld via prep_tasks.gerecht_id) → zie het recept.
-       Lichtgewicht select — alleen de velden die de sheet nodig heeft. */
-    const { data: gerechten } = useSupabase<{ id: string; naam: string; bereidingswijze?: string; ingredienten?: string[] }>('gerechten');
+       bereidingswijze/ingredienten zitten niet in het Gerecht-type maar bestaan
+       wel runtime — cast bij gebruik. */
+    const { data: gerechten } = useSupabase<Gerecht>('gerechten');
 
     const [personeel, setPersoneel] = useState<Personeel[]>([]);
     useEffect(() => {
@@ -188,16 +189,29 @@ export default function KookbordClient() {
         if (!sheetTask) return null;
         const gerechtId = (sheetTask as PrepTask & { gerecht_id?: string }).gerecht_id;
         if (!gerechtId) return null;
-        const g = gerechten.find((x) => String(x.id) === String(gerechtId));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const g: any = gerechten.find((x) => String(x.id) === String(gerechtId));
         if (!g) return null;
         // bereidingswijze is een TEXT-blob met stappen per regel ("1. ..." / "- ...")
-        const steps = (g.bereidingswijze || '')
+        const steps: string[] = (g.bereidingswijze || '')
             .split('\n')
-            .map((s) => s.replace(/^\s*(?:\d+[.)]|[-*•])\s*/, '').trim())
+            .map((s: string) => s.replace(/^\s*(?:\d+[.)]|[-*•])\s*/, '').trim())
             .filter(Boolean);
-        const ingredienten = Array.isArray(g.ingredienten)
-            ? g.ingredienten.filter((i): i is string => typeof i === 'string')
-            : [];
+        // ingredienten kan string[] zijn (oude shape) of object[] ({naam, hoeveelheid, eenheid}).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawIngr: any[] = Array.isArray(g.ingredienten) ? g.ingredienten : [];
+        const ingredienten: string[] = rawIngr
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .map((i: any) => {
+                if (typeof i === 'string') return i;
+                if (i && typeof i === 'object' && i.naam) {
+                    const qty = i.hoeveelheid ?? i.qty_pp ?? '';
+                    const unit = i.eenheid ?? i.unit ?? '';
+                    return `${i.naam}${qty ? ' ' + qty : ''}${unit}`.trim();
+                }
+                return '';
+            })
+            .filter(Boolean);
         const scaledGuests = eventsById.get(sheetTask.event_id)?.guests ?? undefined;
         if (steps.length === 0 && ingredienten.length === 0) return null;
         return { naam: g.naam, steps, ingredienten, scaledGuests };
