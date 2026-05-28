@@ -41,6 +41,7 @@
     "node_modules",
     "cloudflare",
     "chrome-extension",
-    "docs/claude-design"
+    "docs/claude-design",
+    "src/components/_archived"
   ]
 }
