@@ -569,9 +569,23 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     }
 
     function applyAiFill(data: AiFillResult, meta: AiFillMeta) {
+        /* Gang auto-invullen uit AI-suggestie (alleen vision-pad geeft gangcategorie).
+           Best-effort match tegen de eigen gangen-lijst op slug/naam. AI-categorieën:
+           voorgerecht|hoofdgerecht|bijgerecht|dessert|saus|bites. Geen match → laat
+           de bestaande gang_slug staan. */
+        let mappedGang: string | null = null;
+        if (data.gangcategorie) {
+            const cat = data.gangcategorie.toLowerCase().replace(/gerechten?$/, '');
+            mappedGang = gangen.find((g) => {
+                const s = (g.slug || '').toLowerCase();
+                const n = (g.naam || '').toLowerCase();
+                return s.includes(cat) || n.includes(cat) || cat.includes(s);
+            })?.slug ?? null;
+        }
         setForm((f: any) => Object.assign({}, f, {
             naam: f.naam || data.naam,                             // overschrijf niet als al ingevuld
             beschrijving: f.beschrijving || data.beschrijving,
+            gang_slug: f.gang_slug || mappedGang || f.gang_slug,   // alleen invullen als nog leeg
             porties: f.porties || data.porties || 10,
             ingredient_costs: (data.ingredient_costs || []).map(ing => ({
                 naam: ing.naam,
@@ -1396,6 +1410,21 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                             <span>Totale Foodcost p.p.</span>
                                             <span className="ingredient-cost-total-value">€{totalFoodcostPP.toFixed(2)}</span>
                                         </div>
+
+                                        {/* Hint: foodcost blijft €0 zolang AI-geschatte ingrediënten geen
+                                            voorraad-koppeling (en dus prijs) hebben. Compliance: AI verzint
+                                            geen euro's — koppel aan voorraad of vul handmatig een prijs in. */}
+                                        {totalFoodcostPP === 0 && (form.ingredient_costs || []).some((i: any) => i.is_estimated) && (
+                                            <div style={{
+                                                marginTop: 8, padding: '8px 12px', borderRadius: 8,
+                                                background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.25)',
+                                                fontSize: 12, color: 'var(--muted)', lineHeight: 1.45,
+                                            }}>
+                                                💡 Foodcost is €0 omdat de AI-geschatte ingrediënten nog geen prijs hebben.
+                                                Klik op een <strong style={{ color: 'var(--color-accent-gold)' }}>📷 GESCHAT</strong>-ingrediënt
+                                                om 'm aan je voorraad te koppelen, of vul handmatig een kostprijs in.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

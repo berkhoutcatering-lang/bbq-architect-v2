@@ -37,6 +37,9 @@ export interface AiFillResult {
   wijn_suggestie: string;
   service_tip: string;
   kostprijs_pp_schatting: number;
+  /** Optioneel — AI-gesuggereerde gangcategorie (alleen vision-pad). Caller
+   *  mapt 'm best-effort naar de eigen gangen-lijst. */
+  gangcategorie?: string;
 }
 
 export interface AiFillMeta {
@@ -125,6 +128,7 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
           wijn_suggestie: d.wijn_suggestie || '',
           service_tip: d.service_tip || '',
           kostprijs_pp_schatting: 0,   // code rekent uit ingredient × voorraad
+          gangcategorie: d.gangcategorie || undefined,  // caller mapt naar gang_slug
         };
         const meta: AiFillMeta = {
           inventory_size: 0,
