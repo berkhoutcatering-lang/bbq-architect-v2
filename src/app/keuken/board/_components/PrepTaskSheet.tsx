@@ -4,10 +4,23 @@ import { useState } from 'react';
 import {
     Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetBody, SheetFooter,
 } from '@/components/mobile/Sheet';
-import { Play, Check, X, Clock, AlertTriangle, User, ChevronRight } from 'lucide-react';
+import { Play, Check, X, Clock, AlertTriangle, User, ChevronRight, BookOpen, UtensilsCrossed } from 'lucide-react';
 import type { PrepTask, KitchenStation, Personeel, PrepTaskStatus } from '@/types/database.types';
 import { ALLERGEN_META } from '@/lib/prep/allergens';
 import type { Allergen } from '@/lib/allergenDetect';
+
+/** Receptuur die getoond wordt bij een taak die aan een gerecht gekoppeld is. */
+export interface TaskRecipe {
+    naam: string;
+    /** Bereidings-stappen (uit gerecht.bereidingswijze of component.preparation_steps). */
+    steps?: string[];
+    /** Ingrediënten als leesbare strings ("Zalmfilet 80g"). */
+    ingredienten?: string[];
+    /** Componenten waaruit het gerecht bestaat (Sam's "5 componenten = 1 gerecht"). */
+    components?: { name: string; steps?: string[] }[];
+    /** Geschaald aantal porties voor dit event (headcount). */
+    scaledGuests?: number;
+}
 
 interface Props {
     open: boolean;
@@ -20,6 +33,8 @@ interface Props {
     eventAllergens?: Allergen[];
     assigneeName?: string | null;
     personeel: Personeel[];
+    /** Receptuur voor het gekoppelde gerecht — toont stappen + componenten in de sheet. */
+    recipe?: TaskRecipe | null;
     /** Acties — alle return Promise<void>. */
     onStart: (taskId: number) => Promise<void>;
     onComplete: (taskId: number, actualQty?: number, notes?: string) => Promise<void>;
@@ -38,7 +53,7 @@ interface Props {
 export default function PrepTaskSheet({
     open, onOpenChange, task, station,
     eventLabel, eventDateLabel, eventTimeLabel,
-    eventAllergens = [], assigneeName, personeel,
+    eventAllergens = [], assigneeName, personeel, recipe = null,
     onStart, onComplete, onSkip, onSnooze, onReassign,
 }: Props) {
     const [actualQty, setActualQty] = useState<string>('');
@@ -169,6 +184,70 @@ export default function PrepTaskSheet({
                             </div>
                         </div>
                     )}
+
+                    {/* Receptuur — getoond als de taak aan een gerecht gekoppeld is.
+                        Sam's KDS-model: klik op taak → zie hoe je het maakt, geschaald
+                        naar event-headcount. Componenten als sub-secties. */}
+                    {recipe && (recipe.steps?.length || recipe.ingredienten?.length || recipe.components?.length) ? (
+                        <div className="prep-sheet__section">
+                            <h3 className="prep-sheet__section-title">
+                                <BookOpen size={14} /> Receptuur: {recipe.naam}
+                                {recipe.scaledGuests ? (
+                                    <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>
+                                        ({recipe.scaledGuests} gasten)
+                                    </span>
+                                ) : null}
+                            </h3>
+
+                            {recipe.ingredienten && recipe.ingredienten.length > 0 && (
+                                <div style={{ marginBottom: 12 }}>
+                                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>
+                                        Ingrediënten
+                                    </div>
+                                    <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                        {recipe.ingredienten.map((ing, i) => (
+                                            <li key={i} style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{ing}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {recipe.steps && recipe.steps.length > 0 && (
+                                <div style={{ marginBottom: recipe.components?.length ? 12 : 0 }}>
+                                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>
+                                        Bereiding
+                                    </div>
+                                    <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        {recipe.steps.map((step, i) => (
+                                            <li key={i} style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>{step}</li>
+                                        ))}
+                                    </ol>
+                                </div>
+                            )}
+
+                            {recipe.components && recipe.components.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 700 }}>
+                                        Componenten ({recipe.components.length})
+                                    </div>
+                                    {recipe.components.map((comp, ci) => (
+                                        <div key={ci} style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: comp.steps?.length ? 4 : 0 }}>
+                                                <UtensilsCrossed size={12} style={{ color: 'var(--color-accent-gold)' }} /> {comp.name}
+                                            </div>
+                                            {comp.steps && comp.steps.length > 0 && (
+                                                <ol style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                    {comp.steps.map((s, si) => (
+                                                        <li key={si} style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>{s}</li>
+                                                    ))}
+                                                </ol>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : null}
 
                     {/* Notes existing */}
                     {task.notes && (

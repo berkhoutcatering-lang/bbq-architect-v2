@@ -17,7 +17,7 @@ import PrepKdsTopStrip from '../../board/_components/PrepKdsTopStrip';
 import PrepBoardFilters, { type DateFilter } from '../../board/_components/PrepBoardFilters';
 import PrepBoardWeekRail from '../../board/_components/PrepBoardWeekRail';
 import PrepBoardColumn from '../../board/_components/PrepBoardColumn';
-import PrepTaskSheet from '../../board/_components/PrepTaskSheet';
+import PrepTaskSheet, { type TaskRecipe } from '../../board/_components/PrepTaskSheet';
 
 /**
  * KookbordClient — hoofd container voor /keuken/kookbord (PREP-modus).
@@ -42,6 +42,10 @@ export default function KookbordClient() {
     const { data: tasks } = useSupabase<PrepTask>('prep_tasks');
     const { data: stations } = useSupabase<KitchenStation>('kitchen_stations');
     const { data: events } = useSupabase<DbEvent>('events');
+    /* Gerechten laden voor de receptuur-weergave in de task-sheet. Sam's KDS-
+       model: klik op taak (gekoppeld via prep_tasks.gerecht_id) → zie het recept.
+       Lichtgewicht select — alleen de velden die de sheet nodig heeft. */
+    const { data: gerechten } = useSupabase<{ id: string; naam: string; bereidingswijze?: string; ingredienten?: string[] }>('gerechten');
 
     const [personeel, setPersoneel] = useState<Personeel[]>([]);
     useEffect(() => {
@@ -175,6 +179,29 @@ export default function KookbordClient() {
         if (sheetTaskId == null) return null;
         return tasks.find((t) => t.id === sheetTaskId) ?? null;
     }, [sheetTaskId, tasks]);
+
+    /* Receptuur voor de geopende taak — gekoppeld via prep_tasks.gerecht_id.
+       Toont bereiding-stappen + ingrediënten in de sheet (Sam's KDS-wens:
+       klik taak → zie hoe je het maakt). Geschaald aantal gasten komt uit het
+       gekoppelde event. Best-effort: geen gerecht_id of geen match → null. */
+    const sheetRecipe: TaskRecipe | null = useMemo(() => {
+        if (!sheetTask) return null;
+        const gerechtId = (sheetTask as PrepTask & { gerecht_id?: string }).gerecht_id;
+        if (!gerechtId) return null;
+        const g = gerechten.find((x) => String(x.id) === String(gerechtId));
+        if (!g) return null;
+        // bereidingswijze is een TEXT-blob met stappen per regel ("1. ..." / "- ...")
+        const steps = (g.bereidingswijze || '')
+            .split('\n')
+            .map((s) => s.replace(/^\s*(?:\d+[.)]|[-*•])\s*/, '').trim())
+            .filter(Boolean);
+        const ingredienten = Array.isArray(g.ingredienten)
+            ? g.ingredienten.filter((i): i is string => typeof i === 'string')
+            : [];
+        const scaledGuests = eventsById.get(sheetTask.event_id)?.guests ?? undefined;
+        if (steps.length === 0 && ingredienten.length === 0) return null;
+        return { naam: g.naam, steps, ingredienten, scaledGuests };
+    }, [sheetTask, gerechten, eventsById]);
 
     function openSheet(task: PrepTask) {
         setSheetTaskId(task.id);
@@ -380,6 +407,7 @@ export default function KookbordClient() {
                 eventAllergens={sheetTask ? eventAllergens.get(sheetTask.event_id)?.allergens ?? [] : []}
                 assigneeName={sheetTask?.assignee_id ? personeelById.get(sheetTask.assignee_id)?.naam ?? null : null}
                 personeel={personeel}
+                recipe={sheetRecipe}
                 onStart={handleSheetStart}
                 onComplete={handleSheetComplete}
                 onSkip={handleSheetSkip}
