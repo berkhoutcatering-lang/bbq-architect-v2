@@ -108,6 +108,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [bedenkerOpen, setBedenkerOpen] = useState(false);
     const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
+    /* AI-allergeen-detectie bij opslaan: standaard aan, maar Sam wil de keuze.
+       aiSaving = spinner-state tijdens de (trage) AI-call. */
+    const [aiAllergenEnabled, setAiAllergenEnabled] = useState(true);
+    const [aiSaving, setAiSaving] = useState(false);
     /* P0-A: saveData wacht in pending tot user op modal beslist. */
     const [pendingAllergenSave, setPendingAllergenSave] = useState<Record<string, any> | null>(null);
     const [gangFilter, setGangFilter] = useState<string>('all');
@@ -381,9 +385,14 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (editing === 'new') {
             if (!dbData.status) dbData.status = 'actief';
             if (!dbData.bron) dbData.bron = 'manual';
+            /* RLS WITH CHECK op gerechten vereist organization_id ∈ user's orgs.
+               Zonder dit faalt de insert met "new row violates row-level security
+               policy". orgId komt uit useOrg(). */
+            if (!dbData.organization_id && orgId) dbData.organization_id = orgId;
         }
 
         if (editing === 'new') {
+            if (!orgId) { showToast('Geen organisatie geladen — herlaad de pagina', 'error'); return; }
             const { error } = await supabase.from('gerechten').insert([dbData]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht toegevoegd!');
@@ -410,24 +419,37 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (saveData.kostprijs_pp === '' || saveData.kostprijs_pp === null) saveData.kostprijs_pp = 0;
         else saveData.kostprijs_pp = parseFloat(saveData.kostprijs_pp) || 0;
 
-        const aiAllergens = await detectAllergensViaAi(saveData);
-        const existing = Array.isArray(saveData.allergenen) ? saveData.allergenen : [];
-        const newOnes = aiAllergens.filter((a: string) => !existing.includes(a));
-
-        if (newOnes.length > 0) {
-            /* Block save, open modal. Modal-onSubmit roept commitSave aan met
-               de definitieve allergenen-merge op basis van user-decisions. */
-            setPendingAllergenSave(saveData);
-            setAllergenModalRows(newOnes.map((a: string, i: number) => ({
-                id: `save-${i}-${a}`,
-                allergen: a,
-                source: `AI-detectie via ${saveData.ingredient_costs?.length ?? saveData.ingredienten?.length ?? 0} ingrediënten`,
-                confidence: 90,
-            })));
+        /* AI-allergeen-detectie is optioneel (Sam's keuze). Bij uitgeschakeld:
+           direct opslaan zonder AI-call — sneller, geen kosten, handmatige
+           allergenen blijven leidend. */
+        if (!aiAllergenEnabled) {
+            await commitSave(saveData);
             return;
         }
 
-        await commitSave(saveData);
+        setAiSaving(true);
+        try {
+            const aiAllergens = await detectAllergensViaAi(saveData);
+            const existing = Array.isArray(saveData.allergenen) ? saveData.allergenen : [];
+            const newOnes = aiAllergens.filter((a: string) => !existing.includes(a));
+
+            if (newOnes.length > 0) {
+                /* Block save, open modal. Modal-onSubmit roept commitSave aan met
+                   de definitieve allergenen-merge op basis van user-decisions. */
+                setPendingAllergenSave(saveData);
+                setAllergenModalRows(newOnes.map((a: string, i: number) => ({
+                    id: `save-${i}-${a}`,
+                    allergen: a,
+                    source: `AI-detectie via ${saveData.ingredient_costs?.length ?? saveData.ingredienten?.length ?? 0} ingrediënten`,
+                    confidence: 90,
+                })));
+                return;
+            }
+
+            await commitSave(saveData);
+        } finally {
+            setAiSaving(false);
+        }
     }
 
     async function deleteGerecht(id: number | string) {
@@ -1723,8 +1745,43 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     </button>
                                 );
                             })()}
-                            <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); }}>Annuleren</button>
-                            <button className="btn btn-brand btn-sm" onClick={saveGerecht}>Opslaan</button>
+                            {/* AI-allergeen-toggle: Sam wil de keuze of de AI bij opslaan
+                                meedraait. Standaard aan. Uit = direct opslaan, geen AI-call. */}
+                            <button
+                                type="button"
+                                onClick={function () { setAiAllergenEnabled(!aiAllergenEnabled); }}
+                                title={aiAllergenEnabled ? 'AI-allergeencheck staat aan — klik om uit te zetten' : 'AI-allergeencheck staat uit — klik om aan te zetten'}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 'auto',
+                                    padding: '6px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                    background: aiAllergenEnabled ? 'rgba(196,163,90,.12)' : 'rgba(255,255,255,.04)',
+                                    border: '1px solid ' + (aiAllergenEnabled ? 'rgba(196,163,90,.35)' : 'rgba(255,255,255,.12)'),
+                                    color: aiAllergenEnabled ? '#c4a35a' : 'var(--muted)',
+                                }}
+                            >
+                                <span style={{
+                                    width: 28, height: 16, borderRadius: 8, position: 'relative', transition: 'background .15s',
+                                    background: aiAllergenEnabled ? '#c4a35a' : 'rgba(255,255,255,.2)', flexShrink: 0,
+                                }}>
+                                    <span style={{
+                                        position: 'absolute', top: 2, left: aiAllergenEnabled ? 14 : 2, width: 12, height: 12,
+                                        borderRadius: 6, background: '#fff', transition: 'left .15s',
+                                    }} />
+                                </span>
+                                ✦ AI-allergeencheck
+                            </button>
+                            <button className="btn btn-ghost btn-sm" disabled={aiSaving} onClick={function () { setEditing(null); }}>Annuleren</button>
+                            <button className="btn btn-brand btn-sm" disabled={aiSaving} onClick={saveGerecht}>
+                                {aiSaving ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                        <span className="spinner-ring" style={{
+                                            width: 13, height: 13, border: '2px solid rgba(0,0,0,.25)', borderTopColor: '#000',
+                                            borderRadius: '50%', display: 'inline-block', animation: 'spin .6s linear infinite',
+                                        }} />
+                                        AI checkt allergenen...
+                                    </span>
+                                ) : 'Opslaan'}
+                            </button>
                         </div>
                     </div>
                 </div>
