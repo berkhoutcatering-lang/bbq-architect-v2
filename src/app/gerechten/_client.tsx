@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus } from 'lucide-react';
+import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
 import { track, trackOnce } from '@/lib/track';
@@ -70,6 +70,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [gerechten, setGerechten] = useState<Gerecht[]>(initial?.gerechten ?? []);
     const [activeGang, setActiveGang] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | number | null>(null);
+    /* Tab binnen de edit-drawer — spiegelt de tabs van GerechtDetailDrawer
+       (Wat/Bouw/Compliance/Service) zodat toevoegen/bewerken en bekijken
+       hetzelfde rechter-paneel zijn. Reset naar 'wat' bij elke open. */
+    const [editTab, setEditTab] = useState<'wat' | 'bouw' | 'compliance' | 'service'>('wat');
     const [form, setForm] = useState<Record<string, any>>({});
     const [gangEditing, setGangEditing] = useState<string | number | null>(null);
     const [gangForm, setGangForm] = useState<Record<string, any>>({});
@@ -258,6 +262,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
     function newGerecht() {
         setEditing('new');
+        setEditTab('wat');
         setForm({
             naam: '', beschrijving: '', gang_slug: activeGang,
             volgorde: gerechten.filter(function (g) { return g.gang_slug === activeGang; }).length + 1,
@@ -275,6 +280,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     }
     async function editGerecht(g) {
         setEditing(g.id);
+        setEditTab('wat');
 
         const rawIngs = g.ingredienten || [];
         const mappedIngs = Array.isArray(rawIngs) ? rawIngs : (typeof rawIngs === 'string' ? rawIngs.split(',').map(function (s: string) { return s.trim(); }).filter(Boolean) : []);
@@ -1050,15 +1056,51 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             )}
 
             {editing && (
-                <div className="modal-bg" onClick={function (e: React.MouseEvent<HTMLDivElement>) { if (e.target === e.currentTarget) setEditing(null); }}>
-                    <div className="modal-box" style={{ maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <h3 style={{ margin: 0 }}>{editing === 'new' ? 'Nieuw gerecht' : 'Gerecht bewerken'}</h3>
-                            {/* AI-ingang is geconsolideerd naar één knop in het AI RECEPTUUR-
-                                ASSISTENT blok (RecipeAiButton) — die is nu foto-bewust. De
-                                losse header-knop is verwijderd om de dubbele AI-ingang weg te halen. */}
+                <>
+                    <div className="mr-drawer-scrim" onClick={function () { setEditing(null); }} role="presentation" />
+                    <div className="mr-drawer mr-drawer-edit" role="dialog" aria-modal="true" aria-labelledby="edit-drawer-title">
+                        {/* Header — zelfde chrome als GerechtDetailDrawer zodat toevoegen,
+                            bewerken en bekijken één samenhangend rechter-paneel zijn. */}
+                        <div className="mr-drawer-header">
+                            {form.foto_url && (
+                                <div className="mr-drawer-header-photo">
+                                    <img src={form.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                            )}
+                            <div className="mr-drawer-header-info">
+                                <h2 id="edit-drawer-title" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, margin: 0 }}>
+                                    {editing === 'new' ? 'Nieuw gerecht' : (form.naam || 'Gerecht bewerken')}
+                                </h2>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                                    {editing === 'new' ? 'Vul de details in — wissel tussen de tabs hieronder' : 'Bewerk de details'}
+                                </div>
+                            </div>
+                            <button className="mr-drawer-close" onClick={function () { setEditing(null); }} aria-label="Sluit"><X size={18} /></button>
                         </div>
+
+                        {/* Tab-bar — identiek aan de detail-drawer */}
+                        <div className="mr-drawer-tabs" role="tablist" aria-label="Gerecht bewerken">
+                            {([
+                                { id: 'wat', label: 'Wat', Icon: FileText },
+                                { id: 'bouw', label: 'Bouw', Icon: Layers },
+                                { id: 'compliance', label: 'Compliance', Icon: ShieldCheck },
+                                { id: 'service', label: 'Service', Icon: UtensilsCrossed },
+                            ] as const).map(function (t) {
+                                const I = t.Icon;
+                                const active = editTab === t.id;
+                                return (
+                                    <button key={t.id} type="button" role="tab" aria-selected={active}
+                                        className={'mr-drawer-tab' + (active ? ' active' : '')}
+                                        onClick={function () { setEditTab(t.id); }}>
+                                        <I size={13} /> {t.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="mr-drawer-edit-body">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
+                                {editTab === 'wat' && (<>
 
                             <div className="field">
                                 <label>Foto</label>
@@ -1127,7 +1169,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 <label>Beschrijving</label>
                                 <input value={form.beschrijving || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { beschrijving: e.target.value })); }} placeholder="bijv. Krokant gyoza vel met gerookte zalm" />
                             </div>
+                                </>)}
 
+                                {editTab === 'bouw' && (<>
                             <div className="field">
                                 <label>Ingrediënten</label>
                                 <div className="tag-input-container">
@@ -1146,7 +1190,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         placeholder="Typ ingrediënt + Enter" />
                                 </div>
                             </div>
+                                </>)}
 
+                                {editTab === 'service' && (<>
                             <div className="field">
                                 <label>Bereidingswijze <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(één stap per regel voor Kitchen Mode)</span></label>
                                 <textarea value={form.bereidingswijze || ''}
@@ -1263,7 +1309,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     </div>
                                 </div>
                             </div>
+                                </>)}
 
+                                {editTab === 'bouw' && (<>
                             <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
                                 <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
                                     Hardware per gast
@@ -1461,7 +1509,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     <button type="button" className="btn btn-brand btn-sm" onClick={addCostItem} style={{ height: 34 }}>+</button>
                                 </div>
                             </div>
+                                </>)}
 
+                                {editTab === 'compliance' && (<>
                             <div className="field">
                                 <label>⚠️ Allergenen <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                 <div className="tag-input-container">
@@ -1485,7 +1535,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     })}
                                 </div>
                             </div>
+                                </>)}
 
+                                {editTab === 'wat' && (<>
                             <div className="field">
                                 <label>🏷️ Labels <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                 <div className="tag-input-container">
@@ -1509,7 +1561,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     })}
                                 </div>
                             </div>
+                                </>)}
 
+                                {editTab === 'bouw' && (<>
                             <div className="form-grid">
                                 <div className="field">
                                     <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
@@ -1521,6 +1575,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                             </div>
 
+                                </>)}
+
+                                {editTab === 'wat' && (<>
                             <div className="field">
                                 <label>Status</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1614,6 +1671,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     )}
                                 </div>
                             )}
+                                </>)}
                         </div>
 
                         {/* Compleetheid-meter — toont in één oogopslag wat nog mist
@@ -1667,8 +1725,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 <AuditTrailTimeline recordTable="gerechten" recordId={editing as number} />
                             </div>
                         )}
+                        </div>{/* /mr-drawer-edit-body */}
 
-                        <div className="modal-actions">
+                        <div className="mr-drawer-footer">
                             {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={function () { deleteGerecht(editing as number); }}>Verwijderen</button>}
                             {/* Status-toggle: concept/review → activeer · actief → deactiveer · inactief → activeer */}
                             {editing !== 'new' && (function () {
@@ -1745,7 +1804,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                             </button>
                         </div>
                     </div>
-                </div>
+                </>
             )}
 
             {gangEditing && (
