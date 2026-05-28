@@ -53,9 +53,11 @@ interface Props {
   onResult: (data: AiFillResult, meta: AiFillMeta) => void;
   /** Compact = inline-button, normaal = grote CTA. */
   compact?: boolean;
+  /** Als gezet: AI analyseert óók deze foto via vision i.p.v. tekst-only. */
+  fotoUrl?: string;
 }
 
-export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, onResult, compact }: Props) {
+export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, onResult, compact, fotoUrl }: Props) {
   const showToast = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(defaultName);
@@ -80,6 +82,71 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
     }
     setLoading(true);
     try {
+      /* Vision-pad: als er een foto is, analyseert de AI die i.p.v. tekst-only.
+         Resultaat wordt gemapt naar dezelfde AiFillResult-shape zodat de
+         caller (applyAiFill) niks anders hoeft te doen. */
+      if (fotoUrl) {
+        const res = await fetch('/api/gerecht-vision-fill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            naam: name.trim(),
+            beschrijving: hints.trim() || undefined,
+            foto_url: fotoUrl,
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok || !body.success) {
+          setError(body.error || `AI-foto-analyse faalde (${res.status})`);
+          setLoading(false);
+          return;
+        }
+        const d = body.data || {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ingredient_costs: AiFillIngredient[] = (d.ingredienten || []).map((i: any) => ({
+          naam: i.naam,
+          inventory_id: null,
+          qty_pp: typeof i.qty_pp === 'number' ? i.qty_pp : 0,
+          unit: i.eenheid || 'stuks',
+          yield: 1,
+          is_estimated: true,          // vision schat — kostprijs komt later uit voorraad-match
+          estimated_price_eur: null,
+        }));
+        const mapped: AiFillResult = {
+          naam: name.trim(),
+          beschrijving: d.beschrijving || '',
+          porties,
+          ingredient_costs,
+          bereidingswijze: Array.isArray(d.preparation_steps)
+            ? d.preparation_steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')
+            : '',
+          allergenen: [],              // compliance: nooit AI-afgeleid, blijft handmatig
+          tags: [],
+          wijn_suggestie: d.wijn_suggestie || '',
+          service_tip: d.service_tip || '',
+          kostprijs_pp_schatting: 0,   // code rekent uit ingredient × voorraad
+        };
+        const meta: AiFillMeta = {
+          inventory_size: 0,
+          matched_count: 0,
+          estimated_count: ingredient_costs.length,
+          cost_cents: body.usage?.cost_eur_cents ?? 0,
+          elapsed_ms: body.usage?.duration_ms ?? 0,
+        };
+        onResult(mapped, meta);
+        const q = Array.isArray(d.inline_questions) ? d.inline_questions : [];
+        if (q.length > 0) {
+          showToast(`AI vraagt: ${q.join(' · ')}`, 'info');
+        } else {
+          showToast(`Recept uit foto gegenereerd (zekerheid: ${d.vision_confidence || 'middel'})`, 'success');
+        }
+        setOpen(false);
+        setLoading(false);
+        setHints('');
+        return;
+      }
+
+      // Tekst-pad (geen foto): bestaande recipe/ai-fill flow met voorraad-matching
       const res = await fetch('/api/recipe/ai-fill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,10 +247,27 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
                   AI vult je recept in
                 </h2>
                 <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }}>
-                  Geeft ingrediënten, bereidingswijze, allergenen en kostprijs — gematched aan je voorraad.
+                  {fotoUrl
+                    ? 'Analyseert je foto + naam → ingrediënten, bereiding en suggesties.'
+                    : 'Geeft ingrediënten, bereidingswijze, allergenen en kostprijs — gematched aan je voorraad.'}
                 </p>
               </div>
             </div>
+
+            {fotoUrl && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginTop: 14,
+                padding: '10px 12px', borderRadius: 10,
+                background: `${GOLD}14`, border: `1px solid ${GOLD}40`,
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={fotoUrl} alt="Gerecht" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                <div style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.4 }}>
+                  <strong style={{ color: GOLD }}>📷 Foto wordt meegenomen</strong><br />
+                  De AI kijkt naar je foto en stelt zo nauwkeuriger ingrediënten + stappen voor.
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
               <div>
