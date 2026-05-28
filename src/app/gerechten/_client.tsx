@@ -465,7 +465,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (!file) return;
         setUploading(true);
         const ext = file.name.split('.').pop();
-        const fileName = 'gerecht_' + Date.now() + '.' + ext;
+        /* Map-structuur per organisatie i.p.v. platte bucket-root: foto's
+           landen in gerechten-fotos/{org_id}/gerecht_<timestamp>.<ext>. Netter
+           in Supabase Storage + betere multi-tenant scheiding. */
+        const fileName = `${orgId || 'onbekend'}/gerecht_${Date.now()}.${ext}`;
 
         const { data, error } = await supabase.storage
             .from('gerechten-fotos')
@@ -491,7 +494,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (!file) return;
         setUploading(true);
         const ext = file.name.split('.').pop();
-        const fileName = 'service_' + Date.now() + '.' + ext;
+        const fileName = `${orgId || 'onbekend'}/service_${Date.now()}.${ext}`;
         const { data, error } = await supabase.storage
             .from('gerechten-fotos')
             .upload(fileName, file, { cacheControl: '3600', upsert: true });
