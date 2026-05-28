@@ -77,6 +77,16 @@
 .mr-drawer-content::-webkit-scrollbar-thumb { background:rgba(130,130,130,.15); border-radius:2px; }
 .mr-detail-stat { padding:12px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:10px; }
 
+/* ── Edit-drawer ───────────────────────────────────
+   Hergebruikt de detail-drawer chrome (scrim/header/tabs) maar met een eigen
+   scrollende body + sticky footer, zodat toevoegen/bewerken en bekijken
+   hetzelfde rechter-paneel zijn. */
+.mr-drawer-edit { width:560px; max-width:94vw; }
+.mr-drawer-edit-body { flex:1; min-height:0; overflow-y:auto; padding:20px 24px; }
+.mr-drawer-edit-body::-webkit-scrollbar { width:4px; }
+.mr-drawer-edit-body::-webkit-scrollbar-thumb { background:rgba(130,130,130,.15); border-radius:2px; }
+.mr-drawer-footer { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:14px 24px; border-top:1px solid var(--border); background:var(--bg-elevated,var(--bg)); flex-shrink:0; }
+
 /* ── AI rail ───────────────────────────────────── */
 .mr-ai-rail { width:180px; border-left:1px solid var(--border); padding:16px 12px; display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
 .mr-ai-rail-btn { display:flex; align-items:flex-start; gap:10px; padding:10px; border-radius:10px; background:rgba(255,191,0,.04); border:1px solid rgba(255,191,0,.1); cursor:pointer; transition:.15s; text-align:left; font-family:var(--font-sans); color:var(--text); width:100%; }
