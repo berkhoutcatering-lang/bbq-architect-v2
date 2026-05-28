@@ -51,6 +51,23 @@ import type { InventoryItem, Gang, Gerecht, MenuTemplateRow } from '@/types';
    prefetcht gangen + gerechten + inventory + menu_templates parallel zodat
    first paint geen waterfall toont. `loadData()` blijft als refetch zodat
    menu-templates en realtime updates blijven werken. */
+
+/* Component-koppeling ("5 componenten = 1 gerecht"). Een gerecht is opgebouwd
+   uit herbruikbare componenten; de koppeling leeft in gerecht_components. */
+interface ComponentRow {
+    id: number;
+    name: string;
+    type: 'prepared' | 'bought_in';
+    base_quantity: number;
+    base_unit: string;
+    preparation_steps?: unknown;
+}
+interface GerechtComponentLink {
+    component_id: number;
+    quantity_used: number;
+    unit: string;
+}
+
 export interface GerechtenInitial {
     gangen?: Gang[];
     gerechten?: Gerecht[];
@@ -118,6 +135,15 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* P0-A: saveData wacht in pending tot user op modal beslist. */
     const [pendingAllergenSave, setPendingAllergenSave] = useState<Record<string, any> | null>(null);
     const [gangFilter, setGangFilter] = useState<string>('all');
+
+    /* Component-bibliotheek voor de picker in de Bouw-tab. components.id is
+       BIGINT → number met organization_id → useSupabase werkt hier wél.
+       form.componenten houdt de gekoppelde set vast; commitSave synct die
+       naar gerecht_components. */
+    const { data: allComponents } = useSupabase<ComponentRow>('components');
+    const [compInput, setCompInput] = useState<{ component_id: number | ''; quantity_used: string; unit: string }>(
+        { component_id: '', quantity_used: '', unit: '' },
+    );
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const serviceImageRef = useRef<HTMLInputElement>(null);
@@ -270,17 +296,35 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             allergenen: [], tags: [], kostprijs_pp: '',
             service_image: '', battle_plan_steps: [], target_prep_time: 0,
             hardware_items: [], ingredienten_winkels: {},
-            ingredient_costs: [], actief: false,
+            ingredient_costs: [], componenten: [], actief: false,
             porties: 10, wijn_suggestie: '', service_tip: ''
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
         setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
+        setCompInput({ component_id: '', quantity_used: '', unit: '' });
         setStats(null);
     }
     async function editGerecht(g) {
         setEditing(g.id);
         setEditTab('wat');
+
+        /* Bestaande component-koppelingen laden (org-scoped via RLS) zodat de
+           Bouw-tab toont waaruit dit gerecht is opgebouwd. */
+        let existingLinks: GerechtComponentLink[] = [];
+        try {
+            const { data: gcData } = await supabase
+                .from('gerecht_components')
+                .select('component_id, quantity_used, unit')
+                .eq('gerecht_id', g.id);
+            if (Array.isArray(gcData)) {
+                existingLinks = gcData.map(function (r: any) {
+                    return { component_id: Number(r.component_id), quantity_used: Number(r.quantity_used), unit: r.unit || '' };
+                });
+            }
+        } catch (e) {
+            console.warn('[gerecht] component-koppelingen laden faalde:', (e as Error).message);
+        }
 
         const rawIngs = g.ingredienten || [];
         const mappedIngs = Array.isArray(rawIngs) ? rawIngs : (typeof rawIngs === 'string' ? rawIngs.split(',').map(function (s: string) { return s.trim(); }).filter(Boolean) : []);
@@ -308,11 +352,13 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             actief: g.actief !== false,
             porties: g.porties || 10,
             wijn_suggestie: g.wijn_suggestie || '',
-            service_tip: g.service_tip || ''
+            service_tip: g.service_tip || '',
+            componenten: existingLinks
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
         setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
+        setCompInput({ component_id: '', quantity_used: '', unit: '' });
         loadStats(g.naam);
     }
 
@@ -387,6 +433,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        /q/[id] zichtbaar worden — security/safety issue. */
     async function commitSave(saveData: Record<string, any>) {
         const dbData: Record<string, any> = Object.assign({}, saveData);
+        /* `componenten` is een client-side form-veld, geen gerechten-kolom →
+           strip vóór insert/update en sync apart naar gerecht_components. */
+        const componentenLinks: GerechtComponentLink[] = Array.isArray(saveData.componenten) ? saveData.componenten : [];
+        delete dbData.componenten;
         if (editing === 'new') {
             if (!dbData.status) dbData.status = 'actief';
             if (!dbData.bron) dbData.bron = 'manual';
@@ -398,8 +448,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
         if (editing === 'new') {
             if (!orgId) { showToast('Geen organisatie geladen — herlaad de pagina', 'error'); return; }
-            const { error } = await supabase.from('gerechten').insert([dbData]);
+            const { data: inserted, error } = await supabase.from('gerechten').insert([dbData]).select('id').single();
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+            if (inserted?.id) await syncGerechtComponents(inserted.id, componentenLinks);
             showToast('Gerecht toegevoegd!');
             /* Activation tracking — `first_gerecht_created` (ux-master.md sectie 7). */
             trackOnce('first_gerecht_created', 'first_gerecht');
@@ -411,6 +462,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         } else {
             const { error } = await supabase.from('gerechten').update(dbData).eq('id', editing);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+            await syncGerechtComponents(editing, componentenLinks);
             showToast('Gerecht bijgewerkt!');
         }
         setEditing(null);
@@ -776,6 +828,52 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         const items = (form.ingredient_costs || []).slice();
         items.splice(idx, 1);
         setForm(Object.assign({}, form, { ingredient_costs: items }));
+    }
+
+    /* ─── Component-koppeling ─────────────────────────────
+       Sam's mentale model: een gerecht is opgebouwd uit componenten, elk een
+       herbruikbaar bouwblok met eigen preparation_steps + kostprijs. De
+       koppeling leeft in gerecht_components; de DB-trigger rekent
+       cost_at_use_cents + gerechten.total_cost_cents automatisch uit (nooit AI,
+       nooit handmatig). quantity_used is wel handmatige chef-input. */
+    function addComponentLink() {
+        const cid = typeof compInput.component_id === 'number' ? compInput.component_id : parseInt(String(compInput.component_id), 10);
+        if (!Number.isFinite(cid) || cid <= 0) { showToast('Kies eerst een component', 'error'); return; }
+        const qty = parseFloat(compInput.quantity_used);
+        if (!Number.isFinite(qty) || qty <= 0) { showToast('Vul een hoeveelheid in', 'error'); return; }
+        const current: GerechtComponentLink[] = Array.isArray(form.componenten) ? form.componenten : [];
+        if (current.some(function (l) { return l.component_id === cid; })) { showToast('Dit component zit er al in', 'error'); return; }
+        const comp = allComponents.find(function (c) { return c.id === cid; });
+        const unit = compInput.unit.trim() || (comp ? comp.base_unit : '') || 'stuks';
+        setForm(Object.assign({}, form, { componenten: current.concat([{ component_id: cid, quantity_used: qty, unit: unit }]) }));
+        setCompInput({ component_id: '', quantity_used: '', unit: '' });
+    }
+    function removeComponentLink(idx: number) {
+        const current: GerechtComponentLink[] = Array.isArray(form.componenten) ? form.componenten.slice() : [];
+        current.splice(idx, 1);
+        setForm(Object.assign({}, form, { componenten: current }));
+    }
+    /* Sync de form-componenten naar gerecht_components voor een opgeslagen
+       gerecht. Delete-then-insert: simpel + idempotent bij kleine N (catering-
+       gerechten hebben enkele componenten). RLS org_delete/org_insert
+       beschermt tenant-isolatie; de trigger vult cost_at_use_cents. */
+    async function syncGerechtComponents(gerechtId: string | number, links: GerechtComponentLink[]) {
+        if (!gerechtId || !orgId) return;
+        const { error: delErr } = await supabase
+            .from('gerecht_components')
+            .delete()
+            .eq('gerecht_id', gerechtId)
+            .eq('organization_id', orgId);
+        if (delErr) { console.warn('[gerecht] component-sync delete faalde:', delErr.message); }
+        if (links.length === 0) return;
+        const rows = links.map(function (l) {
+            return { gerecht_id: gerechtId, component_id: l.component_id, quantity_used: l.quantity_used, unit: l.unit, organization_id: orgId };
+        });
+        const { error: insErr } = await supabase.from('gerecht_components').insert(rows);
+        if (insErr) {
+            console.warn('[gerecht] component-sync insert faalde:', insErr.message);
+            showToast('Gerecht opgeslagen, maar componenten koppelen faalde: ' + insErr.message, 'error');
+        }
     }
     function calcCostPP(item: any) {
         const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
@@ -1172,6 +1270,75 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </>)}
 
                                 {editTab === 'bouw' && (<>
+                            <div style={{ marginBottom: 4 }}>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Layers size={13} /> Componenten
+                                    {(form.componenten || []).length > 0 && (
+                                        <span style={{ fontWeight: 600, color: 'var(--muted)' }}>({(form.componenten || []).length})</span>
+                                    )}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45, marginBottom: 10 }}>
+                                    Bouw dit gerecht op uit herbruikbare componenten (bv. zalmfilet + wasabi-mayo + gyoza-vel). Elk component brengt z&rsquo;n eigen bereidingsstappen mee naar het kookbord en z&rsquo;n kostprijs naar de marge.
+                                </div>
+
+                                {(form.componenten || []).length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                                        {(form.componenten || []).map(function (link: GerechtComponentLink, idx: number) {
+                                            const comp = allComponents.find(function (c) { return c.id === link.component_id; });
+                                            return (
+                                                <div key={link.component_id} className="hw-item-row">
+                                                    <span className="hw-item-cat"><UtensilsCrossed size={12} /></span>
+                                                    <span className="hw-item-name">{comp ? comp.name : ('Component #' + link.component_id)}</span>
+                                                    {comp && <span className="hw-item-detail">{comp.type === 'bought_in' ? 'inkoop' : 'zelf'}</span>}
+                                                    <span className="hw-item-detail">{link.quantity_used} {link.unit}/gast</span>
+                                                    <button type="button" className="tag-remove" onClick={function () { removeComponentLink(idx); }}>×</button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {allComponents.length === 0 ? (
+                                    <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.25)', fontSize: 12, color: 'var(--muted)', lineHeight: 1.45 }}>
+                                        Nog geen componenten in je bibliotheek. Maak ze aan onder <a href="/gerechten/componenten" style={{ color: 'var(--color-accent-gold)', fontWeight: 600 }}>Menu &rsaquo; Componenten</a>, dan kun je ze hier koppelen.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                        <div className="field" style={{ flex: 2, minWidth: 150 }}>
+                                            <label>Component</label>
+                                            <select
+                                                value={compInput.component_id === '' ? '' : String(compInput.component_id)}
+                                                onChange={function (e: React.ChangeEvent<HTMLSelectElement>) {
+                                                    const id = e.target.value ? parseInt(e.target.value, 10) : '';
+                                                    const comp = typeof id === 'number' ? allComponents.find(function (c) { return c.id === id; }) : undefined;
+                                                    setCompInput(function (prev) { return Object.assign({}, prev, { component_id: id, unit: prev.unit || (comp ? comp.base_unit : ''), quantity_used: prev.quantity_used || (comp ? String(comp.base_quantity) : '') }); });
+                                                }}
+                                                style={{ fontSize: 12, padding: '7px 8px' }}
+                                            >
+                                                <option value="">Kies component…</option>
+                                                {allComponents
+                                                    .filter(function (c) { return !(form.componenten || []).some(function (l: GerechtComponentLink) { return l.component_id === c.id; }); })
+                                                    .map(function (c) { return <option key={c.id} value={c.id}>{c.name} ({c.type === 'bought_in' ? 'inkoop' : 'zelf'})</option>; })}
+                                            </select>
+                                        </div>
+                                        <div className="field" style={{ minWidth: 70, flex: '0 1 80px' }}>
+                                            <label>Qty p.p.</label>
+                                            <input type="number" step="0.01" min="0" value={compInput.quantity_used}
+                                                onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCompInput(function (p) { return Object.assign({}, p, { quantity_used: e.target.value }); }); }}
+                                                onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === 'Enter') { e.preventDefault(); addComponentLink(); } }}
+                                                placeholder="100" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                        </div>
+                                        <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
+                                            <label>Eenheid</label>
+                                            <input value={compInput.unit}
+                                                onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCompInput(function (p) { return Object.assign({}, p, { unit: e.target.value }); }); }}
+                                                placeholder="g" style={{ fontSize: 12, padding: '7px 10px' }} />
+                                        </div>
+                                        <button type="button" className="btn btn-brand btn-sm" onClick={addComponentLink} style={{ height: 34 }}>+</button>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="field">
                                 <label>Ingrediënten</label>
                                 <div className="tag-input-container">
