@@ -103,7 +103,7 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 |---|---|---|
 | `HubTabs` | `src/components/HubTabs.tsx` | Generiek tab-bar; gebruikt door 6 wrappers (PlannenTabs, VerkoopTabs, KeukenTabs, VoorraadTabs, GeldTabs, SysteemTabs) |
 | `Sidebar` | `src/components/Sidebar.tsx` | Hub-link mode (heeft `hubHref` ondersteuning + `min-h-[44px]`) |
-| `BottomNav` | `src/components/BottomNav.tsx` | Mobile-only, 5 items (Vandaag · HACCP · Voorraad · Prep · Meer) |
+| `BottomNav` | `src/components/BottomNav.tsx` | Mobile-only, 5 items (Vandaag · Plannen · Verkoop · Menu · Meer) — Meer triggert sidebar-overlay |
 | `CommandPalette` | `src/components/CommandPalette.tsx` | ⌘K met 35+ routes + Supabase-search (events/offertes/etc.) |
 | `Button` | `src/components/Button.tsx` | Variants: brand · ghost · red · green · cyan · gold · gold-outline; size: default/sm/icon |
 | `EmptyState` | `src/components/EmptyState.tsx` | Per-page config in `EMPTY_STATE_CONFIG` (20 pages al gedekt) |

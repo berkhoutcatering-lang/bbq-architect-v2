@@ -2777,6 +2777,16 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
     padding: 6px 8px;
     font-size: 12px;
   }
+
+  /* iOS Safari zoomt automatisch in wanneer een input gefocust wordt met
+     font-size < 16px. Forceer 16px op mobile zodat ondertekenen/invullen
+     in een tabel niet ineens de hele page in-zoomt. Geldt voor alle
+     .tbl-based forms (offertes line-items, financiën regels, etc.). */
+  .tbl input,
+  .tbl select,
+  .tbl textarea {
+    font-size: 16px;
+  }
 }
 
 /* ============================================= */

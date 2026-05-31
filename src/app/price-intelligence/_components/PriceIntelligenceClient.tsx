@@ -778,7 +778,8 @@ function InvoiceListTable({ invoices, onEdit, onDelete }: { invoices: any[]; onE
     const sorted = invoices.slice().sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     return (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <div className="tbl-wrap">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 640 }}>
             <thead>
                 <tr style={{ background: 'rgba(130,130,130,.04)', borderBottom: '1px solid var(--border)' }}>
                     {['Leverancier', 'Factuurnr.', 'Datum', 'Excl. BTW', 'BTW', 'Totaal', 'Status', ''].map(h => (
@@ -830,6 +831,7 @@ function InvoiceListTable({ invoices, onEdit, onDelete }: { invoices: any[]; onE
                 })}
             </tbody>
         </table>
+        </div>
     );
 }
 
@@ -1110,7 +1112,8 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                                     Geen regels — voeg handmatig toe met knop boven.
                                 </div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <div className="tbl-wrap">
+                                <table className="tbl" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 560 }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--border)' }}>
                                             {[
@@ -1181,6 +1184,7 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
                                         })}
                                     </tbody>
                                 </table>
+                                </div>
                             )}
                         </div>
                     </MetalCard>

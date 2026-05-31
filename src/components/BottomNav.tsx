@@ -7,7 +7,7 @@ import {
     LayoutDashboard,
     Calendar,
     ChefHat,
-    BarChart3,
+    Receipt,
     MoreHorizontal,
 } from "lucide-react";
 
@@ -39,6 +39,21 @@ const tabs: Tab[] = [
             p === "/events" ||
             p.startsWith("/events/"),
     },
+    /* Verkoop = dagelijkse Pro-tier flow (nieuwe offerte/klant). Geld is
+       wekelijks-admin-tier en zit nu achter Meer → sidebar. Past bij
+       persona-volgorde Lars > Pro-tier > Mathijs uit feedback_three_personas. */
+    {
+        label: "Verkoop",
+        icon: <Receipt size={22} />,
+        href: "/offertes",
+        match: (p) =>
+            p === "/offertes" ||
+            p.startsWith("/offertes/") ||
+            p === "/klanten" ||
+            p.startsWith("/klanten/") ||
+            p === "/verkoop" ||
+            p.startsWith("/verkoop/"),
+    },
     {
         label: "Menu",
         icon: <ChefHat size={22} />,
@@ -53,19 +68,6 @@ const tabs: Tab[] = [
             // Backwards-compat: /inspiratie redirect → /gerechten
             p === "/inspiratie" ||
             p.startsWith("/inspiratie/"),
-    },
-    {
-        label: "Geld",
-        icon: <BarChart3 size={22} />,
-        href: "/financien",
-        match: (p) =>
-            p === "/financien" ||
-            p.startsWith("/financien/") ||
-            p === "/uren" ||
-            p.startsWith("/uren/") ||
-            p === "/archief" ||
-            p.startsWith("/geld/") ||
-            p.startsWith("/administratie/"),
     },
     {
         label: "Meer",

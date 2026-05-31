@@ -359,14 +359,15 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                     const lineTotal = (item.qty || 0) * (item.prijs || 0);
                                     return (
                                         <div key={i} style={{
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                                            gap: 12, flexWrap: 'wrap',
                                             padding: '12px 0', borderBottom: i < items.length - 1 ? '1px solid ' + portalLine : 'none',
                                         }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{item.omschrijving || 'Item'}</div>
+                                            <div style={{ flex: '1 1 60%', minWidth: 0 }}>
+                                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', overflowWrap: 'anywhere' }}>{item.omschrijving || 'Item'}</div>
                                                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{item.qty || 0} x {formatEuro(item.prijs || 0)}</div>
                                             </div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{formatEuro(lineTotal)}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>{formatEuro(lineTotal)}</div>
                                         </div>
                                     );
                                 })}
@@ -538,6 +539,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                 </p>
                                 <button
                                     onClick={function () { setSignStep(true); }}
+                                    className="qportal-accept-cta"
                                     style={{
                                         background: brandColor, color: 'var(--brand-background)', border: 'none',
                                         minHeight: 48, padding: '14px 36px', borderRadius: 99, fontSize: 15, fontWeight: 800,
@@ -545,8 +547,6 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
                                         transition: 'transform 0.15s, box-shadow 0.15s',
                                         touchAction: 'manipulation',
                                     }}
-                                    onMouseOver={function (e) { (e.target as HTMLButtonElement).style.transform = 'translateY(-2px)'; }}
-                                    onMouseOut={function (e) { (e.target as HTMLButtonElement).style.transform = 'translateY(0)'; }}
                                 >
                                     Offerte accepteren
                                 </button>
@@ -676,6 +676,12 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
             <style jsx>{`
                 .qportal-sticky-cta {
                     display: none;
+                }
+                /* Hover-lift alleen op pointers met echte hover (desktop muis), niet op touch */
+                @media (hover: hover) and (pointer: fine) {
+                    .qportal-accept-cta:hover {
+                        transform: translateY(-2px);
+                    }
                 }
                 @media (max-width: 767px) {
                     .qportal-sticky-cta {
