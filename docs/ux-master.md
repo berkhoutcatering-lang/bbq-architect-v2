@@ -1,6 +1,6 @@
 # BBQ Architect — UX Master Document
 
-**Laatst bijgewerkt:** 2026-05-15
+**Laatst bijgewerkt:** 2026-06-01
 **Doel:** één plek waar status, principes, KPI's, personas en open items bij elkaar staan. Lees deze als eerste bij een nieuwe sessie.
 
 ---
@@ -14,12 +14,12 @@
 | **1B — WCAG 2.1 AA** | Contrast --muted-light, aria-current, touch-targets ≥44px, font-sizes ≥11px | ✅ Af | — |
 | **1B-Mobile** | App-wide 390px audit + fixes: 44px floor in Button-tsx + tailwind tokens, EventHero+eh-hero stack op mobile, ev-next-stats 2-col, FAB hide phone, PunchPanel stack, breadcrumb 68px voor hamburger | ✅ Af | Polish per niet-hub page (price-intelligence body, factuur-lezer flow) bij gelegenheid |
 | **1C — UX-copy** | Pitmaster Studio → AI Pitmaster, Menu Engineering → Menu-analyse, sentence-case, tone-of-voice principe | ✅ Af | — |
-| **2 — Pro-tier onboarding** | PersonaQuiz + OnboardingChecklist + tracking | ✅ UI af | Generieke demo-data seed-API (technical debt) |
-| **3 — AI-inline** | /prep-counter echte AiStudio i.p.v. fake alert(); /gerechten allergenen-detect bestond al | ✅ Af | AiAssistant 1865r → ~500r refactor; AI-context cross-page persist |
+| **2 — Pro-tier onboarding** | PersonaQuiz + OnboardingChecklist + `/api/onboarding/seed-demo` (219r, idempotent, generiek) gewired in /onboarding/page.tsx | ✅ Volledig af | — |
+| **3 — AI-inline** | /prep-counter echte AiStudio i.p.v. fake alert(); /gerechten allergenen-detect; create_klant + draft_email action_cards live (2026-06-01) | ✅ Af | AiAssistant 1865r → ~500r refactor; AI-context cross-page persist |
 | **4 — HACCP field** | /haccp/field bestond al; "Open Veldmodus" knop op /haccp | ✅ Af (bestond) | Lars-test live op event-dag |
 | **5A — KPI-spec** | 5 metrics + targets + funnel-stappen | ✅ Af | — |
-| **5B — Tracking infra** | Migration `011_activation_events.sql` + helper `track.ts` + 3 events bedraad | ✅ Code af | Mathijs moet migration runnen in Supabase Studio |
-| **5C — Admin dashboard** | /admin/funnel uitbreiden met de 5 nieuwe KPI's | 🟡 Open | ~1.5u werk, vereist live data |
+| **5B — Tracking infra** | Migration `011_activation_events.sql` + helper `track.ts` + BEFORE-INSERT trigger auto-fillt org_id/user_id | ✅ Live sinds 2026-05-01 | 804 events totaal, 155 laatste 7d, 6 event-types actief |
+| **5C — Admin dashboard** | /admin/funnel met alle 5 KPI's (Activation-rate, AI-adoptie, first_offerte_concept/sent, ai_wizard_used) + Pro-tier baseline-uitleg | ✅ Af | 447r live; data verzamelt sinds 2026-05-01 |
 
 ---
 
@@ -123,7 +123,7 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 - 3 styling-systemen door elkaar (Tailwind + custom CSS + inline) — UX-P1 in problem-frames
 
 ### Onboarding
-- **Generieke demo-data seed-API** (`/api/onboarding/seed-demo`) zodat nieuwe Pro-tier tenants direct demo-data zien — bestaand `scripts/seed-demo-data.mjs` werkt alleen voor Hop & Bites
+- ✅ ~~Generieke demo-data seed-API~~ — al gebouwd: `/api/onboarding/seed-demo` (219r idempotent, generiek: 10 klanten/15 gerechten/20 inventory/5 leveranciers/8 events/3 facturen) gewired in /onboarding/page.tsx:281
 - Empty-states per hub-canvas (technisch al via `EMPTY_STATE_CONFIG` maar visueel polish)
 
 ### AI
@@ -138,9 +138,10 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 - /uren PunchPanel volledig mobile-ready (Play-knop bovenaan, status onder, event-select onderaan) — 2026-05-15
 
 ### Launch
-- `/admin/funnel` uitbreiden met 5 nieuwe KPI's + funnel-grafiek
-- Rest van tracking-events bedraden: `signup_completed`, `first_klant_created`, `first_gerecht_created`, `first_offerte_sent`, `ai_allergen_detect`
-- Migration `011_activation_events.sql` runnen in Supabase Studio
+- ✅ ~~/admin/funnel + 5 KPI's~~ — al af (447r, live sinds 2026-05-01)
+- ✅ ~~Tracking-events bedraden~~ — 6 types actief: ai_allergen_detect, checklist_item_done, first_gerecht_created, first_offerte_sent, quiz_completed, signup_completed
+- ✅ ~~Migration 011 runnen~~ — al toegepast 2026-05-01 (trigger auto-fillt org_id/user_id)
+- **Lars veld-test op event-dag** — laatste validatie vóór launch
 
 ---
 
@@ -173,9 +174,16 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 
 ## 10. Top-3 volgende stappen
 
-1. **Mathijs runt migration** `011_activation_events.sql` in Supabase Studio → tracking begint daadwerkelijk events op te slaan. (1 min)
-2. **Generieke demo-data seed-API** — zonder dit zien Pro-tier tenants een lege app. Hoogste user-value. (~4-6u werk, eigen ronde)
-3. **AiAssistant + AIStudio refactor** — 3037 regels samen, vereenvoudigen tot ~1000 totaal opent ruimte voor AI-context-persist en betere onderhoudbaarheid. (~6-8u, eigen ronde)
+Per 2026-06-01: alle voorheen-blokkerende items zijn af (tracking live, /admin/funnel
+draait, seed-demo gewired, MenuComposer-redesign live, AI-acties + control-room live).
+Wat resteert is validatie + polish.
+
+1. **Lars veld-test op event-dag** — touch-targets met handschoenen, zonlicht-leesbaarheid,
+   tablet-flow door HACCP. Geen code, wel laatste launch-validatie. (~2-3u veldwerk)
+2. **AiAssistant + AIStudio refactor** — 3037 regels samen, vereenvoudigen tot ~1000 totaal.
+   Opent ruimte voor AI-context-persist en betere onderhoudbaarheid. (~6-8u, eigen ronde)
+3. **/pricing visuele polish + 313 hardcoded `borderRadius` → tokens** — beide tech debt,
+   geen launch-blokkering. (~4-6u opgeteld)
 
 ---
 
