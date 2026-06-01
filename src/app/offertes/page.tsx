@@ -21,6 +21,7 @@ import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
+import MarginDriftBanner from '@/app/offertes/_components/MarginDriftBanner';
 import PageHint from '@/components/PageHint';
 import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
@@ -714,6 +715,7 @@ export default function Offertes() {
                     <button className="btn-gold" onClick={openTemplatePicker}><Plus size={14} /> Nieuwe offerte</button>
                 </>}
             />
+            <MarginDriftBanner />
             {showWizard && <MenuWizard
                 onComplete={handleWizardComplete}
                 onClose={function () { setShowWizard(false); setPrefillFromTemplate(null); }}

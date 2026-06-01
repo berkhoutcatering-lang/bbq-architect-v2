@@ -18,6 +18,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import ErrorCard from '@/components/ErrorCard';
 import { useAgendaPersonal } from './_components/useAgendaPersonal';
 import PersonalEventModal from './_components/PersonalEventModal';
+import InkooplijstButton from './_components/InkooplijstButton';
 import CalendarView from './_components/CalendarView';
 import FilterPopover from './_components/FilterPopover';
 import FilterPillsBar from './_components/FilterPillsBar';
@@ -974,6 +975,11 @@ function EventDetailDrawer({ event, onClose, onEditPersonal }: { event: AgendaEv
                                     Check voorraad-status
                                 </a>
                             </div>
+                            {typeof event.dbId === 'number' && event.dbId > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                    <InkooplijstButton eventId={event.dbId} accentColor={GOLD} />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

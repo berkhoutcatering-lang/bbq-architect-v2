@@ -37,6 +37,7 @@
     "archiver": "^8.0.0",
     "browser-image-compression": "^2.0.2",
     "culori": "^4.0.2",
+    "date-fns": "^4.3.0",
     "fast-xml-parser": "^5.8.0",
     "framer-motion": "^12.4.7",
     "heic2any": "^0.0.4",

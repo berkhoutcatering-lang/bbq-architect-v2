@@ -12,6 +12,14 @@
         {
             "path": "/api/financien/summary",
             "schedule": "0 6 * * *"
+        },
+        {
+            "path": "/api/cron/recipe-cost-recompute",
+            "schedule": "*/5 * * * *"
+        },
+        {
+            "path": "/api/cron/market-pulse-refresh",
+            "schedule": "30 4 * * *"
         }
     ]
 }

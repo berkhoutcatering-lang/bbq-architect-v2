@@ -17,9 +17,10 @@ import {
     Info, HelpCircle, Plus, FileText, TrendingUp, TrendingDown,
     Store, Euro, CloudUpload, ArrowLeft, Save, FolderOpen, Zap, Lightbulb,
     ExternalLink, Download, Archive, BarChart3, Calendar, Filter, Wallet,
-    ListOrdered, FileUp, Inbox,
+    ListOrdered, FileUp, Inbox, Activity,
 } from 'lucide-react';
 import FolderInbox from './FolderInbox';
+import FolderUitgang from './FolderUitgang';
 import AiBadge from '@/components/ai/AiBadge';
 import {
     GOLD,
@@ -34,7 +35,7 @@ import {
 
 const FOLDER_KEY = 'pi_folder_v3';   // bumped: nieuwe 'inbox' optie
 
-type Folder = 'inbox' | 'invoices' | 'receipts' | 'books' | 'pricelists';
+type Folder = 'inbox' | 'invoices' | 'receipts' | 'books' | 'pricelists' | 'uitgang';
 
 
 function ScanProgress({ step, onCancel }: { step: 'prep' | 'upload' | 'ai' | 'done' | 'error'; onCancel?: () => void }) {
@@ -124,6 +125,7 @@ const TABS: { id: Folder; label: string; hint: string; Icon: any }[] = [
     { id: 'receipts', label: 'Bonnen', hint: 'Kassabonnen · foto', Icon: Receipt },
     { id: 'pricelists', label: 'Prijslijsten', hint: 'Bulk-PDF', Icon: ListOrdered },
     { id: 'books', label: 'Boekhouding', hint: 'Inzichten', Icon: PieChart },
+    { id: 'uitgang', label: 'Uitgang', hint: 'Impact-view', Icon: Activity },
 ];
 
 function FolderTabs({ active, onChange }: { active: Folder; onChange: (f: Folder) => void }) {
@@ -196,7 +198,7 @@ export default function PriceIntelligenceClient() {
     const [folder, setFolder] = useState<Folder>(() => {
         if (typeof window === 'undefined') return 'inbox';
         const stored = localStorage.getItem(FOLDER_KEY);
-        const valid: Folder[] = ['inbox', 'invoices', 'receipts', 'pricelists', 'books'];
+        const valid: Folder[] = ['inbox', 'invoices', 'receipts', 'pricelists', 'books', 'uitgang'];
         return (valid as string[]).includes(stored ?? '') ? (stored as Folder) : 'inbox';
     });
 
@@ -231,6 +233,7 @@ export default function PriceIntelligenceClient() {
                 {folder === 'receipts' && <FolderReceipts />}
                 {folder === 'pricelists' && <FolderPricelists />}
                 {folder === 'books' && <FolderBooks />}
+                {folder === 'uitgang' && <FolderUitgang />}
             </div>
         </div>
         </RequireTier>
