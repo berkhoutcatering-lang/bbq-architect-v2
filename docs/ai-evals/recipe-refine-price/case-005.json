@@ -1,0 +1,14 @@
+{
+  "id": "case-005",
+  "description": "Data-URL prefix wordt automatisch gestript (regex)",
+  "request": {
+    "path": "/api/recipe/refine-price",
+    "body": {
+      "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=",
+      "image_mime": "image/png"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.found" }
+  ]
+}

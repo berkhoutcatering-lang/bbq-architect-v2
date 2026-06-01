@@ -1,0 +1,16 @@
+{
+  "id": "case-001",
+  "description": "Compleet transcript met datum, gasten, allergenen, budget",
+  "request": {
+    "path": "/api/klantgesprek/extract",
+    "body": {
+      "transcript": "Goed gesprek met Annemarie Pietersen van Pietersen Holding gehad. Email annemarie@pietersen-holding.nl, telefoon 06 12345678. Het bedrijfsfeest staat gepland op 15 augustus 2026 in Schoonoord op het kantoorterrein. We hebben het over 80 gasten waarvan 12 vegetarisch. Budget rond de 50 euro per persoon, totaal ongeveer 4000. Eén persoon heeft glutenintolerantie en twee allergisch voor noten. Klant heeft haast want ze willen volgende week beslissen."
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "structured.klant_naam" },
+    { "type": "number_gte", "path": "structured.aantal_gasten", "min": 50 },
+    { "type": "array_min_length", "path": "structured.allergenen", "min": 1 },
+    { "type": "number_gte", "path": "confidence", "min": 0.5 }
+  ]
+}

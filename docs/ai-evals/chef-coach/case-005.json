@@ -1,0 +1,23 @@
+{
+  "id": "case-005",
+  "description": "4 gangen, gemengde voortgang: gang 1 served, gang 2 active, gang 3+4 queued — verwacht briefing-style",
+  "request": {
+    "path": "/api/chef-coach",
+    "body": {
+      "view": "service",
+      "eventTitle": "Trouwerij 120p",
+      "activeCourseTitle": "Voorgerecht 2",
+      "activeCourseStatus": "active",
+      "coursesProgress": [
+        { "num": 1, "title": "Amuse", "status": "served", "servedPortions": 120, "totalPortions": 120 },
+        { "num": 2, "title": "Voorgerecht 2", "status": "active", "servedPortions": 40, "totalPortions": 120 },
+        { "num": 3, "title": "Hoofdgerecht", "status": "queued", "servedPortions": 0, "totalPortions": 120 },
+        { "num": 4, "title": "Dessert", "status": "queued", "servedPortions": 0, "totalPortions": 120 }
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "directive" },
+    { "type": "has_path", "path": "severity" }
+  ]
+}

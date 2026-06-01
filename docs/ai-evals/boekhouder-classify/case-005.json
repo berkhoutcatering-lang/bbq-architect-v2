@@ -1,0 +1,14 @@
+{
+  "id": "case-005",
+  "description": "Drie bon_ids dry-run — moet threshold + counts teruggeven",
+  "request": {
+    "path": "/api/boekhouder/classify",
+    "body": {
+      "bon_ids": [1, 2, 3],
+      "dry_run": true
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "results", "description": "of error indien niet ingelogd / geen bonnen" }
+  ]
+}

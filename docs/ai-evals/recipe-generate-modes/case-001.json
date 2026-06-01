@@ -1,0 +1,20 @@
+{
+  "id": "case-001",
+  "description": "Recipe-mode: één gerecht voor BBQ-zalm met rooktechniek",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "recipe",
+      "prompt": "BBQ-zalm met dille-mayo en gerookte citroen — bedoeld voor zomerevent 30 gasten",
+      "existing": [],
+      "options": { "flavour": "vrij" }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.naam" },
+    { "type": "has_path", "path": "data.ingredienten" },
+    { "type": "array_min_length", "path": "data.ingredienten", "min": 3 },
+    { "type": "array_min_length", "path": "data.instructies", "min": 4 },
+    { "type": "number_gte", "path": "data.preptime", "min": 5 }
+  ]
+}

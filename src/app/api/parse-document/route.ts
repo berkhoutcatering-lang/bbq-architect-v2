@@ -245,33 +245,49 @@ export async function POST(req: NextRequest) {
             }, { status: 502 });
         }
 
-        // Safety net: Nederlandse facturen gebruiken soms BTW-codes (1/L = 9%, 2/H = 21%).
-        // Normaliseer hier voor het geval AI deze codes toch overneemt.
-        function normalizeBtw(val: any): number {
+        // Safety net + anomaly-tracking: NL BTW kent enkel 0, 9 of 21.
+        // 1/L = 9% (laag), 2/H = 21% (hoog). Andere waarden zijn AI-hallucinatie
+        // of een slechte scan — die loggen we als anomaly zodat de operator ze
+        // handmatig kan controleren (P0 uit pre-launch audit 2026-06-01).
+        const btwAnomalies: Array<{ scope: string; raw: unknown; normalized: number }> = [];
+        function normalizeBtw(val: any, scope: string = 'totaal'): number {
+            const raw = val;
             const n = parseFloat(val);
             if (isNaN(n)) return 21;
             if (n === 1) return 9;   // code 1 = laag tarief
             if (n === 2) return 21;  // code 2 = hoog tarief
             if (n <= 3) return 21;   // onwaarschijnlijk laag → normaliseer naar hoog
+            if (n !== 0 && n !== 9 && n !== 21) {
+                const normalized = n >= 14 ? 21 : n >= 6 ? 9 : 0;
+                console.warn(`[parse-document] BTW-anomaly ${scope}: raw=${raw} → normalized=${normalized}`);
+                btwAnomalies.push({ scope, raw, normalized });
+                return normalized;
+            }
             return n;
         }
         if (parsed && Array.isArray(parsed.regels)) {
-            parsed.regels = parsed.regels.map((r: any) => ({
+            parsed.regels = parsed.regels.map((r: any, i: number) => ({
                 ...r,
-                btw_pct: normalizeBtw(r.btw_pct),
+                btw_pct: normalizeBtw(r.btw_pct, `regel[${i}]`),
             }));
         }
         if (parsed && typeof parsed.btw_pct !== 'undefined') {
-            parsed.btw_pct = normalizeBtw(parsed.btw_pct);
+            parsed.btw_pct = normalizeBtw(parsed.btw_pct, 'totaal');
         }
 
-        console.log(`[parse-document] success total=${Date.now() - t0}ms tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
+        console.log(`[parse-document] success total=${Date.now() - t0}ms tokens=${response.usage.input_tokens}in/${response.usage.output_tokens}out${btwAnomalies.length > 0 ? ` btw_anomalies=${btwAnomalies.length}` : ''}`);
         return NextResponse.json({
             success: true,
             data: parsed,
             model: response.model,
             elapsedMs: Date.now() - t0,
             usage: response.usage,
+            ...(btwAnomalies.length > 0
+                ? {
+                    btw_anomalies: btwAnomalies,
+                    warning: `${btwAnomalies.length} verdachte BTW-waarde${btwAnomalies.length === 1 ? '' : 'n'} — controleer handmatig vóór akkoord`,
+                }
+                : {}),
         });
     } catch (e: any) {
         console.error('[parse-document]', e);

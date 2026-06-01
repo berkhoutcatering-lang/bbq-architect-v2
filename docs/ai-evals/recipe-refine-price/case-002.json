@@ -1,0 +1,14 @@
+{
+  "id": "case-002",
+  "description": "Te korte base64 (<100 chars) — Zod validation error",
+  "request": {
+    "path": "/api/recipe/refine-price",
+    "body": {
+      "image_base64": "abc",
+      "image_mime": "image/jpeg"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

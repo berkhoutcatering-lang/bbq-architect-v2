@@ -1,0 +1,17 @@
+{
+  "id": "case-005",
+  "description": "Custom-scope met keywords — auth-fail want geen key",
+  "request": {
+    "path": "/api/extension/ai-detect",
+    "body": {
+      "mode": "html",
+      "html": "<html><body><article class='product'><h2>BBQ-saus Hot</h2><p>5,95</p></article><article class='product'><h2>BBQ-rub klassiek</h2><p>4,50</p></article><article class='product'><h2>BBQ Steakmes</h2><p>22,50</p></article><article class='product'><h2>BBQ-handschoenen</h2><p>11,00</p></article></body></html>",
+      "pageUrl": "https://bbqshop.nl",
+      "scope": "custom",
+      "scopeKeywords": ["bbq", "saus", "rub"]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

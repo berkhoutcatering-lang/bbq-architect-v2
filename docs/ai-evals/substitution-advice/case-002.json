@@ -1,0 +1,12 @@
+{
+  "id": "case-002",
+  "description": "Ontbrekend masterProductId — moet 400 error geven",
+  "request": {
+    "path": "/api/substitution-advice",
+    "body": {}
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "masterProductId", "caseInsensitive": true }
+  ]
+}

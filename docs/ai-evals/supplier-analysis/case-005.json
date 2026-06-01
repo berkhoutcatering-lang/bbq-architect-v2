@@ -1,0 +1,19 @@
+{
+  "id": "case-005",
+  "description": "Edge case: leverancier zonder enkele productregel — moet niet crashen, neutral sentiment",
+  "request": {
+    "path": "/api/supplier-analysis",
+    "body": {
+      "leverancier": "Onbekende Leverancier",
+      "context": {
+        "ourSpend": 0,
+        "ourCount": 0,
+        "ourLines": [],
+        "others": []
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "headline" }
+  ]
+}

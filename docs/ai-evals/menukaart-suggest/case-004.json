@@ -1,0 +1,17 @@
+{
+  "id": "case-004",
+  "description": "Warmer en uitnodigender — 3 kleur-diffs verwacht (accent + bg + text)",
+  "request": {
+    "path": "/api/menukaart-editor/suggest",
+    "body": {
+      "offerId": "1",
+      "templateId": "modern",
+      "prompt": "Warmer en uitnodigender, meer huiselijk gevoel",
+      "customOverrides": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "summary" },
+    { "type": "has_path", "path": "diffs" }
+  ]
+}

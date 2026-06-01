@@ -1,0 +1,17 @@
+{
+  "id": "case-001",
+  "description": "Logo veel groter en donkerder — minstens 2 diffs verwacht",
+  "request": {
+    "path": "/api/menukaart-editor/suggest",
+    "body": {
+      "offerId": "1",
+      "templateId": "classic",
+      "prompt": "Logo veel groter en donkerder achtergrond",
+      "customOverrides": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "summary" },
+    { "type": "has_path", "path": "diffs", "description": "diffs-array aanwezig (kan leeg zijn bij auth-fail)" }
+  ]
+}

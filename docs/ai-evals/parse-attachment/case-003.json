@@ -1,0 +1,13 @@
+{
+  "id": "case-003",
+  "description": "Ontbrekende organizationId — 400 of forbidden",
+  "request": {
+    "path": "/api/parse-attachment",
+    "body": {
+      "inboxId": "00000000-0000-0000-0000-000000000001"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

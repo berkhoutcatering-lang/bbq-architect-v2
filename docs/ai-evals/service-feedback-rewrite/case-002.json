@@ -1,0 +1,19 @@
+{
+  "id": "case-002",
+  "description": "Volledig positieve notities — sentiment 'positive' verwacht",
+  "request": {
+    "path": "/api/service-feedback-rewrite",
+    "body": {
+      "rawNotes": "Alles vlekkeloos verlopen, team werkte super samen, klant gaf complimenten, brisket perfecte bark, geen restjes",
+      "eventContext": {
+        "title": "Bruiloft Van Dijk",
+        "date": "2026-05-25",
+        "guests": 80
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "polishedNarrative" },
+    { "type": "string_contains", "path": "sentiment", "substring": "positive", "caseInsensitive": true }
+  ]
+}

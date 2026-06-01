@@ -1,0 +1,13 @@
+{
+  "id": "case-003",
+  "description": "Niet-bestaand masterProductId — 404 of error verwacht",
+  "request": {
+    "path": "/api/substitution-advice",
+    "body": {
+      "masterProductId": 99999999
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

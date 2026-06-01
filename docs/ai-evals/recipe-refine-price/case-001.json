@@ -1,0 +1,16 @@
+{
+  "id": "case-001",
+  "description": "Geldige tiny-png dummy base64 — endpoint accepteert input maar AI vindt niets",
+  "request": {
+    "path": "/api/recipe/refine-price",
+    "body": {
+      "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=",
+      "image_mime": "image/png",
+      "hint": "Sligro pulled pork pak"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data" },
+    { "type": "has_path", "path": "data.found" }
+  ]
+}

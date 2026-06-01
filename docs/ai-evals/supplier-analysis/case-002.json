@@ -1,0 +1,23 @@
+{
+  "id": "case-002",
+  "description": "Solo-leverancier zonder alternatieven in systeem — positief sentiment verwacht",
+  "request": {
+    "path": "/api/supplier-analysis",
+    "body": {
+      "leverancier": "Local Butcher Wezuperbrug",
+      "context": {
+        "ourSpend": 2800,
+        "ourCount": 6,
+        "ourLines": [
+          { "product": "Briskets US-cut", "prijs": 22.00, "eenheid": "kg" },
+          { "product": "Spareribs", "prijs": 14.50, "eenheid": "kg" }
+        ],
+        "others": []
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "headline" },
+    { "type": "has_path", "path": "body" }
+  ]
+}

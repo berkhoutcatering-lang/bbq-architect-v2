@@ -1,0 +1,15 @@
+{
+  "id": "case-003",
+  "description": "generateEventBriefing met niet-bestaand event — Event niet gevonden",
+  "request": {
+    "path": "/api/ai-execute",
+    "body": {
+      "tool": "generateEventBriefing",
+      "params": { "event_id": 9999999 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "result" },
+    { "type": "has_path", "path": "result.error" }
+  ]
+}

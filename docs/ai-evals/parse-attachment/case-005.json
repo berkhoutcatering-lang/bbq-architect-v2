@@ -1,0 +1,14 @@
+{
+  "id": "case-005",
+  "description": "Onbestaand inboxId met geldige UUID-shape — geen attachments gevonden (zonder valid token wordt 403)",
+  "request": {
+    "path": "/api/parse-attachment",
+    "body": {
+      "inboxId": "00000000-0000-0000-0000-000000000099",
+      "organizationId": "00000000-0000-0000-0000-000000000099"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error", "description": "endpoint vereist x-internal-token header" }
+  ]
+}

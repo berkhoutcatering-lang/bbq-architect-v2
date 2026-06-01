@@ -1,0 +1,14 @@
+{
+  "id": "case-003",
+  "description": "Te korte recipe_name (<2 chars) — Zod validation 400",
+  "request": {
+    "path": "/api/recipe/ai-fill",
+    "body": {
+      "recipe_name": "A",
+      "porties": 10
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "case-001",
+  "description": "Lege bon_ids array — 400 verwacht",
+  "request": {
+    "path": "/api/boekhouder/classify",
+    "body": {
+      "bon_ids": []
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "verplicht", "caseInsensitive": true }
+  ]
+}

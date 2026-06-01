@@ -1,0 +1,24 @@
+{
+  "id": "case-003",
+  "description": "Vegan recept — fine-tunes mogen geen vlees-ingrediënt toevoegen",
+  "request": {
+    "path": "/api/recipe/ai-improve",
+    "body": {
+      "recept": {
+        "naam": "Vegan jackfruit pulled",
+        "porties": 15,
+        "ingredient_costs": [
+          { "naam": "Jackfruit", "qty_pp": 0.15, "unit": "kg", "is_estimated": true, "estimated_price": 4.5 },
+          { "naam": "BBQ-saus", "qty_pp": 0.05, "unit": "L", "is_estimated": true, "estimated_price": 1.2 }
+        ],
+        "tags": ["vegan"]
+      },
+      "focus": ["smaak", "textuur"],
+      "extra_wensen": "Moet vegan blijven"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.fine_tunes" },
+    { "type": "has_path", "path": "meta.tune_count" }
+  ]
+}

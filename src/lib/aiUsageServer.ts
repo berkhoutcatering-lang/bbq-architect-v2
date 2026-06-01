@@ -87,9 +87,12 @@ export async function checkAiCapServer(organizationId: string): Promise<CapStatu
   if (!sb) return { allowed: true, used: 0, cap: -1, tier: 'starter' };
 
   try {
-    // Get tier
+    // Get tier — defensive validatie tegen onbekende plan-waardes (legacy 'pro',
+    // 'free', NULL etc.). Zonder check crasht TIER_LIMITS[tier].aiActionsPerMonth
+    // en degradeert naar fail-open in de catch — wat onbegrensde AI-spend toestaat.
     const orgRes = await sb.from('organizations').select('plan').eq('id', organizationId).single();
-    const tier = (orgRes.data?.plan as Tier) || 'starter';
+    const rawPlan = orgRes.data?.plan;
+    const tier: Tier = rawPlan === 'professional' || rawPlan === 'enterprise' ? rawPlan : 'starter';
     const cap = TIER_LIMITS[tier].aiActionsPerMonth;
 
     if (cap === -1) return { allowed: true, used: 0, cap: -1, tier };
@@ -183,7 +186,8 @@ export async function checkAiCostCapServer(organizationId: string): Promise<Cost
 
     try {
         const orgRes = await sb.from('organizations').select('plan').eq('id', organizationId).single();
-        const tier = (orgRes.data?.plan as Tier) || 'starter';
+        const rawPlan = orgRes.data?.plan;
+        const tier: Tier = rawPlan === 'professional' || rawPlan === 'enterprise' ? rawPlan : 'starter';
         const capCents = COST_CAP_CENTS_PER_TIER[tier];
 
         const startOfMonth = new Date();

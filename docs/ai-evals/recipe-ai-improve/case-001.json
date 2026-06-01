@@ -1,0 +1,26 @@
+{
+  "id": "case-001",
+  "description": "Fine-tune verzoek voor pulled pork — focus op smaak en kostprijs",
+  "request": {
+    "path": "/api/recipe/ai-improve",
+    "body": {
+      "recept": {
+        "naam": "Pulled pork BBQ",
+        "beschrijving": "Procureur 12u low-and-slow op de smoker",
+        "porties": 30,
+        "ingredient_costs": [
+          { "naam": "Procureur", "qty_pp": 0.2, "unit": "kg", "is_estimated": true, "estimated_price": 9.5 },
+          { "naam": "Coleslaw mix", "qty_pp": 0.08, "unit": "kg", "is_estimated": true, "estimated_price": 3.2 },
+          { "naam": "Briochebroodje", "qty_pp": 1, "unit": "stuks", "is_estimated": true, "estimated_price": 0.45 }
+        ],
+        "bereidingswijze": "1. Rub aanbrengen 2. 12u smoken 110C 3. Pluk en serveer",
+        "allergenen": ["gluten"]
+      },
+      "focus": ["smaak", "kostprijs"]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.recept_analyse" },
+    { "type": "array_min_length", "path": "data.fine_tunes", "min": 3 }
+  ]
+}

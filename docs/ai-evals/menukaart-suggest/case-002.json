@@ -1,0 +1,16 @@
+{
+  "id": "case-002",
+  "description": "Strakker en moderner — typografie + decoratie wijzigingen",
+  "request": {
+    "path": "/api/menukaart-editor/suggest",
+    "body": {
+      "offerId": "1",
+      "templateId": "classic",
+      "prompt": "Strakker en moderner, minder ornamenten",
+      "customOverrides": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "summary" }
+  ]
+}

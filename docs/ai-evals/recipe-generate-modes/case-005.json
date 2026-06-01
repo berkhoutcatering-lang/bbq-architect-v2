@@ -1,0 +1,28 @@
+{
+  "id": "case-005",
+  "description": "Scale-mode: schaal recept van 10 naar 60 porties met realistische ronding",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "scale",
+      "options": {
+        "currentRecipe": {
+          "naam": "Spareribs BBQ rub",
+          "porties": 10,
+          "ingredienten": [
+            { "naam": "Spareribs", "hoeveelheid": 4, "eenheid": "kg" },
+            { "naam": "Bruine suiker", "hoeveelheid": 200, "eenheid": "g" },
+            { "naam": "Paprikapoeder", "hoeveelheid": 30, "eenheid": "g" }
+          ],
+          "instructies": ["Rub aanbrengen", "8u koelkast", "4u smoken 110C"]
+        },
+        "targetPorties": 60
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.ingredienten" },
+    { "type": "array_min_length", "path": "data.ingredienten", "min": 2 },
+    { "type": "number_gte", "path": "data.porties", "min": 50, "description": "porties opgeschaald" }
+  ]
+}

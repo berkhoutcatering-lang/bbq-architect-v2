@@ -1,0 +1,25 @@
+{
+  "id": "case-004",
+  "description": "Enrich-mode: bestaand gerecht verrijken met allergenen + battle-plan",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "enrich",
+      "options": {
+        "currentDish": {
+          "naam": "Pulled pork broodje",
+          "categorie": "Vlees",
+          "ingredienten": [
+            { "naam": "Procureur", "hoeveelheid": 200, "eenheid": "g" },
+            { "naam": "Broodje", "hoeveelheid": 1, "eenheid": "stuks" }
+          ]
+        }
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.bereidingswijze", "description": "enrich vult tenminste een veld" },
+    { "type": "has_path", "path": "data.wijn_suggestie" },
+    { "type": "array_min_length", "path": "data.allergenen", "min": 1 }
+  ]
+}

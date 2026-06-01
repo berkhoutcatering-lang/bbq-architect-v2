@@ -1,0 +1,27 @@
+{
+  "id": "case-004",
+  "description": "Morgen-deadline event met menu-gap — Morgen-label verwacht",
+  "request": {
+    "path": "/api/today-briefing",
+    "body": {
+      "candidates": [
+        {
+          "id": "menu_gap_morgen",
+          "type": "menu_incomplete",
+          "priority": "critical",
+          "score": 92,
+          "defaultLabel": "Morgen",
+          "fallbackText": "BBQ Schultz morgen, dessert ontbreekt",
+          "href": "/events/87",
+          "context": { "eventName": "BBQ Schultz", "missing": ["dessert"], "guests": 40 }
+        }
+      ],
+      "firstName": "Mathijs",
+      "time": "16:00"
+    }
+  },
+  "expectations": [
+    { "type": "array_min_length", "path": "bullets", "min": 1 },
+    { "type": "has_path", "path": "bullets.0.href" }
+  ]
+}

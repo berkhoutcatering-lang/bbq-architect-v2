@@ -33,6 +33,9 @@ declare module './database.types' {
     bron?: string;
     kostprijs_pp?: number;
     verkoopprijs?: number;
+    /* Rijke beschrijving via BlockNote-editor (migration 014). NULL voor
+       legacy-gerechten — UI valt dan terug op de plain-text `beschrijving`. */
+    beschrijving_blocks?: unknown[] | null;
   }
 
   /* Gang — minimum + extra_prijs_pp voor menu-configuratie per offerte. */

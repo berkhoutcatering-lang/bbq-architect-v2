@@ -1,0 +1,15 @@
+{
+  "id": "case-002",
+  "description": "Te korte html (<200 chars) — 400 verwacht na auth-check",
+  "request": {
+    "path": "/api/extension/ai-detect",
+    "body": {
+      "mode": "html",
+      "html": "<p>too short</p>",
+      "pageUrl": "https://example.com"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

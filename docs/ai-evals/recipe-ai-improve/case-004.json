@@ -1,0 +1,17 @@
+{
+  "id": "case-004",
+  "description": "Ongeldig recept (geen ingredient_costs) — Zod validation error",
+  "request": {
+    "path": "/api/recipe/ai-improve",
+    "body": {
+      "recept": {
+        "naam": "Lege test",
+        "porties": 10,
+        "ingredient_costs": []
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

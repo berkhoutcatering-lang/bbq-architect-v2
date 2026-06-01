@@ -1,3 +1,5 @@
+import withBundleAnalyzer from '@next/bundle-analyzer';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /**
@@ -10,4 +12,14 @@ const nextConfig = {
   serverExternalPackages: ['archiver'],
 };
 
-export default nextConfig;
+/**
+ * Bundle-analyzer wordt alleen geactiveerd bij `ANALYZE=true npm run build`.
+ * Genereert HTML-rapporten in .next/analyze/{client,server,edge}.html
+ * voor inspectie van bundle-grootte per chunk. Pre-launch audit P1:
+ * meet de impact van code-splits op de 5 monolithen.
+ */
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+export default bundleAnalyzer(nextConfig);

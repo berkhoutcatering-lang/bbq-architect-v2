@@ -1,0 +1,28 @@
+{
+  "id": "case-002",
+  "description": "Eén kritieke factuur — moet als 'Nu' label terugkomen",
+  "request": {
+    "path": "/api/today-briefing",
+    "body": {
+      "candidates": [
+        {
+          "id": "factuur_overdue",
+          "type": "facturen_overdue",
+          "priority": "critical",
+          "score": 95,
+          "defaultLabel": "Nu",
+          "fallbackText": "13 facturen vervallen, totaal 16888 euro",
+          "href": "/financien/facturen?filter=overdue",
+          "context": { "overdueCount": 13, "totalAmount": 16888 }
+        }
+      ],
+      "firstName": "Mathijs",
+      "time": "09:00"
+    }
+  },
+  "expectations": [
+    { "type": "array_min_length", "path": "bullets", "min": 1 },
+    { "type": "has_path", "path": "bullets.0.text" },
+    { "type": "has_path", "path": "bullets.0.href" }
+  ]
+}

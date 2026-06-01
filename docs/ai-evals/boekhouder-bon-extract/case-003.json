@@ -1,0 +1,14 @@
+{
+  "id": "case-003",
+  "description": "Mini transparante PNG dummy — AI zal geen bon kunnen lezen, error verwacht",
+  "request": {
+    "path": "/api/boekhouder/bon-extract",
+    "body": {
+      "image_data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=",
+      "datum_hint": "2026-05-15"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error", "description": "AI ziet niets, returnt error of empty extract" }
+  ]
+}

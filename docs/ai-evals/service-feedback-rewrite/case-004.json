@@ -1,0 +1,15 @@
+{
+  "id": "case-004",
+  "description": "Notities zonder event-context — moet nog werken zonder context",
+  "request": {
+    "path": "/api/service-feedback-rewrite",
+    "body": {
+      "rawNotes": "Logistiek liep stroef, gas ontbrak bij aankomst, half uur vertraging, kwaliteit gerechten oke maar tempo gang 3 viel weg"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "polishedNarrative" },
+    { "type": "has_path", "path": "tags" },
+    { "type": "array_min_length", "path": "tags", "min": 1 }
+  ]
+}

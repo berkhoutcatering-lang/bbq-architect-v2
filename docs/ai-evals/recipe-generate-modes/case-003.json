@@ -1,0 +1,25 @@
+{
+  "id": "case-003",
+  "description": "Recipe-mode klant-flavour: vegan + glutenvrij + €8 budget pp",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "recipe",
+      "prompt": "Hoofdgerecht voor jubileum-diner",
+      "existing": [],
+      "options": {
+        "flavour": "klant",
+        "flavourContext": {
+          "gasten": 25,
+          "budget_pp": 8,
+          "dieet": ["vegan", "glutenvrij"]
+        }
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.tags" },
+    { "type": "number_lte", "path": "data.geschatte_kostprijs_pp", "max": 12, "description": "moet binnen budget blijven" },
+    { "type": "array_min_length", "path": "data.allergenen", "min": 0 }
+  ]
+}

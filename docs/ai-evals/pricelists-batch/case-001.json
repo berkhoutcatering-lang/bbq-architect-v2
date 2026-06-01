@@ -1,0 +1,14 @@
+{
+  "id": "case-001",
+  "description": "JSON body ipv multipart — endpoint vereist auth en formData, faalt vroeg",
+  "request": {
+    "path": "/api/pricelists/batch",
+    "body": {
+      "rows": [],
+      "leverancier": "Sligro"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

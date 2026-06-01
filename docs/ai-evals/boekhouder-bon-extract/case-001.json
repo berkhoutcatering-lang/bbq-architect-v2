@@ -1,0 +1,12 @@
+{
+  "id": "case-001",
+  "description": "Lege image_data_url — 400 verwacht",
+  "request": {
+    "path": "/api/boekhouder/bon-extract",
+    "body": {}
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "foto", "caseInsensitive": true }
+  ]
+}

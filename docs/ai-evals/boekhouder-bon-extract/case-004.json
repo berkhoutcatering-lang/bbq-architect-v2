@@ -1,0 +1,15 @@
+{
+  "id": "case-004",
+  "description": "Webp-image data-URL — endpoint accepteert (geen auth simulatie test)",
+  "request": {
+    "path": "/api/boekhouder/bon-extract",
+    "body": {
+      "image_data_url": "data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v3AgAA=",
+      "datum_hint": "2026-04-20",
+      "leverancier_id": 1
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

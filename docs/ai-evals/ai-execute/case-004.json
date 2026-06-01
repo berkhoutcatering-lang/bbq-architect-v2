@@ -1,0 +1,14 @@
+{
+  "id": "case-004",
+  "description": "bulkCreateGerechten met lege array — error inserted=0",
+  "request": {
+    "path": "/api/ai-execute",
+    "body": {
+      "tool": "bulkCreateGerechten",
+      "params": { "gerechten": [] }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "result.error" }
+  ]
+}

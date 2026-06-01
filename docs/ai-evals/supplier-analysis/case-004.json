@@ -1,0 +1,30 @@
+{
+  "id": "case-004",
+  "description": "Grote leverancier met €12k spend, 50% van totale inkoop — diversificatie-advies verwacht",
+  "request": {
+    "path": "/api/supplier-analysis",
+    "body": {
+      "leverancier": "Hanos Groothandel",
+      "context": {
+        "ourSpend": 12000,
+        "ourCount": 45,
+        "ourLines": [
+          { "product": "Pulled pork US-cut", "prijs": 19.50, "eenheid": "kg" },
+          { "product": "Briketten 5kg", "prijs": 11.00, "eenheid": "zak" },
+          { "product": "Witte wijn azijn", "prijs": 6.50, "eenheid": "fles" }
+        ],
+        "others": [
+          { "leverancier": "Sligro", "spend": 4500, "count": 12, "lines": [
+            { "product": "Pulled pork US-cut", "prijs": 18.20, "eenheid": "kg" }
+          ]},
+          { "leverancier": "Makro", "spend": 3000, "count": 9, "lines": [] }
+        ]
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "headline" },
+    { "type": "has_path", "path": "body" },
+    { "type": "has_path", "path": "sentiment" }
+  ]
+}

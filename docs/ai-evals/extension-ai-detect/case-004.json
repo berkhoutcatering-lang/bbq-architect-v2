@@ -1,0 +1,16 @@
+{
+  "id": "case-004",
+  "description": "Food-drinks scope met dummy html — auth blokkeert maar input zou geldig zijn",
+  "request": {
+    "path": "/api/extension/ai-detect",
+    "body": {
+      "mode": "html",
+      "html": "<html><body><div class='product-tile'><h3>Brisket</h3><span class='price'>14,95</span></div><div class='product-tile'><h3>Procureur</h3><span class='price'>9,50</span></div><div class='product-tile'><h3>Spareribs</h3><span class='price'>11,20</span></div><div class='product-tile'><h3>Bavette</h3><span class='price'>22,00</span></div><div class='product-tile'><h3>Picanha</h3><span class='price'>27,00</span></div></body></html>",
+      "pageUrl": "https://hanos.nl/vlees/categorie",
+      "scope": "food_drinks"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

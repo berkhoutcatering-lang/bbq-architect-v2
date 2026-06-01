@@ -1,0 +1,13 @@
+{
+  "id": "case-005",
+  "description": "Body als JSON-array — endpoint verwacht multipart/form-data, faalt op auth of formdata",
+  "request": {
+    "path": "/api/pricelists/batch",
+    "body": [
+      { "filename": "sligro.pdf" }
+    ]
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

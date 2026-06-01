@@ -1,0 +1,18 @@
+{
+  "id": "case-004",
+  "description": "Brainstorm-intent op /gerechten — forceert propose_dish_concepts tool-call",
+  "request": {
+    "path": "/api/chat",
+    "body": {
+      "messages": [
+        { "role": "user", "content": "Bedenk 4 bites voor een zomerse BBQ met rooksmaak" }
+      ],
+      "pageContext": "/gerechten",
+      "thinkingMode": "deep"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "full", "description": "stream-final bevat ACTION-block met concepts" },
+    { "type": "string_contains", "path": "full", "substring": "ACTION", "caseInsensitive": false }
+  ]
+}

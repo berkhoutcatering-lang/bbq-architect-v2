@@ -1,0 +1,16 @@
+{
+  "id": "case-001",
+  "description": "Geen x-extension-key header — 401 unauthorized",
+  "request": {
+    "path": "/api/extension/ai-detect",
+    "body": {
+      "mode": "html",
+      "html": "<html><body><div>dummy</div></body></html>",
+      "pageUrl": "https://sligro.nl/categories/vlees"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "key", "caseInsensitive": true }
+  ]
+}

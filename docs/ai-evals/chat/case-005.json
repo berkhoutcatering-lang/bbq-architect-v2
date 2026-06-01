@@ -1,0 +1,18 @@
+{
+  "id": "case-005",
+  "description": "Vraag in qa-mode — algemene horeca-vraag zonder page-specifieke context",
+  "request": {
+    "path": "/api/chat",
+    "body": {
+      "messages": [
+        { "role": "user", "content": "Hoe lang kan rauwe rundvlees bij 4 graden gekoeld bewaard worden?" }
+      ],
+      "mode": "qa",
+      "thinkingMode": "standard"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "full" },
+    { "type": "has_path", "path": "model", "description": "final SSE event geeft gebruikt model terug" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "case-004",
+  "description": "Lege body — 403/400 want auth check eerst",
+  "request": {
+    "path": "/api/parse-attachment",
+    "body": {}
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

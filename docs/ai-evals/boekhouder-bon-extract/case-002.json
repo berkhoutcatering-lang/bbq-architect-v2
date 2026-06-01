@@ -1,0 +1,13 @@
+{
+  "id": "case-002",
+  "description": "Geen data:image/ prefix — 400 verwacht",
+  "request": {
+    "path": "/api/boekhouder/bon-extract",
+    "body": {
+      "image_data_url": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII="
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "case-005",
+  "description": "Vijf candidates — AI moet bullets capen op max 5",
+  "request": {
+    "path": "/api/today-briefing",
+    "body": {
+      "candidates": [
+        { "id": "c1", "type": "facturen_overdue", "priority": "critical", "score": 95, "defaultLabel": "Nu", "fallbackText": "5 facturen open", "href": "/facturen", "context": {} },
+        { "id": "c2", "type": "concept_factuur", "priority": "today", "score": 80, "defaultLabel": "Vandaag", "fallbackText": "3 concept-facturen klaar", "href": "/facturen?concept", "context": {} },
+        { "id": "c3", "type": "voorraad_low", "priority": "today", "score": 75, "defaultLabel": "Vandaag", "fallbackText": "Brisket op", "href": "/voorraad", "context": {} },
+        { "id": "c4", "type": "event_morgen", "priority": "today", "score": 70, "defaultLabel": "Morgen", "fallbackText": "Event Jansen morgen", "href": "/events/12", "context": {} },
+        { "id": "c5", "type": "klant_inactief", "priority": "opportunity", "score": 30, "defaultLabel": "Daarna", "fallbackText": "Bakker wacht 6 dagen", "href": "/klanten/bakker", "context": {} },
+        { "id": "c6", "type": "klant_inactief", "priority": "opportunity", "score": 25, "defaultLabel": "Daarna", "fallbackText": "Smit wacht 7 dagen", "href": "/klanten/smit", "context": {} }
+      ],
+      "firstName": "Mathijs",
+      "time": "07:30"
+    }
+  },
+  "expectations": [
+    { "type": "array_min_length", "path": "bullets", "min": 1 },
+    { "type": "has_path", "path": "bullets.0.priority" },
+    { "type": "has_path", "path": "bullets.0.text" }
+  ]
+}

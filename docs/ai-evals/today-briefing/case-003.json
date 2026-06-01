@@ -1,0 +1,48 @@
+{
+  "id": "case-003",
+  "description": "Drie candidates met mix van urgenties — AI moet 3-5 bullets schrijven",
+  "request": {
+    "path": "/api/today-briefing",
+    "body": {
+      "candidates": [
+        {
+          "id": "voorraad_low",
+          "type": "voorraad_low",
+          "priority": "today",
+          "score": 80,
+          "defaultLabel": "Vandaag",
+          "fallbackText": "Bestel brisket en bavette voor woensdag",
+          "href": "/voorraad?filter=low",
+          "context": { "items": ["Brisket", "Bavette"], "eventGuests": 25 }
+        },
+        {
+          "id": "allergie_check",
+          "type": "allergie_check",
+          "priority": "today",
+          "score": 70,
+          "defaultLabel": "Risico",
+          "fallbackText": "Allergieen Pietersen niet bevestigd",
+          "href": "/events/42",
+          "context": { "klant": "Pietersen", "daysUntilEvent": 5 }
+        },
+        {
+          "id": "inactief_klant",
+          "type": "klant_inactief",
+          "priority": "opportunity",
+          "score": 35,
+          "defaultLabel": "Daarna",
+          "fallbackText": "Van Dijk wacht 8 dagen op offerte",
+          "href": "/klanten/van-dijk",
+          "context": { "klant": "Van Dijk", "days": 8, "amount": 6600 }
+        }
+      ],
+      "firstName": "Mathijs",
+      "time": "08:45"
+    }
+  },
+  "expectations": [
+    { "type": "array_min_length", "path": "bullets", "min": 1 },
+    { "type": "has_path", "path": "bullets.0.priority" },
+    { "type": "has_path", "path": "bullets.0.label" }
+  ]
+}

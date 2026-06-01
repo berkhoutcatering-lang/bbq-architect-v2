@@ -1,0 +1,20 @@
+{
+  "id": "case-005",
+  "description": "Negatieve service-review — sentiment 'negative' + concrete actionables",
+  "request": {
+    "path": "/api/service-feedback-rewrite",
+    "body": {
+      "rawNotes": "Vlees te droog, klant niet tevreden, dessert vergeten, hulpkok ziek geworden, twee gasten klaagden over allergie-info",
+      "eventContext": {
+        "title": "Verjaardag Bakker",
+        "date": "2026-05-28",
+        "guests": 35
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "sentiment" },
+    { "type": "array_min_length", "path": "actionables", "min": 2 },
+    { "type": "array_min_length", "path": "keyPoints", "min": 3 }
+  ]
+}

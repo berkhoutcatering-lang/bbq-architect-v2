@@ -1,0 +1,23 @@
+{
+  "id": "case-003",
+  "description": "Allergeen-alert: gast met severe pinda-allergie aan tafel 5 — high severity directive verwacht",
+  "request": {
+    "path": "/api/chef-coach",
+    "body": {
+      "view": "service",
+      "eventTitle": "Bruiloft 80p",
+      "activeCourseTitle": "Hoofdgerecht",
+      "activeCourseStatus": "active",
+      "allergies": [
+        { "person": "Tante Henny", "issue": "pinda-allergie levensbedreigend", "severity": "high", "table": 5, "allergens": ["N", "P"] }
+      ],
+      "coursesProgress": [
+        { "num": 1, "title": "Hoofdgerecht", "status": "active" }
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "directive" },
+    { "type": "string_contains", "path": "severity", "substring": "high", "caseInsensitive": true, "description": "severe allergie = high severity" }
+  ]
+}

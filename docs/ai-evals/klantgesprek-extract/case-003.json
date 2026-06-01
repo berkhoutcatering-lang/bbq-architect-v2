@@ -1,0 +1,14 @@
+{
+  "id": "case-003",
+  "description": "Te kort transcript (<10 tekens) — moet 400 error geven",
+  "request": {
+    "path": "/api/klantgesprek/extract",
+    "body": {
+      "transcript": "hoi"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "kort", "caseInsensitive": true }
+  ]
+}

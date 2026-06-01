@@ -1,0 +1,16 @@
+{
+  "id": "case-002",
+  "description": "Vegan-recept met hints — allergenen-array moet conform whitelist zijn",
+  "request": {
+    "path": "/api/recipe/ai-fill",
+    "body": {
+      "recipe_name": "Vegan BBQ burger met portobello",
+      "porties": 30,
+      "hints": "Volledig veganistisch, glutenvrij broodje gewenst"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.ingredient_costs" },
+    { "type": "has_path", "path": "data.allergenen" }
+  ]
+}

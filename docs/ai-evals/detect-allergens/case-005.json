@@ -1,0 +1,29 @@
+{
+  "id": "case-005",
+  "description": "Complex BBQ-menu met 12+ ingrediënten — meerdere allergenen verwacht (G, L (lactose), E, M (mosterd))",
+  "request": {
+    "path": "/api/detect-allergens",
+    "body": {
+      "dish_name": "BBQ-Buffet voor 30 personen",
+      "ingredients": [
+        "pulled pork",
+        "gerookte zalm",
+        "burger broodjes (tarwe)",
+        "Caesar dressing met ansjovis en parmezaan",
+        "yoghurt-dille saus",
+        "honing-mosterd dressing",
+        "knoflook-mayo",
+        "Romaine sla",
+        "tomaat",
+        "rode ui",
+        "augurken",
+        "frietjes uit eigen friteuse"
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "allergens" },
+    { "type": "array_min_length", "path": "allergens", "min": 4, "description": "verwacht minstens G + L + E + M of V" },
+    { "type": "has_path", "path": "reasoning" }
+  ]
+}

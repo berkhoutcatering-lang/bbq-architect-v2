@@ -1,0 +1,17 @@
+{
+  "id": "case-001",
+  "description": "AI vult compleet recept voor pulled chicken, 20 porties",
+  "request": {
+    "path": "/api/recipe/ai-fill",
+    "body": {
+      "recipe_name": "Pulled chicken tortilla wraps",
+      "porties": 20
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.naam" },
+    { "type": "array_min_length", "path": "data.ingredient_costs", "min": 3 },
+    { "type": "has_path", "path": "data.bereidingswijze" },
+    { "type": "has_path", "path": "meta.matched_count" }
+  ]
+}

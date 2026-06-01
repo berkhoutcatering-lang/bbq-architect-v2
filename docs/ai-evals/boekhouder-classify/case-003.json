@@ -1,0 +1,14 @@
+{
+  "id": "case-003",
+  "description": "Dry-run met enkele bon_id — geen DB-write, AI classify-call uit",
+  "request": {
+    "path": "/api/boekhouder/classify",
+    "body": {
+      "bon_ids": [1],
+      "dry_run": true
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "results", "description": "results-array of error" }
+  ]
+}

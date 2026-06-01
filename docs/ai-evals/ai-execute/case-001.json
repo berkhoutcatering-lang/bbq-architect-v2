@@ -1,0 +1,15 @@
+{
+  "id": "case-001",
+  "description": "Onbekende tool — 400 met duidelijke error",
+  "request": {
+    "path": "/api/ai-execute",
+    "body": {
+      "tool": "wijzig_aarde_rotatie",
+      "params": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "Onbekende tool", "caseInsensitive": true }
+  ]
+}

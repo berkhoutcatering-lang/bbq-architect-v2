@@ -1,0 +1,17 @@
+{
+  "id": "case-001",
+  "description": "Geen candidates: empty-state met all-clear bullet",
+  "request": {
+    "path": "/api/today-briefing",
+    "body": {
+      "candidates": [],
+      "firstName": "Mathijs",
+      "time": "08:30"
+    }
+  },
+  "expectations": [
+    { "type": "array_min_length", "path": "bullets", "min": 1 },
+    { "type": "has_path", "path": "generatedAt" },
+    { "type": "string_contains", "path": "bullets.0.label", "substring": "Daarna" }
+  ]
+}

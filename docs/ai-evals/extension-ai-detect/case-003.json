@@ -1,0 +1,14 @@
+{
+  "id": "case-003",
+  "description": "Image-mode zonder imageBase64 — validation error",
+  "request": {
+    "path": "/api/extension/ai-detect",
+    "body": {
+      "mode": "image",
+      "pageUrl": "https://hanos.nl"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

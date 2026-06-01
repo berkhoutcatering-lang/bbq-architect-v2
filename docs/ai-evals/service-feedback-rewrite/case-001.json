@@ -1,0 +1,21 @@
+{
+  "id": "case-001",
+  "description": "Gemixte service-notities — positief en negatief — sentiment 'mixed' verwacht",
+  "request": {
+    "path": "/api/service-feedback-rewrite",
+    "body": {
+      "rawNotes": "Tempo gang 2 te traag, brisket goed gelukt, klant blij, mac and cheese 30% over gehouden, hulpkok te laat",
+      "eventContext": {
+        "title": "Bedrijfsfeest Noordzee",
+        "date": "2026-05-20",
+        "guests": 60,
+        "menu": "BBQ-buffet met brisket, mac and cheese, coleslaw"
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "polishedNarrative" },
+    { "type": "array_min_length", "path": "keyPoints", "min": 3 },
+    { "type": "array_min_length", "path": "actionables", "min": 2 }
+  ]
+}

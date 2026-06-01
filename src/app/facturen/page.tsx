@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { useOrg } from '@/lib/OrgContext';
-import { downloadUBL } from '@/lib/ublExport';
+import { downloadUBL, generateAndValidateUBL } from '@/lib/ublExport';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -353,7 +353,22 @@ export default function Facturen() {
                                 <Link2 size={14} /> Moneybird
                             </button>
                         )}
-                        <button className="btn btn-ghost" onClick={function () { downloadUBL(form as unknown as Factuur, { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } }); showToast('UBL 2.0 XML gedownload'); }} title="UBL 2.0 e-factuur (Peppol)"><Code size={14} /> UBL</button>
+                        <button className="btn btn-ghost" onClick={function () {
+                            const options = { leverancier: { naam: settings?.bedrijfsnaam || 'Hop & Bites', kvk: settings?.kvk || '', btw_nummer: settings?.btw || '', adres: settings?.adres || '', iban: settings?.iban || '' } };
+                            // Pre-launch P1: Peppol BIS 3.0 compliance-check vóór download.
+                            // Hard errors blokkeren download; warnings worden gelogd maar download gaat door.
+                            const { validation } = generateAndValidateUBL(form as unknown as Factuur, options);
+                            if (!validation.valid) {
+                                console.error('[UBL] validatie faalt:', validation.errors);
+                                showToast(`UBL niet Peppol-conform: ${validation.errors[0]}${validation.errors.length > 1 ? ` (+${validation.errors.length - 1} meer)` : ''}`, 'error');
+                                return;
+                            }
+                            if (validation.warnings.length > 0) {
+                                console.warn('[UBL] BIS 3.0 warnings:', validation.warnings);
+                            }
+                            downloadUBL(form as unknown as Factuur, options);
+                            showToast(`UBL 2.0 XML gedownload${validation.warnings.length > 0 ? ` (${validation.warnings.length} warning${validation.warnings.length === 1 ? '' : 's'} in console)` : ''}`);
+                        }} title="UBL 2.0 e-factuur (Peppol BIS 3.0)"><Code size={14} /> UBL</button>
                         {editing !== 'new' && <button className="btn btn-red" onClick={deleteFactuur}><Trash2 size={14} /> Verwijderen</button>}
                     </div>
                 </div>

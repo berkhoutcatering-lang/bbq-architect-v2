@@ -1,0 +1,17 @@
+{
+  "id": "case-004",
+  "description": "Body met dummy rows — formData-parse faalt, error verwacht",
+  "request": {
+    "path": "/api/pricelists/batch",
+    "body": {
+      "rows": [
+        { "naam": "Brisket", "prijs": 14.5, "eenheid": "kg" },
+        { "naam": "Procureur", "prijs": 9.5, "eenheid": "kg" }
+      ],
+      "leverancier": "Hanos"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

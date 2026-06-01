@@ -1,0 +1,16 @@
+{
+  "id": "case-003",
+  "description": "Te korte prompt (<3 chars) — validation error",
+  "request": {
+    "path": "/api/menukaart-editor/suggest",
+    "body": {
+      "offerId": "1",
+      "templateId": "classic",
+      "prompt": "x",
+      "customOverrides": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

@@ -22,6 +22,7 @@ import {
 import {
     fmtEuro, getGangKey, getGangLabel, getGerechtStatus, getMargin, marginTone,
 } from '../helpers';
+import BeschrijvingBlocksView from './BeschrijvingBlocksView';
 
 export type DetailTab = 'wat' | 'bouw' | 'compliance' | 'service';
 
@@ -457,18 +458,7 @@ function TabService({ gerecht }: { gerecht: Gerecht }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
                 <MREyebrow style={{ marginBottom: 8 }}>Bereidingswijze</MREyebrow>
-                <div style={{
-                    padding: 14, background: 'var(--bg-subtle)',
-                    border: '1px solid var(--border)', borderRadius: 10,
-                    fontSize: 13, color: 'var(--muted)', lineHeight: 1.7, minHeight: 120,
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: 'var(--muted)', fontSize: 11 }}>
-                        <Pencil size={12} /> Klik om te bewerken (BlockNote editor — todo: wire)
-                    </div>
-                    {gerecht.beschrijving || (
-                        <em>Geen bereidingswijze ingevuld. Open Pitmaster AI om receptuur te genereren.</em>
-                    )}
-                </div>
+                <BeschrijvingBlocksView blocks={gerecht.beschrijving_blocks} fallback={gerecht.beschrijving} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>

@@ -1,0 +1,17 @@
+{
+  "id": "case-003",
+  "description": "Korte vraag op /gerechten — SSE-stream start; full-tekst bevat antwoord",
+  "request": {
+    "path": "/api/chat",
+    "body": {
+      "messages": [
+        { "role": "user", "content": "Welke allergenen zitten typisch in pulled pork?" }
+      ],
+      "pageContext": "/gerechten",
+      "thinkingMode": "standard"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "full", "description": "stream-final bevat full-tekst (na SSE-merge)" }
+  ]
+}

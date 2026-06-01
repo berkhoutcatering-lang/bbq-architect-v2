@@ -1,0 +1,15 @@
+{
+  "id": "case-004",
+  "description": "Force-refresh genereert vers advies — JSON met headline + suggestions",
+  "request": {
+    "path": "/api/substitution-advice",
+    "body": {
+      "masterProductId": 1,
+      "forceRefresh": true
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "advice.advice_json.headline" },
+    { "type": "has_path", "path": "advice.advice_json.advies_tekst" }
+  ]
+}

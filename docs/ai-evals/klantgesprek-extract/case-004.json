@@ -1,0 +1,15 @@
+{
+  "id": "case-004",
+  "description": "Veganistische bruiloft — dieet-tag moet eruit komen",
+  "request": {
+    "path": "/api/klantgesprek/extract",
+    "body": {
+      "transcript": "Sanne Hoekstra van sanne@hoekstra.nl belde voor haar bruiloft op 8 september 2026 in Drenthe. 120 gasten, helemaal veganistisch — ze wil dat het niet kinderachtig is. Budget 75 euro per persoon. Sanne praat over verse groenten van het land, lokale producten, niets vlees-imitatie. Locatie is hun eigen tuin."
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "structured.dieet_wensen" },
+    { "type": "array_min_length", "path": "structured.dieet_wensen", "min": 1 },
+    { "type": "number_gte", "path": "structured.budget_pp_eur", "min": 50 }
+  ]
+}

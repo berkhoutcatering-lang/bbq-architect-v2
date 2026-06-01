@@ -1,0 +1,24 @@
+{
+  "id": "case-002",
+  "description": "Focus op preptijd voor brisket — moet add_step of tweak_quantity suggesties geven",
+  "request": {
+    "path": "/api/recipe/ai-improve",
+    "body": {
+      "recept": {
+        "naam": "Brisket smoked",
+        "porties": 20,
+        "ingredient_costs": [
+          { "naam": "Brisket", "qty_pp": 0.3, "unit": "kg", "is_estimated": true, "estimated_price": 14.0 },
+          { "naam": "Mosterd", "qty_pp": 0.005, "unit": "kg", "is_estimated": true, "estimated_price": 0.05 }
+        ],
+        "bereidingswijze": "Rub, smoker 18u, rust",
+        "allergenen": ["mosterd"]
+      },
+      "focus": ["preptijd"]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.fine_tunes" },
+    { "type": "array_min_length", "path": "data.fine_tunes", "min": 1 }
+  ]
+}

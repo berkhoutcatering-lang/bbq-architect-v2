@@ -1,0 +1,17 @@
+{
+  "id": "case-005",
+  "description": "Klassiek voorgerecht — wijn-suggestie + service-tip moeten gevuld",
+  "request": {
+    "path": "/api/recipe/ai-fill",
+    "body": {
+      "recipe_name": "Carpaccio van gerookte runderhaas",
+      "porties": 15,
+      "hints": "Voorgerecht voor diner-event"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.wijn_suggestie" },
+    { "type": "has_path", "path": "data.service_tip" },
+    { "type": "array_min_length", "path": "data.ingredient_costs", "min": 3 }
+  ]
+}

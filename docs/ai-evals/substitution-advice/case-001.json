@@ -1,0 +1,14 @@
+{
+  "id": "case-001",
+  "description": "Geldig masterProductId — endpoint moet advice teruggeven of cache-hit",
+  "request": {
+    "path": "/api/substitution-advice",
+    "body": {
+      "masterProductId": 1,
+      "forceRefresh": false
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "advice", "description": "advice-object aanwezig of error" }
+  ]
+}

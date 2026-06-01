@@ -1,0 +1,13 @@
+{
+  "id": "case-002",
+  "description": "Ontbrekende inboxId in body — 400 verwacht (na auth-check)",
+  "request": {
+    "path": "/api/parse-attachment",
+    "body": {
+      "organizationId": "00000000-0000-0000-0000-000000000002"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

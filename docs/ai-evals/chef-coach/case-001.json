@@ -1,0 +1,20 @@
+{
+  "id": "case-001",
+  "description": "Hub-view: geen actieve gang — korte status zonder specifieke directive",
+  "request": {
+    "path": "/api/chef-coach",
+    "body": {
+      "view": "hub",
+      "eventTitle": "Bedrijfsfeest Noordzee",
+      "coursesProgress": [
+        { "num": 1, "title": "Voorgerecht", "status": "queued" },
+        { "num": 2, "title": "Hoofdgerecht BBQ", "status": "queued" },
+        { "num": 3, "title": "Dessert", "status": "queued" }
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "directive" },
+    { "type": "has_path", "path": "severity" }
+  ]
+}

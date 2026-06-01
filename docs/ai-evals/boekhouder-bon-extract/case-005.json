@@ -1,0 +1,13 @@
+{
+  "id": "case-005",
+  "description": "Veel te grote image_data_url (>14MB) — 413 verwacht",
+  "request": {
+    "path": "/api/boekhouder/bon-extract",
+    "body": {
+      "image_data_url": "data:image/jpeg;base64,REPLACE_WITH_HUGE_PAYLOAD"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

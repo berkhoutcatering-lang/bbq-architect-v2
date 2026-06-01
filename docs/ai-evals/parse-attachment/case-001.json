@@ -1,0 +1,15 @@
+{
+  "id": "case-001",
+  "description": "Geen x-internal-token — 403 forbidden",
+  "request": {
+    "path": "/api/parse-attachment",
+    "body": {
+      "inboxId": "00000000-0000-0000-0000-000000000001",
+      "organizationId": "00000000-0000-0000-0000-000000000002"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "forbidden", "caseInsensitive": true }
+  ]
+}

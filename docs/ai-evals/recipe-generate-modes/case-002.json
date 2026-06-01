@@ -1,0 +1,27 @@
+{
+  "id": "case-002",
+  "description": "Recipe-mode voorraad-flavour: hergebruik restjes brisket en koolrabi",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "recipe",
+      "prompt": "Lunchgerecht uit restjes — gasten morgen om 13:00",
+      "existing": [
+        { "naam": "Brisket low-and-slow", "categorie": "Vlees" },
+        { "naam": "Coleslaw klassiek", "categorie": "Bijgerecht" }
+      ],
+      "options": {
+        "flavour": "voorraad",
+        "flavourContext": {
+          "voorraad": "Restjes brisket 1.5kg, koolrabi 2 stuks, augurken, mosterd, oud brood",
+          "gasten": 12
+        }
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.naam" },
+    { "type": "array_min_length", "path": "data.ingredienten", "min": 3 },
+    { "type": "string_contains", "path": "data.beschrijving", "substring": "brisket", "caseInsensitive": true }
+  ]
+}

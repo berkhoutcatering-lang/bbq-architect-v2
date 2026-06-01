@@ -1,0 +1,21 @@
+{
+  "id": "case-002",
+  "description": "Vega-burger met cashewnoten saus — N (noten) + G (broodje) verwacht",
+  "request": {
+    "path": "/api/detect-allergens",
+    "body": {
+      "dish_name": "Cashew-pesto vega burger",
+      "ingredients": [
+        "Beyond Meat patty",
+        "ciabatta broodje",
+        "cashew-pesto saus",
+        "tomaat",
+        "rucola"
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "allergens" },
+    { "type": "array_min_length", "path": "allergens", "min": 2, "description": "minstens N (noten) + G (gluten)" }
+  ]
+}

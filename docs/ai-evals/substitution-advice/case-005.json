@@ -1,0 +1,16 @@
+{
+  "id": "case-005",
+  "description": "Sonnet-opt-in via body.model — geldige call met advies",
+  "request": {
+    "path": "/api/substitution-advice",
+    "body": {
+      "masterProductId": 1,
+      "forceRefresh": true,
+      "model": "sonnet"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "advice" },
+    { "type": "has_path", "path": "advice.advice_json" }
+  ]
+}

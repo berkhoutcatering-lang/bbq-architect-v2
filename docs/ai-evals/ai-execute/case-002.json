@@ -1,0 +1,15 @@
+{
+  "id": "case-002",
+  "description": "generateInkooplijst zonder event_id — error in result",
+  "request": {
+    "path": "/api/ai-execute",
+    "body": {
+      "tool": "generateInkooplijst",
+      "params": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "result.error" },
+    { "type": "string_contains", "path": "result.error", "substring": "event_id", "caseInsensitive": true }
+  ]
+}

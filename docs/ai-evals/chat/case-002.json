@@ -1,0 +1,15 @@
+{
+  "id": "case-002",
+  "description": "Ongeldige messages-shape (geen array) geeft 400",
+  "request": {
+    "path": "/api/chat",
+    "body": {
+      "messages": "geen array maar string",
+      "pageContext": "/gerechten"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "onjuist", "caseInsensitive": true }
+  ]
+}

@@ -13,9 +13,16 @@ import type {
   DbCourse, DbEventAllergy, PrepTask, PrepSuggestion, Gerecht,
   MargeAlert,
 } from '@/types';
-import EventWizard from '@/components/EventWizard';
-import OnboardingChecklist, { type ChecklistData } from '@/components/onboarding/OnboardingChecklist';
-import PersonaQuiz from '@/components/onboarding/PersonaQuiz';
+import dynamic from 'next/dynamic';
+import type { ChecklistData } from '@/components/onboarding/OnboardingChecklist';
+
+/* Pre-launch P1 code-splits — deze 5 sub-components renderen alleen
+ * conditioneel (state-driven, onboarding-state, of data>0). Door ze via
+ * next/dynamic met ssr:false te laden krimpt de initial JS-bundle voor
+ * de root-route fors. Meet impact met `npm run analyze`. */
+const EventWizard = dynamic(() => import('@/components/EventWizard'), { ssr: false });
+const OnboardingChecklist = dynamic(() => import('@/components/onboarding/OnboardingChecklist'), { ssr: false });
+const PersonaQuiz = dynamic(() => import('@/components/onboarding/PersonaQuiz'), { ssr: false });
 import { LoadingState } from '@/components/LoadingState';
 import { useBrandLogo } from '@/lib/useBrandLogo';
 import { trackOnce } from '@/lib/track';
@@ -24,8 +31,9 @@ import { trackOnce } from '@/lib/track';
 import GreetingStrip from '@/components/dashboard/today/GreetingStrip';
 import EventHero, { type EventHeroEvent } from '@/components/dashboard/today/EventHero';
 import AIQuickPrompts from '@/components/dashboard/today/AIQuickPrompts';
-import AIPromptDrawer, { type QuickPrompt } from '@/components/dashboard/today/AIPromptDrawer';
-import BusinessCharts from '@/components/dashboard/today/BusinessCharts';
+import type { QuickPrompt } from '@/components/dashboard/today/AIPromptDrawer';
+const AIPromptDrawer = dynamic(() => import('@/components/dashboard/today/AIPromptDrawer'), { ssr: false });
+const BusinessCharts = dynamic(() => import('@/components/dashboard/today/BusinessCharts'), { ssr: false });
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
 import KPIStripEmpty from '@/components/dashboard/today/KPIStripEmpty';
 import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';

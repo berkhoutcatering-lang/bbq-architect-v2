@@ -1,0 +1,14 @@
+{
+  "id": "case-002",
+  "description": "Mager transcript: alleen klant-naam en datum — lage confidence verwacht",
+  "request": {
+    "path": "/api/klantgesprek/extract",
+    "body": {
+      "transcript": "Belletje van Karel de Vries gehad. Wil iets organiseren ergens in juni. Verder geen details gegeven, gaat dit weekend nog nadenken en mailt het door."
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "structured.klant_naam" },
+    { "type": "number_lte", "path": "confidence", "max": 0.8, "description": "lage confidence bij vage info" }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "case-004",
+  "description": "Niet-integer bon_ids worden gefilterd — lege resterende lijst",
+  "request": {
+    "path": "/api/boekhouder/classify",
+    "body": {
+      "bon_ids": ["abc", null, 1.5]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

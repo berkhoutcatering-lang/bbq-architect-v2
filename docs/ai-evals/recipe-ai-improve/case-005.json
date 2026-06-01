@@ -1,0 +1,24 @@
+{
+  "id": "case-005",
+  "description": "Schaalbaarheid-focus voor groot event — moet realistische fine-tunes geven",
+  "request": {
+    "path": "/api/recipe/ai-improve",
+    "body": {
+      "recept": {
+        "naam": "BBQ-spies kip",
+        "porties": 80,
+        "ingredient_costs": [
+          { "naam": "Kipdijen", "qty_pp": 0.15, "unit": "kg", "is_estimated": true, "estimated_price": 6.5 },
+          { "naam": "Marinade", "qty_pp": 0.03, "unit": "L", "is_estimated": true, "estimated_price": 0.8 },
+          { "naam": "Spies", "qty_pp": 2, "unit": "stuks", "is_estimated": true, "estimated_price": 0.1 }
+        ],
+        "bereidingswijze": "1. Marineren 4u 2. Op spies 3. Grillen 8 min"
+      },
+      "focus": ["schaalbaarheid"]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.recept_analyse" },
+    { "type": "array_min_length", "path": "data.fine_tunes", "min": 2 }
+  ]
+}

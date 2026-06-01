@@ -1,0 +1,16 @@
+{
+  "id": "case-005",
+  "description": "Ontbrekende offerId — validation error 400",
+  "request": {
+    "path": "/api/menukaart-editor/suggest",
+    "body": {
+      "templateId": "classic",
+      "prompt": "Iets opfrissen graag",
+      "customOverrides": {}
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" },
+    { "type": "string_contains", "path": "error", "substring": "body", "caseInsensitive": true }
+  ]
+}

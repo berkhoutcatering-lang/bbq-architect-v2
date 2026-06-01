@@ -1,0 +1,15 @@
+{
+  "id": "case-001",
+  "description": "Lege messages-array geeft 400 met duidelijke foutmelding",
+  "request": {
+    "path": "/api/chat",
+    "body": {
+      "messages": [],
+      "pageContext": "/vandaag"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error", "description": "error-veld aanwezig bij ongeldige input" },
+    { "type": "string_contains", "path": "error", "substring": "bericht", "caseInsensitive": true }
+  ]
+}

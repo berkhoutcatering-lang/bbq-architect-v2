@@ -1,0 +1,22 @@
+{
+  "id": "case-002",
+  "description": "Actieve gang in service: hoofdgerecht 60% geserveerd — verwacht voortgang-suggestie",
+  "request": {
+    "path": "/api/chef-coach",
+    "body": {
+      "view": "service",
+      "eventTitle": "Verjaardag 40j",
+      "activeCourseTitle": "Pulled Pork Hoofdgerecht",
+      "activeCourseStatus": "active",
+      "coursesProgress": [
+        { "num": 1, "title": "Voorgerecht", "status": "served", "servedPortions": 25, "totalPortions": 25 },
+        { "num": 2, "title": "Pulled Pork Hoofdgerecht", "status": "active", "servedPortions": 15, "totalPortions": 25 },
+        { "num": 3, "title": "Dessert", "status": "queued", "servedPortions": 0, "totalPortions": 25 }
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "directive", "description": "moet directive geven over actieve gang" },
+    { "type": "has_path", "path": "severity" }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "case-004",
+  "description": "Smoker-status oververhit: 145°C op target 110°C — kritiek voor pulled pork temperatuur",
+  "request": {
+    "path": "/api/chef-coach",
+    "body": {
+      "view": "service",
+      "eventTitle": "Catering Smoker BBQ",
+      "activeCourseTitle": "Pulled Pork",
+      "activeCourseStatus": "active",
+      "smokerStatus": {
+        "currentTemp": 145,
+        "targetTemp": 110,
+        "etaMinutes": 30
+      },
+      "coursesProgress": [
+        { "num": 1, "title": "Pulled Pork", "status": "active" }
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "directive" },
+    { "type": "has_path", "path": "severity" }
+  ]
+}

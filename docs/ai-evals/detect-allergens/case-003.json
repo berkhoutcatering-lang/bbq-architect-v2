@@ -1,0 +1,21 @@
+{
+  "id": "case-003",
+  "description": "Schaaldieren-gerecht: garnalen + mosselen — S (schaaldieren) + W (weekdieren) kritisch voor food-safety",
+  "request": {
+    "path": "/api/detect-allergens",
+    "body": {
+      "dish_name": "Zeevruchten-tapas",
+      "ingredients": [
+        "gamba's",
+        "mosselen",
+        "knoflook-olijfolie",
+        "citroen",
+        "peterselie"
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "allergens" },
+    { "type": "array_min_length", "path": "allergens", "min": 1, "description": "schaaldieren moeten altijd worden gedetecteerd — food-safety P0" }
+  ]
+}

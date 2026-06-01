@@ -14,15 +14,20 @@ import {
     Sparkles, AlertTriangle, X, MapPin, Euro, Clock, Calendar,
     Check, RefreshCw, Plus, Pencil,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import PageGuideNote from '@/components/PageGuideNote';
 import ErrorCard from '@/components/ErrorCard';
 import { useAgendaPersonal } from './_components/useAgendaPersonal';
-import PersonalEventModal from './_components/PersonalEventModal';
 import InkooplijstButton from './_components/InkooplijstButton';
 import CalendarView from './_components/CalendarView';
-import FilterPopover from './_components/FilterPopover';
 import FilterPillsBar from './_components/FilterPillsBar';
-import AgendaCategoryModal from './_components/AgendaCategoryModal';
+
+/* Pre-launch P1 code-splits — Modals + FilterPopover renderen alleen
+ * conditioneel (state-driven). Lazy load voorkomt dat ze in de initial
+ * /agenda bundle terechtkomen. */
+const PersonalEventModal = dynamic(() => import('./_components/PersonalEventModal'), { ssr: false });
+const FilterPopover = dynamic(() => import('./_components/FilterPopover'), { ssr: false });
+const AgendaCategoryModal = dynamic(() => import('./_components/AgendaCategoryModal'), { ssr: false });
 import type { AgendaEvent as AgendaEventType, AgendaFilterState } from './_lib/types';
 import { useAgendaFilter, applyFilter } from './_lib/useAgendaFilter';
 import { useAgendaCategories, type AgendaCategoryRow } from './_lib/useAgendaCategories';

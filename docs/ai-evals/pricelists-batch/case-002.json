@@ -1,0 +1,11 @@
+{
+  "id": "case-002",
+  "description": "Lege body — niet ingelogd error of invalid_form",
+  "request": {
+    "path": "/api/pricelists/batch",
+    "body": {}
+  },
+  "expectations": [
+    { "type": "has_path", "path": "error" }
+  ]
+}

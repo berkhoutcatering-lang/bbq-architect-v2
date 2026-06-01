@@ -1,0 +1,16 @@
+{
+  "id": "case-004",
+  "description": "Webp-formaat met hint over Makro vlees — endpoint accepteert input",
+  "request": {
+    "path": "/api/recipe/refine-price",
+    "body": {
+      "image_base64": "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAUAmJaQAA3AA/v3AgAA=",
+      "image_mime": "image/webp",
+      "hint": "Makro brisket prijslabel"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data" },
+    { "type": "has_path", "path": "meta.cost_cents" }
+  ]
+}

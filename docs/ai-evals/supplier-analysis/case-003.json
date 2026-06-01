@@ -1,0 +1,26 @@
+{
+  "id": "case-003",
+  "description": "Kleine leverancier, lage spend (€200) — pas op voor over-reliance advies",
+  "request": {
+    "path": "/api/supplier-analysis",
+    "body": {
+      "leverancier": "AH XL",
+      "context": {
+        "ourSpend": 200,
+        "ourCount": 3,
+        "ourLines": [
+          { "product": "Aluminium folie", "prijs": 8.00, "eenheid": "rol" },
+          { "product": "Servetten 200st", "prijs": 12.00, "eenheid": "doos" }
+        ],
+        "others": [
+          { "leverancier": "Sligro", "spend": 4500, "count": 12, "lines": [] },
+          { "leverancier": "Hanos", "spend": 2200, "count": 8, "lines": [] }
+        ]
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "headline" },
+    { "type": "has_path", "path": "sentiment" }
+  ]
+}

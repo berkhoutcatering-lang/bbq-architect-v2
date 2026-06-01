@@ -1,0 +1,15 @@
+{
+  "id": "case-004",
+  "description": "Edge case: lege ingrediënten-array — moet leeg allergens-array retourneren zonder AI-call",
+  "request": {
+    "path": "/api/detect-allergens",
+    "body": {
+      "dish_name": "Onbekend gerecht",
+      "ingredients": []
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "allergens" },
+    { "type": "string_contains", "path": "reasoning", "substring": "Geen ingrediënten", "caseInsensitive": true, "description": "moet AI-call overslaan" }
+  ]
+}

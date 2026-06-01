@@ -1,0 +1,32 @@
+{
+  "id": "case-001",
+  "description": "Standaard leverancier met 5 producten, 2 goedkoper elders — verwacht headline + savings-tips",
+  "request": {
+    "path": "/api/supplier-analysis",
+    "body": {
+      "leverancier": "Sligro",
+      "context": {
+        "ourSpend": 4500,
+        "ourCount": 12,
+        "ourLines": [
+          { "product": "Rundvlees procureur", "prijs": 18.50, "eenheid": "kg" },
+          { "product": "Brioche broodjes 60st", "prijs": 12.00, "eenheid": "doos" },
+          { "product": "Tomaten kilo", "prijs": 3.20, "eenheid": "kg" },
+          { "product": "Rookhout chunks", "prijs": 8.50, "eenheid": "zak" },
+          { "product": "Mosterd Maille", "prijs": 4.75, "eenheid": "fles" }
+        ],
+        "others": [
+          { "leverancier": "Hanos", "spend": 2200, "count": 8, "lines": [
+            { "product": "Rundvlees procureur", "prijs": 16.80, "eenheid": "kg" },
+            { "product": "Mosterd Maille", "prijs": 4.20, "eenheid": "fles" }
+          ]}
+        ]
+      }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "headline" },
+    { "type": "has_path", "path": "body" },
+    { "type": "has_path", "path": "sentiment" }
+  ]
+}

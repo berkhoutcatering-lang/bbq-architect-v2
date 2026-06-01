@@ -41,13 +41,14 @@ import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
    prefill-data via een query-param doorgeven zonder de wizard te wijzigen. */
 const AI_WIZARD_DRAFT_KEY = 'bbq_ai_offerte_wizard_draft';
 
-/* Demo-seed event uit /api/onboarding/seed-demo dat we als prefill gebruiken
-   wanneer de gebruiker vanuit /onboarding stap 3 hier landt. Matcht het
-   meest "klassieke" event uit de demo-data. Pillar #1 Hub 1: ≤10 min naar
-   eerste offerte. */
+/* Demo-seed event dat we als prefill gebruiken wanneer de gebruiker vanuit
+   /onboarding stap 3 hier landt met `?wizard=true&seedEvent=demo`. Generiek
+   gehouden — geen echte klantnaam, zodat elke nieuwe BBQ Architect-tenant
+   dezelfde "klassieke" demo-ervaring krijgt zonder verwijzing naar Hop & Bites'
+   eigen klantenlijst. Pillar #1 Hub 1: ≤10 min naar eerste offerte. */
 const DEMO_SEED_PREFILL = {
-    clientName: 'Bedrijf Noordzee Logistics',
-    clientAddress: 'Industrieweg 3, Hoogeveen',
+    clientName: 'Voorbeeld Bedrijf',
+    clientAddress: 'Demolaan 1, Voorbeeldstad',
     eventDate: (() => {
         const d = new Date();
         d.setDate(d.getDate() + 28);

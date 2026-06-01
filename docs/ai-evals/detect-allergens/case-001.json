@@ -1,0 +1,20 @@
+{
+  "id": "case-001",
+  "description": "Standaard pulled pork burger met tarwebroodje — moet G (gluten) detecteren",
+  "request": {
+    "path": "/api/detect-allergens",
+    "body": {
+      "dish_name": "Pulled Pork Slider",
+      "ingredients": [
+        "pulled pork schouder",
+        "brioche broodje",
+        "coleslaw met yoghurt",
+        "BBQ saus"
+      ]
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "allergens", "description": "allergens-array moet aanwezig zijn" },
+    { "type": "string_contains", "path": "allergens.0", "substring": "G", "description": "tarwebroodje + brioche = G (gluten)", "caseInsensitive": false }
+  ]
+}

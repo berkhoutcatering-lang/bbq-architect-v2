@@ -1,0 +1,17 @@
+{
+  "id": "case-004",
+  "description": "Spareribs voor groot event — 80 porties met schaalbaar recept",
+  "request": {
+    "path": "/api/recipe/ai-fill",
+    "body": {
+      "recipe_name": "Spareribs sweet bourbon BBQ",
+      "porties": 80,
+      "hints": "Voor bedrijfsfeest, BBQ-rub low-and-slow"
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.bereidingswijze" },
+    { "type": "number_gte", "path": "data.kostprijs_pp_schatting", "min": 1 },
+    { "type": "number_gte", "path": "data.porties", "min": 50 }
+  ]
+}
