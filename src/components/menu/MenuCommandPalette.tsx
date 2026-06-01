@@ -33,6 +33,16 @@ interface Props {
     onSelectComponent?: (c: ComponentLite) => void;
     /* Action-callback voor static items: 'bedenker'|'analyse'|'allergens' */
     onAction?: (id: string) => void;
+    /* Stel-menu-samen v2: 'picker' mode voor MenuComposer.
+       - geen analyse/voorraad acties (verstoort flow)
+       - context-bar toont voor welke gang het is
+       - 'new-gerecht' is wél een actie zodat Sam vanuit picker een gerecht
+         kan aanmaken zonder palette te sluiten */
+    mode?: 'search' | 'picker';
+    pickerContext?: { gangSlug: string; gangLabel: string };
+    /* Hide-set: gerecht-ids die al in de huidige selectie zitten worden
+       verborgen of doorgestreept zodat Sam geen dubbeltap doet */
+    excludeIds?: Set<string>;
 }
 
 type Item =
@@ -47,7 +57,9 @@ interface Section {
 
 export function MenuCommandPalette({
     open, onClose, gerechten, componenten = [], onSelectGerecht, onSelectComponent, onAction,
+    mode = 'search', pickerContext, excludeIds,
 }: Props) {
+    const isPicker = mode === 'picker';
     const router = useRouter();
     const [query, setQuery] = useState('');
     const [activeIdx, setActiveIdx] = useState(0);
@@ -73,11 +85,44 @@ export function MenuCommandPalette({
         return () => window.removeEventListener('keydown', onKey);
     }, [open, onClose]);
 
+    /* In picker mode prioriteren we gerechten die bij de huidige gang horen,
+       en filteren we al-geselecteerde IDs (excludeIds) weg uit de lijst. */
+    const visibleGerechten = useMemo(() => {
+        let list = gerechten;
+        if (excludeIds && excludeIds.size > 0) {
+            list = list.filter(g => !excludeIds.has(String(g.id)));
+        }
+        if (isPicker && pickerContext?.gangSlug) {
+            const slug = pickerContext.gangSlug;
+            const matching = list.filter(g => g.gang_slug === slug);
+            const rest = list.filter(g => g.gang_slug !== slug);
+            return [...matching, ...rest];
+        }
+        return list;
+    }, [gerechten, excludeIds, isPicker, pickerContext]);
+
     const sections: Section[] = useMemo(() => {
         const out: Section[] = [];
 
         if (!query) {
-            /* Empty-state: top acties + recent */
+            if (isPicker) {
+                /* Picker empty-state: "+ Nieuw gerecht" actie + gang-matching gerechten */
+                out.push({
+                    title: 'Acties',
+                    items: [
+                        { kind: 'action', id: 'new-gerecht', label: 'Nieuw gerecht aanmaken', desc: 'Opent gerecht-detail in concept-modus', Icon: Sparkles },
+                    ],
+                });
+                if (visibleGerechten.length > 0) {
+                    const gangLabel = pickerContext?.gangLabel ?? '';
+                    out.push({
+                        title: gangLabel ? `Past bij ${gangLabel}` : 'Suggesties',
+                        items: visibleGerechten.slice(0, 12).map((g) => ({ kind: 'gerecht' as const, data: g })),
+                    });
+                }
+                return out;
+            }
+            /* Search empty-state: top acties + recent */
             out.push({
                 title: 'Acties',
                 items: [
@@ -97,7 +142,7 @@ export function MenuCommandPalette({
         }
 
         /* Met query: filter alles */
-        const dishMatches = gerechten
+        const dishMatches = visibleGerechten
             .filter((g) => fuzzyMatch(query, g.naam) || fuzzyMatch(query, g.beschrijving ?? '') || fuzzyMatch(query, getGangLabel(getGangKey(g))))
             .slice(0, 12);
         if (dishMatches.length) {
@@ -105,6 +150,18 @@ export function MenuCommandPalette({
                 title: `Gerechten (${dishMatches.length})`,
                 items: dishMatches.map((g) => ({ kind: 'gerecht' as const, data: g })),
             });
+        }
+
+        if (isPicker) {
+            /* Picker: bij query altijd "Nieuw gerecht" als laatste optie zodat
+               Sam direct kan aanmaken als hij niets vindt */
+            out.push({
+                title: 'Acties',
+                items: [
+                    { kind: 'action', id: 'new-gerecht', label: `Maak "${query}" aan`, desc: 'Nieuw gerecht in concept-modus', Icon: Sparkles },
+                ],
+            });
+            return out;
         }
 
         const compMatches = componenten
@@ -132,7 +189,7 @@ export function MenuCommandPalette({
             });
         }
         return out;
-    }, [query, gerechten, componenten]);
+    }, [query, gerechten, componenten, isPicker, pickerContext, visibleGerechten]);
 
     const allItems = sections.flatMap((s) => s.items);
 
@@ -171,12 +228,24 @@ export function MenuCommandPalette({
                 aria-modal="true"
                 aria-label="Zoek-palette"
             >
+                {isPicker && pickerContext && (
+                    <div style={{
+                        padding: '6px 14px',
+                        borderBottom: '1px solid var(--border)',
+                        fontSize: 11,
+                        color: 'var(--muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.4,
+                    }}>
+                        Voeg toe aan <strong style={{ color: 'var(--text)' }}>{pickerContext.gangLabel}</strong>
+                    </div>
+                )}
                 <div className="mr-cmdk-input-wrap">
                     <Search size={18} color="var(--muted)" />
                     <input
                         ref={inputRef}
                         className="mr-cmdk-input"
-                        placeholder="Zoek gerechten, componenten, acties…"
+                        placeholder={isPicker ? 'Zoek een gerecht uit je bibliotheek…' : 'Zoek gerechten, componenten, acties…'}
                         value={query}
                         onChange={(e) => { setQuery(e.target.value); setActiveIdx(0); }}
                         onKeyDown={handleKey}
