@@ -43,6 +43,12 @@ export const OfferteItemSchema = z.object({
     'alcohol', 'soft_drinks', 'transport', 'equipment_rental',
     'b2b_intra_eu_reverse', 'export_non_eu', 'exempt',
   ]).optional(),
+  /* Stel-menu-samen v2 (2026-06): wanneer een item via een menukaart in de
+     offerte komt, persisteren we de bron-FKs zodat PDF/portaal/marge-rapportage
+     terug kunnen naar het bron-gerecht. Optioneel — losse items zonder
+     menukaart-bron blijven werken. */
+  gerecht_id: z.string().uuid().optional(),
+  gang_slug: z.string().max(100).optional(),
 });
 
 export const VasteKostenSchema = z.object({

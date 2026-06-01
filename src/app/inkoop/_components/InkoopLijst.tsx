@@ -840,8 +840,7 @@ function PdfPreviewModal({
                         )}
                         <div style={{ height: 1, background: '#e5e5e5', margin: '14px 0' }} />
 
-                        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -2px' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 420 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                             <thead>
                                 <tr style={{ borderBottom: '1.5px solid #222', textAlign: 'left' }}>
                                     <th style={{ padding: '6px 0', fontWeight: 600 }}>Product</th>
@@ -876,7 +875,6 @@ function PdfPreviewModal({
                                 })}
                             </tbody>
                         </table>
-                        </div>
 
                         <div style={{ height: 1, background: '#222', margin: '14px 0' }} />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 28, fontSize: 11 }}>
