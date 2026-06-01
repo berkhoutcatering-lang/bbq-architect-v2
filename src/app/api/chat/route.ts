@@ -217,6 +217,8 @@ const ROLE_ALLOWED_ACTIONS: Record<string, string[]> = {
         'create_event', 'update_event',
         'create_recept', 'update_recept',
         'create_offerte', 'update_offerte',
+        'create_klant', 'update_klant',
+        'draft_email',
         'generate_prep_list', 'generate_inkooplijst',
         'generate_event_briefing', 'get_event_winstgevendheid',
         'mark_weak_dishes', 'filter_gerechten',

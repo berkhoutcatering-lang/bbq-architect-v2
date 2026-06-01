@@ -353,6 +353,34 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         color: '#f59e0b',
     },
 
+    // ── Klanten ──────────────────────────────────────────────────────────────
+    create_klant: {
+        label: 'Klant aanmaken',
+        table: 'klanten',
+        op: 'insert',
+        pages: ['/klanten', '/offertes', '/verkoop/leads', '/'],
+        icon: 'UserPlus',
+        color: '#22c55e',
+    },
+    update_klant: {
+        label: 'Klant bijwerken',
+        table: 'klanten',
+        op: 'update',
+        pages: ['/klanten'],
+        icon: 'Pencil',
+        color: '#3b82f6',
+    },
+
+    // ── Emails ───────────────────────────────────────────────────────────────
+    draft_email: {
+        label: 'Email-concept aanmaken',
+        table: 'emails',
+        op: 'insert',
+        pages: ['/mailbox', '/klanten', '/offertes', '/facturen', '/'],
+        icon: 'Mail',
+        color: '#22c55e',
+    },
+
     // ── AI Gesprekken ────────────────────────────────────────────────────────
     save_conversation: {
         label: 'Gesprek opslaan',
@@ -659,6 +687,31 @@ export async function executeAction(action: { type: string; data: Record<string,
             mapField(['name'], 'naam');
             mapField(['telefoon', 'phone'], 'tel');
             const allowed = ['naam', 'type', 'contact', 'email', 'tel'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'klanten') {
+            mapField(['name', 'klantnaam'], 'naam');
+            mapField(['company', 'bedrijfsnaam'], 'bedrijf');
+            mapField(['address', 'adresregel'], 'adres');
+            mapField(['city', 'woonplaats'], 'plaats');
+            mapField(['zipcode', 'postal_code'], 'postcode');
+            mapField(['phone', 'tel'], 'telefoon');
+            mapField(['mail', 'e_mail'], 'email');
+            mapField(['klant_type', 'category'], 'type');
+            mapField(['notes', 'notitie'], 'notities');
+            const allowed = ['naam', 'bedrijf', 'adres', 'postcode', 'plaats', 'telefoon', 'email', 'type', 'notities'];
+            Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
+        }
+        if (table === 'emails') {
+            mapField(['to_email', 'aan', 'recipient_email'], 'aan_email');
+            mapField(['to_name', 'recipient_name', 'aan_naam_recipient'], 'aan_naam');
+            mapField(['subject', 'titel'], 'onderwerp');
+            mapField(['body', 'tekst', 'message', 'content'], 'inhoud');
+            mapField(['email_type', 'categorie'], 'type');
+            /* Forceer status='concept' — AI mag nooit per ongeluk een email
+               versturen. Verzenden gebeurt expliciet via mailbox UI. */
+            rec.status = 'concept';
+            const allowed = ['klant_id', 'aan_email', 'aan_naam', 'onderwerp', 'inhoud', 'type', 'status'];
             Object.keys(rec).forEach(k => { if (!allowed.includes(k)) delete rec[k]; });
         }
     }
