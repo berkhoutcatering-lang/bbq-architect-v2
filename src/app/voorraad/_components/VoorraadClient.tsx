@@ -20,6 +20,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 import { upsertInventory, deleteInventory, adjustStock } from '../actions';
+import { useIsPhone } from '@/hooks/useIsMobile';
 
 const GOLD = '#c4a35a';
 
@@ -1106,9 +1107,107 @@ function FilterBar({ search, setSearch, filter, setFilter, counts }: any) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   PRODUCT CARD LIST (mobile) — compacte card-stack zodat voorraad-checks
+   in de keuken/op de telefoon werken zonder 10-kolommen horizontal-scroll.
+   Toont de essentials voor field-use: status-badge, stockbar, ±-buttons (44px).
+   ═══════════════════════════════════════════════════════════════════ */
+function ProductCardList({ items, onOpenItem, onAdjust }: { items: InventoryItem[]; onOpenItem: (id: number) => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
+    if (items.length === 0) {
+        return (
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                <Search size={28} style={{ color: 'var(--muted-light)', marginBottom: 10 }} />
+                <div>Geen producten gevonden met deze filter.</div>
+            </div>
+        );
+    }
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10 }}>
+            {items.map(i => {
+                const s = stockStatus(i);
+                const meta = CAT_META[i.categorie] || CAT_META.Overig;
+                const cov = coverageDays(i);
+                const thtDays = daysUntilTHT(i.tht);
+                return (
+                    <div
+                        key={i.id}
+                        onClick={() => onOpenItem(i.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenItem(i.id); } }}
+                        style={{
+                            background: 'var(--card)',
+                            border: '1px solid var(--border)',
+                            borderLeft: `3px solid ${meta.color}`,
+                            borderRadius: 12,
+                            padding: 14,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                            cursor: 'pointer',
+                            touchAction: 'manipulation',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.naam}</div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{i.categorie}</div>
+                            </div>
+                            <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', background: s.bg, color: s.color, border: `1px solid ${s.br}`, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                                {s.label}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}><StockBar item={i} /></div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {i.current_stock} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)' }}>{i.unit}</span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 11, color: 'var(--muted)', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                                {cov !== Infinity && (
+                                    <span style={{ color: cov < 3 ? 'var(--red)' : cov < 7 ? 'var(--amber)' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                        ~{cov.toFixed(1)}d dekking
+                                    </span>
+                                )}
+                                {i.supplier && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <div style={{ width: 6, height: 6, borderRadius: 1, background: supplierColor(i.supplier) }} />
+                                        {i.supplier}
+                                    </span>
+                                )}
+                                {thtDays !== null && thtDays <= 7 && (
+                                    <span style={{ color: thtDays <= 1 ? 'var(--red)' : 'var(--amber)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                        THT {thtDays}d
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => onAdjust(i, -1)}
+                                    aria-label={`Eén ${i.unit} eraf`}
+                                    style={{ minWidth: 44, minHeight: 44, borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, fontWeight: 500, cursor: 'pointer', touchAction: 'manipulation' }}
+                                >−</button>
+                                <button
+                                    onClick={() => onAdjust(i, +1)}
+                                    aria-label={`Eén ${i.unit} erbij`}
+                                    style={{ minWidth: 44, minHeight: 44, borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, fontWeight: 500, cursor: 'pointer', touchAction: 'manipulation' }}
+                                >+</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    PRODUCT TABLE — stockbar, dekking, par, prijs, waarde, leverancier, THT, status
+   Desktop: 10-koloms tabel. Phone: switcht naar ProductCardList (44px ±-buttons,
+   essential info: naam/status/stockbar/voorraad/dekking/leverancier/THT).
    ═══════════════════════════════════════════════════════════════════ */
 function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[]; onOpenItem: (id: number) => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
+    const isPhone = useIsPhone();
     return (
         <MetalCard style={{ overflow: 'hidden' }}>
             <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1121,6 +1220,9 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                     <Hint tip="Par-level = wat je altijd op voorraad wilt hebben. Bestelpunt (gele streep in balk) = drempel waaronder we waarschuwen.">Par & bestelpunt</Hint>
                 </div>
             </div>
+            {isPhone ? (
+                <ProductCardList items={items} onOpenItem={onOpenItem} onAdjust={onAdjust} />
+            ) : (
             <div className="tbl-wrap">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
@@ -1200,7 +1302,8 @@ function ProductTable({ items, onOpenItem, onAdjust }: { items: InventoryItem[];
                     </tbody>
                 </table>
             </div>
-            {items.length === 0 && (
+            )}
+            {!isPhone && items.length === 0 && (
                 <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
                     <Search size={28} style={{ color: 'var(--muted-light)', marginBottom: 10 }} />
                     <div>Geen producten gevonden met deze filter.</div>

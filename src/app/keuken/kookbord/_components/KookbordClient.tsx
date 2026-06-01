@@ -104,6 +104,47 @@ export default function KookbordClient() {
         return () => { cancelled = true; };
     }, [orgId]);
 
+    /* Component-koppeling → kookbord. Sam's "5 componenten = 1 gerecht": een
+       gerecht bestaat uit componenten (bv. zalmfilet + wasabi-mayo + gyoza-vel),
+       elk met eigen preparation_steps. We laden de gerecht_components-join
+       (org-scoped via RLS) en bouwen een Map<gerecht_id, component[]> zodat de
+       PrepTaskSheet de sub-secties kan tonen. gerecht_components heeft geen
+       id-kolom (composite PK) → niet via useSupabase, dus directe query. */
+    const [componentsByGerecht, setComponentsByGerecht] = useState<
+        Map<string, { name: string; steps?: string[] }[]>
+    >(new Map());
+    useEffect(() => {
+        if (!supabase || !orgId) return;
+        let cancelled = false;
+        async function load() {
+            if (!supabase) return;
+            const { data, error } = await supabase
+                .from('gerecht_components')
+                .select('gerecht_id, components(name, preparation_steps)')
+                .eq('organization_id', orgId);
+            if (cancelled || error || !data) return;
+            interface JoinRow {
+                gerecht_id: string;
+                components: { name: string; preparation_steps?: unknown } | null;
+            }
+            const map = new Map<string, { name: string; steps?: string[] }[]>();
+            for (const row of data as unknown as JoinRow[]) {
+                const comp = row.components;
+                if (!comp) continue;
+                const steps = Array.isArray(comp.preparation_steps)
+                    ? comp.preparation_steps.filter((s): s is string => typeof s === 'string')
+                    : undefined;
+                const key = String(row.gerecht_id);
+                const arr = map.get(key) ?? [];
+                arr.push({ name: comp.name, steps: steps && steps.length ? steps : undefined });
+                map.set(key, arr);
+            }
+            if (!cancelled) setComponentsByGerecht(map);
+        }
+        load();
+        return () => { cancelled = true; };
+    }, [orgId]);
+
     const eventsById = useMemo(() => {
         const m = new Map<number, DbEvent>();
         for (const e of events) m.set(e.id, e);
@@ -213,9 +254,10 @@ export default function KookbordClient() {
             })
             .filter(Boolean);
         const scaledGuests = eventsById.get(sheetTask.event_id)?.guests ?? undefined;
-        if (steps.length === 0 && ingredienten.length === 0) return null;
-        return { naam: g.naam, steps, ingredienten, scaledGuests };
-    }, [sheetTask, gerechten, eventsById]);
+        const components = componentsByGerecht.get(String(gerechtId));
+        if (steps.length === 0 && ingredienten.length === 0 && !(components && components.length)) return null;
+        return { naam: g.naam, steps, ingredienten, components, scaledGuests };
+    }, [sheetTask, gerechten, eventsById, componentsByGerecht]);
 
     function openSheet(task: PrepTask) {
         setSheetTaskId(task.id);

@@ -76,7 +76,10 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                     key={item.href}
                                     href={item.href}
                                     onClick={onNavigate}
-                                    className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-all duration-150 whitespace-nowrap overflow-hidden no-underline text-[12px] ${isActive
+                                    /* min-h-[44px] op phone+tablet — Lars met handschoenen
+                                       moet items kunnen raken. xl: terug naar dichter
+                                       voor desktop-power-user. */
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-all duration-150 whitespace-nowrap overflow-hidden no-underline text-[13px] min-h-[44px] xl:min-h-[32px] xl:py-1.5 xl:text-[12px] ${isActive
                                         ? "bg-white/[0.04] text-[var(--text)] border-l-2 border-[var(--brand)] -ml-[10px] pl-3"
                                         : "text-[var(--muted-light)] hover:text-[var(--text)] hover:bg-white/[0.02]"
                                         }`}
@@ -86,7 +89,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                     </span>
                                     <span className="font-medium truncate flex-1">{item.label}</span>
                                     {badgeCount > 0 && (
-                                        <span className="min-w-[16px] h-[16px] rounded-full bg-[var(--danger)] text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                        <span className="min-w-[18px] h-[18px] rounded-full bg-[var(--danger)] text-white text-[10px] font-bold flex items-center justify-center px-1 shrink-0">
                                             {badgeCount}
                                         </span>
                                     )}
@@ -154,7 +157,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 key={item.href}
                                 href={item.href}
                                 onClick={onNavigate}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden no-underline ${isActive
+                                className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg transition-all duration-200 whitespace-nowrap overflow-hidden no-underline ${isActive
                                     ? "bg-[color-mix(in_srgb,var(--brand)_8%,transparent)] text-[var(--text)] border-l-2 border-[var(--brand)] pl-2.5"
                                     : "text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/[0.04] border-l-2 border-transparent pl-2.5"
                                     }`}
@@ -164,7 +167,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                                 </span>
                                 <span className="text-[13px] font-medium truncate flex-1">{item.label}</span>
                                 {badgeCount > 0 && (
-                                    <span className="min-w-[18px] h-[18px] rounded-full bg-[var(--danger)] text-white text-[9px] font-bold flex items-center justify-center px-1 shrink-0">
+                                    <span className="min-w-[18px] h-[18px] rounded-full bg-[var(--danger)] text-white text-[10px] font-bold flex items-center justify-center px-1 shrink-0">
                                         {badgeCount}
                                     </span>
                                 )}
@@ -235,16 +238,25 @@ export default function Sidebar() {
         (pathname.endsWith('/service') || pathname.endsWith('/field') || pathname.includes('/service/') || pathname.includes('/field/'));
 
     // Auto-manage collapsed state based on viewport unless user manually toggled.
-    // Tablet (≥768) but pre-desktop (<1280) → collapsed by default for the icon-rail look.
+    //
+    // Tablet (≥768 <1280) was eerst altijd collapsed (icon-rail) maar dat brak
+    // Lars op event-dag: hij wilde labels lezen zonder eerst te moeten expanden.
+    // Nu: alleen collapsen op desktop-met-smal-window (muis-power-user); echte
+    // touch-tablets (Lars) blijven expanded. We detecteren tablet-touch via
+    // `(pointer: coarse)` zodat een 1100px laptop-window wèl collapsed wordt.
     useEffect(() => {
         if (userToggledCollapse) return;
         if (typeof window === 'undefined') return;
-        const w = window.innerWidth;
-        setCollapsed(isEventRuntime || (w >= BREAKPOINTS.phone && w < BREAKPOINTS.desktop));
-        const onResize = () => {
-            const ww = window.innerWidth;
-            setCollapsed(isEventRuntime || (ww >= BREAKPOINTS.phone && ww < BREAKPOINTS.desktop));
+        const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+        const compute = (w: number) => {
+            if (isEventRuntime) return true;
+            // Touch-tablets in tablet-range → expanded zodat Lars labels ziet
+            if (isTouchDevice) return false;
+            // Desktop met klein window → collapsed icon-rail (Mathijs power-user)
+            return w >= BREAKPOINTS.phone && w < BREAKPOINTS.desktop;
         };
+        setCollapsed(compute(window.innerWidth));
+        const onResize = () => setCollapsed(compute(window.innerWidth));
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
     }, [userToggledCollapse, isEventRuntime]);

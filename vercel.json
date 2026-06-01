@@ -12,6 +12,10 @@
         {
             "path": "/api/financien/summary",
             "schedule": "0 6 * * *"
+        },
+        {
+            "path": "/api/cron/recipe-cost-recompute",
+            "schedule": "15 4 * * *"
         }
     ]
 }

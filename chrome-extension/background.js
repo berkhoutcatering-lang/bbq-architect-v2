@@ -7,7 +7,7 @@
 
 importScripts('api.js', 'adapters.js');
 
-const BG_VERSION = '0.3.3';   // bump bij elke release; popup checkt mismatch
+const BG_VERSION = '0.5.1';   // bump bij elke release; popup checkt mismatch
 const SYNC_STATE_KEY = 'bbq_sync_state';
 const BATCH_SIZE = 50;
 const PAGE_DELAY_MS_DEFAULT = 1500;
@@ -178,27 +178,219 @@ function dedupeProducten(list) {
     return out;
 }
 
-/** tabSend met timeout (default 12s). Voorkomt hangen als content-script crash of pagina geen reply geeft. */
-async function tabSend(tabId, msg, timeoutMs = 12000) {
-    return new Promise(resolve => {
+/** Inject content scripts on-demand. Gebruikt na een tabs already-loaded-before-reload
+ *  scenario: content_scripts uit manifest worden alleen bij navigation geinjecteerd,
+ *  niet retroactief. Met chrome.scripting kunnen we dat handmatig forceren. */
+async function injectContentScripts(tabId) {
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId, allFrames: false },
+            files: ['auto-extractor.js', 'content.js'],
+        });
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+    }
+}
+
+/* ============================================================
+   ROBUST MESSAGING — debug logging, retry/backoff, pre-ping,
+   auto-inject. Vervangt de simpele tabSend uit eerdere versies.
+   ============================================================ */
+
+const AUTO_WALK_DEBUG = true;
+const TABSEND_DEBUG = true;
+
+function awLog(syncRunId, msg, data) {
+    if (!AUTO_WALK_DEBUG) return;
+    const p = `[AUTO-WALK ${syncRunId || 'no-run'}]`;
+    if (data === undefined) console.log(p, msg);
+    else console.log(p, msg, data);
+}
+function awWarn(syncRunId, msg, data) {
+    const p = `[AUTO-WALK ${syncRunId || 'no-run'}]`;
+    if (data === undefined) console.warn(p, msg);
+    else console.warn(p, msg, data);
+}
+function awErr(syncRunId, msg, data) {
+    const p = `[AUTO-WALK ${syncRunId || 'no-run'}]`;
+    if (data === undefined) console.error(p, msg);
+    else console.error(p, msg, data);
+}
+function tsLog(...args) {
+    if (TABSEND_DEBUG) console.log('[tabSend]', ...args);
+}
+function tsWarn(...args) {
+    console.warn('[tabSend]', ...args);
+}
+
+function toErrorMessage(err) {
+    if (!err) return 'unknown error';
+    if (typeof err === 'string') return err;
+    return err.message || String(err);
+}
+function makeRequestId(prefix = 'req') {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+function withStepTimeout(label, ms, fn) {
+    let t = null;
+    return Promise.race([
+        (async () => {
+            try { return await fn(); }
+            finally { if (t) clearTimeout(t); }
+        })(),
+        new Promise((_, reject) => {
+            t = setTimeout(() => reject(new Error(`Timeout in ${label} (${ms}ms)`)), ms);
+        }),
+    ]);
+}
+
+async function getRealTab(tabId) {
+    try { return await chrome.tabs.get(tabId); }
+    catch { return null; }
+}
+async function getRealTabUrl(tabId) {
+    const t = await getRealTab(tabId);
+    return t?.url || '';
+}
+
+/** Detecteer of een tabSend-error wijst op een ontbrekend content script. */
+function isNoReceiverError(msg) {
+    const m = String(msg || '').toLowerCase();
+    return (
+        m.includes('could not establish connection') ||
+        m.includes('receiving end does not exist') ||
+        m.includes('the message port closed') ||
+        m.includes('message port closed')
+    );
+}
+function isRetriableError(msg) {
+    const m = String(msg || '').toLowerCase();
+    return (
+        isNoReceiverError(m) ||
+        m.includes('timeout') ||
+        m.includes('temporarily unavailable') ||
+        m.includes('disconnected')
+    );
+}
+function backoffDelayMs(attempt, base = 250, max = 3000) {
+    const exp = Math.min(max, base * Math.pow(2, Math.max(0, attempt - 1)));
+    const jitter = Math.floor(Math.random() * 120);
+    return exp + jitter;
+}
+function isHeavyMessageType(type) {
+    return type === 'BBQ_GET_HTML' || type === 'BBQ_HUMAN_SCROLL' || type === 'BBQ_AUTO_EXTRACT';
+}
+
+async function sendMessageOnce(tabId, message, timeoutMs, requestId) {
+    return new Promise((resolve, reject) => {
         let done = false;
-        const finish = (v) => { if (!done) { done = true; resolve(v); } };
-        const timer = setTimeout(() => finish({ ok: false, error: `tabSend timeout na ${Math.round(timeoutMs/1000)}s` }), timeoutMs);
+        const started = Date.now();
+        const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            reject(new Error(`tabSend timeout after ${timeoutMs}ms [${requestId}] type=${message?.type}`));
+        }, timeoutMs);
         try {
-            chrome.tabs.sendMessage(tabId, msg, response => {
+            chrome.tabs.sendMessage(tabId, message, (response) => {
+                if (done) return;
+                done = true;
                 clearTimeout(timer);
-                /* chrome.runtime.lastError als content-script niet bestaat */
-                if (chrome.runtime.lastError) {
-                    finish({ ok: false, error: chrome.runtime.lastError.message });
+                const lastErr = chrome.runtime.lastError;
+                if (lastErr) {
+                    reject(new Error(`${lastErr.message} [${requestId}] type=${message?.type}`));
                     return;
                 }
-                finish(response || null);
+                resolve({ response, meta: { requestId, type: message?.type, durationMs: Date.now() - started } });
             });
         } catch (e) {
+            if (done) return;
+            done = true;
             clearTimeout(timer);
-            finish({ ok: false, error: String(e?.message || e) });
+            reject(new Error(`${toErrorMessage(e)} [${requestId}] type=${message?.type}`));
         }
     });
+}
+
+async function pingTab(tabId, timeoutMs = 1200) {
+    const requestId = makeRequestId('ping');
+    const msg = { type: 'BBQ_PING', __bbqMeta: { requestId, sentAt: Date.now() } };
+    const { response } = await sendMessageOnce(tabId, msg, timeoutMs, requestId);
+    return !!(response && response.ok && response.pong);
+}
+
+/**
+ * Drop-in tabSend. Backward-compatible: `tabSend(tabId, msg, timeoutMs)` werkt.
+ * Nieuwe optie:
+ *   tabSend(tabId, msg, timeoutMs, { syncRunId, retries, pingBeforeHeavy, retryInject })
+ *
+ * Bij heavy types (HUMAN_SCROLL/AUTO_EXTRACT/GET_HTML) doet hij een pre-ping; bij
+ * "could not establish connection" errors injecteert hij content scripts opnieuw
+ * en retry't volgens exponential backoff.
+ */
+async function tabSend(tabId, message, timeoutMs = 5000, opts = {}) {
+    const {
+        retries = 2,
+        pingBeforeHeavy = true,
+        retryInject = true,
+        syncRunId = null,
+    } = opts || {};
+
+    if (!tabId) throw new Error('tabSend: missing tabId');
+    if (!message || typeof message !== 'object') throw new Error('tabSend: invalid message');
+
+    const msgType = message.type || 'UNKNOWN';
+    const totalAttempts = 1 + Math.max(0, Number(retries) || 0);
+
+    if (pingBeforeHeavy && isHeavyMessageType(msgType) && msgType !== 'BBQ_PING') {
+        try {
+            const ok = await pingTab(tabId, 1200);
+            tsLog('pre-ping', { syncRunId, msgType, ok });
+            if (!ok && retryInject) {
+                await injectContentScripts(tabId);
+                await sleep(120);
+            }
+        } catch (e) {
+            tsWarn('pre-ping failed (fail-open)', { syncRunId, msgType, err: toErrorMessage(e) });
+            if (retryInject) {
+                await injectContentScripts(tabId);
+                await sleep(120);
+            }
+        }
+    }
+
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+        const requestId = makeRequestId('msg');
+        const messageWithMeta = {
+            ...message,
+            __bbqMeta: { requestId, sentAt: Date.now(), attempt, totalAttempts, syncRunId: syncRunId || null },
+        };
+
+        try {
+            tsLog('send attempt', { syncRunId, msgType, attempt, totalAttempts, requestId });
+            const { response, meta } = await sendMessageOnce(tabId, messageWithMeta, timeoutMs, requestId);
+            tsLog('send success', { syncRunId, msgType, attempt, requestId, durationMs: meta.durationMs });
+            if (response && response.ok === false) {
+                tsWarn('response !ok', { syncRunId, msgType, requestId, response });
+            }
+            return response;
+        } catch (e) {
+            const errText = toErrorMessage(e);
+            lastError = e;
+            const retriable = isRetriableError(errText);
+            const hasNext = attempt < totalAttempts;
+            tsWarn('send failed', { syncRunId, msgType, attempt, totalAttempts, retriable, err: errText });
+            if (!hasNext || !retriable) break;
+            if (retryInject && isNoReceiverError(errText)) {
+                await injectContentScripts(tabId);
+            }
+            await sleep(backoffDelayMs(attempt));
+        }
+    }
+
+    throw lastError || new Error(`tabSend failed: ${msgType}`);
 }
 
 /** Navigate tab + wait for load complete (timeout 15s). Cancel-aware: stopt bij cancel-flag. */
@@ -233,20 +425,45 @@ async function navigateAndWait(tabId, url, syncRunId) {
 }
 
 /** Pre-extract human-like behaviour op pagina (scroll/jitter).
- *  Hard timeout 25s. Onderbreekbaar via cancel-flag. */
-async function humanizePage(tabId, tempo, syncRunId) {
+ *  Hard timeout per call via withStepTimeout. Faalt zacht (continue) bij errors —
+ *  scrape mag niet stoppen alleen omdat scroll/jitter een hiccup had. */
+async function humanizePage(tabId, tempo, syncRunId, opts) {
+    const options = opts || {};
     const flags = tempoFlags(tempo);
+
+    if (isCancelled(syncRunId)) return { ok: false, cancelled: true };
+
     if (flags.scroll) {
-        const scrollPromise = tabSend(tabId, { type: 'BBQ_HUMAN_SCROLL' }, 25000);
-        const cancelGuard = (async () => {
-            while (!isCancelled(syncRunId)) await new Promise(r => setTimeout(r, 200));
-            return { ok: false, cancelled: true };
-        })();
-        await Promise.race([scrollPromise, cancelGuard]);
+        try {
+            await withStepTimeout('BBQ_HUMAN_SCROLL', 30000, async () => {
+                await tabSend(
+                    tabId,
+                    { type: 'BBQ_HUMAN_SCROLL', noLoadMore: !!options.noLoadMore },
+                    25000,
+                    { syncRunId, retries: 1, pingBeforeHeavy: true, retryInject: true }
+                );
+            });
+        } catch (e) {
+            awWarn(syncRunId, 'HUMAN_SCROLL failed (continue)', toErrorMessage(e));
+        }
     }
+
     if (flags.jitter && !isCancelled(syncRunId)) {
-        await tabSend(tabId, { type: 'BBQ_JITTER', count: 4 }, 3000);
+        try {
+            await withStepTimeout('BBQ_JITTER', 5000, async () => {
+                await tabSend(
+                    tabId,
+                    { type: 'BBQ_JITTER', count: 4 },
+                    3000,
+                    { syncRunId, retries: 1, pingBeforeHeavy: false, retryInject: true }
+                );
+            });
+        } catch (e) {
+            awWarn(syncRunId, 'JITTER failed (continue)', toErrorMessage(e));
+        }
     }
+
+    return { ok: true };
 }
 
 /** withTimeout: wraps any async operation in een hard-timeout. */
@@ -389,7 +606,10 @@ async function deepCrawlSite({ leverancierId, tempo, maxPages }) {
                     /* Navigate + humanize. Cancel-checks tussendoor om vroeg te stoppen. */
                     await navigateAndWait(tab.id, norm, syncRunId);
                     if (isCancelled(syncRunId)) return;
-                    await humanizePage(tab.id, tempoChoice, syncRunId);
+                    /* Deep-crawl pagineert via discovered next_page_url +
+                       buildNextPageFallback — load-more clicks zouden de tab
+                       weg-navigeren. Zelfde reden als bij auto-walk. */
+                    await humanizePage(tab.id, tempoChoice, syncRunId, { noLoadMore: true });
                     if (isCancelled(syncRunId)) return;
 
                     /* Check pagina nog leeft (geen captcha-redirect) */
@@ -519,8 +739,9 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
     const scopeKeywords = start?.leverancier?.scope_keywords || [];
     resetCancel(syncRunId);
 
-    /* Diagnostic per scan-stap zodat Sam ziet WAT gewerkt heeft */
-    const diag = { adapter: 0, vision: 0, html: 0, screenshots: 0, methods: [] };
+    /* Diagnostic per scan-stap zodat Sam ziet WAT gewerkt heeft.
+       Volgorde matched de 4-lagen pipeline: jsonld → platform → html-AI → vision-AI */
+    const diag = { jsonld: 0, platform: 0, platformName: null, html: 0, vision: 0, screenshots: 0, methods: [] };
 
     /* Helper: update phase-text in popup zonder de hele state te overschrijven.
        Sam ziet zo live waar de scan is: "Pagina scrollen…" → "Screenshot 2/3…" → "Claude analyseert…" */
@@ -552,70 +773,33 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
             return { ok: true, cancelled: true, productsSeen: 0 };
         }
 
-        /* STAP 2 — Adapter (snel pad voor bekende portalen) */
-        console.log('[BBQ scraper] STAP 2 — adapter scan');
-        await setPhase('Snel-pad proberen…');
-        const adapter = BBQ_detectAdapter(new URL(tab.url).hostname);
-        if (adapter && !useAi) {
-            const r = await tabSend(tab.id, { type: 'BBQ_EXTRACT_ADAPTER', adapter }, 5000);
+        /* STAP 2 — Auto-extract (laag 1 JSON-LD + laag 2 platform detect).
+           Gratis, instant. Pakt ~80% van moderne shops zonder AI-call. */
+        if (!useAi) {
+            console.log('[BBQ scraper] STAP 2 — auto-extract (JSON-LD + platform)');
+            await setPhase('Pagina lezen (JSON-LD + platform)…');
+            const r = await tabSend(tab.id, { type: 'BBQ_AUTO_EXTRACT' }, 5000);
             if (r?.ok && Array.isArray(r.producten)) {
-                diag.adapter = r.producten.length;
-                console.log('[BBQ scraper] adapter (' + adapter.naam + '): ' + r.producten.length + ' producten');
+                diag.jsonld = r.debug?.jsonld || 0;
+                diag.platform = r.debug?.platformCount || 0;
+                diag.platformName = r.debug?.platform || null;
+                console.log('[BBQ scraper] auto-extract: jsonld=' + diag.jsonld + ' platform=' + (diag.platformName || 'none') + '(' + diag.platform + ')');
                 if (r.producten.length > 0) {
-                    diag.methods.push('adapter');
+                    diag.methods.push(r.method || 'auto');
                     producten = r.producten;
                 }
+            } else if (r?.error) {
+                console.warn('[BBQ scraper] auto-extract error:', r.error);
             }
         } else {
-            console.log('[BBQ scraper] adapter overgeslagen — geen adapter of useAi=true');
+            console.log('[BBQ scraper] auto-extract overgeslagen — useAi=true');
         }
 
-        /* STAP 3 — Vision-mode: ALTIJD proberen tenzij adapter al >20 producten gaf
-           (in dat geval is adapter goed genoeg; vision zou alleen kosten toevoegen) */
+        /* STAP 3 — Claude HTML-mode (laag 3, ~€0.005/pag).
+           Goedkoper dan vision; probeer dit eerst als auto-extract <20 vond. */
         if (!isCancelled(syncRunId) && producten.length < 20) {
-            console.log('[BBQ scraper] STAP 3 — vision capture (max 3 shots)');
-            await setPhase('Screenshots maken (1/3)…');
-            const shots = await captureMultiScreenshot(tab.id, tab.windowId, syncRunId, 3, setPhase);
-            diag.screenshots = shots.length;
-            console.log('[BBQ scraper] captured ' + shots.length + ' screenshots, calling Claude vision...');
-            if (shots.length > 0 && !isCancelled(syncRunId)) {
-                try {
-                    await setPhase(`Claude analyseert ${shots.length} screenshot${shots.length > 1 ? 's' : ''}…`);
-                    aiResult = await BBQ.aiDetect({
-                        images: shots.map(s => ({ base64: s.base64, mimeType: s.mimeType })),
-                        pageUrl: tab.url, scope, scopeKeywords,
-                        signal: getScanSignal(),  /* kan AbortError gooien bij cancel */
-                    });
-                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
-                    const visionList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
-                    diag.vision = visionList.length;
-                    console.log('[BBQ scraper] vision returned: ' + visionList.length + ' producten');
-                    if (visionList.length > producten.length) {
-                        diag.methods.push('vision');
-                        producten = visionList;
-                    }
-                } catch (e) {
-                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
-                        /* User-cancel — netjes afsluiten zonder fallback */
-                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
-                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
-                        return { ok: true, cancelled: true, productsSeen: 0 };
-                    }
-                    diag.visionError = String(e?.message || e).slice(0, 120);
-                    console.warn('[BBQ scraper] vision call failed:', e?.message || e);
-                }
-            } else if (shots.length === 0) {
-                diag.visionError = 'geen screenshots — captureVisibleTab faalde (windowId issue?)';
-                console.warn('[BBQ scraper] 0 screenshots — vision overgeslagen');
-            }
-        } else {
-            console.log('[BBQ scraper] vision overgeslagen — adapter al ' + producten.length + ' producten');
-        }
-
-        /* STAP 4 — HTML-mode allerlaatst (vaak slecht op SPA's maar kost geen extra image-tokens) */
-        if (!isCancelled(syncRunId) && producten.length === 0) {
-            console.log('[BBQ scraper] STAP 4 — HTML fallback');
-            await setPhase('HTML-fallback proberen…');
+            console.log('[BBQ scraper] STAP 3 — Claude HTML analyse');
+            await setPhase('AI leest de HTML…');
             const html = await tabSend(tab.id, { type: 'BBQ_GET_HTML' }, 8000);
             if (html?.ok && html.html) {
                 try {
@@ -627,7 +811,7 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                     const htmlList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
                     diag.html = htmlList.length;
                     console.log('[BBQ scraper] html returned: ' + htmlList.length + ' producten');
-                    if (htmlList.length > 0) {
+                    if (htmlList.length > producten.length) {
                         diag.methods.push('html');
                         producten = htmlList;
                     }
@@ -641,6 +825,49 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
                     console.warn('[BBQ scraper] html call failed:', e?.message || e);
                 }
             }
+        } else if (producten.length >= 20) {
+            console.log('[BBQ scraper] html-AI overgeslagen — auto-extract al ' + producten.length + ' producten');
+        }
+
+        /* STAP 4 — Vision-mode (laag 4, ~€0.05/pag).
+           Laatste redmiddel voor heavy-JS / weird DOM sites die laag 1-3 niet pakte. */
+        if (!isCancelled(syncRunId) && producten.length < 10) {
+            console.log('[BBQ scraper] STAP 4 — vision capture (max 3 shots)');
+            await setPhase('Screenshots maken (1/3)…');
+            const shots = await captureMultiScreenshot(tab.id, tab.windowId, syncRunId, 3, setPhase);
+            diag.screenshots = shots.length;
+            console.log('[BBQ scraper] captured ' + shots.length + ' screenshots, calling Claude vision...');
+            if (shots.length > 0 && !isCancelled(syncRunId)) {
+                try {
+                    await setPhase(`Claude analyseert ${shots.length} screenshot${shots.length > 1 ? 's' : ''}…`);
+                    aiResult = await BBQ.aiDetect({
+                        images: shots.map(s => ({ base64: s.base64, mimeType: s.mimeType })),
+                        pageUrl: tab.url, scope, scopeKeywords,
+                        signal: getScanSignal(),
+                    });
+                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+                    const visionList = dedupeProducten(Array.isArray(aiResult?.producten) ? aiResult.producten : []);
+                    diag.vision = visionList.length;
+                    console.log('[BBQ scraper] vision returned: ' + visionList.length + ' producten');
+                    if (visionList.length > producten.length) {
+                        diag.methods.push('vision');
+                        producten = visionList;
+                    }
+                } catch (e) {
+                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
+                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
+                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
+                        return { ok: true, cancelled: true, productsSeen: 0 };
+                    }
+                    diag.visionError = String(e?.message || e).slice(0, 120);
+                    console.warn('[BBQ scraper] vision call failed:', e?.message || e);
+                }
+            } else if (shots.length === 0) {
+                diag.visionError = 'geen screenshots — captureVisibleTab faalde (windowId issue?)';
+                console.warn('[BBQ scraper] 0 screenshots — vision overgeslagen');
+            }
+        } else if (producten.length >= 10) {
+            console.log('[BBQ scraper] vision overgeslagen — html/auto al ' + producten.length + ' producten');
         }
         console.log('[BBQ scraper] FINAL diagnostic:', JSON.stringify(diag), '→', producten.length, 'producten');
         await setPhase('Verwerken…');
@@ -688,9 +915,10 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
 
         /* GEEN PRODUCTEN + GEEN LINKS → diagnostiek aan Sam */
         const diagBits = [
-            `adapter:${diag.adapter}`,
-            `vision(${diag.screenshots}×):${diag.vision}`,
+            `jsonld:${diag.jsonld}`,
+            `platform${diag.platformName ? '(' + diag.platformName + ')' : ''}:${diag.platform}`,
             `html:${diag.html}`,
+            `vision(${diag.screenshots}×):${diag.vision}`,
         ];
         const hint = `Niets gevonden. Probeer: stuur 'm naar een productlijst-pagina (geen homepage), of log eerst in. Pagina kan ook anti-bot of login-screen tonen.`;
         await BBQ.finishSync({ syncRunId, status: 'completed', errorText: diagBits.join(' · ') });
@@ -709,10 +937,508 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
     }
 }
 
-/**
- * Auto-walk: loop door pagina's via adapter "next"-link of AI-detect's next_page_url.
- * Stop bij: geen next, max-pages-cap (50), of user-cancel.
- */
+/* ============================================================
+   URL & paginering helpers (safe wrappers rond bestaande project-fns)
+   ============================================================ */
+
+function normalizeUrlLoose(url) {
+    if (!url || typeof url !== 'string') return '';
+    let s = url.trim();
+    if (s.endsWith(':')) s = s.slice(0, -1);
+    const hashIdx = s.indexOf('#');
+    if (hashIdx >= 0) s = s.slice(0, hashIdx);
+    return s;
+}
+function canonicalPageKey(url) {
+    try {
+        const u = new URL(normalizeUrlLoose(url));
+        u.hash = '';
+        const p = new URLSearchParams(u.search);
+        const sorted = new URLSearchParams();
+        [...p.keys()].sort().forEach((k) => p.getAll(k).forEach((v) => sorted.append(k, v)));
+        u.search = sorted.toString() ? `?${sorted.toString()}` : '';
+        return u.toString();
+    } catch {
+        return normalizeUrlLoose(url);
+    }
+}
+function parsePageParamFlexible(v) {
+    if (v == null) return null;
+    const m = String(v).match(/\d+/);
+    if (!m) return null;
+    const n = Number(m[0]);
+    return Number.isFinite(n) ? n : null;
+}
+function buildNextPageFallbackSafe(currentUrl) {
+    try {
+        if (typeof buildNextPageFallback === 'function') {
+            const x = buildNextPageFallback(currentUrl);
+            if (x) return normalizeUrlLoose(x);
+        }
+    } catch {}
+    try {
+        const u = new URL(normalizeUrlLoose(currentUrl));
+        const params = new URLSearchParams(u.search);
+        const pageRaw = params.get('page');
+        const pageNum = parsePageParamFlexible(pageRaw);
+        if (pageNum == null) params.set('page', '2');
+        else params.set('page', String(pageNum + 1));
+        u.search = params.toString();
+        return u.toString();
+    } catch {
+        return null;
+    }
+}
+
+function dedupeProductList(list) {
+    if (!Array.isArray(list)) return [];
+    try {
+        if (typeof dedupeProducten === 'function') return dedupeProducten(list);
+    } catch {}
+    const seen = new Set();
+    const out = [];
+    for (const p of list) {
+        const key =
+            (p?.sku && `sku:${p.sku}`) ||
+            (p?.id && `id:${p.id}`) ||
+            (p?.product_url && `url:${p.product_url}`) ||
+            (p?.naam && p?.eenheid && `nameunit:${p.naam}|${p.eenheid}`) ||
+            (p?.naam && `name:${p.naam}`) ||
+            JSON.stringify(p);
+        if (!seen.has(key)) { seen.add(key); out.push(p); }
+    }
+    return out;
+}
+function getTempoDelaySafe(tempo) {
+    try {
+        if (typeof tempoDelay === 'function') {
+            const d = Number(tempoDelay(tempo));
+            return Number.isFinite(d) && d >= 0 ? d : 0;
+        }
+    } catch {}
+    return 0;
+}
+function isCancelledSafe(syncRunId) {
+    try { if (typeof isCancelled === 'function') return !!isCancelled(syncRunId); }
+    catch {}
+    return false;
+}
+function getScanSignalSafe() {
+    try { if (typeof getScanSignal === 'function') return getScanSignal(); }
+    catch {}
+    return undefined;
+}
+
+/* ============================================================
+   SELECTOR CACHE — per hostname onthouden welke selectors Claude
+   ons gaf, zodat herhaalde scans op zelfde domein gratis worden.
+   Storage: chrome.storage.local key 'bbq_selector_cache'.
+   Schema:
+     { [hostname]: {
+         selectors: { productCard, naam, prijs, url, eenheid },
+         learnedAt: ISO,
+         lastCount: number,        // count van learn-run
+         successCount: number,     // hoeveel cache-hits sindsdien
+         failCount: number,        // hoeveel cache-misses sindsdien
+       }
+     }
+   ============================================================ */
+
+const CACHE_STORAGE_KEY = 'bbq_selector_cache';
+const CACHE_MAX_FAILS = 3;       /* na 3 fails purge cache voor host */
+const CACHE_MIN_COUNT = 5;       /* < dit aantal producten → cache-miss */
+
+function hostnameOf(url) {
+    try { return new URL(url).hostname; }
+    catch { return null; }
+}
+
+async function loadHostCache(hostname) {
+    if (!hostname) return null;
+    try {
+        const all = await chrome.storage.local.get(CACHE_STORAGE_KEY);
+        const cache = all[CACHE_STORAGE_KEY] || {};
+        return cache[hostname] || null;
+    } catch (e) {
+        awWarn(null, 'loadHostCache failed', toErrorMessage(e));
+        return null;
+    }
+}
+
+async function saveHostCache(hostname, data) {
+    if (!hostname || !data) return;
+    try {
+        const all = await chrome.storage.local.get(CACHE_STORAGE_KEY);
+        const cache = all[CACHE_STORAGE_KEY] || {};
+        cache[hostname] = { ...data, learnedAt: new Date().toISOString() };
+        await chrome.storage.local.set({ [CACHE_STORAGE_KEY]: cache });
+        awLog(null, 'cache saved', { hostname, selectors: data.selectors });
+    } catch (e) {
+        awWarn(null, 'saveHostCache failed', toErrorMessage(e));
+    }
+}
+
+async function clearHostCache(hostname) {
+    if (!hostname) return;
+    try {
+        const all = await chrome.storage.local.get(CACHE_STORAGE_KEY);
+        const cache = all[CACHE_STORAGE_KEY] || {};
+        delete cache[hostname];
+        await chrome.storage.local.set({ [CACHE_STORAGE_KEY]: cache });
+        awLog(null, 'cache cleared', { hostname });
+    } catch (e) {
+        awWarn(null, 'clearHostCache failed', toErrorMessage(e));
+    }
+}
+
+async function recordCacheHit(hostname) {
+    const cur = await loadHostCache(hostname);
+    if (!cur) return;
+    cur.successCount = (cur.successCount || 0) + 1;
+    cur.failCount = 0;  /* reset fail counter bij success */
+    await saveHostCache(hostname, cur);
+}
+
+async function recordCacheMiss(hostname) {
+    const cur = await loadHostCache(hostname);
+    if (!cur) return;
+    cur.failCount = (cur.failCount || 0) + 1;
+    if (cur.failCount >= CACHE_MAX_FAILS) {
+        awWarn(null, `cache purged: ${CACHE_MAX_FAILS} fails in a row`, { hostname });
+        await clearHostCache(hostname);
+    } else {
+        await saveHostCache(hostname, cur);
+    }
+}
+
+function hasValidSelectors(sel) {
+    return !!(sel && typeof sel === 'object' && sel.productCard && sel.naam && sel.prijs);
+}
+
+/* ============================================================
+   extractCatalogPage — één pagina extraheren met richer debug.
+   Volgorde: CACHED-SELECTORS → auto-extract → HTML+AI fallback.
+   ============================================================ */
+async function extractCatalogPage({
+    tabId,
+    pageUrl,
+    tempo,
+    useAi = false,
+    scope,
+    scopeKeywords,
+    syncRunId,
+}) {
+    const debug = {
+        pageUrl,
+        cache: { tried: false, ok: false, count: 0, error: null },
+        autoExtract: { ok: false, count: 0, nextUrl: null, error: null, rawDebug: null },
+        html: { ok: false, length: 0, error: null, rawDebug: null },
+        ai: { ok: false, count: 0, nextUrl: null, error: null, cachedSelectors: false },
+        steps: [],
+    };
+
+    let producten = [];
+    let foundNext = null;
+
+    debug.steps.push('humanize:start');
+    await humanizePage(tabId, tempo, syncRunId, { noLoadMore: true });
+    debug.steps.push('humanize:done');
+
+    /* LAAG 0 — cached selectors van eerdere AI-call. Gratis, instant.
+       Bij <5 producten → cache miss → record fail, fallback naar auto/AI. */
+    const hostname = hostnameOf(pageUrl);
+    const cached = !useAi ? await loadHostCache(hostname) : null;
+    if (cached && hasValidSelectors(cached.selectors)) {
+        debug.cache.tried = true;
+        debug.steps.push('cache:start');
+        try {
+            const r = await withStepTimeout('BBQ_EXTRACT_BY_SELECTORS', 5000, async () => {
+                return await tabSend(tabId, {
+                    type: 'BBQ_EXTRACT_BY_SELECTORS',
+                    selectors: cached.selectors,
+                }, 4000, { syncRunId, retries: 1, pingBeforeHeavy: true, retryInject: true });
+            });
+            const list = Array.isArray(r?.producten) ? dedupeProductList(r.producten) : [];
+            debug.cache.count = list.length;
+            if (r?.ok && list.length >= CACHE_MIN_COUNT) {
+                producten = list;
+                foundNext = r.nextUrl || null;
+                debug.cache.ok = true;
+                debug.steps.push('cache:hit');
+                await recordCacheHit(hostname);
+                /* Cache hit — geen AI nodig. Skip auto-extract en HTML-AI. */
+                awLog(syncRunId, 'cache HIT', { hostname, count: list.length });
+                return {
+                    producten,
+                    nextUrl: foundNext ? normalizeUrlLoose(foundNext) : null,
+                    debug,
+                };
+            } else {
+                debug.cache.error = `count ${list.length} < ${CACHE_MIN_COUNT}`;
+                debug.steps.push('cache:miss');
+                await recordCacheMiss(hostname);
+                awLog(syncRunId, 'cache MISS', { hostname, count: list.length, threshold: CACHE_MIN_COUNT });
+            }
+        } catch (e) {
+            debug.cache.error = toErrorMessage(e);
+            debug.steps.push('cache:error');
+            await recordCacheMiss(hostname);
+        }
+    }
+
+    if (!useAi) {
+        debug.steps.push('auto:start');
+        try {
+            const r = await withStepTimeout('BBQ_AUTO_EXTRACT', 7000, async () => {
+                return await tabSend(tabId, { type: 'BBQ_AUTO_EXTRACT' }, 5000, {
+                    syncRunId, retries: 2, pingBeforeHeavy: true, retryInject: true,
+                });
+            });
+            debug.autoExtract.rawDebug = r?.debug || null;
+            if (r?.ok) {
+                const list = Array.isArray(r.producten) ? r.producten : [];
+                producten = dedupeProductList(list);
+                foundNext = r.nextUrl || null;
+                debug.autoExtract.ok = true;
+                debug.autoExtract.count = producten.length;
+                debug.autoExtract.nextUrl = foundNext;
+            } else {
+                debug.autoExtract.error = r?.error || 'AUTO_EXTRACT !ok';
+            }
+        } catch (e) {
+            debug.autoExtract.error = toErrorMessage(e);
+        }
+        debug.steps.push('auto:done');
+    }
+
+    if (producten.length < 5 || useAi) {
+        debug.steps.push('html:start');
+        let htmlRes = null;
+        try {
+            htmlRes = await withStepTimeout('BBQ_GET_HTML', 10000, async () => {
+                return await tabSend(tabId, { type: 'BBQ_GET_HTML' }, 8000, {
+                    syncRunId, retries: 2, pingBeforeHeavy: true, retryInject: true,
+                });
+            });
+            debug.html.rawDebug = htmlRes?.debug || null;
+            if (htmlRes?.ok && htmlRes.html) {
+                debug.html.ok = true;
+                debug.html.length = String(htmlRes.html).length;
+            } else {
+                debug.html.error = htmlRes?.error || 'GET_HTML !ok/empty';
+            }
+        } catch (e) {
+            debug.html.error = toErrorMessage(e);
+        }
+        debug.steps.push('html:done');
+
+        if (htmlRes?.ok && htmlRes.html) {
+            debug.steps.push('ai:start');
+            try {
+                const ai = await withStepTimeout('AI_DETECT', 90000, async () => {
+                    return await BBQ.aiDetect({
+                        html: htmlRes.html,
+                        pageUrl,
+                        scope,
+                        scopeKeywords,
+                        signal: getScanSignalSafe(),
+                    });
+                });
+                const aiList = dedupeProductList(ai?.producten || []);
+                if (aiList.length > producten.length) producten = aiList;
+                foundNext = foundNext || ai?.next_page_url || null;
+                debug.ai.ok = true;
+                debug.ai.count = aiList.length;
+                debug.ai.nextUrl = ai?.next_page_url || null;
+
+                /* Cache selectors als Claude ze meegaf én we genoeg producten kregen.
+                   Volgende scan op zelfde host = client-side, gratis. */
+                if (hasValidSelectors(ai?.selectors) && aiList.length >= CACHE_MIN_COUNT && hostname) {
+                    debug.ai.cachedSelectors = true;
+                    await saveHostCache(hostname, {
+                        selectors: ai.selectors,
+                        lastCount: aiList.length,
+                        successCount: 0,
+                        failCount: 0,
+                    });
+                    awLog(syncRunId, 'cache LEARNED', { hostname, selectors: ai.selectors, count: aiList.length });
+                }
+            } catch (e) {
+                debug.ai.error = toErrorMessage(e);
+            }
+            debug.steps.push('ai:done');
+        }
+    }
+
+    return {
+        producten: dedupeProductList(producten),
+        nextUrl: foundNext ? normalizeUrlLoose(foundNext) : null,
+        debug,
+    };
+}
+
+/* ============================================================
+   autoWalkCatalogCore — pure loop, geen sync-state management.
+   Caller geeft syncRunId mee. onProgress callback voor UI updates.
+   ============================================================ */
+async function autoWalkCatalogCore({
+    leverancierId,
+    maxPages = 50,
+    tempo = 'normal',
+    useAi = false,
+    scope,
+    scopeKeywords,
+    syncRunId,
+    startUrl,
+    onProgress,
+}) {
+    const tab = await getActiveTab();
+    if (!tab?.id) throw new Error('Geen actieve tab gevonden');
+
+    const cap = Math.min(Math.max(1, Number(maxPages) || 50), 100);
+    const visited = new Set();
+
+    let pagesScanned = 0;
+    let productsSeen = 0;
+    let batchesSent = 0;
+    let emptyPages = 0;
+    let failures = 0;
+    const errors = [];
+
+    let nextUrl = normalizeUrlLoose(startUrl || tab.url || '');
+    if (!nextUrl) throw new Error('Geen geldige start URL');
+
+    awLog(syncRunId, 'START', { nextUrl, cap, tempo, useAi, leverancierId });
+
+    while (nextUrl && pagesScanned < cap) {
+        if (isCancelledSafe(syncRunId)) {
+            awWarn(syncRunId, 'Cancelled, stop');
+            break;
+        }
+
+        const key = canonicalPageKey(nextUrl);
+        if (visited.has(key)) {
+            awWarn(syncRunId, 'Loop detected, stop', { nextUrl });
+            break;
+        }
+        visited.add(key);
+
+        try {
+            const realBefore = await getRealTabUrl(tab.id);
+            if (canonicalPageKey(realBefore) !== canonicalPageKey(nextUrl)) {
+                awLog(syncRunId, 'navigate', { from: realBefore, to: nextUrl });
+                await withStepTimeout('navigateAndWait', 60000, async () => {
+                    await navigateAndWait(tab.id, nextUrl, syncRunId);
+                });
+            }
+        } catch (e) {
+            failures++;
+            errors.push(`navigate ${nextUrl}: ${toErrorMessage(e)}`);
+            awWarn(syncRunId, 'navigateAndWait failed (continue)', toErrorMessage(e));
+        }
+
+        const currentUrl = normalizeUrlLoose((await getRealTabUrl(tab.id)) || nextUrl);
+        awLog(syncRunId, `PAGE ${pagesScanned + 1}/${cap}`, { currentUrl });
+
+        let pageResult;
+        try {
+            pageResult = await extractCatalogPage({
+                tabId: tab.id,
+                pageUrl: currentUrl,
+                tempo, useAi, scope, scopeKeywords, syncRunId,
+            });
+        } catch (e) {
+            failures++;
+            errors.push(`extract ${currentUrl}: ${toErrorMessage(e)}`);
+            awErr(syncRunId, 'extractCatalogPage crashed', toErrorMessage(e));
+            pageResult = { producten: [], nextUrl: null, debug: { crash: toErrorMessage(e) } };
+        }
+
+        const pageProducten = dedupeProductList(pageResult.producten || []);
+        const count = pageProducten.length;
+
+        pagesScanned += 1;
+        productsSeen += count;
+        if (count === 0) emptyPages += 1;
+
+        awLog(syncRunId, 'page result', {
+            page: pagesScanned, count,
+            extractNext: pageResult.nextUrl || null,
+            debug: pageResult.debug,
+        });
+
+        if (count > 0) {
+            try {
+                await withStepTimeout('sendBatch', 30000, async () => {
+                    for (let i = 0; i < pageProducten.length; i += BATCH_SIZE) {
+                        const batch = pageProducten.slice(i, i + BATCH_SIZE);
+                        await BBQ.sendBatch({
+                            syncRunId, leverancierId, pageUrl: currentUrl,
+                            pagesScanned: i === 0 ? 1 : 0, producten: batch,
+                        });
+                    }
+                });
+                batchesSent += 1;
+            } catch (e) {
+                failures++;
+                errors.push(`batch page ${pagesScanned}: ${toErrorMessage(e)}`);
+                awErr(syncRunId, 'sendBatch failed', toErrorMessage(e));
+            }
+        }
+
+        if (typeof onProgress === 'function') {
+            try {
+                await onProgress({ pagesScanned, productsSeen, currentUrl, errors: errors.slice(-5) });
+            } catch (e) {
+                awWarn(syncRunId, 'onProgress failed (continue)', toErrorMessage(e));
+            }
+        }
+
+        /* IMPORTANT: fallback ALTIJD, ook bij 0 producten — sommige pagina's
+           tussen ?page=1..N hebben tijdelijke 0 (lazy-load fail) maar de
+           volgende heeft weer producten. */
+        let foundNext = normalizeUrlLoose(pageResult.nextUrl || '');
+        if (!foundNext) {
+            foundNext = buildNextPageFallbackSafe(currentUrl);
+            awLog(syncRunId, 'next fallback', { from: currentUrl, to: foundNext });
+        }
+
+        /* Stop-conditie: 3 lege pagina's achter elkaar = einde categorie */
+        if (emptyPages >= 3) {
+            awLog(syncRunId, 'stop: 3 empty pages in a row');
+            break;
+        }
+        if (!foundNext) {
+            awLog(syncRunId, 'No next page -> stop');
+            break;
+        }
+        if (visited.has(canonicalPageKey(foundNext))) {
+            awWarn(syncRunId, 'Next already visited -> stop', { foundNext });
+            break;
+        }
+
+        nextUrl = foundNext;
+
+        const delay = getTempoDelaySafe(tempo);
+        if (delay > 0 && !isCancelledSafe(syncRunId)) {
+            await cancellableSleep(delay, syncRunId);
+        }
+    }
+
+    const result = {
+        ok: true,
+        pagesScanned, productsSeen, batchesSent, emptyPages, failures,
+        errors,
+        stoppedByCap: pagesScanned >= cap,
+    };
+    awLog(syncRunId, 'DONE', result);
+    return result;
+}
+
+/* ============================================================
+   autoWalkCatalog — wrapper: BBQ.startSync/finishSync/setSyncState
+   omheen autoWalkCatalogCore. Behoud van bestaande popup-UI.
+   ============================================================ */
 async function autoWalkCatalog({ leverancierId, maxPages, delayMs, useAi, tempo }) {
     const tab = await getActiveTab();
     if (!tab) throw new Error('Geen actief tabblad');
@@ -723,7 +1449,6 @@ async function autoWalkCatalog({ leverancierId, maxPages, delayMs, useAi, tempo 
     const syncRunId = start.syncRunId;
     const scope = start?.leverancier?.scope_filter || 'alles';
     const scopeKeywords = start?.leverancier?.scope_keywords || [];
-    const adapter = BBQ_detectAdapter(new URL(tab.url).hostname);
 
     resetCancel(syncRunId);
 
@@ -733,124 +1458,57 @@ async function autoWalkCatalog({ leverancierId, maxPages, delayMs, useAi, tempo 
         currentUrl: tab.url,
     });
 
-    let pagesScanned = 0;
-    let productsSeen = 0;
-    let nextUrl = tab.url;
-    const cap = Math.min(Math.max(1, maxPages || 50), 100);
-    const errors = [];
-    /* tempo wint over delayMs als gezet */
-    const useTempo = tempo && TEMPO_PRESETS[tempo];
-    const baseWait = useTempo ? null : Math.max(500, delayMs || PAGE_DELAY_MS_DEFAULT);
-    const wait = () => useTempo ? tempoDelay(tempo) : baseWait;
-
-    async function checkCancelAW() {
-        if (!isCancelled(syncRunId)) return false;
-        try { await BBQ.finishSync({ syncRunId, status: 'cancelled', errorText: 'door gebruiker geannuleerd' }); } catch { /* ignore */ }
-        await setSyncState({
-            running: false, mode: 'full', leverancierId, syncRunId,
-            done: true, cancelled: true, pagesScanned, productsSeen, errors,
-            currentUrl: tab.url,
-        });
-        return true;
-    }
-
-    /* Per-pagina hard timeout — voorkomt dat 1 trage pagina alles vastlegt */
-    const PAGE_HARD_TIMEOUT_MS = 120000;
-
     try {
-        while (nextUrl && pagesScanned < cap) {
-            if (await checkCancelAW()) return { ok: true, cancelled: true, productsSeen };
+        const result = await autoWalkCatalogCore({
+            leverancierId,
+            maxPages: maxPages || 50,
+            tempo,
+            useAi,
+            scope, scopeKeywords,
+            syncRunId,
+            startUrl: tab.url,
+            onProgress: async ({ pagesScanned, productsSeen, currentUrl, errors }) => {
+                await setSyncState({
+                    running: true, mode: 'full', leverancierId, syncRunId,
+                    startedAt: (await getSyncState())?.startedAt || Date.now(),
+                    pagesScanned, productsSeen,
+                    errors: errors || [],
+                    currentUrl: currentUrl || tab.url,
+                });
+            },
+        });
 
-            let pageProducten = [];
-            let foundNext = null;
-            try {
-                await withTimeout(`pagina ${(nextUrl||'').slice(0, 80)}`, (async () => {
-                    /* Navigate als nodig */
-                    if (tab.url !== nextUrl) {
-                        await navigateAndWait(tab.id, nextUrl, syncRunId);
-                        if (isCancelled(syncRunId)) return;
-                    }
-                    tab.url = nextUrl;
-
-                    /* Humanize bij hogere tempos */
-                    if (useTempo) await humanizePage(tab.id, tempo, syncRunId);
-                    if (isCancelled(syncRunId)) return;
-
-                    /* Extract via adapter eerst */
-                    if (adapter && !useAi) {
-                        const r = await tabSend(tab.id, { type: 'BBQ_EXTRACT_ADAPTER', adapter }, 5000);
-                        if (r?.ok) {
-                            pageProducten = r.producten || [];
-                            foundNext = r.nextUrl;
-                        }
-                    }
-                    /* Fallback OR forced AI-detect */
-                    if (pageProducten.length === 0 || useAi) {
-                        const html = await tabSend(tab.id, { type: 'BBQ_GET_HTML' }, 8000);
-                        if (html?.ok) {
-                            if (isCancelled(syncRunId)) return;
-                            const ai = await BBQ.aiDetect({ html: html.html, pageUrl: tab.url, scope, scopeKeywords });
-                            pageProducten = ai.producten || [];
-                            foundNext = foundNext || ai.next_page_url;
-                        }
-                    }
-                }), PAGE_HARD_TIMEOUT_MS);
-            } catch (e) {
-                errors.push(`${nextUrl}: ${e.message}`);
-                /* Skip pagina + door; geen retry */
-            }
-            if (await checkCancelAW()) return { ok: true, cancelled: true, productsSeen };
-
-            if (pageProducten.length > 0) {
-                for (let i = 0; i < pageProducten.length; i += BATCH_SIZE) {
-                    const batch = pageProducten.slice(i, i + BATCH_SIZE);
-                    try {
-                        await BBQ.sendBatch({
-                            syncRunId, leverancierId, pageUrl: tab.url,
-                            pagesScanned: i === 0 ? 1 : 0, producten: batch,
-                        });
-                    } catch (e) {
-                        errors.push(`page ${pagesScanned + 1}: ${e.message}`);
-                    }
-                }
-            }
-
-            pagesScanned++;
-            productsSeen += pageProducten.length;
-
+        if (isCancelled(syncRunId)) {
+            await BBQ.finishSync({ syncRunId, status: 'cancelled', errorText: 'door gebruiker geannuleerd' }).catch(() => {});
             await setSyncState({
-                running: true, mode: 'full', leverancierId, syncRunId,
-                startedAt: (await getSyncState())?.startedAt || Date.now(),
-                pagesScanned, productsSeen, errors,
-                currentUrl: tab.url,
+                running: false, mode: 'full', leverancierId, syncRunId,
+                done: true, cancelled: true,
+                pagesScanned: result.pagesScanned, productsSeen: result.productsSeen,
+                currentUrl: (await getRealTabUrl(tab.id)) || tab.url,
             });
-
-            /* Fallback paginering: als geen foundNext maar wel producten,
-               probeer ?page=N+1 zelf (voor SPA-stores zonder klassieke pagination link) */
-            if (!foundNext && pageProducten.length > 0) {
-                foundNext = buildNextPageFallback(tab.url);
-            }
-
-            nextUrl = foundNext;
-            if (nextUrl) {
-                await cancellableSleep(wait(), syncRunId);
-                if (await checkCancelAW()) return { ok: true, cancelled: true, productsSeen };
-            }
+            return { ok: true, cancelled: true, productsSeen: result.productsSeen };
         }
 
-        const status = errors.length === 0 ? 'completed' : (productsSeen > 0 ? 'partial' : 'failed');
-        await BBQ.finishSync({ syncRunId, status, errorText: errors.slice(0, 5).join('; ') || null });
+        const status = result.failures > 0
+            ? (result.productsSeen > 0 ? 'partial' : 'failed')
+            : 'completed';
+        const errorText = result.errors?.length ? result.errors.slice(0, 5).join('; ') : null;
+
+        await BBQ.finishSync({ syncRunId, status, errorText });
         await setSyncState({
             running: false, mode: 'full', leverancierId, syncRunId,
-            done: true, pagesScanned, productsSeen, errors,
-            currentUrl: tab.url, startedAt: (await getSyncState())?.startedAt,
+            done: true,
+            pagesScanned: result.pagesScanned,
+            productsSeen: result.productsSeen,
+            errors: result.errors || [],
+            currentUrl: (await getRealTabUrl(tab.id)) || tab.url,
+            startedAt: (await getSyncState())?.startedAt,
         });
-        return { ok: true, pagesScanned, productsSeen, errors };
+        return { ok: true, pagesScanned: result.pagesScanned, productsSeen: result.productsSeen, errors: result.errors };
     } catch (e) {
         await BBQ.finishSync({ syncRunId, status: 'failed', errorText: String(e?.message || e) }).catch(() => {});
         await setSyncState({
             running: false, error: String(e?.message || e), syncRunId,
-            pagesScanned, productsSeen,
         });
         throw e;
     }

@@ -24,6 +24,7 @@ import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
 import FinanceSummaryStrip from './FinanceSummaryStrip';
+import MarktPulseWidget from './MarktPulseWidget';
 import KiaScenarioModal from '@/components/finance-copilot/KiaScenarioModal';
 import CashflowTab from './tabs/CashflowTab';
 import AangifteTab from './tabs/AangifteTab';
@@ -410,6 +411,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                         <div style={{ marginBottom: 20 }}>
                             <TransportBlock year={selectedYear} />
                         </div>
+                        <MarktPulseWidget />
                         <div className="stat-grid" style={{ marginBottom: 30 }}>
                             <div className="stat-card uren-glass" style={{ background: 'rgba(255,255,255,0.02)' }}>
                                 <div className="stat-icon" style={{ background: 'rgba(255,140,0,.15)', color: 'var(--brand)' }}><Coins size={14} /></div>

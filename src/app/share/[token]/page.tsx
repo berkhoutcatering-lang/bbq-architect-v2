@@ -159,10 +159,10 @@ function ShareList({ bonnen }: ListProps) {
 
     return (
         <div
-            className="overflow-hidden rounded-[14px] border"
-            style={{ borderColor: 'var(--border)', background: 'var(--card)' }}
+            className="rounded-[14px] border"
+            style={{ borderColor: 'var(--border)', background: 'var(--card)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
         >
-            <table className="w-full border-collapse text-[12px]">
+            <table className="w-full border-collapse text-[12px]" style={{ minWidth: 560 }}>
                 <thead>
                     <tr>
                         {['Datum', 'Leverancier', 'Categorie', 'Bedrag', 'BTW 9%', 'BTW 21%'].map((h, i) => (

@@ -10,7 +10,7 @@ const els = {};
  'lev-error','lev-error-msg','btn-lev-retry','btn-done-rescan']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.3.3';
+const POPUP_VERSION = '0.5.1';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
@@ -67,10 +67,10 @@ async function init() {
             setText('page-host', host);
             const adapter = BBQ_detectAdapter(host);
             if (adapter) {
-                els['adapter-badge'].innerText = '✓ Snel pad: ' + adapter.naam;
+                els['adapter-badge'].innerText = '✓ Bekende leverancier: ' + adapter.naam;
                 els['adapter-badge'].classList.add('on');
             } else {
-                els['adapter-badge'].innerText = 'Generic mode (AI-detect)';
+                els['adapter-badge'].innerText = 'AI-modus (universeel)';
                 els['adapter-badge'].classList.remove('on');
             }
             show('page-info');
@@ -200,10 +200,16 @@ function renderState(state) {
         if (state.diagnostic) {
             const d = state.diagnostic;
             const parts = [];
-            if (d.adapter !== undefined) parts.push(`adapter ${d.adapter}`);
-            if (d.screenshots > 0) parts.push(`vision ${d.screenshots}× → ${d.vision}`);
-            else if (d.vision !== undefined) parts.push(`vision ${d.vision}`);
+            if (d.jsonld !== undefined) parts.push(`json-ld ${d.jsonld}`);
+            if (d.platform !== undefined) {
+                const label = d.platformName ? `platform(${d.platformName})` : 'platform';
+                parts.push(`${label} ${d.platform}`);
+            }
             if (d.html !== undefined) parts.push(`html ${d.html}`);
+            if (d.screenshots > 0) parts.push(`vision ${d.screenshots}× → ${d.vision}`);
+            else if (d.vision !== undefined && d.vision > 0) parts.push(`vision ${d.vision}`);
+            /* Backward compat: oude scans met d.adapter */
+            if (d.adapter !== undefined && d.jsonld === undefined) parts.unshift(`adapter ${d.adapter}`);
             if (parts.length) diagLine = `\n\n🔬 ${parts.join(' · ')}`;
         }
         const fullMsg = state.hint ? `${baseMsg}\n\n💡 ${state.hint}${diagLine}` : `${baseMsg}${diagLine}`;

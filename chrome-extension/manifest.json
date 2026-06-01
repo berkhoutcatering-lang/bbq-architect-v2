@@ -1,21 +1,15 @@
 {
   "manifest_version": 3,
   "name": "BBQ Architect — Catalogus Scanner",
-  "version": "0.3.3",
-  "description": "Scan leveranciers-portals met vision-AI (Haiku 4.5) — werkt op SPA's, lazy-load en rommelige layouts. Stuurt producten + prijzen direct naar je BBQ Architect-account.",
+  "version": "0.5.1",
+  "description": "Universele catalogus-scanner — JSON-LD, platform-detectie, Claude HTML-analyse en vision. Werkt op elke webshop zonder per-site configuratie. Stuurt producten + prijzen direct naar BBQ Architect.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
   ],
   "host_permissions": [
-    "https://*.sligro.nl/*",
-    "https://*.makro.nl/*",
-    "https://*.baktotaal.nl/*",
-    "https://vuurenrook.nl/*",
-    "https://*.vuurenrook.nl/*",
-    "https://*.hanos.nl/*",
-    "https://*.bidfood.nl/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
@@ -28,7 +22,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["auto-extractor.js", "content.js"],
       "run_at": "document_idle"
     }
   ]
