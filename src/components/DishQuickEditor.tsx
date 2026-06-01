@@ -18,6 +18,7 @@ export interface DishDraft {
   allergenen?: string[];
   foto_url?: string;
   actief?: boolean;
+  is_in_wizard?: boolean;
 }
 
 interface DishQuickEditorProps {
@@ -75,6 +76,7 @@ export default function DishQuickEditor({ mode, gangSlug, gangOptions, existing,
       allergenen,
       foto_url: fotoUrl.trim() || undefined,
       actief: true,
+      is_in_wizard: true,
     };
 
     // Sync to catalog: insert (create) of update (edit + sync aan)

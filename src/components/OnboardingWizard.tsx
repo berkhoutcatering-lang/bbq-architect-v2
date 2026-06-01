@@ -60,6 +60,7 @@ export default function OnboardingWizard() {
           categorie: gerecht.categorie,
           kostprijs_pp: gerecht.kostprijs_pp,
           actief: true,
+          is_in_wizard: true,
         });
       }
       showToast('Eerste gerecht toegevoegd!', 'success');

@@ -306,6 +306,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             ingredienten_winkels: g.ingredienten_winkels || {},
             ingredient_costs: g.ingredient_costs || [],
             actief: g.actief !== false,
+            is_in_wizard: g.is_in_wizard !== false,
             porties: g.porties || 10,
             wijn_suggestie: g.wijn_suggestie || '',
             service_tip: g.service_tip || ''
@@ -390,6 +391,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         if (editing === 'new') {
             if (!dbData.status) dbData.status = 'actief';
             if (!dbData.bron) dbData.bron = 'manual';
+            /* Defense in depth bovenop DB-default: nieuwe gerechten moeten in de
+               menu- en offerte-wizard verschijnen. Zonder dit moet je naar de
+               toggle in /gerechten om ze zichtbaar te maken. */
+            if (typeof dbData.is_in_wizard !== 'boolean') dbData.is_in_wizard = true;
             /* RLS WITH CHECK op gerechten vereist organization_id ∈ user's orgs.
                Zonder dit faalt de insert met "new row violates row-level security
                policy". orgId komt uit useOrg(). */
@@ -1169,6 +1174,49 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 <label>Beschrijving</label>
                                 <input value={form.beschrijving || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { beschrijving: e.target.value })); }} placeholder="bijv. Krokant gyoza vel met gerookte zalm" />
                             </div>
+
+                            {/* Wizard-zichtbaarheid: onafhankelijk van status. true (default) =
+                                verschijnt in offerte- en menu-wizard. false = bewust verborgen
+                                (zie migration 20260601140000 voor de default-fix). */}
+                            {(function () {
+                                const isVisible = form.is_in_wizard !== false;
+                                return (
+                                    <div className="field">
+                                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                                            <span>Beschikbaar in wizard</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isVisible}
+                                                onClick={function () { setForm(Object.assign({}, form, { is_in_wizard: !isVisible })); }}
+                                                title={isVisible ? 'Klik om te verbergen uit offerte- en menu-wizard' : 'Klik om weer zichtbaar te maken in wizard'}
+                                                style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                                                    padding: '4px 8px', borderRadius: 999, cursor: 'pointer',
+                                                    background: 'transparent', border: 'none', color: isVisible ? 'var(--text)' : 'var(--muted)',
+                                                    fontSize: 12, fontWeight: 600,
+                                                }}
+                                            >
+                                                <span style={{
+                                                    width: 32, height: 18, borderRadius: 9, position: 'relative', transition: 'background .15s',
+                                                    background: isVisible ? '#22c55e' : 'rgba(148,163,184,.35)', flexShrink: 0,
+                                                }}>
+                                                    <span style={{
+                                                        position: 'absolute', top: 2, left: isVisible ? 16 : 2, width: 14, height: 14,
+                                                        borderRadius: 7, background: '#fff', transition: 'left .15s',
+                                                    }} />
+                                                </span>
+                                                {isVisible ? 'Zichtbaar' : 'Verborgen'}
+                                            </button>
+                                        </label>
+                                        <small style={{ color: 'var(--muted)', fontSize: 11, lineHeight: 1.35 }}>
+                                            {isVisible
+                                                ? 'Dit gerecht verschijnt in de offerte- en menu-wizard.'
+                                                : 'Dit gerecht is verborgen uit wizards (handig voor seizoens-items of testdata).'}
+                                        </small>
+                                    </div>
+                                );
+                            })()}
                                 </>)}
 
                                 {editTab === 'bouw' && (<>

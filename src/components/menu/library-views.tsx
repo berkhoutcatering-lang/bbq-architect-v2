@@ -7,7 +7,7 @@
 'use client';
 
 import { useMemo, useState, type CSSProperties } from 'react';
-import { ChefHat, ChevronDown, ChevronUp, Copy, MoreVertical, Pencil } from 'lucide-react';
+import { ChefHat, ChevronDown, ChevronUp, Copy, EyeOff, MoreVertical, Pencil } from 'lucide-react';
 import type { Gerecht, Gang } from '@/types';
 import {
     MRStatusPill, MRCardVisual, MRMarginRing, MRCostBar,
@@ -26,6 +26,39 @@ export interface LibraryViewProps {
     onSelect: (g: Gerecht) => void;
     density?: DishDensity;
     photoMode?: PhotoMode;
+}
+
+/* Subtle indicator dat een gerecht niet in offerte/menu-wizard verschijnt.
+   Tonen als is_in_wizard === false. NULL of true = wel zichtbaar (zie
+   migration 20260601140000 — default omgedraaid). */
+function MRHiddenFromWizardPill({ compact }: { compact?: boolean }) {
+    return (
+        <span
+            title="Verborgen uit wizard — niet selecteerbaar in offerte of menu"
+            aria-label="Verborgen uit wizard"
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: compact ? '2px 6px' : '3px 8px',
+                borderRadius: 999,
+                fontSize: compact ? 10 : 11,
+                fontWeight: 600,
+                color: 'var(--muted)',
+                background: 'rgba(148, 163, 184, 0.14)',
+                border: '1px solid rgba(148, 163, 184, 0.28)',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            <EyeOff size={compact ? 10 : 11} />
+            Verborgen
+        </span>
+    );
+}
+
+function isHiddenFromWizard(g: Gerecht): boolean {
+    return (g as unknown as { is_in_wizard?: boolean | null }).is_in_wizard === false;
 }
 
 /* ═══ EMPTY STATE ═══════════════════════════════════════════ */
@@ -75,8 +108,9 @@ function MRGridCard({ gerecht, gangen, onClick, density, photoMode }: {
             <div className="mr-grid-card-photo" style={{ height: photoH }}>
                 <MRCardVisual gerecht={gerecht} photoMode={photoMode}
                     style={{ width: '100%', height: '100%' }} iconSize={compact ? 36 : 48} />
-                <div className="mr-grid-card-status">
+                <div className="mr-grid-card-status" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     <MRStatusPill status={status} />
+                    {isHiddenFromWizard(gerecht) && <MRHiddenFromWizardPill compact />}
                 </div>
             </div>
             <div className="mr-grid-card-body">
@@ -194,7 +228,10 @@ export function MRListView({ gerechten, gangen, onSelect, density = 'comfortable
                             <MRMarginRing pct={margin} size={compact ? 28 : 34} />
                             <span style={{ fontSize: 12, fontWeight: 600, color: tone.color, fontVariantNumeric: 'tabular-nums' }}>{margin}%</span>
                         </div>
-                        <div style={{ width: 90 }}><MRStatusPill status={status} /></div>
+                        <div style={{ width: 90, display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <MRStatusPill status={status} />
+                            {isHiddenFromWizard(g) && <MRHiddenFromWizardPill compact />}
+                        </div>
                         <div style={{ width: 80, display: 'flex', gap: 4 }}>
                             <button className="mr-icon-btn-sm" title="Dupliceren" onClick={(e) => e.stopPropagation()}><Copy size={13} /></button>
                             <button className="mr-icon-btn-sm" title="Bewerken" onClick={(e) => { e.stopPropagation(); onSelect(g); }}><Pencil size={13} /></button>
@@ -233,8 +270,9 @@ function MRGalleryCard({ gerecht, gangen, onClick, h, photoMode }: {
             <MRCardVisual gerecht={gerecht} photoMode={photoMode}
                 style={{ width: '100%', height: '100%', borderRadius: 12 }} iconSize={56} />
             <div className={`mr-gallery-overlay ${hover ? 'visible' : ''}`}>
-                <div style={{ position: 'absolute', top: 12, left: 12 }}>
+                <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 4 }}>
                     <MRStatusPill status={status} />
+                    {isHiddenFromWizard(gerecht) && <MRHiddenFromWizardPill compact />}
                 </div>
                 <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 500 }}>{gerecht.naam}</div>

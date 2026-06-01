@@ -682,9 +682,16 @@ export interface Gerecht {
   id: number;
   naam: string;
   gang_id?: number;
+  gang_slug?: string;
   categorie?: string;
   beschrijving?: string;
   prijs?: number;
+  verkoopprijs?: number;
+  kostprijs_pp?: number;
+  foto_url?: string;
+  allergenen?: string[];
+  is_in_wizard?: boolean;
+  status?: string;
   ingredient_costs?: GerechIngredientCost[];
   created_at?: string;
 }
