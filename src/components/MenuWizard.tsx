@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Settings } from '@/types';
 import DishQuickEditor, { type DishDraft } from '@/components/DishQuickEditor';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, BookOpen } from 'lucide-react';
+import LoadMenuTemplateSheet, { type LoadedMenuTemplate } from '@/components/menu/LoadMenuTemplateSheet';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -91,6 +92,17 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
     const [templateBeschrijving, setTemplateBeschrijving] = useState(existingTemplate?.beschrijving || '');
     const [editorMode, setEditorMode] = useState<'create' | 'edit' | null>(null);
     const [editingDish, setEditingDish] = useState<DishRow | null>(null);
+    /* Stel-menu-samen v2 (2026-06): Sheet om een bestaande menukaart te laden
+       als startpunt voor deze wizard. Alleen actief in 'offerte'-mode. */
+    const [showLoadSheet, setShowLoadSheet] = useState(false);
+
+    function applyLoadedTemplate(t: LoadedMenuTemplate) {
+        setSelected(t.menu_selectie);
+        if (t.basis_prijs_pp > 0) setBasisPrijs(t.basis_prijs_pp);
+        if (t.aantal_gasten > 0) setAantalGasten(t.aantal_gasten);
+        setShowLoadSheet(false);
+        setStep(0);
+    }
 
     function refreshGerechten() {
         if (!supabase) return;
@@ -291,6 +303,25 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
 
                 {!isOverview && currentGang ? (
                     <div>
+                        {/* Stel-menu-samen v2: snelle import van een bestaande menukaart.
+                            Alleen op stap 0 en alleen in offerte-mode — in template-mode
+                            ben je zelf de menukaart aan het schrijven. */}
+                        {step === 0 && !isTemplateMode && (
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLoadSheet(true)}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '6px 12px', border: '1px solid var(--brand, #c4a35a)', borderRadius: 6,
+                                        background: 'rgba(196,163,90,.06)', color: 'var(--brand, #c4a35a)',
+                                        cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                                    }}
+                                >
+                                    <BookOpen size={14} /> Laad bestaande menukaart
+                                </button>
+                            </div>
+                        )}
                         <h3 style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, marginBottom: 16 }}>{currentGang.naam}</h3>
                         <div className="wizard-info-bar">
                             <div className="gang-title">Selecteer minimaal {currentGang.minimum} {currentGang.naam.toLowerCase()}</div>
@@ -477,6 +508,13 @@ export default function MenuWizard({ onComplete, onClose, settings, existingOffe
                     onClose={() => { setEditorMode(null); setEditingDish(null); }}
                 />
             )}
+
+            {/* Stel-menu-samen v2: rechter-drawer voor "Laad menukaart". */}
+            <LoadMenuTemplateSheet
+                open={showLoadSheet}
+                onClose={() => setShowLoadSheet(false)}
+                onLoad={applyLoadedTemplate}
+            />
         </div>
     );
 }
