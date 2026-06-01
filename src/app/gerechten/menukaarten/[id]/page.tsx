@@ -11,9 +11,9 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@/lib/supabase-server';
-import GerechtenTabs from '@/components/GerechtenTabs';
 import MenuComposer from '@/components/menu/MenuComposer';
 import { getMenuTemplate } from '@/lib/dal/menuTemplates';
+/* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered. */
 
 export const dynamic = 'force-dynamic';
 
@@ -46,13 +46,10 @@ export default async function MenukaartComposerPage({ params }: PageProps) {
     }
 
     return (
-        <div>
-            <GerechtenTabs />
-            <MenuComposer
-                initial={initial}
-                gerechten={gerechten}
-                gangen={gangen}
-            />
-        </div>
+        <MenuComposer
+            initial={initial}
+            gerechten={gerechten}
+            gangen={gangen}
+        />
     );
 }

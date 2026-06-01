@@ -9,9 +9,10 @@
 
 import Link from 'next/link';
 import { Plus, BookOpen, Star, Pencil } from 'lucide-react';
-import GerechtenTabs from '@/components/GerechtenTabs';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { listMenuTemplatesShallow } from '@/lib/dal/menuTemplates';
+/* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered —
+   niet opnieuw mounten hier (gaf dubbele tablist). */
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +29,6 @@ export default async function MenukaartenListPage() {
 
     return (
         <div>
-            <GerechtenTabs />
-
             <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18,
