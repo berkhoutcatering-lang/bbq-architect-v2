@@ -3,8 +3,8 @@
 /**
  * MenuComposer — Stel-menu-samen v2.
  *
- * Per gang een sortable lijst van gerecht-pills. Plus-knop opent
- * MenuCommandPalette in 'picker'-mode; "Vraag AI" roept
+ * Per gang een sortable lijst van gerecht-pills. AddDishButton opent
+ * een inline popover-picker (search + dish-list); "Vraag AI" roept
  * /api/menu-templates/suggest aan. Save → upsertMenuTemplate Server Action.
  *
  * Layout:
@@ -24,6 +24,8 @@ import { useRouter } from 'next/navigation';
 import {
     Plus, Sparkles, Save, Trash2, GripVertical, X, Loader2,
     ChevronDown, ChevronRight, ArrowRight, AlertTriangle, FileText,
+    Search, CornerDownRight, UtensilsCrossed, ChefHat, Users, Wallet,
+    TrendingUp, ShieldAlert, PanelRightOpen, PanelRightClose, Utensils,
 } from 'lucide-react';
 import {
     DndContext, KeyboardSensor, PointerSensor, TouchSensor,
@@ -36,8 +38,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
-import { MenuCommandPalette } from './MenuCommandPalette';
-import { GANG_VISUALS, getGangKey } from './helpers';
+import { GANG_VISUALS, getGangKey, fmtEuro } from './helpers';
 import { upsertMenuTemplate, deleteMenuTemplate } from '@/app/menu-templates/actions';
 import type { MenuTemplateWithItems, MenuTemplateGerechtRef } from '@/lib/dal/menuTemplates';
 import type { Gerecht, Gang } from '@/types';
@@ -107,7 +108,9 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
 
     const [state, setState] = useState<ComposerState>(() => initial ? stateFromInitial(initial) : emptyState());
     const [activeGang, setActiveGang] = useState<string | null>(() => gangen[0]?.slug ?? null);
-    const [picker, setPicker] = useState<{ open: boolean; gangSlug: string } | null>(null);
+    /* Picker-state is verhuisd naar GangPanel (lokaal per gang via InlinePicker).
+       De oude full-modal MenuCommandPalette in picker-mode is verwijderd
+       — Sam vond die te onduidelijk. */
     const [aiPanel, setAiPanel] = useState<{ open: boolean; gangSlug: string; loading: boolean; result: Array<{ gerecht_id: string; redenering: string }>; error?: string } | null>(null);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -328,25 +331,62 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
         return m;
     }, [state.items, gangen]);
 
+    /* Library-sidebar open/dicht — desktop only. State leeft hier zodat
+       hero-toggle in sync blijft met de sidebar. */
+    const [libraryOpen, setLibraryOpen] = useState(true);
+
+    /* KPI-stats: optellen op basis van toegevoegde items + gerechten-lookup.
+       Marge gebruikt verkoopprijs vs kostprijs_pp. Alle berekeningen client-side,
+       geen AI-derivatie (Hard Rule: prijs/marge nooit door AI). */
+    const stats = useMemo(() => {
+        let couvertprijs = 0;
+        let kostprijs = 0;
+        const allergenenSet = new Set<string>();
+        const gangenSet = new Set<string>();
+        for (const it of state.items) {
+            const g = gerechtById.get(it.gerecht_id);
+            if (!g) continue;
+            couvertprijs += Number(g.verkoopprijs ?? g.prijs ?? 0);
+            kostprijs += Number(g.kostprijs_pp ?? 0);
+            gangenSet.add(it.gang_slug);
+            for (const a of g.allergenen ?? []) allergenenSet.add(a);
+        }
+        const margePp = couvertprijs - kostprijs;
+        const margePct = couvertprijs > 0 ? Math.round((margePp / couvertprijs) * 100) : 0;
+        return {
+            couvertprijs,
+            margePct,
+            margePp,
+            gerechten: state.items.length,
+            allergenen: allergenenSet.size,
+            gangenCount: gangenSet.size,
+        };
+    }, [state.items, gerechtById]);
+
     return (
         <div className="menu-composer" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            {/* ── Sticky header ─────────────────────────────────────────── */}
+            {/* ── Hero — Playfair naam-input + meta + actions ────────────── */}
+            <ComposerHero
+                naam={state.naam}
+                aantalGasten={state.aantal_gasten}
+                basisPrijs={state.basis_prijs_pp}
+                onNaamChange={(v) => { setState(s => ({ ...s, naam: v })); setDirty(true); }}
+                onToggleLibrary={() => setLibraryOpen(o => !o)}
+                libraryOpen={libraryOpen}
+            />
+
+            {/* ── KPI strip — live menu-economics ────────────────────────── */}
+            <KpiStrip stats={stats} />
+
+            {/* ── Compact action-bar — basisprijs/gasten/standaard + save ── */}
             <div style={{
                 position: 'sticky', top: 0, zIndex: 5,
-                background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-                padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+                background: 'var(--surface)',
+                borderTop: '1px solid var(--border)',
+                borderBottom: '1px solid var(--border)',
+                marginTop: 16,
+                padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
             }}>
-                <input
-                    type="text"
-                    value={state.naam}
-                    onChange={e => { setState(s => ({ ...s, naam: e.target.value })); setDirty(true); }}
-                    placeholder="Naam van de menukaart…"
-                    style={{
-                        flex: '1 1 220px', minWidth: 220, fontSize: 18, fontWeight: 600,
-                        padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6,
-                        background: 'transparent', color: 'var(--text)',
-                    }}
-                />
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
                     Basisprijs p.p.
                     <input
@@ -425,108 +465,109 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
                 </div>
             )}
 
-            {/* ── Main split — mobile = stacked, desktop = 2-col ────────── */}
-            <div className="menu-composer-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0, flex: 1 }}>
-                {/* Desktop sticky left column (collapses on mobile) */}
-                <div className="menu-composer-gangs-nav" style={{ display: 'none' }}>
+            {/* ── Main content area ─────────────────────────────────────── */}
+            <div className="menu-composer-body" style={{ flex: 1, padding: 20 }}>
+                {/* Mobile (< lg): accordion van alle gangen */}
+                <div className="menu-composer-mobile-list">
                     {gangen.map(g => {
-                        const count = itemsByGang.get(g.slug)?.length ?? 0;
-                        const vis = GANG_VISUALS[getGangKey({ gang_slug: g.slug })] ?? GANG_VISUALS.default;
-                        const active = activeGang === g.slug;
+                        const items = itemsByGang.get(g.slug) ?? [];
+                        const expanded = mobileExpanded[g.slug] ?? false;
+                        const unlinked = unlinkedByGang.get(g.slug) ?? [];
                         return (
-                            <button
-                                key={g.slug}
-                                type="button"
-                                onClick={() => setActiveGang(g.slug)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 10,
-                                    padding: '10px 12px', border: 'none', borderLeft: active ? '3px solid var(--brand, #c4a35a)' : '3px solid transparent',
-                                    background: active ? 'rgba(196,163,90,.08)' : 'transparent',
-                                    color: 'var(--text)', cursor: 'pointer', textAlign: 'left', width: '100%',
-                                }}
-                            >
-                                <span style={{
-                                    width: 26, height: 26, borderRadius: 6,
-                                    background: vis.gradient,
-                                    flexShrink: 0,
-                                }} />
-                                <span style={{ flex: 1, fontWeight: active ? 600 : 400 }}>{g.naam}</span>
-                                <span style={{
-                                    fontSize: 11, color: 'var(--muted)',
-                                    background: 'rgba(255,255,255,.04)', padding: '2px 7px', borderRadius: 99,
-                                }}>{count}</span>
-                            </button>
+                            <div key={g.slug} style={{ marginBottom: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileExpanded(m => ({ ...m, [g.slug]: !m[g.slug] }))}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                                        padding: 12, border: 'none', background: 'var(--surface)', color: 'var(--text)',
+                                        textAlign: 'left', cursor: 'pointer', fontWeight: 600,
+                                    }}
+                                >
+                                    {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                    <span style={{ flex: 1 }}>{g.naam}</span>
+                                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{items.length} gerechten</span>
+                                </button>
+                                {expanded && (
+                                    <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+                                        <GangPanel
+                                            gang={g}
+                                            items={items}
+                                            gangen={gangen}
+                                            gerechten={gerechten}
+                                            gerechtById={gerechtById}
+                                            unlinkedNames={unlinked}
+                                            onAddGerecht={(id) => addGerecht(g.slug, id)}
+                                            onRemove={removeItem}
+                                            onReorder={(oldIdx, newIdx) => reorderInGang(g.slug, oldIdx, newIdx)}
+                                            onMoveToGang={moveToGang}
+                                            onAi={() => requestAiSuggestions(g.slug)}
+                                            onCreateNew={() => window.open('/gerechten?new=1&gang=' + g.slug, '_blank')}
+                                        />
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
 
-                {/* Right column — actieve gang OR (mobile) accordion van alle gangen */}
-                <div className="menu-composer-content" style={{ padding: 16 }}>
-                    {/* Mobile accordion: alle gangen onder elkaar */}
-                    <div className="menu-composer-mobile-list" style={{ display: 'block' }}>
+                {/* Desktop (≥ lg): 2-koloms grid met ALLE gangen tegelijk + library sidebar.
+                    Vervangt de oude left-nav + actieve-gang flow — Sam wil alles in
+                    één scherm kunnen samenstellen, niet gang-voor-gang doorklikken. */}
+                <div className="menu-composer-desktop-split">
+                    <div style={{
+                        flex: 1, minWidth: 0,
+                        display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                        gap: 16, alignItems: 'start',
+                    }}>
                         {gangen.map(g => {
                             const items = itemsByGang.get(g.slug) ?? [];
-                            const expanded = mobileExpanded[g.slug] ?? false;
                             const unlinked = unlinkedByGang.get(g.slug) ?? [];
                             return (
-                                <div key={g.slug} style={{ marginBottom: 12, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setMobileExpanded(m => ({ ...m, [g.slug]: !m[g.slug] }))}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                            padding: 12, border: 'none', background: 'var(--surface)', color: 'var(--text)',
-                                            textAlign: 'left', cursor: 'pointer', fontWeight: 600,
-                                        }}
-                                    >
-                                        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                        <span style={{ flex: 1 }}>{g.naam}</span>
-                                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{items.length} gerechten</span>
-                                    </button>
-                                    {expanded && (
-                                        <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
-                                            <GangPanel
-                                                gang={g}
-                                                items={items}
-                                                gangen={gangen}
-                                                gerechtById={gerechtById}
-                                                unlinkedNames={unlinked}
-                                                onAdd={() => setPicker({ open: true, gangSlug: g.slug })}
-                                                onRemove={removeItem}
-                                                onReorder={(oldIdx, newIdx) => reorderInGang(g.slug, oldIdx, newIdx)}
-                                                onMoveToGang={moveToGang}
-                                                onAi={() => requestAiSuggestions(g.slug)}
-                                            />
-                                        </div>
-                                    )}
+                                <div
+                                    key={g.slug}
+                                    style={{
+                                        padding: 16,
+                                        background: 'var(--surface)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: 12,
+                                        boxShadow: '0 1px 0 rgba(255,255,255,.04) inset, 0 8px 20px rgba(0,0,0,.18)',
+                                    }}
+                                >
+                                    <GangPanel
+                                        gang={g}
+                                        items={items}
+                                        gangen={gangen}
+                                        gerechten={gerechten}
+                                        gerechtById={gerechtById}
+                                        unlinkedNames={unlinked}
+                                        onAddGerecht={(id) => addGerecht(g.slug, id)}
+                                        onRemove={removeItem}
+                                        onReorder={(oldIdx, newIdx) => reorderInGang(g.slug, oldIdx, newIdx)}
+                                        onMoveToGang={moveToGang}
+                                        onAi={() => requestAiSuggestions(g.slug)}
+                                        onCreateNew={() => window.open('/gerechten?new=1&gang=' + g.slug, '_blank')}
+                                    />
                                 </div>
                             );
                         })}
                     </div>
+
+                    {/* LibrarySidebar — komt in volgende stap. Placeholder voor layout. */}
+                    {libraryOpen && (
+                        <LibrarySidebar
+                            gangen={gangen}
+                            gerechten={gerechten}
+                            excludeIdsByGang={(slug) => new Set((itemsByGang.get(slug) ?? []).map(it => it.gerecht_id))}
+                            onPick={addGerecht}
+                            onClose={() => setLibraryOpen(false)}
+                        />
+                    )}
                 </div>
             </div>
 
-            {/* ── Picker palette (gedeeld over gangen) ───────────────────── */}
-            {picker?.open && (
-                <MenuCommandPalette
-                    open={picker.open}
-                    mode="picker"
-                    pickerContext={{
-                        gangSlug: picker.gangSlug,
-                        gangLabel: gangen.find(g => g.slug === picker.gangSlug)?.naam ?? picker.gangSlug,
-                    }}
-                    excludeIds={new Set(state.items.filter(it => it.gang_slug === picker.gangSlug).map(it => it.gerecht_id))}
-                    onClose={() => setPicker(null)}
-                    gerechten={gerechten}
-                    onSelectGerecht={(g) => { addGerecht(picker.gangSlug, String(g.id)); setPicker(null); }}
-                    onAction={(id) => {
-                        if (id === 'new-gerecht') {
-                            window.open('/gerechten?new=1&gang=' + picker.gangSlug, '_blank');
-                            setPicker(null);
-                        }
-                    }}
-                />
-            )}
+            {/* Picker is nu inline per gang (zie GangPanel → InlinePicker).
+                Geen full-modal MenuCommandPalette meer voor add-flow. */}
 
             {/* ── AI suggestions sheet ───────────────────────────────────── */}
             {aiPanel?.open && (
@@ -567,40 +608,173 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
                 </div>
             )}
 
-            {/* ── Responsive CSS — desktop 2-koloms via media query ────── */}
+            {/* ── Responsive CSS — accordion mobile, 2-koloms grid desktop ── */}
             <style jsx>{`
+                .menu-composer-mobile-list { display: block; }
+                .menu-composer-desktop-split { display: none; }
                 @media (min-width: 1024px) {
-                    .menu-composer-grid { grid-template-columns: 280px 1fr; }
-                    .menu-composer-gangs-nav { display: flex !important; flex-direction: column; border-right: 1px solid var(--border); padding: 12px 0; }
-                    .menu-composer-mobile-list { display: none !important; }
-                    .menu-composer-desktop-active { display: block !important; }
+                    .menu-composer-mobile-list { display: none; }
+                    .menu-composer-desktop-split { display: flex; gap: 20px; align-items: flex-start; }
                 }
             `}</style>
-
-            {/* Desktop-only: actieve gang panel (verborgen op mobile via CSS) */}
-            <div className="menu-composer-desktop-active" style={{ display: 'none', padding: 16 }}>
-                {activeGang && (() => {
-                    const gang = gangen.find(g => g.slug === activeGang);
-                    if (!gang) return null;
-                    const items = itemsByGang.get(gang.slug) ?? [];
-                    const unlinked = unlinkedByGang.get(gang.slug) ?? [];
-                    return (
-                        <GangPanel
-                            gang={gang}
-                            items={items}
-                            gangen={gangen}
-                            gerechtById={gerechtById}
-                            unlinkedNames={unlinked}
-                            onAdd={() => setPicker({ open: true, gangSlug: gang.slug })}
-                            onRemove={removeItem}
-                            onReorder={(oldIdx, newIdx) => reorderInGang(gang.slug, oldIdx, newIdx)}
-                            onMoveToGang={moveToGang}
-                            onAi={() => requestAiSuggestions(gang.slug)}
-                        />
-                    );
-                })()}
-            </div>
         </div>
+    );
+}
+
+/* ─── Subcomponent: LibrarySidebar ──────────────────────────────────────
+   Rechter 248px paneel met alle gerechten gegroepeerd per gang.
+   Klik op een rij voegt het gerecht direct toe aan zijn gang. Filter via
+   search-input bovenaan. Collapsable via Library-toggle in de hero. */
+
+function LibrarySidebar({
+    gangen, gerechten, excludeIdsByGang, onPick, onClose,
+}: {
+    gangen: Gang[];
+    gerechten: Gerecht[];
+    excludeIdsByGang: (slug: string) => Set<string>;
+    onPick: (gangSlug: string, gerechtId: string) => void;
+    onClose: () => void;
+}) {
+    const [q, setQ] = useState('');
+    const ql = q.trim().toLowerCase();
+
+    /* Groepeer gerechten per gang via normalized key zoals InlinePicker doet.
+       Filter is_in_wizard !== false + search-match + niet al in deze gang. */
+    const byGang = useMemo(() => {
+        const m = new Map<string, Gerecht[]>();
+        for (const g of gangen) m.set(g.slug, []);
+        for (const dish of gerechten) {
+            if (dish.is_in_wizard === false) continue;
+            if (ql && !dish.naam.toLowerCase().includes(ql)) continue;
+            const key = getGangKey(dish);
+            const gang = gangen.find(gg => getGangKey({ gang_slug: gg.slug }) === key);
+            if (!gang) continue;
+            m.get(gang.slug)!.push(dish);
+        }
+        return m;
+    }, [gerechten, gangen, ql]);
+
+    return (
+        <aside style={{
+            width: 248, flexShrink: 0, alignSelf: 'flex-start', position: 'sticky', top: 70,
+            background: 'var(--card, var(--surface))', border: '1px solid var(--border)',
+            borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+            maxHeight: 'calc(100vh - 100px)',
+        }}>
+            <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
+                borderBottom: '1px solid var(--border)',
+            }}>
+                <UtensilsCrossed size={16} style={{ color: 'var(--brand, #c4a35a)' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', flex: 1 }}>Gerechten-library</span>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    title="Verberg library"
+                    style={{
+                        width: 28, height: 28, borderRadius: 7,
+                        border: '1px solid var(--border)', background: 'transparent',
+                        color: 'var(--muted)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                >
+                    <PanelRightClose size={15} />
+                </button>
+            </div>
+            <div style={{ padding: 10, borderBottom: '1px solid var(--border)' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Search size={14} style={{ position: 'absolute', left: 9, color: 'var(--muted)', pointerEvents: 'none' }} />
+                    <input
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        placeholder="Filter gerechten…"
+                        style={{
+                            width: '100%', boxSizing: 'border-box',
+                            padding: '8px 10px 8px 30px', borderRadius: 9, minHeight: 36,
+                            background: 'transparent', border: '1px solid var(--border)',
+                            color: 'var(--text)', fontSize: 13, outline: 'none',
+                        }}
+                    />
+                </div>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
+                {gangen.map(g => {
+                    const items = byGang.get(g.slug) ?? [];
+                    if (items.length === 0) return null;
+                    const exclude = excludeIdsByGang(g.slug);
+                    return (
+                        <div key={g.slug} style={{ marginBottom: 14 }}>
+                            <div style={{
+                                fontSize: 10, fontWeight: 700, letterSpacing: '.12em',
+                                textTransform: 'uppercase', color: 'var(--muted)', padding: '0 4px 6px',
+                            }}>{g.naam}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {items.map(dish => {
+                                    const alreadyAdded = exclude.has(String(dish.id));
+                                    return (
+                                        <button
+                                            key={dish.id}
+                                            type="button"
+                                            onClick={() => !alreadyAdded && onPick(g.slug, String(dish.id))}
+                                            disabled={alreadyAdded}
+                                            title={alreadyAdded ? 'Staat al in deze gang' : 'Klik om toe te voegen aan ' + g.naam}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                padding: '6px 8px', borderRadius: 9,
+                                                cursor: alreadyAdded ? 'default' : 'pointer',
+                                                background: 'transparent', border: '1px solid var(--border)',
+                                                color: 'var(--text)', textAlign: 'left',
+                                                opacity: alreadyAdded ? 0.4 : 1,
+                                                transition: 'background .12s, border-color .12s',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!alreadyAdded) {
+                                                    e.currentTarget.style.background = 'rgba(196,163,90,.08)';
+                                                    e.currentTarget.style.borderColor = 'rgba(196,163,90,.4)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!alreadyAdded) {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.borderColor = 'var(--border)';
+                                                }
+                                            }}
+                                        >
+                                            {dish.foto_url ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={dish.foto_url} alt="" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                                            ) : (
+                                                <span style={{
+                                                    width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                                                    background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                    color: 'var(--muted)', fontSize: 11, fontWeight: 600,
+                                                }}>{dish.naam.charAt(0).toUpperCase()}</span>
+                                            )}
+                                            <span style={{
+                                                fontSize: 12.5, fontWeight: 500, color: 'var(--text)',
+                                                flex: 1, minWidth: 0, whiteSpace: 'nowrap',
+                                                overflow: 'hidden', textOverflow: 'ellipsis',
+                                            }}>{dish.naam}</span>
+                                            <span style={{
+                                                fontSize: 11, color: 'var(--muted)',
+                                                fontVariantNumeric: 'tabular-nums', flexShrink: 0,
+                                            }}>{fmtEuro(Number(dish.verkoopprijs ?? dish.prijs ?? 0))}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            <div style={{
+                padding: '8px 12px', borderTop: '1px solid var(--border)',
+                fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+                <Plus size={12} />Klik om toe te voegen
+            </div>
+        </aside>
     );
 }
 
@@ -610,16 +784,19 @@ interface GangPanelProps {
     gang: Gang;
     items: ComposerItem[];
     gangen: Gang[];
+    gerechten: Gerecht[];
     gerechtById: Map<string, Gerecht>;
     unlinkedNames: string[];
-    onAdd: () => void;
+    onAddGerecht: (gerechtId: string) => void;
     onRemove: (uid: string) => void;
     onReorder: (oldIdx: number, newIdx: number) => void;
     onMoveToGang: (uid: string, newGangSlug: string) => void;
     onAi: () => void;
+    onCreateNew?: () => void;
 }
 
-function GangPanel({ gang, items, gangen, gerechtById, unlinkedNames, onAdd, onRemove, onReorder, onMoveToGang, onAi }: GangPanelProps) {
+function GangPanel({ gang, items, gangen, gerechten, gerechtById, unlinkedNames, onAddGerecht, onRemove, onReorder, onMoveToGang, onAi, onCreateNew }: GangPanelProps) {
+    const [pickerOpen, setPickerOpen] = useState(false);
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
@@ -642,14 +819,7 @@ function GangPanel({ gang, items, gangen, gerechtById, unlinkedNames, onAdd, onR
                 </span>
             </div>
 
-            {items.length === 0 ? (
-                <div style={{
-                    padding: 28, textAlign: 'center', border: '1px dashed var(--border)',
-                    borderRadius: 8, color: 'var(--muted)', fontSize: 13,
-                }}>
-                    Nog geen gerechten in deze gang.
-                </div>
-            ) : (
+            {items.length > 0 && (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={items.map(it => it.uid)} strategy={verticalListSortingStrategy}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -669,28 +839,49 @@ function GangPanel({ gang, items, gangen, gerechtById, unlinkedNames, onAdd, onR
                 </DndContext>
             )}
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                <button
-                    type="button"
-                    onClick={onAdd}
-                    style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 6,
-                        background: 'transparent', color: 'var(--text)', cursor: 'pointer',
-                    }}
-                >
-                    <Plus size={14} /> Voeg gerecht toe
-                </button>
+            {items.length === 0 && (
+                <div style={{
+                    fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.4,
+                    padding: '4px 2px 0', display: 'flex', alignItems: 'center', gap: 7,
+                }}>
+                    <CornerDownRight size={14} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+                    Voeg het eerste gerecht toe — klik op de knop hieronder of vraag AI.
+                </div>
+            )}
+
+            {/* Primary action: prominent dashed add-button with inline picker.
+                Replaces old MenuCommandPalette modal-flow (Sam: "te onduidelijk"). */}
+            <div style={{ position: 'relative', marginTop: 12 }}>
+                <AddDishButton
+                    gangNaam={gang.naam}
+                    open={pickerOpen}
+                    onClick={() => setPickerOpen(o => !o)}
+                />
+                <InlinePicker
+                    open={pickerOpen}
+                    onClose={() => setPickerOpen(false)}
+                    gerechten={gerechten}
+                    gangSlug={gang.slug}
+                    gangNaam={gang.naam}
+                    excludeIds={new Set(items.map(it => it.gerecht_id))}
+                    onPick={(id) => onAddGerecht(id)}
+                    onCreateNew={onCreateNew}
+                />
+            </div>
+
+            {/* Secondary action: AI suggestion link — subtle, right-aligned */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                 <button
                     type="button"
                     onClick={onAi}
                     style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
-                        padding: '8px 12px', border: '1px solid rgba(196,163,90,.4)', borderRadius: 6,
-                        background: 'rgba(196,163,90,.06)', color: 'var(--brand, #c4a35a)', cursor: 'pointer',
+                        padding: '6px 10px', border: 'none', borderRadius: 6,
+                        background: 'transparent', color: 'var(--brand, #c4a35a)',
+                        cursor: 'pointer', fontSize: 12, fontWeight: 600,
                     }}
                 >
-                    <Sparkles size={14} /> Vraag AI om suggesties
+                    <Sparkles size={13} />Of vraag AI om suggesties
                 </button>
             </div>
 
@@ -900,5 +1091,447 @@ function btnSmall(primary: boolean): React.CSSProperties {
         fontSize: 12,
         fontWeight: primary ? 600 : 400,
     };
+}
+
+/* ─── Subcomponent: ComposerHero ────────────────────────────────────────
+   Warm BBQ-foto-band met Playfair-italic naam-input + meta.
+   Vervangt de oude top-bar inputs voor naam — biedt context-by-design. */
+
+function ComposerHero({
+    naam, aantalGasten, basisPrijs, onNaamChange, onAskAi, onToggleLibrary, libraryOpen,
+}: {
+    naam: string;
+    aantalGasten: number;
+    basisPrijs: number;
+    onNaamChange: (s: string) => void;
+    onAskAi?: () => void;
+    onToggleLibrary?: () => void;
+    libraryOpen?: boolean;
+}) {
+    return (
+        <div style={{ position: 'relative', overflow: 'hidden', flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
+            {/* Background photo */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: 'url(/menucomposer-hero.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center 40%',
+            }} />
+            {/* Horizontal scrim — text-zijde donkerder */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(95deg, rgba(10,10,12,.97) 0%, rgba(10,10,12,.86) 34%, rgba(12,10,8,.42) 100%)',
+            }} />
+            {/* Vertical scrim — bodem-fade */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(0deg, rgba(8,8,10,.7) 0%, transparent 60%)',
+            }} />
+            {/* Brand-tinted glow rechtsboven */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: 'radial-gradient(120% 90% at 88% 18%, rgba(196,163,90,.18), transparent 60%)',
+                pointerEvents: 'none',
+            }} />
+
+            <div style={{
+                position: 'relative', display: 'flex', alignItems: 'flex-end', gap: 16,
+                padding: '22px 24px', minHeight: 156,
+            }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Eyebrow */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                        <span style={{
+                            width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                            background: 'rgba(20,18,16,.6)', backdropFilter: 'blur(6px)',
+                            border: '1px solid rgba(196,163,90,.3)', color: '#c4a35a',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <ChefHat size={17} />
+                        </span>
+                        <span style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase',
+                            color: '#c4a35a',
+                        }}>Menukaart</span>
+                    </div>
+
+                    {/* Title — Playfair italic, editable */}
+                    <input
+                        type="text"
+                        value={naam}
+                        onChange={(e) => onNaamChange(e.target.value)}
+                        placeholder="Naam van de menukaart…"
+                        style={{
+                            fontFamily: 'var(--font-display, Georgia, serif)',
+                            fontStyle: 'italic', fontWeight: 600,
+                            color: 'var(--text, #fff)',
+                            fontSize: 34, lineHeight: 1.05, letterSpacing: '-.01em',
+                            textShadow: '0 2px 18px rgba(0,0,0,.5)',
+                            background: 'transparent', border: 'none', outline: 'none',
+                            width: '100%', padding: 0, display: 'block',
+                        }}
+                    />
+
+                    {/* Meta-row */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 12 }}>
+                        {aantalGasten > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'rgba(255,255,255,.78)' }}>
+                                <Users size={14} style={{ color: '#c4a35a' }} />
+                                {aantalGasten} {aantalGasten === 1 ? 'couvert' : 'couverts'}
+                            </span>
+                        )}
+                        {basisPrijs > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'rgba(255,255,255,.78)', fontVariantNumeric: 'tabular-nums' }}>
+                                <Wallet size={14} style={{ color: '#c4a35a' }} />
+                                €{basisPrijs.toFixed(2)} basis p.p.
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {onAskAi && (
+                        <button
+                            type="button"
+                            onClick={onAskAi}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                                background: 'linear-gradient(180deg, #c4a35a 0%, #9e781c 100%)',
+                                color: '#1a1a1e', border: 'none', fontSize: 13, fontWeight: 700,
+                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,.2), 0 2px 6px rgba(0,0,0,.3)',
+                            }}
+                        >
+                            <Sparkles size={15} />Vraag AI
+                        </button>
+                    )}
+                    {onToggleLibrary && (
+                        <button
+                            type="button"
+                            onClick={onToggleLibrary}
+                            title={libraryOpen ? 'Verberg library' : 'Toon library'}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                                background: 'rgba(20,18,16,.6)', backdropFilter: 'blur(8px)',
+                                color: 'rgba(255,255,255,.9)', border: '1px solid rgba(255,255,255,.15)',
+                                fontSize: 13, fontWeight: 600,
+                            }}
+                        >
+                            {libraryOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                            Library
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ─── Subcomponent: KpiStrip ────────────────────────────────────────────
+   4 KPI-tiles met menu-economics. Kleurt marge groen/oranje/rood.
+   Couvertprijs in brand-tint kaart om hem te accentueren. */
+
+function KpiStrip({ stats }: {
+    stats: { couvertprijs: number; margePct: number; margePp: number; gerechten: number; allergenen: number; gangenCount: number };
+}) {
+    const margeTone = stats.gerechten === 0
+        ? 'var(--muted)'
+        : stats.margePct >= 70 ? '#22c55e'
+            : stats.margePct >= 60 ? '#f59e0b'
+                : '#ef4444';
+    const TileLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' as const, color: 'var(--muted)' };
+    const TileValue = { fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-display, Georgia, serif)', marginTop: 4, lineHeight: 1.1 };
+    const TileSub = { fontSize: 11, color: 'var(--muted)', marginTop: 4 };
+
+    const Tile = ({ icon, label, value, sub, valueColor, accent }: {
+        icon: React.ReactNode;
+        label: string;
+        value: string;
+        sub: string;
+        valueColor?: string;
+        accent?: boolean;
+    }) => (
+        <div style={{
+            padding: '14px 16px', minHeight: 84,
+            border: '1px solid ' + (accent ? 'rgba(196,163,90,.3)' : 'var(--border)'),
+            borderRadius: 12,
+            background: accent ? 'rgba(196,163,90,.06)' : 'transparent',
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ color: accent ? '#c4a35a' : 'var(--muted)', display: 'inline-flex' }}>{icon}</span>
+                <span style={TileLabel}>{label}</span>
+            </div>
+            <div style={{ ...TileValue, color: valueColor || 'var(--text)' }}>{value}</div>
+            <div style={TileSub}>{sub}</div>
+        </div>
+    );
+
+    return (
+        <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 12, padding: '16px 20px 0',
+        }}>
+            <Tile icon={<Wallet size={13} />} label="Couvertprijs" value={'€' + stats.couvertprijs.toFixed(2)} sub="per persoon" valueColor="#c4a35a" accent />
+            <Tile icon={<TrendingUp size={13} />} label="Marge" value={stats.margePct + '%'} sub={'€' + stats.margePp.toFixed(2) + ' p.p.'} valueColor={margeTone} />
+            <Tile icon={<Utensils size={13} />} label="Gerechten" value={String(stats.gerechten)} sub={'over ' + stats.gangenCount + (stats.gangenCount === 1 ? ' gang' : ' gangen')} />
+            <Tile icon={<ShieldAlert size={13} />} label="Allergenen" value={String(stats.allergenen)} sub="soorten in menu" />
+        </div>
+    );
+}
+
+/* ─── Subcomponent: AddDishButton ────────────────────────────────────────
+   Prominent dashed-border button per gang — primaire toevoeg-affordance.
+   Opent een inline popover-picker direct onder de knop. */
+
+function AddDishButton({ gangNaam, open, onClick }: { gangNaam: string; open: boolean; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-expanded={open}
+            style={{
+                width: '100%', minHeight: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+                border: '1.5px dashed ' + (open ? 'var(--brand, #c4a35a)' : 'var(--border)'),
+                background: open ? 'rgba(196,163,90,.06)' : 'transparent',
+                color: open ? 'var(--brand, #c4a35a)' : 'var(--text)',
+                fontSize: 14, fontWeight: 700,
+                transition: 'border-color .15s, background .15s, color .15s',
+            }}
+            onMouseEnter={(e) => {
+                if (!open) {
+                    e.currentTarget.style.borderColor = 'var(--brand, #c4a35a)';
+                    e.currentTarget.style.background = 'rgba(196,163,90,.04)';
+                }
+            }}
+            onMouseLeave={(e) => {
+                if (!open) {
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.background = 'transparent';
+                }
+            }}
+        >
+            <Plus size={18} />
+            <span>Voeg gerecht toe aan {gangNaam}</span>
+        </button>
+    );
+}
+
+/* ─── Subcomponent: InlinePicker ─────────────────────────────────────────
+   Popover-style picker die direct onder de AddDishButton opent.
+   Vervangt de oude full-modal MenuCommandPalette (picker-mode) — Sam
+   omschreef de oude flow als "te onduidelijk". Search + dish-list +
+   footer (Nieuw gerecht link + Klaar). Picker blijft open na elke pick
+   zodat je in één flow meerdere gerechten toevoegt. */
+
+function InlinePicker({
+    open, onClose, gerechten, gangSlug, gangNaam, excludeIds, onPick, onCreateNew,
+}: {
+    open: boolean;
+    onClose: () => void;
+    gerechten: Gerecht[];
+    gangSlug: string;
+    gangNaam: string;
+    excludeIds: Set<string>;
+    onPick: (gerechtId: string) => void;
+    onCreateNew?: () => void;
+}) {
+    const [q, setQ] = useState('');
+    const inputRef = useRef<HTMLInputElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (open) {
+            /* Scroll de picker zelf in beeld zodat hij niet onder de viewport-rand
+               valt op pages met veel content boven de gang. Dan focus search-input. */
+            requestAnimationFrame(() => {
+                panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                inputRef.current?.focus({ preventScroll: true });
+            });
+        }
+        if (!open) setQ('');
+    }, [open]);
+
+    if (!open) return null;
+
+    const ql = q.trim().toLowerCase();
+    /* Filter: respecteer wizard-zichtbaarheid (default true) + sluit
+       al-toegevoegde uit. Eerst gerechten in deze gang.
+
+       Belangrijk: gang.slug uit de gangen-tabel kan "bites" zijn (plural)
+       terwijl gerecht.gang_slug ook "bites" is — maar getGangKey() normaliseert
+       beide naar "bite". Daarom normaliseren we BEIDE kanten zodat ze matchen. */
+    const targetKey = getGangKey({ gang_slug: gangSlug });
+    const available = gerechten.filter(g => {
+        if (g.is_in_wizard === false) return false;
+        if (excludeIds.has(String(g.id))) return false;
+        return true;
+    });
+    const inGang = available.filter(g => getGangKey(g) === targetKey);
+    const matched = ql ? inGang.filter(g => g.naam.toLowerCase().includes(ql)) : inGang;
+    const libraryEmpty = inGang.length === 0;
+
+    return (
+        <>
+            {/* Click-outside scrim — transparent, niet visueel */}
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+
+            <div
+                ref={panelRef}
+                role="dialog"
+                aria-label={'Voeg gerecht toe aan ' + gangNaam}
+                style={{
+                    position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, zIndex: 31,
+                    maxHeight: 380, display: 'flex', flexDirection: 'column',
+                    background: 'var(--card, var(--surface, #1e1e22))',
+                    border: '1px solid var(--border)', borderRadius: 14,
+                    boxShadow: '0 12px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04)',
+                    overflow: 'hidden',
+                }}
+            >
+                {/* Search header */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
+                    borderBottom: '1px solid var(--border)', flexShrink: 0,
+                }}>
+                    <Search size={16} style={{ color: 'var(--muted)' }} />
+                    <input
+                        ref={inputRef}
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        placeholder={'Zoek in ' + gangNaam.toLowerCase() + '…'}
+                        style={{
+                            flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                            color: 'var(--text)', fontSize: 14,
+                        }}
+                    />
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: libraryEmpty ? 0 : 8, minHeight: 0 }}>
+                    {libraryEmpty ? (
+                        <div style={{
+                            padding: '28px 20px', textAlign: 'center',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                        }}>
+                            <span style={{
+                                width: 44, height: 44, borderRadius: 12,
+                                background: 'rgba(196,163,90,.1)', color: 'var(--brand, #c4a35a)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <UtensilsCrossed size={22} />
+                            </span>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                                    Nog geen gerechten in &lsquo;{gangNaam}&rsquo;
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 260 }}>
+                                    Maak eerst een paar {gangNaam.toLowerCase()} aan, dan kun je ze hier kiezen.
+                                </div>
+                            </div>
+                            {onCreateNew && (
+                                <button
+                                    type="button"
+                                    onClick={onCreateNew}
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '7px 12px', borderRadius: 8, border: 'none',
+                                        background: 'var(--brand, #c4a35a)', color: '#1a1a1e',
+                                        fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 2,
+                                    }}
+                                >
+                                    <ArrowRight size={14} />Naar /gerechten
+                                </button>
+                            )}
+                        </div>
+                    ) : matched.length === 0 ? (
+                        <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
+                            Geen gerechten gevonden voor &ldquo;<span style={{ color: 'var(--text)' }}>{q}</span>&rdquo;.
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {matched.map(g => (
+                                <button
+                                    key={g.id}
+                                    type="button"
+                                    onClick={() => onPick(String(g.id))}
+                                    style={{
+                                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                        padding: '9px 12px', minHeight: 48,
+                                        border: '1px solid transparent', borderRadius: 10,
+                                        cursor: 'pointer', textAlign: 'left',
+                                        background: 'transparent', color: 'var(--text)',
+                                        transition: 'background .12s',
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(196,163,90,.06)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                    {g.foto_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={g.foto_url} alt="" style={{
+                                            width: 32, height: 32, borderRadius: 8, objectFit: 'cover',
+                                            border: '1px solid var(--border)', flexShrink: 0,
+                                        }} />
+                                    ) : (
+                                        <span style={{
+                                            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                                            background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                            color: 'var(--muted)', fontSize: 13, fontWeight: 600,
+                                        }}>{g.naam.charAt(0).toUpperCase()}</span>
+                                    )}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{
+                                            fontSize: 14, fontWeight: 500,
+                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                        }}>{g.naam}</div>
+                                    </div>
+                                    <span style={{
+                                        fontSize: 12, color: 'var(--muted)', flexShrink: 0,
+                                        fontVariantNumeric: 'tabular-nums',
+                                    }}>{fmtEuro(Number(g.verkoopprijs ?? g.prijs ?? 0))}</span>
+                                    <span style={{
+                                        width: 24, height: 24, borderRadius: 999, flexShrink: 0,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        border: '1.5px solid var(--border)', color: 'var(--muted)',
+                                    }}>
+                                        <Plus size={14} />
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    padding: '10px 14px', borderTop: '1px solid var(--border)', flexShrink: 0,
+                }}>
+                    {onCreateNew ? (
+                        <button
+                            type="button"
+                            onClick={onCreateNew}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                color: 'var(--brand, #c4a35a)', fontSize: 13, fontWeight: 600,
+                                padding: '6px 4px',
+                            }}
+                        >
+                            <Plus size={15} />Nieuw {gangNaam.toLowerCase()}
+                        </button>
+                    ) : <span />}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        style={{ ...btnSmall(false), minHeight: 36, padding: '6px 14px' }}
+                    >Klaar</button>
+                </div>
+            </div>
+        </>
+    );
 }
 
