@@ -238,7 +238,7 @@ export default function Mailbox() {
             <PageGuideNote
                 id="mailbox"
                 accent="#0ea5e9"
-                icon={Inbox}
+                icon={<Inbox size={14} />}
                 intro="Klant-mails versturen vanuit BBQ Architect zelf — met templates die je niet elke keer opnieuw hoeft te schrijven."
                 actions={[
                     { lead: 'Klik Nieuwe e-mail', text: 'om een mail te schrijven — kies een template of begin blanco.' },

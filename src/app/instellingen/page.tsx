@@ -122,7 +122,7 @@ export default function Instellingen() {
             <PageGuideNote
                 id="instellingen"
                 accent="#64748b"
-                icon={Settings}
+                icon={<Settings size={14} />}
                 intro="De basis-instellingen die overal in de app terugkomen — vul één keer goed in en je bent klaar."
                 actions={[
                     { lead: 'Bedrijfsgegevens', text: 'verschijnen op offertes, facturen en het klantenportaal — KvK en BTW horen hier ook.' },

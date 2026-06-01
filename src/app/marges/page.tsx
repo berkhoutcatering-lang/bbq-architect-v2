@@ -403,7 +403,7 @@ export default function MenuEngineering() {
       <PageGuideNote
         id="marges"
         accent="#22c55e"
-        icon={BarChart3}
+        icon={<BarChart3 size={14} />}
         intro="Hier zie je per gerecht en per gang welke verdiener is en welke geld kost — gebaseerd op je echte verkoop- en kostprijsdata."
         actions={[
           { lead: 'Bekijk de BCG-matrix', text: 'om te zien welke gerechten sterren zijn (hoge marge + populair) en welke honden (lage marge + onpopulair).' },

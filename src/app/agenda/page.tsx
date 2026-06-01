@@ -1360,7 +1360,7 @@ export default function Agenda() {
             <PageGuideNote
                 id="agenda"
                 accent="#FFBF00"
-                icon={Calendar}
+                icon={<Calendar size={14} />}
                 intro="Hier zie je in één oogopslag wat er in je maand staat — events en prep-deadlines naast elkaar."
                 actions={[
                     { lead: 'Klik op een event', text: 'om details te zien en direct door te springen naar de event-hub.' },

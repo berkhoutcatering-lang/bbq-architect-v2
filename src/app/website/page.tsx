@@ -111,7 +111,7 @@ export default function WebsiteBeheer() {
             <PageGuideNote
                 id="website"
                 accent="#22c55e"
-                icon={Globe}
+                icon={<Globe size={14} />}
                 intro="De content van je publieke website (hopbites.nl) regel je hier — wijzigingen zijn binnen 60 seconden live."
                 actions={[
                     { lead: 'Wissel tabbladen', text: '— Hero, Menu, Galerij, FAQ — om de juiste sectie van je website te bewerken.' },

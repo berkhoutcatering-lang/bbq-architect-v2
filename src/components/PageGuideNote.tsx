@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronUp, Compass, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Compass } from 'lucide-react';
 
 export interface GuideAction {
   /** Bold lead — bv. "Klik op een kaart" — en daarna komt de rest van de regel */
@@ -20,8 +20,10 @@ interface Props {
   actions: GuideAction[];
   /** Hex-accent voor border, eyebrow, icon-tile glow */
   accent: string;
-  /** Override-icon — default Compass */
-  icon?: LucideIcon;
+  /** Icon als ReactElement, bv. `<Settings size={14} />`. Component-references
+      (icon={Settings}) zijn function-refs en kunnen niet de SC→CC RSC-grens
+      over — vandaar ReactNode i.p.v. LucideIcon. Kleur komt via currentColor. */
+  icon?: ReactNode;
   /** Footer-element rechts (bv. een mini-stat, badge, link) */
   footer?: ReactNode;
 }
@@ -41,7 +43,7 @@ export default function PageGuideNote({
   intro,
   actions,
   accent,
-  icon: Icon = Compass,
+  icon = <Compass size={14} />,
   footer,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
@@ -110,6 +112,7 @@ export default function PageGuideNote({
             borderRadius: 8,
             background: `color-mix(in oklab, ${accent} 14%, var(--card))`,
             border: `1px solid color-mix(in oklab, ${accent} 30%, var(--border))`,
+            color: accent,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -117,7 +120,7 @@ export default function PageGuideNote({
             marginTop: 1,
           }}
         >
-          <Icon size={14} color={accent} />
+          {icon}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>

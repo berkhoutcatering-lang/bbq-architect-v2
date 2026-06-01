@@ -537,7 +537,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                 <PageGuideNote
                     id="voorraad"
                     accent="#84cc16"
-                    icon={Package}
+                    icon={<Package size={14} />}
                     intro="Real-time voorraadstand: wat heb je liggen, wat staat onder par-level, en wat moet binnen 3 dagen op?"
                     actions={[
                         { lead: 'Tellen of Scannen', text: 'om snel te updaten — handmatig of met je telefooncamera.' },

@@ -112,7 +112,7 @@ export default function AdministratieHub() {
       <PageGuideNote
         id="administratie"
         accent="#f59e0b"
-        icon={BarChart3}
+        icon={<BarChart3 size={14} />}
         intro="Het verzamelpunt voor alles wat administratief is — kies hieronder de hub die je nodig hebt."
         actions={[
           { lead: 'Financiën', text: 'voor je live P&V, BTW en top-klanten — gevoed door je events en facturen.' },

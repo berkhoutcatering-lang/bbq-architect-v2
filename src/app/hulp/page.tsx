@@ -223,7 +223,7 @@ export default function HelpCenter() {
       <PageGuideNote
         id="hulp"
         accent="#f59e0b"
-        icon={HelpCircle}
+        icon={<HelpCircle size={14} />}
         intro="Loop je vast? Hier vind je korte uitleg-artikelen per hub, en als dat niet helpt: direct contact."
         actions={[
           { lead: 'Zoek in artikelen', text: 'op een woord uit je probleem — werkt sneller dan door categorieën klikken.' },

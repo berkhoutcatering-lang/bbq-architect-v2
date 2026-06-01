@@ -154,7 +154,7 @@ export default function UrenPage() {
         <PageGuideNote
           id="uren"
           accent="#c4a35a"
-          icon={Clock}
+          icon={<Clock size={14} />}
           intro="Klok jezelf en je team in — handmatig of met de stop-klok — en zie direct wie waar wat doet."
           actions={[
             { lead: 'Druk de groene knop om te starten', text: '— de timer loopt door tot je stopt, ook als je uitlogt.' },

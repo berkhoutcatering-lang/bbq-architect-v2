@@ -92,7 +92,7 @@ export default function RittenregistratieClient() {
       <PageGuideNote
         id="rittenregistratie"
         accent="#64748b"
-        icon={Car}
+        icon={<Car size={14} />}
         intro="Sluitende kilometeradministratie voor de Belastingdienst — €0,23 per zakelijke kilometer (2026)."
         actions={[
           { lead: 'Voeg een rit toe', text: 'na elk event — datum, start, eind, doel en aantal kilometers.' },

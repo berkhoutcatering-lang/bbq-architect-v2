@@ -117,7 +117,7 @@ export default function PersoneelPage() {
         <PageGuideNote
           id="uren-personeel"
           accent="#c4a35a"
-          icon={Users}
+          icon={<Users size={14} />}
           intro="Hier beheer je iedereen die voor jou werkt. Crew-leden verschijnen automatisch op de Klok-tab zodat je ze kunt inklokken."
           actions={[
             { lead: 'Voeg ook gast-koks of freelancers toe', text: '— ze hoeven geen login te hebben.' },

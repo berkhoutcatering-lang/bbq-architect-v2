@@ -50,7 +50,7 @@ export default function Events() {
             <PageGuideNote
                 id="events"
                 accent="#ec4899"
-                icon={PartyPopper}
+                icon={<PartyPopper size={14} />}
                 intro="Hier maak je nieuwe events aan en zie je alle lopende — van offerte-aanvraag tot service en reflectie."
                 actions={[
                     { lead: 'Nieuw event', text: 'rechtsboven start een leeg event en springt meteen naar de event-hub waar je alles invult.' },

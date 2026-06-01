@@ -1,9 +1,3 @@
-'use client';
-
-/* Tiny wrapper zodat de Settings-icon-prop binnen een client-context blijft.
-   Server Components mogen geen function-references (zoals lucide-react icons)
-   doorgeven aan client components — die zou serialization breken. */
-
 import { Settings } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 
@@ -12,7 +6,7 @@ export default function SysteemGuide() {
         <PageGuideNote
             id="systeem"
             accent="#64748b"
-            icon={Settings}
+            icon={<Settings size={14} />}
             intro="Het bouwbord van de app — alles wat je 1× instelt en daarna nooit meer aanraakt staat hier."
             actions={[
                 { lead: 'Instellingen', text: 'voor je bedrijfsgegevens, logo en huisstijl die overal terugkomen op offertes en facturen.' },

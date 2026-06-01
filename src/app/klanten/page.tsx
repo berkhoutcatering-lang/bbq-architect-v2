@@ -402,7 +402,7 @@ function Klanten() {
             <PageGuideNote
                 id="klanten"
                 accent="#3b82f6"
-                icon={Users}
+                icon={<Users size={14} />}
                 intro="Je hele klantenbestand op één plek — particulier, zakelijk, festival en horeca naast elkaar."
                 actions={[
                     { lead: 'Klik op een klant', text: 'om historie, contactgegevens en gekoppelde events en offertes te zien.' },

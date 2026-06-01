@@ -211,7 +211,7 @@ export default function IntegratiesPage() {
       <PageGuideNote
         id="integraties"
         accent="#6366f1"
-        icon={SettingsIcon}
+        icon={<SettingsIcon size={14} />}
         intro="Koppel BBQ Architect aan de tools die je toch al gebruikt — eenmalig autoriseren, daarna loopt het op de achtergrond."
         actions={[
           { lead: 'Klik een integratie open', text: 'om te zien hoe je hem koppelt — meestal 1 knop en een redirect terug.' },

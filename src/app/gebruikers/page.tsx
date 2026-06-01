@@ -85,7 +85,7 @@ export default function Gebruikers() {
             <PageGuideNote
                 id="gebruikers"
                 accent="#a78bfa"
-                icon={Users}
+                icon={<Users size={14} />}
                 intro="Wie heeft toegang tot deze BBQ Architect-omgeving? Hier nodig je teamleden uit en geef je ze de juiste rol."
                 actions={[
                     { lead: 'Klik Uitnodigen', text: 'om een teamlid via e-mail toegang te geven — alleen admins kunnen dit.' },
