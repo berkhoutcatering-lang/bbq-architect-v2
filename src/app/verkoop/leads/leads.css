@@ -1,0 +1,44 @@
+/* ── /verkoop/leads — scoped helpers voor de design-port (handoff-zip 3) ────
+   De meeste tokens (--card-solid/--brand/--brand-gold/--shadow-card/…) bestaan
+   al in globals.css. Hier alleen wat ontbrak: 2 vars + een paar helper-classes
+   + keyframes. Uniek geprefixt (lead-*) zodat niks app-breed botst. */
+
+.leads-root {
+  --gold-gradient: linear-gradient(135deg, #FFCF33 0%, #c4a35a 100%);
+  --lampion-glow: radial-gradient(circle at 50% 0%, rgba(255,191,0,.12), transparent 70%);
+}
+
+/* uppercase eyebrow-label (verving van ds-eyebrow) */
+.lead-eyebrow {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); line-height: 1;
+}
+
+/* "Premium"-badge in de AI-concept-kop */
+.lead-prem-badge {
+  display: inline-flex; align-items: center; border-radius: 999px;
+  background: var(--brand-tint); color: var(--brand-gold, var(--brand));
+  border: 1px solid var(--brand-tint-border, var(--border));
+  font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* skeleton shimmer (loading) */
+.lead-skel {
+  background: linear-gradient(90deg, var(--card-solid) 25%, var(--bg-deep, var(--bg)) 37%, var(--card-solid) 63%);
+  background-size: 400% 100%; animation: lead-shimmer 1.4s ease infinite;
+}
+@keyframes lead-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+@keyframes lead-spin { to { transform: rotate(360deg); } }
+@keyframes lead-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lead-slide { from { transform: translateX(24px); opacity: .4; } to { transform: translateX(0); opacity: 1; } }
+
+.lead-drawer-scrim { animation: lead-fade .15s ease; }
+.lead-drawer-panel { animation: lead-slide .26s cubic-bezier(.2,.8,.2,1); }
+.lead-spin { animation: lead-spin 1s linear infinite; display: inline-flex; }
+
+/* lijst: verberg secundaire kolommen op smal scherm */
+@media (max-width: 640px) {
+  .leads-cell-hide-sm { display: none !important; }
+  .leads-list-head, .leads-list-row { grid-template-columns: 1fr 110px !important; }
+}

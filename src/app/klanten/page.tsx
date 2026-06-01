@@ -2,6 +2,8 @@
 'use client';
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { entityHref } from '@/lib/related-entities';
+import { formatEur } from '@/lib/format';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -207,7 +209,7 @@ function Klanten() {
         });
     }
 
-    const fmt = (n: number) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n);
+    const fmt = (n: number) => formatEur(n);  // gedeelde canon (src/lib/format.ts) — 2 decimalen NL-stijl
 
     if (editing !== null && form) {
         const stats = klantStats[form.naam];
@@ -299,13 +301,15 @@ function Klanten() {
                                     {stats.eventList.slice(0, 5).map(function (ev: any) {
                                         const statusColor = ev.status === 'confirmed' ? 'var(--emerald)' : ev.status === 'completed' ? 'var(--blue)' : 'var(--amber)';
                                         return (
-                                            <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                            <Link key={ev.id} href={entityHref('event', ev.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 8px', margin: '0 -8px', borderRadius: 8, borderBottom: '1px solid var(--border)', fontSize: 12, color: 'inherit', textDecoration: 'none', cursor: 'pointer', transition: 'background .12s' }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover, rgba(255,255,255,.04))'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                                                 <span>{ev.name} <span style={{ color: 'var(--muted)' }}>— {ev.date}</span></span>
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                     <span>{ev.guests}p</span>
                                                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }}></span>
                                                 </span>
-                                            </div>
+                                            </Link>
                                         );
                                     })}
                                 </div>
@@ -318,10 +322,12 @@ function Klanten() {
                                         let totaal = 0;
                                         (o.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
                                         return (
-                                            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                            <Link key={o.id} href={entityHref('offerte', o.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 8px', margin: '0 -8px', borderRadius: 8, borderBottom: '1px solid var(--border)', fontSize: 12, color: 'inherit', textDecoration: 'none', cursor: 'pointer', transition: 'background .12s' }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover, rgba(255,255,255,.04))'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                                                 <span>{o.nummer} <span style={{ color: 'var(--muted)' }}>— {o.datum}</span></span>
                                                 <span style={{ fontWeight: 600 }}>{fmt(totaal)}</span>
-                                            </div>
+                                            </Link>
                                         );
                                     })}
                                 </div>
@@ -335,13 +341,15 @@ function Klanten() {
                                         (f.items || []).forEach(function (i: any) { totaal += (i.qty || 0) * (i.prijs || 0); });
                                         const statusColor = f.status === 'betaald' ? 'var(--emerald)' : f.status === 'vervallen' ? 'var(--red)' : 'var(--amber)';
                                         return (
-                                            <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                            <Link key={f.id} href={entityHref('factuur', f.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 8px', margin: '0 -8px', borderRadius: 8, borderBottom: '1px solid var(--border)', fontSize: 12, color: 'inherit', textDecoration: 'none', cursor: 'pointer', transition: 'background .12s' }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover, rgba(255,255,255,.04))'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                                                 <span>{f.nummer} <span style={{ color: 'var(--muted)' }}>— {f.datum}</span></span>
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                     <span style={{ fontWeight: 600 }}>{fmt(totaal)}</span>
                                                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }}></span>
                                                 </span>
-                                            </div>
+                                            </Link>
                                         );
                                     })}
                                 </div>

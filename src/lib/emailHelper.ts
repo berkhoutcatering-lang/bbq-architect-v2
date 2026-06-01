@@ -69,7 +69,11 @@ export async function mailOfferte(offerte: any, bedrijfsnaam: string, brandColor
   let subtotaal = 0;
   items.forEach(function (item: any) { subtotaal += (item.qty || 0) * (item.prijs || 0); });
 
-  const acceptUrl = typeof window !== 'undefined' ? window.location.origin + '/q/' + offerte.id : '';
+  /* KRITIEK: portal /q/[id] zoekt op public_token (UUID), niet op offerte.id
+     (integer). Een link met de integer-id geeft de klant een 404. Gebruik
+     public_token; val alleen terug op id als de token écht ontbreekt (legacy). */
+  const portalSlug = offerte.public_token || offerte.id;
+  const acceptUrl = typeof window !== 'undefined' ? window.location.origin + '/q/' + portalSlug : '';
 
   const html = wrapHtml(`
     <p>Beste ${escH(offerte.client_naam || 'klant')},</p>

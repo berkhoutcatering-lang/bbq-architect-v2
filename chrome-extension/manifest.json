@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BBQ Architect — Catalogus Scanner",
-  "version": "0.5.1",
+  "version": "0.6.4",
   "description": "Universele catalogus-scanner — JSON-LD, platform-detectie, Claude HTML-analyse en vision. Werkt op elke webshop zonder per-site configuratie. Stuurt producten + prijzen direct naar BBQ Architect.",
   "permissions": [
     "storage",

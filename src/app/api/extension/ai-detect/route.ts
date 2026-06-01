@@ -72,6 +72,8 @@ SELECTORS — KRITIEKE INSTRUCTIES:
 
 KRITIEKE REGELS — niet bezuinigen, niet samenvatten:
 - Bij een productlijst-pagina (category/listing): return ALLE producten uit de HOOFDLIJST. Als de hoofdlijst 24 producten toont, return 24. Niet 6. Niet "top items".
+- HYBRIDE PAGINA's (subcategorie-cards bovenaan + productgrid eronder, bv. Bidfood, Hanos): vul ALTIJD BEIDE category_links EN producten in. De aanwezigheid van categorie-cards betekent NIET dat je de producten kunt overslaan — return élk product onder de hoofdgrid, plus de categorie-URLs erbij.
+- ZOEK SPECIFIEK naar de element met de MEESTE producten (typisch 12-48 op een lijstpagina). Negeer kleine carousels met 3-6 items (die zijn meestal "Nu in het seizoen" of "Featured").
 - Bij een product-detail pagina: return ALLEEN dat ene hoofdproduct, GEEN "vaak samen gekocht", GEEN "klanten kochten ook", GEEN "andere bekeken ook".
 - Elke variant (kleur, maat, smaak) = aparte regel als die als apart product is gelinkt.
 - "Vanaf €" of "From €"-prijzen tellen mee — gebruik de zichtbare laagste.

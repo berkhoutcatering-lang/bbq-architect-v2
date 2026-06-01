@@ -4,6 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
 import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
+import { useActiveResource, type ActiveResourceKind } from '@/lib/ActiveResourceContext';
+
+/* Welke detail-route hoort bij welke active-resource-kind — zodat de breadcrumb
+   de entiteit-naam ("Bruiloft Veldhoven") toont i.p.v. de kale id-segmenten
+   ("11 > View"). Alleen op detail-routes (sub-pages), niet op de lijst. */
+const KIND_BASEPATH: Record<ActiveResourceKind, string> = {
+  event: '/events',
+  offerte: '/offertes',
+  klant: '/klanten',
+  klantgesprek: '/klantgesprek',
+};
 
 /* Sub-routes voor /gerechten/* worden onderaan in subRouteLabels gemapt
    zodat de breadcrumb-tail leesbaar is ("Allergenen" i.p.v. "Allergen queue"). */
@@ -52,6 +63,7 @@ const subRouteLabels: Record<string, string> = {
 
 export default function Breadcrumbs() {
     const pathname = usePathname();
+    const { active } = useActiveResource();
 
     if (pathname === '/') return null;
 
@@ -99,6 +111,14 @@ export default function Breadcrumbs() {
     const sectionSlug = getSectionSlugByTitle(route.section);
     const isSubPage = pathname !== basePath;
     const subSegments = pathname.split('/').filter(Boolean).slice(1);
+
+    /* Entity-breadcrumb: op een detail-route waar de active-resource matcht met
+       deze sectie, tonen we de entiteit-naam ("Bruiloft Veldhoven") als laatste
+       crumb i.p.v. de kale id/segment-tail. Maakt detail-pagina's onderdeel van
+       het ecosysteem-pad i.p.v. losse "11 > View"-eilanden. */
+    const entityCrumb = (active && isSubPage && KIND_BASEPATH[active.kind] === basePath)
+        ? active.label
+        : null;
 
     return (
         <nav
@@ -148,7 +168,15 @@ export default function Breadcrumbs() {
             ) : (
                 <span style={{ color: 'var(--text)', fontWeight: 600 }}>{route.label}</span>
             )}
-            {isSubPage && subSegments.map(function (seg, i) {
+            {isSubPage && entityCrumb ? (
+                /* Entiteit-naam i.p.v. id-segmenten ("11 > View" → "hopp") */
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ChevronRight size={11} style={{ opacity: 0.4 }} />
+                    <span style={{ color: 'var(--text)', fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {entityCrumb}
+                    </span>
+                </span>
+            ) : isSubPage && subSegments.map(function (seg, i) {
                 // Lookup explicit label, fallback op auto-formatted slug
                 const label = subRouteLabels[seg]
                     ?? seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');

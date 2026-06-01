@@ -32,7 +32,10 @@ export interface WorkflowParams {
 }
 
 export interface WorkflowResult {
-    factuur: { success: boolean; message: string };
+    /* factuur.factuurId aanwezig wanneer succesvol aangemaakt of bestond-al;
+       null bij echte failure. Caller kan dit gebruiken om de factuur-row direct
+       te referencen (mailen, payment-link, etc.) zonder een tweede DB-roundtrip. */
+    factuur: { success: boolean; message: string; factuurId: number | null };
     prep: { success: boolean; message: string; count: number };
     inkoop: { success: boolean; message: string };
     haccp: { success: boolean; message: string; count: number };
@@ -73,22 +76,26 @@ async function syncEventMenuFromOfferte(supabase: Supa, params: WorkflowParams):
 }
 
 // ── 1. Auto-create factuur ──
-async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string }> {
+async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; factuurId: number | null }> {
     try {
-        if (!supabase) return { success: false, message: 'Geen database verbinding' };
+        if (!supabase) return { success: false, message: 'Geen database verbinding', factuurId: null };
 
         /* Dedupe primair op offerte_id (FK + UNIQUE-index, migratie 007).
            Fallback op (client_naam + JSON-items) voor legacy facturen die
            zonder FK werden aangemaakt. Doel: nooit dubbele factuur per
            offerte, ook als migratie nog niet draait. */
         let alreadyExists = false;
+        let existingFactuurId: number | null = null;
         if (params.offerteId) {
             const { data } = await supabase
                 .from('facturen')
                 .select('id')
                 .eq('offerte_id', params.offerteId)
                 .limit(1);
-            if (data && data.length > 0) alreadyExists = true;
+            if (data && data.length > 0) {
+                alreadyExists = true;
+                existingFactuurId = (data[0] as { id: number }).id;
+            }
         }
         if (!alreadyExists) {
             const { data: existing } = await supabase
@@ -99,6 +106,7 @@ async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promis
                 .limit(1);
             if (existing && existing.length > 0) {
                 alreadyExists = true;
+                existingFactuurId = (existing[0] as { id: number }).id;
                 /* Upgrade-pad: bestaande factuur heeft nog geen FK → vul aan
                    zodat downstream queries (event-overzicht, factuur-status
                    per offerte) werken. Voorkomt dat backfill nodig blijft. */
@@ -114,7 +122,7 @@ async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promis
             }
         }
         if (alreadyExists) {
-            return { success: true, message: 'Factuur bestond al' };
+            return { success: true, message: 'Factuur bestond al', factuurId: existingFactuurId };
         }
 
         const betaaltermijn = (params.settings && params.settings.betaaltermijn) || 14;
@@ -124,33 +132,45 @@ async function autoCreateFactuur(supabase: Supa, params: WorkflowParams): Promis
         /* offerte_id + event_id zijn nullable in DB — werkt zowel pre- als
            post-migratie. Pre-migratie gooit Postgres een column-not-found
            als de kolom nog niet bestaat; we vangen dat door zonder FK te
-           retry-en zodat user-flow nooit blokkeert. */
+           retry-en zodat user-flow nooit blokkeert.
+
+           Cruciaal: we vragen `.select('id')` aan zodat de caller de net
+           aangemaakte factuur-id terug krijgt — die wordt gebruikt om de
+           factuur-mail te triggeren (Golden Flow P0). */
+        /* NB: facturen-tabel heeft GEEN client_email kolom (klant-email leeft in
+           de klanten-tabel). organization_id + offerte_id + event_id zijn de enige
+           FK-velden. Voeg client_email hier NIET toe — dat brak eerder de insert. */
         const insertWithFk = {
             nummer,
             status: 'concept',
             client_naam: params.offerteData.client_naam || '',
             client_adres: params.offerteData.client_adres || '',
+            organization_id: params.offerteData.organization_id || null,
             datum: today(),
             vervaldatum: addDays(today(), betaaltermijn),
             items: params.offerteData.items || [],
             offerte_id: params.offerteId || null,
             event_id: params.eventId || null,
         };
-        let { error } = await supabase.from('facturen').insert(insertWithFk);
+        let inserted = await supabase.from('facturen').insert(insertWithFk).select('id').single();
+        let { error } = inserted;
+        let factuurId: number | null = inserted.data ? (inserted.data as { id: number }).id : null;
 
         if (error && /column .* does not exist/i.test(error.message)) {
-            /* Migratie 007 nog niet gedraaid — retry zonder FKs zodat oudere
-               omgevingen blijven werken. */
+            /* Migratie 007 (offerte_id/event_id FK) of organization_id nog niet
+               aanwezig — retry zonder die kolommen zodat oudere omgevingen
+               blijven werken. */
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { offerte_id, event_id, ...withoutFk } = insertWithFk;
-            const retry = await supabase.from('facturen').insert(withoutFk);
+            const { offerte_id, event_id, organization_id, ...withoutFk } = insertWithFk;
+            const retry = await supabase.from('facturen').insert(withoutFk).select('id').single();
             error = retry.error;
+            factuurId = retry.data ? (retry.data as { id: number }).id : null;
         }
 
-        if (error) return { success: false, message: 'Factuur fout: ' + error.message };
-        return { success: true, message: 'Factuur ' + nummer + ' aangemaakt' };
+        if (error) return { success: false, message: 'Factuur fout: ' + error.message, factuurId: null };
+        return { success: true, message: 'Factuur ' + nummer + ' aangemaakt', factuurId };
     } catch (e: any) {
-        return { success: false, message: 'Factuur fout: ' + (e.message || '') };
+        return { success: false, message: 'Factuur fout: ' + (e.message || ''), factuurId: null };
     }
 }
 
@@ -348,7 +368,8 @@ async function autoCreateHaccpTemplates(supabase: Supa, params: WorkflowParams):
                 temp: 0,
                 type: 'ontvangst',
                 status: 'ok',
-                notitie: 'Automatisch aangemaakt bij offerte-acceptatie'
+                auto_logged: true,
+                notitie: 'Automatisch aangemaakt bij offerte-acceptatie — bevestig de echte temperatuur'
             });
             records.push({
                 event_id: params.eventId,
@@ -358,7 +379,8 @@ async function autoCreateHaccpTemplates(supabase: Supa, params: WorkflowParams):
                 temp: 0,
                 type: 'bereiding',
                 status: 'ok',
-                notitie: 'Automatisch aangemaakt bij offerte-acceptatie'
+                auto_logged: true,
+                notitie: 'Automatisch aangemaakt bij offerte-acceptatie — bevestig de echte temperatuur'
             });
             records.push({
                 event_id: params.eventId,
@@ -368,7 +390,8 @@ async function autoCreateHaccpTemplates(supabase: Supa, params: WorkflowParams):
                 temp: 0,
                 type: 'uitgifte',
                 status: 'ok',
-                notitie: 'Automatisch aangemaakt bij offerte-acceptatie'
+                auto_logged: true,
+                notitie: 'Automatisch aangemaakt bij offerte-acceptatie — bevestig de echte temperatuur'
             });
         });
 
@@ -487,13 +510,28 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
 
         for (const cat of COURSE_CATEGORIES) {
             const allKeys = [cat.key, ...cat.aliases];
-            let dishes: string[] = [];
+            let rawDishes: unknown[] = [];
             for (const k of allKeys) {
                 if (Array.isArray(menuSel[k]) && menuSel[k].length > 0) {
-                    dishes = menuSel[k] as string[];
+                    rawDishes = menuSel[k] as unknown[];
                     break;
                 }
             }
+            if (rawDishes.length === 0) continue;
+
+            /* Menu_selectie heeft twee shapes: string[] (oude wizard) of
+               object[] ({naam|gerecht_naam, beschrijving, allergenen} — nieuwe
+               wizard / portal-design). Normaliseer naar plain dish-name strings
+               zodat downstream (mise-aggregatie, gerecht-koppeling) nooit op een
+               object .trim()/.toLowerCase() aanroept. */
+            const dishes: string[] = rawDishes.map(function (d) {
+                if (typeof d === 'string') return d;
+                if (d && typeof d === 'object') {
+                    const obj = d as Record<string, unknown>;
+                    return String(obj.naam || obj.gerecht_naam || '');
+                }
+                return '';
+            }).filter(function (s) { return s.length > 0; });
             if (dishes.length === 0) continue;
 
             /* Dedupe: als deze exacte dish-list al in een eerdere course staat, sla over. */
@@ -536,13 +574,27 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
             return { success: true, message: 'Menu leeg — courses overgeslagen', count: 0 };
         }
 
-        const { error } = await supabase.from('courses').insert(courseRows);
+        let { error } = await supabase.from('courses').insert(courseRows);
         if (error) {
             /* Pre-migratie 009 — courses-tabel bestaat niet. Niet-fataal: workflow gaat door. */
             if (/relation .* does not exist/i.test(error.message)) {
                 return { success: false, message: 'Courses-tabel ontbreekt (migratie 009 nog niet gedraaid)', count: 0 };
             }
-            return { success: false, message: 'Courses fout: ' + error.message, count: 0 };
+            /* Optionele kolom ontbreekt (bv gerecht_id — P0-3 coupling-migratie nog
+               niet gedraaid). Strip de optionele velden en retry zodat de
+               kern-courses (titel/menu/portions) toch worden aangemaakt. */
+            if (/Could not find the '(\w+)' column|column "?\w+"? .* does not exist/i.test(error.message)) {
+                const stripped = courseRows.map(function (row) {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    const { gerecht_id, ...rest } = row;
+                    return rest;
+                });
+                const retry = await supabase.from('courses').insert(stripped);
+                error = retry.error;
+            }
+            if (error) {
+                return { success: false, message: 'Courses fout: ' + error.message, count: 0 };
+            }
         }
 
         return { success: true, message: courseRows.length + ' gangen aangemaakt vanuit menu', count: courseRows.length };
@@ -738,7 +790,7 @@ export async function runAcceptanceWorkflow(
         autoGenerateLogisticsChecklist(supabase, params),
     ]);
 
-    const factuurResult = results[0].status === 'fulfilled' ? results[0].value : { success: false, message: 'Factuur onverwachte fout' };
+    const factuurResult = results[0].status === 'fulfilled' ? results[0].value : { success: false, message: 'Factuur onverwachte fout', factuurId: null };
     const prepResult = results[1].status === 'fulfilled' ? results[1].value : { success: false, message: 'Prep onverwachte fout', count: 0 };
     const inkoopResult = results[2].status === 'fulfilled' ? results[2].value : { success: false, message: 'Inkoop onverwachte fout' };
     const haccpResult = results[3].status === 'fulfilled' ? results[3].value : { success: false, message: 'HACCP onverwachte fout', count: 0 };

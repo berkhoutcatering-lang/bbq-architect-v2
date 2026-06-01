@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const crs = useSupabase<DbCourse>('courses', []);
   const ealg = useSupabase<DbEventAllergy>('event_allergies', []);
   const ma = useSupabase<MargeAlert>('marge_alerts', []);
+  const lds = useSupabase<{ id: number; naam: string; status: string; created_at: string; follow_up_at: string | null }>('leads', []);
 
   const events: DbEvent[] = ev.data || [];
   const facturen: Factuur[] = fac.data || [];
@@ -487,6 +488,25 @@ export default function DashboardPage() {
   // Pillar 4 Vandaag-hub: elke kaart heeft een query-param zodat de target-page
   // direct focust op het juiste item. Geen losse /conflicts route.
   const attentionItems: AttentionItem[] = [];
+  /* Lead Funnel: aanvragen die op opvolging wachten (nieuw/in_gesprek met
+     verlopen follow_up_at, of > 2 dagen oud zonder opvolging). "Mis nooit een lead." */
+  const nowMs = Date.now();
+  const leadsFollowUp = (lds.data || []).filter((l) => {
+    if (l.status !== 'nieuw' && l.status !== 'in_gesprek') return false;
+    if (l.follow_up_at) return new Date(l.follow_up_at).getTime() <= nowMs;
+    return nowMs - new Date(l.created_at).getTime() > 2 * 24 * 60 * 60 * 1000;
+  });
+  if (leadsFollowUp.length > 0) {
+    attentionItems.push({
+      id: 'att-leads',
+      severity: 'medium',
+      icon: 'clock',
+      title: `${plural(leadsFollowUp.length, 'aanvraag', 'aanvragen')} wacht op opvolging`,
+      detail: leadsFollowUp.slice(0, 3).map((l) => l.naam).join(' · '),
+      cta: 'Open pijplijn',
+      href: '/verkoop/leads',
+    });
+  }
   if (lowStockItems.length > 0) {
     attentionItems.push({
       id: 'att-stock',

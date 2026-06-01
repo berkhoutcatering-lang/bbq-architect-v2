@@ -27,9 +27,11 @@ import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
+import { mapOfferteToEventStatus, isOfferteAccepted } from '@/lib/statuses';
 import { calcOfferteMarge } from '@/lib/costCalculations';
 import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles, Palette } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
+import { linkLeadToOfferte } from '@/app/verkoop/leads/actions';
 import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
 import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
@@ -185,7 +187,7 @@ export default function Offertes() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setEditing('new');
-        setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
+        setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
     }
 
     /* Template-picker logica — "Nieuwe offerte" opent een keuze.
@@ -236,8 +238,6 @@ export default function Offertes() {
         const qid = parseInt(String(quoteId), 10);
         if (isNaN(qid)) return null;
 
-        const newStatus = quoteData.status;
-
         let totalBedrag = 0;
         let estimatedGuests = quoteData.aantal_gasten || 0;
         (quoteData.items || []).forEach(function (item) {
@@ -246,14 +246,15 @@ export default function Offertes() {
         });
         const ppp = estimatedGuests > 0 ? totalBedrag / estimatedGuests : 45;
 
-        let eventStatus: string;
-        if (newStatus === 'geaccepteerd' || newStatus === 'akkoord' || newStatus === 'betaald') {
-            eventStatus = 'confirmed';
-        } else if (newStatus === 'afgewezen' || newStatus === 'verlopen') {
-            eventStatus = '__DELETE__';
-        } else {
-            eventStatus = 'optie';
+        /* Canonical mapping via src/lib/statuses.ts — handelt aliases
+           (akkoord/goedgekeurd → geaccepteerd, geannuleerd → afgewezen)
+           en orphan-cleanup ('DELETE') uniform af. */
+        const syncAction = mapOfferteToEventStatus(quoteData.status);
+        if (syncAction === null) {
+            /* Status niet relevant voor event-sync (bv. onbekende legacy waarde). */
+            return null;
         }
+        const eventStatus: string = syncAction === 'DELETE' ? '__DELETE__' : syncAction;
 
         try {
             const res = await supabase.from('events').select('id, status, name').eq('offerte_id', qid);
@@ -329,8 +330,9 @@ export default function Offertes() {
     }
 
     async function triggerWorkflowIfAccepted(eventId: number | null, formData: Record<string, any>) {
-        const isAccepted = formData.status === 'geaccepteerd' || formData.status === 'akkoord' || formData.status === 'betaald';
-        if (!isAccepted || !eventId) return;
+        /* Canonical accept-check via statuses.ts — accepteert ook legacy
+           aliases 'akkoord' en 'goedgekeurd'. */
+        if (!isOfferteAccepted(formData.status) || !eventId) return;
 
         // Show SyncCascade visual feedback
         setCascadeSteps([
@@ -352,26 +354,44 @@ export default function Offertes() {
                 facturenNummers: facturen.data.map((f) => f.nummer)
             });
 
+            /* Deep-links naar de NET aangemaakte entiteiten — niet generiek
+               /facturen maar /facturen?focus=<id>, niet /events maar
+               /events/<id>/hub. Dit is het "wat-is-net-gemaakt"-weefsel:
+               de operator springt direct naar wat de workflow zojuist maakte. */
+            const factuurHref = result.factuur.factuurId
+                ? `/facturen?focus=${result.factuur.factuurId}`
+                : '/facturen';
+            const eventHref = eventId ? `/events/${eventId}/hub` : '/events';
+
             // Update cascade steps progressively
             setCascadeSteps(function (prev) {
                 if (!prev) return prev;
                 return prev.map(function (s) {
-                    if (s.id === 'event') return { ...s, status: 'completed' as const, href: '/events' };
-                    if (s.id === 'factuur') return { ...s, status: result.factuur.success ? 'completed' as const : 'error' as const, detail: result.factuur.message, href: '/facturen' };
-                    if (s.id === 'prep') return { ...s, status: result.prep.success ? 'completed' as const : 'error' as const, detail: result.prep.message, href: '/agenda' };
+                    if (s.id === 'event') return { ...s, status: 'completed' as const, href: eventHref };
+                    if (s.id === 'factuur') return { ...s, status: result.factuur.success ? 'completed' as const : 'error' as const, detail: result.factuur.message, href: factuurHref };
+                    if (s.id === 'prep') return { ...s, status: result.prep.success ? 'completed' as const : 'error' as const, detail: result.prep.message, href: eventHref };
                     if (s.id === 'inkoop') return { ...s, status: result.inkoop.success ? 'completed' as const : 'error' as const, detail: result.inkoop.message, href: '/inkoop' };
-                    if (s.id === 'courses') return { ...s, status: result.courses.success ? 'completed' as const : 'error' as const, detail: result.courses.message, href: '/events' };
+                    if (s.id === 'courses') return { ...s, status: result.courses.success ? 'completed' as const : 'error' as const, detail: result.courses.message, href: eventHref };
                     return s;
                 });
             });
 
-            // Also show follow-up prompt after cascade
+            /* Toast met directe deep-link naar de nieuwe factuur — meteen zichtbaar,
+               niet pas na de 3s-cascade. */
+            if (result.factuur.success && result.factuur.factuurId) {
+                const fNum = /aangemaakt/i.test(result.factuur.message)
+                    ? result.factuur.message.replace(/^Factuur\s*/i, '').replace(/\s*aangemaakt.*$/i, '')
+                    : '';
+                showToast('✓ Factuur ' + (fNum ? fNum + ' ' : '') + 'aangemaakt — open via de groene knop', 'success');
+            }
+
+            // Also show follow-up prompt after cascade — met SPECIFIEKE deep-links
             setTimeout(function () {
                 setFollowUpTitle('Offerte geaccepteerd!');
                 setFollowUpActions([
-                    { icon: '🧾', label: 'Factuur bekijken', href: '/facturen' },
-                    { icon: '📋', label: 'Prep-taken bekijken', href: '/agenda' },
-                    { icon: '🍽️', label: 'Service-gangen aanvullen', href: '/events' },
+                    { icon: '🧾', label: 'Factuur bekijken', href: factuurHref },
+                    { icon: '📅', label: 'Event openen', href: eventHref },
+                    { icon: '📋', label: 'Prep-taken bekijken', href: eventHref },
                     { icon: '📧', label: 'Stuur bevestiging', onClick: function () { if (formData.client_email) { showToast('Bevestiging verstuurd', 'success'); } } },
                 ]);
             }, 3000);
@@ -527,10 +547,11 @@ export default function Offertes() {
                             label="Klantnaam"
                             value={form.client_naam}
                             onChange={function (v) { setField('client_naam', v); clearError('client_naam'); }}
-                            onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); }}
+                            onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); if ((k as { email?: string }).email) setField('client_email', (k as { email?: string }).email); }}
                             error={errors.client_naam}
                         />
                         <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
+                        <div className="field"><label>E-mail klant<FieldTooltip text="Hierheen sturen we de offerte-link, bevestiging en factuur. Zonder e-mail kan de klant geen automatische berichten ontvangen." /></label><input type="email" inputMode="email" autoComplete="email" placeholder="naam@voorbeeld.nl" value={form.client_email || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_email', e.target.value); }} /></div>
                         <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); clearError('datum'); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} /><FieldError message={errors.datum} fieldName="datum" /></div>
                         <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
                         <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
@@ -586,11 +607,20 @@ export default function Offertes() {
                         {(form.aantal_vega || 0) > 0 && <button className="btn btn-ghost btn-sm" onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega menukaart</button>}
                         {editing !== 'new' && (
                             <button className="btn btn-ghost btn-sm" onClick={function () {
-                                const link = window.location.origin + '/q/' + editing;
+                                /* KRITIEK: de portal /q/[id] zoekt op public_token, NIET op
+                                   offerte.id. Een link met de integer-id geeft 404 bij de klant.
+                                   public_token is een UUID (DB-default gen_random_uuid) en zit
+                                   in het geladen form-object. */
+                                const token = (form as { public_token?: string }).public_token;
+                                if (!token) {
+                                    showToast('Sla de offerte eerst op om een klant-link te maken', 'error');
+                                    return;
+                                }
+                                const link = window.location.origin + '/q/' + token;
                                 navigator.clipboard.writeText(link);
-                                showToast('Magic Link gekopieerd!', 'success');
-                            }} title="Kopieer een link die de klant kan openen om de offerte te bekijken">
-                                <LinkIcon size={14} /> Magic Link
+                                showToast('Klant-link gekopieerd! Plak deze in een mail of WhatsApp.', 'success');
+                            }} title="Kopieer een link die de klant kan openen om de offerte te bekijken, te ondertekenen en de aanbetaling te doen">
+                                <LinkIcon size={14} /> Klant-link
                             </button>
                         )}
                         {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green btn-sm" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Maak factuur</button>}
@@ -789,7 +819,20 @@ export default function Offertes() {
             <AiOfferteWizard
                 open={showAiWizard}
                 onClose={function () { setShowAiWizard(false); }}
-                onSaved={function (id) { showToast('✨ AI-offerte opgeslagen als concept', 'success'); loadOffertes(); void id; }}
+                onSaved={function (id) {
+                    showToast('✨ AI-offerte opgeslagen als concept', 'success');
+                    loadOffertes();
+                    /* Lead Funnel: als deze offerte uit een lead-conversie kwam,
+                       koppel de offerte terug aan de lead (FK + status 'offerte'). */
+                    try {
+                        const raw = localStorage.getItem('bbq_lead_convert');
+                        if (raw) {
+                            const conv = JSON.parse(raw) as { leadId?: number };
+                            if (conv?.leadId) void linkLeadToOfferte(Number(conv.leadId), id);
+                            localStorage.removeItem('bbq_lead_convert');
+                        }
+                    } catch { /* geen lead-conversie of localStorage onbeschikbaar */ }
+                }}
             />
             <PageHint id="offertes" title="Offertes" description="Maak offertes met menu-selectie en live marge-berekening. Geaccepteerde offertes genereren automatisch een event en factuur." />
             <div style={{

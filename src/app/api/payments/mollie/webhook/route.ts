@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
+import { mailPaymentOntvangen } from '@/lib/serverMail';
+import { resolveClientEmail } from '@/lib/resolveClientEmail';
 
 /*
  * Mollie payment webhook
@@ -110,6 +112,50 @@ export async function POST(req: NextRequest) {
                 }
             }
             console.info('[mollie-webhook] factuur', factuurId, '→', factuurStatus);
+
+            /* Payment-confirmation email — alleen bij 'paid', niet bij expired/failed.
+               Fire-and-forget. Idempotency-tabel hierboven garandeert dat we geen
+               duplicates sturen (replay = stille 200 OK boven). */
+            if (factuurStatus === 'betaald') {
+                try {
+                    const { data: factuur } = await sb.from('facturen')
+                        .select('id,nummer,client_naam,organization_id,offerte_id,event_id')
+                        .eq('id', factuurId).single();
+                    /* facturen heeft geen client_email kolom — resolve via
+                       offerte/klant/event. Best-effort; null = skip mail. */
+                    const clientEmail = factuur ? await resolveClientEmail(sb, {
+                        orgId: factuur.organization_id,
+                        clientNaam: factuur.client_naam,
+                        offerteId: factuur.offerte_id,
+                        eventId: factuur.event_id,
+                    }) : null;
+                    if (clientEmail && factuur) {
+                        const { data: settingsRow } = await sb.from('settings')
+                            .select('bedrijfsnaam,bedrijf,brand_color,ondertitel')
+                            .eq('organization_id', factuur.organization_id)
+                            .maybeSingle();
+                        const bedrijfsnaam = settingsRow?.bedrijfsnaam || settingsRow?.bedrijf || 'BBQ Architect';
+                        const bedrag = Number(payment.amount?.value || 0);
+                        const method = payment.method || undefined;
+                        mailPaymentOntvangen({
+                            clientEmail,
+                            clientNaam: factuur.client_naam || '',
+                            factuurNummer: String(factuur.nummer || factuur.id),
+                            bedrag,
+                            betalingsmethode: method,
+                            bedrijfsnaam,
+                            brandColor: settingsRow?.brand_color || undefined,
+                            ondertitel: settingsRow?.ondertitel || undefined,
+                        }).then(function (r) {
+                            if (!r.success) console.error('[mollie-webhook] payment-mail failed:', r.error);
+                        }).catch(function (err) {
+                            console.error('[mollie-webhook] payment-mail exception:', err);
+                        });
+                    }
+                } catch (mailErr: any) {
+                    console.error('[mollie-webhook] payment-mail setup failed:', mailErr?.message);
+                }
+            }
         }
 
         return new NextResponse('OK', { status: 200 });

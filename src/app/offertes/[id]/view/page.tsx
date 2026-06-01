@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
+import RelatedEntityPills from '@/components/RelatedEntityPills';
+import { useActiveResource } from '@/lib/ActiveResourceContext';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -363,6 +365,7 @@ export default function OfferteViewPage() {
   const [gerechten, setGerechten] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { setActive } = useActiveResource();
 
   useEffect(() => {
     if (!offerteId || Number.isNaN(offerteId)) return;
@@ -370,6 +373,9 @@ export default function OfferteViewPage() {
       const { data } = await supabase.from('offertes').select('*').eq('id', offerteId).single();
       if (!data) { setLoading(false); return; }
       setOfferte(data);
+      /* Registreer als active-resource → breadcrumb toont de offerte-naam
+         ("Verkoop > Offertes > hopp") + AI/⌘K behoudt deze context cross-page. */
+      setActive({ kind: 'offerte', id: offerteId, label: data.client_naam || ('Offerte ' + (data.nummer || offerteId)), href: `/offertes/${offerteId}/view`, meta: data.nummer ? String(data.nummer) : undefined });
       const [rKlant, rPrev, rGer, rInv] = await Promise.all([
         data.client_naam ? supabase.from('klanten').select('*').eq('naam', data.client_naam).limit(1) : Promise.resolve({ data: null }) as any,
         supabase.from('offertes').select('*').eq('client_naam', data.client_naam || '__none__').neq('id', offerteId).order('datum', { ascending: false }).limit(5),
@@ -553,6 +559,11 @@ export default function OfferteViewPage() {
             <button className="btn btn-ghost"><Download size={14} />PDF</button>
             <button className="btn btn-primary" onClick={() => router.push(`/offertes?edit=${offerte.id}`)}><Send size={14} />Bewerken</button>
           </div>
+        </div>
+
+        {/* Ecosysteem-verbindingen: klikbaar naar gekoppeld event/factuur/klant */}
+        <div style={{ marginBottom: 18 }}>
+          <RelatedEntityPills kind="offerte" id={offerteId} clientNaam={offerte.client_naam} orgId={offerte.organization_id} />
         </div>
 
         <div className="quote-grid">

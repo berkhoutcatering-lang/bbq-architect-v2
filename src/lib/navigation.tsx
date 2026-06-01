@@ -53,6 +53,7 @@ export const navSections: NavSection[] = [
         description: "Offertes, klanten en facturen.",
         hubHref: "/offertes",
         children: [
+            { label: "Aanvragen", icon: <Inbox size={16} />, href: "/verkoop/leads", description: "Inkomende aanvragen + pijplijn" },
             { label: "Offertes", icon: <Receipt size={16} />, href: "/offertes", description: "Offertes opstellen en versturen" },
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
         ],

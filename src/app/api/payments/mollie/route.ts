@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     if (!sb) return NextResponse.json({ error: 'Geen database verbinding' }, { status: 500 });
 
     const body = await req.json();
-    const { factuurId, method } = body;
+    const { factuurId, method, bedragOverride, issuer, redirectUrl } = body;
 
     if (!factuurId) {
       return NextResponse.json({ error: 'Geen factuurId meegegeven' }, { status: 400 });
@@ -91,11 +91,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Factuur niet gevonden' }, { status: 404 });
     }
 
-    // Bereken totaalbedrag
-    const bedrag = berekenFactuurTotaal(factuur);
+    /* Bedrag bepalen: bedragOverride wint van factuurtotaal — zo kan de
+       /q/[id] portal de aanbetaling (30%) afrekenen terwijl de factuur
+       totaal-bedrag behoudt. Override mag niet groter dan totaal. */
+    const factuurTotaal = berekenFactuurTotaal(factuur);
+    let bedrag = factuurTotaal;
+    if (typeof bedragOverride === 'number' && bedragOverride > 0) {
+      if (bedragOverride > factuurTotaal + 0.01) {
+        return NextResponse.json({ error: 'bedragOverride groter dan factuurtotaal' }, { status: 400 });
+      }
+      bedrag = Math.round(bedragOverride * 100) / 100;
+    }
     if (bedrag <= 0) {
       return NextResponse.json({ error: 'Factuurbedrag is 0 of negatief' }, { status: 400 });
     }
+
+    const isDeposit = typeof bedragOverride === 'number' && bedragOverride < factuurTotaal;
+    const description = isDeposit
+      ? `Aanbetaling factuur ${factuur.nummer} - ${factuur.client_naam}`
+      : `Factuur ${factuur.nummer} - ${factuur.client_naam}`;
 
     // Maak betaling aan bij Mollie
     const paymentData: Record<string, any> = {
@@ -103,12 +117,17 @@ export async function POST(req: NextRequest) {
         currency: 'EUR',
         value: bedrag.toFixed(2),
       },
-      description: `Factuur ${factuur.nummer} - ${factuur.client_naam}`,
-      redirectUrl: `${MOLLIE_REDIRECT_URL}/facturen?betaald=${factuur.nummer}`,
+      description,
+      redirectUrl: redirectUrl || `${MOLLIE_REDIRECT_URL}/facturen?betaald=${factuur.nummer}`,
       metadata: {
         factuur_id: factuurId,
         factuur_nummer: factuur.nummer,
         client_naam: factuur.client_naam,
+        /* is_deposit zodat webhook later kan onderscheiden of dit een
+           aanbetaling was; toekomstige uitbreiding kan factuur-status
+           'aanbetaling_ontvangen' inrichten i.p.v. direct 'betaald'. */
+        is_deposit: isDeposit,
+        deposit_amount: typeof bedragOverride === 'number' ? bedragOverride : null,
       },
     };
 
@@ -117,8 +136,13 @@ export async function POST(req: NextRequest) {
       paymentData.webhookUrl = MOLLIE_WEBHOOK_URL;
     }
 
-    // Optioneel: specifieke betaalmethode (ideal, creditcard, bancontact, etc.)
-    if (method) {
+    /* Betaalmethode: issuer impliceert iDEAL + skip Mollie checkout
+       tussenscherm (direct naar bankenvironment). Anders: laat klant
+       op Mollie-zijde de methode kiezen. */
+    if (issuer) {
+      paymentData.method = 'ideal';
+      paymentData.issuer = issuer;
+    } else if (method) {
       paymentData.method = method;
     }
 

@@ -11,6 +11,7 @@ import { Building2, Check, ChevronDown, CloudUpload, Database, Eye, FileText, La
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
 import { THEMES, type ThemePreset, type ThemeMode, findPresetBySignature } from '@/lib/themes';
+import { PORTAL_THEMES } from '@/lib/portalThemes';
 import { perceivedLightness, tintToward, contrastRatio, wcagLevel, autoFixContrast } from '@/lib/colorMath';
 import MenukaartStijl from './_components/MenukaartStijl';
 import type { Overrides } from '@/lib/menukaart/registry';
@@ -192,6 +193,10 @@ export default function Instellingen() {
 
                     {/* Curated thema-presets — geen eigen kleuren kiezen, alleen kant-en-klare combinaties */}
                     <ThemePresetPicker form={form} setForm={setForm} />
+
+                    {/* Klantportaal-stijl — bepaalt de look van de publieke offerte-pagina /q/[id]
+                        die je klant opent. Aparte keuze van de app-huisstijl hierboven. */}
+                    <PortalThemePicker form={form} setForm={setForm} />
                 </div>
             </div>
 
@@ -835,6 +840,68 @@ function AdvancedColorEditor({ activePreset, form, setForm }: {
                         );
                     })}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/* Klantportaal-stijl picker — kiest één van de 8 OKLCH white-label presets
+   (src/lib/portalThemes.ts) die de publieke /q/[id] offerte-pagina kleurt.
+   Compacte swatch-grid; los van de app-huisstijl hierboven want dit is wat
+   de KLANT ziet, niet de operator. */
+function PortalThemePicker({ form, setForm }: { form: any; setForm: (fn: any) => void }) {
+    const active: string = form.brand_theme || 'warm-amber';
+    return (
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Eye size={14} style={{ color: 'var(--brand)' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Klantportaal-stijl</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                Zo ziet je <strong>offerte-pagina</strong> eruit voor klanten — de link die je deelt (<code style={{ fontSize: 11 }}>/q/…</code>).
+                Los van je eigen dashboard-kleuren hierboven.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+                {PORTAL_THEMES.map(function (t) {
+                    const isActive = active === t.id;
+                    const surface = t.vars['--surface'];
+                    const brand1 = t.vars['--brand-1'];
+                    const brand2 = t.vars['--brand-2'];
+                    const textCol = t.vars['--text'];
+                    return (
+                        <button
+                            key={t.id}
+                            type="button"
+                            onClick={function () { setForm((prev: any) => ({ ...prev, brand_theme: t.id })); }}
+                            aria-label={`Portaal-thema ${t.label}`}
+                            aria-pressed={isActive}
+                            style={{
+                                textAlign: 'left', cursor: 'pointer', padding: 0, overflow: 'hidden',
+                                borderRadius: 12,
+                                border: isActive ? `2px solid ${brand1}` : '1px solid var(--border)',
+                                background: 'var(--card)',
+                                boxShadow: isActive ? `0 4px 16px color-mix(in oklch, ${brand1} 30%, transparent)` : 'none',
+                                transition: 'border-color .15s, box-shadow .15s',
+                            }}
+                        >
+                            {/* mini-preview: surface met hero-balk + accent-knop */}
+                            <div style={{ background: surface, padding: '12px 12px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                <div style={{ height: 7, width: '55%', borderRadius: 4, background: textCol, opacity: .85 }} />
+                                <div style={{ height: 5, width: '80%', borderRadius: 3, background: textCol, opacity: .35 }} />
+                                <div style={{ display: 'flex', gap: 5, marginTop: 3 }}>
+                                    <div style={{ height: 18, flex: 1, borderRadius: 6, background: brand1 }} />
+                                    <div style={{ height: 18, width: 18, borderRadius: 6, background: brand2 }} />
+                                </div>
+                            </div>
+                            <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{t.label}</span>
+                                {isActive
+                                    ? <Check size={14} style={{ color: 'var(--brand)' }} />
+                                    : <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>{t.mode === 'dark' ? 'Donker' : 'Licht'}</span>}
+                            </div>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

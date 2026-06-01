@@ -5,7 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { today } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import EventsTimeline from '@/components/redesign/EventsTimeline';
+import EventsListV2 from '@/components/redesign/EventsListV2';
 import PageGuideNote from '@/components/PageGuideNote';
 import { PartyPopper } from 'lucide-react';
 import type { Event as DbEvent, Offerte } from '@/types';
@@ -58,7 +58,7 @@ export default function Events() {
                     { lead: 'Status-kleuren in de timeline', text: 'tonen direct welke events bevestigd zijn en welke nog wachten op actie.' },
                 ]}
             />
-            <EventsTimeline
+            <EventsListV2
                 events={sorted}
                 offertes={offertes}
                 prepTasks={prepTasks}

@@ -26,7 +26,7 @@ import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
 
 const AUTH_PAGES = ['/login', '/signup', '/auth/'];
-const PUBLIC_PAGES = ['/q/', '/invite'];
+const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/'];
 
 // KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
 // Match drie routes:

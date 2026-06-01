@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSupabase } from '@/lib/useSupabase';
 import { useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
@@ -22,6 +22,7 @@ import PageSection from '@/components/PageSection';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
+import RelatedEntityPills from '@/components/RelatedEntityPills';
 import type { Factuur } from '@/types';
 import { upsertFactuur, deleteFactuur as deleteFactuurAction, markFactuurStatus } from './actions';
 import { ArrowLeft, Bell, Code, CreditCard, FileSpreadsheet, FileText, Link2, Loader2, Mail, Plus, Save, Trash2 } from 'lucide-react';
@@ -63,6 +64,23 @@ export default function Facturen() {
             },
         },
     );
+
+    /* ?focus=<id> deep-link — opent de factuur-edit zodra de data geladen is.
+       Voedt de ecosysteem-pills vanuit offerte/event/klant ("→ Factuur F2026-X").
+       window.location.search i.p.v. useSearchParams om geen Suspense-boundary
+       te vereisen op deze client-pagina. Eénmalig via hasFocused-ref. */
+    const hasFocused = useRef(false);
+    useEffect(() => {
+        if (hasFocused.current || loading || facturen.length === 0) return;
+        const focus = new URLSearchParams(window.location.search).get('focus');
+        if (!focus) return;
+        const match = facturen.find((f) => String(f.id) === focus);
+        if (match) {
+            hasFocused.current = true;
+            setEditing(match.id);
+            setForm(JSON.parse(JSON.stringify(match)));
+        }
+    }, [loading, facturen]);
 
     function newFactuur() {
         const nummer = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.map((f: any) => f.nummer));
@@ -183,6 +201,12 @@ export default function Facturen() {
                     </button>
                 </div>
                 <div className="panel-body">
+                    {/* Ecosysteem-verbindingen: klikbaar naar gekoppelde offerte/event/klant */}
+                    {editing !== 'new' && form.id && (
+                        <div style={{ marginBottom: 16 }}>
+                            <RelatedEntityPills kind="factuur" id={form.id} clientNaam={form.client_naam} orgId={orgId} />
+                        </div>
+                    )}
                     <div className="form-grid">
                         <div className="field" data-required><label>Factuurnummer</label><input value={form.nummer} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('nummer', e.target.value); }} style={serverFieldErrors.nummer ? { borderColor: 'var(--red)' } : undefined} /><FieldError name="nummer" fields={serverFieldErrors} /></div>
                         <div className="field"><label>Status</label>

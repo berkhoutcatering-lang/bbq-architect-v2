@@ -73,7 +73,8 @@ export default function AiUsagePage() {
         Promise.all([
             supabase
                 .from('ai_usage')
-                .select('*')
+                // Expliciete kolommen = matcht UsageRow exact, scheelt payload (org_id e.d. niet nodig client-side)
+                .select('id, action_type, model, tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation, cost_eur_cents, metadata, created_at')
                 .eq('organization_id', orgId)
                 .order('created_at', { ascending: false })
                 .limit(500),

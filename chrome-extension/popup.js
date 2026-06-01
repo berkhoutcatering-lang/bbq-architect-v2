@@ -10,7 +10,7 @@ const els = {};
  'lev-error','lev-error-msg','btn-lev-retry','btn-done-rescan']
     .forEach(id => els[id] = document.getElementById(id));
 
-const POPUP_VERSION = '0.5.1';
+const POPUP_VERSION = '0.6.4';
 
 /** Check version-mismatch tussen popup (deze file) en background.js.
  *  Als ze niet matchen → Chrome cached oude background-worker → toon warning. */
@@ -206,6 +206,8 @@ function renderState(state) {
                 parts.push(`${label} ${d.platform}`);
             }
             if (d.html !== undefined) parts.push(`html ${d.html}`);
+            if (d.htmlRaw !== undefined && d.htmlRaw > 0) parts.push(`html-raw ${d.htmlRaw}`);
+            if (d.harvest !== undefined && d.harvest > 0) parts.push(`harvest ${d.harvest}`);
             if (d.screenshots > 0) parts.push(`vision ${d.screenshots}× → ${d.vision}`);
             else if (d.vision !== undefined && d.vision > 0) parts.push(`vision ${d.vision}`);
             /* Backward compat: oude scans met d.adapter */
@@ -234,7 +236,7 @@ function readScanOptions() {
     return {
         leverancierId: activeLevId,
         useAi: !!els['chk-force-ai']?.checked,
-        tempo: els['sel-tempo']?.value || 'normal',
+        tempo: els['sel-tempo']?.value || 'auto',
     };
 }
 

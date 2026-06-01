@@ -78,6 +78,14 @@ export const SettingsSchema = z.object({
     brand_text: HexColor.nullable().optional(),
     brand_card: HexColor.nullable().optional(),
 
+    /* White-label portal-thema — id van een van de 8 OKLCH-presets
+       (src/lib/portalThemes.ts). Bounded enum zodat alleen geldige preset-ids
+       de DB in kunnen. Bepaalt de look van de publieke /q/[id] klant-portal. */
+    brand_theme: z.enum([
+        'warm-amber', 'deep-green', 'terracotta', 'sage',
+        'copper-rust', 'charcoal', 'midnight-blue', 'gold-on-black',
+    ]).nullable().optional(),
+
     /* Accounting-config jsonb. Inhoud bounded via AccountingConfigSchema. */
     accounting_config: AccountingConfigSchema.optional(),
 });

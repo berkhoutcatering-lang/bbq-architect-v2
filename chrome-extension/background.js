@@ -7,7 +7,7 @@
 
 importScripts('api.js', 'adapters.js');
 
-const BG_VERSION = '0.5.1';   // bump bij elke release; popup checkt mismatch
+const BG_VERSION = '0.6.4';   // bump bij elke release; popup checkt mismatch
 const SYNC_STATE_KEY = 'bbq_sync_state';
 const BATCH_SIZE = 50;
 const PAGE_DELAY_MS_DEFAULT = 1500;
@@ -64,6 +64,23 @@ function tempoFlags(tempo) {
     return TEMPO_PRESETS[tempo] || TEMPO_PRESETS.normal;
 }
 
+/* Auto-stealth: bekende anti-bot groothandels-portals → stealth. Open shops →
+   normal. Onbekend → cautious (veilige middenweg, voorkomt bot-block bij eerste
+   scan van nieuwe leverancier). User kan altijd overrulen met expliciete tempo. */
+const ANTI_BOT_HOSTS = [/(^|\.)sligro\.nl$/i, /(^|\.)makro\.nl$/i, /(^|\.)hanos\.nl$/i, /(^|\.)bidfood\.nl$/i];
+const OPEN_SHOP_HOSTS = [/(^|\.)vuurenrook\.nl$/i];
+
+function resolveTempo(tempo, hostname) {
+    /* Expliciete keuze van user wint altijd */
+    if (tempo && tempo !== 'auto') return tempo;
+    let host = '';
+    try { host = new URL(/^https?:/.test(hostname) ? hostname : 'https://' + hostname).hostname; }
+    catch { host = String(hostname || ''); }
+    if (ANTI_BOT_HOSTS.some(re => re.test(host))) return 'stealth';
+    if (OPEN_SHOP_HOSTS.some(re => re.test(host))) return 'normal';
+    return 'cautious';
+}
+
 async function setSyncState(state) {
     await new Promise(r => chrome.storage.session.set({ [SYNC_STATE_KEY]: state }, r));
     chrome.runtime.sendMessage({ type: 'BBQ_STATE_UPDATE', state }).catch(() => {});
@@ -87,20 +104,21 @@ async function getActiveTab() {
 }
 
 /** captureVisibleTab → { base64, mimeType } | null.
- *  Vereist activeTab permissie (al in manifest). PNG voor max kwaliteit op productlabels.
- *  windowId is verplicht vanaf service-worker context — `null` werkt wel in popup-context
- *  maar geeft "no current window"-error vanuit MV3 service worker. */
+ *  Vereist activeTab permissie (al in manifest). JPEG quality 70 — PNG gaf
+ *  2MB+ per shot → 413 (Payload Too Large) bij 3 shots. JPEG ~200-300KB,
+ *  ruim genoeg scherp voor productlabels + prijzen.
+ *  windowId is verplicht vanaf service-worker context. */
 async function captureScreenshot(windowId) {
     return new Promise(resolve => {
         try {
-            chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, dataUrl => {
+            chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 70 }, dataUrl => {
                 if (chrome.runtime.lastError) {
                     console.warn('[BBQ scraper] captureVisibleTab error:', chrome.runtime.lastError.message);
                     resolve(null);
                     return;
                 }
                 if (!dataUrl) { resolve(null); return; }
-                /* dataUrl: "data:image/png;base64,XXX" */
+                /* dataUrl: "data:image/jpeg;base64,XXX" */
                 const m = String(dataUrl).match(/^data:(image\/[a-z]+);base64,(.+)$/);
                 if (!m) { resolve(null); return; }
                 resolve({ mimeType: m[1], base64: m[2] });
@@ -540,6 +558,8 @@ async function deepCrawlSite({ leverancierId, tempo, maxPages }) {
     const tab = await getActiveTab();
     if (!tab) throw new Error('Geen actief tabblad');
 
+    tempo = resolveTempo(tempo, tab.url);
+
     const ping = await tabSend(tab.id, { type: 'BBQ_PING' });
     if (!ping?.ok) throw new Error('Kon content-script niet bereiken op deze pagina');
 
@@ -725,6 +745,9 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
     const tab = await getActiveTab();
     if (!tab) throw new Error('Geen actief tabblad');
 
+    tempo = resolveTempo(tempo, tab.url);
+    console.log('[BBQ scraper] tempo resolved →', tempo, 'voor', (() => { try { return new URL(tab.url).hostname; } catch { return tab.url; } })());
+
     const ping = await tabSend(tab.id, { type: 'BBQ_PING' });
     if (!ping?.ok) throw new Error('Kon content-script niet bereiken op deze pagina');
 
@@ -827,6 +850,90 @@ async function scanCurrentPage({ leverancierId, useAi, tempo }) {
             }
         } else if (producten.length >= 20) {
             console.log('[BBQ scraper] html-AI overgeslagen — auto-extract al ' + producten.length + ' producten');
+        }
+
+        /* STAP 3b — RAW HTML fallback. Als gecleande HTML 0 producten gaf,
+           probeer met RAW body (geen noise-strip, geen findProductGrid).
+           Voor Bidfood-stijl sites waar cleanup te agressief is.
+           Kost €0.005 extra maar 10× goedkoper dan vision. */
+        if (!isCancelled(syncRunId) && producten.length === 0) {
+            console.log('[BBQ scraper] STAP 3b — RAW HTML fallback');
+            await setPhase('AI leest RAW HTML…');
+            const rawRes = await tabSend(tab.id, { type: 'BBQ_GET_RAW_HTML' }, 10000);
+            console.log('[BBQ scraper] raw HTML diag:', {
+                htmlLength: rawRes?.debug?.htmlLength,
+                pickedReason: rawRes?.debug?.pickedReason,
+                containerProductLinks: rawRes?.debug?.containerProductLinks,
+                trimStrategy: rawRes?.debug?.trimStrategy,
+                totalProductLinks: rawRes?.debug?.totalProductLinks,
+                priceMatches: rawRes?.debug?.priceMatches,
+                bodyTextLength: rawRes?.debug?.bodyTextLength,
+            });
+            if (rawRes?.ok && rawRes.html) {
+                try {
+                    const ai2 = await BBQ.aiDetect({
+                        html: rawRes.html, pageUrl: tab.url, scope, scopeKeywords,
+                        signal: getScanSignal(),
+                    });
+                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+                    const rawList = dedupeProducten(Array.isArray(ai2?.producten) ? ai2.producten : []);
+                    diag.htmlRaw = rawList.length;
+                    console.log('[BBQ scraper] raw html returned: ' + rawList.length + ' producten');
+                    if (rawList.length > producten.length) {
+                        diag.methods.push('html-raw');
+                        producten = rawList;
+                        aiResult = ai2;  /* zodat selectors-cache + next_page_url verderop werkt */
+                    }
+                } catch (e) {
+                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
+                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
+                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
+                        return { ok: true, cancelled: true, productsSeen: 0 };
+                    }
+                    diag.htmlRawError = String(e?.message || e).slice(0, 120);
+                    console.warn('[BBQ scraper] raw html call failed:', e?.message || e);
+                }
+            }
+        }
+
+        /* STAP 3c — HARVEST (virtualized lists). Als we nog te weinig producten
+           hebben, scroll door de pagina en verzamel productkaarten zodra ze
+           renderen. Voor Bidfood-stijl sites die virtualiseren (veel <a>-links
+           maar weinig gerenderde naam/prijs). €0.005, 10× goedkoper dan vision. */
+        if (!isCancelled(syncRunId) && producten.length < 10) {
+            console.log('[BBQ scraper] STAP 3c — harvest (virtualized list)');
+            await setPhase('Productlijst oogsten (scroll)…');
+            const harvestRes = await tabSend(tab.id, { type: 'BBQ_HARVEST_HTML' }, 65000);
+            console.log('[BBQ scraper] harvest diag:', {
+                totalCards: harvestRes?.debug?.totalCards,
+                cardsWithPrice: harvestRes?.debug?.cardsWithPrice,
+                htmlLength: harvestRes?.debug?.htmlLength,
+            });
+            if (harvestRes?.ok && harvestRes.html) {
+                try {
+                    const ai3 = await BBQ.aiDetect({
+                        html: harvestRes.html, pageUrl: tab.url, scope, scopeKeywords,
+                        signal: getScanSignal(),
+                    });
+                    if (isCancelled(syncRunId)) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+                    const harvestList = dedupeProducten(Array.isArray(ai3?.producten) ? ai3.producten : []);
+                    diag.harvest = harvestList.length;
+                    console.log('[BBQ scraper] harvest returned: ' + harvestList.length + ' producten');
+                    if (harvestList.length > producten.length) {
+                        diag.methods.push('harvest');
+                        producten = harvestList;
+                        aiResult = ai3;
+                    }
+                } catch (e) {
+                    if (e?.name === 'AbortError' || isCancelled(syncRunId)) {
+                        await BBQ.finishSync({ syncRunId, status: 'cancelled' }).catch(() => {});
+                        await setSyncState({ running: false, done: true, cancelled: true, productsSeen: 0, diagnostic: diag });
+                        return { ok: true, cancelled: true, productsSeen: 0 };
+                    }
+                    diag.harvestError = String(e?.message || e).slice(0, 120);
+                    console.warn('[BBQ scraper] harvest call failed:', e?.message || e);
+                }
+            }
         }
 
         /* STAP 4 — Vision-mode (laag 4, ~€0.05/pag).
@@ -1115,6 +1222,30 @@ function hasValidSelectors(sel) {
     return !!(sel && typeof sel === 'object' && sel.productCard && sel.naam && sel.prijs);
 }
 
+/* Harvest + AI-detect in één helper, gedeeld door de fast-path (cache useHarvest)
+   en de LAAG 3c fallback. Returnt { producten, nextUrl, totalCards }. */
+async function runHarvest({ tabId, pageUrl, scope, scopeKeywords, syncRunId }) {
+    const harvestRes = await withStepTimeout('BBQ_HARVEST_HTML', 65000, async () => {
+        return await tabSend(tabId, { type: 'BBQ_HARVEST_HTML' }, 62000, {
+            syncRunId, retries: 1, pingBeforeHeavy: true, retryInject: true,
+        });
+    });
+    awLog(syncRunId, 'harvest diag', {
+        totalCards: harvestRes?.debug?.totalCards,
+        cardsWithPrice: harvestRes?.debug?.cardsWithPrice,
+        htmlLength: harvestRes?.debug?.htmlLength,
+    });
+    if (!harvestRes?.ok || !harvestRes.html) {
+        return { producten: [], nextUrl: null, totalCards: harvestRes?.debug?.totalCards || 0 };
+    }
+    const ai = await withStepTimeout('AI_DETECT_HARVEST', 90000, async () => {
+        return await BBQ.aiDetect({ html: harvestRes.html, pageUrl, scope, scopeKeywords, signal: getScanSignalSafe() });
+    });
+    const list = dedupeProductList(ai?.producten || []);
+    awLog(syncRunId, 'harvest AI result', { count: list.length });
+    return { producten: list, nextUrl: ai?.next_page_url || null, totalCards: harvestRes?.debug?.totalCards || 0 };
+}
+
 /* ============================================================
    extractCatalogPage — één pagina extraheren met richer debug.
    Volgorde: CACHED-SELECTORS → auto-extract → HTML+AI fallback.
@@ -1140,15 +1271,46 @@ async function extractCatalogPage({
     let producten = [];
     let foundNext = null;
 
+    const hostname = hostnameOf(pageUrl);
+    /* Cache altijd laden — de useHarvest fast-path is zelf een AI-pad en mag
+       dus óók draaien met Force-AI aan. Alleen de gratis client-side lagen
+       (cached selectors, JSON-LD, platform) respecteren useAi. */
+    const cached = await loadHostCache(hostname);
+
+    /* FAST-PATH — site is bekend virtualized (cache.useHarvest). Skip humanScroll,
+       cleaned-HTML én raw-HTML (die geven 1-3 op zulke sites). Ga direct naar harvest.
+       Bespaart per pagina ~30s humanScroll + 2 AI-calls. */
+    if (cached?.useHarvest) {
+        debug.steps.push('harvest-fastpath:start');
+        try {
+            const h = await runHarvest({ tabId, pageUrl, scope, scopeKeywords, syncRunId });
+            if (h.producten.length >= CACHE_MIN_COUNT) {
+                debug.steps.push('harvest-fastpath:hit');
+                debug.ai.count = h.producten.length;
+                debug.ai.fromHarvest = true;
+                await recordCacheHit(hostname);
+                return {
+                    producten: h.producten,
+                    nextUrl: h.nextUrl ? normalizeUrlLoose(h.nextUrl) : null,
+                    debug,
+                };
+            }
+            debug.steps.push('harvest-fastpath:miss');
+            await recordCacheMiss(hostname);
+        } catch (e) {
+            debug.ai.errorHarvest = toErrorMessage(e);
+            debug.steps.push('harvest-fastpath:error');
+        }
+        /* val door naar volledige pipeline als fast-path te weinig gaf */
+    }
+
     debug.steps.push('humanize:start');
     await humanizePage(tabId, tempo, syncRunId, { noLoadMore: true });
     debug.steps.push('humanize:done');
 
     /* LAAG 0 — cached selectors van eerdere AI-call. Gratis, instant.
-       Bij <5 producten → cache miss → record fail, fallback naar auto/AI. */
-    const hostname = hostnameOf(pageUrl);
-    const cached = !useAi ? await loadHostCache(hostname) : null;
-    if (cached && hasValidSelectors(cached.selectors)) {
+       Gratis client-side pad → respecteert useAi. Bij <5 producten → cache miss. */
+    if (!useAi && cached && hasValidSelectors(cached.selectors)) {
         debug.cache.tried = true;
         debug.steps.push('cache:start');
         try {
@@ -1267,6 +1429,87 @@ async function extractCatalogPage({
                 debug.ai.error = toErrorMessage(e);
             }
             debug.steps.push('ai:done');
+        }
+
+        /* LAAG 3b — RAW HTML fallback. Als gecleande HTML 0 producten gaf,
+           probeer met de RAW body (zonder findProductGrid + zonder noise-strip).
+           Bidfood-style sites waar onze cleanup teveel weghaalt. */
+        if (producten.length === 0) {
+            debug.steps.push('ai-raw:start');
+            try {
+                const rawRes = await withStepTimeout('BBQ_GET_RAW_HTML', 10000, async () => {
+                    return await tabSend(tabId, { type: 'BBQ_GET_RAW_HTML' }, 8000, {
+                        syncRunId, retries: 2, pingBeforeHeavy: true, retryInject: true,
+                    });
+                });
+                awLog(syncRunId, 'raw HTML diag', {
+                    htmlLength: rawRes?.debug?.htmlLength,
+                    pickedReason: rawRes?.debug?.pickedReason,
+                    containerProductLinks: rawRes?.debug?.containerProductLinks,
+                    trimStrategy: rawRes?.debug?.trimStrategy,
+                    totalProductLinks: rawRes?.debug?.totalProductLinks,
+                    priceMatches: rawRes?.debug?.priceMatches,
+                    bodyTextLength: rawRes?.debug?.bodyTextLength,
+                });
+                if (rawRes?.ok && rawRes.html) {
+                    const ai2 = await withStepTimeout('AI_DETECT_RAW', 90000, async () => {
+                        return await BBQ.aiDetect({
+                            html: rawRes.html, pageUrl, scope, scopeKeywords,
+                            signal: getScanSignalSafe(),
+                        });
+                    });
+                    const aiList2 = dedupeProductList(ai2?.producten || []);
+                    if (aiList2.length > producten.length) {
+                        producten = aiList2;
+                        debug.ai.count = aiList2.length;
+                        debug.ai.fromRaw = true;
+                    }
+                    foundNext = foundNext || ai2?.next_page_url || null;
+                    if (hasValidSelectors(ai2?.selectors) && aiList2.length >= CACHE_MIN_COUNT && hostname) {
+                        await saveHostCache(hostname, {
+                            selectors: ai2.selectors,
+                            lastCount: aiList2.length,
+                            useRawHtml: true,  /* hint: cleanup verstoort op deze host */
+                            successCount: 0, failCount: 0,
+                        });
+                        awLog(syncRunId, 'cache LEARNED (raw)', { hostname, count: aiList2.length });
+                    }
+                    awLog(syncRunId, 'raw AI result', { count: aiList2.length });
+                }
+            } catch (e) {
+                debug.ai.errorRaw = toErrorMessage(e);
+            }
+            debug.steps.push('ai-raw:done');
+        }
+
+        /* LAAG 3c — HARVEST (virtualized lists). Nog te weinig producten? Scroll
+           door de pagina en verzamel kaarten zodra ze renderen. Voor Bidfood-stijl
+           sites die virtualiseren. €0.005, 10× goedkoper dan vision. */
+        if (producten.length < 10) {
+            debug.steps.push('harvest:start');
+            try {
+                const h = await runHarvest({ tabId, pageUrl, scope, scopeKeywords, syncRunId });
+                if (h.producten.length > producten.length) {
+                    producten = h.producten;
+                    debug.ai.count = h.producten.length;
+                    debug.ai.fromHarvest = true;
+                }
+                foundNext = foundNext || h.nextUrl || null;
+                /* Cache useHarvest ZONDER selectors-eis — harvest stuurt tekst, dus
+                   Claude geeft zelden selectors. We willen toch onthouden dat deze
+                   host virtualiseert, zodat volgende pagina's de fast-path nemen. */
+                if (h.producten.length >= CACHE_MIN_COUNT && hostname) {
+                    await saveHostCache(hostname, {
+                        useHarvest: true,
+                        lastCount: h.producten.length,
+                        successCount: 0, failCount: 0,
+                    });
+                    awLog(syncRunId, 'cache LEARNED (harvest)', { hostname, count: h.producten.length });
+                }
+            } catch (e) {
+                debug.ai.errorHarvest = toErrorMessage(e);
+            }
+            debug.steps.push('harvest:done');
         }
     }
 
@@ -1442,6 +1685,9 @@ async function autoWalkCatalogCore({
 async function autoWalkCatalog({ leverancierId, maxPages, delayMs, useAi, tempo }) {
     const tab = await getActiveTab();
     if (!tab) throw new Error('Geen actief tabblad');
+
+    tempo = resolveTempo(tempo, tab.url);
+    console.log('[BBQ scraper] auto-walk tempo resolved →', tempo);
 
     const start = await BBQ.startSync({
         leverancierId, mode: 'full', portalUrl: tab.url,

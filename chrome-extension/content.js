@@ -47,35 +47,26 @@
         };
     }
 
-    /* Strip noise uit HTML zodat Claude alleen de echte productlijst krijgt.
-       Verwijdert layout-elementen (header/nav/footer/aside) én alle "ruis"-blokken
-       (recommendations, recently-viewed, cross-sell, sidebar, hero, cookie-banner,
-       newsletter, breadcrumbs, ads). Voorkomt dat featured / aanbevolen items als
-       producten worden meegerekend. */
+    /* Strip noise uit HTML — CONSERVATIEF. Alleen harde tags (scripts, styles)
+       en overduidelijke ruis (cookie-banners, newsletter, breadcrumbs). NIET
+       "promo"/"banner"/"hero"/"featured" want die kunnen hoofdgrid-classes zijn
+       op shops zoals Bidfood. Op een productlijst is content > correctness. */
     function stripHtmlNoise(root) {
         /* Pass 1: harde tags */
         root.querySelectorAll('script, style, svg, iframe, noscript, link, meta').forEach(n => n.remove());
 
         /* Pass 2: layout chrome */
-        root.querySelectorAll('header, nav, footer, aside').forEach(n => n.remove());
+        root.querySelectorAll('header, nav, footer').forEach(n => n.remove());
 
-        /* Pass 3: noise via class/id/aria. Case-insensitive partial match.
-           Sortering: meest voorkomende patronen eerst voor performance. */
+        /* Pass 3: alleen ECHT evidente ruis. NIET zoeken op "promo|banner|hero|
+           featured|carousel|slider" want die zitten vaak in hoofdgrid wrappers. */
         const NOISE_SELECTORS = [
-            '[class*="recommend" i]', '[class*="related" i]', '[class*="cross-sell" i]',
-            '[class*="upsell" i]', '[class*="recently" i]', '[class*="recent-view" i]',
-            '[class*="suggest" i]', '[class*="popular" i]', '[class*="featured" i]',
-            '[class*="carousel" i]', '[class*="slider" i]',
-            '[class*="sidebar" i]', '[class*="rail" i]',
-            '[class*="breadcrumb" i]', '[class*="hero-banner" i]', '[class*="hero__" i]',
-            '[class*="promo-banner" i]', '[class*="advert" i]', '[class*="banner-top" i]',
-            '[class*="cookie" i]', '[class*="newsletter" i]', '[class*="signup" i]',
-            '[class*="filter-bar" i]', '[class*="sort-bar" i]',
-            '[id*="recommend" i]', '[id*="related" i]', '[id*="sidebar" i]',
-            '[id*="carousel" i]', '[id*="newsletter" i]', '[id*="cookie" i]',
-            '[aria-label*="aanbevol" i]', '[aria-label*="gerelateerd" i]',
-            '[aria-label*="recently" i]', '[aria-label*="recommend" i]',
-            '[role="banner"]', '[role="complementary"]', '[role="navigation"]',
+            '[class*="cookie-banner" i]', '[class*="cookie-consent" i]',
+            '[class*="newsletter" i]', '[class*="signup-form" i]',
+            '[class*="breadcrumb" i]',
+            '[class*="back-to-top" i]',
+            '[id*="cookie" i]', '[id*="newsletter" i]',
+            '[aria-label*="cookie" i]',
             '[role="contentinfo"]',
         ];
         NOISE_SELECTORS.forEach(sel => {
@@ -83,30 +74,25 @@
                 root.querySelectorAll(sel).forEach(n => n.remove());
             } catch { /* invalid selector — skip */ }
         });
-
-        /* Pass 4: lege containers wegpoetsen die na strip overblijven */
-        root.querySelectorAll('div, section').forEach(el => {
-            if (!el.children.length && !(el.textContent || '').trim()) el.remove();
-        });
     }
 
     /* Probeer de PRIMARY productgrid te vinden — element met de meeste herhaalde
-       directe children van dezelfde tag. Spaart Claude veel input-tokens en
-       sluit suggestie-grids uit (die hebben meestal <8 items). */
+       directe children van dezelfde tag. STRENG: minimaal 20 children, anders
+       pakt 'm carousels/featured-blokken in plaats van echte productgrid.
+       Op een lijstpagina staan typisch 24-48 producten. */
     function findProductGrid(root) {
         const candidates = root.querySelectorAll('div, ul, ol, section');
         let best = null;
         let bestScore = 0;
         candidates.forEach(c => {
             const n = c.children.length;
-            if (n < 8) return;
+            if (n < 20) return;  /* was 8 — verhoogd om carousels uit te sluiten */
             const tags = {};
             for (const child of c.children) {
                 tags[child.tagName] = (tags[child.tagName] || 0) + 1;
             }
             const top = Math.max(...Object.values(tags));
-            /* >75% homogeen + minimaal 8 items */
-            if (top / n >= 0.75 && top > bestScore) {
+            if (top / n >= 0.8 && top > bestScore) {
                 bestScore = top;
                 best = c;
             }
@@ -125,19 +111,19 @@
 
         stripHtmlNoise(clone);
 
-        /* Als we een duidelijke productgrid kunnen vinden: gebruik die, behoud
-           wel de paginering die meestal eronder of erboven staat */
+        /* findProductGrid alleen als hij ECHT zeker is van een grote grid (>=20).
+           Anders: stuur de hele body — Claude bepaalt zelf. Kost wat meer
+           input-tokens maar geeft veel hogere recall. */
         const grid = findProductGrid(clone);
         if (grid) {
             const wrapper = document.createElement('div');
             wrapper.setAttribute('data-bbq-grid', '1');
             wrapper.appendChild(grid.cloneNode(true));
-            /* Paginatie context erbij: zoek <nav> of element met "pagination" class */
             const pag = clone.querySelector('[class*="pagination" i], [class*="paging" i], [aria-label*="pagina" i], [aria-label*="page" i]');
             if (pag) wrapper.appendChild(pag.cloneNode(true));
-            return wrapper.outerHTML.slice(0, 200000);
+            return wrapper.outerHTML.slice(0, 300000);
         }
-        return clone.outerHTML.slice(0, 200000);
+        return clone.outerHTML.slice(0, 300000);
     }
 
     /** Fallback link-extractor: pak ALLE same-origin <a href> die naar product/categorie kunnen wijzen.
@@ -296,6 +282,99 @@
             clientY: Math.floor(Math.random() * window.innerHeight),
         });
         document.dispatchEvent(evt);
+    }
+
+    /* ────────────────────────────────────────────────────────────────────
+       harvestProductCards — voor VIRTUALIZED lists (Bidfood, react-window,
+       vue-virtual-scroller). Deze sites renderen alleen producten in/nabij de
+       viewport; de rest zijn lege <a>-shells. Een enkele HTML-capture mist dus
+       de meeste producten.
+
+       Oplossing: scroll in kleine stappen, en verzamel productkaarten zodra ze
+       renderen. Dedupe op href. Bewaar de versie MÉT prijs (latere renders
+       vullen 'm in). Returnt één samengevoegde HTML-blob met alle kaarten.
+       ──────────────────────────────────────────────────────────────────── */
+    async function harvestProductCards() {
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        const PRODUCT_LINK_SEL = 'a[href*="product" i], a[href*="/p/" i], a[href*="/p." i]';
+        const PRICE_RE = /€|\b\d+,\d{2}\b/;
+        const harvested = new Map(); // href -> { text, hasPrice }
+        const viewportH = window.innerHeight || 800;
+        const step = Math.max(200, Math.floor(viewportH * 0.5));
+        const MAX_STEPS = 40;   /* safety cap; early-exit op no-growth stopt meestal eerder */
+
+        function harvestVisible() {
+            document.querySelectorAll(PRODUCT_LINK_SEL).forEach(link => {
+                const href = link.href;
+                if (!href) return;
+                /* Klim omhoog tot de KLEINSTE container met prijs + compacte tekst.
+                   Cap op 300 chars zodat we 1 productkaart pakken, niet de hele grid. */
+                let card = link;
+                for (let i = 0; i < 8 && card.parentElement; i++) {
+                    const txt = (card.textContent || '').trim();
+                    if (PRICE_RE.test(txt) && txt.length >= 10 && txt.length <= 300) break;
+                    card = card.parentElement;
+                }
+                /* Gebruik innerText (zichtbare tekst, compact) ipv outerHTML (bloat). */
+                const text = (card.innerText || card.textContent || '').replace(/\s+/g, ' ').trim();
+                const hasPrice = PRICE_RE.test(text);
+                const existing = harvested.get(href);
+                /* Bewaar als nieuw, of als deze versie prijs heeft en de oude niet,
+                   of als deze compacter/completer is (maar wel <= 300 chars). */
+                const compact = text.length <= 300 ? text : text.slice(0, 300);
+                if (!existing || (!existing.hasPrice && hasPrice)) {
+                    harvested.set(href, { text: compact, hasPrice });
+                }
+            });
+        }
+
+        let y = 0;
+        let guard = 0;
+        let lastSize = 0;
+        let noGrowth = 0;   /* hoeveel stappen achter elkaar GEEN nieuwe producten */
+        while (guard < MAX_STEPS) {
+            window.scrollTo({ top: y, behavior: 'auto' });
+            await sleep(450 + Math.random() * 200); /* laat virtualized content + API renderen */
+            harvestVisible();
+
+            const docHeight = document.documentElement.scrollHeight;
+            const atBottom = y >= docHeight - viewportH;
+
+            /* Early-exit: stop zodra het aantal producten 3 stappen lang niet groeit.
+               Robuuster dan docHeight-stabiliteit (die op SPA's blijft schommelen). */
+            if (harvested.size === lastSize) {
+                noGrowth++;
+            } else {
+                noGrowth = 0;
+                lastSize = harvested.size;
+            }
+            if (noGrowth >= 3 && atBottom) break;   /* onderaan + geen groei = klaar */
+            if (noGrowth >= 6) break;                /* geen groei al lang = klaar (safety) */
+
+            y += step;
+            guard++;
+        }
+
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        await sleep(200);
+        harvestVisible();
+
+        /* Bouw een COMPACTE tekstlijst — alleen kaarten met prijs.
+           Veel kleiner dan rauwe HTML, en betrouwbaarder voor Claude te parsen. */
+        const all = Array.from(harvested.entries());
+        const withPrice = all.filter(([, v]) => v.hasPrice);
+        const lines = withPrice.map(([href, v], i) =>
+            `${i + 1}. ${v.text}  [PRODUCT_URL: ${href}]`
+        );
+        const blob =
+            '<product_list note="Elke regel is 1 product met zichtbare tekst (merk, naam, eenheid, prijs) en URL. Extraheer naam, prijs en eenheid per regel.">\n' +
+            lines.join('\n') +
+            '\n</product_list>';
+        return {
+            html: blob.slice(0, 200000),
+            totalCards: harvested.size,
+            cardsWithPrice: withPrice.length,
+        };
     }
 
     /* ────────────────────────────────────────────────────────────────────
@@ -552,6 +631,99 @@
                     };
                     pushEvent('message:error', { type, error: response.error });
                     return response;
+                }
+            }
+
+            if (type === 'BBQ_HARVEST_HTML') {
+                /* Virtualized-list harvest: scroll + verzamel productkaarten.
+                   Voor sites zoals Bidfood waar 1 capture de meeste producten mist. */
+                try {
+                    const result = await withTimeoutLocal('HARVEST', 60000, async () => harvestProductCards());
+                    return {
+                        ok: !!result.html && result.totalCards > 0,
+                        html: result.html,
+                        url: location.href,
+                        debug: {
+                            durationMs: Math.round(performance.now() - started),
+                            totalCards: result.totalCards,
+                            cardsWithPrice: result.cardsWithPrice,
+                            htmlLength: result.html.length,
+                            meta: pageMeta(),
+                        },
+                    };
+                } catch (err) {
+                    pushEvent('message:error', { type, error: toErrorMessage(err) });
+                    return { ok: false, html: '', error: toErrorMessage(err) };
+                }
+            }
+
+            if (type === 'BBQ_GET_RAW_HTML') {
+                /* RAW: zonder stripHtmlNoise + zonder findProductGrid.
+                   SMART CONTAINER: zoekt het element met de meeste product-links
+                   en stuurt DAT. Voorkomt dat we de eerste 400KB met header/categorie-
+                   cards sturen terwijl de hoofdlijst onderaan staat (Bidfood-pattern). */
+                try {
+                    const PRODUCT_LINK_SEL = 'a[href*="product" i], a[href*="/p/" i], a[href*="/p." i]';
+                    const allProductLinks = document.querySelectorAll(PRODUCT_LINK_SEL);
+
+                    /* Stap 1: zoek het element met de meeste product-links als descendants. */
+                    let bestContainer = null;
+                    let bestScore = 0;
+                    /* Begin breed: alle div/ul/ol/section/main, daarna closest common ancestor. */
+                    const candidates = document.querySelectorAll('main, [role="main"], section, ul, ol, div');
+                    for (let i = 0; i < candidates.length; i++) {
+                        const el = candidates[i];
+                        const links = el.querySelectorAll(PRODUCT_LINK_SEL).length;
+                        /* Voorkom dat we te brede containers pakken (zoals <body>):
+                           moet >= 8 product-links hebben EN niet de hele body zijn. */
+                        if (links >= 8 && links > bestScore && el !== document.body) {
+                            bestScore = links;
+                            bestContainer = el;
+                        }
+                    }
+
+                    /* Stap 2: pak ofwel die slimme container, ofwel body als fallback. */
+                    let pickedRoot;
+                    let pickedReason;
+                    if (bestContainer && bestScore >= 8) {
+                        pickedRoot = bestContainer;
+                        pickedReason = 'productContainer';
+                    } else {
+                        pickedRoot = document.body || document.documentElement;
+                        pickedReason = 'body';
+                    }
+
+                    const clone = pickedRoot.cloneNode(true);
+                    clone.querySelectorAll('script, style, svg, iframe, noscript, link, meta').forEach(n => n.remove());
+
+                    let raw = clone.outerHTML;
+                    let trimStrategy = 'none';
+                    /* Claude Haiku ondersteunt ~200K input tokens (~700KB HTML).
+                       Cap op 800KB om binnen die marge te blijven met systemprompt. */
+                    if (raw.length > 800000) {
+                        raw = raw.slice(-800000);
+                        trimStrategy = 'tail-800k';
+                    }
+
+                    return {
+                        ok: !!raw,
+                        html: raw,
+                        url: location.href,
+                        debug: {
+                            durationMs: Math.round(performance.now() - started),
+                            htmlLength: raw.length,
+                            pickedReason,
+                            containerProductLinks: bestScore,
+                            trimStrategy,
+                            totalProductLinks: allProductLinks.length,
+                            priceMatches: (document.body.innerText.match(/€\s*\d+[,.]\d+|\b\d+,\d{2}\b/g) || []).length,
+                            mainExists: !!document.querySelector('main, [role="main"]'),
+                            bodyTextLength: document.body.innerText.length,
+                            meta: pageMeta(),
+                        },
+                    };
+                } catch (err) {
+                    return { ok: false, html: '', error: toErrorMessage(err) };
                 }
             }
 

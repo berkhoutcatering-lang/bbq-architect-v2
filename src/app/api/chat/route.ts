@@ -896,6 +896,27 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
 
         const isOnFinancien = normalizedPage === '/financien';
 
+        /* ── SMART MODEL DOWNGRADE (kosten-optimalisatie) ──────────────────────
+           Deep-mode (Opus 4.7, ~6x duurder dan Sonnet) is per-pagina default op
+           /gerechten + /marges + /recepten voor brainstorm en recept-uitwerking.
+           Maar een losse Q&A daar ("welke allergenen zitten in dit gerecht?")
+           heeft die diepte niet nodig. Als GEEN diepe intent actief is én de vraag
+           kort is én er geen foto bij zit, val terug op Sonnet. De brainstorm-,
+           develop-, finance- en materieel-paden behouden hun eigen model + tokens
+           (die worden hieronder expliciet gezet en overschrijven dit alsnog).
+           Resultaat: ~80% goedkoper op losse menu-vragen, geen kwaliteitsverlies
+           op de paden die Opus echt nodig hebben. */
+        let effectiveThinking = modeDef.thinking;
+        const deepIntentActive = wantsBrainstorm || wantsDevelop || wantsMaterieelImport || isOnFinancien;
+        const isShortQuery = lastUserMsg.length < 180;
+        const hasAttachments = !!(attachments && attachments.length > 0);
+        if (thinkingMode === 'deep' && !deepIntentActive && isShortQuery && !hasAttachments) {
+            selectedModel = MODEL_MAP.sonnet;
+            if (maxTokens > 1000) maxTokens = 1000;
+            effectiveThinking = false;
+            console.log('[chat] Smart downgrade: deep->sonnet (korte Q&A, geen diepe intent)');
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const streamParams: any = {
             model: selectedModel,
@@ -955,10 +976,12 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             streamParams.tools = [respondWithBlocksTool];
             streamParams.tool_choice = { type: 'tool', name: 'respond_with_blocks' };
             console.log('[chat] Tool-use forced: respond_with_blocks (page=' + pageContext + ')');
-        } else if (modeDef.thinking) {
+        } else if (effectiveThinking) {
             // Extended thinking voor deep-mode (Opus 4.7 = adaptive + output_config.effort).
+            // effectiveThinking is false geworden bij smart-downgrade naar Sonnet,
+            // zodat we geen thinking-params naar een gedowngrade Sonnet-call sturen.
             streamParams.thinking = { type: 'adaptive' };
-            streamParams.output_config = { effort: modeDef.thinking.effort };
+            streamParams.output_config = { effort: effectiveThinking.effort };
         }
 
         const stream = client.messages.stream(streamParams);

@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import { renderSignedCertificate } from '@/lib/signedPdfRenderer';
+import { mailOfferteGeaccepteerd, mailFactuurServer } from '@/lib/serverMail';
+import { isOfferteAccepted, OFFERTE_STATUS, EVENT_STATUS } from '@/lib/statuses';
+import { resolveClientEmail } from '@/lib/resolveClientEmail';
 
 /* Zod-schema voor accept-payload — voorkomt XSS in signedBy (komt in
    audit-PDF + email), DoS via mega-signatureUrl, en string-injection
@@ -80,12 +83,14 @@ export async function POST(req: NextRequest) {
         if (fetchErr || !offerte) return NextResponse.json({ error: 'Offerte niet gevonden' }, { status: 404 });
 
         // Already accepted? Skip workflow but return success
-        if (offerte.status === 'geaccepteerd' || offerte.status === 'akkoord' || offerte.status === 'betaald') {
+        // Canonical check accepteert legacy aliases (akkoord/goedgekeurd) en betaald.
+        if (isOfferteAccepted(offerte.status)) {
             return NextResponse.json({ success: true, message: 'Offerte was al geaccepteerd', skipped: true });
         }
 
         // 2. Update offerte status + signature data (audit-trail: signer, IP, UA, timestamp)
-        const updatePayload: Record<string, any> = { status: 'geaccepteerd' };
+        // Schrijf altijd canonical 'geaccepteerd' — geen alias-vervuiling meer.
+        const updatePayload: Record<string, any> = { status: OFFERTE_STATUS.GEACCEPTEERD };
         if (signedBy) updatePayload.signed_by = signedBy;
         if (signatureUrl) updatePayload.signature_url = signatureUrl;
         updatePayload.signed_at = signedAtIso;
@@ -176,7 +181,7 @@ export async function POST(req: NextRequest) {
                 location: offerte.client_adres || '',
                 client_naam: offerte.client_naam || '',
                 client_adres: offerte.client_adres || '',
-                status: 'confirmed',
+                status: EVENT_STATUS.CONFIRMED,
                 notitie: offerte.notitie || '',
                 organization_id: orgId,
             };
@@ -224,11 +229,105 @@ export async function POST(req: NextRequest) {
             facturenNummers,
         });
 
+        /* 5. Confirmation- + factuur-mail — fire-and-forget. Failures gaan naar
+           console-log; klant heeft portal-confirmatie ook gezien. Twee mails:
+            (a) bevestiging accept (altijd indien client_email aanwezig)
+            (b) factuur (alleen als net aangemaakt EN client_email) */
+        const totaalIncBtw = (items as Array<Record<string, unknown>>).reduce(function (sum: number, x: Record<string, unknown>) {
+            const qty = Number(x.qty) || 0;
+            const prijs = Number(x.prijs) || 0;
+            const btw = Number(x.btw) || 0;
+            const line = qty * prijs;
+            return sum + line + line * (btw / 100);
+        }, 0);
+        const bedrijfsnaam = (settings && (settings as Record<string, unknown>).bedrijfsnaam as string)
+            || (settings && (settings as Record<string, unknown>).bedrijf as string)
+            || 'BBQ Architect';
+        const brandColor = settings && (settings as Record<string, unknown>).brand_color as string;
+        const ondertitel = settings && (settings as Record<string, unknown>).ondertitel as string;
+
+        /* Klant-email resolven: offerte.client_email → klanten.email (op naam) →
+           events.client_email. Best-effort; null = mail wordt geskipt. */
+        const clientEmail = await resolveClientEmail(sb!, {
+            orgId: offerte.organization_id,
+            clientNaam: offerte.client_naam,
+            clientEmail: offerte.client_email,
+            offerteId: offerteIdNum,
+            eventId,
+        });
+
+        if (clientEmail) {
+            mailOfferteGeaccepteerd({
+                clientEmail,
+                clientNaam: (offerte.client_naam as string) || '',
+                offerteNummer: String(offerte.nummer || offerte.id),
+                eventDatum: (offerte.datum as string) || undefined,
+                totaalIncBtw: totaalIncBtw || undefined,
+                bedrijfsnaam,
+                brandColor: brandColor || undefined,
+                ondertitel: ondertitel || undefined,
+            }).then(function (r) {
+                if (!r.success) console.error('[ACCEPT-API] Confirmation email failed:', r.error);
+            }).catch(function (err) {
+                console.error('[ACCEPT-API] Confirmation email exception:', err);
+            });
+        }
+
+        /* Factuur-mail alleen als de workflow een nieuwe factuur heeft aangemaakt.
+           "Bestond al" betekent dat de mail eerder is verstuurd (of moet zijn) —
+           dubbel-mailen is irritant en kan gezien worden als phishing/spam. */
+        const newlyCreated = workflow.factuur.success
+            && /aangemaakt/i.test(workflow.factuur.message)
+            && workflow.factuur.factuurId;
+        if (newlyCreated && clientEmail) {
+            try {
+                const { data: factuurRow } = await sb!.from('facturen')
+                    .select('id,nummer,datum,vervaldatum')
+                    .eq('id', workflow.factuur.factuurId!)
+                    .single();
+                if (factuurRow) {
+                    mailFactuurServer({
+                        clientEmail,
+                        clientNaam: (offerte.client_naam as string) || '',
+                        factuurNummer: String(factuurRow.nummer || factuurRow.id),
+                        factuurDatum: factuurRow.datum || undefined,
+                        vervaldatum: factuurRow.vervaldatum || undefined,
+                        totaalIncBtw,
+                        bedrijfsnaam,
+                        brandColor: brandColor || undefined,
+                        ondertitel: ondertitel || undefined,
+                    }).then(function (r) {
+                        if (!r.success) console.error('[ACCEPT-API] Factuur-mail failed:', r.error);
+                    }).catch(function (err) {
+                        console.error('[ACCEPT-API] Factuur-mail exception:', err);
+                    });
+                }
+            } catch (fetchErr: any) {
+                console.error('[ACCEPT-API] Factuur fetch for mail failed:', fetchErr?.message);
+            }
+        }
+
+        /* 6. Build response with warnings — workflow runt parallel via allSettled,
+           dus sub-stappen kunnen falen zonder dat de accept-actie faalt. We
+           surface deze fouten zodat de UI (offertes/page.tsx SyncCascade) ze
+           kan tonen en de operator weet wat handmatig moet. */
+        const warnings: Array<{ step: string; message: string }> = [];
+        if (!workflow.factuur.success) warnings.push({ step: 'factuur', message: workflow.factuur.message });
+        if (!workflow.prep.success) warnings.push({ step: 'prep', message: workflow.prep.message });
+        if (!workflow.inkoop.success) warnings.push({ step: 'inkoop', message: workflow.inkoop.message });
+        if (!workflow.haccp.success) warnings.push({ step: 'haccp', message: workflow.haccp.message });
+        if (!workflow.courses.success) warnings.push({ step: 'courses', message: workflow.courses.message });
+        if (!workflow.logistics.success) warnings.push({ step: 'logistics', message: workflow.logistics.message });
+        if (!workflow.moneybird.success && !/niet geconfigureerd|geen config/i.test(workflow.moneybird.message)) {
+            warnings.push({ step: 'moneybird', message: workflow.moneybird.message });
+        }
+
         return NextResponse.json({
             success: true,
             message: 'Offerte geaccepteerd en workflow uitgevoerd',
             eventId,
             workflow,
+            warnings: warnings.length > 0 ? warnings : undefined,
         });
 
     } catch (e: any) {

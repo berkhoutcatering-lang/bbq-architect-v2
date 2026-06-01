@@ -41,7 +41,7 @@ export default function ReferralPage() {
     if (!orgId || !supabase) return;
     supabase
       .from('referrals')
-      .select('*')
+      .select('id, referral_code, status, credit_amount_cents, created_at, signed_up_at, paid_at, expires_at')
       .eq('referrer_org_id', orgId)
       .order('created_at', { ascending: false })
       .then(function (res) {
@@ -65,7 +65,7 @@ export default function ReferralPage() {
         referral_code: code,
         status: 'pending',
       })
-      .select('*')
+      .select('id, referral_code, status, credit_amount_cents, created_at, signed_up_at, paid_at, expires_at')
       .single();
 
     setCreating(false);

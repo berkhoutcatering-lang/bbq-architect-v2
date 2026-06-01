@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { CheckCircle2, Clock, XCircle, AlertTriangle, FileEdit, Eye, Send, CircleDot } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, AlertTriangle, FileEdit, Eye, Send, CircleDot, MessageCircle } from 'lucide-react';
 
 // Universeel statuskleur-schema (Principe #7: Cor's Taal)
 // groen  = bevestigd / betaald / ok / afgerond
@@ -40,6 +40,11 @@ const STATUS_ICON_MAP: Record<string, React.ReactNode> = {
   danger: <AlertTriangle size={12} />,
   afwijking: <AlertTriangle size={12} />,
   defect: <AlertTriangle size={12} />,
+  // Leads (Lead Funnel)
+  in_gesprek: <MessageCircle size={12} />,
+  offerte: <Send size={12} />,
+  gewonnen: <CheckCircle2 size={12} />,
+  verloren: <XCircle size={12} />,
 };
 
 const STATUS_PILL_MAP: Record<string, string> = {
@@ -82,6 +87,12 @@ const STATUS_PILL_MAP: Record<string, string> = {
   active: 'pill-green',
   stopped: 'pill-amber',
   signed: 'pill-blue',
+
+  // Leads (Lead Funnel) — nieuw hergebruikt pill-amber
+  in_gesprek: 'pill-blue',
+  offerte: 'pill-amber',
+  gewonnen: 'pill-green',
+  verloren: 'pill-red',
 };
 
 // Nederlandse weergavelabels
@@ -96,6 +107,24 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   active: 'Actief',
   stopped: 'Gestopt',
   signed: 'Getekend',
+  // Display-statussen (events-lijst + canonical statuses.ts) — hoofdletter-labels
+  // zodat de gedeelde badge ook de display-vorm netjes toont i.p.v. lowercase raw.
+  concept: 'Concept',
+  optie: 'Optie',
+  bevestigd: 'Bevestigd',
+  afgerond: 'Afgerond',
+  geannuleerd: 'Geannuleerd',
+  verzonden: 'Verzonden',
+  geaccepteerd: 'Geaccepteerd',
+  betaald: 'Betaald',
+  afgewezen: 'Afgewezen',
+  verlopen: 'Verlopen',
+  // Leads (Lead Funnel)
+  nieuw: 'Nieuw',
+  in_gesprek: 'In gesprek',
+  offerte: 'Offerte',
+  gewonnen: 'Gewonnen',
+  verloren: 'Verloren',
 };
 
 interface StatusBadgeProps {
