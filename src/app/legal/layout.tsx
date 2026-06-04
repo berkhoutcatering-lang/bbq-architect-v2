@@ -5,21 +5,25 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-[var(--color-bg-primary)] text-white font-['Outfit']">
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--card-solid)]">
-        <div className="max-w-[900px] mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/welkom" className="flex items-center gap-3 no-underline">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)]">
-              <Flame className="w-4 h-4 text-[var(--color-accent-gold)]" />
-            </div>
-            <div>
-              <div className="text-[13px] font-semibold tracking-[0.08em] text-white">BBQ ARCHITECT</div>
-              <div className="text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">Juridisch</div>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-5 text-[12px]">
-            <Link href="/legal/voorwaarden" className="text-[var(--muted)] hover:text-white no-underline">Voorwaarden</Link>
-            <Link href="/legal/privacy" className="text-[var(--muted)] hover:text-white no-underline">Privacy</Link>
-            <Link href="/legal/dpa" className="text-[var(--muted)] hover:text-white no-underline">Verwerkersovereenkomst</Link>
-            <Link href="/welkom" className="text-[var(--color-accent-gold)] hover:brightness-110 no-underline">← Terug</Link>
+        <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/welkom" className="flex items-center gap-2 sm:gap-3 no-underline min-w-0">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)] flex-shrink-0">
+                <Flame className="w-4 h-4 text-[var(--color-accent-gold)]" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12px] sm:text-[13px] font-semibold tracking-[0.06em] text-white truncate">BBQ ARCHITECT</div>
+                <div className="hidden sm:block text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">Juridisch</div>
+              </div>
+            </Link>
+            <Link href="/welkom" className="sm:hidden text-[12px] text-[var(--color-accent-gold)] no-underline whitespace-nowrap">← Terug</Link>
+          </div>
+          {/* Sub-nav scrollt horizontaal op smal mobile zodat Verwerkersovereenkomst niet afkapt. */}
+          <nav className="flex items-center gap-4 sm:gap-5 text-[12px] overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Link href="/legal/voorwaarden" className="text-[var(--muted)] hover:text-white no-underline whitespace-nowrap">Voorwaarden</Link>
+            <Link href="/legal/privacy" className="text-[var(--muted)] hover:text-white no-underline whitespace-nowrap">Privacy</Link>
+            <Link href="/legal/dpa" className="text-[var(--muted)] hover:text-white no-underline whitespace-nowrap">Verwerkersovereenkomst</Link>
+            <Link href="/welkom" className="hidden sm:inline text-[var(--color-accent-gold)] hover:brightness-110 no-underline whitespace-nowrap">← Terug</Link>
           </nav>
         </div>
       </header>

@@ -11,25 +11,25 @@ export default function WelkomPage() {
     <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] font-['Outfit']">
       {/* ═════════ HEADER ═════════ */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--card-solid)]">
-        <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/welkom" className="flex items-center gap-3 no-underline">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)]">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <Link href="/welkom" className="flex items-center gap-2 sm:gap-3 no-underline min-w-0">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)] flex-shrink-0">
               <Flame className="w-4 h-4 text-[var(--color-accent-gold)]" />
             </div>
-            <div>
-              <div className="text-[13px] font-semibold tracking-[0.08em] text-[var(--text)]">BBQ ARCHITECT</div>
-              <div className="text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">AI-catering-SaaS</div>
+            <div className="min-w-0">
+              <div className="text-[12px] sm:text-[13px] font-semibold tracking-[0.06em] text-[var(--text)] truncate">BBQ ARCHITECT</div>
+              <div className="hidden sm:block text-[9px] tracking-[0.25em] text-[var(--muted)] uppercase">AI-catering-SaaS</div>
             </div>
           </Link>
-          <nav className="flex items-center gap-5">
-            <Link href="/welkom" className="text-[13px] text-[var(--text)] no-underline">Home</Link>
-            <Link href="/pricing" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Prijzen</Link>
+          <nav className="flex items-center gap-3 sm:gap-5 flex-shrink-0">
+            <Link href="/welkom" className="hidden sm:inline text-[13px] text-[var(--text)] no-underline">Home</Link>
+            <Link href="/pricing" className="hidden sm:inline text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Prijzen</Link>
             <Link href="/login" className="text-[13px] text-[var(--muted)] hover:text-[var(--text)] no-underline">Inloggen</Link>
             <a
               href="mailto:berkhout.catering@gmail.com?subject=Demo BBQ Architect"
-              className="px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline"
+              className="px-3 sm:px-4 py-2 rounded-lg text-[12px] font-bold bg-[var(--color-accent-gold)] text-black hover:brightness-110 no-underline whitespace-nowrap"
             >
-              Plan een demo
+              Plan demo
             </a>
           </nav>
         </div>

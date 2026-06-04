@@ -25,8 +25,8 @@ import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
 
-const AUTH_PAGES = ['/login', '/signup', '/auth/'];
-const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/'];
+const AUTH_PAGES = ['/login', '/signup', '/auth/', '/onboarding'];
+const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/welkom', '/pricing', '/legal/', '/share/', '/m/'];
 
 // KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
 // Match drie routes:
@@ -215,7 +215,7 @@ function AppShellInner({ children }: { children: ReactNode }) {
           <div className="flex min-h-screen bg-[var(--bg)]">
             <Sidebar />
             <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
-              <header role="banner" style={{
+              <header role="banner" className="app-main-header" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 gap: 12, flexWrap: 'wrap',
               }}>

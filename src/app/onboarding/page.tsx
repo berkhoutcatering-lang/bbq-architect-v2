@@ -66,15 +66,16 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] font-['Outfit']">
       {/* Minimal header */}
       <header className="border-b border-[var(--card-solid)]">
-        <div className="max-w-[900px] mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)]">
+        <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#222228] to-[#111115] flex items-center justify-center border border-[var(--color-border-hover)] flex-shrink-0">
               <Flame className="w-3.5 h-3.5 text-[var(--color-accent-gold)]" />
             </div>
-            <div className="text-[12px] font-semibold tracking-[0.08em] text-[var(--text)]">BBQ ARCHITECT</div>
+            <div className="text-[12px] font-semibold tracking-[0.06em] text-[var(--text)] truncate">BBQ ARCHITECT</div>
           </div>
-          <Link href="/" className="text-[11px] text-[var(--muted)] hover:text-[var(--text)] no-underline">
-            Overslaan — direct naar dashboard
+          <Link href="/" className="text-[11px] text-[var(--muted)] hover:text-[var(--text)] no-underline whitespace-nowrap flex-shrink-0">
+            <span className="hidden sm:inline">Overslaan — direct naar dashboard</span>
+            <span className="sm:hidden">Overslaan</span>
           </Link>
         </div>
       </header>
