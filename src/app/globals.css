@@ -2361,7 +2361,10 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
 
 /* Mobile: tabs scrollen horizontaal i.p.v. overlappen + zijn sticky.
    Op smal scherm passen 5+ tabs niet naast elkaar — wrap of overlap is rommelig.
-   Sticky zodat ze blijven plakken bij lange lijsten (Wave 0 mobile foundation). */
+   Sticky zodat ze blijven plakken bij lange lijsten (Wave 0 mobile foundation).
+   Wrapper-trick: een buiten-container krijgt de fade-mask zodat duidelijk is
+   dat de tab-rij door-scrolt (zonder de scroll-positie van de bar zelf te
+   kapen — vandaar mask op de bar zelf via fixed background-attachment). */
 @media (max-width: 767px) {
   .tab-bar {
     overflow-x: auto;
@@ -2373,6 +2376,11 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
     z-index: 30;
     /* Solid background so content scrolling underneath doesn't bleed through */
     background: var(--card);
+    /* Fade right edge to signal "scroll for more". Mask is gradient that
+       fades the rightmost ~28px so cut-off labels become visually-truncated
+       on purpose instead of looking like a layout bug. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+            mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
   }
   .tab-bar::-webkit-scrollbar { display: none; }
   .tab-btn {
