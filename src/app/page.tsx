@@ -672,17 +672,24 @@ export default function DashboardPage() {
               />
             </div>
             <div className="sidebar-hidden-logo dashboard-header__title min-w-0">
+              {/* Bedrijfsnaam staat boven (belangrijker voor operator), brand-mark eronder.
+                  Op smal scherm krimpt de bedrijfsnaam mee zodat lange namen niet afkappen. */}
               <h1
-                className="text-[14px] font-semibold tracking-[0.08em] truncate"
-                style={{ color: 'var(--text)', fontFamily: "'Outfit', sans-serif" }}
+                className="font-semibold truncate"
+                style={{
+                  color: 'var(--text)',
+                  fontFamily: "'Outfit', sans-serif",
+                  fontSize: 'clamp(13px, 4vw, 15px)',
+                  letterSpacing: '0.02em',
+                }}
               >
-                BBQ ARCHITECT
+                {brand?.bedrijfsnaam || 'Hop & Bites'}
               </h1>
               <p
-                className="text-[9px] tracking-[0.25em] uppercase truncate"
+                className="text-[9px] tracking-[0.2em] uppercase truncate"
                 style={{ color: 'var(--muted)' }}
               >
-                {brand?.bedrijfsnaam || 'Catering'}
+                BBQ ARCHITECT
               </p>
             </div>
           </div>

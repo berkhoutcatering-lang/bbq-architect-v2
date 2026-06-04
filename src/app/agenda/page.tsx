@@ -135,7 +135,7 @@ function KpiTile({ Icon, color, label, value, sub }: { Icon: IconComponent; colo
                 <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{label}</span>
                 <Icon size={14} style={{ color }} />
             </div>
-            <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 24, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
+            <div style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 'clamp(18px, 5.5vw, 24px)', color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>
         </div>
     );

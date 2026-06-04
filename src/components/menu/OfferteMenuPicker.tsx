@@ -41,7 +41,8 @@ const DRAWER_PANEL: CSSProperties = {
     display: 'flex', flexDirection: 'column',
 };
 const DRAWER_HEADER: CSSProperties = {
-    display: 'flex', gap: 16, padding: '20px 24px',
+    /* padding-right reserveert ruimte voor de absolute close-X (16 + 32 + 8). */
+    display: 'flex', gap: 16, padding: '20px 60px 20px 24px',
     borderBottom: '1px solid var(--border)', position: 'relative', flexShrink: 0,
 };
 const DRAWER_CLOSE: CSSProperties = {
