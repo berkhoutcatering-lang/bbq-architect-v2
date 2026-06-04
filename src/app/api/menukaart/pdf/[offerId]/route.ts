@@ -1,8 +1,14 @@
 /**
- * GET /api/menukaart/pdf/[offerId]
+ * GET/POST /api/menukaart/pdf/[offerId]
  *
  * Genereert server-side een menukaart-PDF voor de gegeven offerte met de
  * gekozen template + brand/custom cascade-overrides. Output: application/pdf.
+ *
+ * GET  → leest álles uit de DB (share-link, e-mail-attachment, print-preview).
+ * POST → accepteert een live preview-body zodat de Menu-&-menukaart-canva de
+ *        actuele selectie + styling kan downloaden zonder eerst te saven.
+ *        Zonder dit pad rendert de PDF stale DB-state (Sam, 2026-06-04:
+ *        dessert "Bavarois" ipv "Aardbeien dessert" in de canva).
  *
  * Multi-tenant: RLS doet automatisch tenant-isolatie via auth.uid().
  * Een gebruiker die niet bij de offerte hoort krijgt 404 (RLS filtert hem weg).
@@ -145,13 +151,45 @@ function parseMenuField(raw: unknown): number[] {
     return [];
 }
 
-export async function GET(
+/* Body-shape voor live-preview overrides — alle velden optioneel; ontbrekende
+ * velden vallen door naar de DB-state. Normalisatie is paranoïde: alleen
+ * { [gangSlug:string]: string[] } wordt geaccepteerd voor menuSelectie. */
+type LiveOverrides = {
+    menuSelectie?: Record<string, string[]>;
+    templateId?: string;
+    customOverrides?: Overrides;
+};
+
+function normaliseLiveBody(raw: unknown): LiveOverrides {
+    if (!raw || typeof raw !== 'object') return {};
+    const r = raw as Record<string, unknown>;
+    const out: LiveOverrides = {};
+    if (r.menuSelectie && typeof r.menuSelectie === 'object' && !Array.isArray(r.menuSelectie)) {
+        const sel: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(r.menuSelectie as Record<string, unknown>)) {
+            if (Array.isArray(v)) {
+                const names = v.filter((n): n is string => typeof n === 'string');
+                if (names.length > 0) sel[k] = names;
+            }
+        }
+        out.menuSelectie = sel;
+    }
+    if (typeof r.templateId === 'string' && r.templateId.length > 0 && r.templateId.length < 64) {
+        out.templateId = r.templateId;
+    }
+    if (r.customOverrides && typeof r.customOverrides === 'object' && !Array.isArray(r.customOverrides)) {
+        out.customOverrides = r.customOverrides as Overrides;
+    }
+    return out;
+}
+
+async function renderMenukaartPdf(
     req: NextRequest,
-    { params }: { params: Promise<{ offerId: string }> },
-) {
+    offerId: string,
+    live: LiveOverrides,
+): Promise<NextResponse> {
     try {
         ensureFontsRegistered();
-        const { offerId } = await params;
         const supabase = await createServerSupabase();
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -175,14 +213,18 @@ export async function GET(
             .limit(1)
             .maybeSingle();
 
+        // Live preview-overrides (POST) winnen van de DB-state — zo komt de
+        // Download-PDF-knop in de canva altijd overeen met de live preview,
+        // ook als de cateraar nog niet "Opslaan" heeft geklikt.
         const templateId =
+            live.templateId ||
             (offer.menukaart_template_id as string | null) ||
             (settings?.menukaart_template_id as string | null) ||
             DEFAULT_TEMPLATE_ID;
 
         const template = getTemplate(templateId);
         const brand = (settings?.menukaart_overrides as Overrides) ?? {};
-        const custom = (offer.menukaart_overrides as Overrides) ?? {};
+        const custom = live.customOverrides ?? (offer.menukaart_overrides as Overrides) ?? {};
         const resolved = resolveCascade(template, brand, custom);
         const flat = flatten(resolved) as Overrides;
 
@@ -197,7 +239,7 @@ export async function GET(
         // Fallback: gekoppeld event (legacy menu-ids). Default = empty-state
         // (NOOIT DEMO_MENU naar productie — klant zou Hop & Bites-demo zien).
         let menuData: MenuData = emptyMenu(logoUrl, logoUrlDonker);
-        const offerSelectie = offer.menu_selectie as Record<string, string[]> | null;
+        const offerSelectie = live.menuSelectie ?? (offer.menu_selectie as Record<string, string[]> | null);
         if (offerSelectie && countDishes(offerSelectie) > 0) {
             const [{ data: ger }, { data: gangen }] = await Promise.all([
                 supabase.from('gerechten').select('naam, beschrijving, gang_slug, allergenen'),
@@ -253,4 +295,22 @@ export async function GET(
         console.error('[/api/menukaart/pdf] failed:', msg);
         return NextResponse.json({ error: 'PDF maken mislukt: ' + msg }, { status: 500 });
     }
+}
+
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ offerId: string }> },
+) {
+    const { offerId } = await params;
+    return renderMenukaartPdf(req, offerId, {});
+}
+
+export async function POST(
+    req: NextRequest,
+    { params }: { params: Promise<{ offerId: string }> },
+) {
+    const { offerId } = await params;
+    let body: unknown = {};
+    try { body = await req.json(); } catch { /* lege of ongeldige body — fallback op DB */ }
+    return renderMenukaartPdf(req, offerId, normaliseLiveBody(body));
 }

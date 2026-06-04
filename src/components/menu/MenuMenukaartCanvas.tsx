@@ -198,7 +198,19 @@ export default function MenuMenukaartCanvas({
         if (!offerId) return;
         setDownloading(true);
         try {
-            const res = await fetch(`/api/menukaart/pdf/${offerId}`);
+            /* POST de actuele canva-state mee — anders rendert de server de stale
+               DB-versie en mismatcht de PDF met de live-preview rechts (Sam,
+               2026-06-04: dessert "Bavarois" in de PDF ipv "Aardbeien dessert"
+               in de canva omdat onSave op /offertes alleen form-state update). */
+            const res = await fetch(`/api/menukaart/pdf/${offerId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    menuSelectie,
+                    templateId: activeTemplateId,
+                    customOverrides: overrides,
+                }),
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
