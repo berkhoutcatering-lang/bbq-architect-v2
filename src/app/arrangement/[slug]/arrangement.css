@@ -64,6 +64,7 @@
 .qf-check.on { background: var(--brand-1); border-color: var(--brand-1); color: var(--on-brand); }
 .qf-consent.err .qf-check { border-color: var(--danger-line); }
 .qf-consent-text { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); }
+.qf-consent-text a { color: var(--brand-2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .qf-consent-err { margin: 7px 0 0 33px; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--danger); }
 .cfg-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 

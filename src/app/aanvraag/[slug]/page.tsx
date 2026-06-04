@@ -415,7 +415,7 @@ export default function AanvraagPage() {
                 <span className={'qf-check' + (form.gdpr_consent ? ' on' : '')} role="checkbox" aria-checked={form.gdpr_consent} tabIndex={0}>
                   {form.gdpr_consent && <QFIcon name="check" size={14} stroke={2.4} />}
                 </span>
-                <span className="qf-consent-text">Ik ga akkoord dat mijn gegevens worden gebruikt om contact met mij op te nemen over deze aanvraag.</span>
+                <span className="qf-consent-text">Ik ga akkoord dat mijn gegevens worden gebruikt om contact met mij op te nemen over deze aanvraag. <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>Privacyverklaring</a></span>
               </div>
               {errFor('gdpr_consent') && <div className="qf-consent-err" role="alert"><QFIcon name="alert" size={13} stroke={1.9} />{errFor('gdpr_consent')}</div>}
 
