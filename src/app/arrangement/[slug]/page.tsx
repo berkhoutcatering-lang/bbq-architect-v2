@@ -21,7 +21,7 @@
    - Budget: optioneel; subtiele "binnen budget ✓" wanneer eronder — nooit een
      ontmoedigende "erover"-melding tijdens het kiezen. */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { themeStyleVars, getThemeMode } from '@/lib/portalThemes';
 import type { ArrangementConfigResponse, ArrangementPublic } from '@/types/arrangement';
@@ -255,6 +255,32 @@ function Configurator({ slug, tenant, arrangement }: {
   const [busy, setBusy] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
 
+  /* ── Funnel-tracking (anoniem, fire-and-forget, eenmalig per sessie) ── */
+  const sessionRef = useRef<string | null>(null);
+  const track = useCallback((event: 'view' | 'start' | 'submit') => {
+    try {
+      const fk = `cfg-ev-${event}-${arrangement.id}`;
+      if (sessionStorage.getItem(fk)) return;
+      sessionStorage.setItem(fk, '1');
+    } catch { /* sessionStorage onbeschikbaar → toch versturen */ }
+    try {
+      fetch(`/api/public-arrangement/${slug}/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event, session_id: sessionRef.current, arrangement_id: arrangement.id }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch { /* een beacon mag de pagina nooit storen */ }
+  }, [slug, arrangement.id]);
+  useEffect(() => {
+    try {
+      let s = sessionStorage.getItem('cfg-sid');
+      if (!s) { s = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2); sessionStorage.setItem('cfg-sid', s); }
+      sessionRef.current = s;
+    } catch { sessionRef.current = Math.random().toString(36).slice(2); }
+    track('view');
+  }, [track]);
+
   const pp = cats.reduce((sum, c) => sum + (sel[c.id] ? (c.levels.find((l) => l.id === sel[c.id])?.prijs ?? 0) : 0), 0);
   const budgetNum = parseBudget(budget);
   const withinBudget = budgetNum != null && pp > 0 && pp * gasten <= budgetNum;
@@ -299,7 +325,7 @@ function Configurator({ slug, tenant, arrangement }: {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) { setDir(1); setPhase('success'); window.scrollTo({ top: 0 }); }
+      if (res.ok && data.success) { track('submit'); setDir(1); setPhase('success'); window.scrollTo({ top: 0 }); }
       else if (data.fields) { setShowErr(true); setSubmitErr('Controleer de gemarkeerde velden.'); }
       else setSubmitErr(data.error || 'Er ging iets mis — probeer het later opnieuw.');
     } catch {
@@ -337,7 +363,7 @@ function Configurator({ slug, tenant, arrangement }: {
                 <input className="cfg-start-budget" type="text" inputMode="numeric" placeholder="bijv. € 2.500 totaal" value={budget} onChange={(e) => setBudget(e.target.value)} />
               </div>
             </div>
-            <button className="cfg-start-cta" onClick={() => { if (gasten < minGasten) { popToast(gasten < 1 ? 'Vul eerst het aantal gasten in.' : `Dit arrangement is vanaf ${minGasten} gasten — pas het aantal even aan.`); return; } go('step', 0, 1); }}>Begin met samenstellen<QFIcon name="arrowRight" size={18} stroke={1.9} /></button>
+            <button className="cfg-start-cta" onClick={() => { if (gasten < minGasten) { popToast(gasten < 1 ? 'Vul eerst het aantal gasten in.' : `Dit arrangement is vanaf ${minGasten} gasten — pas het aantal even aan.`); return; } track('start'); go('step', 0, 1); }}>Begin met samenstellen<QFIcon name="arrowRight" size={18} stroke={1.9} /></button>
             <div className="cfg-start-trust">
               <span><QFIcon name="shield" size={14} />Vrijblijvend</span>
               <span><QFIcon name="clock" size={14} />Reactie binnen 24 uur</span>
@@ -442,7 +468,7 @@ function Configurator({ slug, tenant, arrangement }: {
                 <div className={'qf-consent' + (errFor('consent') ? ' err' : '')}
                   onClick={() => setContact((s) => ({ ...s, consent: !s.consent }))}>
                   <span className={'qf-check' + (contact.consent ? ' on' : '')} role="checkbox" aria-checked={contact.consent} tabIndex={0}>{contact.consent && <QFIcon name="check" size={14} stroke={2.4} />}</span>
-                  <span className="qf-consent-text">Ik ga akkoord dat mijn gegevens worden gebruikt om contact met mij op te nemen over deze aanvraag.</span>
+                  <span className="qf-consent-text">Ik ga akkoord dat mijn gegevens worden gebruikt om contact met mij op te nemen over deze aanvraag. <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>Privacyverklaring</a></span>
                 </div>
                 {errFor('consent') && <div className="qf-consent-err"><QFIcon name="alert" size={13} stroke={1.9} />{errFor('consent')}</div>}
                 {submitErr && <div className="qf-consent-err"><QFIcon name="alert" size={13} stroke={1.9} />{submitErr}</div>}

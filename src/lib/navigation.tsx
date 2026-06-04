@@ -3,7 +3,7 @@ import {
     ChefHat, Calendar, PartyPopper, BarChart3,
     ShoppingCart, Package, Clock,
     Settings, Building2, Users, Inbox, Globe,
-    HelpCircle, Sparkles, ScanLine, Car, Store,
+    HelpCircle, Sparkles, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive,
 } from "lucide-react";
@@ -54,6 +54,7 @@ export const navSections: NavSection[] = [
         hubHref: "/offertes",
         children: [
             { label: "Aanvragen", icon: <Inbox size={16} />, href: "/verkoop/leads", description: "Inkomende aanvragen + pijplijn" },
+            { label: "Arrangementen", icon: <Layers size={16} />, href: "/verkoop/arrangementen", description: "Wat klanten zelf kunnen samenstellen — categorieën, niveaus, indicatieprijs" },
             { label: "Offertes", icon: <Receipt size={16} />, href: "/offertes", description: "Offertes opstellen en versturen" },
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
         ],

@@ -54,6 +54,7 @@ export default function ArrangementenPage() {
   const [cats, setCats] = useState<Categorie[]>([]);
   const [slug, setSlug] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [funnel, setFunnel] = useState<{ view: number; start: number; submit: number } | null>(null);
   const [copied, setCopied] = useState(false);
 
   /* arrangement-instellingen (dirty-tracking) */
@@ -90,8 +91,14 @@ export default function ArrangementenPage() {
         byCat.set(row.categorie_id, list);
       }
       setCats(catRows.map((x) => ({ ...x, niveaus: byCat.get(x.id) ?? [] })));
+      /* Trechter-tellingen (3 count-queries; head = geen rijen, alleen count). */
+      const [v, s, sub] = await Promise.all((['view', 'start', 'submit'] as const).map((ev) =>
+        supabase.from('funnel_events').select('id', { count: 'exact', head: true }).eq('arrangement_id', a.id).eq('event', ev),
+      ));
+      setFunnel({ view: v.count ?? 0, start: s.count ?? 0, submit: sub.count ?? 0 });
     } else {
       setCats([]);
+      setFunnel(null);
     }
     setLoading(false);
   }, [orgId]);
@@ -268,6 +275,23 @@ export default function ArrangementenPage() {
                 </div>
               )}
             </section>
+
+            {funnel && (
+              <section className="arr-card arr-funnel">
+                <div className="arr-funnel-top">
+                  <span className="arr-funnel-label">Trechter</span>
+                  <span className="arr-funnel-conv">{funnel.view > 0 ? Math.round((funnel.submit / funnel.view) * 100) : 0}% conversie</span>
+                </div>
+                <div className="arr-funnel-row">
+                  <div className="arr-funnel-step"><b>{funnel.view}</b><span>Bekeken</span></div>
+                  <span className="arr-funnel-arrow">→</span>
+                  <div className="arr-funnel-step"><b>{funnel.start}</b><span>Gestart</span></div>
+                  <span className="arr-funnel-arrow">→</span>
+                  <div className="arr-funnel-step accent"><b>{funnel.submit}</b><span>Aangevraagd</span></div>
+                </div>
+                {funnel.view === 0 && <div className="arr-funnel-hint">Nog geen bezoekers — deel je publieke link om de trechter te vullen.</div>}
+              </section>
+            )}
 
             {/* Categorieën */}
             <div className="arr-section-head">

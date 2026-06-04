@@ -57,6 +57,20 @@
 /* save-bar */
 .arr-save-bar { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--muted); }
 
+/* ── Trechter (funnel-analytics) ───────────────────────────────────────────── */
+.arr-funnel { padding: 16px 18px; margin-bottom: 26px; }
+.arr-funnel-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.arr-funnel-label { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.arr-funnel-conv { font-size: 12px; font-weight: 700; color: var(--brand-gold, var(--brand)); background: var(--brand-tint, rgba(255,191,0,.1)); border-radius: 999px; padding: 3px 11px; }
+.arr-funnel-row { display: flex; align-items: stretch; gap: 6px; }
+.arr-funnel-step { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; align-items: center; text-align: center; padding: 12px 8px; border-radius: 11px; background: var(--bg-deep, var(--bg-subtle)); border: 1px solid var(--border); }
+.arr-funnel-step b { font-size: 22px; font-weight: 700; font-family: ui-monospace, Menlo, monospace; color: var(--text); line-height: 1; }
+.arr-funnel-step span { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.arr-funnel-step.accent { background: var(--brand-tint, rgba(255,191,0,.1)); border-color: var(--brand-tint-border, var(--border)); }
+.arr-funnel-step.accent b { color: var(--brand-gold, var(--brand)); }
+.arr-funnel-arrow { flex: none; display: flex; align-items: center; font-size: 16px; color: var(--muted-weak, var(--muted)); }
+.arr-funnel-hint { margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
 .arr-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: .15s; white-space: nowrap; }
 .arr-btn:disabled { opacity: .55; cursor: not-allowed; }
