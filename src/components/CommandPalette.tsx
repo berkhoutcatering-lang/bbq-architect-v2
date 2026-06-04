@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useIsPhone } from '@/hooks/useIsMobile';
 import { supabase } from '@/lib/supabase';
 import {
     Search, Calendar, FileText, Receipt, Package, ChefHat, BookOpen,
@@ -98,6 +99,7 @@ const typeConfig: Record<string, { icon: typeof Calendar; accent: string; label:
 };
 
 export default function CommandPalette() {
+    const isPhone = useIsPhone();
     const [open, setOpen] = useState(false);
     const [mode, setMode] = useState<'search' | 'ask'>('search');
     const [query, setQuery] = useState('');
@@ -368,7 +370,7 @@ export default function CommandPalette() {
                         value={query}
                         onChange={function (e) { setQuery(e.target.value); }}
                         onKeyDown={handleKeyDown}
-                        placeholder="Zoek events, offertes, recepten, klanten..."
+                        placeholder={isPhone ? "Zoek…" : "Zoek events, offertes, recepten, klanten..."}
                         aria-label="Zoeken"
                         style={{
                             flex: 1,
@@ -380,15 +382,17 @@ export default function CommandPalette() {
                             fontFamily: 'inherit',
                         }}
                     />
-                    <kbd style={{
-                        fontSize: 10,
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        background: 'var(--muted-extra-light)',
-                        border: '1px solid var(--border-strong)',
-                        color: 'var(--muted)',
-                        fontFamily: 'monospace',
-                    }}>ESC</kbd>
+                    {!isPhone && (
+                        <kbd style={{
+                            fontSize: 10,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: 'var(--muted-extra-light)',
+                            border: '1px solid var(--border-strong)',
+                            color: 'var(--muted)',
+                            fontFamily: 'monospace',
+                        }}>ESC</kbd>
+                    )}
                 </div>
 
                 <div role="listbox" aria-label="Zoekresultaten" style={{ maxHeight: 400, overflowY: 'auto', padding: '6px 0' }}>
@@ -477,11 +481,13 @@ export default function CommandPalette() {
                     fontSize: 10,
                     color: 'var(--color-text-muted)',
                 }}>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
-                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
-                        <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
-                    </div>
+                    {!isPhone ? (
+                        <div style={{ display: 'flex', gap: 16 }}>
+                            <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↑↓</kbd> navigeren</span>
+                            <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>↵</kbd> openen</span>
+                            <span><kbd style={{ padding: '1px 4px', borderRadius: 3, background: 'var(--muted-extra-light)', border: '1px solid var(--border)', fontFamily: 'monospace', fontSize: 9 }}>esc</kbd> sluiten</span>
+                        </div>
+                    ) : <div style={{ fontSize: 11, color: 'var(--muted)' }}>Tik om te openen</div>}
                     <button
                         type="button"
                         onClick={function () { setMode('ask'); }}
@@ -502,7 +508,9 @@ export default function CommandPalette() {
                     >
                         <Bot size={11} aria-hidden="true" />
                         Vraag Rook
-                        <kbd style={{ padding: '0 4px', borderRadius: 3, background: 'var(--card-solid)', border: '1px solid var(--brand-tint-border)', fontFamily: 'monospace', fontSize: 9, color: 'var(--brand)' }}>Tab</kbd>
+                        {!isPhone && (
+                            <kbd style={{ padding: '0 4px', borderRadius: 3, background: 'var(--card-solid)', border: '1px solid var(--brand-tint-border)', fontFamily: 'monospace', fontSize: 9, color: 'var(--brand)' }}>Tab</kbd>
+                        )}
                     </button>
                 </div>
                 </>
