@@ -87,13 +87,22 @@
 .cfg-top-brand .m { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--brand-1); color: var(--on-brand); }
 .cfg-progress { margin-top: 12px; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .cfg-progress > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--brand-3), var(--brand-1)); transition: width .55s cubic-bezier(.16,1,.3,1); }
-.cfg-pips { display: flex; gap: 7px; margin-top: 11px; }
-.cfg-pip { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-faint); min-width: 0; }
+.cfg-pips { display: flex; gap: 7px; margin-top: 11px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+.cfg-pips::-webkit-scrollbar { display: none; }
+.cfg-pip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-faint); scroll-snap-align: start; }
 .cfg-pip .d { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; background: var(--surface); transition: .25s; }
 .cfg-pip.done .d { background: var(--brand-1); border-color: var(--brand-1); color: var(--on-brand); }
 .cfg-pip.active { color: var(--text); }
 .cfg-pip.active .d { border-color: var(--brand-1); box-shadow: 0 0 0 3px var(--brand-1-soft); }
 .cfg-pip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* On narrow phones, give inactive pips just their dot so the active label can breathe.
+   Active/done pips keep their name; user still sees full sequence via dots. */
+@media (max-width: 420px) {
+  .cfg-pips { gap: 5px; }
+  .cfg-pip:not(.active) .nm { display: none; }
+  .cfg-pip:not(.active) { flex: 0 0 auto; }
+  .cfg-pip.active { flex: 1; min-width: 0; }
+}
 
 /* ── Stap-enter-animatie ───────────────────────────────────────────────────── */
 .cfg-step { animation: cfg-enter .42s cubic-bezier(.16,1,.3,1) both; }
