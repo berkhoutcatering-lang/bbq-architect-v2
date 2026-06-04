@@ -90,9 +90,11 @@ export async function checkAiCapServer(organizationId: string): Promise<CapStatu
     // Get tier — defensive validatie tegen onbekende plan-waardes (legacy 'pro',
     // 'free', NULL etc.). Zonder check crasht TIER_LIMITS[tier].aiActionsPerMonth
     // en degradeert naar fail-open in de catch — wat onbegrensde AI-spend toestaat.
-    const orgRes = await sb.from('organizations').select('plan').eq('id', organizationId).single();
+    const orgRes = await sb.from('organizations').select('plan, feature_flags').eq('id', organizationId).single();
     const rawPlan = orgRes.data?.plan;
     const tier: Tier = rawPlan === 'professional' || rawPlan === 'enterprise' ? rawPlan : 'starter';
+    const flags = orgRes.data?.feature_flags as Record<string, unknown> | null;
+    if (flags?.ai_unlimited === true) return { allowed: true, used: 0, cap: -1, tier };
     const cap = TIER_LIMITS[tier].aiActionsPerMonth;
 
     if (cap === -1) return { allowed: true, used: 0, cap: -1, tier };
@@ -185,9 +187,11 @@ export async function checkAiCostCapServer(organizationId: string): Promise<Cost
     if (!sb) return { allowed: true, usedCents: 0, capCents: -1, tier: 'starter' };
 
     try {
-        const orgRes = await sb.from('organizations').select('plan').eq('id', organizationId).single();
+        const orgRes = await sb.from('organizations').select('plan, feature_flags').eq('id', organizationId).single();
         const rawPlan = orgRes.data?.plan;
         const tier: Tier = rawPlan === 'professional' || rawPlan === 'enterprise' ? rawPlan : 'starter';
+        const flags = orgRes.data?.feature_flags as Record<string, unknown> | null;
+        if (flags?.ai_unlimited === true) return { allowed: true, usedCents: 0, capCents: -1, tier };
         const capCents = COST_CAP_CENTS_PER_TIER[tier];
 
         const startOfMonth = new Date();

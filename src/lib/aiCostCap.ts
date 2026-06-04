@@ -89,17 +89,39 @@ async function getMonthToDateSpendEur(orgId: string): Promise<number> {
 
 /**
  * Resolve tier voor een org. Lazy lookup met fallback naar 'starter'.
+ * Mapt zowel het `tier`-veld als `plan` (waar 'professional' → 'pro').
  */
 async function getOrgTier(orgId: string): Promise<Tier> {
   const admin = getAdminClient();
   const { data } = await admin
     .from('organizations')
-    .select('tier')
+    .select('plan')
     .eq('id', orgId)
     .single();
-  const t = (data?.tier as string | undefined)?.toLowerCase();
-  if (t === 'pro' || t === 'enterprise' || t === 'starter') return t as Tier;
+  const p = (data?.plan as string | undefined)?.toLowerCase();
+  if (p === 'enterprise' || p === 'starter') return p as Tier;
+  if (p === 'pro' || p === 'professional') return 'pro';
   return 'starter';
+}
+
+/**
+ * Owner-bypass: orgs met `feature_flags.ai_unlimited = true` hebben geen cap.
+ * Bedoeld voor founder-accounts en interne dev-orgs. Bij DB-fout: fail-closed
+ * naar `false` zodat een normale tenant nooit per ongeluk unlimited krijgt.
+ */
+async function hasUnlimitedAiFlag(orgId: string): Promise<boolean> {
+  try {
+    const admin = getAdminClient();
+    const { data } = await admin
+      .from('organizations')
+      .select('feature_flags')
+      .eq('id', orgId)
+      .single();
+    const flags = data?.feature_flags as Record<string, unknown> | null;
+    return flags?.ai_unlimited === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -118,13 +140,26 @@ async function getOrgTier(orgId: string): Promise<Tier> {
  *   const response = await anthropic.messages.create(...);
  */
 export async function checkAiCap(orgId: string, estimatedCallEur: number = 0.02): Promise<CapResult> {
-  const [tier, used] = await Promise.all([
+  const [tier, used, unlimited] = await Promise.all([
     getOrgTier(orgId),
     getMonthToDateSpendEur(orgId),
+    hasUnlimitedAiFlag(orgId),
   ]);
 
   const caps = TIER_CAPS[tier];
   const projected = used + Math.max(0, estimatedCallEur);
+
+  if (unlimited) {
+    return {
+      status: 'ok',
+      tier,
+      used_eur: used,
+      soft_eur: Infinity,
+      hard_eur: Infinity,
+      projected_eur: projected,
+      message: 'OK (ai_unlimited)',
+    };
+  }
 
   if (projected > caps.hard_eur) {
     return {
