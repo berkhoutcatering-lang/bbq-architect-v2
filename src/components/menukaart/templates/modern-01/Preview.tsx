@@ -361,29 +361,33 @@ export default function Modern01Preview({ overrides, data, size = 'normal' }: Pr
                             borderTop: `2px solid ${accent}`,
                         }}
                     >
-                        <div
-                            style={{
-                                fontFamily: `'${bodyFont}', sans-serif`,
-                                fontSize: 8,
-                                fontWeight: 600,
-                                letterSpacing: '.12em',
-                                textTransform: 'uppercase',
-                                color: accent,
-                                marginBottom: 3,
-                            }}
-                        >
-                            Allergenen
-                        </div>
-                        <div
-                            style={{
-                                fontFamily: `'${bodyFont}', sans-serif`,
-                                fontSize: 7,
-                                color: muted,
-                                lineHeight: 1.8,
-                            }}
-                        >
-                            {legend || '—'}
-                        </div>
+                        {legend && (
+                            <>
+                                <div
+                                    style={{
+                                        fontFamily: `'${bodyFont}', sans-serif`,
+                                        fontSize: 8,
+                                        fontWeight: 600,
+                                        letterSpacing: '.12em',
+                                        textTransform: 'uppercase',
+                                        color: accent,
+                                        marginBottom: 3,
+                                    }}
+                                >
+                                    Allergenen
+                                </div>
+                                <div
+                                    style={{
+                                        fontFamily: `'${bodyFont}', sans-serif`,
+                                        fontSize: 7,
+                                        color: muted,
+                                        lineHeight: 1.8,
+                                    }}
+                                >
+                                    {legend}
+                                </div>
+                            </>
+                        )}
                         {footer && (
                             <div style={{ fontSize: 7, color: '#C8C8C8', marginTop: 6 }}>{footer}</div>
                         )}

@@ -1,5 +1,7 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import './offerte-edit.css';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
@@ -15,26 +17,92 @@ import { logActivationEvent } from '@/lib/activation';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
-import MenuWizard from '@/components/MenuWizard';
-import MenuBuilder from '@/components/MenuBuilder';
+import OfferteMenuPicker, { type OfferteMenuPickerResult } from '@/components/menu/OfferteMenuPicker';
+import MenuMenukaartCanvas, { type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import MarginDriftBanner from '@/app/offertes/_components/MarginDriftBanner';
 import PageHint from '@/components/PageHint';
-import FieldTooltip from '@/components/FieldTooltip';
 import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
 import SyncCascade, { type CascadeStep } from '@/components/SyncCascade';
 import { runAcceptanceWorkflow } from '@/lib/acceptance-workflow';
 import { mapOfferteToEventStatus, isOfferteAccepted } from '@/lib/statuses';
 import { calcOfferteMarge } from '@/lib/costCalculations';
-import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, GripVertical, Mail, FileText, Leaf, Copy, FileDown, Sparkles, Palette } from 'lucide-react';
+import { ArrowLeft, Link as LinkIcon, Plus, Trash2, Save, UtensilsCrossed, Mail, FileText, Copy, FileDown, Sparkles, Palette, ChefHat, Gauge, Fuel, List as ListIcon, UserRound, MoreHorizontal, ChevronDown, ChevronRight, Check, Info, CircleDollarSign, Receipt } from 'lucide-react';
 import AiOfferteWizard from '@/components/AiOfferteWizard';
 import { linkLeadToOfferte } from '@/app/verkoop/leads/actions';
 import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
-import type { Offerte, Factuur, Gerecht, InventoryItem } from '@/types';
+import type { Offerte, Factuur, Gerecht, InventoryItem, Gang, MenuTemplateRow } from '@/types';
+
+/* ── Offerte-bewerk UI-primitieven (nagebouwd uit Sam's design-zip) ──────────
+   Lichtgewicht dropdown + BTW-picker. De rest van de kaart-layout staat inline
+   in de edit-view; alleen deze twee hebben eigen open-state + outside-click. */
+function useOffClickOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => void, active: boolean) {
+    useEffect(function () {
+        if (!active) return undefined;
+        function onDown(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) onOut(); }
+        function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onOut(); }
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return function () { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active]);
+}
+
+function OffDropdown({ trigger, children }: { trigger: (open: boolean, toggle: () => void) => ReactNode; children: ReactNode }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    useOffClickOutside(ref, function () { setOpen(false); }, open);
+    return (
+        <div className="off-dd" ref={ref}>
+            {trigger(open, function () { setOpen(function (o) { return !o; }); })}
+            {open ? <div className="off-dd-menu" onClick={function () { setOpen(false); }}>{children}</div> : null}
+        </div>
+    );
+}
+
+/* Catering-BTW is in NL altijd 0 / 9 / 21 (0 = B2B reverse-charge, 9 = voeding,
+   21 = service/alcohol). Compacte custom picker — native <select> mis-paint. */
+const BTW_OPTIONS = [0, 9, 21];
+function OffBtwSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    useOffClickOutside(ref, function () { setOpen(false); }, open);
+    return (
+        <div className="off-btw" ref={ref}>
+            <button type="button" className="off-btw-btn" onClick={function () { setOpen(function (o) { return !o; }); }} aria-haspopup="listbox" aria-expanded={open}>
+                {value}% <ChevronDown size={13} color="var(--muted)" />
+            </button>
+            {open ? (
+                <div className="off-btw-menu">
+                    {BTW_OPTIONS.map(function (b) {
+                        return (
+                            <button type="button" key={b} className="off-btw-item" onClick={function () { onChange(b); setOpen(false); }}>
+                                {b}%
+                                {b === value ? <Check size={13} color="var(--accent-gold-text)" style={{ marginLeft: 'auto' }} /> : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/* Status-meta voor de kopbalk-dropdown — alle 6 offerte-statussen (de design-zip
+   toonde er 3; we behouden de volledige set zodat geen functionaliteit verdwijnt). */
+const STATUS_META: Record<string, { label: string; dot: string }> = {
+    concept: { label: 'Concept', dot: 'var(--muted-weak)' },
+    verzonden: { label: 'Verzonden', dot: 'var(--blue)' },
+    geaccepteerd: { label: 'Geaccepteerd', dot: 'var(--green)' },
+    afgewezen: { label: 'Afgewezen', dot: 'var(--red)' },
+    verlopen: { label: 'Verlopen', dot: 'var(--amber)' },
+    geannuleerd: { label: 'Geannuleerd', dot: 'var(--muted)' },
+};
+const STATUS_ORDER = ['concept', 'verzonden', 'geaccepteerd', 'afgewezen', 'verlopen', 'geannuleerd'];
 
 /* localStorage key matchend met AiOfferteWizard's DRAFT_KEY. Wordt door de
    wizard automatisch ingelezen wanneer `open` true wordt — zo kunnen we
@@ -67,6 +135,8 @@ export default function Offertes() {
     const { data: offertes, insert, update, remove, refetch: loadOffertes } = useSupabase<Offerte>('offertes', []);
     const facturen = useSupabase<Factuur>('facturen', []);
     const { data: gerechtenData } = useSupabase<Gerecht>('gerechten', []);
+    const { data: gangenData } = useSupabase<Gang>('gangen', []);
+    const { data: menuTemplatesData } = useSupabase<MenuTemplateRow>('menu_templates', []);
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const { settings } = useSettings();
     const { orgId } = useOrg();
@@ -75,15 +145,14 @@ export default function Offertes() {
     const [editing, setEditing] = useState<string | number | null>(null);
     const [form, setForm] = useState<Record<string, any> | null>(null);
     const [showWizard, setShowWizard] = useState(false);
-    const [showWizardForExisting, setShowWizardForExisting] = useState(false);
     const [showAiWizard, setShowAiWizard] = useState(false);
-    const [showMenuBuilder, setShowMenuBuilder] = useState(false);
+    const [showCanvas, setShowCanvas] = useState(false);
     /* Template-picker: "Nieuwe offerte" opent eerst een keuze tussen handmatig,
        vanaf nul met wizard, of starten met een opgeslagen menu uit /gerechten. */
     const [showTemplatePicker, setShowTemplatePicker] = useState(false);
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
     const [prefillFromTemplate, setPrefillFromTemplate] = useState<any | null>(null);
-    const [vasteKostenInput, setVasteKostenInput] = useState<Record<string, any>>({ naam: '', bedrag: '' });
+    const [vasteOpen, setVasteOpen] = useState(false);
     const [filterStatus, setFilterStatus] = useState<string>('alle');
     const [sortField, setSortField] = useState<string>('datum');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -145,43 +214,52 @@ export default function Offertes() {
     function margeLabel(pct: number) { return pct > 70 ? 'Sterk' : pct >= 60 ? 'Aandacht' : 'Lage marge'; }
     function margeEmoji(pct: number) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
 
-    function handleWizardComplete(result: any) {
+    /* Sinds 2026-06-02: OfferteMenuPicker vervangt MenuWizard. De picker geeft
+       alleen de gerechten-selectie (menu_selectie + template_naam) — een menukaart
+       houdt bewust GEEN prijs of aantal gasten vast. Die vult de cateraar hier in
+       de offerte-regel in: qty = aantal couverts, prijs = prijs p.p. → totaal rolt. */
+    function buildBasisItem(template_naam: string) {
+        return {
+            desc: template_naam,
+            qty: 1,
+            prijs: 0,
+            btw: (settings && settings.default_btw) || 21,
+        };
+    }
+
+    function handleWizardComplete(result: OfferteMenuPickerResult) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setShowWizard(false);
+        setPrefillFromTemplate(null);
         setEditing('new');
         setForm({
             nummer: nummer,
-            status: 'definitief',
-            client_naam: result.client_naam,
-            client_adres: result.client_adres,
-            datum: result.datum,
-            geldig_tot: addDays(result.datum, geldigDagen),
-            notitie: 'Signature Menu - ' + result.aantal_gasten + ' gasten',
-            items: result.items,
+            status: 'concept',
+            client_naam: '',
+            client_adres: '',
+            client_email: '',
+            datum: today(),
+            geldig_tot: addDays(today(), geldigDagen),
+            notitie: result.template_naam,
+            items: [buildBasisItem(result.template_naam)],
             menu_selectie: result.menu_selectie,
-            aantal_gasten: result.aantal_gasten,
-            aantal_vega: result.aantal_vega,
-            basis_prijs_pp: result.basis_prijs_pp,
-            korting: result.korting
         });
-        showToast('Menu samengesteld! Klik Opslaan om definitief te maken.', 'info');
+        showToast('Menukaart toegepast! Vul prijs, gasten en klantgegevens aan.', 'info');
     }
 
-    function handleWizardUpdateExisting(result: any) {
-        setShowWizardForExisting(false);
+    /* De geünificeerde canva levert menu-keuze + menukaart-styling in één keer.
+       Schrijf naar de form; saveOfferte persisteert menu_selectie +
+       menukaart_template_id + menukaart_overrides. Prijs/gasten/regels blijven
+       intact — die vult de cateraar in de offerte-regel (min input, max output). */
+    function handleCanvasSave(result: CanvasSaveResult) {
+        setShowCanvas(false);
         setForm(Object.assign({}, form, {
-            menu_selectie: result.menu_selectie,
-            aantal_gasten: result.aantal_gasten,
-            aantal_vega: result.aantal_vega,
-            basis_prijs_pp: result.basis_prijs_pp,
-            korting: result.korting,
-            client_naam: result.client_naam,
-            client_adres: result.client_adres,
-            datum: result.datum,
-            items: result.items
+            menu_selectie: result.menuSelectie,
+            menukaart_template_id: result.templateId,
+            menukaart_overrides: result.customOverrides,
         }));
-        showToast('🍽️ Menu bijgewerkt! Klik Opslaan om wijzigingen door te voeren.', 'info');
+        showToast('Menu & menukaart bijgewerkt! Klik Opslaan om door te voeren.', 'info');
     }
 
     function newOfferte() {
@@ -209,18 +287,17 @@ export default function Offertes() {
     }
 
     function newOfferteFromWizardBlank() {
+        /* "Vanaf nul" opent de picker zonder voorkeuze — cateraar kiest zelf
+           welke menukaart eruit komt. Geen samenstel-wizard meer. */
         setPrefillFromTemplate(null);
         setShowTemplatePicker(false);
         setShowWizard(true);
     }
 
-    function newOfferteFromTemplate(t: any) {
-        const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
-        setPrefillFromTemplate({
-            menu_selectie: sel,
-            basis_prijs_pp: t.basis_prijs_pp || undefined,
-            aantal_gasten: t.aantal_gasten || undefined,
-        });
+    function newOfferteFromTemplate(t: { id: number }) {
+        /* Picker krijgt de template-id mee; selectie + uitvinken gebeurt in
+           de picker zelf. handleWizardComplete bouwt daarna de offerte. */
+        setPrefillFromTemplate({ templateId: t.id });
         setShowTemplatePicker(false);
         setShowWizard(true);
     }
@@ -518,208 +595,328 @@ export default function Offertes() {
         const branding = buildBrandingConfig(settings);
         generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals, branding: branding, orgId: orgId || undefined });
     }
-    function downloadMenukaart() {
-        const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, branding: branding, orgId: orgId || undefined });
-    }
-    function downloadVegaMenukaart() {
-        const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'menukaart', form: form, settings: settings, gerechten: gerechtenData, isVega: true, branding: branding, orgId: orgId || undefined });
-    }
-
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
 
+        /* BTW gegroepeerd per tarief — voor de totalen-weergave. Grand total
+           blijft calcLineTotals.totaal zodat PDF/portaal exact gelijk lopen. */
+        const btwGroups: Record<number, number> = {};
+        (form.items || []).forEach(function (it: { qty?: number; prijs?: number; btw?: number }) {
+            const rate = Number(it.btw) || 0;
+            btwGroups[rate] = (btwGroups[rate] || 0) + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * rate / 100;
+        });
+        const btwRates = Object.keys(btwGroups).map(Number).filter(function (r) { return btwGroups[r] > 0.0001; }).sort(function (a, b) { return a - b; });
+
+        /* Marge — read-only, NOOIT AI-afgeleid (hard rule). Zelfde calc als de lijst. */
+        const marge = calcOfferteMargeData(form);
+        const margeKey = margeColor(marge.margePct);
+        const margeHex = margeKey === 'green' ? 'var(--green)' : margeKey === 'orange' ? 'var(--amber)' : 'var(--red)';
+
+        /* Menu-lijst afgeleid uit menu_selectie + gangen-volgorde — exact dezelfde
+           bron als de canva, PDF en portaal (één pipeline, geen notitie-rommel). */
+        const gangArr = gangenData as Array<{ slug?: string; naam?: string; volgorde?: number }>;
+        const gangNaam = function (slug: string) { const g = gangArr.find(function (x) { return x.slug === slug; }); return (g && g.naam) || slug.replace(/_/g, ' '); };
+        const gangVolgorde = function (slug: string) { const g = gangArr.find(function (x) { return x.slug === slug; }); return (g && typeof g.volgorde === 'number') ? g.volgorde : 999; };
+        const menuSelObj = (form.menu_selectie && typeof form.menu_selectie === 'object' && !Array.isArray(form.menu_selectie)) ? (form.menu_selectie as Record<string, string[]>) : null;
+        const menuList: Array<{ n: string; t: string }> = [];
+        if (menuSelObj) {
+            Object.entries(menuSelObj)
+                .filter(function (e) { return Array.isArray(e[1]) && e[1].length > 0; })
+                .sort(function (a, b) { return gangVolgorde(a[0]) - gangVolgorde(b[0]); })
+                .forEach(function (e) { (e[1] as string[]).forEach(function (naam) { menuList.push({ n: naam, t: gangNaam(e[0]) }); }); });
+        }
+
+        /* Vaste kosten — inline editen (min input): geen los invoer-veld meer. */
+        const vasteKosten: Array<{ naam?: string; bedrag?: number | string }> = form.vaste_kosten || [];
+        const vasteTotaal = vasteKosten.reduce(function (s, k) { return s + (parseFloat(String(k.bedrag)) || 0); }, 0);
+        const updateVaste = function (idx: number, key: string, val: unknown) { const arr = vasteKosten.slice(); arr[idx] = Object.assign({}, arr[idx], { [key]: val }); setField('vaste_kosten', arr); };
+        const addVaste = function () { setField('vaste_kosten', vasteKosten.concat([{ naam: '', bedrag: 0 }])); if (!vasteOpen) setVasteOpen(true); };
+        const removeVaste = function (idx: number) { const arr = vasteKosten.slice(); arr.splice(idx, 1); setField('vaste_kosten', arr); };
+
+        const isNew = editing === 'new';
+        const statusMeta = STATUS_META[form.status] || STATUS_META.concept;
+        const ctxLabel = form.nummer ? `${form.nummer} · ${form.client_naam || 'Geen klant'}` : 'Nieuwe offerte';
+
+        async function handleMail() {
+            const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites');
+            showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error');
+            if (res.success && !res.fallback && form?.id && form?.status !== 'verzonden') {
+                const hadEerdere = (offertes || []).some(function (o) { return o.status === 'verzonden' && o.id !== form.id; });
+                await update(form.id, { status: 'verzonden' });
+                if (!hadEerdere && orgId) { logActivationEvent(orgId, 'first_quote_sent', { offerte_id: form.id }); }
+            }
+        }
+        function copyKlantLink() {
+            /* KRITIEK: de portal /q/[id] zoekt op public_token, NIET op offerte.id.
+               Een link met de integer-id geeft 404 bij de klant. public_token is een
+               UUID (DB-default gen_random_uuid) en zit in het geladen form-object. */
+            const token = (form as { public_token?: string }).public_token;
+            if (!token) { showToast('Sla de offerte eerst op om een klant-link te maken', 'error'); return; }
+            navigator.clipboard.writeText(window.location.origin + '/q/' + token);
+            showToast('Klant-link gekopieerd! Plak deze in een mail of WhatsApp.', 'success');
+        }
+
         return (
-            <div className="hopbites-theme panel">
-                <div className="panel-head">
-                    <h3>{editing === 'new' ? 'Nieuwe Offerte' : 'Offerte Bewerken'}</h3>
-                    <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
-                </div>
-                <div className="panel-body">
-                    <div className="form-grid">
-                        <div className="field"><label>Offertenummer</label><input value={form.nummer} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('nummer', e.target.value); }} /></div>
-                        <div className="field"><label>Status</label>
-                            <select value={form.status} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setField('status', e.target.value); }}>
-                                {[['concept', 'Concept'], ['verzonden', 'Verzonden'], ['geaccepteerd', 'Geaccepteerd'], ['afgewezen', 'Afgewezen'], ['verlopen', 'Verlopen'], ['geannuleerd', 'Geannuleerd']].map(function (s) { return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}
-                            </select>
+            <div className="hopbites-theme off-page">
+                <div className="off-wrap">
+                    {/* ── Kopbalk: nummer + status-dropdown + "..."-acties + terug ── */}
+                    <header className="off-card off-top">
+                        <div>
+                            <span className="eyebrow">{isNew ? 'Nieuwe offerte' : 'Offerte bewerken'}</span>
+                            <div className="num">{form.nummer || 'Concept'}</div>
+                            <p className="meta">{form.created_at ? 'Aangemaakt ' + fmtNl(String(form.created_at).slice(0, 10)) : 'Nieuwe offerte'} · {settings?.bedrijfsnaam || 'BBQ Architect'}</p>
                         </div>
-                        <KlantAutocomplete
-                            label="Klantnaam"
-                            value={form.client_naam}
-                            onChange={function (v) { setField('client_naam', v); clearError('client_naam'); }}
-                            onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); if ((k as { email?: string }).email) setField('client_email', (k as { email?: string }).email); }}
-                            error={errors.client_naam}
-                        />
-                        <div className="field"><label>Klantadres</label><input value={form.client_adres} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_adres', e.target.value); }} /></div>
-                        <div className="field"><label>E-mail klant<FieldTooltip text="Hierheen sturen we de offerte-link, bevestiging en factuur. Zonder e-mail kan de klant geen automatische berichten ontvangen." /></label><input type="email" inputMode="email" autoComplete="email" placeholder="naam@voorbeeld.nl" value={form.client_email || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_email', e.target.value); }} /></div>
-                        <div className="field"><label>Datum</label><input type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); clearError('datum'); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} /><FieldError message={errors.datum} fieldName="datum" /></div>
-                        <div className="field"><label>Geldig Tot<FieldTooltip text="Na deze datum is de offerte niet meer bindend." /></label><input type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} /></div>
-                        <div className="field full"><label>Notitie</label><textarea rows={2} value={form.notitie || ''} onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} /></div>
-                    </div>
-
-                    <div style={{ marginTop: 24 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                            <h4 style={{ fontSize: 14, fontWeight: 600 }}>Regels</h4>
-                            <button className="btn btn-brand btn-sm" onClick={addItem}><Plus size={14} /> Regel</button>
-                        </div>
-                        <div className="tbl-wrap">
-                        <table className="tbl">
-                            <thead><tr><th>Omschrijving</th><th style={{ width: 80 }}>Aantal</th><th style={{ width: 100 }}>Prijs</th><th style={{ width: 70 }}>BTW%<FieldTooltip text="Standaard 21% voor catering. 9% voor bepaalde voedingsmiddelen." position="left" /></th><th style={{ width: 90 }}>Totaal</th><th style={{ width: 30 }}></th></tr></thead>
-                            <tbody>
-                                {(form.items || []).map(function (item, idx: number) {
-                                    return <tr key={idx}>
-                                        <td><input value={item.desc} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
-                                        <td><input type="number" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
-                                        <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
-                                        <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
-                                        <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
-                                        <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen" style={{ minWidth: 36, minHeight: 36 }}><Trash2 size={14} /></button></td>
-                                    </tr>;
-                                })}
-                            </tbody>
-                        </table>
-                        </div>
-                        <div style={{ textAlign: 'right', marginTop: 12, fontSize: 14 }}>
-                            <div style={{ color: 'var(--muted)' }}>Subtotaal: {fmt(totals.subtotaal)}</div>
-                            <div style={{ color: 'var(--muted)' }}>BTW: {fmt(totals.btw)}</div>
-                            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--brand)' }}>Totaal: {fmt(totals.totaal)}</div>
-                        </div>
-                    </div>
-                    <div className="editor-actions">
-                        <button className="btn-gold" onClick={saveOfferte} title="Sla de offerte op en synchroniseer met de agenda"><Save size={14} /> Opslaan</button>
-                        <button className="btn btn-ghost" onClick={async function () {
-                            const res = await mailOfferte(form, settings?.bedrijfsnaam || 'Hop & Bites');
-                            showToast(res.fallback ? 'Mailto geopend — stel RESEND_API_KEY in .env in voor directe verzending' : res.success ? 'Offerte verstuurd!' : 'Fout: ' + res.error, res.success ? 'success' : 'error');
-                            if (res.success && !res.fallback && form?.id && form?.status !== 'verzonden') {
-                                const hadEerdere = (offertes || []).some(function (o) { return o.status === 'verzonden' && o.id !== form.id; });
-                                await update(form.id, { status: 'verzonden' });
-                                if (!hadEerdere && orgId) {
-                                    logActivationEvent(orgId, 'first_quote_sent', { offerte_id: form.id });
-                                }
-                            }
-                        }} title="Stuur de offerte per e-mail naar de klant"><Mail size={14} /> Mail</button>
-                        <button className="btn btn-ghost" onClick={downloadOfferte} title="Download de offerte als PDF met prijzen en regels"><FileText size={14} /> PDF</button>
-                        <button className="btn btn-ghost" onClick={function () { setShowWizardForExisting(true); }} title="Stapsgewijs een menu samenstellen per gang"><UtensilsCrossed size={14} /> Menu Wizard</button>
-                    </div>
-                    <div className="editor-actions-more">
-                        <button className="btn btn-ghost btn-sm" onClick={function () { setShowMenuBuilder(true); }} title="Sleep gerechten naar het menu met drag & drop"><GripVertical size={14} /> Menu Builder</button>
-                        <button className="btn btn-ghost btn-sm" onClick={downloadMenukaart} title="Download een printbare menukaart zonder prijzen"><UtensilsCrossed size={14} /> Menukaart</button>
-                        {(form.aantal_vega || 0) > 0 && <button className="btn btn-ghost btn-sm" onClick={downloadVegaMenukaart} title="Download een vegetarische menukaart"><Leaf size={14} /> Vega menukaart</button>}
-                        {editing !== 'new' && (
-                            <button className="btn btn-ghost btn-sm" onClick={function () {
-                                /* KRITIEK: de portal /q/[id] zoekt op public_token, NIET op
-                                   offerte.id. Een link met de integer-id geeft 404 bij de klant.
-                                   public_token is een UUID (DB-default gen_random_uuid) en zit
-                                   in het geladen form-object. */
-                                const token = (form as { public_token?: string }).public_token;
-                                if (!token) {
-                                    showToast('Sla de offerte eerst op om een klant-link te maken', 'error');
-                                    return;
-                                }
-                                const link = window.location.origin + '/q/' + token;
-                                navigator.clipboard.writeText(link);
-                                showToast('Klant-link gekopieerd! Plak deze in een mail of WhatsApp.', 'success');
-                            }} title="Kopieer een link die de klant kan openen om de offerte te bekijken, te ondertekenen en de aanbetaling te doen">
-                                <LinkIcon size={14} /> Klant-link
-                            </button>
-                        )}
-                        {editing !== 'new' && form.status === 'geaccepteerd' && <button className="btn btn-green btn-sm" onClick={convertToFactuur} title="Zet deze geaccepteerde offerte om naar een factuur"><FileText size={14} /> Maak factuur</button>}
-                        {editing !== 'new' && <button className="btn btn-ghost btn-sm" onClick={function () { duplicateOfferte(form); }} title="Maak een kopie van deze offerte als nieuw concept"><Copy size={14} /> Dupliceer</button>}
-                        {editing !== 'new' && <button className="btn btn-red btn-sm" onClick={deleteOfferte} title="Verwijder deze offerte permanent"><Trash2 size={14} /> Verwijderen</button>}
-                    </div>
-
-                    <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Vaste kosten</h4>
-                        {(form.vaste_kosten || []).length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-                                {(form.vaste_kosten || []).map(function (k, idx: number) {
+                        <div className="off-top-actions">
+                            <OffDropdown trigger={function (open, toggle) {
+                                return (
+                                    <button type="button" className="off-status-btn" onClick={toggle} aria-haspopup="listbox" aria-expanded={open}>
+                                        <span className="off-status-dot" style={{ background: statusMeta.dot }} />
+                                        {statusMeta.label}
+                                        <ChevronDown size={15} color="var(--muted)" />
+                                    </button>
+                                );
+                            }}>
+                                {STATUS_ORDER.map(function (k) {
                                     return (
-                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                                            <span style={{ flex: 1, fontSize: 13 }}>{k.naam}</span>
-                                            <span style={{ fontSize: 13, fontWeight: 700 }}>€{(parseFloat(k.bedrag) || 0).toFixed(2)}</span>
-                                            <button type="button" className="tag-remove" onClick={function () {
-                                                const items = (form.vaste_kosten || []).slice();
-                                                items.splice(idx, 1);
-                                                setField('vaste_kosten', items);
-                                            }}>×</button>
+                                        <button type="button" key={k} className="off-dd-item" onClick={function () { setField('status', k); }}>
+                                            <span className="off-status-dot" style={{ background: STATUS_META[k].dot, marginLeft: 2, marginRight: 4 }} />
+                                            {STATUS_META[k].label}
+                                            {k === form.status ? <Check size={15} color="var(--accent-gold-text)" style={{ marginLeft: 'auto' }} /> : null}
+                                        </button>
+                                    );
+                                })}
+                            </OffDropdown>
+
+                            <OffDropdown trigger={function (open, toggle) {
+                                return (
+                                    <button type="button" className="off-iconbtn" onClick={toggle} title="Meer acties" aria-label="Meer acties" aria-expanded={open}>
+                                        <MoreHorizontal size={19} />
+                                    </button>
+                                );
+                            }}>
+                                <button type="button" className="off-dd-item" onClick={handleMail}><span className="ico"><Mail size={16} /></span> Mail versturen</button>
+                                <button type="button" className="off-dd-item" onClick={downloadOfferte}><span className="ico"><FileText size={16} /></span> PDF downloaden</button>
+                                {!isNew && <button type="button" className="off-dd-item" onClick={copyKlantLink}><span className="ico"><LinkIcon size={16} /></span> Klant-link kopiëren</button>}
+                                {!isNew && form.status === 'geaccepteerd' && <button type="button" className="off-dd-item" onClick={convertToFactuur}><span className="ico"><Receipt size={16} /></span> Maak factuur</button>}
+                                {!isNew && <button type="button" className="off-dd-item" onClick={function () { duplicateOfferte(form); }}><span className="ico"><Copy size={16} /></span> Dupliceer</button>}
+                                {!isNew && <div className="off-dd-sep" />}
+                                {!isNew && <button type="button" className="off-dd-item danger" onClick={deleteOfferte}><span className="ico"><Trash2 size={16} /></span> Verwijderen</button>}
+                            </OffDropdown>
+
+                            <button type="button" className="off-iconbtn" onClick={function () { setEditing(null); setForm(null); }} title="Terug naar overzicht" aria-label="Terug naar overzicht">
+                                <ArrowLeft size={18} />
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* ── 1 · Klant (WIE) ── */}
+                    <section className="off-card">
+                        <div className="off-head">
+                            <span className="off-ic"><UserRound size={18} color="var(--accent-gold-text)" /></span>
+                            <div style={{ minWidth: 0 }}>
+                                <span className="off-step">Wie</span>
+                                <h2 className="off-h2">Klant</h2>
+                                <p className="off-sub">Voor wie is deze offerte?</p>
+                            </div>
+                        </div>
+                        <div className="off-klant">
+                            <KlantAutocomplete
+                                label="Klantnaam"
+                                inputClassName="off-input"
+                                value={form.client_naam}
+                                onChange={function (v) { setField('client_naam', v); clearError('client_naam'); }}
+                                onSelect={function (k) { setField('client_naam', k.naam); setField('client_adres', [k.adres, k.postcode, k.plaats].filter(Boolean).join(', ')); if ((k as { email?: string }).email) setField('client_email', (k as { email?: string }).email); }}
+                                error={errors.client_naam}
+                            />
+                            <label className="off-field">
+                                <span className="off-field-label">Adres</span>
+                                <textarea className="off-area" value={form.client_adres || ''} placeholder="Straat, postcode en plaats" onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('client_adres', e.target.value); }} />
+                            </label>
+                            <label className="off-field">
+                                <span className="off-field-label">E-mail</span>
+                                <input className="off-input" type="email" inputMode="email" autoComplete="email" placeholder="naam@bedrijf.nl" value={form.client_email || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('client_email', e.target.value); }} />
+                            </label>
+                            <div className="off-2col">
+                                <label className="off-field">
+                                    <span className="off-field-label">Datum</span>
+                                    <input className="off-input" type="date" value={form.datum} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('datum', e.target.value); clearError('datum'); }} style={errors.datum ? { borderColor: 'var(--red)' } : {}} />
+                                    <FieldError message={errors.datum} fieldName="datum" />
+                                </label>
+                                <label className="off-field">
+                                    <span className="off-field-label">Geldig tot</span>
+                                    <input className="off-input" type="date" value={form.geldig_tot} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setField('geldig_tot', e.target.value); }} />
+                                    <span className="off-field-hint">Standaard 30 dagen</span>
+                                </label>
+                            </div>
+                            <label className="off-field">
+                                <span className="off-field-label">Notitie</span>
+                                <textarea className="off-area" rows={2} value={form.notitie || ''} placeholder="Interne notitie of opmerking voor de klant" onChange={function (e: React.ChangeEvent<HTMLTextAreaElement>) { setField('notitie', e.target.value); }} />
+                            </label>
+                        </div>
+                    </section>
+
+                    {/* ── 2 · Menu (WAT) — CTA opent de geünificeerde canva ── */}
+                    <section className="off-card">
+                        <div className="off-head">
+                            <span className="off-ic"><ChefHat size={18} color="var(--accent-gold-text)" /></span>
+                            <div style={{ minWidth: 0 }}>
+                                <span className="off-step">Wat</span>
+                                <h2 className="off-h2">Menu</h2>
+                                <p className="off-sub">Wat serveer je?</p>
+                            </div>
+                        </div>
+                        <button type="button" className="off-menu-cta" onClick={function () { setShowCanvas(true); }} title="Menu samenstellen — de menukaart vult zichzelf automatisch">
+                            <span className="cta-ic"><UtensilsCrossed size={20} color="#1a1407" /></span>
+                            <div style={{ minWidth: 0 }}>
+                                <div className="cta-t">Menu &amp; menukaart</div>
+                                <div className="cta-s">Stel het menu samen en genereer de menukaart</div>
+                            </div>
+                            <ChevronRight size={20} color="var(--accent-gold-text)" style={{ marginLeft: 'auto' }} />
+                        </button>
+                        {menuList.length > 0 ? (
+                            <>
+                                <ul className="off-menu-list">
+                                    {menuList.map(function (d, i) {
+                                        return <li key={i}><span className="dot" />{d.n}<span className="tag">{d.t}</span></li>;
+                                    })}
+                                </ul>
+                                <div className="off-menu-foot">
+                                    <CircleDollarSign size={14} color="var(--muted)" />
+                                    {menuList.length} gerechten gekozen
+                                    {marge.foodcostTotaal > 0 ? <> · foodcost <span className="mono" style={{ color: 'var(--text)', fontWeight: 600 }}>&nbsp;{fmt(marge.foodcostTotaal)}</span></> : null}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="off-empty">
+                                <Info size={16} color="var(--muted)" />
+                                Nog geen gerechten gekozen — open de menukaart om het menu samen te stellen.
+                            </div>
+                        )}
+                    </section>
+
+                    {/* ── 3 · Regels (HOEVEEL) ── */}
+                    <section className="off-card">
+                        <div className="off-head">
+                            <span className="off-ic"><ListIcon size={18} color="var(--accent-gold-text)" /></span>
+                            <div style={{ minWidth: 0 }}>
+                                <span className="off-step">Hoeveel</span>
+                                <h2 className="off-h2">Offerteregels</h2>
+                                <p className="off-sub">Wat reken je door?</p>
+                            </div>
+                        </div>
+                        <div className="off-table-wrap">
+                            <table className="off-table">
+                                <colgroup>
+                                    <col /><col style={{ width: 78 }} /><col style={{ width: 118 }} /><col style={{ width: 92 }} /><col style={{ width: 116 }} /><col style={{ width: 40 }} />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Omschrijving</th>
+                                        <th className="r">Aantal</th>
+                                        <th className="r">Prijs €</th>
+                                        <th className="r">BTW</th>
+                                        <th className="r">Totaal</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(form.items || []).map(function (item, idx: number) {
+                                        return (
+                                            <tr key={idx}>
+                                                <td><input className="off-cellinput" value={item.desc} placeholder="Omschrijving…" onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
+                                                <td><input className="off-cellinput num" type="number" min="0" step="1" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
+                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
+                                                <td className="r"><OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItem(idx, 'btw', v); }} /></td>
+                                                <td className="r"><span className="off-linetotal">{fmt((item.qty || 0) * (item.prijs || 0))}</span></td>
+                                                <td><button type="button" className="off-rowdel" onClick={function () { removeItem(idx); }} title="Regel verwijderen" aria-label="Regel verwijderen"><Trash2 size={15} /></button></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" className="off-addrow" onClick={addItem}><Plus size={15} /> Regel</button>
+                        <div className="off-totals">
+                            <div className="row"><span className="lab">Subtotaal (excl. btw)</span><span className="val">{fmt(totals.subtotaal)}</span></div>
+                            {btwRates.map(function (rate) { return <div className="row" key={rate}><span className="lab">BTW {rate}%</span><span className="val">{fmt(btwGroups[rate])}</span></div>; })}
+                            <div className="row grand"><span className="lab">Totaal</span><span className="val">{fmt(totals.totaal)}</span></div>
+                        </div>
+                    </section>
+
+                    {/* ── 4 · Vaste kosten (EENMALIG, inklapbaar) ── */}
+                    <section className="off-card">
+                        <button type="button" className="off-collap-head" onClick={function () { setVasteOpen(!vasteOpen); }} aria-expanded={vasteOpen}>
+                            <span className="off-ic"><Fuel size={18} color="var(--accent-gold-text)" /></span>
+                            <div>
+                                <span className="off-step">Eenmalig</span>
+                                <h2 className="off-h2">Vaste kosten</h2>
+                            </div>
+                            <span className="off-collap-sum">
+                                <span className="amt">{fmt(vasteTotaal)}</span>
+                                <span>· {vasteKosten.length} {vasteKosten.length === 1 ? 'post' : 'posten'}</span>
+                                <span className={'off-chev' + (vasteOpen ? ' open' : '')}><ChevronDown size={18} /></span>
+                            </span>
+                        </button>
+                        {vasteOpen ? (
+                            <div className="off-collap-body">
+                                {vasteKosten.map(function (k, idx: number) {
+                                    return (
+                                        <div className="off-kost-row" key={idx}>
+                                            <input className="off-input" value={k.naam || ''} placeholder="Kostenpost" onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateVaste(idx, 'naam', e.target.value); }} />
+                                            <input className="off-input mono" type="number" min="0" step="0.01" value={k.bedrag as number} style={{ textAlign: 'right' }} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateVaste(idx, 'bedrag', parseFloat(e.target.value) || 0); }} />
+                                            <button type="button" className="off-rowdel" onClick={function () { removeVaste(idx); }} title="Verwijderen" aria-label="Kostenpost verwijderen"><Trash2 size={15} /></button>
                                         </div>
                                     );
                                 })}
+                                <button type="button" className="off-addrow" onClick={addVaste}><Plus size={15} /> Kostenpost toevoegen</button>
                             </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                            <div className="field" style={{ flex: 1 }}>
-                                <label>Kostenpost</label>
-                                <input value={vasteKostenInput.naam} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { naam: e.target.value })); }}
-                                    placeholder="bijv. Brandstof, Personeel" />
+                        ) : null}
+                    </section>
+
+                    {/* ── 5 · Winst-overzicht (MARGE) — read-only ── */}
+                    <section className="off-card">
+                        <div className="off-head">
+                            <span className="off-ic"><Gauge size={18} color="var(--accent-gold-text)" /></span>
+                            <div style={{ minWidth: 0 }}>
+                                <span className="off-step">Marge</span>
+                                <h2 className="off-h2">Winst-overzicht</h2>
+                                <p className="off-sub">Automatisch berekend uit menu, regels en kosten</p>
                             </div>
-                            <div className="field" style={{ width: 110 }}>
-                                <label>Bedrag €</label>
-                                <input type="number" step="0.01" value={vasteKostenInput.bedrag}
-                                    onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setVasteKostenInput(Object.assign({}, vasteKostenInput, { bedrag: e.target.value })); }}
-                                    placeholder="75" />
-                            </div>
-                            <button type="button" className="btn btn-brand btn-sm" onClick={function () {
-                                if (!vasteKostenInput.naam.trim()) return;
-                                setField('vaste_kosten', (form.vaste_kosten || []).concat([{ naam: vasteKostenInput.naam.trim(), bedrag: parseFloat(vasteKostenInput.bedrag) || 0 }]));
-                                setVasteKostenInput({ naam: '', bedrag: '' });
-                            }}><Plus size={14} /> Toevoegen</button>
                         </div>
-                    </div>
-
-                    {(function () {
-                        const m = calcOfferteMargeData(form);
-                        if (m.gasten === 0) return null;
-                        const color = margeColor(m.margePct);
-                        const barWidth = Math.min(100, Math.max(0, m.margePct));
-                        return (
-                            <div className="profit-breakdown">
-                                <div className="profit-breakdown-head">
-                                    <span style={{ fontWeight: 800, fontSize: 13 }}>📊 Profit Breakdown</span>
-                                    <span className={'marge-badge marge-' + color}>{margeEmoji(m.margePct)} {m.margePct.toFixed(1)}% {margeLabel(m.margePct)}</span>
-                                </div>
-                                <div className="profit-breakdown-bar">
-                                    <div className="profit-breakdown-fill" style={{ width: barWidth + '%', background: color === 'green' ? 'var(--green)' : color === 'orange' ? 'var(--amber)' : 'var(--red)' }}></div>
-                                </div>
-                                <div className="profit-breakdown-grid">
-                                    <div className="profit-breakdown-cell">
-                                        <div className="profit-breakdown-label">Omzet</div>
-                                        <div className="profit-breakdown-value" style={{ color: 'var(--green)' }}>€{m.omzet.toFixed(2)}</div>
-                                        <div className="profit-breakdown-sub">{m.gasten} gasten × €{m.prijsPP.toFixed(2)}</div>
-                                    </div>
-                                    <div className="profit-breakdown-cell">
-                                        <div className="profit-breakdown-label">Foodcost</div>
-                                        <div className="profit-breakdown-value" style={{ color: 'var(--red)' }}>-€{m.foodcostTotaal.toFixed(2)}</div>
-                                        <div className="profit-breakdown-sub">€{m.foodcostPP.toFixed(2)} p.p.</div>
-                                    </div>
-                                    <div className="profit-breakdown-cell">
-                                        <div className="profit-breakdown-label">Vaste Kosten</div>
-                                        <div className="profit-breakdown-value" style={{ color: 'var(--amber)' }}>-€{m.vasteKosten.toFixed(2)}</div>
-                                    </div>
-                                    <div className="profit-breakdown-cell">
-                                        <div className="profit-breakdown-label">Netto Winst</div>
-                                        <div className="profit-breakdown-value" style={{ fontSize: 18, fontWeight: 900, color: m.nettoWinst >= 0 ? 'var(--green)' : 'var(--red)' }}>€{m.nettoWinst.toFixed(2)}</div>
-                                    </div>
+                        <div className="off-stats">
+                            <div className="off-stat"><span className="lab">Omzet</span><span className="val">{fmt(marge.omzet)}</span><span className="note">excl. btw</span></div>
+                            <div className="off-stat"><span className="lab">Foodcost</span><span className="val">{fmt(marge.foodcostTotaal)}</span><span className="note">{marge.omzet > 0 ? Math.round(marge.foodcostTotaal / marge.omzet * 100) + '% van omzet' : 'kies een menu'}</span></div>
+                            <div className="off-stat"><span className="lab">Vaste kosten</span><span className="val">{fmt(marge.vasteKosten)}</span><span className="note">eenmalig</span></div>
+                            <div className="off-stat off-stat-net">
+                                <span className="lab">Netto winst</span>
+                                <span className="val">{fmt(marge.nettoWinst)}</span>
+                                <div className="off-marge">
+                                    <div className="off-marge-track"><div className="off-marge-fill" style={{ width: Math.max(0, Math.min(100, marge.margePct)) + '%', background: margeHex }} /></div>
+                                    <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />Marge {marge.margePct.toFixed(0)}% · {margeLabel(marge.margePct)}</span>
                                 </div>
                             </div>
-                        );
-                    })()}
-
-                    {showWizardForExisting && <MenuWizard onComplete={handleWizardUpdateExisting} onClose={function () { setShowWizardForExisting(false); }} settings={settings} existingOfferte={form} />}
-                    <MenuBuilder
-                        open={showMenuBuilder}
-                        onClose={function () { setShowMenuBuilder(false); }}
-                        onApply={function (menuSel) {
-                            setField('menu_selectie', menuSel);
-                            showToast('Menu bijgewerkt via Builder', 'success');
-                        }}
-                        initialMenu={typeof form.menu_selectie === 'object' && !Array.isArray(form.menu_selectie) ? form.menu_selectie : {}}
-                    />
+                        </div>
+                    </section>
                 </div>
 
+                <MenuMenukaartCanvas
+                    open={showCanvas}
+                    onClose={function () { setShowCanvas(false); }}
+                    contextLabel={ctxLabel}
+                    gerechten={gerechtenData}
+                    gangen={gangenData}
+                    menuTemplates={menuTemplatesData}
+                    initialMenuSelectie={typeof form.menu_selectie === 'object' && !Array.isArray(form.menu_selectie) ? form.menu_selectie : {}}
+                    templateId={form.menukaart_template_id || settings?.menukaart_template_id || 'restaurant-01'}
+                    brandOverrides={(settings?.menukaart_overrides as Record<string, unknown>) ?? {}}
+                    customOverrides={(form.menukaart_overrides as Record<string, unknown>) ?? {}}
+                    logoUrl={settings?.logo_url ?? null}
+                    offerId={editing !== 'new' ? form.id : null}
+                    onSave={handleCanvasSave}
+                />
+
                 <StickyActionBar
-                    hint={form.nummer ? `${form.nummer} · ${form.client_naam || 'Geen klant'}` : 'Nieuwe offerte'}
+                    hint={ctxLabel}
                     secondary={
                         <button className="btn btn-ghost" onClick={function () { setEditing(null); setForm(null); }}>
                             <ArrowLeft size={14} /> Annuleren
@@ -747,12 +944,12 @@ export default function Offertes() {
                 </>}
             />
             <MarginDriftBanner />
-            {showWizard && <MenuWizard
-                onComplete={handleWizardComplete}
+            <OfferteMenuPicker
+                open={showWizard}
                 onClose={function () { setShowWizard(false); setPrefillFromTemplate(null); }}
-                settings={settings}
-                existingOfferte={prefillFromTemplate}
-            />}
+                onApply={handleWizardComplete}
+                initialTemplateId={prefillFromTemplate?.templateId ?? null}
+            />
             {showTemplatePicker && (
                 <div className="modal-bg" onClick={function (e) { if (e.target === e.currentTarget) setShowTemplatePicker(false); }}>
                     <div className="modal-box" style={{ maxWidth: 560, width: '95%', maxHeight: '85vh', overflow: 'auto' }}>
@@ -807,7 +1004,7 @@ export default function Offertes() {
 
                         {availableTemplates.length === 0 && (
                             <div style={{ padding: 12, fontSize: 12, color: 'var(--muted)', textAlign: 'center' as const, border: '1px dashed var(--border)', borderRadius: 8 }}>
-                                Nog geen opgeslagen menu&rsquo;s. Maak er één aan op <a href="/gerechten" style={{ color: 'var(--brand)', textDecoration: 'underline' }}>/gerechten → tab Menu&rsquo;s</a>.
+                                Nog geen menukaarten. Maak er één aan via <Link href="/gerechten/menukaarten/nieuw" style={{ color: 'var(--brand)', textDecoration: 'underline' }}>Menu → Menukaarten</Link>.
                             </div>
                         )}
 

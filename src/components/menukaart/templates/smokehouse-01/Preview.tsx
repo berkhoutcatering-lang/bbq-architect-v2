@@ -363,28 +363,32 @@ export default function Smokehouse01Preview({ overrides, data, size = 'normal' }
                     zIndex: 3,
                 }}
             >
-                <div
-                    style={{
-                        fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 10,
-                        letterSpacing: '.1em',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        flexShrink: 0,
-                    }}
-                >
-                    Allergenen
-                </div>
-                <div
-                    style={{
-                        fontFamily: `'${bodyFont}', monospace`,
-                        fontSize: 7,
-                        opacity: 0.85,
-                        lineHeight: 1.6,
-                    }}
-                >
-                    {legend || '—'}
-                </div>
+                {legend && (
+                    <>
+                        <div
+                            style={{
+                                fontFamily: `'${headingFont}', sans-serif`,
+                                fontSize: 10,
+                                letterSpacing: '.1em',
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                flexShrink: 0,
+                            }}
+                        >
+                            Allergenen
+                        </div>
+                        <div
+                            style={{
+                                fontFamily: `'${bodyFont}', monospace`,
+                                fontSize: 7,
+                                opacity: 0.85,
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            {legend}
+                        </div>
+                    </>
+                )}
             </div>
             {footer && (
                 <div

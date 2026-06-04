@@ -371,19 +371,23 @@ export default function Editorial01Preview({ overrides, data, size = 'normal' }:
                             alignItems: 'baseline',
                         }}
                     >
-                        <div
-                            style={{
-                                fontSize: 8,
-                                fontWeight: 600,
-                                letterSpacing: '.12em',
-                                textTransform: 'uppercase',
-                                color: accent,
-                                flexShrink: 0,
-                            }}
-                        >
-                            Allergenen
-                        </div>
-                        <div style={{ fontSize: 8, color: muted, lineHeight: 1.8 }}>{legend || '—'}</div>
+                        {legend && (
+                            <>
+                                <div
+                                    style={{
+                                        fontSize: 8,
+                                        fontWeight: 600,
+                                        letterSpacing: '.12em',
+                                        textTransform: 'uppercase',
+                                        color: accent,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    Allergenen
+                                </div>
+                                <div style={{ fontSize: 8, color: muted, lineHeight: 1.8 }}>{legend}</div>
+                            </>
+                        )}
                     </div>
                     {(footer || addressLine || email || website) && (
                         <div style={{ marginTop: 6, fontSize: 7, color: '#D0C8BA' }}>

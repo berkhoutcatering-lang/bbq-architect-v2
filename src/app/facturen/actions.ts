@@ -19,10 +19,11 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import {
     FactuurSchema,
     FACTUUR_STATUSES,
-    type FactuurInput,
 } from '@/lib/schemas/factuur';
 
-export type { FactuurInput };
+/* Geen `export type { FactuurInput }` — een 'use server' module mag alleen
+   async functions exporteren, anders crasht de Turbopack server-actions-loader
+   runtime. Importeer types direct uit @/lib/schemas/factuur. */
 
 /* StatusMutationSchema blijft lokaal — het is een action-payload (niet de
    entity-shape) en hoort daarom niet in de centrale schemas-module. Hij

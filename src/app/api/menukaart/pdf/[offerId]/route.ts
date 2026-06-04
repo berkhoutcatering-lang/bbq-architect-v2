@@ -24,6 +24,7 @@ import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides } from '@/lib/menukaar
 import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
 import { PdfFor } from '@/lib/menukaart/pdf';
 import { emptyMenu, type MenuData, type MenuGang } from '@/lib/menukaart/menu-data';
+import { buildMenuData as buildMenuDataFromSelectie, countDishes } from '@/lib/menukaart/build-menu-data';
 import { createElement, type ReactElement } from 'react';
 import path from 'path';
 
@@ -160,7 +161,7 @@ export async function GET(
         // wordt simpelweg niet teruggegeven (404 ipv 403, om existence-leaks te vermijden).
         const { data: offer, error: offerErr } = await supabase
             .from('offertes')
-            .select('id, nummer, client_naam, datum, menukaart_template_id, menukaart_overrides, event_id')
+            .select('id, nummer, client_naam, datum, menukaart_template_id, menukaart_overrides, event_id, menu_selectie')
             .eq('id', offerId)
             .maybeSingle();
 
@@ -187,11 +188,23 @@ export async function GET(
 
         const logoUrl = settings?.logo_url ?? null;
         const logoUrlDonker = settings?.logo_dark_url ?? null;
+        // Allergenen-keuze volgt dezelfde cascade als de canva (default uit).
+        const showAllergens = flat.showAllergens ?? false;
 
-        // Menu data — uit het gekoppelde event (de menu-ids), met gerechten/recepten lookup.
-        // Default = empty-state (NOOIT DEMO_MENU naar productie — klant zou Hop & Bites-demo zien).
+        // Menu data — PRIMAIR uit offer.menu_selectie (wat de "Menu & menukaart"-
+        // canva schrijft). Zelfde gestructureerde pipeline als de live-preview op
+        // het scherm, zodat de PDF identiek is aan wat de cateraar zag.
+        // Fallback: gekoppeld event (legacy menu-ids). Default = empty-state
+        // (NOOIT DEMO_MENU naar productie — klant zou Hop & Bites-demo zien).
         let menuData: MenuData = emptyMenu(logoUrl, logoUrlDonker);
-        if (offer.event_id) {
+        const offerSelectie = offer.menu_selectie as Record<string, string[]> | null;
+        if (offerSelectie && countDishes(offerSelectie) > 0) {
+            const [{ data: ger }, { data: gangen }] = await Promise.all([
+                supabase.from('gerechten').select('naam, beschrijving, gang_slug, allergenen'),
+                supabase.from('gangen').select('slug, naam, volgorde').order('volgorde'),
+            ]);
+            menuData = buildMenuDataFromSelectie(offerSelectie, ger ?? [], gangen ?? [], { logoUrl, logoUrlDonker, showAllergens });
+        } else if (offer.event_id) {
             const { data: event } = await supabase
                 .from('events')
                 .select('menu')
@@ -203,6 +216,15 @@ export async function GET(
                 const { data: ger } = await supabase.from('gerechten').select('id, naam, beschrijving, categorie, gang_slug, allergenen');
                 menuData = buildMenuData(menuIds, (ger as Gerecht[]) ?? [], [], logoUrl, logoUrlDonker);
             }
+        }
+
+        // Sluitstuk: respecteer de allergenen-toggle op álle paden (ook de legacy
+        // event-fallback) — geen allergenen op de kaart tenzij bewust aangezet.
+        if (!showAllergens) {
+            menuData = {
+                ...menuData,
+                gangen: menuData.gangen.map((g) => ({ ...g, dishes: g.dishes.map((d) => ({ ...d, allergens: undefined })) })),
+            };
         }
 
         const PdfComponent = PdfFor(template.id);

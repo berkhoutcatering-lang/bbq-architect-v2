@@ -84,20 +84,24 @@ export function MRPhoto({ src, alt, style, className, fallbackSize = 24 }: {
 }
 
 /* ═══ MRCardVisual ═══════════════════════════════════════════
-   Gradient + icon (default) OF echte foto (mixed/all mode).
-   Het centrale atom dat de Bucket-C "categorie-gradients" rendert. */
+   Echte foto als foto_url bestaat; anders een gang-getinte gradient met
+   het gang-icoon en (optioneel) de dish-naam als overlay. `showName`
+   true op Grid + Gallery (waar de visual een poster vervangt) en false
+   op kleine thumbnails (List-rij). */
 export function MRCardVisual({
     gerecht,
     photoMode = 'mixed',
     style,
     className,
     iconSize = 48,
+    showName = false,
 }: {
-    gerecht: { id: string | number; foto_url?: string | null; gang_slug?: string; categorie?: string };
+    gerecht: { id: string | number; foto_url?: string | null; gang_slug?: string; categorie?: string; naam?: string };
     photoMode?: PhotoMode;
     style?: CSSProperties;
     className?: string;
     iconSize?: number;
+    showName?: boolean;
 }) {
     const showPhoto = shouldShowPhoto(gerecht, photoMode);
     const gangKey = getGangKey(gerecht);
@@ -107,14 +111,7 @@ export function MRCardVisual({
     if (showPhoto) {
         return (
             <div style={{ position: 'relative', ...style }} className={className}>
-                <MRPhoto src={gerecht.foto_url} style={{ width: '100%', height: '100%' }} />
-                {/* 📷-badge op echte foto-cards (Bucket-C ronde 2) */}
-                <span style={{
-                    position: 'absolute', top: 6, right: 6, fontSize: 10,
-                    padding: '2px 6px', borderRadius: 999,
-                    background: 'rgba(30,30,34,.7)', backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255,255,255,.12)', lineHeight: 1, zIndex: 2,
-                }}>📷</span>
+                <MRPhoto src={gerecht.foto_url} alt={gerecht.naam ?? ''} style={{ width: '100%', height: '100%' }} />
             </div>
         );
     }
@@ -125,17 +122,44 @@ export function MRCardVisual({
             style={{
                 ...style,
                 background: visual.gradient,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 position: 'relative', overflow: 'hidden',
+                gap: showName ? 8 : 0,
+                padding: showName ? '12px 10px' : 0,
             }}
         >
-            {/* Noise-texture overlay 8% (Sam's feedback ronde 2 — was te plat) */}
+            {/* Noise-texture overlay 8% — gang-gradient krijgt textuur */}
             <div style={{
                 position: 'absolute', inset: 0,
                 backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%270 0 200 200%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.65%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23n)%27/%3E%3C/svg%3E")',
                 opacity: 0.08, pointerEvents: 'none', mixBlendMode: 'overlay',
             }} />
-            <IconComp size={iconSize} color="rgba(255,255,255,.7)" strokeWidth={1.75} />
+            <IconComp
+                size={showName ? Math.round(iconSize * 0.6) : iconSize}
+                color={showName ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.7)'}
+                strokeWidth={1.75}
+                style={{ flexShrink: 0, position: 'relative' }}
+            />
+            {showName && gerecht.naam && (
+                <div style={{
+                    position: 'relative',
+                    fontFamily: 'var(--font-display, Georgia, serif)',
+                    fontStyle: 'italic',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,.92)',
+                    textShadow: '0 1px 8px rgba(0,0,0,.5)',
+                    maxWidth: '95%',
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                }}>
+                    {gerecht.naam}
+                </div>
+            )}
         </div>
     );
 }

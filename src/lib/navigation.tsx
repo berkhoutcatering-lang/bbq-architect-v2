@@ -63,12 +63,11 @@ export const navSections: NavSection[] = [
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "gerechten",
-        description: "Gerechten, componenten en ingrediënten — één bibliotheek voor wat je kookt.",
+        description: "Gerechten, componenten en menukaarten — één bibliotheek voor wat je kookt.",
         hubHref: "/gerechten",
         children: [
             { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Wat je verkoopt: samengesteld uit componenten, met marge en allergenen-cascade" },
             { label: "Componenten", icon: <Boxes size={16} />, href: "/gerechten/componenten", description: "Atomaire bouwstenen — zelf-bereid of inkoop. Wijzig één keer, alle gerechten passen mee" },
-            { label: "Ingrediënten", icon: <Package size={16} />, href: "/voorraad?context=menu", description: "Edit-flow zit in Voorraad; deze link filtert op ingrediënten die in jouw menu zitten" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
         ],
     },

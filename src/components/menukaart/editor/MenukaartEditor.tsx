@@ -260,6 +260,7 @@ export default function MenukaartEditor({
     const eventSummary = eventCount > 0 ? `${eventCount} ingevuld` : 'Leeg';
 
     const decoCount = [
+        flat.showAllergens ? 1 : 0,
         flat.showOrnament ? 1 : 0,
         flat.showDividers ? 1 : 0,
         flat.showGhostNumbers ? 1 : 0,
@@ -819,8 +820,16 @@ function PropertiesPanel({
                 />
             </Section>
 
-            {(template.allowList.showOrnament || template.allowList.showDividers || template.allowList.showGhostNumbers || template.allowList.showFootnoteAllergens) && (
+            {(template.allowList.showAllergens || template.allowList.showOrnament || template.allowList.showDividers || template.allowList.showGhostNumbers || template.allowList.showFootnoteAllergens) && (
             <Section icon={<Sparkles size={15} />} title="Decoraties" summary={decoSummary}>
+                {template.allowList.showAllergens && (
+                    <ToggleControl
+                        label="Allergenen op de kaart"
+                        value={!!flat.showAllergens}
+                        source={src('showAllergens')}
+                        onChange={v => onChange('showAllergens', v)}
+                    />
+                )}
                 {template.allowList.showOrnament && (
                     <ToggleControl
                         label="Toon ornament-randen"

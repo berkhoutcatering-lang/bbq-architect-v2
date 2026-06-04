@@ -36,6 +36,7 @@ import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides, type EventMessagePosi
 import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
 import { PreviewFor } from '@/components/menukaart/templates';
 import type { MenuData } from '@/lib/menukaart/menu-data';
+import MenuMenukaartCanvas, { type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -62,6 +63,7 @@ export default function EventHubPage() {
   const { orgId } = useOrg();
   const [event, setEvent] = useState<any>(null);
   const [offerte, setOfferte] = useState<any>(null);
+  const [showCanvas, setShowCanvas] = useState(false);
   const [prepTasks, setPrepTasks] = useState<any[]>([]);
   const [factuur, setFactuur] = useState<any>(null);
   const [recepten, setRecepten] = useState<any[]>([]);
@@ -366,6 +368,22 @@ export default function EventHubPage() {
       console.error('[EVENT-HUB] offerte PDF failed:', msg);
       showToast('Offerte-PDF maken mislukt: ' + msg, 'error');
     } finally { setDownloading(null); }
+  }
+
+  /* 2e toegangspunt naar de "Menu & menukaart"-canva (de offerte is de 1e).
+     Schrijft naar de gekoppelde offerte; lokale state-update werkt de live
+     preview direct bij. */
+  async function handleCanvasSaveEvent(result: CanvasSaveResult) {
+    if (!offerte) return;
+    setShowCanvas(false);
+    const { error } = await supabase.from('offertes').update({
+      menu_selectie: result.menuSelectie,
+      menukaart_template_id: result.templateId,
+      menukaart_overrides: result.customOverrides,
+    }).eq('id', offerte.id);
+    if (error) { showToast('Opslaan mislukt: ' + error.message, 'error'); return; }
+    setOfferte((prev: any) => prev ? { ...prev, menu_selectie: result.menuSelectie, menukaart_template_id: result.templateId, menukaart_overrides: result.customOverrides } : prev);
+    showToast('Menu & menukaart opgeslagen', 'success');
   }
 
   async function downloadMenukaartPdf() {
@@ -884,9 +902,9 @@ export default function EventHubPage() {
                             >
                                 <Heart size={14} />{menukaartFlat.eventTitle || menukaartFlat.eventMessage ? 'Boodschap bewerken' : '+ Persoonlijke boodschap'}
                             </button>
-                            <a href={`/offertes`} className="btn btn-ghost btn-sm" title="Open de offerte om het menu via de wizard aan te passen">
-                                <Edit3 size={14} />Menu aanpassen via offerte
-                            </a>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowCanvas(true)} title="Menu samenstellen — de menukaart vult zichzelf automatisch">
+                                <Edit3 size={14} />Menu &amp; menukaart
+                            </button>
                         </>
                     ) : (
                         <span style={{ fontSize: 11, color: 'var(--muted)' }} title="Dit event heeft geen gekoppelde offerte. Maak een offerte op /offertes en koppel die aan dit event om het menu te wijzigen.">Geen gekoppelde offerte</span>
@@ -1262,6 +1280,21 @@ export default function EventHubPage() {
           }}
         />
       )}
+
+      <MenuMenukaartCanvas
+        open={showCanvas}
+        onClose={() => setShowCanvas(false)}
+        contextLabel={event.name || (offerte ? `Offerte ${offerte.nummer || offerte.id}` : 'Event')}
+        gerechten={gerechten}
+        gangen={gangen}
+        initialMenuSelectie={offerte?.menu_selectie ?? {}}
+        templateId={menukaartTemplate.id}
+        brandOverrides={(settings?.menukaart_overrides as Record<string, unknown>) ?? {}}
+        customOverrides={(offerte?.menukaart_overrides as Record<string, unknown>) ?? {}}
+        logoUrl={settings?.logo_url ?? null}
+        offerId={offerte?.id ?? null}
+        onSave={handleCanvasSaveEvent}
+      />
     </div>
   );
 }

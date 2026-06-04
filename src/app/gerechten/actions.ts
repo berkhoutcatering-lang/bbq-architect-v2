@@ -16,9 +16,11 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { GerechtSchema, type GerechtInput } from '@/lib/schemas/gerecht';
+import { GerechtSchema } from '@/lib/schemas/gerecht';
 
-export type { GerechtInput };
+/* Geen `export type { GerechtInput }` — een 'use server' module mag alleen
+   async functions exporteren, anders crasht de Turbopack server-actions-loader
+   runtime. Importeer types direct uit @/lib/schemas/gerecht. */
 
 export async function upsertGerecht(input: unknown): Promise<
   | { data: { id: string | number; naam: string } }

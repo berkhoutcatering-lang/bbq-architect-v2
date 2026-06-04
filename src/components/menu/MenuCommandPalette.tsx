@@ -1,10 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════
    MenuCommandPalette — ⌘K op /gerechten/*
-   Bucket C P0-6. 4 sections: Gerechten (fuzzy search), Componenten,
-   Ingrediënten (deeplink /voorraad?context=menu), Acties.
-   Eigen implementatie (geen cmdk lib nodig). Werkt op echte
-   Supabase Gerecht[] uit parent.
-   ═══════════════════════════════════════════════════════════════ */
+   Bucket C P0-6. 3 sections: Gerechten (fuzzy search), Componenten, Acties.
+   Eigen implementatie (geen cmdk lib nodig). Werkt op echte Supabase
+   Gerecht[] uit parent. Ingrediënten-deeplink is 2026-06-02 verwijderd —
+   Voorraad is de canonical plek (sidebar + /voorraad hub-tabs). */
 
 'use client';
 
@@ -129,7 +128,6 @@ export function MenuCommandPalette({
                     { kind: 'action', id: 'bedenker',  label: 'Bedenk met AI',  desc: 'Open AI gerechten-brainstorm', Icon: Sparkles },
                     { kind: 'action', id: 'analyse',   label: 'Open Analyse',   desc: 'Performance & Health',         Icon: BarChart3, href: '/gerechten/analyse' },
                     { kind: 'action', id: 'allergens', label: 'Allergens-queue',desc: 'Bevestig openstaande allergenen', Icon: ShieldCheck },
-                    { kind: 'action', id: 'ingredienten', label: 'Ingrediënten',  desc: 'Deeplink naar Voorraad', Icon: Package, href: '/voorraad?context=menu' },
                 ],
             });
             if (gerechten.length > 0) {
@@ -181,13 +179,6 @@ export function MenuCommandPalette({
         const actions = allActions.filter((a) => a.kind === 'action' && fuzzyMatch(query, a.label));
         if (actions.length) out.push({ title: 'Acties', items: actions });
 
-        if (fuzzyMatch(query, 'ingredienten') || fuzzyMatch(query, 'voorraad')) {
-            const ingrItem: Item = { kind: 'action', id: 'ingredienten', label: 'Ingrediënten (Voorraad)', desc: 'Deeplink naar /voorraad?context=menu', Icon: Package, href: '/voorraad?context=menu' };
-            out.push({
-                title: 'Ingrediënten',
-                items: [ingrItem],
-            });
-        }
         return out;
     }, [query, gerechten, componenten, isPicker, pickerContext, visibleGerechten]);
 

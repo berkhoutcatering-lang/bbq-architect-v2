@@ -345,27 +345,31 @@ export default function Square01Preview({ overrides, data, size = 'normal' }: Pr
                     color: bandText,
                 }}
             >
-                <span
-                    style={{
-                        fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 8,
-                        fontWeight: 700,
-                        letterSpacing: '.08em',
-                        flexShrink: 0,
-                    }}
-                >
-                    Allergenen
-                </span>
-                <span
-                    style={{
-                        fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 6.5,
-                        opacity: 0.65,
-                        lineHeight: 1.3,
-                    }}
-                >
-                    {legend || '—'}
-                </span>
+                {legend && (
+                    <>
+                        <span
+                            style={{
+                                fontFamily: `'${headingFont}', sans-serif`,
+                                fontSize: 8,
+                                fontWeight: 700,
+                                letterSpacing: '.08em',
+                                flexShrink: 0,
+                            }}
+                        >
+                            Allergenen
+                        </span>
+                        <span
+                            style={{
+                                fontFamily: `'${bodyFont}', sans-serif`,
+                                fontSize: 6.5,
+                                opacity: 0.65,
+                                lineHeight: 1.3,
+                            }}
+                        >
+                            {legend}
+                        </span>
+                    </>
+                )}
             </div>
             {(footer || addressLine || website) && (
                 <div

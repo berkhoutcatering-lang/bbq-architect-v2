@@ -18,9 +18,11 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { MaterieelSchema, type MaterieelInput } from '@/lib/schemas/materieel';
+import { MaterieelSchema } from '@/lib/schemas/materieel';
 
-export type { MaterieelInput };
+/* Geen `export type { MaterieelInput }` — een 'use server' module mag alleen
+   async functions exporteren, anders crasht de Turbopack server-actions-loader
+   runtime. Importeer types direct uit @/lib/schemas/materieel. */
 
 interface ActionResult<T = unknown> {
     data?: T;

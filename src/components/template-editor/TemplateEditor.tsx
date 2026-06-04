@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DndContext, DragOverlay, closestCenter, type DragEndEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { nanoid } from 'nanoid';
@@ -9,21 +10,49 @@ import {
   Save, Eye, Loader2, Undo2, Redo2, Trash2, Copy,
   AlignLeft, AlignCenter, AlignRight, ZoomIn, ZoomOut, Maximize2,
   ChevronLeft, Settings, Database, Pen, Grid3X3, Crosshair,
-  LayoutTemplate, X
+  LayoutTemplate
 } from 'lucide-react';
 import EditorCanvas from './EditorCanvas';
 import BlockPalette from './BlockPalette';
 import BlockPropertiesPanel from './BlockPropertiesPanel';
 import LayersPanel from './LayersPanel';
 import BlockRenderer from './BlockRenderer';
-import { TemplateBrandingProvider, useTemplateBranding } from './TemplateBrandingContext';
+import { TemplateBrandingProvider } from './TemplateBrandingContext';
 import { migrateToAbsoluteLayout, needsMigration } from '@/lib/templateMigration';
 import type { TemplateBlock, PageSettings, PdfTemplate } from '@/types/template.types';
-import { BLOCK_PALETTE, STARTER_TEMPLATES, type StarterTemplate } from '@/lib/templateDefaults';
+import { BLOCK_PALETTE, type StarterTemplate } from '@/lib/templateDefaults';
 import { renderFromTemplate } from '@/lib/templateRenderer';
 import { buildPreviewContext } from '@/lib/templateContext';
 import { useToast } from '@/components/Toast';
 import { useSettings } from '@/lib/useSupabase';
+
+// Lazy-loaded sub-views — only fetched after the user interacts.
+// Modals stay hidden until triggered; DataTab only mounts when the tab is opened.
+const DataTab = dynamic(() => import('./DataTab'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, background: 'var(--bg)' }}>
+      <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', color: 'var(--muted)' }} aria-label="Laden" />
+    </div>
+  ),
+});
+const StarterPicker = dynamic(() => import('./StarterPicker'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)' }}>
+      <Loader2 size={22} style={{ animation: 'spin 1s linear infinite', color: '#fff' }} aria-label="Sjablonen laden" />
+    </div>
+  ),
+});
+const MyTemplatesPicker = dynamic(() => import('./MyTemplatesPicker'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99998, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)' }}>
+      <Loader2 size={22} style={{ animation: 'spin 1s linear infinite', color: '#fff' }} aria-label="Templates laden" />
+    </div>
+  ),
+});
+const DeleteDialog = dynamic(() => import('./DeleteDialog'), { ssr: false });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -98,28 +127,6 @@ const previewBtnStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 4,
   border: '1px solid var(--border-strong)', cursor: 'pointer', fontSize: 12, fontWeight: 500,
   background: 'transparent', color: 'var(--text)',
-};
-
-const dialogScrim: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 99999,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(0,0,0,0.5)',
-};
-
-const dialogStyle: React.CSSProperties = {
-  background: 'var(--surface)', borderRadius: 8, padding: '20px 24px', maxWidth: 360,
-  boxShadow: '0 8px 32px rgba(0,0,0,.45)',
-  border: '1px solid var(--border-strong)',
-};
-
-const dialogCancelBtn: React.CSSProperties = {
-  padding: '6px 14px', borderRadius: 4, border: '1px solid var(--border-strong)',
-  background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--text)',
-};
-
-const dialogConfirmBtn: React.CSSProperties = {
-  padding: '6px 14px', borderRadius: 4, border: 'none',
-  background: 'var(--danger)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600,
 };
 
 const numberStyle: React.CSSProperties = {
@@ -1142,179 +1149,25 @@ export default function TemplateEditor({ template, documentType, organizationId,
 
       {/* ═══ Starter Template Picker ═══ */}
       {starterPicker && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 99998,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.45)', padding: 20,
-        }} onClick={function () { setStarterPicker(false); setPendingStarter(null); }}>
-          <div onClick={function (e) { e.stopPropagation(); }} style={{
-            background: 'var(--card)', borderRadius: 10, maxWidth: 960, width: '100%', maxHeight: '90vh',
-            boxShadow: '0 20px 60px rgba(0,0,0,.25)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Sjabloon kiezen</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Begin met een kant-en-klare lay-out — je past hem daarna volledig aan.</div>
-              </div>
-              <button onClick={function () { setStarterPicker(false); setPendingStarter(null); }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, color: 'var(--muted)' }}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                {(STARTER_TEMPLATES[documentType] || []).map(function (starter) {
-                  const isPending = pendingStarter?.id === starter.id;
-                  return (
-                    <div key={starter.id}
-                      onClick={function () { setPendingStarter(starter); }}
-                      style={{
-                        background: 'var(--card)', borderRadius: 8,
-                        border: isPending ? '2px solid var(--brand)' : '1px solid var(--border)',
-                        padding: 14, cursor: 'pointer', transition: 'all 0.15s',
-                        boxShadow: isPending ? '0 4px 12px color-mix(in srgb, var(--brand) 18%, transparent)' : '0 1px 3px rgba(0,0,0,.04)',
-                      }}>
-                      <StarterThumbnail starter={starter} documentType={documentType} />
-                      <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{starter.name}</div>
-                      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{starter.description}</div>
-                      <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted-light)' }}>{starter.blocks.length} blokken</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--card)' }}>
-              <button onClick={function () { setStarterPicker(false); setPendingStarter(null); }}
-                style={{ padding: '8px 16px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--card)', cursor: 'pointer', fontSize: 12, color: 'var(--muted)' }}>
-                Annuleren
-              </button>
-              <button onClick={function () { if (pendingStarter) applyStarter(pendingStarter); }}
-                disabled={!pendingStarter}
-                style={{
-                  padding: '8px 18px', borderRadius: 4, border: 'none', cursor: pendingStarter ? 'pointer' : 'default',
-                  background: pendingStarter ? 'var(--brand)' : 'var(--border)',
-                  color: 'var(--brand-background, #fff)', fontSize: 12, fontWeight: 600,
-                }}>
-                Sjabloon toepassen
-              </button>
-            </div>
-          </div>
-        </div>
+        <StarterPicker
+          documentType={documentType}
+          pendingStarter={pendingStarter}
+          onSelect={setPendingStarter}
+          onApply={function () { if (pendingStarter) applyStarter(pendingStarter); }}
+          onClose={function () { setStarterPicker(false); setPendingStarter(null); }}
+        />
       )}
 
       {/* ═══ Mijn templates Picker ═══ */}
       {myTemplatesPicker && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 99998,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.45)', padding: 20,
-        }} onClick={function () { setMyTemplatesPicker(false); }}>
-          <div onClick={function (e) { e.stopPropagation(); }} style={{
-            background: 'var(--card)', borderRadius: 10, maxWidth: 720, width: '100%', maxHeight: '80vh',
-            boxShadow: '0 20px 60px rgba(0,0,0,.4)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            border: '1px solid var(--border)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Mijn templates</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Open een eerder opgeslagen template, of markeer er een als actief (zichtbaar in event hub).</div>
-              </div>
-              <button onClick={function () { setMyTemplatesPicker(false); }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 6, color: 'var(--muted)' }}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ padding: 20, overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-              {loadingMyTemplates && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: 30 }}>Laden...</div>
-              )}
-              {!loadingMyTemplates && myTemplates.length === 0 && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: 30 }}>
-                  Nog geen opgeslagen templates voor deze documentsoort. Begin via &quot;Sjablonen&quot;.
-                </div>
-              )}
-              {!loadingMyTemplates && myTemplates.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {myTemplates.map(function (t) {
-                    const isActive = (t as any).is_default === true;
-                    const isCurrent = t.id === template?.id;
-                    return (
-                      <div key={t.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8,
-                        background: 'var(--card)', border: '1px solid ' + (isCurrent ? 'var(--brand)' : 'var(--border)'),
-                      }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.name || 'Naamloos'}</div>
-                            {isActive && (
-                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--brand-background, #fff)', background: 'var(--brand)', padding: '2px 7px', borderRadius: 10 }}>Actief</span>
-                            )}
-                            {isCurrent && (
-                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 10 }}>In bewerking</span>
-                            )}
-                          </div>
-                          {t.description && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{t.description}</div>}
-                          <div style={{ fontSize: 10, color: 'var(--muted-light)', marginTop: 2 }}>{(t.blocks || []).length} blokken · v{t.version}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {!isActive && (
-                            <button
-                              onClick={async function () {
-                                const res = await fetch('/api/templates/' + t.id, {
-                                  method: 'PUT',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ isDefault: true }),
-                                });
-                                if (res.ok) {
-                                  setMyTemplates(function (prev) {
-                                    return prev.map(function (x) {
-                                      if (x.id === t.id) return { ...x, is_default: true } as PdfTemplate;
-                                      if (x.document_type === t.document_type && x.organization_id === t.organization_id) {
-                                        return { ...x, is_default: false } as PdfTemplate;
-                                      }
-                                      return x;
-                                    });
-                                  });
-                                  showToast('Ingesteld als actief', 'success');
-                                } else {
-                                  showToast('Instellen mislukt', 'error');
-                                }
-                              }}
-                              style={{
-                                padding: '6px 10px', fontSize: 11, fontWeight: 600,
-                                background: 'transparent', color: 'var(--brand)',
-                                border: '1px solid color-mix(in srgb, var(--brand) 40%, transparent)',
-                                borderRadius: 6, cursor: 'pointer',
-                              }}>
-                              Actief maken
-                            </button>
-                          )}
-                          <button
-                            disabled={isCurrent}
-                            onClick={function () {
-                              window.location.href = '/template-editor?type=' + t.document_type + '&id=' + t.id;
-                            }}
-                            style={{
-                              padding: '6px 14px', fontSize: 11, fontWeight: 600,
-                              background: isCurrent ? 'var(--border)' : 'var(--brand)', color: 'var(--brand-background, #fff)',
-                              border: 'none', borderRadius: 6, cursor: isCurrent ? 'default' : 'pointer',
-                              opacity: isCurrent ? 0.6 : 1,
-                            }}>
-                            {isCurrent ? 'Actief geopend' : 'Openen'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MyTemplatesPicker
+          templates={myTemplates}
+          loading={loadingMyTemplates}
+          currentTemplateId={template?.id || null}
+          onClose={function () { setMyTemplatesPicker(false); }}
+          onSetTemplates={setMyTemplates}
+          showToast={showToast}
+        />
       )}
 
       {/* ═══ Delete Confirmation Dialog ═══ */}
@@ -1431,237 +1284,8 @@ function BrandColorField({ label, idSuffix, value, fallback, onChange }: { label
   );
 }
 
-// ── Delete Dialog (P1.3, P4.2) ──────────────────────────────────────────────
-function DeleteDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
-  const cancelRef = useRef<HTMLButtonElement | null>(null);
-  const confirmRef = useRef<HTMLButtonElement | null>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(function () {
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    cancelRef.current?.focus();
-    return function () {
-      try { previousFocusRef.current?.focus(); } catch { /* noop */ }
-    };
-  }, []);
-
-  function handleKey(e: React.KeyboardEvent) {
-    if (e.key === 'Escape') { e.preventDefault(); onCancel(); return; }
-    if (e.key === 'Enter' && document.activeElement === confirmRef.current) {
-      e.preventDefault(); onConfirm(); return;
-    }
-    if (e.key === 'Tab') {
-      const focusables = [cancelRef.current, confirmRef.current].filter(Boolean) as HTMLElement[];
-      if (focusables.length === 0) return;
-      const idx = focusables.indexOf(document.activeElement as HTMLElement);
-      e.preventDefault();
-      if (e.shiftKey) {
-        const next = idx <= 0 ? focusables[focusables.length - 1] : focusables[idx - 1];
-        next?.focus();
-      } else {
-        const next = idx === -1 || idx >= focusables.length - 1 ? focusables[0] : focusables[idx + 1];
-        next?.focus();
-      }
-    }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
-      style={dialogScrim}
-      onClick={onCancel}
-    >
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-desc"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
-        onClick={function (e) { e.stopPropagation(); }}
-        onKeyDown={handleKey}
-        style={dialogStyle}
-      >
-        <h2 id="delete-dialog-title" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>
-          Blok verwijderen?
-        </h2>
-        <p id="delete-dialog-desc" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
-          Dit kan ongedaan worden gemaakt met Ctrl+Z.
-        </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button ref={cancelRef} onClick={onCancel} style={dialogCancelBtn}>Annuleren</button>
-          <button ref={confirmRef} onClick={onConfirm} style={dialogConfirmBtn}>Verwijderen</button>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-// ── Data Tab Component ──
-const VAR_GROUPS: Record<string, { label: string; icon: string; keys: string[] }> = {
-  bedrijf: { label: 'Bedrijfsgegevens', icon: 'building', keys: ['bedrijfsnaam', 'ondertitel', 'bedrijf_email', 'bedrijf_telefoon', 'bedrijf_adres', 'website', 'kvk', 'btw_nr', 'iban'] },
-  klant: { label: 'Klantgegevens', icon: 'user', keys: ['client_naam', 'client_adres'] },
-  document: { label: 'Document', icon: 'file', keys: ['nummer', 'datum', 'vervaldatum', 'geldig_tot', 'document_type', 'notitie'] },
-  financieel: { label: 'Financieel', icon: 'euro', keys: ['subtotaal', 'btw_bedrag', 'totaal', 'betaalvoorwaarden'] },
-  event: { label: 'Event & Gasten', icon: 'calendar', keys: ['event_naam', 'event_datum', 'aantal_gasten', 'haccp_datum', 'winkel', 'bon_totaal'] },
-};
-
-const VAR_LABELS: Record<string, string> = {
-  bedrijfsnaam: 'Bedrijfsnaam', ondertitel: 'Ondertitel', bedrijf_email: 'E-mail', bedrijf_telefoon: 'Telefoon',
-  bedrijf_adres: 'Adres', website: 'Website', kvk: 'KvK-nummer', btw_nr: 'BTW-nummer', iban: 'IBAN',
-  client_naam: 'Naam klant', client_adres: 'Adres klant',
-  nummer: 'Documentnummer', datum: 'Datum', vervaldatum: 'Vervaldatum', geldig_tot: 'Geldig tot',
-  document_type: 'Type', notitie: 'Notitie',
-  subtotaal: 'Subtotaal', btw_bedrag: 'BTW', totaal: 'Totaal', betaalvoorwaarden: 'Betaalvoorwaarden',
-  event_naam: 'Evenement', event_datum: 'Eventdatum', aantal_gasten: 'Aantal gasten',
-  haccp_datum: 'HACCP datum', winkel: 'Winkel', bon_totaal: 'Bon totaal',
-};
-
-function DataTab({ documentType, previewData, onUpdatePreviewData }: { documentType: string; previewData: Record<string, string>; onUpdatePreviewData: (data: Record<string, string>) => void }) {
-  const ctx = buildPreviewContext(documentType);
-
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-strong)', fontSize: 12, color: 'var(--text)', background: 'var(--bg)' };
-  const headStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--brand)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.03em' };
-  const codeStyle: React.CSSProperties = { fontSize: 9, color: 'var(--brand)', background: 'var(--brand-tint)', padding: '1px 5px', borderRadius: 3, fontFamily: 'monospace', whiteSpace: 'nowrap' };
-
-  function handleChange(key: string, value: string) {
-    onUpdatePreviewData({ ...previewData, [key]: value });
-  }
-
-  return (
-    <section role="region" aria-labelledby="data-tab-title" style={{ flex: 1, overflow: 'auto', padding: 32, background: 'var(--bg)' }}>
-      <div style={{ maxWidth: 700, margin: '0 auto' }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', padding: 24, marginBottom: 16 }}>
-          <h2 id="data-tab-title" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Voorbeeld Data</h2>
-          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
-            Pas deze waarden aan om je template te testen met andere data. Ze worden gebruikt bij <code style={{ background: 'var(--hover)', padding: '1px 4px', borderRadius: 3, color: 'var(--text)' }}>{'{{variabele}}'}</code> velden en in de PDF preview.
-          </p>
-
-          {Object.entries(VAR_GROUPS).map(function ([key, group]) {
-            const visibleKeys = group.keys.filter(function (k) { return previewData[k] !== undefined; });
-            if (visibleKeys.length === 0) return null;
-            return (
-              <div key={key} style={{ marginBottom: 20 }}>
-                <div style={headStyle}>{group.label}</div>
-                {visibleKeys.map(function (varKey) {
-                  const isLong = (previewData[varKey] || '').length > 60;
-                  const fieldId = `data-${varKey}`;
-                  return (
-                    <div key={varKey} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-                      <div style={{ width: 130, flexShrink: 0, paddingTop: 5 }}>
-                        <label htmlFor={fieldId} style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted)', display: 'block' }}>{VAR_LABELS[varKey] || varKey}</label>
-                        <code style={codeStyle}>{'{{' + varKey + '}}'}</code>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        {isLong ? (
-                          <textarea id={fieldId} value={previewData[varKey] || ''} rows={2}
-                            onChange={function (e) { handleChange(varKey, e.target.value); }}
-                            style={{ ...inputStyle, resize: 'vertical' }} />
-                        ) : (
-                          <input id={fieldId} value={previewData[varKey] || ''}
-                            onChange={function (e) { handleChange(varKey, e.target.value); }}
-                            style={inputStyle} />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          <button onClick={function () { onUpdatePreviewData(buildPreviewContext(documentType).variables); }}
-            style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer', fontSize: 11, color: 'var(--muted)' }}>
-            Standaardwaarden herstellen
-          </button>
-        </div>
-
-        {ctx.data.items && ctx.data.items.length > 0 && (
-          <div style={{ background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', padding: 24, marginBottom: 16 }}>
-            <div style={headStyle}>Regelitems</div>
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600 }}>Omschrijving</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>Aantal</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, textAlign: 'right' }}>Prijs</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, textAlign: 'center' }}>BTW%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ctx.data.items.map(function (item, i) {
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{item.omschrijving}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'center', ...numberStyle }}>{item.qty}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'right', ...numberStyle }}>{'\u20ac ' + item.prijs.toFixed(2)}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'center', ...numberStyle }}>{item.btw}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {ctx.data.menuSelectie && (
-          <div style={{ background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', padding: 24, marginBottom: 16 }}>
-            <div style={headStyle}>Menu</div>
-            {Object.entries(ctx.data.menuSelectie).map(function ([gang, dishes]) {
-              return (
-                <div key={gang} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{gang}</div>
-                  {dishes.map(function (dish, i) {
-                    return <div key={i} style={{ fontSize: 12, color: 'var(--muted)', paddingLeft: 12 }}>{dish}</div>;
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {ctx.data.haccpRecords && ctx.data.haccpRecords.length > 0 && (
-          <div style={{ background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', padding: 24, marginBottom: 16 }}>
-            <div style={headStyle}>HACCP Metingen</div>
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600 }}>Tijd</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600 }}>Product</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600 }}>Type</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600, textAlign: 'right' }}>Temp</th>
-                  <th style={{ padding: '6px 8px', color: 'var(--muted)', fontWeight: 600 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ctx.data.haccpRecords.map(function (r, i) {
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', ...numberStyle }}>{r.tijd}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{r.wat}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{r.type}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'right', ...numberStyle }}>{r.temp}°C</td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 3, fontWeight: 600, background: r.status === 'ok' ? 'var(--success-tint)' : 'rgba(245,158,11,.15)', color: r.status === 'ok' ? 'var(--success)' : 'var(--warning)' }}>
-                          {r.status.toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
+// ── Data Tab + Starter Picker zijn verhuisd naar ./DataTab.tsx en ./StarterPicker.tsx
+//    en worden via next/dynamic geladen om de initial bundle kleiner te maken.
 
 // Helper: Snap block position to align with other blocks' edges/centers
 function snapToAlignments(
@@ -1761,145 +1385,6 @@ function getDefaultBlockWidth(type: string, item: any): number | null {
     case 'haccp_table':
       return null;
     default: return 80;
-  }
-}
-
-
-// Mini visual thumbnail for the starter picker — renders a rough A4 preview
-function StarterThumbnail({ starter, documentType }: { starter: StarterTemplate; documentType: PdfTemplate['document_type'] }) {
-  const branding = useTemplateBranding();
-  const bg = starter.pageSettings.backgroundColor;
-  const frameBlock = starter.blocks.find(function (b) { return b.type === 'border_frame'; }) as any;
-  const accent = documentType === 'haccp' ? '#c83232' : branding.primary;
-  const frameColor = frameBlock ? (frameBlock.color === 'brand_primary' ? accent : frameBlock.color) : null;
-
-  function frameOverlay() {
-    if (!frameBlock || !frameColor) return null;
-    const style = frameBlock.style;
-    if (style === 'single' || style === 'dashed' || style === 'dotted' || style === 'rounded') {
-      return <div style={{
-        position: 'absolute', inset: '4%', pointerEvents: 'none',
-        border: '1px ' + (style === 'rounded' ? 'solid' : style) + ' ' + frameColor,
-        borderRadius: style === 'rounded' ? 3 : 0,
-      }} />;
-    }
-    if (style === 'double') {
-      return <div style={{ position: 'absolute', inset: '4%', border: '1px solid ' + frameColor, pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', inset: 2, border: '1px solid ' + frameColor }} />
-      </div>;
-    }
-    if (style === 'corners') {
-      const sz = 10;
-      return (
-        <div style={{ position: 'absolute', inset: '4%', pointerEvents: 'none' }}>
-          {[{ t: 0, l: 0 }, { t: 0, r: 0 }, { b: 0, l: 0 }, { b: 0, r: 0 }].map(function (p, i) {
-            const style: React.CSSProperties = { position: 'absolute', ...p };
-            return (
-              <div key={i}>
-                <div style={{ ...style, width: sz, height: 1, background: frameColor }} />
-                <div style={{ ...style, width: 1, height: sz, background: frameColor }} />
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-    if (style === 'ornament') {
-      return <div style={{ position: 'absolute', inset: '4%', border: '1px solid ' + frameColor, pointerEvents: 'none' }}>
-        {[{ t: 0, l: 0 }, { t: 0, r: 0 }, { b: 0, l: 0 }, { b: 0, r: 0 }].map(function (p, i) {
-          return <div key={i} style={{ position: 'absolute', ...p, width: 5, height: 5, background: frameColor, clipPath: 'polygon(0 0, 100% 0, 0 100%)', transform: 'rotate(' + (i * 90) + 'deg)' }} />;
-        })}
-      </div>;
-    }
-    return null;
-  }
-
-  return (
-    <div style={{
-      width: '100%', aspectRatio: '210 / 297', background: bg,
-      border: '1px solid #e0e0e0', borderRadius: 4, overflow: 'hidden', position: 'relative',
-      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.02)',
-    }}>
-      <div style={{ position: 'absolute', inset: 0, padding: '8%', display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {starter.blocks.slice(0, 9).map(function (b, i) {
-          return <MiniBlock key={i} block={b} docType={documentType} />;
-        })}
-      </div>
-      {frameOverlay()}
-    </div>
-  );
-}
-
-function MiniBlock({ block, docType }: { block: TemplateBlock; docType: PdfTemplate['document_type'] }) {
-  const accent = docType === 'haccp' ? '#c83232' : docType === 'menukaart' ? '#c4a35a' : '#c4a35a';
-  const muted = docType === 'menukaart' ? 'rgba(255,255,255,.4)' : '#d0d0d0';
-
-  switch (block.type) {
-    case 'logo':
-      return <div style={{ height: 12, width: '35%', alignSelf: block.alignment === 'center' ? 'center' : block.alignment === 'right' ? 'flex-end' : 'flex-start', background: 'rgba(0,0,0,.06)', borderRadius: 2 }} />;
-    case 'document_badge':
-      return <div style={{ height: 8, width: '40%', alignSelf: 'center', background: (block as any).backgroundColor === 'brand_primary' ? accent : (block as any).backgroundColor, borderRadius: 1 }} />;
-    case 'divider':
-      return <div style={{ height: 1, width: '100%', background: accent }} />;
-    case 'text':
-      return <div style={{ height: 3, width: (block as any).alignment === 'center' ? '60%' : '80%', alignSelf: (block as any).alignment === 'center' ? 'center' : 'flex-start', background: muted, borderRadius: 1 }} />;
-    case 'client_info':
-      return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ height: 3, width: '80%', background: muted }} />
-            <div style={{ height: 2, width: '60%', background: muted, opacity: 0.6 }} />
-          </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ height: 2, width: '100%', background: muted, opacity: 0.6 }} />
-            <div style={{ height: 2, width: '90%', background: muted, opacity: 0.6 }} />
-          </div>
-        </div>
-      );
-    case 'items_table':
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: 4, width: '100%', background: accent }} />
-          <div style={{ height: 2, width: '100%', background: muted, opacity: 0.4, marginTop: 1 }} />
-          <div style={{ height: 2, width: '100%', background: muted, opacity: 0.4, marginTop: 1 }} />
-        </div>
-      );
-    case 'menu':
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <div style={{ height: 3, width: '50%', alignSelf: 'center', background: accent }} />
-          <div style={{ height: 2, width: '80%', alignSelf: 'center', background: muted, opacity: 0.6 }} />
-          <div style={{ height: 2, width: '70%', alignSelf: 'center', background: muted, opacity: 0.6 }} />
-        </div>
-      );
-    case 'totals':
-      return <div style={{ height: 4, width: '40%', alignSelf: 'flex-end', background: accent, borderRadius: 1 }} />;
-    case 'payment_details':
-      return <div style={{ height: 14, width: '100%', background: 'rgba(0,0,0,.04)', border: '1px solid ' + accent, borderRadius: 2 }} />;
-    case 'footer':
-      return <div style={{ height: 2, width: '60%', alignSelf: 'center', background: muted, opacity: 0.5, marginTop: 'auto' }} />;
-    case 'haccp_table':
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ height: 4, width: '100%', background: accent }} />
-          <div style={{ height: 2, width: '100%', background: muted, opacity: 0.4, marginTop: 1 }} />
-          <div style={{ height: 2, width: '100%', background: muted, opacity: 0.4, marginTop: 1 }} />
-        </div>
-      );
-    case 'image':
-      return <div style={{ height: 24, width: '100%', background: 'rgba(0,0,0,.05)', border: '1px dashed ' + muted, borderRadius: 2 }} />;
-    case 'spacer':
-      return <div style={{ height: Math.min((block as any).height / 3, 8) }} />;
-    case 'shape':
-      return <div style={{ height: 6, width: '100%', background: (block as any).fillColor === 'brand_primary' ? accent : (block as any).fillColor, borderRadius: 1 }} />;
-    case 'icon':
-      return <div style={{ height: 5, width: 5, borderRadius: '50%', alignSelf: 'center', background: accent }} />;
-    case 'stamp':
-      return <div style={{ height: 14, width: 14, borderRadius: '50%', alignSelf: 'center', border: '1.5px solid ' + ((block as any).color || accent), margin: '2px 0' }} />;
-    case 'border_frame':
-      return null; // rendered as overlay below
-    default:
-      return <div style={{ height: 3, width: '50%', background: muted, opacity: 0.4 }} />;
   }
 }
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { FileText, Receipt, Users, Inbox } from 'lucide-react';
+import { FileText, Receipt, Users, Inbox, Layers } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
 const TABS: HubTab[] = [
   { href: '/verkoop/leads', label: 'Aanvragen', icon: Inbox },
+  { href: '/verkoop/arrangementen', label: 'Arrangementen', icon: Layers },
   { href: '/offertes', label: 'Offertes', icon: FileText },
   { href: '/facturen', label: 'Facturen', icon: Receipt },
   { href: '/klanten', label: 'Klanten', icon: Users },

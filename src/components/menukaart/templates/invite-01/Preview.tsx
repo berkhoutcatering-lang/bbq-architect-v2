@@ -387,7 +387,7 @@ export default function Invite01Preview({ overrides, data, size = 'normal' }: Pr
                             lineHeight: 1.55,
                         }}
                     >
-                        {legend || ''}
+                        {legend}
                     </div>
                     {(footer || website) && (
                         <div

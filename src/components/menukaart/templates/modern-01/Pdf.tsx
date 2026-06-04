@@ -154,8 +154,12 @@ export default function Modern01Pdf({ overrides, data }: PdfTemplateProps) {
                     )}
 
                     <View style={styles.legend}>
-                        <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                        <Text style={styles.legendText}>{legend || '—'}</Text>
+                        {legend ? (
+                            <>
+                                <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                                <Text style={styles.legendText}>{legend}</Text>
+                            </>
+                        ) : null}
                         {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                     </View>
                 </View>

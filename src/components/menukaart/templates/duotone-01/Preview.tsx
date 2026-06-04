@@ -332,40 +332,42 @@ export default function Duotone01Preview({ overrides, data, size = 'normal' }: P
             </div>
 
             {/* Bottom bar */}
-            <div
-                style={{
-                    background: accent,
-                    padding: `${8}px ${30}px`,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    color: barText,
-                    position: 'relative',
-                    zIndex: 3,
-                }}
-            >
+            {legend && (
                 <div
                     style={{
-                        fontFamily: `'${headingFont}', sans-serif`,
-                        fontSize: 11,
-                        letterSpacing: '.08em',
+                        background: accent,
+                        padding: `${8}px ${30}px`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        color: barText,
+                        position: 'relative',
+                        zIndex: 3,
                     }}
                 >
-                    Allergenen
+                    <div
+                        style={{
+                            fontFamily: `'${headingFont}', sans-serif`,
+                            fontSize: 11,
+                            letterSpacing: '.08em',
+                        }}
+                    >
+                        Allergenen
+                    </div>
+                    <div
+                        style={{
+                            fontFamily: `'${bodyFont}', sans-serif`,
+                            fontSize: 7,
+                            opacity: 0.7,
+                            maxWidth: 330,
+                            textAlign: 'right',
+                            lineHeight: 1.5,
+                        }}
+                    >
+                        {legend}
+                    </div>
                 </div>
-                <div
-                    style={{
-                        fontFamily: `'${bodyFont}', sans-serif`,
-                        fontSize: 7,
-                        opacity: 0.7,
-                        maxWidth: 330,
-                        textAlign: 'right',
-                        lineHeight: 1.5,
-                    }}
-                >
-                    {legend || '—'}
-                </div>
-            </div>
+            )}
             {(footer || addressLine || website) && (
                 <div
                     style={{

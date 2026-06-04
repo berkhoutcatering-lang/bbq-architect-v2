@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Rustic-01 — Bistro warm, kraft-papier, Caveat script.
  *
@@ -12,6 +14,7 @@
 
 import type { Overrides } from '@/lib/menukaart/registry';
 import { type MenuData, formatAllergenLegend } from '@/lib/menukaart/menu-data';
+import { useFitToPage } from '../useFitToPage';
 
 type Props = {
     overrides: Overrides;
@@ -109,8 +112,11 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
         </div>
     );
 
+    const { frameRef, contentRef, scale: fitScale } = useFitToPage([data, overrides]);
+
     return (
         <div
+            ref={frameRef}
             style={{
                 background: `linear-gradient(170deg, ${bg} 0%, ${bgDark} 100%)`,
                 width: 480,
@@ -155,6 +161,7 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
             )}
 
             <div
+                ref={contentRef}
                 style={{
                     padding: `${28}px ${34}px ${22}px`,
                     display: 'flex',
@@ -162,6 +169,8 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
                     minHeight: '100%',
                     position: 'relative',
                     zIndex: 2,
+                    transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+                    transformOrigin: 'top center',
                 }}
             >
                 {/* Header — wax seal */}
@@ -328,31 +337,35 @@ export default function Rustic01Preview({ overrides, data, size = 'normal' }: Pr
 
                 {/* Legend */}
                 <div style={{ marginTop: 'auto', paddingTop: 8, textAlign: 'center' }}>
-                    <div style={{ width: 50, height: 1, background: light, margin: '0 auto', marginBottom: 5 }} />
-                    <div
-                        style={{
-                            fontFamily: `'${bodyFont}', serif`,
-                            fontSize: 8,
-                            fontWeight: 600,
-                            letterSpacing: '.15em',
-                            textTransform: 'uppercase',
-                            color: accent,
-                            marginBottom: 3,
-                        }}
-                    >
-                        Allergenen
-                    </div>
-                    <div
-                        style={{
-                            fontFamily: `'${bodyFont}', serif`,
-                            fontSize: 8,
-                            fontStyle: 'italic',
-                            color: muted,
-                            lineHeight: 1.7,
-                        }}
-                    >
-                        {legend || '—'}
-                    </div>
+                    {legend && (
+                        <>
+                            <div style={{ width: 50, height: 1, background: light, margin: '0 auto', marginBottom: 5 }} />
+                            <div
+                                style={{
+                                    fontFamily: `'${bodyFont}', serif`,
+                                    fontSize: 8,
+                                    fontWeight: 600,
+                                    letterSpacing: '.15em',
+                                    textTransform: 'uppercase',
+                                    color: accent,
+                                    marginBottom: 3,
+                                }}
+                            >
+                                Allergenen
+                            </div>
+                            <div
+                                style={{
+                                    fontFamily: `'${bodyFont}', serif`,
+                                    fontSize: 8,
+                                    fontStyle: 'italic',
+                                    color: muted,
+                                    lineHeight: 1.7,
+                                }}
+                            >
+                                {legend}
+                            </div>
+                        </>
+                    )}
                     {footer && (
                         <div
                             style={{

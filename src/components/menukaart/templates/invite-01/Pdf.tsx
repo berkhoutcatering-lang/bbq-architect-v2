@@ -129,7 +129,7 @@ export default function Invite01Pdf({ overrides, data }: PdfTemplateProps) {
                     )}
 
                     <View style={styles.legend}>
-                        <Text style={styles.legendText}>{legend || ''}</Text>
+                        <Text style={styles.legendText}>{legend}</Text>
                         {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                     </View>
                 </View>

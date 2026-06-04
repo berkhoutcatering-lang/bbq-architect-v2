@@ -130,10 +130,12 @@ export default function Smokehouse01Pdf({ overrides, data }: PdfTemplateProps) {
                     )}
                 </View>
 
-                <View style={styles.legendBar}>
-                    <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                    <Text style={styles.legendText}>{legend || '—'}</Text>
-                </View>
+                {legend ? (
+                    <View style={styles.legendBar}>
+                        <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                        <Text style={styles.legendText}>{legend}</Text>
+                    </View>
+                ) : null}
                 {footer ? <Text style={styles.footer}>{footer}</Text> : null}
             </Page>
         </Document>

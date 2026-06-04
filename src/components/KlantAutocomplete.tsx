@@ -23,9 +23,12 @@ interface Props {
     label?: string;
     style?: React.CSSProperties;
     error?: string;
+    /** Optionele extra class voor de input — bv. "off-input" zodat het veld
+     *  de offerte-bewerk-styling krijgt buiten de hopbites-theme context. */
+    inputClassName?: string;
 }
 
-export default function KlantAutocomplete({ value, onChange, onSelect, label, style, error }: Props) {
+export default function KlantAutocomplete({ value, onChange, onSelect, label, style, error, inputClassName }: Props) {
     const [suggestions, setSuggestions] = useState<Klant[]>([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -83,6 +86,7 @@ export default function KlantAutocomplete({ value, onChange, onSelect, label, st
         <div className="field" ref={wrapperRef} style={Object.assign({ position: 'relative' }, style || {})}>
             {label && <label>{label}</label>}
             <input
+                className={inputClassName}
                 value={value}
                 onChange={function (e) { onChange(e.target.value); }}
                 onFocus={function () { if (suggestions.length > 0) setShowDropdown(true); }}

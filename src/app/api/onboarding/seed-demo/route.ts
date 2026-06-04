@@ -51,6 +51,13 @@ const DEMO_LEVERANCIERS = [
   { naam: 'Disposables NL', categorie: 'Verpakking' },
 ];
 
+const DEMO_GANGEN = [
+  { naam: 'Voorgerechten', slug: 'voorgerechten', minimum: 1, extra_prijs_pp: 0, volgorde: 1, actief: true },
+  { naam: 'Hoofdgerechten', slug: 'hoofdgerechten', minimum: 1, extra_prijs_pp: 0, volgorde: 2, actief: true },
+  { naam: 'Bijgerechten',   slug: 'bijgerechten',   minimum: 1, extra_prijs_pp: 0, volgorde: 3, actief: true },
+  { naam: 'Nagerechten',    slug: 'nagerechten',    minimum: 1, extra_prijs_pp: 0, volgorde: 4, actief: true },
+];
+
 const DEMO_GERECHTEN = [
   { naam: 'Pulled Pork Brioche', categorie: 'hoofdgerecht', gang_slug: 'hoofdgerechten', kostprijs_pp: 4.20, omschrijving: 'Langzaam gerookte pulled pork op een zachte brioche met cole slaw.' },
   { naam: 'BBQ Brisket', categorie: 'hoofdgerecht', gang_slug: 'hoofdgerechten', kostprijs_pp: 6.80, omschrijving: '14 uur gerookte brisket, slice-thick, met BBQ-saus.' },
@@ -155,8 +162,65 @@ export async function POST(req: NextRequest) {
   // 4. GERECHTEN
   const gerIns = await sb.from('gerechten').insert(
     DEMO_GERECHTEN.map((g) => ({ ...g, organization_id: orgId, status: 'actief' })),
-  ).select('id, naam');
+  ).select('id, naam, gang_slug');
   if (gerIns.error) errors.push(`gerechten: ${gerIns.error.message}`);
+  const seededGerechten = gerIns.data ?? [];
+
+  // 4b. GANGEN — 4 NL-cateraar baseline-gangen zodat MenuComposer canvas niet
+  //              leeg is voor de verse tenant. Slugs matchen DEMO_GERECHTEN.gang_slug.
+  const gangIns = await sb.from('gangen').insert(
+    DEMO_GANGEN.map((g) => ({ ...g, organization_id: orgId })),
+  ).select('id, slug');
+  if (gangIns.error) errors.push(`gangen: ${gangIns.error.message}`);
+
+  // 4c. DEFAULT MENUKAART — 1 template met alle 15 demo-gerechten verdeeld over
+  //                          de 4 gangen. Geeft de offerte-wizard direct iets om uit
+  //                          te kiezen i.p.v. een lege state.
+  let templateId: number | null = null;
+  if (seededGerechten.length > 0) {
+    // Bouw menu_selectie JSONB shape (backwards-compat: { gang_slug: [naam, ...] }).
+    const menuSelectie: Record<string, string[]> = {};
+    for (const g of seededGerechten) {
+      if (!g.gang_slug) continue;
+      if (!menuSelectie[g.gang_slug]) menuSelectie[g.gang_slug] = [];
+      menuSelectie[g.gang_slug].push(g.naam);
+    }
+
+    const tplIns = await sb.from('menu_templates').insert({
+      organization_id: orgId,
+      naam: 'Demo BBQ-menukaart',
+      beschrijving: 'Voorbeeldmenu met alle demo-gerechten — pas aan naar je eigen aanbod.',
+      menu_selectie: menuSelectie,
+      basis_prijs_pp: 39.50,
+      aantal_gasten: 40,
+      actief: true,
+      is_default: true,
+    }).select('id').maybeSingle();
+    if (tplIns.error) errors.push(`menu_templates: ${tplIns.error.message}`);
+    templateId = tplIns.data?.id ?? null;
+
+    // 4d. menu_template_items — relational join (canonical v2).
+    if (templateId !== null) {
+      const itemsPerGang: Record<string, number> = {};
+      const items = seededGerechten
+        .filter((g) => g.gang_slug)
+        .map((g) => {
+          const volgorde = itemsPerGang[g.gang_slug!] ?? 0;
+          itemsPerGang[g.gang_slug!] = volgorde + 1;
+          return {
+            organization_id: orgId,
+            menu_template_id: templateId,
+            gerecht_id: g.id,
+            gang_slug: g.gang_slug!,
+            volgorde,
+          };
+        });
+      if (items.length > 0) {
+        const mtiIns = await sb.from('menu_template_items').insert(items);
+        if (mtiIns.error) errors.push(`menu_template_items: ${mtiIns.error.message}`);
+      }
+    }
+  }
 
   // 5. EVENTS (4 komend, 4 historisch)
   const today = new Date();
@@ -200,6 +264,8 @@ export async function POST(req: NextRequest) {
         leveranciers: leveranciers.length,
         inventory: invIns.data?.length ?? 0,
         gerechten: gerIns.data?.length ?? 0,
+        gangen: gangIns.data?.length ?? 0,
+        menu_templates: templateId ? 1 : 0,
         events: evIns.data?.length ?? 0,
       },
     },
@@ -212,6 +278,8 @@ export async function POST(req: NextRequest) {
       leveranciers: leveranciers.length,
       inventory: invIns.data?.length ?? 0,
       gerechten: gerIns.data?.length ?? 0,
+      gangen: gangIns.data?.length ?? 0,
+      menu_templates: templateId ? 1 : 0,
       events: evIns.data?.length ?? 0,
     },
     errors: errors.length > 0 ? errors : undefined,

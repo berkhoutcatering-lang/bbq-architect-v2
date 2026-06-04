@@ -120,9 +120,13 @@ export default function Restaurant01Pdf({ overrides, data }: PdfTemplateProps) {
                 )}
 
                 <View style={styles.legendWrap}>
-                    {(overrides.showOrnament !== false) && <View style={styles.legendLine} />}
-                    <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                    <Text style={styles.legendText}>{legend || '—'}</Text>
+                    {legend ? (
+                        <>
+                            {(overrides.showOrnament !== false) && <View style={styles.legendLine} />}
+                            <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                            <Text style={styles.legendText}>{legend}</Text>
+                        </>
+                    ) : null}
                     {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                 </View>
             </Page>

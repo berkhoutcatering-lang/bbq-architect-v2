@@ -120,9 +120,13 @@ export default function Tasting01Pdf({ overrides, data }: PdfTemplateProps) {
                 )}
 
                 <View style={styles.legend}>
-                    <View style={styles.legendRule} />
-                    <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                    <Text style={styles.legendText}>{legend || '—'}</Text>
+                    {legend ? (
+                        <>
+                            <View style={styles.legendRule} />
+                            <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                            <Text style={styles.legendText}>{legend}</Text>
+                        </>
+                    ) : null}
                     {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                 </View>
             </Page>

@@ -322,37 +322,41 @@ export default function Minimal01Preview({ overrides, data, size = 'normal' }: P
 
                 {/* Legend */}
                 <div style={{ marginTop: 'auto', paddingTop: 8 }}>
-                    <div style={{ width: '100%', height: 1.5, background: text, marginBottom: 6 }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <div
-                            style={{
-                                fontSize: 8,
-                                fontWeight: 500,
-                                letterSpacing: '.15em',
-                                textTransform: 'uppercase',
-                                color: text,
-                            }}
-                        >
-                            Allergenen
-                        </div>
-                        <div style={{ fontSize: 8, fontWeight: 300, color: light }}>
-                            {used.length} allergenen · {totalDishes} gerechten
-                        </div>
-                    </div>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(4, 1fr)',
-                            gap: `${2}px ${10}px`,
-                            marginTop: 3,
-                        }}
-                    >
-                        {used.map(a => (
-                            <div key={a} style={{ fontSize: 8, fontWeight: 300, color: muted }}>
-                                <span style={{ fontWeight: 500, color: text }}>{a}</span> {ALLERGEN_MAP[a]}
+                    {used.length > 0 && (
+                        <>
+                            <div style={{ width: '100%', height: 1.5, background: text, marginBottom: 6 }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <div
+                                    style={{
+                                        fontSize: 8,
+                                        fontWeight: 500,
+                                        letterSpacing: '.15em',
+                                        textTransform: 'uppercase',
+                                        color: text,
+                                    }}
+                                >
+                                    Allergenen
+                                </div>
+                                <div style={{ fontSize: 8, fontWeight: 300, color: light }}>
+                                    {used.length} allergenen · {totalDishes} gerechten
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                            <div
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(4, 1fr)',
+                                    gap: `${2}px ${10}px`,
+                                    marginTop: 3,
+                                }}
+                            >
+                                {used.map(a => (
+                                    <div key={a} style={{ fontSize: 8, fontWeight: 300, color: muted }}>
+                                        <span style={{ fontWeight: 500, color: text }}>{a}</span> {ALLERGEN_MAP[a]}
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
                     {footer && (
                         <div style={{ marginTop: 8, fontSize: 8, fontWeight: 300, color: light }}>{footer}</div>
                     )}

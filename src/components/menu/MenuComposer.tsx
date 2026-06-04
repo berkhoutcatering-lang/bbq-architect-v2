@@ -21,12 +21,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import {
     Plus, Sparkles, Save, Trash2, GripVertical, X, Loader2,
     ChevronDown, ChevronRight, ArrowRight, AlertTriangle, FileText,
-    Search, CornerDownRight, UtensilsCrossed, ChefHat, Users, Wallet,
-    TrendingUp, ShieldAlert, PanelRightOpen, PanelRightClose, Utensils,
+    CornerDownRight, UtensilsCrossed, ChefHat,
+    ShieldAlert, PanelRightOpen, PanelRightClose, Utensils,
 } from 'lucide-react';
+
+// Lazy-loaded sub-components. Each only loads its chunk the first time it mounts
+// (LibrarySidebar / AiSuggestionsSheet on first open, InlinePicker on first add-click).
+const LibrarySidebar = dynamic(() => import('./LibrarySidebar'), { ssr: false });
+const AiSuggestionsSheet = dynamic(() => import('./AiSuggestionsSheet'), { ssr: false });
+const InlinePicker = dynamic(() => import('./InlinePicker'), { ssr: false });
 import {
     DndContext, KeyboardSensor, PointerSensor, TouchSensor,
     useSensor, useSensors, closestCenter, type DragEndEvent,
@@ -338,25 +345,18 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
     /* KPI-stats: optellen op basis van toegevoegde items + gerechten-lookup.
        Marge gebruikt verkoopprijs vs kostprijs_pp. Alle berekeningen client-side,
        geen AI-derivatie (Hard Rule: prijs/marge nooit door AI). */
+    /* Samenstelling-tellingen voor de KPI-strip. Geen prijs/marge: een
+       menukaart houdt geen geld vast (dat zit op de offerte). */
     const stats = useMemo(() => {
-        let couvertprijs = 0;
-        let kostprijs = 0;
         const allergenenSet = new Set<string>();
         const gangenSet = new Set<string>();
         for (const it of state.items) {
             const g = gerechtById.get(it.gerecht_id);
             if (!g) continue;
-            couvertprijs += Number(g.verkoopprijs ?? g.prijs ?? 0);
-            kostprijs += Number(g.kostprijs_pp ?? 0);
             gangenSet.add(it.gang_slug);
             for (const a of g.allergenen ?? []) allergenenSet.add(a);
         }
-        const margePp = couvertprijs - kostprijs;
-        const margePct = couvertprijs > 0 ? Math.round((margePp / couvertprijs) * 100) : 0;
         return {
-            couvertprijs,
-            margePct,
-            margePp,
             gerechten: state.items.length,
             allergenen: allergenenSet.size,
             gangenCount: gangenSet.size,
@@ -365,20 +365,21 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
 
     return (
         <div className="menu-composer" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            {/* ── Hero — Playfair naam-input + meta + actions ────────────── */}
+            {/* ── Hero — Playfair naam-input + actions ───────────────────── */}
             <ComposerHero
                 naam={state.naam}
-                aantalGasten={state.aantal_gasten}
-                basisPrijs={state.basis_prijs_pp}
                 onNaamChange={(v) => { setState(s => ({ ...s, naam: v })); setDirty(true); }}
                 onToggleLibrary={() => setLibraryOpen(o => !o)}
                 libraryOpen={libraryOpen}
             />
 
-            {/* ── KPI strip — live menu-economics ────────────────────────── */}
+            {/* ── KPI strip — samenstelling-tellingen (geen prijs/gasten:
+                   die horen bij de offerte, niet bij de menukaart) ───────── */}
             <KpiStrip stats={stats} />
 
-            {/* ── Compact action-bar — basisprijs/gasten/standaard + save ── */}
+            {/* ── Compact action-bar — standaard-toggle + save. Basisprijs en
+                   aantal gasten zijn bewust weg: een menukaart is het aanbod,
+                   prijs + headcount vul je per klant in de offerte in. ────── */}
             <div style={{
                 position: 'sticky', top: 0, zIndex: 5,
                 background: 'var(--surface)',
@@ -387,27 +388,6 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
                 marginTop: 16,
                 padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
             }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-                    Basisprijs p.p.
-                    <input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={state.basis_prijs_pp}
-                        onChange={e => { setState(s => ({ ...s, basis_prijs_pp: Number(e.target.value) || 0 })); setDirty(true); }}
-                        style={{ width: 80, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'var(--text)' }}
-                    />
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
-                    Gasten
-                    <input
-                        type="number"
-                        min={1}
-                        value={state.aantal_gasten}
-                        onChange={e => { setState(s => ({ ...s, aantal_gasten: Number(e.target.value) || 40 })); setDirty(true); }}
-                        style={{ width: 70, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'var(--text)' }}
-                    />
-                </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
                     <input
                         type="checkbox"
@@ -621,162 +601,9 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
     );
 }
 
-/* ─── Subcomponent: LibrarySidebar ──────────────────────────────────────
-   Rechter 248px paneel met alle gerechten gegroepeerd per gang.
-   Klik op een rij voegt het gerecht direct toe aan zijn gang. Filter via
-   search-input bovenaan. Collapsable via Library-toggle in de hero. */
-
-function LibrarySidebar({
-    gangen, gerechten, excludeIdsByGang, onPick, onClose,
-}: {
-    gangen: Gang[];
-    gerechten: Gerecht[];
-    excludeIdsByGang: (slug: string) => Set<string>;
-    onPick: (gangSlug: string, gerechtId: string) => void;
-    onClose: () => void;
-}) {
-    const [q, setQ] = useState('');
-    const ql = q.trim().toLowerCase();
-
-    /* Groepeer gerechten per gang via normalized key zoals InlinePicker doet.
-       Filter is_in_wizard !== false + search-match + niet al in deze gang. */
-    const byGang = useMemo(() => {
-        const m = new Map<string, Gerecht[]>();
-        for (const g of gangen) m.set(g.slug, []);
-        for (const dish of gerechten) {
-            if (dish.is_in_wizard === false) continue;
-            if (ql && !dish.naam.toLowerCase().includes(ql)) continue;
-            const key = getGangKey(dish);
-            const gang = gangen.find(gg => getGangKey({ gang_slug: gg.slug }) === key);
-            if (!gang) continue;
-            m.get(gang.slug)!.push(dish);
-        }
-        return m;
-    }, [gerechten, gangen, ql]);
-
-    return (
-        <aside style={{
-            width: 248, flexShrink: 0, alignSelf: 'flex-start', position: 'sticky', top: 70,
-            background: 'var(--card, var(--surface))', border: '1px solid var(--border)',
-            borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            maxHeight: 'calc(100vh - 100px)',
-        }}>
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
-                borderBottom: '1px solid var(--border)',
-            }}>
-                <UtensilsCrossed size={16} style={{ color: 'var(--brand, #c4a35a)' }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', flex: 1 }}>Gerechten-library</span>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    title="Verberg library"
-                    style={{
-                        width: 28, height: 28, borderRadius: 7,
-                        border: '1px solid var(--border)', background: 'transparent',
-                        color: 'var(--muted)', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                >
-                    <PanelRightClose size={15} />
-                </button>
-            </div>
-            <div style={{ padding: 10, borderBottom: '1px solid var(--border)' }}>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Search size={14} style={{ position: 'absolute', left: 9, color: 'var(--muted)', pointerEvents: 'none' }} />
-                    <input
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        placeholder="Filter gerechten…"
-                        style={{
-                            width: '100%', boxSizing: 'border-box',
-                            padding: '8px 10px 8px 30px', borderRadius: 9, minHeight: 36,
-                            background: 'transparent', border: '1px solid var(--border)',
-                            color: 'var(--text)', fontSize: 13, outline: 'none',
-                        }}
-                    />
-                </div>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
-                {gangen.map(g => {
-                    const items = byGang.get(g.slug) ?? [];
-                    if (items.length === 0) return null;
-                    const exclude = excludeIdsByGang(g.slug);
-                    return (
-                        <div key={g.slug} style={{ marginBottom: 14 }}>
-                            <div style={{
-                                fontSize: 10, fontWeight: 700, letterSpacing: '.12em',
-                                textTransform: 'uppercase', color: 'var(--muted)', padding: '0 4px 6px',
-                            }}>{g.naam}</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {items.map(dish => {
-                                    const alreadyAdded = exclude.has(String(dish.id));
-                                    return (
-                                        <button
-                                            key={dish.id}
-                                            type="button"
-                                            onClick={() => !alreadyAdded && onPick(g.slug, String(dish.id))}
-                                            disabled={alreadyAdded}
-                                            title={alreadyAdded ? 'Staat al in deze gang' : 'Klik om toe te voegen aan ' + g.naam}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: 8,
-                                                padding: '6px 8px', borderRadius: 9,
-                                                cursor: alreadyAdded ? 'default' : 'pointer',
-                                                background: 'transparent', border: '1px solid var(--border)',
-                                                color: 'var(--text)', textAlign: 'left',
-                                                opacity: alreadyAdded ? 0.4 : 1,
-                                                transition: 'background .12s, border-color .12s',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!alreadyAdded) {
-                                                    e.currentTarget.style.background = 'rgba(196,163,90,.08)';
-                                                    e.currentTarget.style.borderColor = 'rgba(196,163,90,.4)';
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                if (!alreadyAdded) {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.borderColor = 'var(--border)';
-                                                }
-                                            }}
-                                        >
-                                            {dish.foto_url ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={dish.foto_url} alt="" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
-                                            ) : (
-                                                <span style={{
-                                                    width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-                                                    background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
-                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                    color: 'var(--muted)', fontSize: 11, fontWeight: 600,
-                                                }}>{dish.naam.charAt(0).toUpperCase()}</span>
-                                            )}
-                                            <span style={{
-                                                fontSize: 12.5, fontWeight: 500, color: 'var(--text)',
-                                                flex: 1, minWidth: 0, whiteSpace: 'nowrap',
-                                                overflow: 'hidden', textOverflow: 'ellipsis',
-                                            }}>{dish.naam}</span>
-                                            <span style={{
-                                                fontSize: 11, color: 'var(--muted)',
-                                                fontVariantNumeric: 'tabular-nums', flexShrink: 0,
-                                            }}>{fmtEuro(Number(dish.verkoopprijs ?? dish.prijs ?? 0))}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-            <div style={{
-                padding: '8px 12px', borderTop: '1px solid var(--border)',
-                fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-                <Plus size={12} />Klik om toe te voegen
-            </div>
-        </aside>
-    );
-}
+/* LibrarySidebar, AiSuggestionsSheet en InlinePicker zijn verhuisd naar eigen
+   bestanden en worden via next/dynamic geladen. Zo komen ze niet in de initial
+   bundle van MenuComposer terecht. */
 
 /* ─── Subcomponent: GangPanel ───────────────────────────────────────── */
 
@@ -857,16 +684,18 @@ function GangPanel({ gang, items, gangen, gerechten, gerechtById, unlinkedNames,
                     open={pickerOpen}
                     onClick={() => setPickerOpen(o => !o)}
                 />
-                <InlinePicker
-                    open={pickerOpen}
-                    onClose={() => setPickerOpen(false)}
-                    gerechten={gerechten}
-                    gangSlug={gang.slug}
-                    gangNaam={gang.naam}
-                    excludeIds={new Set(items.map(it => it.gerecht_id))}
-                    onPick={(id) => onAddGerecht(id)}
-                    onCreateNew={onCreateNew}
-                />
+                {pickerOpen && (
+                    <InlinePicker
+                        open={pickerOpen}
+                        onClose={() => setPickerOpen(false)}
+                        gerechten={gerechten}
+                        gangSlug={gang.slug}
+                        gangNaam={gang.naam}
+                        excludeIds={new Set(items.map(it => it.gerecht_id))}
+                        onPick={(id) => onAddGerecht(id)}
+                        onCreateNew={onCreateNew}
+                    />
+                )}
             </div>
 
             {/* Secondary action: AI suggestion link — subtle, right-aligned */}
@@ -1000,86 +829,6 @@ function SortablePill({ item, gerecht, gangen, currentGangSlug, onRemove, onMove
     );
 }
 
-/* ─── Subcomponent: AiSuggestionsSheet ──────────────────────────────── */
-
-function AiSuggestionsSheet({ gangNaam, loading, error, suggesties, gerechtById, onClose, onAccept }: {
-    gangNaam: string;
-    loading: boolean;
-    error?: string;
-    suggesties: Array<{ gerecht_id: string; redenering: string }>;
-    gerechtById: Map<string, Gerecht>;
-    onClose: () => void;
-    onAccept: (gerechtId: string) => void;
-}) {
-    return (
-        <div className="mr-modal-scrim" onClick={onClose} role="presentation">
-            <div onClick={e => e.stopPropagation()} style={{
-                position: 'fixed', right: 0, top: 0, bottom: 0, width: '95%', maxWidth: 480,
-                background: 'var(--surface)', borderLeft: '1px solid var(--border)',
-                display: 'flex', flexDirection: 'column',
-            }}>
-                <div style={{
-                    padding: 14, borderBottom: '1px solid var(--border)',
-                    display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                    <Sparkles size={16} color="var(--brand, #c4a35a)" />
-                    <h3 style={{ margin: 0, flex: 1, fontSize: 15 }}>AI-voorstellen voor {gangNaam}</h3>
-                    <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}>
-                        <X size={16} />
-                    </button>
-                </div>
-                <div style={{ flex: 1, overflow: 'auto', padding: 14 }}>
-                    {loading && (
-                        <div style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
-                            <Loader2 size={20} className="animate-spin" /> Voorstellen ophalen…
-                        </div>
-                    )}
-                    {error && (
-                        <div style={{ padding: 14, background: 'rgba(220,50,47,.07)', border: '1px solid rgba(220,50,47,.25)', borderRadius: 6, color: 'var(--text)', fontSize: 13 }}>
-                            Kon geen voorstellen ophalen: {error}
-                        </div>
-                    )}
-                    {!loading && !error && suggesties.length === 0 && (
-                        <div style={{ textAlign: 'center', padding: 24, color: 'var(--muted)', fontSize: 13 }}>
-                            Geen voorstellen — voeg eerst meer gerechten toe aan je bibliotheek.
-                        </div>
-                    )}
-                    {suggesties.map(s => {
-                        const g = gerechtById.get(s.gerecht_id);
-                        const prijs = g ? Number(g.verkoopprijs ?? 0) : 0;
-                        return (
-                            <div key={s.gerecht_id} style={{
-                                padding: 12, marginBottom: 10, border: '1px solid var(--border)',
-                                borderRadius: 8,
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                    <h4 style={{ margin: 0, fontSize: 14, flex: 1 }}>{g?.naam ?? '(onbekend gerecht)'}</h4>
-                                    {g && <span style={{ fontSize: 11, color: 'var(--muted)' }}>€{prijs.toFixed(2)} p.p.</span>}
-                                </div>
-                                {s.redenering && (
-                                    <p style={{ marginTop: 6, marginBottom: 8, fontSize: 12, color: 'var(--muted)' }}>{s.redenering}</p>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => onAccept(s.gerecht_id)}
-                                    disabled={!g}
-                                    style={{
-                                        padding: '6px 10px', border: 'none', borderRadius: 4,
-                                        background: g ? 'var(--brand, #c4a35a)' : 'var(--muted)',
-                                        color: '#1a1a1e', cursor: g ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600,
-                                    }}
-                                >
-                                    Voeg toe
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function btnSmall(primary: boolean): React.CSSProperties {
     return {
         padding: '6px 10px',
@@ -1098,11 +847,9 @@ function btnSmall(primary: boolean): React.CSSProperties {
    Vervangt de oude top-bar inputs voor naam — biedt context-by-design. */
 
 function ComposerHero({
-    naam, aantalGasten, basisPrijs, onNaamChange, onAskAi, onToggleLibrary, libraryOpen,
+    naam, onNaamChange, onAskAi, onToggleLibrary, libraryOpen,
 }: {
     naam: string;
-    aantalGasten: number;
-    basisPrijs: number;
     onNaamChange: (s: string) => void;
     onAskAi?: () => void;
     onToggleLibrary?: () => void;
@@ -1172,20 +919,9 @@ function ComposerHero({
                         }}
                     />
 
-                    {/* Meta-row */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 12 }}>
-                        {aantalGasten > 0 && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'rgba(255,255,255,.78)' }}>
-                                <Users size={14} style={{ color: '#c4a35a' }} />
-                                {aantalGasten} {aantalGasten === 1 ? 'couvert' : 'couverts'}
-                            </span>
-                        )}
-                        {basisPrijs > 0 && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'rgba(255,255,255,.78)', fontVariantNumeric: 'tabular-nums' }}>
-                                <Wallet size={14} style={{ color: '#c4a35a' }} />
-                                €{basisPrijs.toFixed(2)} basis p.p.
-                            </span>
-                        )}
+                    {/* Eyebrow-subtitle: een menukaart is het aanbod, geen prijs/headcount */}
+                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.6)', marginTop: 10 }}>
+                        Je vaste aanbod — prijs en aantal gasten vul je per klant in de offerte in.
                     </div>
                 </div>
 
@@ -1230,29 +966,22 @@ function ComposerHero({
 }
 
 /* ─── Subcomponent: KpiStrip ────────────────────────────────────────────
-   4 KPI-tiles met menu-economics. Kleurt marge groen/oranje/rood.
-   Couvertprijs in brand-tint kaart om hem te accentueren. */
+   3 telling-tiles: gerechten · gangen · allergenen. Geen prijs/marge —
+   een menukaart houdt geen geld vast. */
 
-function KpiStrip({ stats }: {
-    stats: { couvertprijs: number; margePct: number; margePp: number; gerechten: number; allergenen: number; gangenCount: number };
+const KPI_TILE_LABEL: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' };
+const KPI_TILE_VALUE: React.CSSProperties = { fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-display, Georgia, serif)', marginTop: 4, lineHeight: 1.1 };
+const KPI_TILE_SUB: React.CSSProperties = { fontSize: 11, color: 'var(--muted)', marginTop: 4 };
+
+function KpiTile({ icon, label, value, sub, valueColor, accent }: {
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    sub: string;
+    valueColor?: string;
+    accent?: boolean;
 }) {
-    const margeTone = stats.gerechten === 0
-        ? 'var(--muted)'
-        : stats.margePct >= 70 ? '#22c55e'
-            : stats.margePct >= 60 ? '#f59e0b'
-                : '#ef4444';
-    const TileLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' as const, color: 'var(--muted)' };
-    const TileValue = { fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-display, Georgia, serif)', marginTop: 4, lineHeight: 1.1 };
-    const TileSub = { fontSize: 11, color: 'var(--muted)', marginTop: 4 };
-
-    const Tile = ({ icon, label, value, sub, valueColor, accent }: {
-        icon: React.ReactNode;
-        label: string;
-        value: string;
-        sub: string;
-        valueColor?: string;
-        accent?: boolean;
-    }) => (
+    return (
         <div style={{
             padding: '14px 16px', minHeight: 84,
             border: '1px solid ' + (accent ? 'rgba(196,163,90,.3)' : 'var(--border)'),
@@ -1261,22 +990,25 @@ function KpiStrip({ stats }: {
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ color: accent ? '#c4a35a' : 'var(--muted)', display: 'inline-flex' }}>{icon}</span>
-                <span style={TileLabel}>{label}</span>
+                <span style={KPI_TILE_LABEL}>{label}</span>
             </div>
-            <div style={{ ...TileValue, color: valueColor || 'var(--text)' }}>{value}</div>
-            <div style={TileSub}>{sub}</div>
+            <div style={{ ...KPI_TILE_VALUE, color: valueColor || 'var(--text)' }}>{value}</div>
+            <div style={KPI_TILE_SUB}>{sub}</div>
         </div>
     );
+}
 
+function KpiStrip({ stats }: {
+    stats: { gerechten: number; allergenen: number; gangenCount: number };
+}) {
     return (
         <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
             gap: 12, padding: '16px 20px 0',
         }}>
-            <Tile icon={<Wallet size={13} />} label="Couvertprijs" value={'€' + stats.couvertprijs.toFixed(2)} sub="per persoon" valueColor="#c4a35a" accent />
-            <Tile icon={<TrendingUp size={13} />} label="Marge" value={stats.margePct + '%'} sub={'€' + stats.margePp.toFixed(2) + ' p.p.'} valueColor={margeTone} />
-            <Tile icon={<Utensils size={13} />} label="Gerechten" value={String(stats.gerechten)} sub={'over ' + stats.gangenCount + (stats.gangenCount === 1 ? ' gang' : ' gangen')} />
-            <Tile icon={<ShieldAlert size={13} />} label="Allergenen" value={String(stats.allergenen)} sub="soorten in menu" />
+            <KpiTile icon={<Utensils size={13} />} label="Gerechten" value={String(stats.gerechten)} sub={stats.gerechten === 1 ? 'gerecht' : 'gerechten'} valueColor="#c4a35a" accent />
+            <KpiTile icon={<UtensilsCrossed size={13} />} label="Gangen" value={String(stats.gangenCount)} sub={stats.gangenCount === 1 ? 'gang' : 'gangen'} />
+            <KpiTile icon={<ShieldAlert size={13} />} label="Allergenen" value={String(stats.allergenen)} sub="soorten in menu" />
         </div>
     );
 }
@@ -1319,219 +1051,5 @@ function AddDishButton({ gangNaam, open, onClick }: { gangNaam: string; open: bo
     );
 }
 
-/* ─── Subcomponent: InlinePicker ─────────────────────────────────────────
-   Popover-style picker die direct onder de AddDishButton opent.
-   Vervangt de oude full-modal MenuCommandPalette (picker-mode) — Sam
-   omschreef de oude flow als "te onduidelijk". Search + dish-list +
-   footer (Nieuw gerecht link + Klaar). Picker blijft open na elke pick
-   zodat je in één flow meerdere gerechten toevoegt. */
-
-function InlinePicker({
-    open, onClose, gerechten, gangSlug, gangNaam, excludeIds, onPick, onCreateNew,
-}: {
-    open: boolean;
-    onClose: () => void;
-    gerechten: Gerecht[];
-    gangSlug: string;
-    gangNaam: string;
-    excludeIds: Set<string>;
-    onPick: (gerechtId: string) => void;
-    onCreateNew?: () => void;
-}) {
-    const [q, setQ] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
-    const panelRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (open) {
-            /* Scroll de picker zelf in beeld zodat hij niet onder de viewport-rand
-               valt op pages met veel content boven de gang. Dan focus search-input. */
-            requestAnimationFrame(() => {
-                panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                inputRef.current?.focus({ preventScroll: true });
-            });
-        }
-        if (!open) setQ('');
-    }, [open]);
-
-    if (!open) return null;
-
-    const ql = q.trim().toLowerCase();
-    /* Filter: respecteer wizard-zichtbaarheid (default true) + sluit
-       al-toegevoegde uit. Eerst gerechten in deze gang.
-
-       Belangrijk: gang.slug uit de gangen-tabel kan "bites" zijn (plural)
-       terwijl gerecht.gang_slug ook "bites" is — maar getGangKey() normaliseert
-       beide naar "bite". Daarom normaliseren we BEIDE kanten zodat ze matchen. */
-    const targetKey = getGangKey({ gang_slug: gangSlug });
-    const available = gerechten.filter(g => {
-        if (g.is_in_wizard === false) return false;
-        if (excludeIds.has(String(g.id))) return false;
-        return true;
-    });
-    const inGang = available.filter(g => getGangKey(g) === targetKey);
-    const matched = ql ? inGang.filter(g => g.naam.toLowerCase().includes(ql)) : inGang;
-    const libraryEmpty = inGang.length === 0;
-
-    return (
-        <>
-            {/* Click-outside scrim — transparent, niet visueel */}
-            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-
-            <div
-                ref={panelRef}
-                role="dialog"
-                aria-label={'Voeg gerecht toe aan ' + gangNaam}
-                style={{
-                    position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, zIndex: 31,
-                    maxHeight: 380, display: 'flex', flexDirection: 'column',
-                    background: 'var(--card, var(--surface, #1e1e22))',
-                    border: '1px solid var(--border)', borderRadius: 14,
-                    boxShadow: '0 12px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04)',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Search header */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
-                    borderBottom: '1px solid var(--border)', flexShrink: 0,
-                }}>
-                    <Search size={16} style={{ color: 'var(--muted)' }} />
-                    <input
-                        ref={inputRef}
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        placeholder={'Zoek in ' + gangNaam.toLowerCase() + '…'}
-                        style={{
-                            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                            color: 'var(--text)', fontSize: 14,
-                        }}
-                    />
-                </div>
-
-                {/* Body */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: libraryEmpty ? 0 : 8, minHeight: 0 }}>
-                    {libraryEmpty ? (
-                        <div style={{
-                            padding: '28px 20px', textAlign: 'center',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-                        }}>
-                            <span style={{
-                                width: 44, height: 44, borderRadius: 12,
-                                background: 'rgba(196,163,90,.1)', color: 'var(--brand, #c4a35a)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                <UtensilsCrossed size={22} />
-                            </span>
-                            <div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
-                                    Nog geen gerechten in &lsquo;{gangNaam}&rsquo;
-                                </div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 260 }}>
-                                    Maak eerst een paar {gangNaam.toLowerCase()} aan, dan kun je ze hier kiezen.
-                                </div>
-                            </div>
-                            {onCreateNew && (
-                                <button
-                                    type="button"
-                                    onClick={onCreateNew}
-                                    style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                                        padding: '7px 12px', borderRadius: 8, border: 'none',
-                                        background: 'var(--brand, #c4a35a)', color: '#1a1a1e',
-                                        fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 2,
-                                    }}
-                                >
-                                    <ArrowRight size={14} />Naar /gerechten
-                                </button>
-                            )}
-                        </div>
-                    ) : matched.length === 0 ? (
-                        <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
-                            Geen gerechten gevonden voor &ldquo;<span style={{ color: 'var(--text)' }}>{q}</span>&rdquo;.
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {matched.map(g => (
-                                <button
-                                    key={g.id}
-                                    type="button"
-                                    onClick={() => onPick(String(g.id))}
-                                    style={{
-                                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                                        padding: '9px 12px', minHeight: 48,
-                                        border: '1px solid transparent', borderRadius: 10,
-                                        cursor: 'pointer', textAlign: 'left',
-                                        background: 'transparent', color: 'var(--text)',
-                                        transition: 'background .12s',
-                                    }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(196,163,90,.06)'; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                                >
-                                    {g.foto_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={g.foto_url} alt="" style={{
-                                            width: 32, height: 32, borderRadius: 8, objectFit: 'cover',
-                                            border: '1px solid var(--border)', flexShrink: 0,
-                                        }} />
-                                    ) : (
-                                        <span style={{
-                                            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                                            background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
-                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                            color: 'var(--muted)', fontSize: 13, fontWeight: 600,
-                                        }}>{g.naam.charAt(0).toUpperCase()}</span>
-                                    )}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            fontSize: 14, fontWeight: 500,
-                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                        }}>{g.naam}</div>
-                                    </div>
-                                    <span style={{
-                                        fontSize: 12, color: 'var(--muted)', flexShrink: 0,
-                                        fontVariantNumeric: 'tabular-nums',
-                                    }}>{fmtEuro(Number(g.verkoopprijs ?? g.prijs ?? 0))}</span>
-                                    <span style={{
-                                        width: 24, height: 24, borderRadius: 999, flexShrink: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        border: '1.5px solid var(--border)', color: 'var(--muted)',
-                                    }}>
-                                        <Plus size={14} />
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                    padding: '10px 14px', borderTop: '1px solid var(--border)', flexShrink: 0,
-                }}>
-                    {onCreateNew ? (
-                        <button
-                            type="button"
-                            onClick={onCreateNew}
-                            style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 6,
-                                background: 'transparent', border: 'none', cursor: 'pointer',
-                                color: 'var(--brand, #c4a35a)', fontSize: 13, fontWeight: 600,
-                                padding: '6px 4px',
-                            }}
-                        >
-                            <Plus size={15} />Nieuw {gangNaam.toLowerCase()}
-                        </button>
-                    ) : <span />}
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{ ...btnSmall(false), minHeight: 36, padding: '6px 14px' }}
-                    >Klaar</button>
-                </div>
-            </div>
-        </>
-    );
-}
+/* InlinePicker is verhuisd naar ./InlinePicker.tsx (dynamic-load on first open). */
 
