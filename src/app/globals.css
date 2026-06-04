@@ -8855,6 +8855,12 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   .fab-root {
     display: none !important;
   }
+  /* Pages met een eigen sticky-bottom-CTA kunnen MobileCmdKTrigger verbergen
+     door class `has-sticky-cta` op body te zetten. Voorkomt overlap met
+     wizard "Volgende" of soortgelijke conversie-knoppen. */
+  body.has-sticky-cta .mobile-cmdk-trigger {
+    display: none !important;
+  }
 }
 
 /* Breadcrumb — laat ruimte voor de mobile hamburger (44px op left:12px = eindigt 56px).

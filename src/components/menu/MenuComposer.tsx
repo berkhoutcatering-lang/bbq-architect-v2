@@ -769,9 +769,16 @@ function SortablePill({ item, gerecht, gangen, currentGangSlug, onRemove, onMove
                 {...attributes}
                 {...listeners}
                 aria-label="Sleep om volgorde te wijzigen"
-                style={{ border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'grab', padding: 0 }}
+                style={{
+                    border: 'none', background: 'transparent', color: 'var(--muted)', cursor: 'grab',
+                    /* WCAG 2.2 SC 2.5.8: minimum 24×24 voor pointer-target. Op mobile maken we
+                       em ruimer (44×44) zodat een vinger de handle echt kan pakken. */
+                    minWidth: 44, minHeight: 44, padding: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    touchAction: 'none',
+                }}
             >
-                <GripVertical size={14} />
+                <GripVertical size={16} />
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

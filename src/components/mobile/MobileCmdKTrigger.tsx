@@ -29,33 +29,46 @@ export default function MobileCmdKTrigger() {
     window.dispatchEvent(new Event('open-command-palette'));
   }
 
+  /* Slightly smaller (48 ipv 56) en met opaak/transparant-fade zodat hij minder
+     opdringerig over content valt — touch-target blijft 48px (boven WCAG 44).
+     Pages met een eigen sticky-bottom-CTA kunnen de FAB verbergen door class
+     `has-sticky-cta` op body te zetten (zie CSS hieronder). */
   return (
     <button
       type="button"
       onClick={handleClick}
+      className="mobile-cmdk-trigger"
       aria-label="Zoek of navigeer (Command-palet openen)"
       style={{
         position: 'fixed',
-        right: 16,
-        bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
-        // Stack: Sidebar mobile overlay 60 > BottomNav 55 > FAB visually above BottomNav (76px gap).
+        right: 14,
+        bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+        // Stack: Sidebar mobile overlay 60 > BottomNav 55 > FAB visually above BottomNav.
         // z-45 keeps FAB hidden when Sidebar overlay or ChatPanel drawer is open.
         zIndex: 45,
-        width: 56,
-        height: 56,
+        width: 48,
+        height: 48,
         borderRadius: 9999,
         background: 'var(--brand, #c4a35a)',
         color: 'var(--bg, #0c0c0e)',
         border: 'none',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.35)',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3)',
+        opacity: 0.78,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         touchAction: 'manipulation',
+        transition: 'opacity .15s ease, transform .15s ease',
       }}
+      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.78'; }}
+      onFocus={(e) => { e.currentTarget.style.opacity = '1'; }}
+      onBlur={(e) => { e.currentTarget.style.opacity = '0.78'; }}
+      onTouchStart={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(.94)'; }}
+      onTouchEnd={(e) => { e.currentTarget.style.opacity = '0.78'; e.currentTarget.style.transform = 'scale(1)'; }}
     >
-      <Search size={22} strokeWidth={2.4} aria-hidden />
+      <Search size={20} strokeWidth={2.4} aria-hidden />
     </button>
   );
 }
