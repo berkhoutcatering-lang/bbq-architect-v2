@@ -8408,6 +8408,18 @@ textarea:focus-visible,
     border-radius: 22px;
     opacity: 0.85;
   }
+  /* Reserveer ruimte links voor de fixed hamburger (44px @ left:12px → 56px).
+     Anders schuift Breadcrumbs of de ActiveResourcePill onder de hamburger. */
+  .app-main-header {
+    padding-left: 60px;
+    padding-top: 4px;
+    min-height: 52px;
+  }
+  /* Breadcrumbs op kleine schermen: niet wrappen tot 2 regels door lange paden. */
+  .app-main-header > nav {
+    min-width: 0;
+    overflow: hidden;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -8860,6 +8872,11 @@ html, body { max-width: 100vw; overflow-x: hidden; }
      wizard "Volgende" of soortgelijke conversie-knoppen. */
   body.has-sticky-cta .mobile-cmdk-trigger {
     display: none !important;
+  }
+  /* HACCP-instap cards: op smal mobile 1-koloms zodat tekst niet elke 2
+     woorden afbreekt ("checks voor alle gerechten tegelijk"). */
+  .haccp-instap-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

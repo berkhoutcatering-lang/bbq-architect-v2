@@ -68,7 +68,7 @@ export default function MargesPageHero({ totaalGerechten, metKostprijs }: Props)
           <h1
             style={{
               fontWeight: 200,
-              fontSize: 36,
+              fontSize: 'clamp(24px, 7vw, 36px)',
               margin: 0,
               lineHeight: 1.05,
               letterSpacing: '-0.025em',

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Monitor } from 'lucide-react';
+import { useIsPhone } from '@/hooks/useIsMobile';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -157,6 +159,7 @@ function initBlocks(template: PdfTemplate | null): TemplateBlock[] {
 }
 
 export default function TemplateEditor({ template, documentType, organizationId, onSave }: Props) {
+  const isPhone = useIsPhone();
   const showToast = useToast();
   // Pull the organisation's huisstijl colours so the Settings tab shows the *real* defaults
   // (not the hardcoded #9e781c/#8b6914) — these are what the renderer uses when no per-template override is set.
@@ -780,6 +783,42 @@ export default function TemplateEditor({ template, documentType, organizationId,
 
   // Template name input width (P3.3): grows with content, clamped
   const nameInputWidth = Math.min(Math.max(name.length + 2, 14), 36);
+
+  if (isPhone) {
+    return (
+      <div style={{
+        minHeight: 'calc(100dvh - 60px)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '32px 24px', textAlign: 'center', gap: 16,
+        background: 'var(--bg)',
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: 18,
+          background: 'rgba(196,163,90,.12)',
+          border: '1px solid rgba(196,163,90,.3)',
+          color: 'var(--brand, #c4a35a)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Monitor size={32} />
+        </div>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
+          Open op een desktop of tablet
+        </h1>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', maxWidth: 320, lineHeight: 1.5 }}>
+          De template-editor heeft drie panelen naast elkaar — componenten, canvas en
+          eigenschappen. Dat past niet op een telefoon. Open dezelfde link op een
+          laptop of tablet (≥1024px breed).
+        </p>
+        <a href="/instellingen" style={{
+          marginTop: 8, padding: '10px 18px', borderRadius: 10,
+          background: 'var(--brand, #c4a35a)', color: '#1a1a1e',
+          fontWeight: 600, fontSize: 14, textDecoration: 'none',
+        }}>
+          Terug naar instellingen
+        </a>
+      </div>
+    );
+  }
 
   return (
     <TemplateBrandingProvider value={{ primary: orgPrimary, accent: orgAccent, logoUrl: orgLogoUrl, logoDarkUrl: orgLogoDarkUrl, bedrijfsnaam: orgBedrijfsnaam }}>

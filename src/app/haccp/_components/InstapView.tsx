@@ -117,6 +117,7 @@ export default function InstapView({ onSelectEvent, onOpenDossier }: Props) {
             </div>
 
             <div
+                className="haccp-instap-grid"
                 style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr 1fr',
