@@ -26,12 +26,13 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import {
     MenuTemplateUpsertSchema,
     ApplyMenuTemplateSchema,
-    type MenuTemplateUpsertInput,
-    type ApplyMenuTemplateInput,
 } from '@/lib/schemas/menu-template';
 import { listMenuTemplatesShallow, type MenuTemplateShallow } from '@/lib/dal/menuTemplates';
 
-export type { MenuTemplateUpsertInput, ApplyMenuTemplateInput };
+/* Een 'use server' module mag ALLEEN async functions exporteren (Next.js/
+   Turbopack server-actions-loader). De vroegere `export type { ... }` re-export
+   crashte runtime met "MenuTemplateUpsertInput is not defined" zodra deze
+   actions geladen werden. Types importeer je direct uit @/lib/schemas/menu-template. */
 
 interface UpsertOk {
     data: { id: number };
@@ -139,7 +140,7 @@ export async function applyMenuTemplateToOfferte(input: unknown): Promise<ApplyO
             id, naam, basis_prijs_pp, aantal_gasten,
             menu_template_items (
                 gerecht_id, gang_slug, volgorde,
-                gerecht:gerechten ( id, naam, prijs_pp, verkoopprijs )
+                gerecht:gerechten ( id, naam, verkoopprijs )
             )
         `)
         .eq('id', templateId)

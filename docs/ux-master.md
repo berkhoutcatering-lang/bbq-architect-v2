@@ -75,8 +75,8 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 🏠 Vandaag          → /          (hardcoded bovenaan Sidebar.tsx, control-tower)
 📅 Plannen          → /agenda    (children: Agenda · Events)
 🛒 Verkoop          → /offertes  (children: Offertes · Klanten)
-🍳 Menu & Recepten  → /gerechten (children: Gerechten · Componenten · Ingrediënten · Kookbord)
-                                  + sub-tabs in _client.tsx: AI Bedenker · AI Pitmaster · Menu-analyse · Insights · Allergen-queue
+🍳 Menu              → /gerechten (sidebar children: Gerechten · Componenten · Kookbord)
+                                  + hub-tabs (GerechtenTabs.tsx): Gerechten · Componenten · Menukaarten · Analyse
 📦 Voorraad         → /voorraad  (children: Voorraad · Inkoop · Leveranciers)
 💰 Geld             → /financien (children: Financiën · Uren · Bonnen & Facturen · Boekhouder · Rittenregistratie)
 ⚙️ Systeem          → /systeem   (secondary; children: Instellingen · Gebruikers · Integraties · Mailbox · Website · Foto-archief · Help Center · Platform Beheer)
@@ -84,9 +84,11 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 
 **Naam-historie** (voor wie oude docs leest):
 - "Inspiratie Bibliotheek" → vervangen door "Menu & Recepten" (2026-05-16, `/inspiratie` is dood-redirect)
+- "Menu & Recepten" → ingekort tot "Menu" (2026-06-02)
 - "Instellingen & Hulp" → vervangen door "Systeem"
 - "Plannen & Events" / "Verkoop & Klanten" / "Geld & Boekhouding" / "Voorraad & Beheer" → ingekort
 - Hub-URL `/sectie/systeem` (dynamic) → `/systeem` (statisch via navigation)
+- Sidebar-link "Ingrediënten" verwijderd (2026-06-02) — was dubbele redirect naar `/voorraad?context=menu`. Middleware-stub blijft voor backwards-compat.
 
 **Patroon**:
 - Klik hub-naam in sidebar → ga naar `hubHref` (default tab van die hub)

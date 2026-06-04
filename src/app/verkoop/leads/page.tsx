@@ -15,9 +15,10 @@ import { useRouter } from 'next/navigation';
 import {
   Plus, Search, SearchX, Inbox, LayoutGrid, List, X, Mail, Phone, Calendar, Users, MapPin,
   Trash2, ArrowRight, Sparkles, Flame, Loader2, RefreshCw, MessageCircle, FileText,
-  CheckCircle2, XCircle, GripVertical, Pencil, Link2, Check, Save,
+  CheckCircle2, XCircle, GripVertical, Pencil, Link2, Check, Save, Layers,
 } from 'lucide-react';
 import { formatEur } from '@/lib/format';
+import type { MenuSelectieSnapshot } from '@/types/arrangement';
 import { useSupabase } from '@/lib/useSupabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
@@ -50,6 +51,8 @@ interface Lead {
   offerte_id: number | null;
   client_naam: string | null;
   ai_concept: AiConcept | null;
+  menu_selectie: MenuSelectieSnapshot | null;
+  menu_prijs_indicatie: number | null;
   follow_up_at: string | null;
   created_at: string;
 }
@@ -70,7 +73,7 @@ const LEAD_STATUS: Record<LeadStatus, { label: string; Icon: typeof Inbox; dot: 
 };
 const STAGES: LeadStatus[] = ['nieuw', 'in_gesprek', 'offerte', 'gewonnen', 'verloren'];
 
-const SOURCE_LABEL: Record<string, string> = { public_form: 'Aanvraagformulier', manual: 'Handmatig', klantgesprek: 'Klantgesprek' };
+const SOURCE_LABEL: Record<string, string> = { public_form: 'Aanvraagformulier', manual: 'Handmatig', klantgesprek: 'Klantgesprek', arrangement: 'Zelf samengesteld' };
 const EVENT_TYPES = ['Bruiloft', 'Bedrijfsfeest', 'Verjaardag', 'Festival', 'Jubileum', 'Anders'];
 const MND = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
@@ -96,6 +99,7 @@ function relTime(iso: string | null): string {
 function sourceIcon(src: string) {
   if (src === 'klantgesprek') return Phone;
   if (src === 'manual') return Pencil;
+  if (src === 'arrangement') return Layers;
   return Link2;
 }
 
@@ -366,7 +370,7 @@ export default function LeadsPage() {
                   </div>
                   <span className="mono leads-cell-hide-sm" style={{ fontSize: 12.5, color: 'var(--muted-light)' }}>{fmtDateShort(l.event_datum)}</span>
                   <span className="mono leads-cell-hide-sm" style={{ fontSize: 12.5, color: 'var(--muted-light)' }}>{l.gasten != null ? l.gasten + 'p' : '—'}</span>
-                  <span className="mono leads-cell-hide-sm" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--brand-gold, var(--brand))' }}>{l.budget_indicatie || '—'}</span>
+                  <span className="mono leads-cell-hide-sm" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--brand-gold, var(--brand))' }}>{l.menu_prijs_indicatie != null ? '~ ' + formatEur(l.menu_prijs_indicatie) : (l.budget_indicatie || '—')}</span>
                   <span style={{ justifySelf: 'start' }}><LeadBadge status={statusOf(l)} size="sm" /></span>
                 </div>
               ))}
@@ -409,6 +413,9 @@ export default function LeadsPage() {
                   </div>
                 </>
               )}
+
+              {/* Zelf samengesteld arrangement — gekozen niveaus + indicatie-omzet */}
+              {drawer !== 'new' && drawer.menu_selectie && <ArrangementLeadBlock lead={drawer} />}
 
               {/* AI-concept menu — gegrond in eigen receptenbibliotheek */}
               {drawer !== 'new' && <AIConceptBlock lead={drawer} concept={concept} loading={aiLoading} onGenerate={() => genConcept(drawer)} onUse={() => maakOfferte(drawer)} />}
@@ -500,10 +507,52 @@ function LeadCard({ lead, onOpen, onDragStart, onDragEnd, dragging }: { lead: Le
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12, paddingTop: 11, borderTop: '1px solid var(--border)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}><SI size={11} color="var(--muted)" />{relTime(lead.created_at)}</span>
-          {lead.budget_indicatie && <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--brand-gold, var(--brand))' }}>{lead.budget_indicatie}</span>}
+          {lead.menu_prijs_indicatie != null
+            ? <span className="mono" title="Indicatie-omzet — zelf samengesteld" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--brand-gold, var(--brand))' }}>~ {formatEur(lead.menu_prijs_indicatie)}</span>
+            : lead.budget_indicatie && <span className="mono" style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--brand-gold, var(--brand))' }}>{lead.budget_indicatie}</span>}
         </div>
       </div>
     </article>
+  );
+}
+
+/* ── Zelf-samengesteld-arrangement-blok (gekozen niveaus + indicatie-omzet) ── */
+function ArrangementLeadBlock({ lead }: { lead: Lead }) {
+  const sel = lead.menu_selectie;
+  if (!sel) return null;
+  const totaal = lead.menu_prijs_indicatie != null ? lead.menu_prijs_indicatie : sel.pp * sel.gasten;
+  return (
+    <div style={{ borderRadius: 14, overflow: 'hidden', flexShrink: 0, background: 'var(--card-solid)', border: '1px solid var(--border)' }}>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>
+          <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand-tint)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Layers size={15} color="var(--brand)" /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>Zelf samengesteld arrangement</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sel.arrangement_naam} · {sel.gasten} gasten</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sel.regels.map((r, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, fontSize: 12.5 }}>
+              <span style={{ color: 'var(--muted)', flex: 'none' }}>{r.categorie}</span>
+              <span style={{ flex: 1, borderBottom: '1px dotted var(--border)', margin: '0 2px', transform: 'translateY(-3px)' }} />
+              <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, flex: 'none' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>{r.niveau}</span>
+                <span className="mono" style={{ color: 'var(--muted-light)', fontSize: 11.5 }}>{formatEur(r.prijs_pp)} p.p.</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>Indicatie-omzet</div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{formatEur(sel.pp)} p.p. × {sel.gasten} gasten</div>
+          </div>
+          <div className="mono" style={{ fontSize: 21, fontWeight: 800, color: 'var(--brand-gold, var(--brand))', letterSpacing: '-.02em' }}>~ {formatEur(totaal)}</div>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10.5, color: 'var(--muted)' }}>Indicatie op basis van de keuze van de klant — niet bindend. Eindprijs bepaal je in de offerte.</div>
+      </div>
+    </div>
   );
 }
 

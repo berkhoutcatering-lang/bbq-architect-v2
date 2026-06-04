@@ -115,20 +115,24 @@ export default function Minimal01Pdf({ overrides, data }: PdfTemplateProps) {
                 )}
 
                 <View style={{ marginTop: 'auto' }}>
-                    <View style={styles.legendRule} />
-                    <View style={styles.legendHead}>
-                        <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                        <Text style={styles.legendCount}>
-                            {used.length} allergenen · {totalDishes} gerechten
-                        </Text>
-                    </View>
-                    <View style={styles.legendGrid}>
-                        {used.map(a => (
-                            <Text key={a} style={styles.legendItem}>
-                                <Text style={styles.legendCode}>{a}</Text> {ALLERGEN_MAP[a]}
-                            </Text>
-                        ))}
-                    </View>
+                    {used.length > 0 && (
+                        <>
+                            <View style={styles.legendRule} />
+                            <View style={styles.legendHead}>
+                                <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                                <Text style={styles.legendCount}>
+                                    {used.length} allergenen · {totalDishes} gerechten
+                                </Text>
+                            </View>
+                            <View style={styles.legendGrid}>
+                                {used.map(a => (
+                                    <Text key={a} style={styles.legendItem}>
+                                        <Text style={styles.legendCode}>{a}</Text> {ALLERGEN_MAP[a]}
+                                    </Text>
+                                ))}
+                            </View>
+                        </>
+                    )}
                     {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                 </View>
             </Page>

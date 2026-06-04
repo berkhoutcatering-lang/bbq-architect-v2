@@ -50,3 +50,7 @@ next-env.d.ts
 # Reference-only materiaal (HTML prototypes + uploads), niet in git history
 # (40MB + 126 binaries). Lokaal extract via ZIP indien nodig.
 docs/claude-design/
+
+# Design-handoff zip-extracten (Cloud Design v2/v3, offerte). Reference-only —
+# de productie-code leeft in src/. Niet in git history.
+.design-import/

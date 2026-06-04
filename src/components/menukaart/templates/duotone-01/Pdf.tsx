@@ -129,10 +129,12 @@ export default function Duotone01Pdf({ overrides, data }: PdfTemplateProps) {
                     )}
                 </View>
 
-                <View style={styles.botBar}>
-                    <Text style={styles.botLabel}>ALLERGENEN</Text>
-                    <Text style={styles.botItems}>{legend || '—'}</Text>
-                </View>
+                {legend ? (
+                    <View style={styles.botBar}>
+                        <Text style={styles.botLabel}>ALLERGENEN</Text>
+                        <Text style={styles.botItems}>{legend}</Text>
+                    </View>
+                ) : null}
                 {footer ? <Text style={styles.footer}>{footer}</Text> : null}
             </Page>
         </Document>

@@ -335,29 +335,33 @@ export default function Tasting01Preview({ overrides, data, size = 'normal' }: P
 
                 {/* Legend */}
                 <div style={{ textAlign: 'center', paddingTop: 8 }}>
-                    <div style={{ width: 28, height: 1, background: accent, margin: `0 auto ${6}px` }} />
-                    <div
-                        style={{
-                            fontSize: 8,
-                            fontWeight: 500,
-                            letterSpacing: '.15em',
-                            textTransform: 'uppercase',
-                            color: accent,
-                            marginBottom: 3,
-                        }}
-                    >
-                        Allergenen
-                    </div>
-                    <div
-                        style={{
-                            fontSize: 8,
-                            fontWeight: 300,
-                            color: muted,
-                            lineHeight: 1.8,
-                        }}
-                    >
-                        {legend || '—'}
-                    </div>
+                    {legend && (
+                        <>
+                            <div style={{ width: 28, height: 1, background: accent, margin: `0 auto ${6}px` }} />
+                            <div
+                                style={{
+                                    fontSize: 8,
+                                    fontWeight: 500,
+                                    letterSpacing: '.15em',
+                                    textTransform: 'uppercase',
+                                    color: accent,
+                                    marginBottom: 3,
+                                }}
+                            >
+                                Allergenen
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: 8,
+                                    fontWeight: 300,
+                                    color: muted,
+                                    lineHeight: 1.8,
+                                }}
+                            >
+                                {legend}
+                            </div>
+                        </>
+                    )}
                     {footer && (
                         <div
                             style={{

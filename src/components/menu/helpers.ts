@@ -75,18 +75,17 @@ export function getGangLabel(key: string, gangen?: Gang[]): string {
     return labels[key] ?? key;
 }
 
-/* ── Photo mixed-mode logic ─────────────────────────────────────
-   ~30% van de gerechten toont een echte foto in 'mixed' mode (default).
-   In 'all' altijd, in 'none' nooit. */
+/* ── Photo display logic ────────────────────────────────────────
+   Sinds 2026-06-02: foto's worden altijd getoond als ze er zijn. De oude
+   id-hash sampling ('mixed' = 30%) is verwijderd — Sam uploadde een foto
+   en zag 'm niet op de kaart staan. PhotoMode + parameter blijven bestaan
+   voor backwards-compat met callers; 'none' verbergt nog steeds expliciet,
+   'all' en 'mixed' gedragen zich identiek. */
 export type PhotoMode = 'all' | 'mixed' | 'none';
 
-export function shouldShowPhoto(gerecht: { id: string | number; foto_url?: string | null }, mode: PhotoMode = 'mixed'): boolean {
-    if (mode === 'all') return Boolean(gerecht.foto_url);
+export function shouldShowPhoto(gerecht: { foto_url?: string | null }, mode: PhotoMode = 'mixed'): boolean {
     if (mode === 'none') return false;
-    /* Mixed: alleen als een echte foto bestaat EN id-hash een 30% sample raakt. */
-    if (!gerecht.foto_url) return false;
-    const idNum = typeof gerecht.id === 'number' ? gerecht.id : String(gerecht.id).split('').reduce((s, c) => s + c.charCodeAt(0), 0);
-    return idNum % 10 < 3;
+    return Boolean(gerecht.foto_url);
 }
 
 /* ── Formatters ─────────────────────────────────────────────── */

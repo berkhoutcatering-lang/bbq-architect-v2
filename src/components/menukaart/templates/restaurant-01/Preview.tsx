@@ -1,10 +1,16 @@
+'use client';
+
 /**
  * Restaurant-01 — klassiek-restaurant template.
  *
  * Rendert ALTIJD op 480px base. Schaling via CSS transform in wrapper.
  * Safe-area: 48px horizontal (10%), 60px vertical (8.8%).
+ *
+ * Auto fit-to-page: de inhoud schaalt zodat álle gangen binnen de A4 vallen,
+ * hoeveel gerechten je ook kiest — nooit afgekapt (Sam, 2026-06-02).
  */
 
+import { useFitToPage } from '../useFitToPage';
 import type { Overrides, LogoPosition } from '@/lib/menukaart/registry';
 import { type MenuData, formatAllergenLegend } from '@/lib/menukaart/menu-data';
 
@@ -48,6 +54,10 @@ export default function Restaurant01Preview({ overrides, data }: Props) {
     const logoInitials = brandName.split(/\s+/).map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
     const legend = formatAllergenLegend(data.gangen);
 
+    /* Auto fit-to-page (gedeelde hook): schaalt de inhoud zodat hij binnen de
+       vaste A4 past — nooit afgesneden, hoeveel gerechten je ook kiest. */
+    const { frameRef, contentRef, scale: fitScale } = useFitToPage([data, overrides]);
+
     const eventBlock = (eventTitle || eventMessage) && (
         <div style={{
             textAlign: 'center', margin: '8px auto 12px', padding: '8px 12px',
@@ -67,15 +77,18 @@ export default function Restaurant01Preview({ overrides, data }: Props) {
     );
 
     return (
-        <div className="r01-frame" style={{
+        <div ref={frameRef} className="r01-frame" style={{
             background: bg, width: BASE_WIDTH, aspectRatio: '1 / 1.414',
             boxShadow: '0 4px 24px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03)',
             borderRadius: 3, overflow: 'hidden', flexShrink: 0, position: 'relative',
             fontFamily: `'${bodyFont}', sans-serif`, color: text,
         }}>
-            <div className="r01-pad" style={{
+            <div ref={contentRef} className="r01-pad" style={{
                 padding: `${SAFE_Y}px ${SAFE_X}px`,
                 display: 'flex', flexDirection: 'column', minHeight: '100%',
+                boxSizing: 'border-box',
+                transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+                transformOrigin: 'top center',
             }}>
                 {/* Header */}
                 <div style={{ textAlign: align, marginBottom: 8 }}>
@@ -188,20 +201,24 @@ export default function Restaurant01Preview({ overrides, data }: Props) {
                 {eventPosition === 'bottom' && eventBlock}
 
                 <div style={{ marginTop: 'auto', paddingTop: 16, textAlign: 'center' }}>
-                    {showOrnament && (
-                        <div style={{ width: 120, height: 1, background: accent, margin: '0 auto 8px', opacity: 0.3 }} />
+                    {legend && (
+                        <>
+                            {showOrnament && (
+                                <div style={{ width: 120, height: 1, background: accent, margin: '0 auto 8px', opacity: 0.3 }} />
+                            )}
+                            <div style={{
+                                fontFamily: `'${bodyFont}', sans-serif`, fontSize: 8, fontWeight: 500,
+                                letterSpacing: '.15em', textTransform: 'uppercase', color: accent, marginBottom: 4,
+                            }}>
+                                Allergenen
+                            </div>
+                            <div style={{
+                                fontFamily: `'${bodyFont}', sans-serif`, fontSize: 8, color: '#8A847B', lineHeight: 1.8,
+                            }}>
+                                {legend}
+                            </div>
+                        </>
                     )}
-                    <div style={{
-                        fontFamily: `'${bodyFont}', sans-serif`, fontSize: 8, fontWeight: 500,
-                        letterSpacing: '.15em', textTransform: 'uppercase', color: accent, marginBottom: 4,
-                    }}>
-                        Allergenen
-                    </div>
-                    <div style={{
-                        fontFamily: `'${bodyFont}', sans-serif`, fontSize: 8, color: '#8A847B', lineHeight: 1.8,
-                    }}>
-                        {legend || 'Geen allergenen aanwezig'}
-                    </div>
                 </div>
                 {footer && (
                     <div style={{

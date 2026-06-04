@@ -125,10 +125,12 @@ export default function Square01Pdf({ overrides, data }: PdfTemplateProps) {
                     )}
                 </View>
 
-                <View style={styles.botStrip}>
-                    <Text style={styles.botLabel}>ALLERGENEN</Text>
-                    <Text style={styles.botItems}>{legend || '—'}</Text>
-                </View>
+                {legend ? (
+                    <View style={styles.botStrip}>
+                        <Text style={styles.botLabel}>ALLERGENEN</Text>
+                        <Text style={styles.botItems}>{legend}</Text>
+                    </View>
+                ) : null}
                 {footer ? <Text style={styles.footer}>{footer}</Text> : null}
             </Page>
         </Document>

@@ -14,9 +14,11 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { OfferteSchema, type OfferteInput } from '@/lib/schemas/offerte';
+import { OfferteSchema } from '@/lib/schemas/offerte';
 
-export type { OfferteInput };
+/* Geen `export type { OfferteInput }` — een 'use server' module mag alleen
+   async functions exporteren, anders crasht de Turbopack server-actions-loader
+   runtime. Importeer types direct uit @/lib/schemas/offerte. */
 
 export async function upsertOfferte(input: unknown): Promise<
   | { data: { id: string | number; status: string } }

@@ -45,12 +45,22 @@ export async function GET(
   const t = await resolveTenant(slug);
   if (!t) return NextResponse.json({ error: 'Caterer niet gevonden' }, { status: 404 });
 
+  /* Heeft deze cateraar een publiek arrangement? → tweede ingang ("Zelf offerte
+     samenstellen") tonen op het aanvraagformulier. */
+  const { count: arrangementCount } = await t.supabase
+    .from('arrangementen')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', t.org.id)
+    .eq('actief', true)
+    .eq('publiek', true);
+
   return NextResponse.json({
     bedrijfsnaam: t.settings?.bedrijfsnaam || 'Catering',
     ondertitel: t.settings?.ondertitel || null,
     brand_theme: t.settings?.brand_theme || 'warm-amber',
     telefoon: t.settings?.telefoon || null,
     email: t.settings?.email || null,
+    hasArrangement: (arrangementCount ?? 0) > 0,
   });
 }
 

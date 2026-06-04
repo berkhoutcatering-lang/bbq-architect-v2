@@ -59,6 +59,10 @@ export type Overrides = {
     showDividers?: boolean;
     showGhostNumbers?: boolean;
     showFootnoteAllergens?: boolean;
+    /* Master-toggle: toon allergenen op de kaart. Afwezig/false = uit
+       (Sam: "geen allergenen tenzij ik dat wens"). Codes komen uit
+       gerechten.allergenen — nooit AI-afgeleid (hard rule). */
+    showAllergens?: boolean;
 };
 
 export type OverrideKey = keyof Overrides;
@@ -87,6 +91,7 @@ export type AllowList = {
     showDividers?: { type: 'toggle' };
     showGhostNumbers?: { type: 'toggle' };
     showFootnoteAllergens?: { type: 'toggle' };
+    showAllergens?: { type: 'toggle' };
 };
 
 export type Template = {
@@ -146,6 +151,11 @@ const COMMON_COLORS: Pick<AllowList, 'accent' | 'bg' | 'text'> = {
     text: { type: 'color' },
 };
 
+/** Allergenen-toggle — in elke template overridable, default uit. */
+const COMMON_ALLERGENS: Pick<AllowList, 'showAllergens'> = {
+    showAllergens: { type: 'toggle' },
+};
+
 /* COMMON_LOGO_FULL = logoPosition + logoSize. Alleen gebruiken in templates
    die `overrides.logoPosition` daadwerkelijk gebruiken in Preview + Pdf.
    COMMON_LOGO_SIZE = alleen logoSize. Voor templates met vaste positie. */
@@ -194,6 +204,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_FULL,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -235,6 +246,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_FULL,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -269,6 +281,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -302,6 +315,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -336,6 +350,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -371,6 +386,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -405,6 +421,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -438,6 +455,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -470,6 +488,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,
@@ -502,6 +521,7 @@ export const TEMPLATES: Template[] = [
         },
         allowList: {
             ...COMMON_COLORS,
+            ...COMMON_ALLERGENS,
             ...COMMON_LOGO_SIZE,
             ...COMMON_SIZE,
             ...COMMON_TEXT,

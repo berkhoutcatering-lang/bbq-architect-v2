@@ -107,7 +107,7 @@ function MRGridCard({ gerecht, gangen, onClick, density, photoMode }: {
         <div className="mr-grid-card" onClick={() => onClick(gerecht)} style={{ width: w, height: h }}>
             <div className="mr-grid-card-photo" style={{ height: photoH }}>
                 <MRCardVisual gerecht={gerecht} photoMode={photoMode}
-                    style={{ width: '100%', height: '100%' }} iconSize={compact ? 36 : 48} />
+                    style={{ width: '100%', height: '100%' }} iconSize={compact ? 36 : 48} showName />
                 <div className="mr-grid-card-status" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     <MRStatusPill status={status} />
                     {isHiddenFromWizard(gerecht) && <MRHiddenFromWizardPill compact />}
@@ -268,7 +268,7 @@ function MRGalleryCard({ gerecht, gangen, onClick, h, photoMode }: {
             style={{ height: h }}
         >
             <MRCardVisual gerecht={gerecht} photoMode={photoMode}
-                style={{ width: '100%', height: '100%', borderRadius: 12 }} iconSize={56} />
+                style={{ width: '100%', height: '100%', borderRadius: 12 }} iconSize={56} showName />
             <div className={`mr-gallery-overlay ${hover ? 'visible' : ''}`}>
                 <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 4 }}>
                     <MRStatusPill status={status} />

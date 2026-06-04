@@ -18,6 +18,25 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     return null;
   }
 
+  /* In development NOOIT registreren. sw.js serveert static assets (.js/.css)
+     cache-first — in dev betekent dat stale Turbopack-chunks na elke hot-reload,
+     met runtime-errors als "module factory is not available" of "X is not
+     defined" tot gevolg. Ruim meteen een eerder geregistreerde SW + zijn bbq-
+     caches op zodat dev-sessies verse chunks krijgen. Productie (immutable,
+     content-hashed chunks) gebruikt cache-first zoals voorheen — daar is het
+     veilig en gewenst voor offline/PWA. */
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((k) => k.startsWith('bbq-')).map((k) => caches.delete(k)));
+      }
+    } catch { /* best-effort cleanup, niet fataal */ }
+    return null;
+  }
+
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',

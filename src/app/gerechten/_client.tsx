@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useSupabase } from '@/lib/useSupabase';
@@ -14,11 +16,8 @@ import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
 import PageSection from '@/components/PageSection';
 import MargeBar from '@/components/chips/MargeBar';
-import MenuWizard, { type MenuTemplateInput } from '@/components/MenuWizard';
-import KitchenModeStepper from '@/components/KitchenModeStepper';
-import AuditTrailTimeline from '@/components/AuditTrailTimeline';
 import { LoadingState } from '@/components/LoadingState';
-import FollowUpPrompt, { type FollowUpAction } from '@/components/FollowUpPrompt';
+import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
@@ -30,10 +29,32 @@ import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
    import stays voor evt. fallback. */
 import { MRViewToggle, MRSearchBar, MRButton, MRFilterPill } from '@/components/menu/atoms';
 import { MRLibraryView } from '@/components/menu/library-views';
-import { GerechtDetailDrawer } from '@/components/menu/drawer/GerechtDetailDrawer';
-import { MenuCommandPalette, useCmdKShortcut } from '@/components/menu/MenuCommandPalette';
-import { BedenkerModal } from '@/components/menu/BedenkerModal';
-import { AllergenConfirmModal, type AllergenRow } from '@/components/menu/AllergenConfirmModal';
+import { useCmdKShortcut } from '@/components/menu/MenuCommandPalette';
+import { type AllergenRow } from '@/components/menu/AllergenConfirmModal';
+
+/* Lazy-loaded heavy widgets — wizards, modals, drawers, command palette.
+   Elke chunk laadt pas wanneer de bijbehorende UI voor het eerst opent.
+   Audit P1 bundle-trim. useCmdKShortcut blijft statisch (hook moet bij mount). */
+const KitchenModeStepper = dynamic(() => import('@/components/KitchenModeStepper'), { ssr: false });
+const AuditTrailTimeline = dynamic(() => import('@/components/AuditTrailTimeline'), { ssr: false });
+const FollowUpPrompt = dynamic(() => import('@/components/FollowUpPrompt'), { ssr: false });
+const GerechtDetailDrawer = dynamic(
+    () => import('@/components/menu/drawer/GerechtDetailDrawer').then(m => ({ default: m.GerechtDetailDrawer })),
+    { ssr: false },
+);
+const MenuCommandPalette = dynamic(
+    () => import('@/components/menu/MenuCommandPalette').then(m => ({ default: m.MenuCommandPalette })),
+    { ssr: false },
+);
+const BedenkerModal = dynamic(
+    () => import('@/components/menu/BedenkerModal').then(m => ({ default: m.BedenkerModal })),
+    { ssr: false },
+);
+const AllergenConfirmModal = dynamic(
+    () => import('@/components/menu/AllergenConfirmModal').then(m => ({ default: m.AllergenConfirmModal })),
+    { ssr: false },
+);
+const AiFotoPromptDialog = dynamic(() => import('@/components/menu/AiFotoPromptDialog'), { ssr: false });
 import { useMenuView } from '@/hooks/useMenuView';
 import { getGangKey, getGangLabel } from '@/components/menu/helpers';
 import {
@@ -59,6 +80,7 @@ export interface GerechtenInitial {
 }
 
 export default function Gerechten({ initial }: { initial?: GerechtenInitial } = {}) {
+    const router = useRouter();
     const showToast = useToast();
     const showConfirm = useConfirm();
     const { orgId } = useOrg();
@@ -82,6 +104,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [labelInput, setLabelInput] = useState('');
     const [battleInput, setBattleInput] = useState('');
     const [uploading, setUploading] = useState(false);
+    /* AI-foto-prompt dialog state (vervangt placeholder bij geen foto). */
+    const [aiFotoOpen, setAiFotoOpen] = useState(false);
     const [stats, setStats] = useState<Record<string, any> | null>(null);
     const [hwInput, setHwInput] = useState<Record<string, any>>({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
     const [costInput, setCostInput] = useState<Record<string, any>>({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
@@ -94,8 +118,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
     const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
     const [menuTemplates, setMenuTemplates] = useState<MenuTemplateRow[]>(initial?.menuTemplates ?? []);
-    const [showMenuWizard, setShowMenuWizard] = useState(false);
-    const [editingTemplate, setEditingTemplate] = useState<MenuTemplateInput | null>(null);
     /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).
        Dit object bewaart titel + stappen array voor de stepper. */
     const [kitchenMode, setKitchenMode] = useState<{ titel: string; stappen: string[] } | null>(null);
@@ -160,49 +182,15 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setMenuTemplates(data || []);
     }
 
+    /* Sinds 2026-06-02: MenuWizard is uit /gerechten verwijderd. Menukaart-
+       samenstellen gaat via MenuComposer op /gerechten/menukaarten/[nieuw|id].
+       Beide functies push naar die route — geen lokale modal-state meer. */
     function newMenuTemplate() {
-        setEditingTemplate(null);
-        setShowMenuWizard(true);
+        router.push('/gerechten/menukaarten/nieuw');
     }
 
-    function editMenuTemplate(t) {
-        setEditingTemplate({
-            id: t.id,
-            naam: t.naam,
-            beschrijving: t.beschrijving || '',
-            menu_selectie: typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {}),
-            basis_prijs_pp: t.basis_prijs_pp || undefined,
-            aantal_gasten: t.aantal_gasten || undefined,
-        });
-        setShowMenuWizard(true);
-    }
-
-    async function handleMenuTemplateComplete(result: any) {
-        const naam = (result.template_naam || '').trim();
-        if (!naam) { showToast('Geef het menu een naam', 'error'); return; }
-
-        const payload = {
-            naam,
-            beschrijving: result.template_beschrijving || null,
-            menu_selectie: result.menu_selectie || {},
-            basis_prijs_pp: result.basis_prijs_pp || 0,
-            aantal_gasten: result.aantal_gasten || 40,
-            organization_id: orgId || null,
-            actief: true,
-        };
-
-        if (result.template_id) {
-            const { error } = await supabase.from('menu_templates').update(payload).eq('id', result.template_id);
-            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
-            showToast('Menu bijgewerkt!');
-        } else {
-            const { error } = await supabase.from('menu_templates').insert([payload]);
-            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
-            showToast('Menu opgeslagen!');
-        }
-        setShowMenuWizard(false);
-        setEditingTemplate(null);
-        await loadMenuTemplates();
+    function editMenuTemplate(t: MenuTemplateRow) {
+        router.push(`/gerechten/menukaarten/${t.id}`);
     }
 
     function deleteMenuTemplate(id: number | string) {
@@ -1043,15 +1031,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 )}
             </>)}
 
-            {showMenuWizard && (
-                <MenuWizard
-                    mode="template"
-                    existingTemplate={editingTemplate}
-                    onComplete={handleMenuTemplateComplete}
-                    onClose={function () { setShowMenuWizard(false); setEditingTemplate(null); }}
-                />
-            )}
-
             {kitchenMode && (
                 <KitchenModeStepper
                     titel={kitchenMode.titel}
@@ -1118,9 +1097,25 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="foto-upload-zone" onClick={function () { fileInputRef.current!.click(); }}>
-                                        {uploading ? <span style={{ color: 'var(--color-accent-gold)' }}>⏳ Uploaden...</span> : <span>📷 Klik om foto te uploaden</span>}
-                                    </div>
+                                    <>
+                                        <div className="foto-upload-zone" onClick={function () { fileInputRef.current!.click(); }}>
+                                            {uploading ? <span style={{ color: 'var(--color-accent-gold)' }}>⏳ Uploaden...</span> : <span>📷 Klik om foto te uploaden</span>}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={function () { setAiFotoOpen(true); }}
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                marginTop: 8, padding: '6px 10px', borderRadius: 8,
+                                                background: 'transparent', border: '1px solid var(--border)',
+                                                color: 'var(--brand, #c4a35a)', fontSize: 12, fontWeight: 600,
+                                                cursor: 'pointer',
+                                            }}
+                                            title={editing === 'new' ? 'Sla het gerecht eerst op' : 'Vraag AI om een foto-prompt voor Poe / Sora / Nano Banana'}
+                                        >
+                                            <Sparkles size={13} /> Of laat AI een foto-prompt maken
+                                        </button>
+                                    </>
                                 )}
                                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoUpload} />
                             </div>
@@ -1983,6 +1978,18 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                         setAllergenModalRows([]);
                     }
                 }}
+            />
+
+            {/* AiFotoPromptDialog — geopend vanuit "Of laat AI een foto-prompt maken"
+                onder de upload-zone. 3 paden: upload / AI-prompt-via-Sonnet / skip.
+                AI-pad werkt alleen voor opgeslagen gerechten (regenerate-prompt
+                vereist een gerecht-id). Bij editing === 'new' is dat pad disabled. */}
+            <AiFotoPromptDialog
+                open={aiFotoOpen}
+                onClose={() => setAiFotoOpen(false)}
+                gerechtId={editing && editing !== 'new' ? editing : null}
+                gerechtNaam={form.naam}
+                onUploadClick={() => fileInputRef.current?.click()}
             />
 
             {/* Lokale BedenkerModal — voor de "+ Bedenk met AI" knop in header.

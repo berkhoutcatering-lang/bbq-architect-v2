@@ -15,9 +15,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { SettingsSchema, type SettingsInput } from '@/lib/schemas/settings';
+import { SettingsSchema } from '@/lib/schemas/settings';
 
-export type { SettingsInput };
+/* Geen `export type { SettingsInput }` — een 'use server' module mag alleen
+   async functions exporteren, anders crasht de Turbopack server-actions-loader
+   runtime ("X is not defined"). Importeer types direct uit @/lib/schemas/settings. */
 
 interface ActionResult<T = unknown> {
     data?: T;

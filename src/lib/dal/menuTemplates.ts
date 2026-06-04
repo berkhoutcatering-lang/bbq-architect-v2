@@ -32,7 +32,6 @@ export interface MenuTemplateGerechtRef {
     naam: string;
     gang_slug: string | null;
     kostprijs_pp: number | null;
-    prijs_pp: number | null;
     verkoopprijs: number | null;
     foto_url: string | null;
     allergenen: string[] | null;
@@ -102,7 +101,7 @@ export async function getMenuTemplate(
             menu_template_items (
                 id, gerecht_id, gang_slug, volgorde,
                 gerecht:gerechten (
-                    id, naam, gang_slug, kostprijs_pp, prijs_pp, verkoopprijs, foto_url, allergenen
+                    id, naam, gang_slug, kostprijs_pp, verkoopprijs, foto_url, allergenen
                 )
             )
         `)
@@ -125,7 +124,6 @@ export async function getMenuTemplate(
                 naam: row.gerecht.naam,
                 gang_slug: row.gerecht.gang_slug ?? null,
                 kostprijs_pp: row.gerecht.kostprijs_pp != null ? Number(row.gerecht.kostprijs_pp) : null,
-                prijs_pp: row.gerecht.prijs_pp != null ? Number(row.gerecht.prijs_pp) : null,
                 verkoopprijs: row.gerecht.verkoopprijs != null ? Number(row.gerecht.verkoopprijs) : null,
                 foto_url: row.gerecht.foto_url ?? null,
                 allergenen: row.gerecht.allergenen ?? null,

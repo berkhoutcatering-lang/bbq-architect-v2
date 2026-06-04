@@ -136,10 +136,12 @@ export default function Editorial01Pdf({ overrides, data }: PdfTemplateProps) {
                         </View>
                     )}
 
-                    <View style={styles.legend}>
-                        <Text style={styles.legendLabel}>ALLERGENEN</Text>
-                        <Text style={styles.legendText}>{legend || '—'}</Text>
-                    </View>
+                    {legend ? (
+                        <View style={styles.legend}>
+                            <Text style={styles.legendLabel}>ALLERGENEN</Text>
+                            <Text style={styles.legendText}>{legend}</Text>
+                        </View>
+                    ) : null}
                     {footer ? <Text style={styles.footer}>{footer}</Text> : null}
                 </View>
             </Page>
