@@ -322,7 +322,9 @@ export function MRSearchBar({ onCmdK, placeholder = 'Zoek gerechten…' }: { onC
         >
             <Search size={15} color="var(--muted)" />
             <span style={{ flex: 1, fontSize: 13, color: 'var(--muted)' }}>{placeholder}</span>
-            <kbd style={{
+            {/* ⌘K badge alleen op desktop — telefoons hebben geen ⌘-toets.
+                hidden-mobile-cmdk wordt verborgen via globals.css <768px. */}
+            <kbd className="hidden-mobile-cmdk" style={{
                 fontSize: 10, padding: '2px 7px',
                 border: '1px solid var(--border)', borderRadius: 5,
                 fontFamily: 'var(--font-mono, ui-monospace)',

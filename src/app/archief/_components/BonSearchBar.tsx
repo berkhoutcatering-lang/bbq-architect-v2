@@ -99,7 +99,7 @@ export function BonSearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
                     </button>
                 )}
                 <kbd
-                    className="rounded-[6px] border px-2 py-0.5 font-mono text-[10px] text-[var(--muted)]"
+                    className="hidden-mobile-cmdk rounded-[6px] border px-2 py-0.5 font-mono text-[10px] text-[var(--muted)]"
                     style={{
                         borderColor: 'var(--border)',
                         background: 'rgba(130,130,130,.06)',

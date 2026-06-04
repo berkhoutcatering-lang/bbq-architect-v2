@@ -6025,6 +6025,15 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   .ai-studio-topbar {
     padding: 8px 12px;
     gap: 8px;
+    flex-wrap: wrap;
+  }
+  /* Verberg de subtitle ("Jouw AI-collega voor brainstorm en uitwerking")
+     op smal mobile zodat "Pitmaster Studio · Rook" netjes naast de tabs past. */
+  .ai-studio-brand__sub {
+    display: none;
+  }
+  .ai-studio-brand__title {
+    font-size: 13px !important;
   }
 
   .ai-mode-tab {
@@ -8878,6 +8887,11 @@ html, body { max-width: 100vw; overflow-x: hidden; }
   .haccp-instap-grid {
     grid-template-columns: 1fr !important;
   }
+  /* ⌘K en `/` kbd-badges horen niet op telefoons (geen fysiek toetsenbord).
+     Globale class voor de patroon-componenten die deze hint tonen. */
+  .hidden-mobile-cmdk {
+    display: none !important;
+  }
 }
 
 /* Breadcrumb — laat ruimte voor de mobile hamburger (44px op left:12px = eindigt 56px).
@@ -8950,14 +8964,21 @@ html, body { max-width: 100vw; overflow-x: hidden; }
 }
 
 /* Bottom-clearance helper (used by <MobileSafeBottom>).
-   On phone: pad the bottom of the page so the BottomNav (60px) + safe-area
-   doesn't cover content. The --mobile-safe-bottom-extra var lets a page add
-   more clearance for a StickyMobileCTA stacking on top of the BottomNav. */
+   On phone: pad the bottom of the page so de BottomNav (60px) + de
+   MobileCmdKTrigger (bottom:72 + height:48 = top is 120px van onder) niet
+   over content valt. De --mobile-safe-bottom-extra var laat een page extra
+   clearance toevoegen voor een StickyMobileCTA op de BottomNav. */
 .mobile-safe-bottom {
   /* desktop: noop */
 }
 @media (max-width: 767px) {
   .mobile-safe-bottom {
+    /* 136 = 72 (CmdK offset) + 48 (CmdK size) + 16 (buffer). Vermijdt dat
+       de oranje vergrootglas de laatste inhouds-regels of CTA verbergt. */
+    padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
+  }
+  /* Pages die has-sticky-cta zetten verbergen CmdK al — terug naar oude waarde. */
+  body.has-sticky-cta .mobile-safe-bottom {
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
   }
 }

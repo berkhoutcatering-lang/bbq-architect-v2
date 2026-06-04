@@ -817,13 +817,13 @@ export default function AIStudio({
                         {sidebarOpen ? <PanelLeft size={14} /> : <Menu size={14} />}
                     </button>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-background)', fontSize: 16 }}>
+                    <div className="ai-studio-brand" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-background)', fontSize: 16, flexShrink: 0 }}>
                             <Bot size={14} />
                         </div>
-                        <div>
-                            <div style={{ fontWeight: 800, fontSize: 15 }}>Pitmaster Studio · Rook</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Jouw AI-collega voor brainstorm en uitwerking</div>
+                        <div className="ai-studio-brand__text" style={{ minWidth: 0 }}>
+                            <div className="ai-studio-brand__title" style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Pitmaster Studio · Rook</div>
+                            <div className="ai-studio-brand__sub" style={{ fontSize: 12, color: 'var(--muted)' }}>Jouw AI-collega voor brainstorm en uitwerking</div>
                         </div>
                     </div>
 
