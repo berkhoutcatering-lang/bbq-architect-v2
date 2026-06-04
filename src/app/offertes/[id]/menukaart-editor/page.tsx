@@ -10,6 +10,9 @@ import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@/lib/supabase-server';
 import MenukaartEditor from '@/components/menukaart/editor/MenukaartEditor';
 import { DEFAULT_TEMPLATE_ID, type Overrides } from '@/lib/menukaart/registry';
+import { buildMenuData } from '@/lib/menukaart/build-menu-data';
+import type { Gerecht, Gang } from '@/types';
+import type { MenuTemplateLite } from '@/components/menu/MenuMenukaartCanvas';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -25,10 +28,18 @@ export default async function Page({ params }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) notFound();
 
-    const [{ data: offer }, { data: settings }] = await Promise.all([
+    /* Parallelle queries: offerte + tenant-settings + gerechten/gangen-
+       bibliotheek + opgeslagen menukaart-templates. Alles via RLS gefilterd. */
+    const [
+        { data: offer },
+        { data: settings },
+        { data: gerechtenData },
+        { data: gangenData },
+        { data: menuTemplatesData },
+    ] = await Promise.all([
         supabase
             .from('offertes')
-            .select('id, nummer, client_naam, datum, menukaart_template_id, menukaart_overrides')
+            .select('id, nummer, client_naam, datum, menukaart_template_id, menukaart_overrides, menu_selectie')
             .eq('id', id)
             .maybeSingle(),
         supabase
@@ -36,6 +47,14 @@ export default async function Page({ params }: Props) {
             .select('logo_url, menukaart_template_id, menukaart_overrides')
             .limit(1)
             .maybeSingle(),
+        supabase.from('gerechten').select('*'),
+        supabase.from('gangen').select('*').order('volgorde'),
+        supabase
+            .from('menu_templates')
+            .select('id, naam, is_default, menu_selectie')
+            .eq('actief', true)
+            .order('is_default', { ascending: false })
+            .order('updated_at', { ascending: false }),
     ]);
 
     if (!offer) notFound();
@@ -45,6 +64,27 @@ export default async function Page({ params }: Props) {
     const customOverrides = (offer.menukaart_overrides as Overrides) ?? {};
     const offerLabel = offer.nummer || offer.client_naam || `Offerte ${offer.id}`;
 
+    /* menu_selectie kan in legacy DB-rijen string-JSON of array zijn.
+       Alleen de object-shape geeft een betekenisvolle menukaart. */
+    const rawSel = offer.menu_selectie as unknown;
+    const menuSelectie: Record<string, string[]> | null =
+        rawSel && typeof rawSel === 'object' && !Array.isArray(rawSel)
+            ? (rawSel as Record<string, string[]>)
+            : null;
+
+    /* Server-side menuData zodat de preview de échte gerechten toont
+       i.p.v. DEMO_MENU. Allergenen volgen de showAllergens-toggle. */
+    const showAllergens = (customOverrides.showAllergens as boolean | undefined)
+        ?? (brandOverrides.showAllergens as boolean | undefined)
+        ?? false;
+
+    const menuData = buildMenuData(
+        menuSelectie,
+        (gerechtenData ?? []) as Array<{ naam?: string; beschrijving?: string; gang_slug?: string; allergenen?: unknown }>,
+        (gangenData ?? []) as Array<{ slug?: string; naam?: string; volgorde?: number }>,
+        { logoUrl: settings?.logo_url ?? null, showAllergens },
+    );
+
     return (
         <MenukaartEditor
             offerId={String(offer.id)}
@@ -53,6 +93,12 @@ export default async function Page({ params }: Props) {
             brandOverrides={brandOverrides}
             customOverrides={customOverrides}
             logoUrl={settings?.logo_url ?? null}
+            menuData={menuData}
+            gerechten={(gerechtenData ?? []) as Gerecht[]}
+            gangen={(gangenData ?? []) as Gang[]}
+            menuTemplates={(menuTemplatesData ?? []) as MenuTemplateLite[]}
+            initialMenuSelectie={menuSelectie}
+            contextLabel={offerLabel}
         />
     );
 }

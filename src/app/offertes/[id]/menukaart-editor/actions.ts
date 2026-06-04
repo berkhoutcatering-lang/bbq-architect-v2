@@ -137,6 +137,64 @@ export async function switchOfferTemplate(input: unknown): Promise<ActionResult>
     return { ok: true };
 }
 
+/* ── Menu-selectie + styling samen opslaan ────────────────────────
+   Wordt aangeroepen vanuit de "Bewerk menu"-knop in MenukaartEditor →
+   MenuMenukaartCanvas → Opslaan. Schrijft `menu_selectie` mee zodat
+   stijl- en menu-edits via één Server Action consistent landen, ipv
+   dat de client zelf naar Supabase moet schrijven. */
+
+const MenuSelectieSchema = z.record(z.string(), z.array(z.string()));
+
+const SaveOfferMenuSchema = z.object({
+    offerId: z.string(),
+    menuSelectie: MenuSelectieSchema,
+    templateId: z.string().refine(v => VALID_TEMPLATE_IDS.includes(v), 'Onbekende template'),
+    rawOverrides: z.record(z.string(), z.unknown()).optional(),
+});
+
+export async function saveOfferMenu(input: unknown): Promise<ActionResult> {
+    const parsed = SaveOfferMenuSchema.safeParse(input);
+    if (!parsed.success) {
+        return { error: 'Validatie-fout: ' + parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ') };
+    }
+    const { offerId, menuSelectie, templateId, rawOverrides } = parsed.data;
+
+    const template = getTemplate(templateId);
+    /* Overrides door allow-list. Leeg/ongezet → behoud de huidige DB-overrides
+       (geen onbedoelde reset wanneer de canva alleen menu-edits doorgeeft). */
+    let cleanOverrides: Overrides | undefined = undefined;
+    if (rawOverrides !== undefined) {
+        const check = validateOverrides(template, rawOverrides);
+        if (check.ok === false) {
+            return { error: `Ongeldige waardes: ${check.errors.map(e => `${e.key} (${e.reason})`).join(', ')}` };
+        }
+        cleanOverrides = check.clean;
+    }
+
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Niet ingelogd' };
+
+    const updatePayload: Record<string, unknown> = {
+        menu_selectie: menuSelectie,
+        menukaart_template_id: templateId,
+    };
+    if (cleanOverrides !== undefined) updatePayload.menukaart_overrides = cleanOverrides;
+
+    const { error } = await supabase
+        .from('offertes')
+        .update(updatePayload)
+        .eq('id', offerId);
+
+    if (error) return { error: error.message };
+
+    revalidatePath(`/offertes/${offerId}`);
+    revalidatePath(`/offertes/${offerId}/menukaart-editor`);
+    revalidatePath(`/q/${offerId}`);
+    revalidatePath(`/events`);
+    return { ok: true };
+}
+
 /* ── Tenant-laag (brand) ──────────────────────────────────────── */
 
 export async function saveTenantBrandOverrides(

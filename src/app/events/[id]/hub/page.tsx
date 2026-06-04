@@ -783,6 +783,14 @@ export default function EventHubPage() {
                     <span className="doc-primary-tag ready">Live</span>
                   </div>
                   <div className="doc-primary-actions">
+                    <button
+                      className="primary"
+                      disabled={!offerte}
+                      onClick={() => router.push(`/events/${event.id}/menukaart-editor`)}
+                      title={offerte ? 'Bewerk menu + stijl' : 'Koppel eerst een offerte'}
+                    >
+                      <UtensilsCrossed size={13} />Menukaart aanpassen
+                    </button>
                     <button onClick={() => {
                       const el = document.querySelector('.mk-preview-wrap');
                       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -792,7 +800,7 @@ export default function EventHubPage() {
                     <button disabled={!offerte || downloading === 'menukaart'} onClick={downloadMenukaartPdf}>
                       <Download size={13} />{downloading === 'menukaart' ? 'Bezig…' : 'PDF'}
                     </button>
-                    <button className="primary" onClick={printMenukaart}>
+                    <button onClick={printMenukaart}>
                       <Printer size={13} />Print {event.guests || 0}×
                     </button>
                   </div>
@@ -946,7 +954,7 @@ export default function EventHubPage() {
                     </div>
                     <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
                       {event.offerte_id ? (
-                        <a href={`/offertes/${event.offerte_id}/menukaart-editor`}
+                        <a href={`/events/${event.id}/menukaart-editor`}
                           style={{ fontSize: 11, color: 'var(--brand-gold)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--brand-gold) 30%, transparent)' }}>
                           <Pencil size={11} /> Menukaart aanpassen
                         </a>
