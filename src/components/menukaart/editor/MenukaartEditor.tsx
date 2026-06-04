@@ -35,7 +35,10 @@ import {
     Heart,
     AtSign,
     Printer,
+    UtensilsCrossed,
+    Monitor,
 } from 'lucide-react';
+import { useIsPhone } from '@/hooks/useIsMobile';
 import {
     getTemplate,
     DEFAULT_TEMPLATE_ID,
@@ -59,8 +62,10 @@ import {
 import AICoach, { type Diff } from './AICoach';
 import TemplatePickerSheet from './TemplatePickerSheet';
 import EventMessageControl from './EventMessageControl';
-import { saveOfferOverrides, resetOfferKeys } from '@/app/offertes/[id]/menukaart-editor/actions';
+import { saveOfferOverrides, resetOfferKeys, saveOfferMenu } from '@/app/offertes/[id]/menukaart-editor/actions';
 import type { Template } from '@/lib/menukaart/registry';
+import MenuMenukaartCanvas, { type MenuTemplateLite, type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
+import type { Gerecht, Gang } from '@/types';
 import './editor.css';
 
 const ZOOM_STEPS = [50, 75, 100, 125] as const;
@@ -74,6 +79,17 @@ type Props = {
     customOverrides: Overrides;
     menuData?: MenuData;
     logoUrl?: string | null;
+    /** Bibliotheek voor de "Bewerk menu"-canva. Optioneel zodat de editor
+     *  ook standalone werkt (zonder menu-knop). */
+    gerechten?: Gerecht[];
+    gangen?: Gang[];
+    menuTemplates?: MenuTemplateLite[];
+    /** Huidige menu_selectie van de offerte (gang_slug → dish-namen). */
+    initialMenuSelectie?: Record<string, string[]> | null;
+    /** Tonen we de "Bewerk menu"-knop? Default: alleen als gerechten/gangen aanwezig zijn. */
+    showMenuButton?: boolean;
+    /** Optionele context-string voor de canva-header (bv. "EVT-2026-001 · …"). */
+    contextLabel?: string;
 };
 
 export default function MenukaartEditor({
@@ -84,7 +100,14 @@ export default function MenukaartEditor({
     customOverrides: initialCustom,
     menuData,
     logoUrl,
+    gerechten,
+    gangen,
+    menuTemplates,
+    initialMenuSelectie,
+    showMenuButton,
+    contextLabel,
 }: Props) {
+    const isPhone = useIsPhone();
     const router = useRouter();
     const [templateId, setTemplateId] = useState(initialTemplateId);
     const template = useMemo(() => getTemplate(templateId), [templateId]);
@@ -110,6 +133,14 @@ export default function MenukaartEditor({
         Object.keys(initialCustom).length > 0 ? 'saved' : 'never',
     );
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+    /* Menu-canva drawer — opent via "Bewerk menu"-knop in de header. Schrijft
+       menu_selectie + template + overrides in één Server Action (saveOfferMenu)
+       zodat een stijl-edit nooit per ongeluk de menu reset of vice versa. */
+    const [canvasOpen, setCanvasOpen] = useState(false);
+    const canMenuEdit = Boolean(
+        showMenuButton !== false && gerechten && gangen && gerechten.length > 0,
+    );
 
     /* ── Cascade resolution ─────────────────────────────────── */
     const resolved = useMemo(() => resolveCascade(template, brandOverrides, custom), [template, brandOverrides, custom]);
@@ -229,6 +260,32 @@ export default function MenukaartEditor({
         setCompareMode(false);
     }, [custom, diffs]);
 
+    /* ── Menu-canva save → Server Action saveOfferMenu ─────────────
+       De canva levert {menuSelectie, templateId, customOverrides}.
+       We schrijven het in 1 RPC, sluiten de drawer, en refreshen de pagina
+       zodat de live menukaart-preview de nieuwe menu_selectie oppikt. */
+    const handleCanvasSave = useCallback(async (result: CanvasSaveResult) => {
+        setSaveStatus('saving');
+        const res = await saveOfferMenu({
+            offerId,
+            menuSelectie: result.menuSelectie,
+            templateId: result.templateId,
+            rawOverrides: result.customOverrides,
+        });
+        if ('error' in res) {
+            setSaveStatus('error');
+            return;
+        }
+        setTemplateId(result.templateId);
+        setCustom(result.customOverrides);
+        setSaveStatus('saved');
+        setLastSavedAt(new Date());
+        setCanvasOpen(false);
+        /* Refresh haalt de nieuwe menu_selectie + brandOverrides terug zodat
+           de preview de toegevoegde gerechten direct toont. */
+        router.refresh();
+    }, [offerId, router]);
+
     /* ── Template switch — sluit compare-mode + accepteer server-side overrides reset ─ */
     const handleTemplateSwitched = useCallback((newTemplateId: string) => {
         setTemplateId(newTemplateId);
@@ -269,6 +326,48 @@ export default function MenukaartEditor({
     const decoSummary = `${decoCount} actief`;
 
     /* ── Render ─────────────────────────────────────────────── */
+    if (isPhone) {
+        return (
+            <div style={{
+                minHeight: 'calc(100dvh - 60px)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: '32px 24px', textAlign: 'center', gap: 16,
+                background: 'var(--bg)',
+            }}>
+                <div style={{
+                    width: 72, height: 72, borderRadius: 18,
+                    background: 'rgba(196,163,90,.12)',
+                    border: '1px solid rgba(196,163,90,.3)',
+                    color: 'var(--brand, #c4a35a)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                    <Monitor size={32} />
+                </div>
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
+                    Open op een desktop of tablet
+                </h1>
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)', maxWidth: 320, lineHeight: 1.5 }}>
+                    De menukaart-editor laat je het thema, de lay-out en de tekst zien op een echte
+                    A4-preview. Dat past niet op een telefoon — open dezelfde link op een laptop of
+                    tablet (≥1024px breed).
+                </p>
+                <div style={{
+                    fontSize: 12, color: 'var(--muted)', padding: '6px 12px',
+                    border: '1px solid var(--border)', borderRadius: 999,
+                }}>
+                    Offerte · <span style={{ color: 'var(--text)', fontWeight: 600 }}>{offerLabel}</span>
+                </div>
+                <Link href={`/offertes/${offerId}`} style={{
+                    marginTop: 8, padding: '10px 18px', borderRadius: 10,
+                    background: 'var(--brand, #c4a35a)', color: '#1a1a1e',
+                    fontWeight: 600, fontSize: 14, textDecoration: 'none',
+                }}>
+                    Terug naar de offerte
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="mke">
             <div className="mke-shell">
@@ -284,6 +383,8 @@ export default function MenukaartEditor({
                     onRedo={redo}
                     onClose={() => router.push(`/offertes/${offerId}/view`)}
                     onOpenPicker={() => setPickerOpen(true)}
+                    canMenuEdit={canMenuEdit}
+                    onOpenMenu={() => setCanvasOpen(true)}
                 />
 
                 <div className="mke-body">
@@ -506,6 +607,26 @@ export default function MenukaartEditor({
                     currentAccent={flat.accent}
                     onSwitched={handleTemplateSwitched}
                 />
+
+                {/* Menu-canva drawer — hergebruikt de bestaande canva uit
+                    /offertes (zelfde UX, zelfde dish-picker, live preview). */}
+                {canMenuEdit && (
+                    <MenuMenukaartCanvas
+                        open={canvasOpen}
+                        onClose={() => setCanvasOpen(false)}
+                        contextLabel={contextLabel ?? offerLabel}
+                        gerechten={gerechten ?? []}
+                        gangen={gangen ?? []}
+                        menuTemplates={menuTemplates ?? []}
+                        initialMenuSelectie={initialMenuSelectie ?? {}}
+                        templateId={templateId}
+                        brandOverrides={brandOverrides}
+                        customOverrides={custom}
+                        logoUrl={logoUrl}
+                        offerId={offerId}
+                        onSave={handleCanvasSave}
+                    />
+                )}
             </div>
         </div>
     );
@@ -525,6 +646,8 @@ function Header({
     onRedo,
     onClose,
     onOpenPicker,
+    canMenuEdit,
+    onOpenMenu,
 }: {
     offerId: string;
     offerLabel: string;
@@ -537,6 +660,8 @@ function Header({
     onRedo: () => void;
     onClose: () => void;
     onOpenPicker: () => void;
+    canMenuEdit: boolean;
+    onOpenMenu: () => void;
 }) {
     return (
         <header className="mke-header">
@@ -561,6 +686,16 @@ function Header({
                     <Redo2 size={15} />
                 </button>
                 <div className="mke-header-divider" />
+                {canMenuEdit && (
+                    <button
+                        className="mke-btn-ghost"
+                        type="button"
+                        onClick={onOpenMenu}
+                        title="Voeg gerechten toe of pas gangen aan"
+                    >
+                        <UtensilsCrossed size={13} /> Bewerk menu
+                    </button>
+                )}
                 <button className="mke-btn-ghost" type="button" onClick={onOpenPicker} title="Kies een andere template">
                     <Layout size={13} /> Wisselen van template
                 </button>

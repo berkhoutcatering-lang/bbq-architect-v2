@@ -902,7 +902,8 @@ function ComposerHero({
                         }}>Menukaart</span>
                     </div>
 
-                    {/* Title — Playfair italic, editable */}
+                    {/* Title — Playfair italic, editable. Clamp font on narrow phones so
+                        names like "menu 1 seizoen 1" don't visually scroll out of view. */}
                     <input
                         type="text"
                         value={naam}
@@ -912,10 +913,12 @@ function ComposerHero({
                             fontFamily: 'var(--font-display, Georgia, serif)',
                             fontStyle: 'italic', fontWeight: 600,
                             color: 'var(--text, #fff)',
-                            fontSize: 34, lineHeight: 1.05, letterSpacing: '-.01em',
+                            fontSize: 'clamp(22px, 7vw, 34px)',
+                            lineHeight: 1.05, letterSpacing: '-.01em',
                             textShadow: '0 2px 18px rgba(0,0,0,.5)',
                             background: 'transparent', border: 'none', outline: 'none',
                             width: '100%', padding: 0, display: 'block',
+                            textOverflow: 'ellipsis',
                         }}
                     />
 

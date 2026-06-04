@@ -89,10 +89,10 @@ export default async function MenukaartenListPage() {
                         </Link>
                     </div>
                 ) : (
-                    <div style={{
+                    <div className="menukaarten-list" style={{
                         border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
                     }}>
-                        <div style={{
+                        <div className="menukaarten-list__head" style={{
                             display: 'grid',
                             gridTemplateColumns: 'minmax(0,2fr) 90px 110px 110px 90px 60px',
                             gap: 12, padding: '10px 14px',
@@ -112,6 +112,7 @@ export default async function MenukaartenListPage() {
                             <Link
                                 key={t.id}
                                 href={`/gerechten/menukaarten/${t.id}`}
+                                className="menukaarten-list__row"
                                 style={{
                                     display: 'grid',
                                     gridTemplateColumns: 'minmax(0,2fr) 90px 110px 110px 90px 60px',
@@ -128,11 +129,15 @@ export default async function MenukaartenListPage() {
                                             {t.beschrijving}
                                         </div>
                                     )}
+                                    <div className="menukaarten-list__meta-mobile" style={{ display: 'none', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                                        {t.item_count} gerechten · € {t.basis_prijs_pp.toFixed(2)} p.p. · {t.aantal_gasten} gasten
+                                        {t.is_default && <> · <span style={{ color: 'var(--brand, #c4a35a)', fontWeight: 600 }}>★ Default</span></>}
+                                    </div>
                                 </div>
-                                <div style={{ textAlign: 'right', fontSize: 13 }}>{t.item_count}</div>
-                                <div style={{ textAlign: 'right', fontSize: 13 }}>€ {t.basis_prijs_pp.toFixed(2)}</div>
-                                <div style={{ textAlign: 'right', fontSize: 13 }}>{t.aantal_gasten}</div>
-                                <div>
+                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.item_count}</div>
+                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>€ {t.basis_prijs_pp.toFixed(2)}</div>
+                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.aantal_gasten}</div>
+                                <div className="menukaarten-list__col">
                                     {t.is_default && (
                                         <span style={{
                                             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -151,6 +156,14 @@ export default async function MenukaartenListPage() {
                         ))}
                     </div>
                 )}
+                <style>{`
+                    @media (max-width: 640px) {
+                        .menukaarten-list__head { display: none !important; }
+                        .menukaarten-list__row { grid-template-columns: 1fr auto !important; }
+                        .menukaarten-list__col { display: none !important; }
+                        .menukaarten-list__meta-mobile { display: block !important; }
+                    }
+                `}</style>
             </div>
         </div>
     );
