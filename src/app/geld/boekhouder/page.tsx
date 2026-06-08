@@ -81,6 +81,10 @@ function defaultMonth(): string {
 export default function BoekhouderPage() {
   const [tab, setTab] = useState<Tab>('stapel');
   const [month, setMonth] = useState<string>(defaultMonth());
+  /* rangeMode 'last3' (default) toont 3 maanden zodat een bon van vorige maand
+     niet "verdwijnt" zodra Sam de nieuwe maand in gaat. Sam kan switchen naar
+     'month' voor specifieke maand-classificatie (BTW-aangifte einde kwartaal). */
+  const [rangeMode, setRangeMode] = useState<'last3' | 'month'>('last3');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('alle');
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
@@ -93,8 +97,9 @@ export default function BoekhouderPage() {
   const fetchBonnen = useCallback(async function () {
     setLoading(true);
     try {
+      const filterParam = rangeMode === 'last3' ? 'range=last3' : `month=${month}`;
       const r = await fetch(
-        `/api/boekhouder/bonnen?month=${month}&status=${statusFilter}`,
+        `/api/boekhouder/bonnen?${filterParam}&status=${statusFilter}`,
         { credentials: 'include' }
       );
       if (r.status === 503) {
@@ -110,7 +115,7 @@ export default function BoekhouderPage() {
     } catch {
       setRows([]); setCounts(null);
     } finally { setLoading(false); }
-  }, [month, statusFilter]);
+  }, [month, statusFilter, rangeMode]);
 
   useEffect(function () { fetchBonnen(); }, [fetchBonnen]);
 
@@ -177,13 +182,54 @@ export default function BoekhouderPage() {
           >
             <Plus size={14} /> Bon toevoegen
           </button>
-          <label style={{ fontSize: 12, color: 'var(--muted)' }}>Maand:</label>
-          <input
-            type="month"
-            value={month}
-            onChange={e => setMonth(e.target.value)}
-            style={{ background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}
-          />
+          {/* Range toggle: 'last3' (default — vangt vorige-maand bonnen op)
+              of 'month' (precieze maand voor BTW-aangifte) */}
+          <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid var(--border, rgba(255,255,255,.12))', overflow: 'hidden' }} role="group" aria-label="Periode-selectie">
+            <button
+              type="button"
+              onClick={() => setRangeMode('last3')}
+              aria-pressed={rangeMode === 'last3'}
+              style={{
+                background: rangeMode === 'last3' ? 'var(--brand)' : 'transparent',
+                color: rangeMode === 'last3' ? '#000' : 'var(--muted)',
+                border: 'none',
+                padding: '6px 10px',
+                fontSize: 12,
+                fontWeight: rangeMode === 'last3' ? 600 : 400,
+                cursor: 'pointer',
+                minHeight: 32,
+              }}
+            >
+              Laatste 3 mnd
+            </button>
+            <button
+              type="button"
+              onClick={() => setRangeMode('month')}
+              aria-pressed={rangeMode === 'month'}
+              style={{
+                background: rangeMode === 'month' ? 'var(--brand)' : 'transparent',
+                color: rangeMode === 'month' ? '#000' : 'var(--muted)',
+                border: 'none',
+                borderLeft: '1px solid var(--border, rgba(255,255,255,.12))',
+                padding: '6px 10px',
+                fontSize: 12,
+                fontWeight: rangeMode === 'month' ? 600 : 400,
+                cursor: 'pointer',
+                minHeight: 32,
+              }}
+            >
+              Maand
+            </button>
+          </div>
+          {rangeMode === 'month' && (
+            <input
+              type="month"
+              value={month}
+              onChange={e => setMonth(e.target.value)}
+              aria-label="Specifieke maand"
+              style={{ background: 'var(--card-solid)', color: 'var(--text, #f5f5f5)', border: '1px solid var(--border, rgba(255,255,255,.12))', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}
+            />
+          )}
         </div>
       </header>
 
@@ -282,7 +328,11 @@ export default function BoekhouderPage() {
             <div className="bh-empty">Bonnen laden…</div>
           ) : visibleRows.length === 0 ? (
             <div className="bh-empty">
-              {tab === 'twijfel' ? '🎉 Geen twijfels — perfecte maand!' : 'Geen bonnen voor deze maand/filter.'}
+              {tab === 'twijfel'
+                ? '🎉 Geen twijfels — perfecte maand!'
+                : rangeMode === 'last3'
+                  ? 'Geen bonnen in laatste 3 maanden voor dit filter.'
+                  : 'Geen bonnen voor deze maand/filter.'}
             </div>
           ) : (
             <ul className="bh-rows">

@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
 
     const monthParam = req.nextUrl.searchParams.get('month'); // YYYY-MM
+    const rangeParam = req.nextUrl.searchParams.get('range'); // 'last3' | 'month'
     const statusFilter = req.nextUrl.searchParams.get('status') || 'alle';
 
     // Join op leverancier werkt; event-FK is mogelijk nog niet in schema-cache
@@ -49,7 +50,15 @@ export async function GET(req: NextRequest) {
       .order('datum', { ascending: false })
       .limit(500);
 
-    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+    if (rangeParam === 'last3') {
+      /* Laatste 3 maanden inclusief huidige: bv. vandaag 8 juni → vanaf 1 april.
+         Dekt scenario: bon van 10 apr wordt vandaag gescand, moet zichtbaar
+         blijven in boekhouder zonder dat Sam handmatig maand moet kiezen. */
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`;
+      query = query.gte('datum', startStr);
+    } else if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [yyyy, mm] = monthParam.split('-');
       const start = `${yyyy}-${mm}-01`;
       const nextMonth = Number(mm) === 12
