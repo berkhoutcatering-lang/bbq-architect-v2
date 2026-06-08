@@ -68,6 +68,19 @@ const BodySchema = z.object({
         Mens-blijft-de-baas regel: AI mag nooit zelf aanmaken — alleen
         via deze expliciete user-action. */
     new_leverancier_naam: z.string().min(2).max(120).optional(),
+    /** Bon-scanner v2: pass-historie + reconciliation-status uit extract. */
+    reconciliation_status: z.enum(['ok', 'minor_drift', 'mismatch', 'no_total']).optional(),
+    ai_passes: z.array(z.object({
+        model: z.string(),
+        engine: z.string(),
+        confidence: z.number(),
+        items_count: z.number(),
+        reconciliation_status: z.string(),
+        mismatch_eur: z.number(),
+        cost_eur_cents: z.number(),
+        duration_ms: z.number(),
+        error: z.string().nullable(),
+    })).max(10).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -315,6 +328,9 @@ export async function POST(req: NextRequest) {
         file_mime: fileMime,
         source,
         status: 'pending',
+        /* Bon-scanner v2: persist reconciliation flag + pass-history. */
+        reconciliation_status: body.reconciliation_status ?? null,
+        ai_passes: body.ai_passes ?? null,
     };
 
     // ── Fix-up pad: bestaande bon zonder file → UPDATE met nieuwe file_path ──

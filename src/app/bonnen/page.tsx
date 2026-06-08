@@ -26,7 +26,8 @@ import MultiFormatDropZone, {
     type ExtractResult,
 } from '@/app/bonnen/_components/MultiFormatDropZone';
 import { fmt } from '@/lib/utils';
-import { ArrowRight, Check, Archive, ExternalLink, Loader2, Link2 } from 'lucide-react';
+import { ArrowRight, Check, Archive, ExternalLink, Loader2, Link2, AlertTriangle, Sparkles, Zap } from 'lucide-react';
+import { compressBonImage, blobToDataUrl } from '@/lib/compressBonImage';
 
 interface CompletedExtract {
     id: string;
@@ -48,6 +49,9 @@ interface CompletedExtract {
     chosenLeverancierId?: number | null;
     chosenNewLeverancierNaam?: string | null;
     leverancierResolved?: boolean;
+    /* Bon-scanner v2: escalatie-state. */
+    escalating?: boolean;
+    escalateError?: string | null;
 }
 
 export default function BonnenPage() {
@@ -170,6 +174,9 @@ function BonnenPageInner() {
                     attach_to_bon_id: attachToBonId ?? undefined,
                     // Nieuwe leverancier expliciet door Sam aangevraagd.
                     new_leverancier_naam: entry.chosenNewLeverancierNaam ?? undefined,
+                    // v2: persist reconciliation + pass-history voor audit
+                    reconciliation_status: entry.result.reconciliation?.status,
+                    ai_passes: entry.result.ai_passes,
                 }),
             });
             const data = await res.json();
@@ -206,6 +213,67 @@ function BonnenPageInner() {
                 ),
             );
             showToast({ message: `Opslaan mislukt: ${msg}`, type: 'error' });
+        }
+    }
+
+    /* Escaleer een bestaande extractie naar Opus 4.7 voor maximale accuracy.
+       Wordt gebruikt als de reconciliation rood vlagt (Σ items ≠ totaal_bedrag)
+       of als Sam handmatig "probeer met krachtigere AI" klikt. Cost ~€0.10. */
+    async function escalateExtract(entryId: string) {
+        const entry = completed.find(c => c.id === entryId);
+        if (!entry || entry.escalating) return;
+        if (entry.result.can_escalate === false) {
+            showToast({ message: 'Al de krachtigste AI geprobeerd.', type: 'warning' });
+            return;
+        }
+
+        setCompleted(prev => prev.map(c =>
+            c.id === entryId ? { ...c, escalating: true, escalateError: null } : c,
+        ));
+
+        try {
+            const isImage = entry.originalFile.type.startsWith('image/');
+            let dataUrl: string;
+            if (isImage) {
+                const blob = await compressBonImage(entry.originalFile);
+                dataUrl = await blobToDataUrl(blob);
+            } else {
+                dataUrl = await fileToDataUrl(entry.originalFile);
+            }
+
+            const res = await fetch('/api/bonnen/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_type: entry.result.source_type,
+                    file_data_url: dataUrl,
+                    filename: entry.file_name,
+                    force_model: 'claude-opus-4-7',
+                }),
+            });
+
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.message || errJson.error || `HTTP ${res.status}`);
+            }
+
+            const newResult = (await res.json()) as ExtractResult;
+            setCompleted(prev => prev.map(c =>
+                c.id === entryId
+                    ? { ...c, result: newResult, escalating: false, leverancierResolved: newResult.leverancier_state === 'auto_matched' }
+                    : c,
+            ));
+            showToast({
+                message: `Opnieuw gescand met Opus 4.7 (${newResult.items_with_suggestions.length} regels).`,
+                type: 'success',
+                title: 'Klaar',
+            });
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Escalatie mislukte';
+            setCompleted(prev => prev.map(c =>
+                c.id === entryId ? { ...c, escalating: false, escalateError: msg } : c,
+            ));
+            showToast({ message: `Opnieuw scannen mislukt: ${msg}`, type: 'error' });
         }
     }
 
@@ -398,6 +466,7 @@ function BonnenPageInner() {
                                 onCommit={commitToArchief}
                                 onChooseLeverancier={chooseLeverancier}
                                 onChooseNewLeverancier={chooseNewLeverancier}
+                                onEscalate={escalateExtract}
                             />
                         ))}
                     </div>
@@ -412,11 +481,13 @@ function ResultCard({
     onCommit,
     onChooseLeverancier,
     onChooseNewLeverancier,
+    onEscalate,
 }: {
     entry: CompletedExtract;
     onCommit: (entryId: string) => void;
     onChooseLeverancier: (entryId: string, leverancierId: number, naam: string) => void;
     onChooseNewLeverancier: (entryId: string, naam: string) => void;
+    onEscalate: (entryId: string) => void;
 }) {
     const r = entry.result;
     const lev = r.bon_preview.leverancier_naam || '(onbekend)';
@@ -505,6 +576,14 @@ function ResultCard({
                     value={`${r.items_with_suggestions.length} · ${matchedCount} gematcht`}
                 />
             </div>
+
+            {/* Reconciliation-banner — flag bij Σ items ≠ totaal_bedrag.
+                Komt boven leverancier-step zodat Sam ziet dat hij moet checken
+                vóórdat hij koppelt + bevestigt. */}
+            <ReconciliationBanner
+                entry={entry}
+                onEscalate={() => onEscalate(entry.id)}
+            />
 
             {/* Leverancier-approval step — mens-blijft-de-baas regel.
                 AI suggesteert; Sam keurt goed of kiest. Verschijnt boven de
@@ -684,6 +763,166 @@ function Badge({ color, label }: { color: string; label: string }) {
         >
             {label}
         </span>
+    );
+}
+
+/* ── ReconciliationBanner — flag mismatches uit Σ items vs totaal_bedrag ──
+   Vier states (uit reconciliation.status):
+     ok          → niets tonen (clean run)
+     minor_drift → grijze regel onder ai_cost ("klein verschil €0.20, OK")
+     mismatch    → rode banner met escalatie-knop
+     no_total    → oranje banner (AI vond geen totaal_bedrag)
+
+   Toont ook de pass-history: bv. "Gescand met Haiku → Sonnet (€0.025)".
+   Klikbare "Probeer met Opus" knop als can_escalate=true. */
+function ReconciliationBanner({
+    entry,
+    onEscalate,
+}: {
+    entry: CompletedExtract;
+    onEscalate: () => void;
+}) {
+    const r = entry.result;
+    const rec = r.reconciliation;
+    const passes = r.ai_passes ?? [];
+    const canEsc = r.can_escalate !== false;
+
+    /* Geen reconciliation-data = oude flow / UBL. Toon alleen pass-history als die er is. */
+    if (!rec) return null;
+
+    /* OK + minor_drift: subtiele info-regel, geen banner. */
+    if (rec.status === 'ok') {
+        if (passes.length <= 1) return null;
+        return (
+            <div
+                style={{
+                    fontSize: 11,
+                    color: 'var(--muted)',
+                    marginBottom: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    flexWrap: 'wrap',
+                }}
+            >
+                <Sparkles size={11} />
+                <span>
+                    Gescand via {passes.length} passes ({passes.map(p => p.engine).join(' → ')}) — totaal €
+                    {(r.ai_cost_eur_cents / 100).toFixed(3)}
+                </span>
+            </div>
+        );
+    }
+
+    /* minor_drift = oranje subtiel */
+    if (rec.status === 'minor_drift') {
+        return (
+            <div
+                style={{
+                    padding: '8px 12px',
+                    marginBottom: 12,
+                    borderRadius: 8,
+                    background: 'rgba(196,163,90,.06)',
+                    border: '1px solid rgba(196,163,90,.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 12,
+                }}
+            >
+                <AlertTriangle size={14} style={{ color: 'var(--brand-gold, #C4A35A)', flexShrink: 0 }} />
+                <span style={{ flex: 1, color: 'var(--muted)' }}>{rec.explanation}</span>
+            </div>
+        );
+    }
+
+    /* mismatch + no_total = rode/oranje banner met escalatie-knop. */
+    const isMismatch = rec.status === 'mismatch';
+    const accentBg = isMismatch ? 'rgba(239,68,68,.06)' : 'rgba(249,115,22,.05)';
+    const accentBorder = isMismatch ? 'rgba(239,68,68,.3)' : 'rgba(249,115,22,.25)';
+    const accentColor = isMismatch ? 'var(--red, #ef4444)' : 'var(--orange, #f97316)';
+
+    return (
+        <div
+            style={{
+                padding: '12px 14px',
+                marginBottom: 12,
+                borderRadius: 10,
+                background: accentBg,
+                border: `1px solid ${accentBorder}`,
+            }}
+        >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <AlertTriangle size={16} style={{ color: accentColor, flexShrink: 0 }} />
+                <div
+                    style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.08em',
+                        color: accentColor,
+                    }}
+                >
+                    {isMismatch ? 'Controleer regels' : 'Geen totaal gevonden'}
+                </div>
+                <div style={{ flex: 1 }} />
+                {rec.claimed_total_eur != null && (
+                    <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+                        Σ €{rec.sum_items_eur.toFixed(2)} vs totaal €{rec.claimed_total_eur.toFixed(2)}
+                    </div>
+                )}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>{rec.explanation}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {canEsc && (
+                    <button
+                        type="button"
+                        onClick={onEscalate}
+                        disabled={entry.escalating}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            minHeight: 36,
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            background: accentColor,
+                            color: 'var(--bg, #0f0f12)',
+                            border: 'none',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: entry.escalating ? 'wait' : 'pointer',
+                            opacity: entry.escalating ? 0.6 : 1,
+                        }}
+                    >
+                        {entry.escalating ? (
+                            <>
+                                <Loader2 size={12} className="animate-spin" /> Opus is bezig…
+                            </>
+                        ) : (
+                            <>
+                                <Zap size={12} /> Probeer met Opus 4.7 (~€0.10)
+                            </>
+                        )}
+                    </button>
+                )}
+                {!canEsc && (
+                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        Opus 4.7 al geprobeerd — pas regels handmatig aan voor je bevestigt.
+                    </span>
+                )}
+                {passes.length > 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+                        Passes: {passes.map(p => p.engine).join(' → ')}
+                    </span>
+                )}
+            </div>
+            {entry.escalateError && (
+                <div style={{ fontSize: 11, color: 'var(--red, #ef4444)', marginTop: 6 }}>
+                    {entry.escalateError}
+                </div>
+            )}
+        </div>
     );
 }
 

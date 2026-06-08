@@ -25,11 +25,11 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, FileText, Image as ImageIcon, Loader2, Upload, X, Sparkles, FileCode, Monitor } from 'lucide-react';
+import { Camera, FileText, Image as ImageIcon, Loader2, Upload, X, Sparkles, FileCode, Monitor, Layers } from 'lucide-react';
 import { compressBonImage, blobToDataUrl } from '@/lib/compressBonImage';
 import { extractPdfText } from '@/lib/pdfTextExtract';
 
-export type SourceType = 'photo' | 'pdf' | 'screenshot' | 'clipboard' | 'ubl_xml' | 'camera';
+export type SourceType = 'photo' | 'pdf' | 'screenshot' | 'clipboard' | 'ubl_xml' | 'camera' | 'photo_multi';
 
 export interface ExtractResult {
     ok: boolean;
@@ -64,6 +64,28 @@ export interface ExtractResult {
        voor de leverancier-stap voordat 'ie bevestigt naar archief. */
     leverancier_state?: 'auto_matched' | 'needs_approval' | 'new_suggested' | 'no_leverancier';
     leverancier_candidates?: Array<{ id: number; naam: string; score: number }>;
+    /* Bon-scanner v2: reconciliation-vlag + pass-history voor transparency. */
+    reconciliation?: {
+        status: 'ok' | 'minor_drift' | 'mismatch' | 'no_total';
+        mismatch_eur: number;
+        sum_items_eur: number;
+        claimed_total_eur: number | null;
+        explanation: string;
+        negative_items_count: number;
+    };
+    ai_passes?: Array<{
+        model: string;
+        engine: string;
+        confidence: number;
+        items_count: number;
+        reconciliation_status: string;
+        mismatch_eur: number;
+        cost_eur_cents: number;
+        duration_ms: number;
+        error: string | null;
+    }>;
+    /** Of UI nog een Opus-pass mag triggeren (false = al gedaan). */
+    can_escalate?: boolean;
 }
 
 interface DuplicateError {
@@ -116,6 +138,8 @@ export default function MultiFormatDropZone(props: DropZoneProps) {
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const [announce, setAnnounce] = useState('');
+    const [pendingBundle, setPendingBundle] = useState<File[] | null>(null);
+    const [bundleProcessing, setBundleProcessing] = useState(false);
     const dragCount = useRef(0);
     const fileInput = useRef<HTMLInputElement>(null);
     const cameraInput = useRef<HTMLInputElement>(null);
@@ -129,15 +153,8 @@ export default function MultiFormatDropZone(props: DropZoneProps) {
         setTimeout(() => setAnnounce(''), 4000);
     }, []);
 
-    const enqueue = useCallback(
+    const addToQueue = useCallback(
         (files: File[]) => {
-            if (files.length === 0) return;
-            if (files.length > maxBatch) {
-                onError?.(
-                    `Maximaal ${maxBatch} bestanden tegelijk. ${files.length - maxBatch} overgeslagen.`,
-                );
-                files = files.slice(0, maxBatch);
-            }
             const items: QueueItem[] = files.map(f => ({
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 file: f,
@@ -149,7 +166,88 @@ export default function MultiFormatDropZone(props: DropZoneProps) {
                 `${files.length} bestand${files.length === 1 ? '' : 'en'} toegevoegd aan wachtrij.`,
             );
         },
-        [maxBatch, onError, announceFmt],
+        [announceFmt],
+    );
+
+    const enqueue = useCallback(
+        (files: File[]) => {
+            if (files.length === 0) return;
+            if (files.length > maxBatch) {
+                onError?.(
+                    `Maximaal ${maxBatch} bestanden tegelijk. ${files.length - maxBatch} overgeslagen.`,
+                );
+                files = files.slice(0, maxBatch);
+            }
+
+            /* Multi-foto bundeling: bij 2-8 image-files in één drop tonen we
+               een dialog "1 bon of N bonnen?". User kiest. Bij PDF/XML naast
+               images → skip de dialog (mix kan nooit één bon zijn). */
+            const images = files.filter(f => f.type.startsWith('image/'));
+            const nonImages = files.filter(f => !f.type.startsWith('image/'));
+            const isPureImageBatch = images.length === files.length;
+
+            if (isPureImageBatch && images.length >= 2 && images.length <= 8) {
+                setPendingBundle(images);
+                return;
+            }
+
+            /* Wel images + iets anders → non-images normaal, images afzonderlijk. */
+            if (nonImages.length > 0) addToQueue(nonImages);
+            if (images.length > 0) addToQueue(images);
+        },
+        [maxBatch, onError, addToQueue],
+    );
+
+    /* ── Multi-foto bundeling: process N foto's als één bon ─────────── */
+
+    const processBundle = useCallback(
+        async (files: File[]) => {
+            setBundleProcessing(true);
+            announceFmt(`Bundel van ${files.length} foto's wordt voorbereid…`);
+            try {
+                /* Compress + naar data-URL per foto. Serial om UI-thread niet
+                   te bevriezen op grote batches (3-8 foto's = 3-8 HEIC-decodes). */
+                const dataUrls: string[] = [];
+                for (const f of files) {
+                    const blob = await compressBonImage(f);
+                    dataUrls.push(await blobToDataUrl(blob));
+                }
+                announceFmt(`AI leest ${files.length} foto's als één bon uit…`);
+
+                const res = await fetch('/api/bonnen/extract', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source_type: 'photo_multi',
+                        file_data_urls: dataUrls,
+                        filename: `bundle-${files.length}-fotos`,
+                    }),
+                });
+
+                if (res.status === 409) {
+                    const dup = (await res.json()) as DuplicateError;
+                    onDuplicate?.(dup, files[0]);
+                    announceFmt('Bundel staat al in archief.');
+                    return;
+                }
+                if (!res.ok) {
+                    const errJson = await res.json().catch(() => ({}));
+                    onError?.(errJson.message || errJson.error || `Status ${res.status}`);
+                    return;
+                }
+                const result = (await res.json()) as ExtractResult;
+                announceFmt('Bundel uitgelezen — preview opent.');
+                /* originalFile = de eerste foto, voor Storage-upload bij commit
+                   (de bundel wordt als 1 bon opgeslagen, eerste foto is referentie). */
+                onExtracted(result, files[0]);
+            } catch (e) {
+                onError?.(e instanceof Error ? e.message : 'Bundel-extractie mislukt');
+            } finally {
+                setBundleProcessing(false);
+                setPendingBundle(null);
+            }
+        },
+        [announceFmt, onExtracted, onDuplicate, onError],
     );
 
     /* ── Drag handlers (op window niveau zodat hele viewport reageert) ─ */
@@ -571,6 +669,204 @@ export default function MultiFormatDropZone(props: DropZoneProps) {
                 }}
             >
                 {announce}
+            </div>
+
+            {/* Multi-foto bundeling dialog */}
+            {pendingBundle && (
+                <BundleChoiceDialog
+                    files={pendingBundle}
+                    processing={bundleProcessing}
+                    onBundle={() => processBundle(pendingBundle)}
+                    onSeparate={() => {
+                        const f = pendingBundle;
+                        setPendingBundle(null);
+                        addToQueue(f);
+                    }}
+                    onCancel={() => setPendingBundle(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+/* ── BundleChoiceDialog ───────────────────────────────────────────────
+   Komt op bij ≥2 image-files. Sam kiest: één bon (lange kassabon) of N
+   aparte bonnen. Voorkomt dat een opgeknipte Sligro-bon als 3 records
+   in het archief belandt. */
+function BundleChoiceDialog(props: {
+    files: File[];
+    processing: boolean;
+    onBundle: () => void;
+    onSeparate: () => void;
+    onCancel: () => void;
+}) {
+    const { files, processing, onBundle, onSeparate, onCancel } = props;
+    const previews = files.slice(0, 4).map(f => ({ name: f.name, url: URL.createObjectURL(f) }));
+    useEffect(() => {
+        return () => previews.forEach(p => URL.revokeObjectURL(p.url));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bundle-dialog-title"
+            style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 10000,
+                background: 'rgba(0,0,0,.6)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+            }}
+            onClick={e => { if (e.target === e.currentTarget && !processing) onCancel(); }}
+        >
+            <div
+                style={{
+                    background: 'var(--card, #1c1c20)',
+                    borderRadius: 16,
+                    border: '1px solid var(--border)',
+                    padding: 24,
+                    maxWidth: 520,
+                    width: '100%',
+                    boxShadow: '0 24px 60px rgba(0,0,0,.5)',
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div
+                        style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            background: 'rgba(255,191,0,.12)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                        }}
+                    >
+                        <Layers size={20} color="var(--brand)" />
+                    </div>
+                    <h3
+                        id="bundle-dialog-title"
+                        style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}
+                    >
+                        {files.length} foto's tegelijk
+                    </h3>
+                </div>
+
+                <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
+                    Hoort dit bij <strong style={{ color: 'var(--text)' }}>één lange bon</strong> (kassabon in stukken
+                    gefotografeerd) of zijn het{' '}
+                    <strong style={{ color: 'var(--text)' }}>{files.length} aparte bonnen</strong>?
+                </p>
+
+                {/* Thumbnails */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+                    {previews.map((p, i) => (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                            key={i}
+                            src={p.url}
+                            alt=""
+                            style={{
+                                width: 60,
+                                height: 60,
+                                objectFit: 'cover',
+                                borderRadius: 8,
+                                border: '1px solid var(--border)',
+                            }}
+                        />
+                    ))}
+                    {files.length > 4 && (
+                        <div
+                            style={{
+                                width: 60,
+                                height: 60,
+                                borderRadius: 8,
+                                border: '1px solid var(--border)',
+                                background: 'rgba(130,130,130,.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 12,
+                                color: 'var(--muted)',
+                            }}
+                        >
+                            +{files.length - 4}
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                        type="button"
+                        onClick={onBundle}
+                        disabled={processing}
+                        className="btn btn-brand"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            minHeight: 44,
+                            opacity: processing ? 0.6 : 1,
+                            cursor: processing ? 'wait' : 'pointer',
+                        }}
+                    >
+                        {processing ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" /> Bundel wordt uitgelezen…
+                            </>
+                        ) : (
+                            <>
+                                <Layers size={16} /> Eén bon · {files.length} foto's combineren
+                            </>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onSeparate}
+                        disabled={processing}
+                        className="btn btn-ghost"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            minHeight: 44,
+                        }}
+                    >
+                        {files.length} aparte bonnen
+                    </button>
+                    {!processing && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            style={{
+                                fontSize: 12,
+                                color: 'var(--muted)',
+                                background: 'transparent',
+                                padding: 8,
+                                textDecoration: 'underline',
+                                textDecorationStyle: 'dotted',
+                            }}
+                        >
+                            Annuleren
+                        </button>
+                    )}
+                </div>
+
+                {!processing && (
+                    <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 16, lineHeight: 1.5 }}>
+                        Tip: bij combineren gebruikt de AI{' '}
+                        <strong style={{ color: 'var(--text)' }}>Sonnet 4.6</strong> (~€0.04 per bundel).
+                    </p>
+                )}
             </div>
         </div>
     );

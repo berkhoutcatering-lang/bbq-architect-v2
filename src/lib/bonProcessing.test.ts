@@ -201,6 +201,22 @@ describe('parseBonBtw', () => {
         const b = parseBonBtw(items);
         expect(b.bruto_bedrag).toBeCloseTo(4.50, 2);
     });
+
+    it('negatieve items (korting-regel) → netto klopt na aftrek', () => {
+        /* Sligro-scenario: brisket €109 (9%) + korting €−21.80 (21%).
+           Bruto = €87.20. Netto = €100 − €10 = €90. */
+        const items: BonItemRow[] = [
+            { naam: 'Brisket', aantal: 1, unit: 'kg', prijs: 109, btw_pct: 9, totaal: 109 },
+            { naam: 'Loyaliteits-korting', aantal: 1, unit: 'stuks', prijs: -12.10, btw_pct: 21, totaal: -12.10 },
+        ];
+        const b = parseBonBtw(items);
+        expect(b.bruto_bedrag).toBeCloseTo(96.90, 2);
+        /* 109/1.09 = 100, -12.10/1.21 = -10 → netto 90 */
+        expect(b.netto_bedrag).toBeCloseTo(90, 1);
+        /* btw_laag = 109 - 100 = 9, btw_hoog = -12.10 - (-10) = -2.10 */
+        expect(b.btw_laag_bedrag).toBeCloseTo(9, 1);
+        expect(b.btw_hoog_bedrag).toBeCloseTo(-2.10, 1);
+    });
 });
 
 describe('summarizeBon', () => {

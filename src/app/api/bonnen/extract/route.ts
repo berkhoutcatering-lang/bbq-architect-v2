@@ -1,81 +1,64 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * POST /api/bonnen/extract — Bucket E P0-2
+ * POST /api/bonnen/extract — Bon-scanner v2
  * ────────────────────────────────────────
- * UNIFIED extract endpoint die de 3 oude flows vervangt:
- *   - /api/chat (image-uploads vanaf /inkoop)
- *   - /api/boekhouder/bon-extract (boekhouder-flow)
- *   - /api/bonnen/quick-upload (ScanFab field-mode)
+ * UNIFIED extract endpoint. Eén route, zes source_types:
+ *   photo        — foto van bon (single image)
+ *   pdf          — multi-page PDF (text-first → vision fallback)
+ *   screenshot   — desktop screenshot
+ *   clipboard    — Cmd+V paste (image)
+ *   camera       — mobile camera capture
+ *   ubl_xml      — UBL/Peppol e-factuur (XML, deterministisch, gratis)
+ *   photo_multi  — N foto's van ÉÉN bon (lange kassabon)
  *
- * Eén route, vijf source_types:
- *   photo        — foto van bon (single image)        → Haiku vision
- *   pdf          — multi-page PDF                       → text-first / Files API
- *   screenshot   — desktop screenshot                   → Haiku vision
- *   clipboard    — Cmd+V paste (image)                  → Haiku vision
- *   ubl_xml      — UBL/Peppol e-factuur (XML)           → deterministisch parser
+ * Bon-scanner v2 changes:
+ *   - Auto-escalatie ladder Haiku → Sonnet → Opus bij lage confidence / mismatch
+ *   - Reconciliation-laag: Σ items vs totaal_bedrag, vlag mismatches
+ *   - Supplier-hints (Sligro/Hanos/Makro/...) in prompt voor pass-2+
+ *   - Multi-image support voor lange kassabonnen (1 dedup-hash voor de bundel)
+ *   - Per-pass cost-attribution + ai_passes metadata in response
  *
  * Hard rules:
- *   1. BTW NOOIT AI-derived — validateBtwPct snapt naar 0/9/21.
+ *   1. BTW NOOIT AI-derived — parseBonBtw + validateBtwPct server-side
  *   2. SHA-256 dedup VÓÓR AI-call. Hit → 409 met existing bon_id.
  *   3. UBL = gratis (geen ai_usage row).
- *   4. cap-check via checkAiCap(orgId, 0.05 PDF | 0.03 image).
- *   5. logAiUsageServer per call (ook bij Haiku-text-only).
- *
- * Body: {
- *   source_type: 'photo' | 'pdf' | 'screenshot' | 'clipboard' | 'ubl_xml',
- *   file_data_url: string,            // data:<mime>;base64,<payload>
- *   filename?: string,
- *   datum_hint?: string,              // YYYY-MM-DD
- *   pdf_text?: string,                // optioneel: client extracted PDF-text
- * }
- *
- * Response: {
- *   bon_preview: {...},
- *   items_with_suggestions: [...],
- *   source_type: '...',
- *   confidence_per_field: {...},
- *   processing_status: 'extracted'|'committed'|'duplicate',
- *   duplicate_bon_id?: string,
- * }
+ *   4. cap-check via checkAiCap(orgId, ...) blokkeert Opus pass-3 bij hard-cap.
+ *   5. logAiUsageServer per pass (transparante kosten).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { logAiUsageServer } from '@/lib/aiUsageServer';
-import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkAiCap } from '@/lib/aiCostCap';
 import { matchInventory } from '@/lib/inventoryDeduction';
-import { matchLeverancier, findLeverancierCandidates, normalizeBonItem, parseBonBtw } from '@/lib/bonProcessing';
+import { matchLeverancier, findLeverancierCandidates } from '@/lib/bonProcessing';
 import { isUsableText } from '@/lib/pdfTextExtract';
 import { parseUbl, isLikelyUbl } from '@/lib/ublIngress';
+import {
+    runBonExtractionLadder,
+    summarizeFinalPass,
+    type ExtractionMode,
+    type ModelKey,
+    type PassResult,
+} from '@/lib/bonExtractionPasses';
 import type { BonItemRow } from '@/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // multi-page PDF kan iets langer duren dan single image
+export const maxDuration = 90; // Multi-pass ladder kan langer duren dan single-pass
 
-type SourceType = 'photo' | 'pdf' | 'screenshot' | 'clipboard' | 'ubl_xml' | 'camera' | 'email';
+type SourceType = 'photo' | 'pdf' | 'screenshot' | 'clipboard' | 'ubl_xml' | 'camera' | 'email' | 'photo_multi';
 
 interface ExtractRequest {
     source_type: SourceType;
-    file_data_url: string;
+    file_data_url?: string;
+    file_data_urls?: string[];        // photo_multi pad
     filename?: string;
     datum_hint?: string;
     pdf_text?: string;
-    /** Optioneel: client-computed SHA-256 (defense-in-depth — server hashes ook). */
     client_hash?: string;
-}
-
-interface BonPreview {
-    leverancier_naam: string | null;
-    leverancier_id: number | null;
-    datum: string | null;
-    totaal_bedrag: number;
-    netto_bedrag: number;
-    btw_laag_bedrag: number;
-    btw_hoog_bedrag: number;
-    invoice_id?: string | null;
+    /** UI kan handmatige escalatie forceren ("Probeer met krachtigere AI"). */
+    force_model?: ModelKey;
 }
 
 interface ItemWithSuggestion extends BonItemRow {
@@ -84,46 +67,7 @@ interface ItemWithSuggestion extends BonItemRow {
     match_confidence: 'high' | 'medium' | 'low' | 'none';
 }
 
-/* System prompts — strict JSON-output, BTW per regel. */
-const VISION_PROMPT = `Je bent een NL-boekhouding-extractie-assistent voor een BBQ-catering.
-Lees de bijgevoegde foto/screenshot/PDF van een aankoop-bon of factuur en extract de
-gegevens in strict JSON (geen markdown, geen prose).
-
-OUTPUT FORMAT:
-{
-  "leverancier": "Sligro" | null,
-  "datum": "YYYY-MM-DD" | null,
-  "totaal_bedrag": 234.50,
-  "items": [
-    {
-      "naam": "Pulled pork rauw",
-      "aantal": 5.0,
-      "eenheid": "kg" | "stuks" | "L" | "ml" | "g",
-      "prijs_per_eenheid": 14.95,
-      "totaal": 74.75,
-      "btw_pct": 9 | 21 | 0
-    }
-  ],
-  "confidence": 0.95
-}
-
-REGELS:
-- Geen velden verzinnen. Niet leesbaar = null.
-- BTW per regel — kijk naar BTW-kolom op de bon, NIET zelf berekenen.
-- Items: alleen tastbare producten/diensten, geen subtotaal- of korting-regels.
-- Datum: YYYY-MM-DD; als alleen "16-04-2026" zichtbaar → "2026-04-16".
-- Bij onleesbaar of geen bon: { "error": "korte reden" }.
-
-GEEN andere tekst, geen markdown.`;
-
-const PDF_TEXT_PROMPT = `Je krijgt de ge-OCR'de tekst van een aankoop-bon/factuur (PDF).
-Extract dezelfde JSON-structuur als bij vision-input. De tekst kan kolom-volgorde
-verloren hebben — gebruik prijs-patronen ("€ 14,95") en eenheden ("kg", "st") om
-items te reconstrueren.
-
-${VISION_PROMPT}`;
-
-/* ── Helpers ────────────────────────────────────────────────────── */
+/* ── Helpers ────────────────────────────────────────────────────────── */
 
 function parseDataUrl(dataUrl: string): { mediaType: string; base64: string } | null {
     const m = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl);
@@ -135,26 +79,7 @@ function sha256(buf: Buffer): string {
     return createHash('sha256').update(buf).digest('hex');
 }
 
-function parseAiJson(raw: string): any {
-    /* Models kunnen ondanks "geen markdown" toch ```json wrappers terugsturen. */
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
-    try {
-        return JSON.parse(cleaned);
-    } catch {
-        /* Probeer het eerste {...}-blok te vissen (soms staat er een prefix). */
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) {
-            try {
-                return JSON.parse(match[0]);
-            } catch {
-                /* fall through */
-            }
-        }
-        return null;
-    }
-}
-
-/* ── Route handler ──────────────────────────────────────────────── */
+/* ── Route handler ──────────────────────────────────────────────────── */
 
 export async function POST(req: NextRequest) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -186,9 +111,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Ongeldige JSON body' }, { status: 400 });
     }
 
-    if (!body.source_type || !body.file_data_url) {
+    if (!body.source_type) {
+        return NextResponse.json({ error: 'source_type is verplicht' }, { status: 400 });
+    }
+
+    /* ────────────────────────────────────────────────────────────────
+       PATH 1: photo_multi — N foto's van één bon.
+       ──────────────────────────────────────────────────────────────── */
+    if (body.source_type === 'photo_multi') {
+        return handlePhotoMulti({ supabase, orgId, userId: user.id, body, apiKey });
+    }
+
+    /* Vanaf hier: single-file paden. file_data_url is verplicht. */
+    if (!body.file_data_url) {
         return NextResponse.json(
-            { error: 'source_type + file_data_url zijn verplicht' },
+            { error: 'file_data_url is verplicht' },
             { status: 400 },
         );
     }
@@ -208,7 +145,6 @@ export async function POST(req: NextRequest) {
     const rawBytes = Buffer.from(parsed.base64, 'base64');
     const imageHash = sha256(rawBytes);
 
-    /* Server-side dup-check, ook als client al hashte (defense-in-depth). */
     const { data: dup } = await supabase
         .from('bonnen')
         .select('id, processing_status, datum, winkel, totaal_bedrag')
@@ -245,7 +181,7 @@ export async function POST(req: NextRequest) {
     }));
 
     /* ────────────────────────────────────────────────────────────────
-       Path 1: UBL XML — pure parse, no AI, no cost.
+       PATH 2: UBL XML — pure parse, no AI, no cost.
        ──────────────────────────────────────────────────────────────── */
     if (
         body.source_type === 'ubl_xml' ||
@@ -282,12 +218,7 @@ export async function POST(req: NextRequest) {
                 invoice_id: ubl.invoice_id,
             },
             items_with_suggestions: ubl.items,
-            confidence_per_field: {
-                leverancier: 1.0,
-                datum: ubl.datum ? 1.0 : 0,
-                totaal_bedrag: 1.0,
-                btw: 1.0,
-            },
+            confidence_per_field: { leverancier: 1, datum: ubl.datum ? 1 : 0, totaal_bedrag: 1, btw: 1 },
             processing_status: ubl.suggested_status,
             image_hash: imageHash,
             ocr_engine: 'ubl-parse',
@@ -295,10 +226,13 @@ export async function POST(req: NextRequest) {
             pages: null,
             ai_cost_eur_cents: 0,
             ai_classify_status: 'auto_accepted',
+            confidence: 1,
+            reconciliation: { status: 'ok', explanation: 'UBL-XML — deterministisch geparsed.' },
+            ai_passes: [],
         });
     }
 
-    /* ── AI paths: cap-check vóór elke Anthropic-call ──────────────── */
+    /* ── AI paths: cap-check ─────────────────────────────────────── */
     const isPdf = body.source_type === 'pdf' || parsed.mediaType === 'application/pdf';
     const estimatedCost = isPdf ? 0.05 : 0.03;
     const cap = await checkAiCap(orgId, estimatedCost);
@@ -317,274 +251,201 @@ export async function POST(req: NextRequest) {
 
     const client = new Anthropic({ apiKey });
 
-    /* ────────────────────────────────────────────────────────────────
-       Path 2: PDF — text-first (Haiku), fallback to vision (Sonnet).
-       ──────────────────────────────────────────────────────────────── */
+    /* ── Bouw extraction mode ──────────────────────────────────────── */
+    let mode: ExtractionMode;
+    let pdfBase64ForFallback: string | undefined;
+
     if (isPdf) {
-        const usableText = body.pdf_text && isUsableText(body.pdf_text);
-
-        if (usableText) {
-            /* Goedkoop pad: Haiku op de geëxtraheerde tekst (~€0.001/bon). */
-            const r = await client.messages.create({
-                model: 'claude-haiku-4-5',
-                max_tokens: 1800,
-                system: [
-                    {
-                        type: 'text',
-                        text: PDF_TEXT_PROMPT,
-                        cache_control: { type: 'ephemeral' },
-                    },
-                ],
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'text',
-                                text:
-                                    'PDF-text:\n<document>\n' +
-                                    body.pdf_text!.slice(0, 60_000) +
-                                    '\n</document>',
-                            },
-                        ],
-                    },
-                ],
-            });
-
-            const costCents = estimateAiCostCents({
-                model: 'claude-haiku-4-5',
-                tokens_input: r.usage.input_tokens || 0,
-                tokens_output: r.usage.output_tokens || 0,
-                tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-                tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-            });
-            void logAiUsageServer({
-                organization_id: orgId,
-                user_id: user.id,
-                action_type: 'other',
-                model: 'claude-haiku-4-5',
-                tokens_input: r.usage.input_tokens || 0,
-                tokens_output: r.usage.output_tokens || 0,
-                tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-                tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-                cost_eur_cents: costCents,
-                metadata: { route: 'bonnen-extract', source_type: 'pdf-text' },
-            });
-
-            const textBlock = r.content.find((c: any) => c.type === 'text') as any;
-            return buildAiResponse({
-                raw: textBlock?.text ?? '',
-                source_type: 'pdf',
-                ocr_engine: 'haiku-text',
-                mime_type: parsed.mediaType,
-                pages: null,
-                image_hash: imageHash,
-                inventory,
-                leveranciers,
-                datum_hint: body.datum_hint,
-                cost_cents: costCents,
-            });
+        if (body.pdf_text && isUsableText(body.pdf_text)) {
+            /* Pass-1: Haiku op tekst (€0.001). Bij escalatie → Sonnet/Opus document met de PDF base64. */
+            mode = { kind: 'pdf_text', text: body.pdf_text };
+            pdfBase64ForFallback = parsed.base64;
+        } else {
+            /* Image-PDF / scan: meteen Sonnet document. */
+            mode = { kind: 'pdf_document', base64: parsed.base64 };
         }
-
-        /* Image-PDF: Sonnet 4.6 met native document-block (multi-page +
-           citations support). Geen Files API-upload nodig voor single-shot;
-           native base64-document werkt en kost geen extra round-trip. */
-        const r = await client.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 2500,
-            system: [
+    } else {
+        const allowedImageMimes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+        if (!allowedImageMimes.has(parsed.mediaType)) {
+            return NextResponse.json(
                 {
-                    type: 'text',
-                    text: VISION_PROMPT,
-                    cache_control: { type: 'ephemeral' },
+                    error: 'unsupported_mime',
+                    message: `Format ${parsed.mediaType} niet ondersteund. Probeer JPEG, PNG, PDF of UBL-XML.`,
                 },
-            ],
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'document',
-                            source: {
-                                type: 'base64',
-                                media_type: 'application/pdf' as any,
-                                data: parsed.base64,
-                            },
-                            /* citations: laat het model regels uit het document letterlijk
-                               citeren (voor confidence-display in UI). */
-                            citations: { enabled: true },
-                        } as any,
-                        { type: 'text', text: 'Extract deze bon.' },
-                    ],
-                },
-            ],
-        });
-
-        const costCents = estimateAiCostCents({
-            model: 'claude-sonnet-4-6',
-            tokens_input: r.usage.input_tokens || 0,
-            tokens_output: r.usage.output_tokens || 0,
-            tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-            tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-        });
-        void logAiUsageServer({
-            organization_id: orgId,
-            user_id: user.id,
-            action_type: 'other',
-            model: 'claude-sonnet-4-6',
-            tokens_input: r.usage.input_tokens || 0,
-            tokens_output: r.usage.output_tokens || 0,
-            tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-            tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-            cost_eur_cents: costCents,
-            metadata: { route: 'bonnen-extract', source_type: 'pdf-document' },
-        });
-
-        const textBlock = r.content.find((c: any) => c.type === 'text') as any;
-        return buildAiResponse({
-            raw: textBlock?.text ?? '',
-            source_type: 'pdf',
-            ocr_engine: 'sonnet-files',
-            mime_type: parsed.mediaType,
-            pages: null,
-            image_hash: imageHash,
-            inventory,
-            leveranciers,
-            datum_hint: body.datum_hint,
-            cost_cents: costCents,
-        });
+                { status: 415 },
+            );
+        }
+        mode = { kind: 'image', mediaType: parsed.mediaType, base64: parsed.base64 };
     }
 
-    /* ────────────────────────────────────────────────────────────────
-       Path 3: Image (photo/screenshot/clipboard/camera) — Haiku vision.
-       ──────────────────────────────────────────────────────────────── */
-    const allowedImageMimes = new Set([
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/webp',
-        'image/gif',
-    ]);
-    if (!allowedImageMimes.has(parsed.mediaType)) {
-        return NextResponse.json(
-            {
-                error: 'unsupported_mime',
-                message: `Format ${parsed.mediaType} niet ondersteund. Probeer JPEG, PNG, PDF of UBL-XML.`,
-            },
-            { status: 415 },
-        );
-    }
-
-    const r = await client.messages.create({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1800,
-        system: [
-            {
-                type: 'text',
-                text: VISION_PROMPT,
-                cache_control: { type: 'ephemeral' },
-            },
-        ],
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'image',
-                        source: {
-                            type: 'base64',
-                            media_type: parsed.mediaType as any,
-                            data: parsed.base64,
-                        },
-                    },
-                    { type: 'text', text: 'Extract deze bon.' },
-                ],
-            },
-        ],
-    });
-
-    const costCents = estimateAiCostCents({
-        model: 'claude-haiku-4-5',
-        tokens_input: r.usage.input_tokens || 0,
-        tokens_output: r.usage.output_tokens || 0,
-        tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-        tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-    });
-    void logAiUsageServer({
+    /* ── Run ladder ────────────────────────────────────────────────── */
+    const ladder = await runBonExtractionLadder({
+        client,
+        mode,
+        cap_status: cap.status as 'ok' | 'soft_warn' | 'hard_block',
         organization_id: orgId,
         user_id: user.id,
-        action_type: 'other',
-        model: 'claude-haiku-4-5',
-        tokens_input: r.usage.input_tokens || 0,
-        tokens_output: r.usage.output_tokens || 0,
-        tokens_cache_read: r.usage.cache_read_input_tokens || 0,
-        tokens_cache_creation: r.usage.cache_creation_input_tokens || 0,
-        cost_eur_cents: costCents,
-        metadata: { route: 'bonnen-extract', source_type: body.source_type },
+        force_model: body.force_model,
+        pdf_base64_for_vision_fallback: pdfBase64ForFallback,
     });
 
-    const textBlock = r.content.find((c: any) => c.type === 'text') as any;
-    return buildAiResponse({
-        raw: textBlock?.text ?? '',
+    return buildLadderResponse({
+        ladder_final: ladder.final,
+        ladder_passes: ladder.passes,
+        ladder_total_cost_cents: ladder.total_cost_eur_cents,
         source_type: body.source_type,
-        ocr_engine: 'haiku-vision',
         mime_type: parsed.mediaType,
-        pages: null,
         image_hash: imageHash,
         inventory,
         leveranciers,
         datum_hint: body.datum_hint,
-        cost_cents: costCents,
+        pages: null,
     });
 }
 
-/* ── Shared response-builder voor alle AI-paths ──────────────────── */
+/* ── photo_multi pad ──────────────────────────────────────────────────
+   N foto's van één lange kassabon. Geen Haiku — direct Sonnet 4.6 multi-image.
+   Dedup-hash = SHA-256 van concat(image-bytes) zodat identieke bundel-uploads
+   dezelfde dedup-key krijgen. */
+async function handlePhotoMulti(args: {
+    supabase: Awaited<ReturnType<typeof createServerSupabase>>;
+    orgId: string;
+    userId: string;
+    body: ExtractRequest;
+    apiKey: string;
+}) {
+    const { supabase, orgId, userId, body, apiKey } = args;
+    if (!body.file_data_urls || body.file_data_urls.length < 2) {
+        return NextResponse.json(
+            { error: 'photo_multi vereist file_data_urls met minimaal 2 foto\'s' },
+            { status: 400 },
+        );
+    }
+    if (body.file_data_urls.length > 8) {
+        return NextResponse.json(
+            { error: 'photo_multi maximaal 8 foto\'s tegelijk (jouw bundel: ' + body.file_data_urls.length + ')' },
+            { status: 400 },
+        );
+    }
 
+    const parsedImages: Array<{ mediaType: string; base64: string; bytes: Buffer }> = [];
+    for (const url of body.file_data_urls) {
+        const p = parseDataUrl(url);
+        if (!p) {
+            return NextResponse.json({ error: 'foto data-URL ongeldig (verwacht data:image/...;base64,...)' }, { status: 400 });
+        }
+        if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(p.mediaType)) {
+            return NextResponse.json({ error: `foto-format ${p.mediaType} niet ondersteund in photo_multi` }, { status: 415 });
+        }
+        parsedImages.push({ mediaType: p.mediaType, base64: p.base64, bytes: Buffer.from(p.base64, 'base64') });
+    }
+
+    /* Dedup-hash op concat-bytes. */
+    const combinedHash = createHash('sha256');
+    for (const img of parsedImages) combinedHash.update(img.bytes);
+    const imageHash = combinedHash.digest('hex');
+
+    const { data: dup } = await supabase
+        .from('bonnen')
+        .select('id, processing_status, datum, winkel, totaal_bedrag')
+        .eq('organization_id', orgId)
+        .eq('image_hash', imageHash)
+        .limit(1)
+        .maybeSingle();
+
+    if (dup) {
+        return NextResponse.json({
+            error: 'duplicate',
+            message: 'Deze bonnen-bundel staat al in je archief.',
+            duplicate_bon_id: dup.id,
+            duplicate_winkel: dup.winkel,
+            duplicate_datum: dup.datum,
+            duplicate_totaal: dup.totaal_bedrag,
+            processing_status: 'duplicate',
+        }, { status: 409 });
+    }
+
+    /* Cap-check — multi-image is duurder (~€0.04-0.10 per bundel). */
+    const estimatedCost = 0.08;
+    const cap = await checkAiCap(orgId, estimatedCost);
+    if (cap.status === 'hard_block') {
+        return NextResponse.json({
+            error: 'ai_cap_exceeded',
+            message: cap.message,
+            used_eur: cap.used_eur,
+            hard_eur: cap.hard_eur,
+            tier: cap.tier,
+        }, { status: 429 });
+    }
+
+    const [invRes, levRes] = await Promise.all([
+        supabase.from('inventory').select('id, naam').eq('organization_id', orgId),
+        supabase.from('leveranciers').select('id, naam, type').eq('organization_id', orgId),
+    ]);
+    const inventory = (invRes.data ?? []).map((i: any) => ({ id: i.id, naam: i.naam }));
+    const leveranciers = (levRes.data ?? []).map((l: any) => ({ id: l.id, naam: l.naam, type: l.type }));
+
+    const client = new Anthropic({ apiKey });
+    const mode: ExtractionMode = {
+        kind: 'multi_image',
+        images: parsedImages.map(p => ({ mediaType: p.mediaType, base64: p.base64 })),
+    };
+
+    const ladder = await runBonExtractionLadder({
+        client,
+        mode,
+        cap_status: cap.status as 'ok' | 'soft_warn' | 'hard_block',
+        organization_id: orgId,
+        user_id: userId,
+        force_model: body.force_model,
+    });
+
+    return buildLadderResponse({
+        ladder_final: ladder.final,
+        ladder_passes: ladder.passes,
+        ladder_total_cost_cents: ladder.total_cost_eur_cents,
+        source_type: 'photo_multi',
+        mime_type: parsedImages[0].mediaType,
+        image_hash: imageHash,
+        inventory,
+        leveranciers,
+        datum_hint: body.datum_hint,
+        pages: parsedImages.length,
+    });
+}
+
+/* ── Response-builder ─────────────────────────────────────────────────
+   Gemeenschappelijk voor alle AI-paden. Bouwt items_with_suggestions,
+   leverancier-state, confidence-per-field en de ai_passes audit-trail. */
 interface BuildArgs {
-    raw: string;
+    ladder_final: PassResult;
+    ladder_passes: PassResult[];
+    ladder_total_cost_cents: number;
     source_type: SourceType;
-    ocr_engine: 'haiku-vision' | 'haiku-text' | 'sonnet-files';
     mime_type: string;
-    pages: number | null;
     image_hash: string;
     inventory: Array<{ id: number; naam: string }>;
     leveranciers: Array<{ id: number; naam: string; type?: string | null }>;
     datum_hint?: string;
-    cost_cents: number;
+    pages: number | null;
 }
 
-function buildAiResponse(args: BuildArgs): NextResponse {
-    const parsed = parseAiJson(args.raw);
-    if (!parsed || parsed.error) {
-        return NextResponse.json(
-            {
-                error: 'extract_failed',
-                message:
-                    parsed?.error || 'AI kon de bon niet uitlezen. Probeer een scherpere foto.',
-                raw: args.raw.slice(0, 300),
-            },
-            { status: 422 },
-        );
+function buildLadderResponse(args: BuildArgs): NextResponse {
+    const f = args.ladder_final;
+
+    if (f.error && f.items.length === 0) {
+        return NextResponse.json({
+            error: 'extract_failed',
+            message: f.error.startsWith('extract_failed_json')
+                ? 'AI kon de bon niet uitlezen. Probeer een scherpere foto.'
+                : f.error,
+            raw: f.raw_text.slice(0, 300),
+            ai_passes: args.ladder_passes.map(summarizePass),
+        }, { status: 422 });
     }
 
-    /* Normaliseer items via bonProcessing.normalizeBonItem (BTW gevalideerd). */
-    const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : [];
-    const normalized: BonItemRow[] = rawItems
-        .map(it => {
-            /* AI gebruikt prijs_per_eenheid; normalizeBonItem accepteert dat. */
-            return normalizeBonItem({
-                naam: it.naam,
-                aantal: it.aantal,
-                eenheid: it.eenheid,
-                prijs: it.prijs_per_eenheid ?? it.prijs,
-                totaal: it.totaal,
-                btw_pct: it.btw_pct,
-            });
-        })
-        .filter((x): x is BonItemRow => x != null);
-
-    /* Items met inventory-suggestion verrijken. */
-    const items_with_suggestions: ItemWithSuggestion[] = normalized.map(it => {
+    /* Items met inventory-suggesties verrijken. */
+    const items_with_suggestions: ItemWithSuggestion[] = f.items.map(it => {
         const matchedInv = matchInventory(it.naam, args.inventory);
         let confidence: ItemWithSuggestion['match_confidence'] = 'none';
         if (matchedInv) {
@@ -602,58 +463,36 @@ function buildAiResponse(args: BuildArgs): NextResponse {
         };
     });
 
-    /* Leverancier match via fuzzy lookup op de AI-string.
-       AUTO-MATCH alleen bij hoge score (≥80, "naam begint met query");
-       lagere scores zijn suggesties die Sam expliciet moet bevestigen.
-       Mens-blijft-de-baas regel: AI mag nooit zelf een nieuwe leverancier
-       aanmaken, alleen voorstellen + similar candidates leveren. */
-    const leverancier_naam: string | null = parsed.leverancier
-        ? String(parsed.leverancier).trim()
-        : null;
+    /* Leverancier fuzzy-match. */
+    const leverancier_naam = f.leverancier;
     const candidates = leverancier_naam
         ? findLeverancierCandidates(leverancier_naam, args.leveranciers, 3)
         : [];
-    /* Strikte auto-match drempel: score >= 80. Anders: keuze aan gebruiker. */
-    const autoMatchedLev = candidates.length > 0 && candidates[0].score >= 80
-        ? candidates[0]
-        : null;
-    /* Backwards-compat: oude callers verwachten ook matchLeverancier-resultaat. */
+    const autoMatchedLev = candidates.length > 0 && candidates[0].score >= 80 ? candidates[0] : null;
     const matchedLev = autoMatchedLev ?? (leverancier_naam ? matchLeverancier(leverancier_naam, args.leveranciers) : null);
 
-    /* BTW: niet vertrouwen op AI-totalen — herbereken uit gevalideerde regels. */
-    const btw = parseBonBtw(normalized);
-    const totaal_bedrag =
-        typeof parsed.totaal_bedrag === 'number' && parsed.totaal_bedrag > 0
-            ? parsed.totaal_bedrag
-            : btw.bruto_bedrag;
+    /* BTW + totaal uit final pass. */
+    const totals = summarizeFinalPass(f);
 
-    const datum = args.datum_hint || (parsed.datum && /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.datum)) ? parsed.datum : null);
+    /* Datum: hint > AI > null. */
+    const datum = args.datum_hint || f.datum;
 
-    const aiConfidence =
-        typeof parsed.confidence === 'number' && parsed.confidence >= 0 && parsed.confidence <= 1
-            ? parsed.confidence
-            : 0.7;
-
-    const preview: BonPreview = {
-        leverancier_naam,
-        leverancier_id: matchedLev?.id ?? null,
-        datum,
-        totaal_bedrag: Math.round(totaal_bedrag * 100) / 100,
-        netto_bedrag: btw.netto_bedrag,
-        btw_laag_bedrag: btw.btw_laag_bedrag,
-        btw_hoog_bedrag: btw.btw_hoog_bedrag,
-    };
+    /* OCR-engine alias voor backwards-compat met /archief tab-rendering. */
+    const ocr_engine = mapEngineToLegacy(f.engine);
 
     return NextResponse.json({
         ok: true,
         source_type: args.source_type,
-        bon_preview: preview,
+        bon_preview: {
+            leverancier_naam,
+            leverancier_id: matchedLev?.id ?? null,
+            datum,
+            totaal_bedrag: totals.totaal_bedrag,
+            netto_bedrag: totals.netto_bedrag,
+            btw_laag_bedrag: totals.btw_laag_bedrag,
+            btw_hoog_bedrag: totals.btw_hoog_bedrag,
+        },
         items_with_suggestions,
-        /* Leverancier-state voor de UI:
-           - 'auto_matched'    → AI vond zekere match (score >= 80), Sam ziet groen vinkje
-           - 'needs_approval'  → er zijn similar leveranciers (score 40-79), Sam kiest
-           - 'new_suggested'   → AI las een naam maar geen kandidaten — voorstel: nieuwe maken
-           - 'no_leverancier'  → AI las geen naam, Sam moet handmatig invullen */
         leverancier_state: !leverancier_naam
             ? 'no_leverancier'
             : autoMatchedLev
@@ -663,17 +502,62 @@ function buildAiResponse(args: BuildArgs): NextResponse {
                 : 'new_suggested',
         leverancier_candidates: candidates.map(c => ({ id: c.id, naam: c.naam, score: c.score })),
         confidence_per_field: {
-            leverancier: matchedLev ? aiConfidence : aiConfidence * 0.6,
-            datum: datum ? aiConfidence : 0,
-            totaal_bedrag: aiConfidence,
-            btw: 0.9, // herberekend uit items
+            leverancier: matchedLev ? f.confidence : f.confidence * 0.6,
+            datum: datum ? f.confidence : 0,
+            totaal_bedrag: f.confidence,
+            btw: 0.9,
         },
-        processing_status: aiConfidence < 0.6 ? 'extracted' : 'extracted',
+        processing_status: 'extracted',
         image_hash: args.image_hash,
-        ocr_engine: args.ocr_engine,
+        ocr_engine,
         mime_type: args.mime_type,
         pages: args.pages,
-        confidence: Math.round(aiConfidence * 100) / 100,
-        ai_cost_eur_cents: args.cost_cents,
+        confidence: Math.round(f.confidence * 100) / 100,
+        ai_cost_eur_cents: args.ladder_total_cost_cents,
+        /* v2-fields: */
+        reconciliation: {
+            status: f.reconciliation.status,
+            mismatch_eur: f.reconciliation.mismatch_eur,
+            sum_items_eur: f.reconciliation.sum_items_eur,
+            claimed_total_eur: f.reconciliation.claimed_total_eur,
+            explanation: f.reconciliation.explanation,
+            negative_items_count: f.reconciliation.negative_items_count,
+        },
+        ai_passes: args.ladder_passes.map(summarizePass),
+        /* Of de UI nog 1 escalatie mag aanbieden (Opus retry-knop). */
+        can_escalate: canEscalateFurther(args.ladder_passes),
     });
+}
+
+function summarizePass(p: PassResult) {
+    return {
+        model: p.model,
+        engine: p.engine,
+        confidence: Math.round(p.confidence * 100) / 100,
+        items_count: p.items.length,
+        reconciliation_status: p.reconciliation.status,
+        mismatch_eur: p.reconciliation.mismatch_eur,
+        cost_eur_cents: p.cost_eur_cents,
+        duration_ms: p.duration_ms,
+        error: p.error,
+    };
+}
+
+/** Heeft de ladder al Opus-pass-3 gedraaid? Zo nee, mag UI hem nog forceren. */
+function canEscalateFurther(passes: PassResult[]): boolean {
+    return !passes.some(p => p.model === 'claude-opus-4-7');
+}
+
+/** Map nieuwe engine-namen naar legacy aliases voor /archief UI. */
+function mapEngineToLegacy(engine: PassResult['engine']): string {
+    switch (engine) {
+        case 'haiku-vision': return 'haiku-vision';
+        case 'haiku-text': return 'haiku-text';
+        case 'sonnet-vision': return 'sonnet-vision';
+        case 'sonnet-document': return 'sonnet-files';
+        case 'sonnet-multi': return 'sonnet-multi';
+        case 'opus-vision': return 'opus-vision';
+        case 'opus-document': return 'opus-document';
+        case 'opus-multi': return 'opus-multi';
+    }
 }
