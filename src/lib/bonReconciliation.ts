@@ -37,17 +37,30 @@ const TOLERANCE_DRIFT_EUR = 0.50;
 /**
  * Reconcileer items met door-AI-gerapporteerd totaal.
  *
+ * Twee scenario's:
+ *   - pricesIncludeBtw=true  → som van item.totaal moet ≈ claimedTotal
+ *   - pricesIncludeBtw=false → som van item.totaal IS ex-BTW; we converteren
+ *                              elke regel naar bruto (netto + netto * btw/100)
+ *                              en vergelijken die met claimedTotal.
+ *
  * @param items genormaliseerde bon-items (na normalizeBonItem)
  * @param claimedTotal door AI geëxtraheerde totaal_bedrag (null als AI 'm niet vond)
+ * @param pricesIncludeBtw of item.totaal incl-BTW is (kassabon) of ex-BTW (factuur). Default true.
  * @returns status + uitleg voor UI
  */
 export function reconcileBon(
     items: BonItemRow[],
     claimedTotal: number | null,
+    pricesIncludeBtw = true,
 ): ReconciliationResult {
+    /* Reken per regel het bruto-bedrag uit op basis van pricesIncludeBtw.
+       In de UI tonen we altijd bruto-som (zodat het naast totaal_bedrag valt). */
     const sumItems = items.reduce((acc, it) => {
-        const t = it.totaal ?? it.aantal * it.prijs;
-        return acc + (Number.isFinite(t) ? t : 0);
+        const lineTotal = it.totaal ?? it.aantal * it.prijs;
+        if (!Number.isFinite(lineTotal)) return acc;
+        if (pricesIncludeBtw || !it.btw_pct) return acc + lineTotal;
+        /* ex-BTW interpretatie: factuur (Sligro/Hanos) — bruto = netto * (1+btw/100) */
+        return acc + lineTotal * (1 + it.btw_pct / 100);
     }, 0);
 
     const sumRounded = Math.round(sumItems * 100) / 100;

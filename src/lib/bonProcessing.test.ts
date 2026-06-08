@@ -203,7 +203,7 @@ describe('parseBonBtw', () => {
     });
 
     it('negatieve items (korting-regel) → netto klopt na aftrek', () => {
-        /* Sligro-scenario: brisket €109 (9%) + korting €−21.80 (21%).
+        /* Kassabon-scenario: brisket €109 (9%) + korting €−21.80 (21%).
            Bruto = €87.20. Netto = €100 − €10 = €90. */
         const items: BonItemRow[] = [
             { naam: 'Brisket', aantal: 1, unit: 'kg', prijs: 109, btw_pct: 9, totaal: 109 },
@@ -216,6 +216,20 @@ describe('parseBonBtw', () => {
         /* btw_laag = 109 - 100 = 9, btw_hoog = -12.10 - (-10) = -2.10 */
         expect(b.btw_laag_bedrag).toBeCloseTo(9, 1);
         expect(b.btw_hoog_bedrag).toBeCloseTo(-2.10, 1);
+    });
+
+    it('Sligro-factuur (pricesIncludeBtw=false): regelbedragen ex-BTW', () => {
+        /* Sligro: items €159.46 (laag 9%) + €112.92 (hoog 21%) ex-BTW.
+           BTW laag: €14.35. BTW hoog: €23.71. Totaal bruto: €310.44. */
+        const items: BonItemRow[] = [
+            { naam: 'Schoonmaak', aantal: 1, unit: 'stuks', prijs: 112.92, btw_pct: 21, totaal: 112.92 },
+            { naam: 'Brisket', aantal: 1, unit: 'kg', prijs: 159.46, btw_pct: 9, totaal: 159.46 },
+        ];
+        const b = parseBonBtw(items, /* pricesIncludeBtw */ false);
+        expect(b.netto_bedrag).toBeCloseTo(272.38, 1);
+        expect(b.btw_hoog_bedrag).toBeCloseTo(23.71, 1);
+        expect(b.btw_laag_bedrag).toBeCloseTo(14.35, 1);
+        expect(b.bruto_bedrag).toBeCloseTo(310.44, 1);
     });
 });
 

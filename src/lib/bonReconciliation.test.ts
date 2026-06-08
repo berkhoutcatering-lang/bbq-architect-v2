@@ -78,6 +78,29 @@ describe('reconcileBon', () => {
         const r = reconcileBon(items, 0);
         expect(r.status).toBe('no_total');
     });
+
+    it('Sligro-scenario (ex-BTW regels): Σ €272.38 + BTW €38.06 → totaal €310.44 = ok', () => {
+        /* Sligro factuur: regelbedragen ex-BTW. Twee items, één 9% één 21%.
+           Item1 netto €112.92 → bruto €112.92*1.21 = €136.63
+           Item2 netto €159.46 → bruto €159.46*1.09 = €173.81
+           Totaal bruto ≈ €310.44 */
+        const items = [
+            mkItem('Schoonmaak', 1, 112.92, 21, 112.92),
+            mkItem('Brisket', 1, 159.46, 9, 159.46),
+        ];
+        const r = reconcileBon(items, 310.44, /* pricesIncludeBtw */ false);
+        expect(r.status).toBe('ok');
+    });
+
+    it('Sligro-scenario zonder ex-BTW flag → mismatch (oude flow)', () => {
+        const items = [
+            mkItem('Schoonmaak', 1, 112.92, 21, 112.92),
+            mkItem('Brisket', 1, 159.46, 9, 159.46),
+        ];
+        const r = reconcileBon(items, 310.44);  // default pricesIncludeBtw=true
+        expect(r.status).toBe('mismatch');
+        expect(r.mismatch_eur).toBeGreaterThan(35);
+    });
 });
 
 describe('shouldEscalate', () => {

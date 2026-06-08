@@ -38,6 +38,7 @@ OUTPUT FORMAT:
   "leverancier": "Sligro" | null,
   "datum": "YYYY-MM-DD" | null,
   "totaal_bedrag": 234.50,
+  "prices_include_btw": true | false,
   "items": [
     {
       "naam": "Pulled pork rauw",
@@ -56,7 +57,11 @@ REGELS:
 - BTW per regel — kijk naar BTW-kolom op de bon, NIET zelf berekenen.
 - Items: alleen tastbare producten/diensten, geen subtotaal- of korting-regels.
 - Datum: YYYY-MM-DD; als alleen "16-04-2026" zichtbaar → "2026-04-16".
-- Controleer of som van items.totaal binnen €0.50 van totaal_bedrag valt. Anders flag in confidence.
+- prices_include_btw: true op KASSABONNEN (Makro/Crisp/AH — bedrag inclusief BTW per regel).
+  false op FACTUREN (Sligro/Hanos/Bidfood — bedrag exclusief BTW per regel, BTW staat apart onderaan).
+  Controleer: als onderaan een blok staat met "BTW hoog %" + "BTW laag %" naast goederen-totalen,
+  dan is dit een FACTUUR (false). Anders is het een kassabon (true).
+- item.totaal = exact het bedrag uit de "bedrag/totaal"-kolom op de bon — NIET zelf incl-BTW maken.
 - Bij onleesbaar of geen bon: { "error": "korte reden" }.
 
 GEEN andere tekst, geen markdown.`;
@@ -103,6 +108,8 @@ export interface PassResult {
     leverancier: string | null;
     datum: string | null;
     totaal_bedrag: number | null;
+    /** True = kassabon (regelbedragen incl-BTW); false = factuur (regelbedragen ex-BTW). */
+    prices_include_btw: boolean;
     raw_text: string;
     reconciliation: ReconciliationResult;
     cost_eur_cents: number;
@@ -285,6 +292,8 @@ async function runSinglePass(args: RunPassArgs): Promise<PassResult> {
     let datum: string | null = null;
     let totaal_bedrag: number | null = null;
     let confidence = 0;
+    /* Default: kassabonnen (incl-BTW). AI moet false zetten voor facturen. */
+    let prices_include_btw = true;
 
     if (parsed && !parsed.error) {
         const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
@@ -303,14 +312,19 @@ async function runSinglePass(args: RunPassArgs): Promise<PassResult> {
         datum = typeof parsed.datum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.datum) ? parsed.datum : null;
         totaal_bedrag = typeof parsed.totaal_bedrag === 'number' && parsed.totaal_bedrag > 0 ? parsed.totaal_bedrag : null;
         confidence = typeof parsed.confidence === 'number' && parsed.confidence >= 0 && parsed.confidence <= 1 ? parsed.confidence : 0.7;
+        if (typeof parsed.prices_include_btw === 'boolean') {
+            prices_include_btw = parsed.prices_include_btw;
+        }
     } else if (parsed?.error) {
         error = error ?? String(parsed.error);
     } else if (!error) {
         error = 'extract_failed_json';
     }
 
-    /* Reconcile — vergelijk Σ items met totaal_bedrag. */
-    const reconciliation = reconcileBon(items, totaal_bedrag);
+    /* Reconcile — vergelijk Σ items met totaal_bedrag.
+       Bij factuur (Sligro/Hanos): prices_include_btw=false → reconcileBon weet
+       dat items ex-BTW zijn en past Σ aan. */
+    const reconciliation = reconcileBon(items, totaal_bedrag, prices_include_btw);
 
     /* Stem confidence af op reconciliation — als items €5 mismatchen, is de
        AI-confidence-zelfrapportage minder waard. */
@@ -327,6 +341,7 @@ async function runSinglePass(args: RunPassArgs): Promise<PassResult> {
         leverancier,
         datum,
         totaal_bedrag,
+        prices_include_btw,
         raw_text,
         reconciliation,
         cost_eur_cents,
@@ -531,7 +546,7 @@ export function summarizeFinalPass(pass: PassResult): {
     btw_hoog_bedrag: number;
     totaal_bedrag: number;
 } {
-    const btw = parseBonBtw(pass.items);
+    const btw = parseBonBtw(pass.items, pass.prices_include_btw);
     const totaal_bedrag = pass.totaal_bedrag ?? btw.bruto_bedrag;
     return {
         netto_bedrag: btw.netto_bedrag,

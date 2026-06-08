@@ -33,26 +33,34 @@ const SUPPLIER_HINTS: SupplierHint[] = [
         key: 'sligro',
         displayName: 'Sligro',
         matchPatterns: ['sligro'],
-        hint: `Bon lijkt van Sligro. Sligro-facturen hebben kolommen: [artnr | omschrijving | aantal | eenheid | netto/stuk | totaal | btw%]. Belangrijke regels:
-- Negeer "Subtotaal", "Totaal incl BTW" en kortings-regels — die zijn GEEN items.
-- Statiegeld + emballage zijn aparte regels — wél meenemen als items met btw_pct: 9 of 21 zoals op de bon.
-- Bij "retour"/"creditregel" → aantal of totaal negatief teruggeven (niet positief).
-- Lange artikel-omschrijvingen kunnen over 2 regels gaan — combineer ze.`,
+        hint: `Bon is een FACTUUR van Sligro. KRITIEK: prices_include_btw=false.
+Sligro-factuur heeft kolommen: [artnr | groep | besteld | geleverd | verpakking | inhoud | omschrijving | b/t/w | E.M. | prijs | bedrag].
+- De "bedrag"-kolom is EXCLUSIEF BTW. BTW wordt onderaan apart getoond per tarief (laag/hoog).
+- Geef item.totaal exact zoals in "bedrag"-kolom staat — niet zelf vermenigvuldigen met BTW.
+- b/t/w kolom: L = laag (9%), H = hoog (21%) → zet btw_pct: 9 of 21 per regel.
+- Negeer "Subtotaal", "Totaal", "Gegeven", "Wisselgeld", "TRANSPORT" — geen items.
+- Statiegeld + emballage = wél items, ze staan met L/H aangegeven.
+- Bij "retour"/"creditregel" → totaal negatief teruggeven.
+- Lange artikel-omschrijvingen kunnen over 2 regels gaan (zoals "No waste, 30% korting" of "Van X voor Y") — combineer in 1 item.
+- Footer-rij heeft "goederen hoog % btw" / "btw hoog %" / "goederen laag % btw" / "btw laag %" → dit BEVESTIGT prices_include_btw=false.`,
     },
     {
         key: 'hanos',
         displayName: 'Hanos',
         matchPatterns: ['hanos'],
-        hint: `Bon lijkt van Hanos. Hanos-facturen lijken op Sligro: multi-koloms met artnr. Belangrijke regels:
+        hint: `Bon is een FACTUUR van Hanos. KRITIEK: prices_include_btw=false.
+- Bedrag-kolom is EXCLUSIEF BTW (zoals Sligro). BTW staat onderaan apart per tarief.
+- Geef item.totaal exact uit "bedrag"-kolom; niet zelf BTW oprekenen.
 - Negeer subtotalen + kortings-regels.
-- Hanos toont prijs vaak ex-BTW per stuk; "totaal" kolom is incl BTW.
-- Pas op met "statiegeld retour" → negatieve item-regel.`,
+- "Statiegeld retour" → negatieve item-regel.`,
     },
     {
         key: 'makro',
         displayName: 'Makro',
         matchPatterns: ['makro', 'metro'],
-        hint: `Bon lijkt van Makro/Metro. Makro-kassabonnen zijn smal (thermisch papier) — vaak vervaagd. Belangrijke regels:
+        hint: `Bon is een KASSABON van Makro/Metro. prices_include_btw=true.
+- Kassabonnen zijn smal (thermisch papier) — vaak vervaagd.
+- Bedragen per regel zijn INCLUSIEF BTW.
 - Bovenaan staat "BON" of "FACTUUR" + bon-nummer — negeer dat als item.
 - Onderaan staat "BTW 9% / BTW 21%" sub-totaal blok — negeer dat als items.
 - Productnaam staat soms in HOOFDLETTERS afgekort — neem letterlijk over.`,
@@ -61,24 +69,27 @@ const SUPPLIER_HINTS: SupplierHint[] = [
         key: 'bidfood',
         displayName: 'Bidfood',
         matchPatterns: ['bidfood', 'deli xl', 'deli-xl'],
-        hint: `Bon lijkt van Bidfood (voorheen Deli XL). Belangrijke regels:
-- Items per pallet/doos — "aantal × inhoud" patroon (bv. "6 × 1kg" = 6 stuks van 1 kg elk; geef aantal=6, eenheid="stuks" terug).
+        hint: `Bon is een FACTUUR van Bidfood (voorheen Deli XL). KRITIEK: prices_include_btw=false.
+- Bedrag-kolom is EXCLUSIEF BTW. BTW apart onderaan per tarief.
+- Items per pallet/doos — "aantal × inhoud" patroon (bv. "6 × 1kg" = 6 stuks van 1 kg elk; aantal=6, eenheid="stuks").
 - Statiegeld/emballage in aparte sectie onderaan — wel meenemen.`,
     },
     {
         key: 'crisp',
         displayName: 'Crisp',
         matchPatterns: ['crisp'],
-        hint: `Bon lijkt van Crisp (online supermarkt). Belangrijke regels:
+        hint: `Bon is een KASSABON van Crisp (online supermarkt). prices_include_btw=true.
 - Items hebben vaak gewicht IN de productnaam (bv. "Biefstuk 200g"). Aantal = 1, eenheid = "stuks".
+- Bedrag is INCLUSIEF BTW per regel.
 - Bezorgkosten zijn een item-regel onderaan (BTW 21%).`,
     },
     {
         key: 'agf',
         displayName: 'AGF Suijkerbuijk',
         matchPatterns: ['suijkerbuijk', 'agf'],
-        hint: `Bon lijkt van een AGF-groothandel (groente/fruit). Belangrijke regels:
-- Veel items in kg of stuks per krat — "10kg" of "1 krat" patroon.
+        hint: `Bon is meestal een FACTUUR van een AGF-groothandel (groente/fruit). prices_include_btw=false (tenzij duidelijk een kassabon).
+- Bedrag-kolom is meestal EXCLUSIEF BTW; BTW staat apart onderaan.
+- Items in kg of stuks per krat — "10kg" of "1 krat" patroon.
 - BTW vrijwel altijd 9% (food).`,
     },
 ];

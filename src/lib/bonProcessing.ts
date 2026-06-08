@@ -181,10 +181,18 @@ export interface BonBtwBreakdown {
 
 /**
  * Bereken BTW-breakdown uit genormaliseerde items.
- * Aanname: item.totaal is INCLUSIEF BTW (zoals op een Sligro-bon).
- * Daaruit destilleren we netto en btw-bedrag per tarief.
+ *
+ * Twee scenario's:
+ *   - pricesIncludeBtw=true  (kassabon Makro/Crisp/AH): item.totaal IS bruto.
+ *                            netto = totaal / (1 + btw/100), btw = totaal - netto
+ *   - pricesIncludeBtw=false (factuur Sligro/Hanos/Bidfood): item.totaal IS netto.
+ *                            btw = netto * btw/100, bruto = netto + btw
+ *
+ * Default true voor backwards-compat met bestaande callers (de oude single-pass
+ * extract-route ging hier altijd vanuit). Nieuwe flow in extract-route v2 leest
+ * `prices_include_btw` uit AI-output en geeft dit door.
  */
-export function parseBonBtw(items: BonItemRow[]): BonBtwBreakdown {
+export function parseBonBtw(items: BonItemRow[], pricesIncludeBtw = true): BonBtwBreakdown {
     let btw_laag_bedrag = 0;
     let btw_hoog_bedrag = 0;
     let netto_bedrag = 0;
@@ -192,16 +200,33 @@ export function parseBonBtw(items: BonItemRow[]): BonBtwBreakdown {
 
     for (const item of items) {
         const totaal = item.totaal ?? (item.aantal * item.prijs);
-        bruto_bedrag += totaal;
         const btw_pct = item.btw_pct ?? 0;
+
         if (btw_pct === 0) {
+            /* Geen BTW → bruto == netto. */
+            bruto_bedrag += totaal;
             netto_bedrag += totaal;
             continue;
         }
-        /* totaal = netto × (1 + btw/100) → netto = totaal / (1 + btw/100) */
-        const factor = 1 + btw_pct / 100;
-        const netto = totaal / factor;
-        const btw = totaal - netto;
+
+        let netto: number;
+        let btw: number;
+        let bruto: number;
+
+        if (pricesIncludeBtw) {
+            /* totaal = bruto = netto × (1 + btw/100) → netto = totaal / (1 + btw/100) */
+            const factor = 1 + btw_pct / 100;
+            netto = totaal / factor;
+            btw = totaal - netto;
+            bruto = totaal;
+        } else {
+            /* totaal = netto → btw = netto × btw/100, bruto = netto + btw */
+            netto = totaal;
+            btw = netto * (btw_pct / 100);
+            bruto = netto + btw;
+        }
+
+        bruto_bedrag += bruto;
         netto_bedrag += netto;
         if (btw_pct === 9) btw_laag_bedrag += btw;
         else if (btw_pct === 21) btw_hoog_bedrag += btw;
