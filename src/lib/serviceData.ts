@@ -10,13 +10,58 @@
 
 import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
 import type {
-    ServiceEvent, Course, AllergyEntry, AllergenCode,
+    ServiceEvent, Course, AllergyEntry, AllergenCode, CourseGerecht,
 } from '@/app/events/[id]/service/_types/service';
+import { findGerechtMatch } from '@/lib/gerechtMatch';
 
-/* Lichte gerecht-shape — alleen wat we nodig hebben voor allergie-cross-ref. */
+/* Lichte gerecht-shape voor de KDS: allergie-cross-ref + foto's + service-tips.
+   `id` is nodig voor de FK-route via courses.gerecht_ids; de overige velden
+   komen gewoon mee uit useSupabase('gerechten') (select *). */
 export interface GerechtAllergenLookup {
+    id?: string;
     naam: string;
     allergenen?: string[] | null;
+    foto_url?: string | null;
+    service_image?: string | null;
+    service_tip?: string | null;
+}
+
+/**
+ * Los de gerechten van een gang op, in menu-volgorde.
+ *
+ * 1) FK-route: courses.gerecht_ids (sinds migratie 20260611100000) — betrouwbaar.
+ * 2) Fallback: comma-separated dish-namen uit course.description, case-
+ *    insensitive naam-match — voor data van vóór de migratie.
+ */
+export function resolveGerechtenForCourse(
+    course: DbCourse,
+    gerechten: GerechtAllergenLookup[],
+): GerechtAllergenLookup[] {
+    const out: GerechtAllergenLookup[] = [];
+    const seen = new Set<string>();
+
+    const ids = Array.isArray(course.gerecht_ids) ? course.gerecht_ids : [];
+    for (const id of ids) {
+        const g = gerechten.find(x => x.id === id);
+        if (g && !seen.has(g.naam.toLowerCase().trim())) {
+            out.push(g);
+            seen.add(g.naam.toLowerCase().trim());
+        }
+    }
+    if (out.length > 0) return out;
+
+    for (const part of (course.description || '').split(',')) {
+        const t = part.trim();
+        if (!t || seen.has(t.toLowerCase())) continue;
+        /* Fuzzy-maar-veilig: exact → uniek-containment ("Bavette" vindt
+           "Gerookte bavette"); ambigu = geen match. */
+        const g = findGerechtMatch(t, gerechten.filter(x => x.naam));
+        if (g && !out.includes(g)) {
+            out.push(g);
+            seen.add(t.toLowerCase());
+        }
+    }
+    return out;
 }
 
 /** Default banner-gradient per type. */
@@ -38,14 +83,25 @@ function heroForType(type: string | undefined | null): string {
     return '🍽️';
 }
 
-/** Map DbCourse → Course (UI shape). Zorgt voor defaults op elk JSONB-veld. */
-function dbCourseToCourse(c: DbCourse): Course {
+/** Map DbCourse → Course (UI shape). Zorgt voor defaults op elk JSONB-veld.
+ *  Met `gerechten` erbij krijgt de course ook foto's + service-tips mee. */
+function dbCourseToCourse(c: DbCourse, gerechten: GerechtAllergenLookup[] = []): Course {
+    const resolved = resolveGerechtenForCourse(c, gerechten);
+    const courseGerechten: CourseGerecht[] = resolved.map(g => ({
+        id: g.id,
+        naam: g.naam,
+        fotoUrl: g.service_image || g.foto_url || undefined,
+        serviceTip: g.service_tip || undefined,
+    }));
+    const fotoUrl = courseGerechten.find(g => g.fotoUrl)?.fotoUrl;
     return {
         id: 'c_' + c.id,
         num: c.num,
         title: c.title,
         emoji: c.emoji || '🍽️',
         imgGradient: c.image_gradient || 'linear-gradient(135deg, #3f3f46, #18181b)',
+        fotoUrl,
+        gerechten: courseGerechten.length > 0 ? courseGerechten : undefined,
         prepTime: c.prep_time_minutes || 0,
         serveTime: c.serve_offset_minutes || 0,
         status: c.status,
@@ -101,23 +157,12 @@ function buildSpecialFlagsForCourse(
     eventAllergies: DbEventAllergy[],
     gerechten: GerechtAllergenLookup[],
 ): Map<number, string> {
-    /* Welke dish-namen zitten in deze gang? Bron-volgorde:
-       1) course.description ("Bavette, Chimichurri, Roosti")
-       2) eerste woord van mise-items (fallback) */
-    const dishNames: string[] = [];
-    if (course.description) {
-        course.description.split(',').forEach(s => {
-            const t = s.trim();
-            if (t) dishNames.push(t);
-        });
-    }
-
-    /* Verzamel allergenen-codes uit alle gerechten in deze gang. */
+    /* Verzamel allergenen-codes uit alle gerechten in deze gang.
+       resolveGerechtenForCourse pakt de FK-route (gerecht_ids) waar die
+       bestaat en valt anders terug op naam-match via de description. */
     const courseAllergens = new Set<string>();
-    for (const dishName of dishNames) {
-        const g = gerechten.find(x => x.naam && x.naam.toLowerCase().trim() === dishName.toLowerCase().trim());
-        if (!g || !g.allergenen) continue;
-        for (const code of g.allergenen) courseAllergens.add(code.toUpperCase());
+    for (const g of resolveGerechtenForCourse(course, gerechten)) {
+        for (const code of g.allergenen || []) courseAllergens.add(code.toUpperCase());
     }
 
     /* Voor elke event_allergy: als overlap → flag op tafel-nummer. */
@@ -193,7 +238,7 @@ export function dbEventToServiceEvent(
         courses: eventCourses
             .sort((a, b) => a.num - b.num)
             .map(c => {
-                const course = dbCourseToCourse(c);
+                const course = dbCourseToCourse(c, gerechten);
                 /* Auto-allergie-flagging per tafel obv gerechten.allergenen. */
                 const flags = buildSpecialFlagsForCourse(c, eventAllergies, gerechten);
                 if (flags.size > 0) {

@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { aggregateMiseFromDishes } from '@/lib/miseAggregation';
+import { findGerechtMatch } from '@/lib/gerechtMatch';
 import { bulkScheduleEventPrep } from '@/lib/prep/bulkSchedule';
 
 type Supa = SupabaseClient<any, any, any>;
@@ -454,7 +455,7 @@ function distributePortionsForCourses(total: number, tableCount: number): { tabl
    (pure helpers; geïmporteerd bovenaan). Reden: tests konden ze niet pakken
    zonder de Supabase-import in dit bestand mee te slepen. */
 
-async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promise<{ success: boolean; message: string; count: number }> {
+async function autoCreateCourses(supabase: Supa, params: Pick<WorkflowParams, 'eventId' | 'offerteData'>): Promise<{ success: boolean; message: string; count: number }> {
     try {
         if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
 
@@ -477,9 +478,11 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
             return { success: true, message: 'Geen menu — courses overgeslagen', count: 0 };
         }
 
-        /* Haal event op voor guests-count (voor portion-distribution). */
-        const { data: event } = await supabase.from('events').select('guests').eq('id', params.eventId).single();
+        /* Haal event op voor guests-count (portion-distribution) + org-id
+           (gerechten-filter — zie hieronder). */
+        const { data: event } = await supabase.from('events').select('guests, organization_id').eq('id', params.eventId).single();
         const guests = event?.guests || 0;
+        const orgId: string | null = event?.organization_id || null;
         /* tableCount schaalt met gasten — ~10 gasten per tafel is een goede default
            voor BBQ-events. Minimum 1 zodat distributePortions niet door 0 deelt.
            User kan dit later via de courses-editor aanpassen. */
@@ -490,18 +493,18 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
            een lege mise op — geen crash.
            P0-3 fix: ook `id` selecteren zodat we per course een gerecht_id
            kunnen vullen — daarmee koppelt prep_tasks.course_id zich automatisch
-           via bulkScheduleEventPrep. */
-        const { data: gerechtenData, error: gerechtenErr } = await supabase
-            .from('gerechten')
-            .select('id, naam, ingredient_costs');
+           via bulkScheduleEventPrep.
+           Tenant-fix: expliciet org-filter. Deze workflow draait ook server-
+           side met service-role (api/accept-offerte) waar RLS NIET scopet —
+           zonder filter kon een dish-naam aan een gerecht van een ándere
+           tenant gekoppeld worden. */
+        let gerechtenQuery = supabase.from('gerechten').select('id, naam, ingredient_costs');
+        if (orgId) gerechtenQuery = gerechtenQuery.eq('organization_id', orgId);
+        const { data: gerechtenData, error: gerechtenErr } = await gerechtenQuery;
         if (gerechtenErr) console.warn('[acceptance] gerechten fetch error:', gerechtenErr);
         const gerechten = gerechtenData || [];
 
-        /* Map dish-name → gerecht_id (case-insensitive, trim) voor course-coupling. */
-        const dishIdByName = new Map<string, string>();
-        for (const g of gerechten as Array<{ id: string; naam: string }>) {
-            if (g.id && g.naam) dishIdByName.set(g.naam.trim().toLowerCase(), g.id);
-        }
+        const gerechtenForMatch = (gerechten as Array<{ id: string; naam: string }>).filter(g => g.id && g.naam);
 
         /* Voor elke categorie-spec: pak de eerste matching key (canoniek of alias). */
         const courseRows: any[] = [];
@@ -541,16 +544,19 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
 
             const mise = aggregateMiseFromDishes(dishes, gerechten, guests);
 
-            /* P0-3: koppel de eerste herkende gerecht-naam aan deze course
-               zodat prep_tasks via bulkScheduleEventPrep automatisch
-               course_id krijgen. Niet 1-op-1 want courses kunnen meerdere
-               gerechten bevatten — voor MVP is het hoofdgerecht (eerste in
-               de lijst) representatief voor de course-flow. */
-            let gerechtIdForCourse: string | null = null;
+            /* Koppel ALLE herkende gerecht-namen aan deze course (gerecht_ids,
+               in menu-volgorde) — bron voor KDS foto's/recepturen/allergie-
+               flags. Het eerste blijft als enkelvoudig gerecht_id staan zodat
+               prep_tasks via bulkScheduleEventPrep automatisch course_id
+               krijgen (P0-3 gedrag ongewijzigd). */
+            const gerechtIdsForCourse: string[] = [];
             for (const dn of dishes) {
-                const lookup = dishIdByName.get(dn.trim().toLowerCase());
-                if (lookup) { gerechtIdForCourse = lookup; break; }
+                /* Exact → uniek-containment ("Bavette" → "Gerookte bavette");
+                   ambigu of onbekend = geen koppeling. */
+                const match = findGerechtMatch(dn, gerechtenForMatch);
+                if (match && !gerechtIdsForCourse.includes(match.id)) gerechtIdsForCourse.push(match.id);
             }
+            const gerechtIdForCourse: string | null = gerechtIdsForCourse[0] || null;
 
             courseRows.push({
                 event_id: params.eventId,
@@ -562,6 +568,7 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
                 prep_time_minutes: cat.prepTimeMinutes,
                 serve_offset_minutes: cat.serveOffsetMinutes,
                 gerecht_id: gerechtIdForCourse,
+                gerecht_ids: gerechtIdsForCourse,
                 steps: [],
                 mise,
                 plating: [],
@@ -580,13 +587,13 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
             if (/relation .* does not exist/i.test(error.message)) {
                 return { success: false, message: 'Courses-tabel ontbreekt (migratie 009 nog niet gedraaid)', count: 0 };
             }
-            /* Optionele kolom ontbreekt (bv gerecht_id — P0-3 coupling-migratie nog
-               niet gedraaid). Strip de optionele velden en retry zodat de
-               kern-courses (titel/menu/portions) toch worden aangemaakt. */
+            /* Optionele kolom ontbreekt (gerecht_id / gerecht_ids — koppel-
+               migraties nog niet gedraaid). Strip de optionele velden en retry
+               zodat de kern-courses (titel/menu/portions) toch worden aangemaakt. */
             if (/Could not find the '(\w+)' column|column "?\w+"? .* does not exist/i.test(error.message)) {
                 const stripped = courseRows.map(function (row) {
                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                    const { gerecht_id, ...rest } = row;
+                    const { gerecht_id, gerecht_ids, ...rest } = row;
                     return rest;
                 });
                 const retry = await supabase.from('courses').insert(stripped);
@@ -601,6 +608,29 @@ async function autoCreateCourses(supabase: Supa, params: WorkflowParams): Promis
     } catch (e: any) {
         return { success: false, message: 'Courses fout: ' + (e.message || ''), count: 0 };
     }
+}
+
+/**
+ * Hergebruik buiten de acceptance-flow: bouw gangen uit een menu_selectie
+ * voor een bestaand event (bv. de "Bouw uit menu"-knop in de CoursesEditor,
+ * voor events die vóór de acceptance-workflow zijn aangemaakt of waar de
+ * gangen handmatig zijn leeggegooid).
+ *
+ * replaceExisting=true wist bestaande gangen eerst — caller heeft de
+ * gebruiker dan al om bevestiging gevraagd.
+ */
+export async function seedCoursesFromMenu(
+    supabase: Supa,
+    eventId: number,
+    menuSelectie: unknown,
+    opts: { replaceExisting?: boolean } = {},
+): Promise<{ success: boolean; message: string; count: number }> {
+    if (!supabase) return { success: false, message: 'Geen database verbinding', count: 0 };
+    if (opts.replaceExisting) {
+        const { error } = await supabase.from('courses').delete().eq('event_id', eventId);
+        if (error) return { success: false, message: 'Bestaande gangen wissen mislukt: ' + error.message, count: 0 };
+    }
+    return autoCreateCourses(supabase, { eventId, offerteData: { menu_selectie: menuSelectie } });
 }
 
 // ── 6. Auto-generate logistics-checklist placeholder ──

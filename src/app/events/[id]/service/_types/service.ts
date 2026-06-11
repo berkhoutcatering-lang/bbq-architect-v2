@@ -38,6 +38,15 @@ export interface CourseItem {
     special?: string;
 }
 
+/** Gerecht zoals de KDS hem nodig heeft — opgelost uit courses.gerecht_ids
+ *  (FK-route) of via naam-match op de description (fallback pre-migratie). */
+export interface CourseGerecht {
+    id?: string;
+    naam: string;
+    fotoUrl?: string;
+    serviceTip?: string;
+}
+
 export interface Course {
     id: string;
     num: number;
@@ -55,6 +64,10 @@ export interface Course {
     qualityChecks: string[];
     items: CourseItem[];
     aiNote?: string;
+    /** Eerste beschikbare gerecht-foto — card-header/hero. Ontbreekt = emoji-fallback. */
+    fotoUrl?: string;
+    /** Opgeloste gerechten van deze gang, in menu-volgorde. */
+    gerechten?: CourseGerecht[];
 }
 
 export interface AllergyEntry {

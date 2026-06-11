@@ -10,13 +10,16 @@ import {
 import type { ServiceEvent, Course, CourseStatus, CourseItem } from './_types/service';
 import { buildServiceDirectives } from './_lib/serviceDirectives';
 import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
+import ServiceTabBar from '@/components/service/ServiceTabBar';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { dbEventToServiceEvent } from '@/lib/serviceData';
+import { computeTableZones, type TableZoneInfo } from '@/lib/floorPlanZones';
+import { generateActieplan, type ActieplanResult } from '@/lib/actieplan';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { useIsPhone } from '@/hooks/useIsMobile';
-import type { DbEvent, DbCourse, DbEventAllergy } from '@/types';
+import type { DbEvent, DbCourse, DbEventAllergy, FloorPlan, ServiceZone, FloorPlanGuest } from '@/types';
 
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
@@ -119,8 +122,10 @@ function HelpNote({ title, children, tone = 'amber' }: { title: string; children
 /* ═══════════════════════════════════════════════════════════════════
    BOARD — Kanban (queued / active / ready / served)
    ═══════════════════════════════════════════════════════════════════ */
-function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrapup, rookOffset }: {
+function ServiceModeBoard({ event, eventDbId, tableZones, onOpenCourse, onAdvanceStatus, onBack, onWrapup, rookOffset }: {
     event: ServiceEvent;
+    eventDbId: number;
+    tableZones: Record<number, TableZoneInfo>;
     onOpenCourse: (cid: string) => void;
     onAdvanceStatus: (cid: string) => void;
     onBack: () => void;
@@ -187,6 +192,12 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
                 )}
             </div>
 
+            {/* Tab-switcher Gangen ⇄ Plattegrond — stond eerst alléén op de
+                plattegrond-pagina, waardoor die vanaf het bord onvindbaar was. */}
+            <div style={{ marginRight: rookOffset, borderBottom: '1px solid var(--border)', background: 'var(--color-bg-elevated)' }}>
+                <ServiceTabBar eventId={eventDbId} activeTab="gangen" />
+            </div>
+
             <ServiceAIBar event={event} />
 
             <div style={{ flex: 1, padding: '20px 22px', overflow: 'auto', marginRight: rookOffset }}>
@@ -197,10 +208,10 @@ function ServiceModeBoard({ event, onOpenCourse, onAdvanceStatus, onBack, onWrap
                     <strong style={{ color: BRAND }}>Per-tafel grid:</strong> oranje = bezig, groen = klaar. <span style={{ color: '#f87171' }}>Rode rand = allergie/dieet.</span>
                 </HelpNote>
                 <div className="kds-board-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, alignContent: 'start' }}>
-                    <Column title="Wachtend" Icon={Clock} tone="gray" courses={queued} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
-                    <Column title="In bereiding" Icon={Flame} tone="amber" courses={active} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
-                    <Column title="Klaar voor uitgifte" Icon={CheckCircle} tone="green" courses={ready} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
-                    <Column title="Geserveerd" Icon={Award} tone="muted" courses={served} event={event} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="Wachtend" Icon={Clock} tone="gray" courses={queued} event={event} tableZones={tableZones} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="In bereiding" Icon={Flame} tone="amber" courses={active} event={event} tableZones={tableZones} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="Klaar voor uitgifte" Icon={CheckCircle} tone="green" courses={ready} event={event} tableZones={tableZones} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
+                    <Column title="Geserveerd" Icon={Award} tone="muted" courses={served} event={event} tableZones={tableZones} onOpenCourse={onOpenCourse} onAdvanceStatus={onAdvanceStatus} />
                 </div>
             </div>
         </div>
@@ -243,9 +254,10 @@ function ServiceAIBar({ event }: { event: ServiceEvent | null }) {
     );
 }
 
-function Column({ title, Icon, tone, courses, event, onOpenCourse, onAdvanceStatus }: {
+function Column({ title, Icon, tone, courses, event, tableZones, onOpenCourse, onAdvanceStatus }: {
     title: string; Icon: any; tone: 'gray' | 'amber' | 'green' | 'muted';
-    courses: Course[]; event: ServiceEvent; onOpenCourse: (cid: string) => void; onAdvanceStatus: (cid: string) => void;
+    courses: Course[]; event: ServiceEvent; tableZones: Record<number, TableZoneInfo>;
+    onOpenCourse: (cid: string) => void; onAdvanceStatus: (cid: string) => void;
 }) {
     const toneColors = {
         gray: { border: 'var(--border)', text: 'var(--muted)', bg: 'transparent' },
@@ -268,14 +280,14 @@ function Column({ title, Icon, tone, courses, event, onOpenCourse, onAdvanceStat
                     <div style={{ padding: 22, textAlign: 'center', color: 'var(--muted)', fontSize: 12, fontStyle: 'italic', border: '1px dashed var(--border)', borderRadius: 10 }}>geen gangen</div>
                 )}
                 {courses.map(course => (
-                    <CourseCard key={course.id} course={course} event={event} onOpen={() => onOpenCourse(course.id)} onAdvance={() => onAdvanceStatus(course.id)} />
+                    <CourseCard key={course.id} course={course} event={event} tableZones={tableZones} onOpen={() => onOpenCourse(course.id)} onAdvance={() => onAdvanceStatus(course.id)} />
                 ))}
             </div>
         </div>
     );
 }
 
-function CourseCard({ course, event, onOpen, onAdvance }: { course: Course; event: ServiceEvent; onOpen: () => void; onAdvance: () => void }) {
+function CourseCard({ course, event, tableZones, onOpen, onAdvance }: { course: Course; event: ServiceEvent; tableZones: Record<number, TableZoneInfo>; onOpen: () => void; onAdvance: () => void }) {
     const totalPortions = course.items.reduce((acc, i) => acc + (i.count || 0), 0);
     const allergyItems = course.items.filter(i => i.special).length;
     const isActive = course.status === 'active';
@@ -287,8 +299,9 @@ function CourseCard({ course, event, onOpen, onAdvance }: { course: Course; even
         }}
             onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
-            <div style={{ height: 70, background: course.imgGradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontSize: 34 }}>{course.emoji}</div>
+            {/* Echte gerecht-foto (via gerecht_ids/naam-match) — emoji is fallback. */}
+            <div style={{ height: 70, background: course.fotoUrl ? `url(${course.fotoUrl}) center/cover no-repeat` : course.imgGradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {!course.fotoUrl && <div style={{ fontSize: 34 }}>{course.emoji}</div>}
                 <div style={{ position: 'absolute', top: 7, left: 7, background: 'rgba(0,0,0,.6)', padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: '.04em', color: '#fff' }}>
                     GANG {course.num}/{event.courses.length}
                 </div>
@@ -322,7 +335,7 @@ function CourseCard({ course, event, onOpen, onAdvance }: { course: Course; even
                         <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 5 }}>Per tafel</div>
                         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(10, course.items.length)}, 1fr)`, gap: 3 }}>
                             {course.items.map(item => (
-                                <div key={item.id} title={`Tafel ${item.table} · ${item.count}p${item.special ? ' · ' + item.special : ''}`} style={{
+                                <div key={item.id} title={`Tafel ${item.table} · ${item.count}p${tableZones[item.table] ? ' · ' + tableZones[item.table].name : ''}${item.special ? ' · ' + item.special : ''}`} style={{
                                     height: 22, borderRadius: 4,
                                     background: item.served ? 'rgba(34,197,94,.4)' : item.ready ? 'rgba(34,197,94,.2)' : item.inProgress ? `${BRAND}40` : 'rgba(255,255,255,.04)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -383,9 +396,11 @@ const advanceBtnStyle = (status: CourseStatus): React.CSSProperties => {
 /* ═══════════════════════════════════════════════════════════════════
    DETAIL — fullscreen course (4 tabs)
    ═══════════════════════════════════════════════════════════════════ */
-function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, rookOffset }: {
+function ServiceModeDetail({ event, courseId, tableZones, onBack, onAdvance, onToggleItem, onApplyActieplan, rookOffset }: {
     event: ServiceEvent; courseId: string;
+    tableZones: Record<number, TableZoneInfo>;
     onBack: () => void; onAdvance: () => void; onToggleItem: (cid: string, iid: string) => void;
+    onApplyActieplan: (result: ActieplanResult) => Promise<void>;
     rookOffset: number;
 }) {
     const course = event.courses.find(c => c.id === courseId);
@@ -401,8 +416,8 @@ function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, r
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', marginRight: rookOffset }}>
-            {/* Hero header */}
-            <div style={{ position: 'relative', minHeight: 260, background: course.imgGradient, padding: '24px 30px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
+            {/* Hero header — gerecht-foto met donkere gradient; gradient-only als fallback */}
+            <div style={{ position: 'relative', minHeight: 260, background: course.fotoUrl ? `linear-gradient(180deg, rgba(8,6,4,.30), rgba(8,6,4,.78)), url(${course.fotoUrl}) center/cover no-repeat` : course.imgGradient, padding: '24px 30px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button onClick={onBack} style={{
                         background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,.15)', color: '#fff',
@@ -425,7 +440,7 @@ function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, r
                 </div>
 
                 <div>
-                    <div style={{ fontSize: 86, marginBottom: 4, lineHeight: 1, opacity: 0.9, filter: 'drop-shadow(0 4px 20px rgba(0,0,0,.5))' }}>{course.emoji}</div>
+                    {!course.fotoUrl && <div style={{ fontSize: 86, marginBottom: 4, lineHeight: 1, opacity: 0.9, filter: 'drop-shadow(0 4px 20px rgba(0,0,0,.5))' }}>{course.emoji}</div>}
                     <h1 style={{ fontFamily: 'Outfit, sans-serif', fontSize: 42, margin: 0, fontWeight: 200, color: '#fff', letterSpacing: '-.02em', lineHeight: 1.05 }}>{course.title}</h1>
                     <p style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', marginTop: 6, maxWidth: 720, lineHeight: 1.4 }}>{course.description}</p>
                 </div>
@@ -491,9 +506,9 @@ function ServiceModeDetail({ event, courseId, onBack, onAdvance, onToggleItem, r
             </div>
 
             <div style={{ flex: 1, padding: '22px 30px', overflow: 'auto' }}>
-                {tab === 'steps' && <StepsView course={course} completedSteps={completedSteps} toggleStep={toggleStep} />}
+                {tab === 'steps' && <StepsView course={course} completedSteps={completedSteps} toggleStep={toggleStep} onApplyActieplan={onApplyActieplan} />}
                 {tab === 'mise' && <MiseView course={course} />}
-                {tab === 'tables' && <TablesView course={course} onToggleItem={onToggleItem} />}
+                {tab === 'tables' && <TablesView course={course} tableZones={tableZones} onToggleItem={onToggleItem} />}
                 {tab === 'quality' && <QualityView course={course} />}
             </div>
         </div>
@@ -512,7 +527,7 @@ function HeroStat({ Icon, val, label }: { Icon: any; val: React.ReactNode; label
     );
 }
 
-function StepsView({ course, completedSteps, toggleStep }: { course: Course; completedSteps: Record<number, boolean>; toggleStep: (n: number) => void }) {
+function StepsView({ course, completedSteps, toggleStep, onApplyActieplan }: { course: Course; completedSteps: Record<number, boolean>; toggleStep: (n: number) => void; onApplyActieplan: (result: ActieplanResult) => Promise<void> }) {
     return (
         <div>
             <HelpNote title="Hoe gebruik je de bereidingswijze?" tone="amber">
@@ -523,7 +538,7 @@ function StepsView({ course, completedSteps, toggleStep }: { course: Course; com
                 <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Bereidingswijze · stap voor stap</div>
                     {course.steps.length === 0 && (
-                        <div style={{ padding: 22, textAlign: 'center', color: 'var(--muted)', border: '1px dashed var(--border)', borderRadius: 10 }}>Geen stappen voor deze gang.</div>
+                        <ActieplanGeneratorBlock course={course} onApply={onApplyActieplan} />
                     )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                         {course.steps.map(step => {
@@ -553,10 +568,22 @@ function StepsView({ course, completedSteps, toggleStep }: { course: Course; com
                 </div>
                 <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Plating · zo ziet hij eruit</div>
-                    <div style={{ background: course.imgGradient, borderRadius: 14, height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
-                        <div style={{ fontSize: 100, opacity: 0.4, filter: 'drop-shadow(0 8px 30px rgba(0,0,0,.6))' }}>{course.emoji}</div>
-                        <div style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,.6)', padding: '5px 10px', borderRadius: 6, fontSize: 10.5, color: 'rgba(255,255,255,.8)' }}>Plating-foto referentie</div>
+                    <div style={{ background: course.fotoUrl ? `url(${course.fotoUrl}) center/cover no-repeat` : course.imgGradient, borderRadius: 14, height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+                        {!course.fotoUrl && <div style={{ fontSize: 100, opacity: 0.4, filter: 'drop-shadow(0 8px 30px rgba(0,0,0,.6))' }}>{course.emoji}</div>}
+                        <div style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,.6)', padding: '5px 10px', borderRadius: 6, fontSize: 10.5, color: 'rgba(255,255,255,.8)' }}>
+                            {course.fotoUrl ? `Plating-referentie · ${(course.gerechten || []).find(g => g.fotoUrl === course.fotoUrl)?.naam || course.title}` : 'Plating-foto referentie'}
+                        </div>
                     </div>
+                    {(course.gerechten || []).some(g => g.serviceTip) && (
+                        <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <HandPlatter size={13} style={{ color: BRAND }} /> Service-tips uit het menu
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.7 }}>
+                                {(course.gerechten || []).filter(g => g.serviceTip).map((g, i) => <li key={i}><strong>{g.naam}:</strong> {g.serviceTip}</li>)}
+                            </ul>
+                        </div>
+                    )}
                     {course.plating.length > 0 && (
                         <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
                             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -577,6 +604,96 @@ function StepsView({ course, completedSteps, toggleStep }: { course: Course; com
                         </div>
                     )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Actieplan-generator — lege gang? Eén knop bouwt het stappenplan
+ * deterministisch uit de receptuur (componenten → battle-plan →
+ * bereidingswijze), hoeveelheden geschaald naar dit event. Het resultaat
+ * is een VOORSTEL: pas na "Gebruik dit actieplan" wordt het opgeslagen.
+ */
+function ActieplanGeneratorBlock({ course, onApply }: { course: Course; onApply: (result: ActieplanResult) => Promise<void> }) {
+    const showToast = useToast();
+    const [busy, setBusy] = useState(false);
+    const [applying, setApplying] = useState(false);
+    const [proposal, setProposal] = useState<ActieplanResult | null>(null);
+
+    async function generate() {
+        setBusy(true);
+        try {
+            const { supabase } = await import('@/lib/supabase');
+            const result = await generateActieplan(supabase, {
+                gerechtIds: (course.gerechten || []).map(g => g.id).filter((x): x is string => !!x),
+                dishNames: course.description.split(',').map(s => s.trim()).filter(Boolean),
+                portions: course.items.reduce((a, i) => a + (i.count || 0), 0),
+            });
+            if (result.steps.length === 0) {
+                showToast(result.sources[0] || 'Geen receptuur gevonden voor deze gang.', 'warning');
+                return;
+            }
+            setProposal(result);
+        } catch (e) {
+            showToast('Actieplan genereren mislukt: ' + (e instanceof Error ? e.message : 'onbekende fout'), 'error');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    if (!proposal) {
+        return (
+            <div style={{ padding: 26, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 10 }}>
+                <div style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.6, marginBottom: 14, maxWidth: 460, margin: '0 auto 14px' }}>
+                    Geen stappen voor deze gang. Bouw het actieplan uit de receptuur van je gerechten —
+                    componenten en hoeveelheden worden geschaald naar dit event.
+                </div>
+                <button onClick={generate} disabled={busy} style={{
+                    padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                    background: busy ? 'var(--color-bg-deep)' : BRAND, color: busy ? 'var(--muted)' : '#0f0f0f',
+                    border: 'none', cursor: busy ? 'default' : 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44,
+                }}>
+                    {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {busy ? 'Receptuur ophalen…' : 'Actieplan opbouwen uit receptuur'}
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ border: `1px solid ${BRAND}40`, borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', background: `${BRAND}0d`, borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: BRAND, marginBottom: 4 }}>Voorstel · {proposal.steps.length} stappen</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>{proposal.sources.join(' · ')}</div>
+            </div>
+            <div style={{ maxHeight: 340, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {proposal.steps.map(s => (
+                    <div key={s.n} style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '8px 10px', background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                        <span style={{ color: BRAND, fontWeight: 700, minWidth: 20, fontVariantNumeric: 'tabular-nums' }}>{s.n}</span>
+                        <span style={{ flex: 1, lineHeight: 1.45 }}>
+                            <span style={{ fontWeight: 600 }}>{s.action}</span>
+                            {s.detail && <span style={{ color: 'var(--muted)' }}> — {s.detail}</span>}
+                        </span>
+                    </div>
+                ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid var(--border)' }}>
+                <button
+                    onClick={async () => { setApplying(true); try { await onApply(proposal); } finally { setApplying(false); } }}
+                    disabled={applying}
+                    style={{ flex: 1, padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: 13, background: BRAND, color: '#0f0f0f', border: 'none', cursor: 'pointer', minHeight: 44 }}
+                >
+                    {applying ? 'Opslaan…' : `Gebruik dit actieplan (${proposal.steps.length} stappen)`}
+                </button>
+                <button
+                    onClick={() => setProposal(null)}
+                    disabled={applying}
+                    style={{ padding: '12px 16px', borderRadius: 8, fontSize: 13, background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border)', cursor: 'pointer', minHeight: 44 }}
+                >
+                    Annuleer
+                </button>
             </div>
         </div>
     );
@@ -620,7 +737,7 @@ function MiseView({ course }: { course: Course }) {
 }
 const miseTh: React.CSSProperties = { textAlign: 'left', padding: '11px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' };
 
-function TablesView({ course, onToggleItem }: { course: Course; onToggleItem: (cid: string, iid: string) => void }) {
+function TablesView({ course, tableZones, onToggleItem }: { course: Course; tableZones: Record<number, TableZoneInfo>; onToggleItem: (cid: string, iid: string) => void }) {
     return (
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
             <HelpNote title="Per-tafel uitgifte" tone="green">
@@ -647,6 +764,13 @@ function TablesView({ course, onToggleItem }: { course: Course; onToggleItem: (c
                                     <div style={{ fontSize: 15, fontWeight: 700 }}>{item.count} pers.</div>
                                 </div>
                             </div>
+                            {/* Zone uit de plattegrond ("achterin · glutenvrij") — icoon + label, niet alleen kleur. */}
+                            {tableZones[item.table] && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: tableZones[item.table].color || BRAND, flexShrink: 0 }} />
+                                    <span>{tableZones[item.table].name}</span>
+                                </div>
+                            )}
                             <div style={{ fontSize: 11.5, color: colors.text, fontWeight: 600, marginBottom: item.special ? 6 : 8 }}>{colors.label}</div>
                             {item.special && (
                                 <div style={{ fontSize: 11, color: 'var(--red)', background: 'rgba(220,38,38,.1)', padding: '6px 8px', borderRadius: 6, marginBottom: 8, lineHeight: 1.4 }}>
@@ -1142,7 +1266,25 @@ export default function ServiceMode() {
     const { data: dbEvents } = useSupabase<DbEvent>('events', []);
     const { data: dbCourses } = useSupabase<DbCourse>('courses', []);
     const { data: dbAllergies } = useSupabase<DbEventAllergy>('event_allergies', []);
-    const { data: dbGerechten } = useSupabase<{ id: number; naam: string; allergenen?: string[] }>('gerechten', []);
+    const { data: dbGerechten, loading: gerechtenLoading } = useSupabase<{
+        id: string; naam: string; allergenen?: string[];
+        foto_url?: string | null; service_image?: string | null; service_tip?: string | null;
+    }>('gerechten', []);
+
+    /* Plattegrond-data → zone-labels per tafel ("achterin · glutenvrij"). */
+    const { data: dbFloorPlans } = useSupabase<FloorPlan>('floor_plans', []);
+    const { data: dbZones } = useSupabase<ServiceZone>('service_zones', []);
+    const { data: dbPins } = useSupabase<FloorPlanGuest>('floor_plan_guests', []);
+
+    const tableZones = useMemo<Record<number, TableZoneInfo>>(() => {
+        const fp = dbFloorPlans.find(f => f.event_id === urlEventId);
+        if (!fp) return {};
+        const zones = dbZones.filter(z => z.floor_plan_id === fp.id);
+        if (zones.length === 0) return {};
+        const pins = dbPins.filter(p => p.event_id === urlEventId);
+        const allergies = dbAllergies.filter(a => a.event_id === urlEventId);
+        return computeTableZones(fp.canvas_json, zones, pins, allergies);
+    }, [dbFloorPlans, dbZones, dbPins, dbAllergies, urlEventId]);
 
     /* Build het ServiceEvent voor het event in de URL.
        Geen mock-fallback hier — als courses ontbreken, tonen we een lege state
@@ -1156,13 +1298,16 @@ export default function ServiceMode() {
         return dbEventToServiceEvent(dbEvent, dbCourses, dbAllergies, dbGerechten);
     }, [dbEvent, dbCourses, dbAllergies, dbGerechten]);
 
-    /* Sync builtEvent → eventState (deep-clone zodat optimistic updates lokaal blijven). */
+    /* Sync builtEvent → eventState (deep-clone zodat optimistic updates lokaal blijven).
+       Gate op gerechtenLoading: de state wordt maar één keer geseed, en zonder
+       deze gate verloor je de race met de gerechten-fetch — bord stond dan
+       zonder foto's/service-tips/allergie-flags vastgeklikt. */
     useEffect(() => {
-        if (builtEvent && !eventState) {
+        if (builtEvent && !eventState && !gerechtenLoading) {
             setEventState(JSON.parse(JSON.stringify(builtEvent)));
         }
         /* eslint-disable-next-line react-hooks/exhaustive-deps */
-    }, [builtEvent]);
+    }, [builtEvent, gerechtenLoading]);
 
     /* Auto-enter fullscreen bij ?fullscreen=1 */
     useEffect(() => {
@@ -1244,6 +1389,31 @@ export default function ServiceMode() {
                 }),
             };
         });
+    }
+
+    /* Actieplan-voorstel bevestigd → persist naar courses.steps (+plating
+       als de gang er nog geen had) en werk de lokale state bij. */
+    async function applyActieplan(courseUiId: string, result: ActieplanResult) {
+        const dbId = parseInt(courseUiId.replace('c_', ''), 10);
+        const target = eventState?.courses.find(c => c.id === courseUiId);
+        const fillPlating = !!target && target.plating.length === 0 && result.plating.length > 0;
+        if (Number.isFinite(dbId)) {
+            const { supabase } = await import('@/lib/supabase');
+            const patch: Record<string, unknown> = { steps: result.steps };
+            if (fillPlating) patch.plating = result.plating;
+            const { error } = await supabase.from('courses').update(patch).eq('id', dbId);
+            if (error) {
+                showToast('Actieplan opslaan mislukt: ' + error.message, 'error');
+                return;
+            }
+        }
+        setEventState(state => state ? ({
+            ...state,
+            courses: state.courses.map(c => c.id === courseUiId
+                ? { ...c, steps: result.steps, plating: fillPlating ? result.plating : c.plating }
+                : c),
+        }) : state);
+        showToast(`Actieplan toegevoegd — ${result.steps.length} stappen.`, 'success');
     }
 
     /* Build chef context for AI — rijk aan info zodat Rook precies weet wat er speelt */
@@ -1370,6 +1540,8 @@ export default function ServiceMode() {
             {view === 'board' && eventState && (
                 <ServiceModeBoard
                     event={eventState}
+                    eventDbId={urlEventId}
+                    tableZones={tableZones}
                     onOpenCourse={openCourse}
                     onAdvanceStatus={advanceStatus}
                     onBack={handleExitToHub}
@@ -1386,9 +1558,11 @@ export default function ServiceMode() {
                 <ServiceModeDetail
                     event={eventState}
                     courseId={courseId}
+                    tableZones={tableZones}
                     onBack={() => setView('board')}
                     onAdvance={() => advanceStatus(courseId)}
                     onToggleItem={toggleItem}
+                    onApplyActieplan={(result) => applyActieplan(courseId, result)}
                     rookOffset={rookOffset}
                 />
             )}

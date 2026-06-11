@@ -20,9 +20,10 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, GripVertical, Save, ChevronUp, ChevronDown, X, Sparkles } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save, ChevronUp, ChevronDown, X, Sparkles, Wand2 } from 'lucide-react';
 import type { DbCourse, CourseMise, CourseItem } from '@/types';
 import { useToast } from '@/components/Toast';
+import { seedCoursesFromMenu } from '@/lib/acceptance-workflow';
 
 interface Props {
     eventId: number;
@@ -40,7 +41,10 @@ const STATUS_LABELS: Record<DbCourse['status'], string> = {
     recalled: 'Teruggeroepen',
 };
 
-/* Intern editing-shape — enkel de velden die de UI exposeert. */
+/* Intern editing-shape — enkel de velden die de UI exposeert, plus
+   passthrough-velden die de UI niet toont maar die bij save (delete-then-
+   insert) NIET verloren mogen gaan: steps komen o.a. uit de actieplan-
+   generator in Service Mode, gerecht_ids uit de menu-koppeling. */
 interface EditableCourse {
     id?: number;        // bestaande row in DB; undefined = nieuw
     num: number;
@@ -52,6 +56,15 @@ interface EditableCourse {
     serve_offset_minutes: number | null;
     mise: CourseMise[];
     items: CourseItem[];
+    /* Passthrough (niet in UI): */
+    steps?: unknown[];
+    plating?: unknown[];
+    quality_checks?: unknown[];
+    gerecht_id?: string | null;
+    gerecht_ids?: string[] | null;
+    image_gradient?: string | null;
+    veg_option?: string | null;
+    ai_note?: string | null;
 }
 
 /** Verdeel `total` portions zo gelijk mogelijk over `tableCount` tafels.
@@ -91,37 +104,47 @@ export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) 
     const [saving, setSaving] = useState(false);
     const [openIdx, setOpenIdx] = useState<number | null>(null);
 
-    /* Laad bestaande courses voor dit event. */
+    /* Laad bestaande courses voor dit event. Losse functie zodat
+       "Bouw uit menu" na het seeden opnieuw kan laden. */
+    async function fetchCourses(): Promise<void> {
+        const { data, error } = await supabase
+            .from('courses')
+            .select('*')
+            .eq('event_id', eventId)
+            .order('num', { ascending: true });
+        if (error) { console.warn('[CoursesEditor] load failed:', error); setLoading(false); return; }
+        const rows = (data || []) as DbCourse[];
+        setCourses(rows.map(r => ({
+            id: r.id,
+            num: r.num,
+            title: r.title,
+            description: r.description || '',
+            status: r.status,
+            emoji: r.emoji || '🍽️',
+            prep_time_minutes: r.prep_time_minutes ?? null,
+            serve_offset_minutes: r.serve_offset_minutes ?? null,
+            mise: Array.isArray(r.mise) ? r.mise : [],
+            items: Array.isArray(r.items) ? r.items : [],
+            /* Passthrough — behouden bij save, niet zichtbaar in de UI. */
+            steps: Array.isArray(r.steps) ? r.steps : [],
+            plating: Array.isArray(r.plating) ? r.plating : [],
+            quality_checks: Array.isArray(r.quality_checks) ? r.quality_checks : [],
+            gerecht_id: r.gerecht_id ?? null,
+            gerecht_ids: Array.isArray(r.gerecht_ids) ? r.gerecht_ids : [],
+            image_gradient: r.image_gradient ?? null,
+            veg_option: r.veg_option ?? null,
+            ai_note: r.ai_note ?? null,
+        })));
+        /* Detect bestaand tableCount uit eerste course; fallback op 6. */
+        if (rows[0] && Array.isArray(rows[0].items) && rows[0].items.length > 0) {
+            setTableCount(rows[0].items.length);
+        }
+        setLoading(false);
+    }
+
     useEffect(() => {
-        let alive = true;
-        (async () => {
-            const { data, error } = await supabase
-                .from('courses')
-                .select('*')
-                .eq('event_id', eventId)
-                .order('num', { ascending: true });
-            if (!alive) return;
-            if (error) { console.warn('[CoursesEditor] load failed:', error); setLoading(false); return; }
-            const rows = (data || []) as DbCourse[];
-            setCourses(rows.map(r => ({
-                id: r.id,
-                num: r.num,
-                title: r.title,
-                description: r.description || '',
-                status: r.status,
-                emoji: r.emoji || '🍽️',
-                prep_time_minutes: r.prep_time_minutes ?? null,
-                serve_offset_minutes: r.serve_offset_minutes ?? null,
-                mise: Array.isArray(r.mise) ? r.mise : [],
-                items: Array.isArray(r.items) ? r.items : [],
-            })));
-            /* Detect bestaand tableCount uit eerste course; fallback op 6. */
-            if (rows[0] && Array.isArray(rows[0].items) && rows[0].items.length > 0) {
-                setTableCount(rows[0].items.length);
-            }
-            setLoading(false);
-        })();
-        return () => { alive = false; };
+        void fetchCourses();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [eventId]);
 
     function setCourse(idx: number, patch: Partial<EditableCourse>) {
@@ -149,6 +172,46 @@ export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) 
             [next[idx], next[j]] = [next[j], next[idx]];
             return next.map((c, i) => ({ ...c, num: i + 1 }));
         });
+    }
+
+    const [building, setBuilding] = useState(false);
+
+    /* "Bouw uit menu" — zelfde code-pad als de acceptance-workflow (stap 5),
+       maar handmatig triggerbaar voor events die vóór die workflow bestonden
+       of waar de gangen opnieuw opgebouwd moeten worden. */
+    async function buildFromMenu() {
+        if (courses.length > 0 && !confirm('Dit vervangt de huidige gangen door het menu van de offerte. Doorgaan?')) return;
+        setBuilding(true);
+        try {
+            /* Offerte zoeken: via events.offerte_id, anders omgekeerd via offertes.event_id. */
+            const { data: ev } = await supabase.from('events').select('id, offerte_id').eq('id', eventId).single();
+            let offerte: { menu_selectie?: unknown } | null = null;
+            if (ev?.offerte_id) {
+                const { data } = await supabase.from('offertes').select('id, menu_selectie').eq('id', ev.offerte_id).maybeSingle();
+                offerte = data;
+            }
+            if (!offerte) {
+                const { data } = await supabase.from('offertes').select('id, menu_selectie').eq('event_id', eventId)
+                    .order('id', { ascending: false }).limit(1).maybeSingle();
+                offerte = data;
+            }
+            const menuSel = offerte?.menu_selectie;
+            const isEmpty = !menuSel || (typeof menuSel === 'object' && Object.keys(menuSel as object).length === 0);
+            if (isEmpty) {
+                showToast('Geen offerte-menu gevonden voor dit event — koppel eerst een offerte met een menu.', 'warning');
+                return;
+            }
+            const result = await seedCoursesFromMenu(supabase, eventId, menuSel, { replaceExisting: true });
+            if (!result.success) { showToast(result.message, 'error'); return; }
+            showToast(result.message, 'success');
+            setLoading(true);
+            await fetchCourses();
+            onSaved?.();
+        } catch (e: any) {
+            showToast('Bouwen uit menu mislukt: ' + (e?.message || 'onbekende fout'), 'error');
+        } finally {
+            setBuilding(false);
+        }
     }
 
     function changeTableCount(n: number) {
@@ -192,12 +255,30 @@ export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) 
                     serve_offset_minutes: c.serve_offset_minutes,
                     mise: c.mise,
                     items: c.items,
-                    /* steps/plating/quality_checks: lege arrays totdat editor v2 ze ondersteunt. */
-                    steps: [],
-                    plating: [],
-                    quality_checks: [],
+                    /* Passthrough — eerder gingen steps (actieplan!) en de
+                       gerecht-koppeling hier stilletjes verloren bij elke save. */
+                    steps: c.steps ?? [],
+                    plating: c.plating ?? [],
+                    quality_checks: c.quality_checks ?? [],
+                    image_gradient: c.image_gradient ?? null,
+                    veg_option: c.veg_option ?? null,
+                    ai_note: c.ai_note ?? null,
+                    gerecht_id: c.gerecht_id ?? null,
+                    gerecht_ids: c.gerecht_ids ?? [],
                 }));
-                const { error: insErr } = await supabase.from('courses').insert(rows);
+                let { error: insErr } = await supabase.from('courses').insert(rows);
+                /* Koppel-migraties nog niet gedraaid → kolom ontbreekt.
+                   Strip de optionele velden en retry (zelfde vangnet als
+                   autoCreateCourses in acceptance-workflow). */
+                if (insErr && /Could not find the '(\w+)' column|column "?\w+"? .* does not exist/i.test(insErr.message)) {
+                    const stripped = rows.map(r => {
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                        const { gerecht_id, gerecht_ids, ...rest } = r;
+                        return rest;
+                    });
+                    const retry = await supabase.from('courses').insert(stripped);
+                    insErr = retry.error;
+                }
                 if (insErr) throw insErr;
             }
             onSaved?.();
@@ -227,6 +308,14 @@ export default function CoursesEditor({ eventId, eventGuests, onSaved }: Props) 
                     </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={buildFromMenu}
+                        disabled={building}
+                        title="Genereer de gangen uit het offerte-menu van dit event (incl. gerecht-koppeling en mise)"
+                    >
+                        {building ? <><Sparkles size={12} className="animate-pulse" /> Bouwen…</> : <><Wand2 size={12} /> Bouw uit menu</>}
+                    </button>
                     <button className="btn btn-ghost btn-sm" onClick={addCourse}><Plus size={12} /> Gang</button>
                     <button className="btn btn-brand btn-sm" onClick={save} disabled={saving}>
                         {saving ? <><Sparkles size={12} className="animate-pulse" /> Opslaan…</> : <><Save size={12} /> Opslaan</>}

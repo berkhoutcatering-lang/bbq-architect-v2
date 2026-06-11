@@ -51,7 +51,9 @@ export interface UseSupabaseOptions {
     skipInitialFetch?: boolean;
 }
 
-export function useSupabase<T extends { id: number }>(
+/* id mag number (bigserial-tabellen) of string (uuid-tabellen zoals
+   floor_plans/service_zones) zijn — Supabase .eq('id', …) accepteert beide. */
+export function useSupabase<T extends { id: number | string }>(
     table: string,
     defaultVal?: T[],
     options?: UseSupabaseOptions,
@@ -67,8 +69,8 @@ export function useSupabase<T extends { id: number }>(
     error: string | null;
     refetch: () => void;
     insert: (row: Partial<T>) => Promise<T | null>;
-    update: (id: number, row: Partial<T>) => Promise<T | null>;
-    remove: (id: number) => Promise<void>;
+    update: (id: number | string, row: Partial<T>) => Promise<T | null>;
+    remove: (id: number | string) => Promise<void>;
     setData: React.Dispatch<React.SetStateAction<T[]>>;
 } {
     const skipInitialFetch = options?.skipInitialFetch ?? false;
@@ -228,7 +230,7 @@ export function useSupabase<T extends { id: number }>(
         });
     }, [table, orgId, offlineMode, activeOffline]);
 
-    const update = useCallback(function (id: number, row: Partial<T>): Promise<T | null> {
+    const update = useCallback(function (id: number | string, row: Partial<T>): Promise<T | null> {
         if (!supabase || !orgId) return Promise.resolve(null);
         let previousRow: T | undefined;
         let merged: T | undefined;
@@ -251,10 +253,12 @@ export function useSupabase<T extends { id: number }>(
                 table: table as OfflineTable,
                 op: 'update',
                 row: row as Record<string, unknown>,
-                rowId: id,
+                /* Offline-queue werkt alleen voor bigserial-tabellen — uuid-ids
+                   komen hier in de praktijk nooit (niet offline-enabled). */
+                rowId: typeof id === 'number' ? id : null,
             })
                 .then(function () {
-                    if (merged) return applyLocalMutation(table as OfflineTable, 'update', merged as unknown as Record<string, unknown>, id);
+                    if (merged) return applyLocalMutation(table as OfflineTable, 'update', merged as unknown as Record<string, unknown>, typeof id === 'number' ? id : null);
                 })
                 .then(function () {
                     emitQueueChange();
@@ -282,7 +286,7 @@ export function useSupabase<T extends { id: number }>(
         });
     }, [table, orgId, offlineMode, activeOffline]);
 
-    const remove = useCallback(function (id: number): Promise<void> {
+    const remove = useCallback(function (id: number | string): Promise<void> {
         if (!supabase || !orgId) return Promise.resolve();
         let removedRow: T | undefined;
         // Optimistic: remove immediately
@@ -298,10 +302,10 @@ export function useSupabase<T extends { id: number }>(
                 table: table as OfflineTable,
                 op: 'delete',
                 row: { id },
-                rowId: id,
+                rowId: typeof id === 'number' ? id : null,
             })
                 .then(function () {
-                    return applyLocalMutation(table as OfflineTable, 'delete', { id }, id);
+                    return applyLocalMutation(table as OfflineTable, 'delete', { id }, typeof id === 'number' ? id : null);
                 })
                 .then(function () {
                     emitQueueChange();

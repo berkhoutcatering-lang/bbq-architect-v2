@@ -893,6 +893,12 @@ export interface DbCourse {
   plating: string[];
   quality_checks: string[];
   items: CourseItem[];
+  /* Koppeling naar gerechten: enkelvoud = representatief gerecht (prep-flow),
+     meervoud = álle gerechten van de gang in menu-volgorde (KDS foto's/
+     recepturen/allergie-flags). Optioneel — kolommen bestaan pas na
+     migraties 20260511160000 (gerecht_link) + 20260611100000 (gerecht_ids). */
+  gerecht_id?: string | null;
+  gerecht_ids?: string[] | null;
   organization_id?: string | null;
   created_at: string;
   updated_at: string;
