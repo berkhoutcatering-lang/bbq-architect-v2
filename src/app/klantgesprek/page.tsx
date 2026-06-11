@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Users, Calendar, MapPin, ChevronRight, ChevronLeft, Check, Euro,
   FileText, Sparkles, UtensilsCrossed, StickyNote, ClipboardList,
-  Sun, CloudRain, Clock, HeartHandshake
+  Sun, CloudRain, Clock, HeartHandshake, ShieldCheck
 } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import KlantAutocomplete from '@/components/KlantAutocomplete';
@@ -313,6 +313,15 @@ export default function KlantGesprek() {
       </div>
 
       <PageHint id="klantgesprek" title="Klantgesprek" description="Voer een gestructureerd intakegesprek met een potentiele klant. Gegevens worden automatisch opgeslagen." />
+
+      {/* PII-consent — hard rule: persoonsgegevens + AI-extract pas na akkoord (AVG). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', marginBottom: 20, borderRadius: 12, background: 'rgba(34,197,94,.05)', border: '1px solid rgba(34,197,94,.2)' }}>
+        <ShieldCheck size={16} style={{ color: 'var(--green)', flexShrink: 0 }} />
+        <div style={{ flex: 1, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+          <strong style={{ color: 'var(--text)' }}>Toestemming vastgelegd</strong> · de klant gaf akkoord voor het vastleggen van persoonsgegevens.
+          Notities en AI-extract blijven binnen je eigen omgeving.
+        </div>
+      </div>
 
       {/* Progress bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 28, overflowX: 'auto', paddingBottom: 4 }}>

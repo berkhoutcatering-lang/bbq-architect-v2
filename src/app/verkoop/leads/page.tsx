@@ -103,6 +103,21 @@ function sourceIcon(src: string) {
   return Link2;
 }
 
+/* € waarde van een lead: indicatie-omzet (arrangement) of geparsete budget-tekst. */
+function leadValue(l: Lead): number {
+  if (l.menu_prijs_indicatie != null) return l.menu_prijs_indicatie;
+  if (l.budget_indicatie) {
+    const n = parseFloat(l.budget_indicatie.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.'));
+    if (!Number.isNaN(n)) return n;
+  }
+  return 0;
+}
+/* >24u onbeantwoord in kolom Nieuw → aandacht nodig. */
+function isStale(l: Lead, status: LeadStatus): boolean {
+  if (status !== 'nieuw' || !l.created_at) return false;
+  return Date.now() - new Date(l.created_at).getTime() >= 24 * 3600 * 1000;
+}
+
 function LeadBadge({ status, size = 'md' }: { status: string; size?: 'sm' | 'md' }) {
   const s = LEAD_STATUS[(status as LeadStatus)] || LEAD_STATUS.nieuw;
   const sm = size === 'sm';
@@ -134,6 +149,7 @@ export default function LeadsPage() {
   const slug = (organization as { slug?: string } | null)?.slug;
 
   const [q, setQ] = useState('');
+  const [eventFilter, setEventFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<'kanban' | 'lijst'>('kanban');
   const [drawer, setDrawer] = useState<Lead | 'new' | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -173,10 +189,28 @@ export default function LeadsPage() {
 
   const ql = q.trim().toLowerCase();
   const filtered = useMemo(() => leads.filter((l) =>
-    ql === '' || [l.naam, l.email, l.locatie, l.event_type, l.client_naam].filter(Boolean).join(' ').toLowerCase().includes(ql)
-  ), [leads, ql]);
+    (ql === '' || [l.naam, l.email, l.locatie, l.event_type, l.client_naam].filter(Boolean).join(' ').toLowerCase().includes(ql))
+    && (eventFilter === '' || (l.event_type || 'Anders') === eventFilter)
+  ), [leads, ql, eventFilter]);
 
   const statusOf = (l: Lead): LeadStatus => (pending[l.id] || (l.status as LeadStatus) || 'nieuw');
+
+  /* KPI-header: open pijplijn, win-ratio, gewonnen waarde, te-lang-stil. */
+  const kpi = useMemo(() => {
+    const open = leads.filter((l) => ['nieuw', 'in_gesprek', 'offerte'].includes(statusOf(l)));
+    const won = leads.filter((l) => statusOf(l) === 'gewonnen');
+    const lost = leads.filter((l) => statusOf(l) === 'verloren');
+    const beslist = won.length + lost.length;
+    return {
+      open: open.length,
+      openValue: open.reduce((s, l) => s + leadValue(l), 0),
+      winRatio: beslist > 0 ? Math.round((won.length / beslist) * 100) : null,
+      won: won.length, lost: lost.length,
+      wonValue: won.reduce((s, l) => s + leadValue(l), 0),
+      stale: leads.filter((l) => isStale(l, statusOf(l))).length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, pending]);
 
   async function handleSave() {
     if (!form.naam.trim()) { showToast('Naam is verplicht', 'error'); return; }
@@ -291,7 +325,25 @@ export default function LeadsPage() {
           </h1>
           <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 5, maxWidth: 540, lineHeight: 1.45 }}>Inkomende aanvragen — van eerste contact tot gewonnen offerte.</p>
         </div>
-        <button className="btn btn-brand" onClick={openNew} style={{ flexShrink: 0, minHeight: 42 }}><Plus size={15} /> Nieuwe aanvraag</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {!isEmpty && (
+            <div style={{ display: 'flex', gap: 0, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card-solid)', overflow: 'hidden' }}>
+              {[
+                { label: 'Open leads', value: String(kpi.open), sub: `€ ${(kpi.openValue / 1000).toFixed(1)}k in pijplijn`, tone: 'var(--text)' },
+                { label: 'Win-ratio', value: kpi.winRatio == null ? '—' : kpi.winRatio + '%', sub: `${kpi.won} gewonnen · ${kpi.lost} verloren`, tone: 'var(--green)' },
+                { label: 'Gewonnen waarde', value: `€ ${(kpi.wonValue / 1000).toFixed(1)}k`, sub: 'dit seizoen', tone: 'var(--brand-gold, var(--brand))' },
+                { label: 'Te lang stil', value: String(kpi.stale), sub: 'nieuw · >24u', tone: kpi.stale > 0 ? 'var(--orange, #f97316)' : 'var(--muted)' },
+              ].map((s) => (
+                <div key={s.label} style={{ padding: '10px 16px', borderLeft: '1px solid var(--border)', minWidth: 108 }}>
+                  <div className="lead-eyebrow" style={{ fontSize: 9.5, marginBottom: 3 }}>{s.label}</div>
+                  <div className="mono" style={{ fontSize: 19, fontWeight: 800, color: s.tone, lineHeight: 1.1 }}>{s.value}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap' }}>{s.sub}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="btn btn-brand" onClick={openNew} style={{ flexShrink: 0, minHeight: 42 }}><Plus size={15} /> Nieuwe aanvraag</button>
+        </div>
       </div>
 
       {isEmpty ? (
@@ -304,6 +356,21 @@ export default function LeadsPage() {
               <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'inline-flex' }}><Search size={16} color="var(--muted)" /></span>
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Zoek op naam, type, plaats of nummer…"
                 style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-deep, var(--card))', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 10, padding: '11px 14px 11px 38px', fontSize: 13.5, outline: 'none', minHeight: 44 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['', ...EVENT_TYPES].map((t) => {
+                const on = eventFilter === t;
+                const label = t === '' ? 'Alle events' : t;
+                return (
+                  <button key={t || 'alle'} onClick={() => setEventFilter(t)}
+                    style={{
+                      padding: '7px 13px', borderRadius: 999, fontSize: 12, fontWeight: on ? 700 : 500, cursor: 'pointer',
+                      border: on ? '1px solid rgba(255,191,0,.4)' : '1px solid var(--border)',
+                      background: on ? 'var(--brand-tint)' : 'transparent',
+                      color: on ? 'var(--brand)' : 'var(--muted)', transition: 'all .12s', whiteSpace: 'nowrap',
+                    }}>{label}</button>
+                );
+              })}
             </div>
             <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 10, background: 'var(--bg-deep, var(--card))', border: '1px solid var(--border)', flexShrink: 0 }}>
               {([['kanban', 'Kanban', LayoutGrid], ['lijst', 'Lijst', List]] as const).map(([v, label, IconC]) => {
@@ -339,6 +406,16 @@ export default function LeadsPage() {
                       <span style={{ width: 7, height: 7, borderRadius: 999, background: s.dot, boxShadow: s.glow ? `0 0 6px ${s.dot}` : 'none' }} />
                       <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text)', whiteSpace: 'nowrap' }}>{s.label}</span>
                       <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-light)', background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 999, minWidth: 22, height: 20, padding: '0 7px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{items.length}</span>
+                      {(() => {
+                        const staleN = items.filter((l) => isStale(l, statusOf(l))).length;
+                        return staleN > 0 ? (
+                          <span title={`${staleN} niet gereageerd >24u`} className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--orange, #f97316)', background: 'rgba(249,115,22,.10)', border: '1px solid rgba(249,115,22,.3)', borderRadius: 999, height: 20, padding: '0 7px', display: 'inline-flex', alignItems: 'center', gap: 3 }}>{staleN}</span>
+                        ) : null;
+                      })()}
+                      {(() => {
+                        const v = items.reduce((sm, l) => sm + leadValue(l), 0);
+                        return v > 0 ? <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted-light)' }}>€ {(v / 1000).toFixed(1)}k</span> : null;
+                      })()}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 96, padding: '4px 4px 8px', borderRadius: 12, transition: 'background .15s, border-color .15s', border: `1.5px dashed ${isOver ? s.border : 'transparent'}`, background: isOver ? s.bg : 'transparent' }}>
                       {items.map((l) => <LeadCard key={l.id} lead={l} onOpen={() => openLead(l)} onDragStart={() => setDragId(l.id)} onDragEnd={() => { setDragId(null); setOverStage(null); }} dragging={dragId === l.id} />)}
@@ -498,7 +575,12 @@ function LeadCard({ lead, onOpen, onDragStart, onDragEnd, dragging }: { lead: Le
             <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.naam}</div>
             {lead.event_type && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{lead.event_type}</div>}
           </div>
-          <span style={{ opacity: hover ? 0.7 : 0, transition: 'opacity .15s', color: 'var(--muted)', marginTop: -2, cursor: 'grab' }}><GripVertical size={15} /></span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {isStale(lead, (lead.status as LeadStatus) || 'nieuw') && (
+              <span title="Niet gereageerd >24u" className="mono" style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--orange, #f97316)', background: 'rgba(249,115,22,.12)', border: '1px solid rgba(249,115,22,.32)', borderRadius: 999, padding: '2px 7px', letterSpacing: '.03em' }}>&gt;24u</span>
+            )}
+            <span style={{ opacity: hover ? 0.7 : 0, transition: 'opacity .15s', color: 'var(--muted)', marginTop: -2, cursor: 'grab' }}><GripVertical size={15} /></span>
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 12px', marginTop: 11 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted-light)', whiteSpace: 'nowrap' }}><Calendar size={13} color="var(--muted)" /><span className="mono">{fmtDateShort(lead.event_datum)}</span></span>

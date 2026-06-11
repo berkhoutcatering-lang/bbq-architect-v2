@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Layers, Tag, TrendingUp, ShieldAlert } from 'lucide-react';
 
 interface Props {
@@ -19,6 +20,16 @@ export default function GerechtenKpiTiles({
   allergenenGedekt,
   totaalGerechten,
 }: Props) {
+  // APK v3 #32: bij allergen-dekking <80% surface een actionable CTA
+  // (link naar gerechten zonder allergens) ipv passieve KPI-display.
+  // HACCP-relevant: ontbrekende allergens = risico bij klant-allergie.
+  const allergenenMissend = Math.max(0, totaalGerechten - allergenenGedekt);
+  const allergenenDekkingPct = totaalGerechten > 0 ? (allergenenGedekt / totaalGerechten) * 100 : 0;
+  const allergenenWarn = totaalGerechten > 0 && allergenenDekkingPct < 80;
+  const allergenenSub = allergenenWarn
+    ? `Vul aan voor ${allergenenMissend} gerecht${allergenenMissend === 1 ? '' : 'en'} →`
+    : 'in receptuur gemerkt';
+
   const tiles = [
     {
       label: 'In de kaart',
@@ -26,6 +37,7 @@ export default function GerechtenKpiTiles({
       sub: `${conceptCount} concept${conceptCount === 1 ? '' : 'en'}`,
       Icon: Layers,
       tone: 'default' as const,
+      href: null as string | null,
     },
     {
       label: 'Gem. verkoop',
@@ -33,6 +45,7 @@ export default function GerechtenKpiTiles({
       sub: 'per portie',
       Icon: Tag,
       tone: 'default' as const,
+      href: null as string | null,
     },
     {
       label: 'Gem. brutomarge',
@@ -40,13 +53,15 @@ export default function GerechtenKpiTiles({
       sub: 'over alle gangen',
       Icon: TrendingUp,
       tone: 'green' as const,
+      href: null as string | null,
     },
     {
       label: 'Allergenen-dekking',
       value: `${allergenenGedekt}/${totaalGerechten}`,
-      sub: 'in receptuur gemerkt',
+      sub: allergenenSub,
       Icon: ShieldAlert,
-      tone: 'default' as const,
+      tone: (allergenenWarn ? 'warn' : 'default') as 'default' | 'warn' | 'green',
+      href: allergenenWarn ? '/gerechten?queue=allergens' : null,
     },
   ];
 
@@ -67,9 +82,13 @@ export default function GerechtenKpiTiles({
       {tiles.map((t) => {
         const Icon = t.Icon;
         const valueColor =
-          t.tone === 'green' ? 'var(--green)' : 'var(--text)';
-        return (
-          <div key={t.label} style={{ background: 'var(--card)', padding: '18px 20px' }}>
+          t.tone === 'green' ? 'var(--green)'
+          : t.tone === 'warn' ? 'var(--amber, #f59e0b)'
+          : 'var(--text)';
+        const subColor = t.tone === 'warn' ? 'var(--amber, #f59e0b)' : 'var(--muted)';
+        const iconColor = t.tone === 'warn' ? 'var(--amber, #f59e0b)' : 'var(--muted-light)';
+        const tileBody = (
+          <>
             <div
               style={{
                 display: 'flex',
@@ -90,7 +109,7 @@ export default function GerechtenKpiTiles({
               >
                 {t.label}
               </div>
-              <Icon size={13} color="var(--muted-light)" />
+              <Icon size={13} color={iconColor} />
             </div>
             <div
               style={{
@@ -103,7 +122,22 @@ export default function GerechtenKpiTiles({
             >
               {t.value}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{t.sub}</div>
+            <div style={{ fontSize: 11, color: subColor, marginTop: 4, fontWeight: t.tone === 'warn' ? 600 : 400 }}>{t.sub}</div>
+          </>
+        );
+        const baseStyle = { background: 'var(--card)', padding: '18px 20px' };
+        if (t.href) {
+          return (
+            <Link key={t.label} href={t.href} style={{ ...baseStyle, textDecoration: 'none', color: 'inherit', cursor: 'pointer', transition: 'background .12s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover, rgba(245,158,11,.05))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--card)'; }}>
+              {tileBody}
+            </Link>
+          );
+        }
+        return (
+          <div key={t.label} style={baseStyle}>
+            {tileBody}
           </div>
         );
       })}

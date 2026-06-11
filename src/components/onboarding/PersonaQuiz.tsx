@@ -76,8 +76,10 @@ export default function PersonaQuiz({ forceShow, onComplete }: Props) {
             .select('persona_result')
             .eq('organization_id', orgId)
             .maybeSingle();
-          if (!cancelled && data?.persona_result && Object.keys(data.persona_result).length > 0) {
-            // Hydrate localStorage zodat volgende load nog sneller is
+          /* APK v3 #30: check op IS NOT NULL ipv Object.keys > 0 zodat een
+             expliciete skip (opgeslagen als { skipped_at: ... }) ook in
+             volgende browser/incognito niet opnieuw triggert. */
+          if (!cancelled && data?.persona_result != null) {
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data.persona_result)); } catch { /* */ }
             return;
           }
@@ -135,7 +137,18 @@ export default function PersonaQuiz({ forceShow, onComplete }: Props) {
   }
 
   function handleSkip() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({})); } catch { /* */ }
+    /* APK v3 #30: skip ook server-side persistent maken zodat quiz niet
+       opnieuw triggert in andere browser/incognito. Markeer met timestamp
+       zodat we onderscheid kunnen maken tussen "nooit aangeboden" (null)
+       en "expliciet overgeslagen". */
+    const skipMarker = { skipped_at: new Date().toISOString() };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(skipMarker)); } catch { /* */ }
+    if (orgId && supabase) {
+      void supabase
+        .from('settings')
+        .update({ persona_result: skipMarker })
+        .eq('organization_id', orgId);
+    }
     setOpen(false);
   }
 

@@ -28,6 +28,7 @@ import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
 import EventTabs from '@/components/EventTabs';
 import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
+import PitmasterFaseCard from '@/components/ask-pitmaster/PitmasterFaseCard';
 import MenukaartMissingNotice from '@/components/menukaart/MenukaartMissingNotice';
 import EventMessageQuickEdit from '@/components/menukaart/EventMessageQuickEdit';
 import { useToast } from '@/components/Toast';
@@ -138,7 +139,11 @@ export default function EventHubPage() {
         ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null, error: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),
         supabase.from('haccp_records').select('*').eq('event_id', eventId),
-        ev.offerte_id ? supabase.from('service_logs').select('*').eq('offerte_id', ev.offerte_id) : Promise.resolve({ data: [], error: null }) as any,
+        /* service_logs.offerte_id is UUID, events.offerte_id is BIGINT —
+           type-mismatch zorgde voor 12× console-error per page-load. Geen
+           data-bron beschikbaar zonder schema-migratie of een UUID-koppeling.
+           Skip query tot service_logs schema-decision (zie audit-task #27). */
+        Promise.resolve({ data: [], error: null }) as any,
         supabase.from('event_reflecties').select('*').eq('event_id', eventId).limit(1),
         supabase.from('inkooplijsten').select('*').eq('event_id', eventId).limit(1),
         supabase.from('gangen').select('*').order('volgorde', { ascending: true }),
@@ -559,9 +564,18 @@ export default function EventHubPage() {
     );
   }
 
-  const evDate = new Date(event.date + 'T17:00:00');
-  const dateLabel = `${evDate.getDate()} ${moNamesLong[evDate.getMonth()]} ${evDate.getFullYear()}`;
-  const dateUpper = `${evDate.getDate()} ${moNamesShort[evDate.getMonth()].toUpperCase()} ${evDate.getFullYear()}`;
+  /* APK-fix #45: guard tegen ongeldige event.date (kan Date-object of
+     ongeparste string zijn afhankelijk van Supabase response). Bij Invalid
+     Date faalt moNamesShort[NaN].toUpperCase() de hele page. */
+  const evDateRaw = event.date ? String(event.date) : '';
+  const evDate = new Date(evDateRaw.includes('T') ? evDateRaw : evDateRaw + 'T17:00:00');
+  const evDateValid = !Number.isNaN(evDate.getTime());
+  const dateLabel = evDateValid
+    ? `${evDate.getDate()} ${moNamesLong[evDate.getMonth()]} ${evDate.getFullYear()}`
+    : 'Datum onbekend';
+  const dateUpper = evDateValid
+    ? `${evDate.getDate()} ${(moNamesShort[evDate.getMonth()] || 'jan').toUpperCase()} ${evDate.getFullYear()}`
+    : 'DATUM ONBEKEND';
   const circumference = 2 * Math.PI * 86;
 
   const statusLabel = event.status === 'confirmed' ? 'Bevestigd' : event.status === 'optie' ? 'Optie · wacht op akkoord' : event.status === 'completed' ? 'Afgerond' : 'Nieuw';
@@ -813,7 +827,12 @@ export default function EventHubPage() {
                     key: 'factuur' as const,
                     Ic: Receipt,
                     t: factuur ? `Factuur ${factuur.nummer || ''}` : 'Factuur',
-                    s: factuur ? (factuur.status || 'concept') : 'Bij akkoord',
+                    /* APK v3 #7: surface "klaar om te versturen" als
+                       event afgerond + reflectie ingevuld + factuur nog concept.
+                       Niet auto-flippen (Sam wil control), wel visibility. */
+                    s: (event?.status === 'completed' && reflectie && factuur?.status === 'concept')
+                      ? '✨ Klaar om te versturen'
+                      : factuur ? (factuur.status || 'concept') : 'Bij akkoord',
                     onClick: () => factuur ? router.push(`/facturen?id=${factuur.id}`) : router.push('/facturen'),
                     download: factuur ? downloadFactuurPdf : undefined,
                     disabled: !factuur,
@@ -1141,6 +1160,10 @@ export default function EventHubPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <PitmasterFaseCard
+              event={{ id: event.id, name: event.name, date: event.date, guests: event.guests, status: event.status }}
+              daysLeft={derived?.daysLeft ?? 0}
+            />
             <div className="client-card">
               <div className="cc-row">
                 <div className="cc-avatar">{(event.client_naam || 'VD').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Settings, Users, Inbox, Globe, HelpCircle, Building2, Camera } from 'lucide-react';
+import { Settings, Users, Inbox, Globe, HelpCircle, Building2 } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
 const TABS: HubTab[] = [
@@ -8,7 +8,6 @@ const TABS: HubTab[] = [
   { href: '/gebruikers', label: 'Gebruikers', icon: Users },
   { href: '/mailbox', label: 'Mailbox', icon: Inbox },
   { href: '/website', label: 'Website', icon: Globe },
-  { href: '/foto-archief', label: 'Foto-archief', icon: Camera },
   { href: '/hulp', label: 'Hulp', icon: HelpCircle },
   { href: '/admin', label: 'Admin', icon: Building2 },
 ];

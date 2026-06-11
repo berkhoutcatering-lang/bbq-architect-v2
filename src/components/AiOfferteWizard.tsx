@@ -244,6 +244,36 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                     <button onClick={onClose} aria-label="Sluit wizard" style={{ background: 'transparent', border: 'none', color: 'var(--muted, #999)', cursor: 'pointer', padding: 10, minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}><X size={18} /></button>
                 </div>
 
+                {/* Step-indicator — mapt de 3 interne stappen naar de design-fases.
+                    Brief = input · Opzet/Menu = generating · Versturen = preview. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '14px 24px', borderBottom: '1px solid var(--card-solid, #1a1a1e)' }}>
+                    {(() => {
+                        const fases = ['Brief', 'Menu', 'Versturen'];
+                        const activeIdx = step === 'input' ? 0 : step === 'generating' ? 1 : 2;
+                        return fases.map((f, i) => {
+                            const done = i < activeIdx;
+                            const active = i === activeIdx;
+                            return (
+                                <React.Fragment key={f}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                        <span style={{
+                                            width: 22, height: 22, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: 11, fontWeight: 700, flexShrink: 0,
+                                            background: done ? 'rgba(34,197,94,.15)' : active ? GOLD : 'transparent',
+                                            border: done ? '1px solid var(--green)' : active ? `1px solid ${GOLD}` : '1px solid var(--border)',
+                                            color: done ? 'var(--green)' : active ? '#0a0a0c' : 'var(--muted)',
+                                        }}>{done ? <Check size={12} /> : i + 1}</span>
+                                        <span style={{ fontSize: 12.5, fontWeight: active ? 700 : 500, color: active ? 'var(--text)' : done ? 'var(--muted)' : 'var(--muted-light, #777)' }}>{f}</span>
+                                    </span>
+                                    {i < fases.length - 1 && (
+                                        <span style={{ flex: 1, height: 1, margin: '0 12px', background: done ? 'var(--green)' : 'var(--border)', opacity: done ? 0.5 : 1 }} />
+                                    )}
+                                </React.Fragment>
+                            );
+                        });
+                    })()}
+                </div>
+
                 <style jsx>{`
                     @media (max-width: 767px) {
                         :global(.ai-wizard-backdrop) {
@@ -501,6 +531,13 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             {error && (
                                 <div style={{ padding: 10, borderRadius: 8, background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', fontSize: 12, color: 'var(--red)' }}>{error}</div>
                             )}
+
+                            {/* BTW-disclaimer — hard rule: AI suggereert prijs, BTW-splits worden
+                                server-side berekend uit BTW_RULES_2026, nooit door het model. */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 12px', borderRadius: 8, background: 'rgba(196,163,90,.06)', border: '1px solid rgba(196,163,90,.2)', fontSize: 11.5, color: 'var(--muted)' }}>
+                                <Check size={13} style={{ color: GOLD, flexShrink: 0 }} />
+                                <span>BTW (9% eten · 21% drank &amp; service) wordt <strong style={{ color: 'var(--text)' }}>server-side berekend</strong> bij het opslaan — niet door de AI.</span>
+                            </div>
 
                             <div style={{ display: 'flex', gap: 8, position: 'sticky', bottom: 0, paddingTop: 10, background: 'var(--bg, #0a0a0d)' }}>
                                 <button onClick={() => setStep('input')} style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid var(--card-solid, #1a1a1e)', background: 'var(--card, #15151a)', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Opnieuw</button>

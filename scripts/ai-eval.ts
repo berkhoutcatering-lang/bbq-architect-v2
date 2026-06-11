@@ -49,6 +49,49 @@ const BASE = process.env.BBQ_EVAL_BASE || 'http://localhost:3000';
 const THRESHOLD = Number(process.env.BBQ_EVAL_THRESHOLD ?? '0.9');
 const EVALS_DIR = resolve(process.cwd(), 'docs/ai-evals');
 
+/* APK-finding #34: zonder Supabase-sessie krijgt elke /api/* call een
+   redirect naar /login = HTML response = JSON-parse-fout = 0% pass-rate.
+   Auth-flow: log een test-user in via Supabase REST, vang de access_token,
+   stuur die als Bearer-header mee. Bearer-tokens worden door @supabase/ssr
+   serverComponentClient herkend, dus de API-routes zien een ingelogde user
+   en RLS-policies werken normaal. Env-vars vereist:
+     BBQ_EVAL_USER_EMAIL    — test-user in dezelfde org als de eval-data
+     BBQ_EVAL_USER_PASSWORD — wachtwoord van die user
+   Optioneel:
+     NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (al in CI). */
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SB_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const EVAL_EMAIL = process.env.BBQ_EVAL_USER_EMAIL || '';
+const EVAL_PWD = process.env.BBQ_EVAL_USER_PASSWORD || '';
+let bearerToken: string | null = null;
+
+async function authenticate(): Promise<void> {
+  if (!EVAL_EMAIL || !EVAL_PWD) {
+    console.warn('[ai-eval] BBQ_EVAL_USER_EMAIL/PASSWORD ontbreken — endpoints zullen 401/redirect retourneren');
+    return;
+  }
+  if (!SB_URL || !SB_ANON) {
+    console.error('[ai-eval] NEXT_PUBLIC_SUPABASE_URL/ANON_KEY ontbreken — auth onmogelijk');
+    process.exit(2);
+  }
+  const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SB_ANON },
+    body: JSON.stringify({ email: EVAL_EMAIL, password: EVAL_PWD }),
+  });
+  if (!res.ok) {
+    console.error(`[ai-eval] auth failed: ${res.status} ${await res.text()}`);
+    process.exit(2);
+  }
+  const data = await res.json() as { access_token?: string };
+  if (!data.access_token) {
+    console.error('[ai-eval] auth response zonder access_token');
+    process.exit(2);
+  }
+  bearerToken = data.access_token;
+  console.log('[ai-eval] authenticated as ' + EVAL_EMAIL);
+}
+
 function getByPath(obj: unknown, path: string): unknown {
   if (!path) return obj;
   const parts = path.split('.');
@@ -100,9 +143,11 @@ async function runCase(tc: TestCase): Promise<CaseResult> {
   let httpStatus = 0;
   let json: unknown = null;
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (bearerToken) headers['Authorization'] = `Bearer ${bearerToken}`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(tc.request.body),
     });
     httpStatus = res.status;
@@ -149,6 +194,7 @@ async function loadCases(endpointDir: string): Promise<TestCase[]> {
 
 async function main() {
   console.log(`[ai-eval] base=${BASE} threshold=${THRESHOLD}`);
+  await authenticate();
 
   let entries: string[];
   try {

@@ -23,6 +23,11 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # APK-fix #34: zonder deze auth-credentials krijgen alle /api/* calls
+      # een redirect-naar-login (HTML) en faalt elke eval-case op JSON-parse.
+      # Test-user moet in dezelfde organisatie zitten als de eval-fixtures.
+      BBQ_EVAL_USER_EMAIL: ${{ secrets.BBQ_EVAL_USER_EMAIL }}
+      BBQ_EVAL_USER_PASSWORD: ${{ secrets.BBQ_EVAL_USER_PASSWORD }}
       BBQ_EVAL_THRESHOLD: ${{ inputs.threshold || '0.9' }}
       BBQ_EVAL_BASE: http://localhost:3000
 

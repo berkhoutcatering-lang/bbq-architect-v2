@@ -24,6 +24,7 @@ import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
 import FinanceSummaryStrip from './FinanceSummaryStrip';
+import KostenAnomalieDonut from './sections/KostenAnomalieDonut';
 import MarktPulseWidget from './MarktPulseWidget';
 import KiaScenarioModal from '@/components/finance-copilot/KiaScenarioModal';
 import CashflowTab from './tabs/CashflowTab';
@@ -437,6 +438,17 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                                 </div>
                             </div>
                         </div>
+
+                        {/* Kostenanomalie — verklaart een te-mooie marge (verwachte vs geboekte kosten) */}
+                        <KostenAnomalieDonut
+                            verwacht={(forecast.totalFoodcost || 0) + (forecast.totalLabor || 0)}
+                            geboekt={bonnen
+                                .filter((b) => (b.datum || '').startsWith(String(selectedYear)))
+                                .reduce((s, b) => s + (b.totaal_bedrag || 0), 0)}
+                            margePct={forecast.overalMarge || 0}
+                            bonnenOngecategoriseerd={bonnen.filter((b) => (b.datum || '').startsWith(String(selectedYear)) && !(b as { rgs_code?: string | null }).rgs_code).length}
+                            onToonBonnen={() => { window.location.href = '/archief'; }}
+                        />
                     </PageSection>
 
                     <PageSection>

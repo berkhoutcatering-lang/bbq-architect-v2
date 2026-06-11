@@ -312,6 +312,11 @@ function Klanten() {
                                             </Link>
                                         );
                                     })}
+                                    {stats.eventList.length > 5 && (
+                                        <Link href={`/events?client=${encodeURIComponent(form.naam)}`} style={{ display: 'block', textAlign: 'center', padding: '8px', marginTop: 4, fontSize: 12, color: 'var(--brand)', textDecoration: 'none', fontWeight: 600 }}>
+                                            Alle {stats.eventList.length} events bekijken →
+                                        </Link>
+                                    )}
                                 </div>
                             )}
 
@@ -330,6 +335,11 @@ function Klanten() {
                                             </Link>
                                         );
                                     })}
+                                    {stats.offerteList.length > 5 && (
+                                        <Link href={`/offertes?client=${encodeURIComponent(form.naam)}`} style={{ display: 'block', textAlign: 'center', padding: '8px', marginTop: 4, fontSize: 12, color: 'var(--brand)', textDecoration: 'none', fontWeight: 600 }}>
+                                            Alle {stats.offerteList.length} offertes bekijken →
+                                        </Link>
+                                    )}
                                 </div>
                             )}
 
@@ -352,6 +362,11 @@ function Klanten() {
                                             </Link>
                                         );
                                     })}
+                                    {stats.factuurList.length > 5 && (
+                                        <Link href={`/facturen?client=${encodeURIComponent(form.naam)}`} style={{ display: 'block', textAlign: 'center', padding: '8px', marginTop: 4, fontSize: 12, color: 'var(--brand)', textDecoration: 'none', fontWeight: 600 }}>
+                                            Alle {stats.factuurList.length} facturen bekijken →
+                                        </Link>
+                                    )}
                                 </div>
                             )}
                         </div>
