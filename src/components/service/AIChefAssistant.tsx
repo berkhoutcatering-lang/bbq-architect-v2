@@ -80,11 +80,20 @@ export default function AIChefAssistant({
     refreshIntervalMs = 60_000,
     enabled = true,
     onDockChange,
+    onDirective,
+    dockSignal,
+    hideLauncher = false,
 }: {
     context: ChefContext;
     refreshIntervalMs?: number;
     enabled?: boolean;
     onDockChange?: (docked: boolean) => void;
+    /** Laatste directive naar buiten — voor de V2 directive-strip op het bord. */
+    onDirective?: (d: { text: string; severity: 'praise' | 'normal' | 'urgent' | 'critical'; generatedAt?: string }) => void;
+    /** Verhoog dit getal om het paneel extern te openen (strip-tap op het bord). */
+    dockSignal?: number;
+    /** Geen zwevende bubble als het paneel dicht is — de V2-strip vervangt hem. */
+    hideLauncher?: boolean;
 }) {
     // Default: open op desktop, dicht op mobile (Rook is dan een floating bubble
     // die je antikt, opent als bottom-sheet ipv de hele viewport te kapen).
@@ -122,6 +131,11 @@ export default function AIChefAssistant({
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) setVoiceSupported(true);
     }, []);
 
+    /* Extern open-signaal (V2 directive-strip op het bord). */
+    useEffect(() => {
+        if (dockSignal && dockSignal > 0) setDocked(true);
+    }, [dockSignal]);
+
     /* Auto-scroll chat */
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -146,6 +160,7 @@ export default function AIChefAssistant({
                     generatedAt: body.generatedAt,
                 };
                 setDirective(d);
+                onDirective?.({ text: d.directive, severity: d.severity, generatedAt: d.generatedAt });
                 if (userQuestion) {
                     setChatLog(prev => [
                         ...prev,
@@ -168,7 +183,7 @@ export default function AIChefAssistant({
             }
         } catch { /* */ }
         setLoading(false);
-    }, [context, enabled, voiceOn, voiceSupported]);
+    }, [context, enabled, voiceOn, voiceSupported, onDirective]);
 
     /* Initial + interval */
     useEffect(() => {
@@ -182,8 +197,9 @@ export default function AIChefAssistant({
     if (!enabled) return null;
     const c = directive ? SEVERITY_COLORS[directive.severity] : SEVERITY_COLORS.normal;
 
-    /* ── MINIMIZED: floating bubble ── */
+    /* ── MINIMIZED: floating bubble (V2-bord vervangt hem door de strip) ── */
     if (!docked) {
+        if (hideLauncher) return null;
         return (
             <button onClick={() => setDocked(true)} title="Open Rook" style={{
                 position: 'fixed', bottom: 24, right: 24, zIndex: 9000,

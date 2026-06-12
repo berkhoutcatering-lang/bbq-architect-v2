@@ -136,6 +136,7 @@ function dbAllergyToEntry(a: DbEventAllergy): AllergyEntry {
         name: a.name || '—',
         allergens,
         note: a.note || '',
+        severity: a.severity,
     };
 }
 

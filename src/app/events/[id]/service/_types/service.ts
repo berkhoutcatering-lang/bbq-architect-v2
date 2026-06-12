@@ -76,6 +76,8 @@ export interface AllergyEntry {
     name: string;
     allergens: AllergenCode[];
     note: string;
+    /** Uit event_allergies.severity — 'critical' = streng, aparte prep. */
+    severity?: 'normal' | 'high' | 'critical';
 }
 
 export interface ServiceEvent {

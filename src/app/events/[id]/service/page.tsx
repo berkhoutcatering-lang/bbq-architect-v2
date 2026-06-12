@@ -11,10 +11,13 @@ import type { ServiceEvent, Course, CourseStatus, CourseItem } from './_types/se
 import { buildServiceDirectives } from './_lib/serviceDirectives';
 import AIChefAssistant, { type ChefContext } from '@/components/service/AIChefAssistant';
 import ServiceTabBar from '@/components/service/ServiceTabBar';
+import ServiceBoardV2, { type RookDirectiveInfo } from './_components/v2';
+import type { MiniMapTafel } from './_components/v2/atoms';
+import type { TafelStatus } from './_components/v2/helpers';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { dbEventToServiceEvent } from '@/lib/serviceData';
-import { computeTableZones, type TableZoneInfo } from '@/lib/floorPlanZones';
+import { computeTableZones, parseTableNumber, type TableZoneInfo } from '@/lib/floorPlanZones';
 import { generateActieplan, type ActieplanResult } from '@/lib/actieplan';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -1245,6 +1248,8 @@ export default function ServiceMode() {
     const searchParams = useSearchParams();
     const urlEventId = parseInt(String(params.id), 10);
     const isFullscreenMode = searchParams.get('fullscreen') === '1';
+    /* Nieuw design-handoff-bord is de standaard; ?v1=1 = oude kanban-weergave. */
+    const useV1 = searchParams.get('v1') === '1';
 
     const { isFullscreen, enterFullscreen, exitFullscreen } = useFullscreen();
     useWakeLock(isFullscreenMode);
@@ -1256,6 +1261,9 @@ export default function ServiceMode() {
     const [eventState, setEventState] = useState<ServiceEvent | null>(null);
     // Op phone start Rook NIET docked — anders covert hij het hele scherm voor de board zichtbaar wordt.
     const [rookDocked, setRookDocked] = useState(true);
+    /* V2: laatste Rook-directive voor de strip + signaal om het paneel te openen. */
+    const [rookDirective, setRookDirective] = useState<RookDirectiveInfo | null>(null);
+    const [rookDockSignal, setRookDockSignal] = useState(0);
     const isPhone = useIsPhone();
     useEffect(() => {
         if (isPhone) setRookDocked(false);
@@ -1276,15 +1284,32 @@ export default function ServiceMode() {
     const { data: dbZones } = useSupabase<ServiceZone>('service_zones', []);
     const { data: dbPins } = useSupabase<FloorPlanGuest>('floor_plan_guests', []);
 
+    const eventFloorPlan = useMemo(() => dbFloorPlans.find(f => f.event_id === urlEventId) || null, [dbFloorPlans, urlEventId]);
+    const floorZones = useMemo(
+        () => (eventFloorPlan ? dbZones.filter(z => z.floor_plan_id === eventFloorPlan.id) : []),
+        [dbZones, eventFloorPlan],
+    );
+
     const tableZones = useMemo<Record<number, TableZoneInfo>>(() => {
-        const fp = dbFloorPlans.find(f => f.event_id === urlEventId);
-        if (!fp) return {};
-        const zones = dbZones.filter(z => z.floor_plan_id === fp.id);
-        if (zones.length === 0) return {};
+        if (!eventFloorPlan || floorZones.length === 0) return {};
         const pins = dbPins.filter(p => p.event_id === urlEventId);
         const allergies = dbAllergies.filter(a => a.event_id === urlEventId);
-        return computeTableZones(fp.canvas_json, zones, pins, allergies);
-    }, [dbFloorPlans, dbZones, dbPins, dbAllergies, urlEventId]);
+        return computeTableZones(eventFloorPlan.canvas_json, floorZones, pins, allergies);
+    }, [eventFloorPlan, floorZones, dbPins, dbAllergies, urlEventId]);
+
+    /* Mini-plattegrond: tafel-shapes met een nummer in hun label → puntjes op de kaart. */
+    const mmTafels = useMemo<MiniMapTafel[]>(() => {
+        const shapes = (eventFloorPlan?.canvas_json as { shapes?: { kind?: string; label?: string; x_pct?: number; y_pct?: number; w_pct?: number; h_pct?: number }[] })?.shapes;
+        if (!Array.isArray(shapes)) return [];
+        const uit: MiniMapTafel[] = [];
+        for (const s of shapes) {
+            if (!s.kind || !(s.kind.startsWith('round-table') || s.kind.startsWith('long-table'))) continue;
+            const nr = parseTableNumber(s.label);
+            if (!nr || uit.some(t => t.nr === nr)) continue;
+            uit.push({ nr, cx: (s.x_pct || 0) + (s.w_pct || 0) / 2, cy: (s.y_pct || 0) + (s.h_pct || 0) / 2 });
+        }
+        return uit;
+    }, [eventFloorPlan]);
 
     /* Build het ServiceEvent voor het event in de URL.
        Geen mock-fallback hier — als courses ontbreken, tonen we een lege state
@@ -1386,6 +1411,78 @@ export default function ServiceMode() {
                             return { ...i, inProgress: true };
                         }),
                     };
+                }),
+            };
+        });
+    }
+
+    /* ── V2-handlers: zelfde flow, maar mét persistentie naar de DB.
+       Het oude bord hield status alleen in geheugen — een reload tijdens
+       service was alles kwijt. V2 schrijft best-effort terug naar
+       courses.status (incl. audit-log) en courses.items. ── */
+    async function persistCourseItems(courseUiId: string, items: CourseItem[]) {
+        const dbId = parseInt(courseUiId.replace('c_', ''), 10);
+        if (!Number.isFinite(dbId)) return;
+        try {
+            const { supabase } = await import('@/lib/supabase');
+            const kale = items.map(({ table, count, served, ready, inProgress, started, special }) =>
+                ({ table, count, served, ready, inProgress, started, special }));
+            await supabase.from('courses').update({ items: kale }).eq('id', dbId);
+        } catch { /* best-effort — service blokkeert nooit op sync */ }
+    }
+
+    async function persistCourseStatus(courseUiId: string, status: CourseStatus) {
+        const dbId = parseInt(courseUiId.replace('c_', ''), 10);
+        if (!Number.isFinite(dbId)) return;
+        try {
+            const { updateCourseStatus } = await import('@/lib/serviceState');
+            await updateCourseStatus(urlEventId, dbId, status);
+        } catch { /* best-effort */ }
+    }
+
+    function advanceV2(course: Course, next: CourseStatus) {
+        setEventState(state => {
+            if (!state) return state;
+            return {
+                ...state,
+                courses: state.courses.map(c => {
+                    if (c.id !== course.id) return c;
+                    let items = c.items;
+                    if (next === 'served' && c.status !== 'served') {
+                        const totalPortions = c.items.reduce((a, i) => a + (i.count || 0), 0);
+                        const alreadyServed = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
+                        const newlyServed = totalPortions - alreadyServed;
+                        if (newlyServed > 0) {
+                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'));
+                        }
+                        items = c.items.map(i => ({ ...i, served: true, ready: true, inProgress: false }));
+                        void persistCourseItems(c.id, items);
+                    }
+                    void persistCourseStatus(c.id, next);
+                    return { ...c, status: next, items };
+                }),
+            };
+        });
+    }
+
+    function setTafelV2(course: Course, item: CourseItem, status: TafelStatus) {
+        setEventState(state => {
+            if (!state) return state;
+            return {
+                ...state,
+                courses: state.courses.map(c => {
+                    if (c.id !== course.id) return c;
+                    const items = c.items.map(i => {
+                        if (i.id !== item.id) return i;
+                        if (status === 'geserveerd') {
+                            if (!i.served) void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'));
+                            return { ...i, served: true, ready: true, inProgress: false };
+                        }
+                        if (status === 'klaar') return { ...i, served: false, ready: true, inProgress: false };
+                        return { ...i, served: false, ready: false, inProgress: false };
+                    });
+                    void persistCourseItems(c.id, items);
+                    return { ...c, items };
                 }),
             };
         });
@@ -1523,8 +1620,8 @@ export default function ServiceMode() {
 
     return (
         <>
-            {/* Exit-fullscreen knop — altijd zichtbaar als we in fullscreen-mode draaien */}
-            {isFullscreenMode && (
+            {/* Exit-fullscreen knop — alleen op het oude bord; V2 heeft een eigen terug-knop */}
+            {isFullscreenMode && useV1 && (
                 <button onClick={handleExitToHub} title="Sluit Service Mode" style={{
                     position: 'fixed', top: 14, right: 14, zIndex: 1000,
                     width: 40, height: 40, borderRadius: 10,
@@ -1537,7 +1634,27 @@ export default function ServiceMode() {
                 </button>
             )}
 
-            {view === 'board' && eventState && (
+            {/* ── V2 (design-handoff): rail + focus-kaart + kookkaart-sheet ── */}
+            {!useV1 && view === 'board' && eventState && (
+                <ServiceBoardV2
+                    event={eventState}
+                    eventDbId={urlEventId}
+                    tableZones={tableZones}
+                    floorZones={floorZones}
+                    mmTafels={mmTafels}
+                    rookDirective={rookDirective}
+                    rookOpen={rookDocked}
+                    onToggleRook={() => { if (!rookDocked) setRookDockSignal(s => s + 1); }}
+                    onAdvance={advanceV2}
+                    onSetTafel={setTafelV2}
+                    onApplyActieplan={applyActieplan}
+                    onExit={handleExitToHub}
+                    onWrapup={() => setView('wrapup')}
+                />
+            )}
+
+            {/* ── V1 fallback (?v1=1): oude kanban-weergave ── */}
+            {useV1 && view === 'board' && eventState && (
                 <ServiceModeBoard
                     event={eventState}
                     eventDbId={urlEventId}
@@ -1554,7 +1671,7 @@ export default function ServiceMode() {
                 <ServiceModeWrapup event={eventState} onBackToBoard={() => setView('board')} rookOffset={rookOffset} />
             )}
 
-            {view === 'detail' && eventState && courseId && (
+            {useV1 && view === 'detail' && eventState && courseId && (
                 <ServiceModeDetail
                     event={eventState}
                     courseId={courseId}
@@ -1567,8 +1684,14 @@ export default function ServiceMode() {
                 />
             )}
 
-            {/* Persistent AI Chef Rook — over alle views */}
-            <AIChefAssistant context={chefContext} onDockChange={setRookDocked} />
+            {/* Persistent AI Chef Rook — op V2 vervangt de directive-strip de bubble */}
+            <AIChefAssistant
+                context={chefContext}
+                onDockChange={setRookDocked}
+                onDirective={setRookDirective}
+                dockSignal={rookDockSignal}
+                hideLauncher={!useV1}
+            />
         </>
     );
 }
