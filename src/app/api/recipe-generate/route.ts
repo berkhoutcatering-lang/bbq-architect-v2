@@ -75,7 +75,9 @@ const RECIPE_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (één recept):
                                  alleen als geen referentie bestaat. */
 }`;
 
-const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met meerdere gerechten):
+const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met meerdere gerechten).
+BEWUST ZONDER instructies/receptuur/bereidingsstappen per gerecht — die bestaan al in de
+bibliotheek of worden later verrijkt. Voeg ze NIET toe; houd het antwoord compact en snel.
 
 {
   "menu_naam": "string",
@@ -83,15 +85,12 @@ const MENU_SCHEMA_PROMPT = `Retourneer dit EXACTE JSON-schema (volledig menu met
   "aantal_gasten": number,
   "gerechten": [
     {
-      // zelfde schema als single recipe
       "naam": "string",
       "categorie": "Vlees" | "Vis" | "Bijgerecht" | "Saus" | "Dessert" | "Drank",
       "gang": "Voorgerecht" | "Hoofdgerecht" | "Bijgerecht" | "Dessert" | "Borrelhapje",
       "porties": number,
-      "preptime": number,
-      "beschrijving": "string",
+      "beschrijving": "string (1-2 zinnen, menu-worthy — NIET langer)",
       "ingredienten": [{ "naam": "string", "hoeveelheid": number, "eenheid": "string" }],
-      "instructies": ["..."],
       "allergenen": ["..."],
       "tags": ["..."],
       "geschatte_kostprijs_pp": number,

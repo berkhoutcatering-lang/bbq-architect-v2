@@ -293,6 +293,9 @@ export default function LeadsPage() {
         lead.event_type, lead.budget_indicatie ? 'budget ' + lead.budget_indicatie : '', lead.bericht,
         concept?.gerechten?.length ? 'Voorgesteld AI-menu: ' + concept.gerechten.map((g) => g.naam).join(', ') : '',
       ].filter(Boolean).join(' · '),
+      /* Volledige AI-concept meegeven: wizard opent dan direct op het
+         controle-scherm i.p.v. een tweede (identieke) generatie van ~2 min. */
+      generated: concept || undefined,
       savedAt: Date.now(),
     };
     try {

@@ -582,8 +582,14 @@ export default function EventHubPage() {
   const statusPillVariant = event.status === 'confirmed' ? 'p-ok' : event.status === 'completed' ? 'p-draft' : event.status === 'optie' ? 'p-optie' : 'p-send';
 
   const saldo = factuur ? (Number(factuur.totaal) || 0) - (Number(factuur.betaald) || 0) : 0;
+  /* "Volledig betaald" alléén wanneer er echt een bedrag betaald is — een
+     factuur van €0 (bv. wizard-offerte zonder regels) is niet "betaald" maar
+     leeg. Voorkwam gevaarlijk vertrouwen (fix 2026-06-12). */
+  const factuurTotaal = factuur ? (Number(factuur.totaal) || 0) : 0;
   const saldoLabel = factuur
-    ? (saldo === 0 ? 'Volledig betaald' : saldo > 0 ? `Open · ${factuur.nummer}` : `Overbetaald · ${factuur.nummer}`)
+    ? (saldo === 0 && factuurTotaal > 0 ? 'Volledig betaald'
+      : saldo === 0 ? `Nog geen bedrag · ${factuur.nummer}`
+      : saldo > 0 ? `Open · ${factuur.nummer}` : `Overbetaald · ${factuur.nummer}`)
     : 'Geen factuur';
 
   return (

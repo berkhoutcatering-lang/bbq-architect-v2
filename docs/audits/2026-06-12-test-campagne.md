@@ -184,3 +184,23 @@ De klanten-bug bleek de derde van een **bevestigde klasse van 16 kapotte opslag-
 ### Opruimregister — eindstand
 Alle testdata verwijderd en nagecontroleerd (0 rijen over in offertes/events/leads/facturen/klanten/inventory/gerechten/time_logs/audit_log). Jouw echte data: niets gewijzigd, niets verwijderd. De enige blijvende wijzigingen zijn de bug-fixes in code + de audit_log-migratie.
 
+---
+
+## Weekend-klaar-ronde (2026-06-12, avond) — top-10 #1, #2 (deels), #7 + extra's ✅
+
+Mathijs test in het weekend van 13-14 juni; deze ronde maakte de geld-keten écht bruikbaar. Volledige verse keten doorlopen als bewijs: publieke lead → AI-menu → wizard → portal → acceptatie → event-hub.
+
+| # | Fix | Bewijs |
+|---|---|---|
+| 1 | **Wizard-offertes krijgen echte prijsregels** (`items[]`: menuprijs p.p. × gasten, btw-categorie food) — [AiOfferteWizard.tsx](../../src/components/AiOfferteWizard.tsx) | Offerte #41: 40 × €51,60 = €2.064 in items; **factuur erft dezelfde regels** |
+| 2 | **Portal rekent juiste BTW**: btw_category → 9% via centrale [btw-rules.ts](../../src/lib/btw-rules.ts) (eten kreeg eerst 21% door settings-default) + eerlijk %-label — [Portal.tsx](../../src/app/q/[id]/_components/Portal.tsx) | Subtotaal €2.064 · BTW 9% €185,76 · totaal €2.249,76 · **aanbetaling €674,93** (was €0,00) |
+| 3 | **Lead-menu gaat mee de wizard in** — wizard opent direct op controle-scherm, geen tweede generatie van ~2 min — [leads/page.tsx](../../src/app/verkoop/leads/page.tsx) + wizard-restore | "Gebruik in offerte" → direct "Menu bedacht", 0 extra AI-calls |
+| 4 | **Menu-generatie ~33% sneller**: schema zonder receptuur per gerecht (bestaat al in bibliotheek) — [recipe-generate/route.ts](../../src/app/api/recipe-generate/route.ts) | Gemeten 71,6s / 6.029 tokens (was 106-131s / 7.071-8.815) |
+| 5 | **Eco-score ~×60 gefixt**: batch-hoeveelheden gedeeld door porties vóór CO₂-berekening — wizard | Was "374,7 kg CO₂e per portie" |
+| 6 | **"Volledig betaald"-misleiding weg**: alleen bij echt betaald bedrag; lege factuur → "Nog geen bedrag · F…" — [hub/page.tsx](../../src/app/events/[id]/hub/page.tsx) | Hub event 55: **OMZET €2.064** (was €0) · saldo "Nog geen bedrag" |
+| 7 | **Acceptatie zonder Mollie is veilig** (bestond al, nu geverifieerd): eerst accept+event+factuur, dán betaalpoging; geen sleutel → nette terugval, datum staat vast | Acceptatie lokaal volledig doorlopen zonder Mollie-sleutel |
+
+**Poortwachters:** `npm run build` (productie) exit 0 · `tsc --noEmit` 0 fouten · alle [TEST]-data opgeruimd (nacontrole 0 rijen).
+
+**Nog open (geen weekend-blokkades):** menu-generatie naar <8s vraagt de grotere ontwerp-ingreep (top-10 #2); hub-MARGE toont "geen cost per regel" voor wizard-offertes (P2); hub-SALDO rekent met niet-bestaand `totaal`-veld (nu eerlijk gelabeld; later uit items rekenen, P2); facturen-nummering hergebruikt nummers van verwijderde facturen (zelfde count+1-patroon, top-10 #8).
+

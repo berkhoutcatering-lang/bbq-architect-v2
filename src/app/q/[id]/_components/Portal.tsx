@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Icon, BrandMark, AllergenChip } from './Icon';
 import { allergensFor } from './allergens';
 import { themeStyleVars, getThemeMode } from './themes';
+import { getBtwPct, type BtwCategory } from '@/lib/btw-rules';
 import { SignModal } from './SignModal';
 import { Bedankt } from './Bedankt';
 import './portal.css';
@@ -16,7 +17,11 @@ export interface PortalOfferItem {
   qty?: number;
   prijs?: number;
   omschrijving?: string;
+  beschrijving?: string;
   btw?: number;
+  /* BTW-categorie-hint (bv. wizard-items) — rate wordt via btw-rules.ts
+     opgezocht, nooit hier hardcoded (hard rule 1). */
+  btw_category?: string;
 }
 
 export interface PortalVasteKost {
@@ -130,7 +135,15 @@ function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string):
   let btwService = 0;
   items.forEach(function (it) {
     const line = (it.qty || 0) * (it.prijs || 0);
-    const rate = typeof it.btw === 'number' ? it.btw : defaultBtw;
+    /* Rate-volgorde: expliciete btw op het item → btw_category via de
+       centrale btw-rules (food_catering = 9% enz.) → settings-default.
+       Fix 2026-06-12: wizard-menu-items kregen onterecht 21% "service"
+       omdat de category-hint genegeerd werd. */
+    let rate = typeof it.btw === 'number' ? it.btw : NaN;
+    if (Number.isNaN(rate) && it.btw_category) {
+      try { rate = getBtwPct(it.btw_category as BtwCategory); } catch { rate = NaN; }
+    }
+    if (Number.isNaN(rate)) rate = defaultBtw;
     if (rate >= 20) {
       service += line;
       btwService += line * (rate / 100);
@@ -346,7 +359,9 @@ function TotalCard({ t, defaultBtw }: { t: ParsedTotals; defaultBtw: number }) {
         <div className="pp-btw">
           {t.btwFood > 0 && (
             <div className="pp-btw-row">
-              <span className="k"><span className="pp-btw-pct">{defaultBtw}%</span> over food</span>
+              {/* Label uit de werkelijke verhouding — defaultBtw kan 21 zijn
+                  terwijl de food-bucket 9% rekent (fix 2026-06-12). */}
+              <span className="k"><span className="pp-btw-pct">{t.food > 0 ? Math.round((t.btwFood / t.food) * 100) : 9}%</span> over food</span>
               <span className="v">{fmt(t.btwFood)}</span>
             </div>
           )}

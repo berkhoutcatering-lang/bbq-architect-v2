@@ -89,6 +89,14 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                     if (typeof d.vegaCount === 'number') setVegaCount(d.vegaCount);
                     if (typeof d.gangen === 'string') setGangen(d.gangen);
                     if (typeof d.prompt === 'string') setPrompt(d.prompt);
+                    /* Lead-handoff: kwam er een vers AI-concept mee uit de
+                       leads-drawer? Direct naar het controle-scherm — geen
+                       tweede generatie van ~2 minuten (fix 2026-06-12). */
+                    const gen = d.generated as { gerechten?: unknown[] } | undefined;
+                    if (gen && Array.isArray(gen.gerechten) && gen.gerechten.length > 0) {
+                        setGenerated(gen);
+                        setStep('preview');
+                    }
                     return;
                 }
                 /* Stale draft (> TTL) → verwijderen. */
@@ -188,6 +196,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
 
             const notitie = `${generated.menu_naam || 'AI-gegenereerd menu'}${generated.thema ? ' — ' + generated.thema : ''}. ${(generated.gerechten || []).length} gangen samengesteld door AI op basis van jouw stijl.`;
 
+            const pp = prijsPp ?? generated.adviesprijs_pp ?? Math.ceil((generated.totale_kostprijs_pp || 35) * 2);
             const payload: any = {
                 organization_id: orgId,
                 nummer,
@@ -197,10 +206,20 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                 datum: eventDate,
                 aantal_gasten: gasten,
                 aantal_vega: vegaCount,
-                basis_prijs_pp: prijsPp ?? generated.adviesprijs_pp ?? Math.ceil((generated.totale_kostprijs_pp || 35) * 2),
+                basis_prijs_pp: pp,
                 menu_selectie: menuSelectie,
                 notitie,
-                items: [],
+                /* Geld-bron: één menu-regel per persoon. Portal (aanbetaling),
+                   event-hub (omzet/saldo) en factuur rekenen allemaal uit
+                   items[] — leeg = overal €0 én klant kon accepteren zonder
+                   aanbetaling (fix 2026-06-12). Gerecht-detail blijft in
+                   menu_selectie voor de menuweergave. */
+                items: [{
+                    beschrijving: (generated.menu_naam || 'BBQ-menu') + ' — menuprijs per persoon (' + (generated.gerechten || []).length + ' gerechten)',
+                    qty: gasten,
+                    prijs: pp,
+                    btw_category: 'food_catering',
+                }],
                 vaste_kosten: [],
             };
 
@@ -484,7 +503,17 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             {/* Carbon-footprint preview — Pillar #2 + 2026-trend. */}
                             {(() => {
                                 const allIngredients = (generated.gerechten || []).flatMap(function (g: any) {
-                                    return Array.isArray(g.ingredienten) ? g.ingredienten : [];
+                                    const list = Array.isArray(g.ingredienten) ? g.ingredienten : [];
+                                    /* AI levert batch-hoeveelheden (heel event); estimateCarbon
+                                       verwacht per-portie. Zonder deling telt 8 kg varkensschouder
+                                       als 8 kg p.p. → eco-score ~×60 te hoog (gemeten: "374,7 kg
+                                       CO₂e per portie", fix 2026-06-12). */
+                                    const porties = Number(g.porties) > 0 ? Number(g.porties) : (gasten || 1);
+                                    return list.map(function (ing: any) {
+                                        return ing && typeof ing.hoeveelheid === 'number'
+                                            ? { ...ing, hoeveelheid: ing.hoeveelheid / porties }
+                                            : ing;
+                                    });
                                 });
                                 if (allIngredients.length === 0) return null;
                                 return (
