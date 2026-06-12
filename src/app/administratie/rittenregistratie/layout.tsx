@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
-import GeldTabs from '@/components/GeldTabs';
+import TeamTabs from '@/components/TeamTabs';
 
 export default function RittenregistratieLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <div style={{ padding: '16px 32px 0' }}>
-        <GeldTabs />
+        <TeamTabs />
       </div>
       {children}
     </>

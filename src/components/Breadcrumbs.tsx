@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
-import { getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
+import { navSections, getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
 import { useActiveResource, type ActiveResourceKind } from '@/lib/ActiveResourceContext';
 
 /* Welke detail-route hoort bij welke active-resource-kind — zodat de breadcrumb
@@ -16,39 +16,29 @@ const KIND_BASEPATH: Record<ActiveResourceKind, string> = {
   klantgesprek: '/klantgesprek',
 };
 
-/* Sub-routes voor /gerechten/* worden onderaan in subRouteLabels gemapt
-   zodat de breadcrumb-tail leesbaar is ("Allergenen" i.p.v. "Allergen queue"). */
-const routeMap: Record<string, { label: string; section: string }> = {
-    '/marges': { label: 'Marges & analyse', section: 'Menu' },
-    '/gerechten': { label: 'Gerechten', section: 'Menu' },
-    '/recepten': { label: 'Recepten', section: 'Menu' },
-    '/bedenker': { label: 'Bedenker', section: 'Menu' },
-    '/ai-chat': { label: 'AI Pitmaster', section: 'Menu' },
-    '/agenda': { label: 'Agenda', section: 'Plannen' },
-    '/events': { label: 'Events', section: 'Plannen' },
+/* Eén-bron-principe (Operatie Overzicht 2026-06-12): de hub per route komt
+   uit navSections — het kruimelpad kan niet meer uit de pas lopen met de
+   sidebar (zoals "GELD › Uren" terwijl Uren naar Team & Operatie verhuisde).
+   fallbackRouteMap dekt alleen routes die bewust níet in de sidebar staan. */
+const fallbackRouteMap: Record<string, { label: string; section: string }> = {
+    '/marges': { label: 'Marges & analyse', section: 'Keuken' },
+    '/recepten': { label: 'Recepten', section: 'Keuken' },
+    '/bedenker': { label: 'Bedenker', section: 'Keuken' },
+    '/ai-chat': { label: 'AI Pitmaster', section: 'Keuken' },
     '/prep-counter': { label: 'Prep Counter', section: 'Plannen' },
     '/klantgesprek': { label: 'Klantgesprek', section: 'Plannen' },
     '/haccp': { label: 'HACCP', section: 'Plannen' },
-    '/offertes': { label: 'Offertes', section: 'Verkoop' },
-    '/facturen': { label: 'Facturen', section: 'Verkoop' },
-    '/klanten': { label: 'Klanten', section: 'Verkoop' },
-    '/financien': { label: 'Financiën', section: 'Geld' },
-    '/uren': { label: 'Uren', section: 'Geld' },
-    '/inkoop': { label: 'Inkoop', section: 'Voorraad' },
-    '/voorraad': { label: 'Voorraad', section: 'Voorraad' },
-    '/leveranciers': { label: 'Leveranciers', section: 'Voorraad' },
-    '/logistiek': { label: 'Logistiek', section: 'Voorraad' },
-    '/materieel': { label: 'Materieel', section: 'Voorraad' },
-    '/price-intelligence': { label: 'Inkoopprijzen', section: 'Voorraad' },
     '/foto-archief': { label: 'Foto-archief', section: 'Systeem' },
-    '/gebruikers': { label: 'Gebruikers', section: 'Systeem' },
-    '/instellingen': { label: 'Instellingen', section: 'Systeem' },
-    '/mailbox': { label: 'Mailbox', section: 'Systeem' },
-    '/website': { label: 'Website Beheer', section: 'Systeem' },
     '/faq': { label: 'FAQ', section: 'Systeem' },
     '/contact': { label: 'Contact', section: 'Systeem' },
-    '/hulp': { label: 'Help Center', section: 'Systeem' },
 };
+
+const routeMap: Record<string, { label: string; section: string }> = { ...fallbackRouteMap };
+for (const section of navSections) {
+    for (const child of section.children) {
+        routeMap[child.href] = { label: child.label, section: section.title };
+    }
+}
 
 /* Expliciete labels voor sub-route segments — beter dan auto-format
    (zoals "Allergen queue") wanneer de tab/UI een andere naam hanteert. */

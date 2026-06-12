@@ -31,7 +31,10 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
         || (section.hubHref && (pathname === section.hubHref || pathname.startsWith(section.hubHref + '/')));
     const sectionBadgeCount = section.children.reduce((sum, child) => sum + (badges[child.href] || 0), 0);
 
-    /* Hub-link variant: kopje is directe link naar hub-canvas, children altijd zichtbaar eronder (geen toggle nodig). */
+    /* Hub-link variant: kopje is directe link naar hub-canvas. Operatie
+       Overzicht (2026-06-12): children alleen zichtbaar voor de hub waar je
+       nú in zit — de sidebar in rust toont 8 keuzes i.p.v. ~26. Binnen een
+       hub klappen de spokes vanzelf uit (progressive disclosure). */
     if (section.hubHref) {
         return (
             <div className="mt-1">
@@ -66,7 +69,7 @@ function SidebarFolder({ section, collapsed, pathname, expandedSections, toggleS
                         </span>
                     )}
                 </Link>
-                {!collapsed && (
+                {!collapsed && isActiveFolder && (
                     <div className="ml-[18px] mt-0.5 mb-2 space-y-px border-l border-[var(--sidebar-border)] pl-2">
                         {section.children.map((item) => {
                             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));

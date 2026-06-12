@@ -20,7 +20,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateProductionPlan } from './productionQty';
-import { scheduledAtForPhase } from './prepTaskScheduler';
+import { scheduledAtForPhase, PHASE_DURATION_MINUTES } from './prepTaskScheduler';
 import {
     findTemplateForDish,
     resolveOffsetMinutes,
@@ -81,6 +81,8 @@ export interface BulkScheduleResult {
     matchedTemplates: number;
     /** Hoeveel gerechten kregen een fallback generic-task (geen DAG-match). */
     fallbackCount: number;
+    /** Hoeveel component-taken gegenereerd zijn (kookbord v2, gebundeld per event). */
+    componentCount?: number;
     /** Server_recipe-tasks die verwijderd zijn (force-mode). */
     deletedCount: number;
     tasks: ScheduledTaskRow[];
@@ -93,7 +95,7 @@ export interface ScheduledTaskRow {
     phase: PrepTaskPhase;
     scheduled_at: string;
     station_id: number | null;
-    gerecht_id: string;
+    gerecht_id: string | null;
     course_id: number | null;
     target_qty: number | null;
     target_unit: string | null;
@@ -101,6 +103,10 @@ export interface ScheduledTaskRow {
     priority: number;
     status: 'planned';
     dagen: number;
+    /* Component-gestuurde taken (kookbord v2). NULL voor template/fallback. */
+    component_id: number | null;
+    duration_min: number | null;
+    batch_key: string | null;
 }
 
 /**
@@ -235,12 +241,116 @@ export async function bulkScheduleEventPrep(
         }
     }
 
+    // 6b. Componenten per gerecht ophalen (kookbord v2). Gerechten mét
+    //     gekoppelde food-componenten krijgen component-taken; de rest valt
+    //     terug op template/fallback. quantity_used geldt per gerecht-batch
+    //     van `porties` porties → schaal met guests/porties.
+    const { data: gcData } = await supabase
+        .from('gerecht_components')
+        .select('gerecht_id, quantity_used, unit, components(id, name, type, category, prep_minutes)')
+        .in('gerecht_id', dishIds)
+        .eq('organization_id', orgId);
+
+    interface GcRow {
+        gerecht_id: string;
+        quantity_used: number | null;
+        unit: string | null;
+        components: {
+            id: number;
+            name: string;
+            type: string | null;
+            category: string | null;
+            prep_minutes: number | null;
+        } | null;
+    }
+    const componentsByDish = new Map<string, GcRow[]>();
+    for (const row of ((gcData ?? []) as unknown as GcRow[])) {
+        if (!row.components) continue;
+        if (row.components.category === 'non_food') continue; // materiaal ≠ kooktaak
+        const arr = componentsByDish.get(row.gerecht_id) ?? [];
+        arr.push(row);
+        componentsByDish.set(row.gerecht_id, arr);
+    }
+
     // 7. Genereer task rows per gerecht
     const taskRows: ScheduledTaskRow[] = [];
     let matchedTemplates = 0;
     let fallbackCount = 0;
+    let componentCount = 0;
+
+    /* Component-pass — bundeling BINNEN het event: zelfde component voor
+       meerdere gerechten → één taak met opgetelde hoeveelheid ("pot mayo is
+       toch open"). batch_key bundelt dezelfde component over events op
+       dezelfde dag heen in de UI. Hoeveelheid = quantity_used × guests/porties,
+       server-berekend — nooit AI. */
+    const dishesWithComponents = new Set<string>();
+    const compGroups = new Map<number, {
+        component: NonNullable<GcRow['components']>;
+        totalQty: number;
+        unit: string | null;
+        dishNames: string[];
+        dishIds: string[];
+    }>();
+    for (const dish of dishes as DishRow[]) {
+        const comps = componentsByDish.get(dish.id);
+        if (!comps || comps.length === 0) continue;
+        dishesWithComponents.add(dish.id);
+        const factor = event.guests / Math.max(1, dish.porties ?? 10);
+        for (const row of comps) {
+            const comp = row.components!;
+            const qty = (row.quantity_used ?? 0) * factor;
+            const existing = compGroups.get(comp.id);
+            if (existing) {
+                existing.totalQty += qty;
+                existing.dishNames.push(dish.naam);
+                existing.dishIds.push(dish.id);
+            } else {
+                compGroups.set(comp.id, {
+                    component: comp,
+                    totalQty: qty,
+                    unit: row.unit,
+                    dishNames: [dish.naam],
+                    dishIds: [dish.id],
+                });
+            }
+        }
+    }
+
+    for (const group of compGroups.values()) {
+        const comp = group.component;
+        const boughtIn = comp.type === 'bought_in';
+        const phase = boughtIn ? 'koud' : componentPhase(comp.name);
+        const stationType = boughtIn ? 'koud' : componentStationType(comp.name);
+        const scheduledAt = scheduledAtForPhase(phase, { eventStart: eventStartISO });
+        const dishLabel = group.dishNames.length > 2
+            ? `${group.dishNames.slice(0, 2).join(' + ')} +${group.dishNames.length - 2}`
+            : group.dishNames.join(' + ');
+        const singleDish = group.dishIds.length === 1 ? group.dishIds[0] : null;
+
+        componentCount++;
+        taskRows.push({
+            event_id: eventId,
+            organization_id: orgId,
+            text: `${boughtIn ? 'Klaarzetten: ' : ''}${comp.name} — ${dishLabel}`,
+            phase,
+            scheduled_at: scheduledAt,
+            station_id: stationByType.get(stationType) ?? null,
+            gerecht_id: singleDish,
+            course_id: singleDish ? courseByGerecht.get(singleDish) ?? null : null,
+            target_qty: group.totalQty > 0 ? roundQty(group.totalQty) : null,
+            target_unit: group.totalQty > 0 ? group.unit : null,
+            qty_source: 'server_recipe',
+            priority: 50,
+            status: 'planned',
+            dagen: dagenBeforeEvent(scheduledAt, eventStartISO),
+            component_id: comp.id,
+            duration_min: comp.prep_minutes ?? (boughtIn ? 10 : 30),
+            batch_key: `comp:${comp.id}:${event.date}`,
+        });
+    }
 
     for (const dish of dishes as DishRow[]) {
+        if (dishesWithComponents.has(dish.id)) continue; // al gedekt door component-taken
         const template = findTemplateForDish(dish.naam);
         const courseId = courseByGerecht.get(dish.id) ?? null;
         const ingredientForDish = productionPlan.filter((p) => p.gerecht_id === dish.id);
@@ -263,6 +373,9 @@ export async function bulkScheduleEventPrep(
                 priority: 50,
                 status: 'planned',
                 dagen: dagenBeforeEvent(scheduledAtForPhase('other', { eventStart: eventStartISO }), eventStartISO),
+                component_id: null,
+                duration_min: 30,
+                batch_key: null,
             });
             continue;
         }
@@ -296,6 +409,9 @@ export async function bulkScheduleEventPrep(
                 priority: stepPriority(step),
                 status: 'planned',
                 dagen: dagenBeforeEvent(scheduledAt, eventStartISO),
+                component_id: null,
+                duration_min: templateStepDuration(step),
+                batch_key: null,
             });
         }
     }
@@ -306,6 +422,7 @@ export async function bulkScheduleEventPrep(
             taskCount: taskRows.length,
             matchedTemplates,
             fallbackCount,
+            componentCount,
             deletedCount,
             tasks: taskRows,
         };
@@ -318,6 +435,7 @@ export async function bulkScheduleEventPrep(
             taskCount: 0,
             matchedTemplates,
             fallbackCount,
+            componentCount,
             deletedCount,
             tasks: [],
         };
@@ -333,9 +451,44 @@ export async function bulkScheduleEventPrep(
         taskCount: taskRows.length,
         matchedTemplates,
         fallbackCount,
+        componentCount,
         deletedCount,
         tasks: taskRows,
     };
+}
+
+/* ─── Component-routing (deterministisch, uitlegbaar — geen AI) ─────── */
+
+/** Fase-afleiding uit de component-naam. Sauzen/dressings → warm (fornuis),
+ *  rook-componenten → smoke, rest → koud (mise en place). */
+function componentPhase(name: string): PrepTaskPhase {
+    const n = name.toLowerCase();
+    if (/\b(gerookt|rook|smoke)/.test(n)) return 'smoke';
+    if (/(saus|mayo|dressing|glaze|jus|crème|creme|room|compote|ketchup)/.test(n)) return 'warm';
+    if (/(marinade|marineer)/.test(n)) return 'marinade';
+    if (/(rub|kruidenmix)/.test(n)) return 'rub';
+    return 'koud';
+}
+
+/** Station-routing uit de component-naam — matcht Sam's station-types
+ *  (koud/smoker/warm/sauzen/expeditie). */
+function componentStationType(name: string): string {
+    const n = name.toLowerCase();
+    if (/(saus|mayo|dressing|glaze|jus|compote|ketchup)/.test(n)) return 'sauzen';
+    if (/\b(gerookt|rook|smoke)/.test(n)) return 'smoker';
+    if (/(bak|grill|frituur|warm)/.test(n)) return 'warm';
+    return 'koud';
+}
+
+function roundQty(qty: number): number {
+    return Math.round(qty * 100) / 100;
+}
+
+/** Werkduur van een template-stap: expliciete override of fase-default. */
+function templateStepDuration(step: RecipePhaseStep): number {
+    const custom = (step as { customDurationMinutes?: number }).customDurationMinutes;
+    if (typeof custom === 'number' && custom > 0) return custom;
+    return PHASE_DURATION_MINUTES[step.phase] ?? 30;
 }
 
 /* ─── Helpers ───────────────────────────────────────────────── */

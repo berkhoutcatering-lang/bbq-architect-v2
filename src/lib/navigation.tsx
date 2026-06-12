@@ -27,11 +27,13 @@ export interface NavSection {
     hubHref?: string;
 }
 
-/* IA 2026-05-08 — 7-hub sidebar.
+/* IA 2026-06-12 — Operatie Overzicht (docs/operatie-overzicht.md).
    Vandaag is hardcoded bovenaan in Sidebar.tsx.
-   Hier: Plannen · Verkoop · Keuken · Voorraad · Geld · Systeem (6 secties = 7 hubs totaal).
-   Elke hub heeft sub-items als children die zichtbaar worden in de sidebar-rail.
-   Hub-pages zelf (plannen, gerechten, voorraad, financien) dragen een horizontale tab-bar. */
+   Hier: Plannen · Verkoop · Keuken · Inkoop & Voorraad · Geld · Team & Operatie · Systeem.
+   Eén-deur-regel: elk begrip één plek. Uren/Materieel/Ritten/Logistiek wonen in
+   Team & Operatie (niet in Geld/Voorraad); Bonnen woont bij Inkoop & Voorraad.
+   De sidebar toont alleen hub-titels; children klappen uit voor de actieve hub
+   (zie SidebarFolder). Routes wijzigen hier NIET — alleen de groepering. */
 export const navSections: NavSection[] = [
     {
         title: "Plannen",
@@ -60,31 +62,32 @@ export const navSections: NavSection[] = [
         ],
     },
     {
-        title: "Menu",
+        title: "Keuken",
         icon: <ChefHat size={18} />,
         type: "folder",
         slug: "gerechten",
-        description: "Gerechten, componenten en menukaarten — één bibliotheek voor wat je kookt.",
+        description: "Gerechten, componenten, kookbord en menu-analyse — één bibliotheek voor wat je kookt.",
         hubHref: "/gerechten",
         children: [
             { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Wat je verkoopt: samengesteld uit componenten, met marge en allergenen-cascade" },
             { label: "Componenten", icon: <Boxes size={16} />, href: "/gerechten/componenten", description: "Atomaire bouwstenen — zelf-bereid of inkoop. Wijzig één keer, alle gerechten passen mee" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
+            { label: "Menu-analyse", icon: <TrendingUp size={16} />, href: "/gerechten/analyse", description: "Welke gerechten verdienen hun plek — populariteit × marge" },
         ],
     },
     {
-        title: "Voorraad",
+        title: "Inkoop & Voorraad",
         icon: <Package size={18} />,
         type: "folder",
         slug: "voorraad",
-        description: "Voorraad, inkoop, leveranciers, materieel en logistiek.",
+        description: "Voorraad, inkoop, leveranciers en bonnen.",
         hubHref: "/voorraad",
         children: [
             { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
-            { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bon-scanner" },
+            { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bestelvoorstellen" },
             { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
-            { label: "Materieel", icon: <Hammer size={16} />, href: "/materieel", description: "Smoker, pannen, equipment — wat je meeneemt naar het event" },
-            { label: "Logistiek", icon: <Truck size={16} />, href: "/logistiek", description: "Routes, transport en planning" },
+            { label: "Bonnen scannen", icon: <ScanLine size={16} />, href: "/bonnen", description: "Sleep foto's, PDFs, screenshots of UBL-XML naar binnen — wij lezen ze uit" },
+            { label: "Bonnenkistje", icon: <Archive size={16} />, href: "/archief", description: "Doorzoekbaar boekhoud-archief — vind elke bon over 7 jaar heen tot op het woord" },
             { label: "Inkoopprijzen", icon: <TrendingUp size={16} />, href: "/price-intelligence", description: "Mail je leveranciers-PDF — wij lezen ′m uit." },
         ],
     },
@@ -93,15 +96,26 @@ export const navSections: NavSection[] = [
         icon: <BarChart3 size={18} />,
         type: "folder",
         slug: "geld",
-        description: "Financiën, uren, bonnen en kilometeradministratie.",
+        description: "Financiën, facturen en je boekhouder.",
         hubHref: "/financien",
         children: [
             { label: "Financiën", icon: <BarChart3 size={16} />, href: "/financien", description: "Dashboard, W&V, uitgaven, BTW en top-klanten" },
-            { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "Urenregistratie en planning" },
-            { label: "Bonnen scannen", icon: <ScanLine size={16} />, href: "/bonnen", description: "Sleep foto's, PDFs, screenshots of UBL-XML naar binnen — wij lezen ze uit" },
-            { label: "Bonnenkistje", icon: <Archive size={16} />, href: "/archief", description: "Doorzoekbaar boekhoud-archief — typ baktotaal, vind elke bon over 7 jaar heen tot op het woord" },
+            { label: "Facturen", icon: <Receipt size={16} />, href: "/facturen", description: "Facturen opstellen, versturen en innen" },
             { label: "Boekhouder", icon: <BookOpen size={16} />, href: "/geld/boekhouder", description: "RGS-categorisering en maandpakket voor je boekhouder" },
+        ],
+    },
+    {
+        title: "Team & Operatie",
+        icon: <Clock size={18} />,
+        type: "folder",
+        slug: "team",
+        description: "Uren, materieel, ritten en logistiek — alles rond je mensen en spullen.",
+        hubHref: "/uren",
+        children: [
+            { label: "Uren", icon: <Clock size={16} />, href: "/uren", description: "In- en uitklokken, crew-uren en maandoverzicht" },
+            { label: "Materieel", icon: <Hammer size={16} />, href: "/materieel", description: "Smoker, pannen, equipment — wat je meeneemt naar het event" },
             { label: "Rittenregistratie", icon: <Car size={16} />, href: "/administratie/rittenregistratie", description: "Sluitende kilometeradministratie — €0,23/km Belastingdienst" },
+            { label: "Logistiek", icon: <Truck size={16} />, href: "/logistiek", description: "Routes, transport en planning" },
         ],
     },
     {
