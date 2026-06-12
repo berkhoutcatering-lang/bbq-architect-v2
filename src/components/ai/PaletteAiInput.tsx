@@ -135,6 +135,18 @@ export default function PaletteAiInput({ initialQuery = '', onClose, onSwitchToS
                         }
                     }
                 }
+
+                /* Vangnet (eis 2026-06-12: alles in blokken, nooit leeg):
+                   lostekst zonder blocks → info-blok; helemaal niets binnen
+                   (bv. afgekapte tool-JSON) → leesbare foutmelding. */
+                const finalBlocks = tryParseBlocks(assembled);
+                const restText = stripActionMarker(assembled);
+                if (!finalBlocks && restText) {
+                    setBlocks([{ type: 'info', title: 'Rook', text: restText }]);
+                    setText('');
+                } else if (!finalBlocks && !restText) {
+                    setError('Geen antwoord ontvangen — probeer het opnieuw.');
+                }
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Onbekende fout');
             } finally {

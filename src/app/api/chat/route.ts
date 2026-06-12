@@ -10,7 +10,7 @@ import { logAiUsageServer, checkAiCapServer } from '@/lib/aiUsageServer';
 import { checkAiCap } from '@/lib/aiCostCap';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { BLOCK_TOOL_SCHEMA, isBlock } from '@/lib/ai/blocks';
-import { buildBlockDirective, isRouteAllowed, PAGE_TOOL_WHITELIST } from '@/lib/ai/page-contracts';
+import { buildBlockDirective, isRouteAllowed } from '@/lib/ai/page-contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
@@ -914,7 +914,9 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         const hasAttachments = !!(attachments && attachments.length > 0);
         if (thinkingMode === 'deep' && !deepIntentActive && isShortQuery && !hasAttachments) {
             selectedModel = MODEL_MAP.sonnet;
-            if (maxTokens > 1000) maxTokens = 1000;
+            /* Clamp op 3000 (was 1000): block-JSON met routes past niet in 1000
+               tokens — afgekapte tool-JSON = leeg antwoord (fix 2026-06-12). */
+            if (maxTokens > 3000) maxTokens = 3000;
             effectiveThinking = false;
             console.log('[chat] Smart downgrade: deep->sonnet (korte Q&A, geen diepe intent)');
         }
@@ -927,13 +929,17 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             messages: merged,
             temperature: modeDef.temperature,
         };
-        // Pages waar we ALTIJD structured blocks willen ipv vrije tekst.
-        // Block-forced op elke pagina die in PAGE_TOOL_WHITELIST staat. Self-
-        // maintaining: voeg een page toe aan src/lib/ai/page-contracts.ts en
-        // hij krijgt automatisch het block-contract. /ai-chat en /q/[id] zijn
-        // bewust uit de whitelist gelaten — chat-studio heeft geen page-context,
-        // klant-portal heeft helemaal geen AI.
-        const forceBlocks = !!PAGE_TOOL_WHITELIST[normalizedPage];
+        // Blokken zijn de standaard op ELKE pagina — eis 2026-06-12: nooit
+        // platte tekst in de chat. Vroeger gold dit alleen voor pagina's in
+        // PAGE_TOOL_WHITELIST; de rest (uren, bonnen, archief, …) kreeg vrije
+        // tekst. Uitzonderingen stroomopwaarts in de else-if-keten: speciale
+        // intents (scrape/materieel/brainstorm/develop) en de /financien-
+        // copilot (eigen tool-set, auto-keuze). Deep-mode met extended
+        // thinking kan geen forced tool_choice aan (API-restrictie) — daar
+        // bieden we de tool aan met auto-keuze en vangt de client lostekst op.
+        // mode==='page' (⌘K-palette + ChatPanel) forceert blokken ook óp /financien.
+        const isPageMode = mode === 'page';
+        const forceBlocks = isPageMode || !effectiveThinking;
 
         if (scrapeNeedsScreenshot) {
             // URL-scrape kreeg geen bruikbare content (SPA-pagina). AI moet om screenshot vragen
@@ -968,9 +974,10 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             // is ~2k tokens. Voor 3 gerechten = ~6k. Bump naar minimaal 8000.
             if ((streamParams.max_tokens || 0) < 8000) streamParams.max_tokens = 8000;
             console.log('[chat] Tool-use forced: develop_dishes (uitwerking intent)');
-        } else if (isOnFinancien) {
+        } else if (isOnFinancien && !isPageMode) {
             // Finance Copilot — AI kiest zelf tussen blocks/propose-ideas/compute-kia.
             // tool_choice='auto' (default) zodat het model context-driven beslist.
+            // ⌘K/ChatPanel-vragen (mode='page') vallen door naar forceBlocks.
             streamParams.tools = [respondWithBlocksTool, proposeFinanceIdeasTool, computeKiaScenarioTool];
             // GEEN tool_choice forced — laat AI kiezen.
             console.log('[chat] Tool-use auto: /financien with [respond_with_blocks, propose_finance_ideas, compute_kia_scenario]');
@@ -984,6 +991,11 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
             // zodat we geen thinking-params naar een gedowngrade Sonnet-call sturen.
             streamParams.thinking = { type: 'adaptive' };
             streamParams.output_config = { effort: effectiveThinking.effort };
+            // Blokken-tool beschikbaar (auto-keuze): forced tool_choice +
+            // thinking mag niet samen van de API, maar dankzij de block-
+            // directive in de system prompt pakt het model de tool vrijwel
+            // altijd. Eventuele lostekst vangt de client op in een info-blok.
+            streamParams.tools = [respondWithBlocksTool];
         }
 
         const stream = client.messages.stream(streamParams);

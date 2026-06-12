@@ -31,7 +31,10 @@ export const MODES: Record<ThinkingMode, ModeDef> = {
         icon: 'zap',
         model: 'claude-haiku-4-5',
         modelKey: 'haiku',
-        maxTokens: 400,
+        /* Was 400 — te krap sinds alles via respond_with_blocks gaat: de
+           block-JSON (veldnamen, routes, structuur) kost ~3× meer tokens dan
+           lopende tekst. Afgekapte JSON = leeg antwoord (fix 2026-06-12). */
+        maxTokens: 1200,
         thinking: false,
         temperature: 0.3,
         costMultiplier: 0.2,
@@ -44,7 +47,10 @@ export const MODES: Record<ThinkingMode, ModeDef> = {
         icon: 'bot',
         model: 'claude-sonnet-4-6',
         modelKey: 'sonnet',
-        maxTokens: 1000,
+        /* Was 1000 — gemeten: een blocks-antwoord met bullets+nav_cards+routes
+           knalde er precies op stuk (output=1000, JSON half af, palette leeg).
+           3000 geeft ruimte; prompt houdt antwoorden alsnog kort. */
+        maxTokens: 3000,
         thinking: false,
         temperature: 0.7,
         costMultiplier: 1.0,

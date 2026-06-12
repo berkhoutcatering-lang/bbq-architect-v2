@@ -281,9 +281,20 @@ export default function ChatPanel() {
                     }
                 }
 
-                // Streaming klaar — markeer message als af
+                /* Vangnet (eis 2026-06-12: alles in blokken, nooit leeg):
+                   lostekst zonder blocks → info-blok; helemaal niets binnen
+                   (bv. afgekapte tool-JSON) → leesbare warning i.p.v. stilte. */
+                const finalBlocks = tryParseBlocks(assembled);
+                const restText = stripActionMarker(assembled);
+                const textFallback: Block[] = [{ type: 'info', title: 'Rook', text: restText }];
+                const emptyFallback: Block[] = [{ type: 'warning', title: 'Geen antwoord ontvangen', text: 'Het antwoord kwam niet goed door. Probeer het opnieuw.' }];
                 setMessages((prev) =>
-                    prev.map((m) => (m.id === placeholder.id ? { ...m, streaming: false } : m))
+                    prev.map((m) => {
+                        if (m.id !== placeholder.id) return m;
+                        if (!finalBlocks && restText) return { ...m, text: '', blocks: textFallback, streaming: false };
+                        if (!finalBlocks && !restText) return { ...m, text: '', blocks: emptyFallback, streaming: false };
+                        return { ...m, streaming: false };
+                    })
                 );
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Onbekende fout';
