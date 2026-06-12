@@ -1034,7 +1034,12 @@ export default function EventHubPage() {
                         const doneCount = tasks.filter(t => prepState[t.id]).length;
                         const pct = Math.round((doneCount / tasks.length) * 100);
                         const isToday = today0 === d;
-                        const isPast = today0 > d;
+                        /* dagen = dagen vóór het event; een fase is pas
+                           verstreken als er minder dagen resteren dan de
+                           fase-dag. '>' stond omgekeerd, waardoor élke taak
+                           bij een event in de toekomst 'Achterstand' kreeg
+                           (23/23 vals alarm op event 9, fix 2026-06-13). */
+                        const isPast = today0 < d;
                         const isOnDeck = today0 - d >= 0 && today0 - d <= 1;
                         const dotColor = pct === 100 ? 'var(--green)' : isToday ? 'var(--brand)' : isOnDeck ? 'var(--amber)' : 'var(--brand-gold)';
                         return (

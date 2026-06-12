@@ -8,7 +8,10 @@
    houdt alleen de types + de ALLERGENS-display-lookup over.
    ═══════════════════════════════════════════════════════════════════ */
 
-export type AllergenCode = 'G' | 'L' | 'N' | 'V' | 'VE' | 'E' | 'S' | 'F' | 'M';
+/* EU-14 compleet (fix 2026-06-13): Pinda ontbrak — 'Pinda-allergie strikt'
+   moest noodgedwongen als Noten geregistreerd worden. Codes = allergens-
+   mastertabel (migration 20260516180000). V/VE zijn dieet-vlaggen. */
+export type AllergenCode = 'G' | 'L' | 'N' | 'P' | 'V' | 'VE' | 'E' | 'S' | 'F' | 'C' | 'W' | 'M' | 'SE' | 'SU' | 'SD' | 'LU';
 
 export const ALLERGENS: Record<AllergenCode, { label: string; color: string }> = {
     G: { label: 'Gluten', color: '#d97706' },
@@ -20,6 +23,13 @@ export const ALLERGENS: Record<AllergenCode, { label: string; color: string }> =
     S: { label: 'Soja', color: '#a3a3a3' },
     F: { label: 'Vis', color: '#0ea5e9' },
     M: { label: 'Mosterd', color: '#eab308' },
+    P: { label: 'Pinda', color: '#b45309' },
+    C: { label: 'Schaaldieren', color: '#f43f5e' },
+    W: { label: 'Weekdieren', color: '#8b5cf6' },
+    SE: { label: 'Sesam', color: '#a16207' },
+    SU: { label: 'Sulfiet', color: '#64748b' },
+    SD: { label: 'Selderij', color: '#84cc16' },
+    LU: { label: 'Lupine', color: '#c084fc' },
 };
 
 export type CourseStatus = 'queued' | 'active' | 'ready' | 'served' | 'recalled';
