@@ -13,6 +13,7 @@ import GerechtKaart, { GANGEN, type GerechtData, type GangConfig, getGang } from
 import GerechtDetailsModal from './GerechtDetailsModal';
 import { MapStation, GangPickerModal } from './MapStation';
 import { BCGMatrix, QuadrantCards, type DishAnalysis, calcDishFoodcost, countDishPopularity, median } from './BCGMatrix';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import MargesBackground from './_components/MargesBackground';
 import MargesPageHero from './_components/MargesPageHero';
 import MargesKpiTiles from './_components/MargesKpiTiles';
@@ -94,11 +95,11 @@ export default function MenuEngineering() {
     if (!supabase) { setLoading(false); return; }
     Promise.all([
       supabase.from('gangen').select('*').order('volgorde'),
-      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief,ingredienten,bereidingswijze,verkoopprijs,marge_pct,pijnpunten,toppunten,foto_prompt').order('volgorde'),
+      supabase.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,total_cost_cents,actief,ingredienten,bereidingswijze,verkoopprijs,marge_pct,pijnpunten,toppunten,foto_prompt').order('volgorde'),
       supabase.from('events').select('id,menu'),
       supabase.from('offertes').select('id,menu_selectie,basis_prijs_pp,aantal_gasten'),
       supabase.from('inventory').select('id,naam,unit,purchase_price,yield_factor,last_price_eur,last_price_at'),
-      supabase.from('gerechten').select('id,naam,gang_slug,ingredient_costs,kostprijs_pp'),
+      supabase.from('gerechten').select('id,naam,gang_slug,ingredient_costs,kostprijs_pp,total_cost_cents'),
     ]).then(function (results: any[]) {
       const gangenData = results[0].data || [];
       const gerechtenData = results[1].data || [];
@@ -272,10 +273,10 @@ export default function MenuEngineering() {
   }, [offertesData]);
 
   const stats = useMemo(function () {
-    const metKostprijs = gerechten.filter(function (g) { return g.kostprijs_pp && g.kostprijs_pp > 0; });
+    const metKostprijs = gerechten.filter(function (g) { return effectieveKostprijsPP(g) > 0; });
     const vp = avgVerkoopprijs;
     const gemMarge = metKostprijs.length > 0
-      ? metKostprijs.reduce(function (s, g) { return s + (1 - (g.kostprijs_pp || 0) / vp); }, 0) / metKostprijs.length * 100
+      ? metKostprijs.reduce(function (s, g) { return s + (1 - effectieveKostprijsPP(g) / vp); }, 0) / metKostprijs.length * 100
       : 0;
     return {
       totaal: gerechten.length,
@@ -289,14 +290,14 @@ export default function MenuEngineering() {
    *  Fallback: meest-recent toegevoegd. */
   const winner = useMemo(function () {
     const candidates = gerechten.filter(function (g) {
-      return g.actief && g.kostprijs_pp && g.kostprijs_pp > 0;
+      return g.actief && effectieveKostprijsPP(g) > 0;
     });
     if (candidates.length === 0) return null;
     const vp = avgVerkoopprijs;
     let best = candidates[0];
     let bestMarge = 0;
     candidates.forEach(function (g) {
-      const marge = ((vp - (g.kostprijs_pp || 0)) / vp) * 100;
+      const marge = ((vp - effectieveKostprijsPP(g)) / vp) * 100;
       if (marge > bestMarge) {
         bestMarge = marge;
         best = g;
@@ -322,8 +323,8 @@ export default function MenuEngineering() {
     const dishes: DishAnalysis[] = [];
     fullGerechten.forEach(function (g: any) {
       const foodcost = calcDishFoodcost(g, inventoryData);
-      // Also fall back to kostprijs_pp if ingredient_costs not set
-      const effectiveCost = foodcost > 0 ? foodcost : (g.kostprijs_pp || 0);
+      /* Eén kostprijs-waarheid: componenten-rollup wint (lib/gerecht-kosten). */
+      const effectiveCost = effectieveKostprijsPP(g, foodcost);
       if (effectiveCost <= 0) return; // skip dishes with no cost data
 
       const pop = countDishPopularity(g.naam, g.id, eventsData, offertesData);

@@ -18,6 +18,7 @@ import PageSection from '@/components/PageSection';
 import MargeBar from '@/components/chips/MargeBar';
 import { LoadingState } from '@/components/LoadingState';
 import { type FollowUpAction } from '@/components/FollowUpPrompt';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
@@ -823,7 +824,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             { label: 'Naam', ok: !!(g.naam && String(g.naam).trim()) },
             { label: 'Beschrijving', ok: !!(g.beschrijving && String(g.beschrijving).trim()) },
             { label: 'Foto', ok: !!g.foto_url },
-            { label: 'Kostprijs', ok: Number(g.kostprijs_pp || 0) > 0 },
+            { label: 'Kostprijs', ok: effectieveKostprijsPP(g as { total_cost_cents?: number | null; kostprijs_pp?: number | string | null }) > 0 },
             { label: 'Ingrediënten', ok: Array.isArray(g.ingredienten) && g.ingredienten.length > 0 },
             { label: 'Allergenen', ok: Array.isArray(g.allergenen) && g.allergenen.length > 0 },
             { label: 'Bereidingswijze', ok: !!(g.bereidingswijze && String(g.bereidingswijze).trim()) },
@@ -1613,6 +1614,18 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 <div className="field">
                                     <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
                                     <input type="number" step="0.01" value={form.kostprijs_pp || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} placeholder="€0.00" />
+                                    {(function () {
+                                        /* Eén kostprijs-waarheid: als dit gerecht componenten heeft,
+                                           rolt de kostprijs dáár vandaan en wint die overal. */
+                                        const huidig = editing && editing !== 'new' ? gerechten.find(function (x) { return x.id === editing; }) : null;
+                                        const rollupCents = Number((huidig as { total_cost_cents?: number | null } | null)?.total_cost_cents || 0);
+                                        if (rollupCents <= 0) return null;
+                                        return (
+                                            <div style={{ fontSize: 11.5, color: 'var(--brand)', marginTop: 4 }}>
+                                                Rolt op uit componenten: €{(rollupCents / 100).toFixed(2)} p.p. — lijsten en analyses gebruiken dát bedrag.
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="field">
                                     <label>Volgorde</label>

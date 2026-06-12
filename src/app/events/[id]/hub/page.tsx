@@ -581,14 +581,16 @@ export default function EventHubPage() {
   const statusLabel = event.status === 'confirmed' ? 'Bevestigd' : event.status === 'optie' ? 'Optie · wacht op akkoord' : event.status === 'completed' ? 'Afgerond' : 'Nieuw';
   const statusPillVariant = event.status === 'confirmed' ? 'p-ok' : event.status === 'completed' ? 'p-draft' : event.status === 'optie' ? 'p-optie' : 'p-send';
 
-  const saldo = factuur ? (Number(factuur.totaal) || 0) - (Number(factuur.betaald) || 0) : 0;
-  /* "Volledig betaald" alléén wanneer er echt een bedrag betaald is — een
-     factuur van €0 (bv. wizard-offerte zonder regels) is niet "betaald" maar
-     leeg. Voorkwam gevaarlijk vertrouwen (fix 2026-06-12). */
-  const factuurTotaal = factuur ? (Number(factuur.totaal) || 0) : 0;
+  /* Saldo uit de factuur-regels — de facturen-tabel heeft geen totaal/
+     betaald-kolommen; de oude berekening las die spookvelden en stond
+     daardoor ALTIJD op €0 (fix 2026-06-13). Betaald = status 'betaald'
+     (vol bedrag); deelbetalingen kent het datamodel nog niet. */
+  const factuurTotaal = factuur ? calcLineTotals(factuur.items).totaal : 0;
+  const factuurBetaald = factuur && factuur.status === 'betaald' ? factuurTotaal : 0;
+  const saldo = factuurTotaal - factuurBetaald;
   const saldoLabel = factuur
-    ? (saldo === 0 && factuurTotaal > 0 ? 'Volledig betaald'
-      : saldo === 0 ? `Nog geen bedrag · ${factuur.nummer}`
+    ? (factuurTotaal <= 0 ? `Nog geen bedrag · ${factuur.nummer}`
+      : saldo === 0 ? 'Volledig betaald'
       : saldo > 0 ? `Open · ${factuur.nummer}` : `Overbetaald · ${factuur.nummer}`)
     : 'Geen factuur';
 
@@ -601,7 +603,10 @@ export default function EventHubPage() {
           </button>
         </div>
         <EventTabs eventId={event.id} eventName={event.name} />
-        {offerte && !offerte.menukaart_template_id && (
+        {/* Alleen tonen als er écht geen menu-inhoud is — de kaart verderop
+            valt terug op het standaard-sjabloon en zegt dan "LIVE", dus een
+            banner op sjabloon-keuze sprak zichzelf tegen (fix 2026-06-13). */}
+        {offerte && menuGroups.length === 0 && (
           <div style={{ marginTop: 16 }}>
             <MenukaartMissingNotice
               eventName={titleCase(displayEventName(event.name))}

@@ -44,7 +44,7 @@ Spokes worden horizontale tabs óp de hubpagina (patroon draait al op /financien
 | Sessie | Wat | Omvang | Risico |
 |---|---|---|---|
 | 0 | **Weekendtest als munitie**: Mathijs noteert elk moment van zóeken ("waar zat … ook alweer?") | — | — |
-| 1 | Sidebar-inklap + verhuizingen (Team & Operatie) + redirects + anatomie-pass | ~1 dag | laag — geen feature-code, alleen navigatie |
+| 1 | Sidebar-inklap + verhuizingen (Team & Operatie) + tabbalken + kruimelpad-éénbron — **✅ af 2026-06-12 (commit 64e2b03)**: ruststand 8 items, spokes klappen per actieve hub, Geld=puur geld, Facturen in nav, Breadcrumbs lezen navSections. Resteert uit sessie 1: anatomie-pass per pagina | ~1 dag | laag — geen feature-code, alleen navigatie |
 | 2 | Bonnen-éénwording + Marge-éénwording (ingangen samenvoegen, engines blijven) | ~1 dag | middel — drie pagina's worden tabs |
 | 3 | Gerechten+Recepten-merge (stond al op de lijst, memory 2026) | ~1 dag | middel |
 | 4 | Naming-pass (één NL-term per begrip) + **nieuwe-persoon-test live afnemen** (Lars of een vreemde cateraar) | ~½ dag | laag |

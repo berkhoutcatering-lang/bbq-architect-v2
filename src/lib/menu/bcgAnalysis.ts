@@ -14,6 +14,7 @@
  */
 
 import { calcDishFoodcost, countDishPopularity, median, type DishAnalysis, type Quadrant } from '@/app/marges/BCGMatrix';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
 export { type DishAnalysis, type Quadrant };
 
@@ -60,7 +61,8 @@ export function buildBcgAnalysis(
   const dishes: DishAnalysis[] = [];
   fullGerechten.forEach((g: any) => {
     const foodcost = calcDishFoodcost(g, inventoryData);
-    const effectiveCost = foodcost > 0 ? foodcost : (g.kostprijs_pp || 0);
+    /* Eén kostprijs-waarheid: componenten-rollup wint (zie lib/gerecht-kosten). */
+    const effectiveCost = effectieveKostprijsPP(g, foodcost);
     if (effectiveCost <= 0) return; // skip dishes zonder kosten-data
 
     const pop = countDishPopularity(g.naam, g.id, eventsData, offertesData);
