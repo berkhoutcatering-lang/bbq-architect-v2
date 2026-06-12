@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
     Boxes, ArrowLeft, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
-    Upload, FileText,
+    Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -22,6 +22,8 @@ import { FoodcostImpactModal, type FoodcostImpactPayload } from '@/components/me
 import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
+/* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
+import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
 
 interface AiProposal {
     name: string;
@@ -30,7 +32,7 @@ interface AiProposal {
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
-    ingredients?: Array<{ name: string; qty: number; unit: string }>;
+    ingredients?: Array<{ name: string; qty: number; unit: string; cost_cents?: number }>;
     preparation_steps?: string[];
     flavor_tags?: string[];
     allergens?: Array<{ allergen_code: string; ai_suggested?: boolean }>;
@@ -74,15 +76,25 @@ const ALLERGEN_LABELS: Record<string, string> = {
 };
 
 type ComponentType = 'prepared' | 'bought_in';
+type ComponentCategory = 'food' | 'non_food';
 
 interface ComponentRow {
     id: number;
     name: string;
     description: string | null;
     type: ComponentType;
+    /* food = menu-bouwsteen, non_food = verpakking/materieel (2026-06-12). */
+    category: ComponentCategory;
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /* Pak-prijs administratie (2026-06-12): wat er bij de groothandel betaald is,
+       voor welke inhoud. Bron van base_*; herzienbaar in de edit-drawer. */
+    pack_price_cents: number | null;
+    pack_quantity: number | null;
+    pack_unit: string | null;
+    ingredients: unknown;
+    preparation_steps: unknown;
     flavor_tags: string[] | null;
     supplier_product_id: number | null;
     ai_suggested: boolean;
@@ -92,26 +104,6 @@ interface ComponentRow {
     /* S2-deel-3: koppeling aan component_folders. NULL = root. */
     folder_id: string | null;
 }
-
-interface FormState {
-    name: string;
-    description: string;
-    type: ComponentType;
-    base_quantity: string;   // string in input, parsed bij submit
-    base_unit: string;
-    base_cost_euros: string; // input in euro's, omgerekend naar cents bij submit
-    flavor_tags: string;     // comma-separated input
-}
-
-const EMPTY_FORM: FormState = {
-    name: '',
-    description: '',
-    type: 'prepared',
-    base_quantity: '100',
-    base_unit: 'g',
-    base_cost_euros: '',
-    flavor_tags: '',
-};
 
 const UNITS = ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'];
 
@@ -123,31 +115,85 @@ function formatPerBase(cents: number, qty: number, unit: string): string {
     return `${formatEuro(cents)} / ${qty}${unit}`;
 }
 
+/* Decimaal-parser die ook Nederlandse komma's accepteert ("2,5"). */
+function parseDec(s: string): number {
+    return Number(String(s).trim().replace(',', '.'));
+}
+
+/* ── Ingrediëntregels: form-state (strings) ⇄ JSONB [{name,qty,unit,cost_cents}] ── */
+
+interface IngredientFormRow {
+    name: string;
+    qty: string;
+    unit: string;
+    cost_euros: string;
+}
+
+const emptyIngredientRow = (): IngredientFormRow => ({ name: '', qty: '', unit: 'g', cost_euros: '' });
+
+function ingredientsFromJson(value: unknown): IngredientFormRow[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
+        .map(v => ({
+            name: typeof v.name === 'string' ? v.name : '',
+            qty: v.qty != null && Number.isFinite(Number(v.qty)) ? String(v.qty) : '',
+            unit: typeof v.unit === 'string' ? v.unit : '',
+            cost_euros: typeof v.cost_cents === 'number' && Number.isFinite(v.cost_cents) && v.cost_cents > 0
+                ? (v.cost_cents / 100).toFixed(2) : '',
+        }));
+}
+
+function rowsToIngredientsJson(rows: IngredientFormRow[]): Array<{ name: string; qty: number; unit: string; cost_cents: number }> {
+    return rows
+        .filter(r => r.name.trim().length > 0)
+        .map(r => {
+            const qty = parseDec(r.qty);
+            const cents = Math.round(parseDec(r.cost_euros) * 100);
+            return {
+                name: r.name.trim(),
+                qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
+                unit: r.unit.trim(),
+                cost_cents: Number.isFinite(cents) && cents > 0 ? cents : 0,
+            };
+        });
+}
+
+function ingredientSumCents(rows: IngredientFormRow[]): number {
+    return rows.reduce((s, r) => {
+        const cents = Math.round(parseDec(r.cost_euros) * 100);
+        return s + (Number.isFinite(cents) && cents > 0 ? cents : 0);
+    }, 0);
+}
+
+function stepsFromJson(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((s): s is string => typeof s === 'string');
+}
+
+/* Naam-heuristiek voor non-food bij scan-import (default food). */
+const NON_FOOD_RE = /folie|vacuumzak|snijplank|braadpan|servet|beker|handschoen|krat|disposable|tape|zak/i;
+
 export default function ComponentenPage() {
     const toast = useToast();
     const confirm = useConfirm();
 
     const [components, setComponents] = useState<ComponentRow[]>([]);
+    /* Per component: in hoeveel gerechten zit hij — de zichtbare lijn
+       van inkoopprijs naar gerecht (2026-06-12). */
+    const [usage, setUsage] = useState<Record<number, number>>({});
     const [loading, setLoading] = useState(true);
-    const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [selectedComponentId, setSelectedComponentId] = useState<number | null>(null);
     const [showImport, setShowImport] = useState(false);
-    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType>('all');
+    /* Eerste drie pills betekenen impliciet category=food; non_food is een eigen chip. */
+    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food'>('all');
     const [search, setSearch] = useState('');
-    const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-    /* AI-genereer state */
-    const [showAi, setShowAi] = useState(false);
-    const [aiPrompt, setAiPrompt] = useState('');
-    const [aiType, setAiType] = useState<ComponentType>('prepared');
-    const [aiBusy, setAiBusy] = useState(false);
-    const [aiProposal, setAiProposal] = useState<AiProposal | null>(null);
-    const [aiAccepting, setAiAccepting] = useState(false);
-    /* Bevestigde flags per allergen-code / haccp-index — default alles aan na AI-output */
-    const [confirmedAllergens, setConfirmedAllergens] = useState<Set<string>>(new Set());
-    const [confirmedHaccp, setConfirmedHaccp] = useState<Set<number>>(new Set());
+    /* Twee first-class toevoegen-routes (2026-06-12):
+       Zelf bereid → ReceptuurDrawer, Scan kant-en-klaar → ScanDrawer. */
+    const [showReceptuur, setShowReceptuur] = useState(false);
+    const [showScan, setShowScan] = useState(false);
 
     /* S2-deel-3: folder-state. currentFolderId=null toont alle componenten;
        als ingesteld → filter op components.folder_id.
@@ -210,6 +256,7 @@ export default function ComponentenPage() {
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Laden mislukt');
             setComponents(body.components ?? []);
+            setUsage(body.usage ?? {});
         } catch (e: any) {
             toast(e.message || 'Laden mislukt', 'error');
         } finally {
@@ -236,7 +283,13 @@ export default function ComponentenPage() {
             /* Folder-filter: bij currentFolderId=null tonen we ALLE componenten
                (root + sub). Bij specifieke folder tonen we alleen die folder. */
             if (currentFolderId !== null && c.folder_id !== currentFolderId) return false;
-            if (typeFilter !== 'all' && c.type !== typeFilter) return false;
+            /* Alle | Zelf-bereid | Inkoop = impliciet food; Non-food eigen chip. */
+            if (typeFilter === 'non_food') {
+                if (c.category !== 'non_food') return false;
+            } else {
+                if (c.category === 'non_food') return false;
+                if (typeFilter !== 'all' && c.type !== typeFilter) return false;
+            }
             if (search.trim().length > 0) {
                 const q = search.trim().toLowerCase();
                 if (!c.name.toLowerCase().includes(q) && !(c.description ?? '').toLowerCase().includes(q)) {
@@ -257,145 +310,6 @@ export default function ComponentenPage() {
     }, [components]);
     const rootCount = useMemo(() => components.filter(c => c.folder_id === null).length, [components]);
 
-    async function handleCreate(e: React.FormEvent) {
-        e.preventDefault();
-        const name = form.name.trim();
-        if (!name) { toast('Naam verplicht', 'error'); return; }
-        const baseQty = Number(form.base_quantity);
-        if (!Number.isFinite(baseQty) || baseQty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
-        const costEuros = Number(form.base_cost_euros);
-        if (!Number.isFinite(costEuros) || costEuros < 0) { toast('Kostprijs ongeldig', 'error'); return; }
-        const baseCostCents = Math.round(costEuros * 100);
-        const tags = form.flavor_tags
-            .split(',').map(t => t.trim()).filter(t => t.length > 0);
-
-        setCreating(true);
-        try {
-            const res = await fetch('/api/components', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    description: form.description.trim() || null,
-                    type: form.type,
-                    base_quantity: baseQty,
-                    base_unit: form.base_unit,
-                    base_cost_cents: baseCostCents,
-                    flavor_tags: tags,
-                    /* Nieuwe componenten landen in de huidige folder; root als geen folder geselecteerd. */
-                    folder_id: currentFolderId,
-                }),
-            });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error || 'Aanmaken mislukt');
-            toast(`Component "${name}" toegevoegd`, 'success');
-            setForm(EMPTY_FORM);
-            setShowForm(false);
-            await loadComponents();
-        } catch (e: any) {
-            toast(e.message || 'Aanmaken mislukt', 'error');
-        } finally {
-            setCreating(false);
-        }
-    }
-
-    async function handleGenerate(e: React.FormEvent) {
-        e.preventDefault();
-        const prompt = aiPrompt.trim();
-        if (!prompt) { toast('Vul een prompt in', 'error'); return; }
-        setAiBusy(true);
-        setAiProposal(null);
-        try {
-            const res = await fetch('/api/ai/component-generate', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, type: aiType }),
-            });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error || 'AI-call mislukt');
-            const proposal = body.proposal as AiProposal;
-            setAiProposal(proposal);
-            // Default: alle AI-suggesties bevestigd (mens kan uitzetten wat niet klopt)
-            setConfirmedAllergens(new Set((proposal.allergens ?? []).map(a => a.allergen_code)));
-            setConfirmedHaccp(new Set((proposal.haccp_points ?? []).map((_, i) => i)));
-        } catch (e: any) {
-            toast(e.message || 'AI-call mislukt', 'error');
-        } finally {
-            setAiBusy(false);
-        }
-    }
-
-    async function handleAcceptProposal() {
-        if (!aiProposal) return;
-        setAiAccepting(true);
-        try {
-            const allergens = (aiProposal.allergens ?? [])
-                .filter(a => confirmedAllergens.has(a.allergen_code))
-                .map(a => ({ allergen_code: a.allergen_code, ai_suggested: true }));
-            const haccp_points = (aiProposal.haccp_points ?? [])
-                .filter((_, i) => confirmedHaccp.has(i))
-                .map(h => ({
-                    type: h.type,
-                    threshold_value: h.threshold_value,
-                    threshold_unit: h.threshold_unit,
-                    note: h.note,
-                    ai_suggested: true,
-                }));
-
-            const res = await fetch('/api/components', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: aiProposal.name,
-                    description: aiProposal.description ?? null,
-                    type: aiProposal.type,
-                    base_quantity: aiProposal.base_quantity,
-                    base_unit: aiProposal.base_unit,
-                    base_cost_cents: aiProposal.base_cost_cents,
-                    ingredients: aiProposal.ingredients ?? null,
-                    preparation_steps: aiProposal.preparation_steps ?? null,
-                    flavor_tags: aiProposal.flavor_tags ?? [],
-                    ai_suggested: true,
-                    allergens,
-                    haccp_points,
-                }),
-            });
-            const body = await res.json();
-            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
-            toast(`"${aiProposal.name}" toegevoegd uit AI-voorstel`, 'success');
-            if (body.warnings) {
-                toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
-            }
-            setAiProposal(null);
-            setAiPrompt('');
-            setShowAi(false);
-            await loadComponents();
-        } catch (e: any) {
-            toast(e.message || 'Opslaan mislukt', 'error');
-        } finally {
-            setAiAccepting(false);
-        }
-    }
-
-    function toggleAllergen(code: string) {
-        setConfirmedAllergens(prev => {
-            const next = new Set(prev);
-            if (next.has(code)) next.delete(code); else next.add(code);
-            return next;
-        });
-    }
-
-    function toggleHaccp(idx: number) {
-        setConfirmedHaccp(prev => {
-            const next = new Set(prev);
-            if (next.has(idx)) next.delete(idx); else next.add(idx);
-            return next;
-        });
-    }
-
     async function handleDelete(c: ComponentRow) {
         if (!window.confirm(`Verwijder "${c.name}"?\n\nDit kan niet ongedaan worden gemaakt. Als de component in een gerecht zit, wordt verwijderen tegengehouden.`)) return;
         setDeletingId(c.id);
@@ -415,14 +329,18 @@ export default function ComponentenPage() {
         }
     }
 
-    const preparedCount = components.filter(c => c.type === 'prepared').length;
-    const boughtCount = components.filter(c => c.type === 'bought_in').length;
-    const aiCount = components.filter(c => c.ai_suggested).length;
-    const totalCount = components.length;
+    /* Statistieken rekenen alleen over food — non-food (folie, kratten) zou
+       het gemiddelde kostprijs-beeld vervuilen. Defensief: alles ≠ non_food = food. */
+    const foodComponents = components.filter(c => c.category !== 'non_food');
+    const nonFoodCount = components.length - foodComponents.length;
+    const preparedCount = foodComponents.filter(c => c.type === 'prepared').length;
+    const boughtCount = foodComponents.filter(c => c.type === 'bought_in').length;
+    const aiCount = foodComponents.filter(c => c.ai_suggested).length;
+    const totalCount = foodComponents.length;
     const aiProgress = totalCount === 0 ? 0 : aiCount / totalCount;
     const avgCostCents = totalCount === 0
         ? 0
-        : Math.round(components.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
+        : Math.round(foodComponents.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
     const circumference = 2 * Math.PI * 86;
 
     /* GP-5: render-helper voor het card-grid-gebied (loading/empty/cards).
@@ -451,24 +369,24 @@ export default function ComponentenPage() {
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {components.length === 0
-                            ? 'Begin met je eerste bouwsteen. Zelf-bereid (gegrilde ananas, kokos espuma) of inkoop (Hanos broodje). Of laat AI er een voorstellen.'
+                            ? 'Begin met je eerste bouwsteen. Zelf bereid met volledige receptuur (aardbeien bavaroise) of scan een kant-en-klaar product met je camera.'
                             : 'Geen component op deze filter of zoekterm.'}
                     </p>
-                    {components.length === 0 && !showForm && !showAi && (
+                    {components.length === 0 && !showReceptuur && !showScan && (
                         <div className="mt-6 flex items-center justify-center gap-2">
                             <button
                                 type="button"
-                                onClick={() => setShowAi(true)}
+                                onClick={() => setShowScan(true)}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/10 px-3 py-1.5 text-[12px] font-medium text-[var(--brand)] transition hover:bg-[var(--brand)]/15"
                             >
-                                <Sparkles size={12} /> AI Genereer
+                                <Camera size={12} /> Scan kant-en-klaar
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setShowForm(true)}
+                                onClick={() => setShowReceptuur(true)}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90"
                             >
-                                <Plus size={12} /> Handmatig
+                                <ChefHat size={12} /> Zelf bereid
                             </button>
                         </div>
                     )}
@@ -495,6 +413,11 @@ export default function ComponentenPage() {
                                             <Sparkles size={8} /> AI
                                         </span>
                                     )}
+                                    {c.category === 'non_food' && (
+                                        <span className="rounded bg-[var(--bg)] px-1 py-0.5 text-[9px] normal-case tracking-normal text-[var(--muted)]">
+                                            non-food
+                                        </span>
+                                    )}
                                 </div>
                                 <span
                                     role="button"
@@ -519,6 +442,18 @@ export default function ComponentenPage() {
                                 </span>
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                                     /{c.base_quantity}{c.base_unit}
+                                </span>
+                            </div>
+                            {/* Inkoop-helderheid: herkenbare groothandel-eenheid + de lijn
+                                naar gerechten, direct op de kaart (2026-06-12). */}
+                            <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
+                                <span className="font-medium text-[var(--brand)]">
+                                    {unitPriceLabel(c.base_cost_cents, c.base_quantity, c.base_unit) ?? ''}
+                                </span>
+                                <span className="text-[var(--muted)]">
+                                    {(usage[c.id] ?? 0) > 0
+                                        ? `in ${usage[c.id]} ${usage[c.id] === 1 ? 'gerecht' : 'gerechten'}`
+                                        : 'nog niet in een gerecht'}
                                 </span>
                             </div>
                             {c.flavor_tags && c.flavor_tags.length > 0 && (
@@ -566,13 +501,30 @@ export default function ComponentenPage() {
                                 </div>
                             </div>
                             <div className="eh-hero-actions">
+                                {/* Twee first-class routes: zelf bereid (volledige receptuur,
+                                    AI-vulbaar) en kant-en-klaar via foto/screenshot-scan. */}
                                 <button
                                     type="button"
-                                    onClick={() => { setShowAi(v => !v); setShowForm(false); }}
+                                    onClick={() => setShowReceptuur(true)}
                                     className="btn btn-primary"
                                     style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
                                 >
-                                    <Sparkles size={14} /> AI Genereer
+                                    <ChefHat size={14} /> Zelf bereid
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowScan(true)}
+                                    className="btn btn-primary"
+                                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                                >
+                                    <Camera size={14} /> Scan kant-en-klaar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowImport(true)}
+                                    className="btn btn-ghost"
+                                >
+                                    <Upload size={14} /> Importeer leverancier (bulk)
                                 </button>
                                 {/* S2-deel-2: Bedenker is verhuisd uit de hoofdtabs; deze knop
                                     is nu de prominente ingang voor de uitgebreide brainstorm-studio
@@ -584,21 +536,6 @@ export default function ComponentenPage() {
                                 >
                                     <Sparkles size={14} /> Bedenker Studio
                                 </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowForm(v => !v); setShowAi(false); }}
-                                    className="btn btn-ghost"
-                                >
-                                    {showForm ? <X size={14} /> : <Plus size={14} />}
-                                    {showForm ? 'Annuleer' : 'Nieuw component'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowImport(true); setShowForm(false); setShowAi(false); }}
-                                    className="btn btn-ghost"
-                                >
-                                    <Upload size={14} /> Importeer leverancier
-                                </button>
                             </div>
                         </div>
                         <div className="eh-countdown">
@@ -635,9 +572,9 @@ export default function ComponentenPage() {
                     </div>
                     <div className="eh-hero-stats">
                         <div className="eh-hero-stat">
-                            <div className="l">Totaal</div>
+                            <div className="l">Totaal food</div>
                             <div className="v">{totalCount}</div>
-                            <div className="s">In bibliotheek</div>
+                            <div className="s">{nonFoodCount > 0 ? `+ ${nonFoodCount} non-food` : 'In bibliotheek'}</div>
                         </div>
                         <div className="eh-hero-stat">
                             <div className="l">Zelf-bereid</div>
@@ -665,6 +602,29 @@ export default function ComponentenPage() {
                     </div>
                 </div>
 
+                {/* Inkoop-helderheid (2026-06-12): de grote lijn in één strip.
+                    Drunk-test: een moe iemand snapt in één zin hoe inkoopprijzen
+                    bij gerechten terechtkomen en waar hij moet zijn. */}
+                <div
+                    className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-[var(--border)] px-4 py-3 text-[12px] text-[var(--muted-light)]"
+                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                >
+                    <Calculator size={14} className="shrink-0 text-[var(--brand)]" />
+                    <strong style={{ color: 'var(--text)' }}>Zo stroomt je inkoopprijs naar je gerechten:</strong>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span>verpakking bij de groothandel (€62,50 / doos 5 kg)</span>
+                        <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
+                        <span>eenheidsprijs (€12,50 / kg)</span>
+                        <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
+                        <span>gerecht-kostprijs (200 g = €2,50)</span>
+                    </span>
+                    <span className="basis-full text-[11px] text-[var(--muted)]">
+                        Prijs gewijzigd bij je slager? Klik de bouwsteen aan, pas de pak-prijs aan en
+                        elk gerecht dat &apos;m gebruikt rekent direct mee. Nieuw product? Scan een screenshot
+                        of foto met <strong>Scan kant-en-klaar</strong>.
+                    </span>
+                </div>
+
                 {/* GP-5 (2026-05-25): FolderBar (horizontale chips) vervangen door
                     FolderTree (Drive-style sidebar) + DndContext voor drag-drop.
                     Tree mount onder de hero, de filter-bar + grid binnen DndContext
@@ -684,7 +644,7 @@ export default function ComponentenPage() {
                             onClick={() => setTypeFilter('all')}
                             className={`filter-bar-pill ${typeFilter === 'all' ? 'is-active' : ''}`}
                         >
-                            Alle <span className="count">{components.length}</span>
+                            Alle <span className="count">{totalCount}</span>
                         </button>
                         <button
                             type="button"
@@ -699,6 +659,13 @@ export default function ComponentenPage() {
                             className={`filter-bar-pill ${typeFilter === 'bought_in' ? 'is-active' : ''}`}
                         >
                             <ShoppingBag size={12} /> Inkoop <span className="count">{boughtCount}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter('non_food')}
+                            className={`filter-bar-pill ${typeFilter === 'non_food' ? 'is-active' : ''}`}
+                        >
+                            <Boxes size={12} /> Non-food <span className="count">{nonFoodCount}</span>
                         </button>
                     </div>
                     <div className="filter-bar-sep" aria-hidden></div>
@@ -728,336 +695,6 @@ export default function ComponentenPage() {
                         )}
                     </div>
                 </div>
-
-            {/* AI Genereer-strook */}
-            {showAi && (
-                <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                            <Sparkles size={16} /> AI als Creative Chef
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => { setShowAi(false); setAiProposal(null); setAiPrompt(''); }}
-                            className="text-muted-foreground hover:text-foreground"
-                            aria-label="Sluit AI-strook"
-                        >
-                            <X size={16} />
-                        </button>
-                    </div>
-
-                    {!aiProposal && (
-                        <form onSubmit={handleGenerate} className="space-y-3">
-                            <p className="text-xs text-muted-foreground">
-                                Beschrijf wat je wil — naam, ingrediënt, smaak. AI maakt een compleet voorstel met
-                                ingrediënten, kostprijs, allergenen en HACCP-punten. Jij bevestigt wat klopt.
-                            </p>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setAiType('prepared')}
-                                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${aiType === 'prepared' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
-                                >
-                                    <Package size={12} /> Zelf-bereid
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAiType('bought_in')}
-                                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${aiType === 'bought_in' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
-                                >
-                                    <ShoppingBag size={12} /> Inkoop
-                                </button>
-                            </div>
-                            <textarea
-                                value={aiPrompt}
-                                onChange={(e) => setAiPrompt(e.target.value)}
-                                rows={2}
-                                maxLength={500}
-                                placeholder="bv. 'bacon crumble met chili voor op sliders' of 'gepekelde komkommer-lintjes voor amuse'"
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                                required
-                            />
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-muted-foreground">{aiPrompt.length} / 500</span>
-                                <button
-                                    type="submit"
-                                    disabled={aiBusy}
-                                    className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                                >
-                                    {aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                                    {aiBusy ? 'AI denkt na...' : 'Genereer'}
-                                </button>
-                            </div>
-                        </form>
-                    )}
-
-                    {aiProposal && (
-                        <div className="space-y-4 rounded-xl border border-border bg-card p-4">
-                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-primary">
-                                <Sparkles size={11} /> AI-voorstel — bevestig wat klopt
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold">{aiProposal.name}</h3>
-                                {aiProposal.description && (
-                                    <p className="mt-1 text-sm text-muted-foreground">{aiProposal.description}</p>
-                                )}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-                                <div>
-                                    <div className="text-xs text-muted-foreground">Type</div>
-                                    <div className="font-medium">{aiProposal.type === 'prepared' ? 'Zelf-bereid' : 'Inkoop'}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-muted-foreground">Basis</div>
-                                    <div className="font-medium">{aiProposal.base_quantity} {aiProposal.base_unit}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-muted-foreground">Kostprijs</div>
-                                    <div className="font-medium">{formatEuro(aiProposal.base_cost_cents)}</div>
-                                </div>
-                            </div>
-
-                            {aiProposal.ingredients && aiProposal.ingredients.length > 0 && (
-                                <div>
-                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Ingrediënten</div>
-                                    <ul className="space-y-0.5 text-sm">
-                                        {aiProposal.ingredients.map((ing, i) => (
-                                            <li key={i} className="flex justify-between">
-                                                <span>{ing.name}</span>
-                                                <span className="text-muted-foreground">{ing.qty} {ing.unit}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {aiProposal.preparation_steps && aiProposal.preparation_steps.length > 0 && (
-                                <div>
-                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Bereiding</div>
-                                    <ol className="list-decimal space-y-0.5 pl-5 text-sm">
-                                        {aiProposal.preparation_steps.map((s, i) => <li key={i}>{s}</li>)}
-                                    </ol>
-                                </div>
-                            )}
-
-                            {aiProposal.flavor_tags && aiProposal.flavor_tags.length > 0 && (
-                                <div>
-                                    <div className="mb-1 text-xs font-medium text-muted-foreground">Smaakprofiel</div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {aiProposal.flavor_tags.map(t => (
-                                            <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{t}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {aiProposal.allergens && aiProposal.allergens.length > 0 && (
-                                <div>
-                                    <div className="mb-1 text-xs font-medium text-muted-foreground">
-                                        Allergenen — klik om af te vinken als ze niet kloppen
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {aiProposal.allergens.map(a => {
-                                            const on = confirmedAllergens.has(a.allergen_code);
-                                            return (
-                                                <button
-                                                    key={a.allergen_code}
-                                                    type="button"
-                                                    onClick={() => toggleAllergen(a.allergen_code)}
-                                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground line-through'}`}
-                                                >
-                                                    {on && <Check size={11} />}
-                                                    {ALLERGEN_LABELS[a.allergen_code] ?? a.allergen_code}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-                            {aiProposal.haccp_points && aiProposal.haccp_points.length > 0 && (
-                                <div>
-                                    <div className="mb-1 text-xs font-medium text-muted-foreground">
-                                        HACCP-punten — klik om af te vinken als ze niet kloppen
-                                    </div>
-                                    <div className="space-y-1">
-                                        {aiProposal.haccp_points.map((h, i) => {
-                                            const on = confirmedHaccp.has(i);
-                                            return (
-                                                <button
-                                                    key={i}
-                                                    type="button"
-                                                    onClick={() => toggleHaccp(i)}
-                                                    className={`flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left text-xs transition ${on ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/50 text-muted-foreground line-through'}`}
-                                                >
-                                                    <ThermometerSun size={14} className="mt-0.5 shrink-0" />
-                                                    <div className="flex-1">
-                                                        <div className="font-medium">
-                                                            {h.type}
-                                                            {h.threshold_value != null && (
-                                                                <span> — {h.threshold_value} {h.threshold_unit ?? ''}</span>
-                                                            )}
-                                                        </div>
-                                                        {h.note && <div className="text-[11px] opacity-80">{h.note}</div>}
-                                                    </div>
-                                                    {on && <Check size={12} className="mt-0.5 text-primary" />}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end gap-2 border-t border-border pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setAiProposal(null)}
-                                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-                                >
-                                    Opnieuw genereren
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleAcceptProposal}
-                                    disabled={aiAccepting}
-                                    className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                                >
-                                    {aiAccepting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                    {aiAccepting ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Inline create form */}
-            {showForm && (
-                <form onSubmit={handleCreate} className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <Plus size={16} className="text-primary" /> Nieuw component
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label className="block text-sm">
-                            <span className="mb-1 block text-muted-foreground">Naam</span>
-                            <input
-                                type="text"
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="bv. Gegrilde ananas salsa"
-                                required
-                                className="w-full rounded-md border border-border bg-background px-3 py-2"
-                            />
-                        </label>
-
-                        <label className="block text-sm">
-                            <span className="mb-1 block text-muted-foreground">Type</span>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, type: 'prepared' })}
-                                    className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${form.type === 'prepared' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
-                                >
-                                    <Package size={14} className="mr-1 inline" /> Zelf-bereid
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, type: 'bought_in' })}
-                                    className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${form.type === 'bought_in' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background'}`}
-                                >
-                                    <ShoppingBag size={14} className="mr-1 inline" /> Inkoop
-                                </button>
-                            </div>
-                        </label>
-                    </div>
-
-                    <label className="block text-sm">
-                        <span className="mb-1 block text-muted-foreground">Beschrijving (optioneel)</span>
-                        <input
-                            type="text"
-                            value={form.description}
-                            onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            placeholder="bv. Zoete grill-aroma met chili en limoen"
-                            className="w-full rounded-md border border-border bg-background px-3 py-2"
-                        />
-                    </label>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <label className="block text-sm">
-                            <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
-                            <input
-                                type="number"
-                                value={form.base_quantity}
-                                onChange={(e) => setForm({ ...form, base_quantity: e.target.value })}
-                                step="0.001"
-                                min="0.001"
-                                required
-                                className="w-full rounded-md border border-border bg-background px-3 py-2"
-                            />
-                        </label>
-
-                        <label className="block text-sm">
-                            <span className="mb-1 block text-muted-foreground">Eenheid</span>
-                            <select
-                                value={form.base_unit}
-                                onChange={(e) => setForm({ ...form, base_unit: e.target.value })}
-                                className="w-full rounded-md border border-border bg-background px-3 py-2"
-                            >
-                                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                        </label>
-
-                        <label className="block text-sm">
-                            <span className="mb-1 block text-muted-foreground">Kostprijs voor basis (€)</span>
-                            <input
-                                type="number"
-                                value={form.base_cost_euros}
-                                onChange={(e) => setForm({ ...form, base_cost_euros: e.target.value })}
-                                step="0.01"
-                                min="0"
-                                placeholder="1.43"
-                                required
-                                className="w-full rounded-md border border-border bg-background px-3 py-2"
-                            />
-                        </label>
-                    </div>
-
-                    <label className="block text-sm">
-                        <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
-                        <input
-                            type="text"
-                            value={form.flavor_tags}
-                            onChange={(e) => setForm({ ...form, flavor_tags: e.target.value })}
-                            placeholder="zoet, zuur, pikant, rokerig"
-                            className="w-full rounded-md border border-border bg-background px-3 py-2"
-                        />
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                            Gebruikt door AI om passende componenten te combineren tot gerechten.
-                        </span>
-                    </label>
-
-                    <div className="flex justify-end gap-2 pt-2">
-                        <button
-                            type="button"
-                            onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                            className="rounded-md border border-border bg-background px-4 py-2 text-sm"
-                        >
-                            Annuleer
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={creating}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                        >
-                            {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                            {creating ? 'Toevoegen...' : 'Voeg toe'}
-                        </button>
-                    </div>
-                </form>
-            )}
 
             {/* Lijst */}
             {/* GP-5 (2026-05-25): wrap content in DndContext + mr-comp-layout grid
@@ -1127,11 +764,28 @@ export default function ComponentenPage() {
                 />
             )}
 
+            {showReceptuur && (
+                <ReceptuurDrawer
+                    folderId={currentFolderId}
+                    onClose={() => setShowReceptuur(false)}
+                    onSaved={() => { setShowReceptuur(false); loadComponents(); }}
+                />
+            )}
+
+            {showScan && (
+                <ScanDrawer
+                    folderId={currentFolderId}
+                    onClose={() => setShowScan(false)}
+                    onImported={() => { setShowScan(false); loadComponents(); }}
+                />
+            )}
+
                 <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground" style={{ marginTop: 18 }}>
                     <Sparkles size={14} className="mr-1 inline text-primary" />
-                    AI suggereert, jij bevestigt. Klik <strong>AI Genereer</strong> om een full-spec component
-                    voorstel te krijgen (incl. allergeen- en HACCP-suggesties). Niets wordt opgeslagen tot je
-                    op <strong>Voeg toe aan bibliotheek</strong> klikt — uitvinkte items komen er niet in.
+                    AI suggereert, jij bevestigt. Bij <strong>Zelf bereid</strong> vult AI op verzoek de hele
+                    receptuur (ingrediënten, stappen, allergenen, HACCP) — alles blijft aanpasbaar. Bij{' '}
+                    <strong>Scan kant-en-klaar</strong> leest AI je foto of screenshot. Niets wordt opgeslagen
+                    tot jij bevestigt.
                 </div>
             </div>
 
@@ -1169,6 +823,14 @@ function ComponentEditDrawer({
     const [baseUnit, setBaseUnit] = useState('g');
     const [costEuros, setCostEuros] = useState('');
     const [flavorTags, setFlavorTags] = useState('');
+    const [category, setCategory] = useState<ComponentCategory>('food');
+    /* Pak-prijs (2026-06-12): de bron-administratie waar de kostprijs uit komt.
+       Herzienbaar; de rekenhulp voert wijzigingen door naar de base-velden. */
+    const [packPrice, setPackPrice] = useState('');
+    const [packQty, setPackQty] = useState('');
+    const [packUnit, setPackUnit] = useState<PackUnit>('kg');
+    const [ingredients, setIngredients] = useState<IngredientFormRow[]>([]);
+    const [steps, setSteps] = useState<string[]>([]);
     const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
     const [haccpRows, setHaccpRows] = useState<HaccpRow[]>([]);
 
@@ -1186,6 +848,12 @@ function ComponentEditDrawer({
             setBaseUnit(c.base_unit);
             setCostEuros((c.base_cost_cents / 100).toFixed(2));
             setFlavorTags((c.flavor_tags ?? []).join(', '));
+            setCategory(c.category === 'non_food' ? 'non_food' : 'food');
+            setPackPrice(c.pack_price_cents != null ? (c.pack_price_cents / 100).toFixed(2) : '');
+            setPackQty(c.pack_quantity != null ? String(c.pack_quantity) : '');
+            setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
+            setIngredients(ingredientsFromJson(c.ingredients));
+            setSteps(stepsFromJson(c.preparation_steps));
             setAllergenCodes(new Set((body.allergens as AllergenRow[] ?? []).map(a => a.allergen_code)));
             setHaccpRows((body.haccp_points as HaccpRow[] ?? []).map(h => ({
                 id: h.id, type: h.type, threshold_value: h.threshold_value,
@@ -1209,16 +877,36 @@ function ComponentEditDrawer({
         });
     }
 
-    function addHaccpRow() {
-        setHaccpRows(prev => [...prev, { type: 'kerntemp', threshold_value: null, threshold_unit: 'celsius', note: null, ai_suggested: false }]);
+    /* Rekenhulp-doorvoer: pak-invoer → base-velden. Alleen bij user-input,
+       nooit op mount, zodat een opgeslagen kostprijs niet stilletjes
+       herrekend wordt bij het openen van de drawer. */
+    function applyPack(nextPrice: string, nextQty: string, nextUnit: PackUnit) {
+        setPackPrice(nextPrice);
+        setPackQty(nextQty);
+        setPackUnit(nextUnit);
+        const cents = Math.round(parseDec(nextPrice) * 100);
+        const q = parseDec(nextQty);
+        if (Number.isFinite(cents) && cents >= 0 && Number.isFinite(q) && q > 0) {
+            const base = packToBase(cents, q, nextUnit);
+            if (base) {
+                setBaseQty(String(base.base_quantity));
+                setBaseUnit(base.base_unit);
+                setCostEuros((base.base_cost_cents / 100).toFixed(2));
+            }
+        }
     }
 
-    function updateHaccpRow(idx: number, patch: Partial<HaccpRow>) {
-        setHaccpRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r));
-    }
-
-    function removeHaccpRow(idx: number) {
-        setHaccpRows(prev => prev.filter((_, i) => i !== idx));
+    /* Pak-trio voor de PATCH: compleet → meesturen, leeg → wissen (null),
+       half ingevuld → bestaande administratie laten staan. */
+    function packPayload(): Record<string, number | string | null> {
+        const cents = Math.round(parseDec(packPrice) * 100);
+        const q = parseDec(packQty);
+        const complete = packPrice.trim() !== '' && Number.isFinite(cents) && cents >= 0 && Number.isFinite(q) && q > 0;
+        if (complete) return { pack_price_cents: cents, pack_quantity: q, pack_unit: packUnit };
+        if (packPrice.trim() === '' && packQty.trim() === '') {
+            return { pack_price_cents: null, pack_quantity: null, pack_unit: null };
+        }
+        return {};
     }
 
     /* GP-4 (2026-05-25): foodcost-impact preview-state.
@@ -1251,6 +939,13 @@ function ComponentEditDrawer({
                 base_unit: baseUnit,
                 base_cost_cents: baseCostCents,
                 flavor_tags: tags,
+                category,
+                ...packPayload(),
+                /* Receptuur alleen meesturen voor zelf-bereide componenten. */
+                ...(comp?.type === 'prepared' ? {
+                    ingredients: rowsToIngredientsJson(ingredients),
+                    preparation_steps: steps.map(s => s.trim()).filter(s => s.length > 0),
+                } : {}),
                 allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: false })),
                 haccp_points: haccpRows.filter(r => r.type),
             }),
@@ -1358,6 +1053,16 @@ function ComponentEditDrawer({
                                 <span className="mb-1 block text-muted-foreground">Beschrijving</span>
                                 <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
                             </label>
+                            {/* Inkoop-items: pak-prijs is de bron, base-velden het berekende
+                                resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
+                            {comp?.type === 'bought_in' && (
+                                <PakketRekenhulp
+                                    priceEuros={packPrice}
+                                    qty={packQty}
+                                    unit={packUnit}
+                                    onApply={applyPack}
+                                />
+                            )}
                             <div className="grid grid-cols-3 gap-2">
                                 <label className="block text-xs">
                                     <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
@@ -1374,74 +1079,42 @@ function ComponentEditDrawer({
                                     <input type="number" step="0.01" min="0" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
                                 </label>
                             </div>
+                            {comp?.type === 'bought_in' && packPrice.trim() !== '' && (
+                                <p className="text-[10px] text-muted-foreground">
+                                    ↑ Automatisch berekend uit de pak-prijs. Pas de rekenhulp aan, dan rekenen deze velden mee.
+                                </p>
+                            )}
                             <label className="block text-xs">
                                 <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
                                 <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, ..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
                             </label>
+                            <CategoryToggle value={category} onChange={setCategory} />
                         </section>
+
+                        {/* Receptuur — alleen voor zelf-bereide componenten */}
+                        {comp?.type === 'prepared' && (
+                            <>
+                                <section>
+                                    <IngredientsEditor
+                                        rows={ingredients}
+                                        onChange={setIngredients}
+                                        onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
+                                    />
+                                </section>
+                                <section>
+                                    <StepsEditor steps={steps} onChange={setSteps} />
+                                </section>
+                            </>
+                        )}
 
                         {/* Allergenen */}
                         <section>
                             <div className="mb-2 text-xs font-medium text-muted-foreground">Allergenen — klik om aan/uit te zetten</div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {ALLERGEN_CODES.map(code => {
-                                    const on = allergenCodes.has(code);
-                                    return (
-                                        <button
-                                            key={code}
-                                            type="button"
-                                            onClick={() => toggleAllergen(code)}
-                                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-                                            title={ALLERGEN_LABELS[code]}
-                                        >
-                                            {on && <Check size={11} />}
-                                            {ALLERGEN_LABELS[code] ?? code}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            <AllergenToggles codes={allergenCodes} onToggle={toggleAllergen} />
                         </section>
 
                         {/* HACCP-punten */}
-                        <section>
-                            <div className="mb-2 flex items-center justify-between">
-                                <span className="text-xs font-medium text-muted-foreground">HACCP-punten</span>
-                                <button type="button" onClick={addHaccpRow} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
-                                    <Plus size={11} /> Toevoegen
-                                </button>
-                            </div>
-                            {haccpRows.length === 0 ? (
-                                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
-                                    Nog geen HACCP-punten.
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {haccpRows.map((h, idx) => (
-                                        <div key={idx} className="rounded-md border border-border bg-card p-2 text-xs">
-                                            <div className="flex items-start gap-2">
-                                                <ThermometerSun size={14} className="mt-1 shrink-0 text-muted-foreground" />
-                                                <div className="flex-1 space-y-1">
-                                                    <select value={h.type} onChange={(e) => {
-                                                        const t = HACCP_TYPES.find(x => x.value === e.target.value);
-                                                        updateHaccpRow(idx, { type: e.target.value, threshold_unit: t?.defaultUnit || h.threshold_unit });
-                                                    }} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs">
-                                                        {HACCP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                                    </select>
-                                                    <div className="grid grid-cols-2 gap-1">
-                                                        <input type="number" placeholder="waarde" value={h.threshold_value ?? ''} onChange={(e) => updateHaccpRow(idx, { threshold_value: e.target.value === '' ? null : Number(e.target.value) })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
-                                                        <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateHaccpRow(idx, { threshold_unit: e.target.value || null })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
-                                                    </div>
-                                                    <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateHaccpRow(idx, { note: e.target.value || null })} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs" />
-                                                </div>
-                                                <button type="button" onClick={() => removeHaccpRow(idx)} aria-label="Verwijder HACCP-rij" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
+                        <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
 
                         <div className="flex justify-end gap-2 border-t border-border pt-4">
                             <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
@@ -1470,10 +1143,9 @@ function ComponentEditDrawer({
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   GP-5 (2026-05-25): DraggableComponentCard — wraps de bestaande card-knop
-   met dnd-kit useDraggable zodat hij naar een FolderTree-folder kan slepen.
-   PointerSensor met 5px activationConstraint zorgt dat een normale klik
-   nog steeds de onClick van de button bereikt (geen drag-start).
+   GP-5 (2026-05-25): DraggableComponentCard — wraps de card-knop met dnd-kit
+   useDraggable zodat hij naar een FolderTree-folder kan slepen. PointerSensor
+   met 5px activationConstraint laat een normale klik de edit-drawer openen.
    ────────────────────────────────────────────────────────────────────────── */
 
 function DraggableComponentCard({
@@ -1866,6 +1538,898 @@ function SupplierImportDrawer({
                             >
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                                 {saving ? 'Opslaan...' : `Importeer ${keepCount}`}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PakketRekenhulp — de kern van inkoop-helderheid (2026-06-12).
+   "Wat betaal je, voor hoeveel?" → eenheidsprijs + voorbeeld-dosering.
+   Presentational: parent houdt de pak-state en voert base-velden door.
+   Hard rule: dit is code-rekenwerk (lib/unitPrice), nooit AI-rekenwerk.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function PakketRekenhulp({
+    priceEuros, qty, unit, onApply,
+}: {
+    priceEuros: string;
+    qty: string;
+    unit: PackUnit;
+    onApply: (price: string, qty: string, unit: PackUnit) => void;
+}) {
+    const cents = Math.round(parseDec(priceEuros) * 100);
+    const q = parseDec(qty);
+    const valid = priceEuros.trim() !== '' && Number.isFinite(cents) && cents >= 0 && Number.isFinite(q) && q > 0;
+    const base = valid ? packToBase(cents, q, unit) : null;
+    const label = base ? unitPriceLabel(base.base_cost_cents, base.base_quantity, base.base_unit) : null;
+    const example = base ? exampleUseCost(base) : null;
+
+    return (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium">
+                <Calculator size={13} className="text-primary" />
+                Rekenhulp: van groothandel naar eenheidsprijs
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                <label className="block text-xs">
+                    <span className="mb-1 block text-muted-foreground">Wat betaal je? (€)</span>
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="62,50"
+                        value={priceEuros}
+                        onChange={(e) => onApply(e.target.value, qty, unit)}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                    />
+                </label>
+                <label className="block text-xs">
+                    <span className="mb-1 block text-muted-foreground">Voor hoeveel?</span>
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="5"
+                        value={qty}
+                        onChange={(e) => onApply(priceEuros, e.target.value, unit)}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                    />
+                </label>
+                <label className="block text-xs">
+                    <span className="mb-1 block text-muted-foreground">Eenheid</span>
+                    <select
+                        value={unit}
+                        onChange={(e) => onApply(priceEuros, qty, e.target.value as PackUnit)}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                    >
+                        {PACK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                </label>
+            </div>
+            {base ? (
+                <div className="mt-2 rounded-md bg-background/60 px-2.5 py-2 text-xs">
+                    <div className="font-mono font-semibold">
+                        = €{(base.base_cost_cents / 100).toFixed(2)} per {base.base_quantity === 1 ? '' : base.base_quantity}{base.base_unit}
+                        {label ? <span className="ml-1 font-sans font-normal text-muted-foreground">({label})</span> : null}
+                    </div>
+                    {example && (
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            Voorbeeld: {example.qty} {example.unit} in een gerecht kost €{(example.cents / 100).toFixed(2)}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                    Vul in wat de verpakking kost en hoeveel erin zit — de prijs per eenheid rekenen wij uit.
+                    Komma of punt mag allebei.
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Kleine herbruikbare editors voor de drawers (geëxtraheerd uit de oude
+   inline drawer-markup zodat edit- én create-drawers hetzelfde gedrag delen).
+   ────────────────────────────────────────────────────────────────────────── */
+
+function CategoryToggle({ value, onChange }: { value: ComponentCategory; onChange: (v: ComponentCategory) => void }) {
+    return (
+        <div className="text-xs">
+            <span className="mb-1 block text-muted-foreground">Categorie</span>
+            <div className="inline-flex rounded-md border border-border bg-muted p-0.5">
+                <button
+                    type="button"
+                    onClick={() => onChange('food')}
+                    className={`rounded px-3 py-1 transition ${value === 'food' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                >
+                    Food
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onChange('non_food')}
+                    className={`rounded px-3 py-1 transition ${value === 'non_food' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                >
+                    Non-food
+                </button>
+            </div>
+            <span className="mt-1 block text-[10px] text-muted-foreground">
+                {value === 'food'
+                    ? 'Menu-bouwsteen — telt mee in gerecht-kostprijzen en statistieken.'
+                    : 'Verpakking/materieel — telt niet mee in kostprijs-statistieken.'}
+            </span>
+        </div>
+    );
+}
+
+function AllergenToggles({ codes, onToggle }: { codes: Set<string>; onToggle: (code: string) => void }) {
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {ALLERGEN_CODES.map(code => {
+                const on = codes.has(code);
+                return (
+                    <button
+                        key={code}
+                        type="button"
+                        onClick={() => onToggle(code)}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                        title={ALLERGEN_LABELS[code]}
+                    >
+                        {on && <Check size={11} />}
+                        {ALLERGEN_LABELS[code] ?? code}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+function HaccpEditor({ rows, onChange }: { rows: HaccpRow[]; onChange: (rows: HaccpRow[]) => void }) {
+    function addRow() {
+        onChange([...rows, { type: 'kerntemp', threshold_value: null, threshold_unit: 'celsius', note: null, ai_suggested: false }]);
+    }
+    function updateRow(idx: number, patch: Partial<HaccpRow>) {
+        onChange(rows.map((r, i) => i === idx ? { ...r, ...patch } : r));
+    }
+    function removeRow(idx: number) {
+        onChange(rows.filter((_, i) => i !== idx));
+    }
+    return (
+        <section>
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">HACCP-punten</span>
+                <button type="button" onClick={addRow} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
+                    <Plus size={11} /> Toevoegen
+                </button>
+            </div>
+            {rows.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
+                    Nog geen HACCP-punten.
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {rows.map((h, idx) => (
+                        <div key={idx} className="rounded-md border border-border bg-card p-2 text-xs">
+                            <div className="flex items-start gap-2">
+                                <ThermometerSun size={14} className="mt-1 shrink-0 text-muted-foreground" />
+                                <div className="flex-1 space-y-1">
+                                    <select value={h.type} onChange={(e) => {
+                                        const t = HACCP_TYPES.find(x => x.value === e.target.value);
+                                        updateRow(idx, { type: e.target.value, threshold_unit: t?.defaultUnit || h.threshold_unit });
+                                    }} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs">
+                                        {HACCP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                    </select>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        <input type="number" placeholder="waarde" value={h.threshold_value ?? ''} onChange={(e) => updateRow(idx, { threshold_value: e.target.value === '' ? null : Number(e.target.value) })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                        <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateRow(idx, { threshold_unit: e.target.value || null })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                    </div>
+                                    <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateRow(idx, { note: e.target.value || null })} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                </div>
+                                <button type="button" onClick={() => removeRow(idx)} aria-label="Verwijder HACCP-rij" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                                    <Trash2 size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (steps: string[]) => void }) {
+    return (
+        <div>
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Bereidingsstappen</span>
+                <button type="button" onClick={() => onChange([...steps, ''])} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
+                    <Plus size={11} /> Stap toevoegen
+                </button>
+            </div>
+            {steps.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
+                    Nog geen stappen — voeg toe of laat AI de receptuur vullen.
+                </div>
+            ) : (
+                <div className="space-y-1.5">
+                    {steps.map((s, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                            <span className="w-5 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{idx + 1}.</span>
+                            <input
+                                type="text"
+                                value={s}
+                                onChange={(e) => onChange(steps.map((x, i) => i === idx ? e.target.value : x))}
+                                placeholder="bv. Ananas grillen tot karamellisatie"
+                                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                            />
+                            <button type="button" onClick={() => onChange(steps.filter((_, i) => i !== idx))} aria-label={`Verwijder stap ${idx + 1}`} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                                <Trash2 size={12} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function IngredientsEditor({
+    rows, onChange, onAdoptSum,
+}: {
+    rows: IngredientFormRow[];
+    onChange: (rows: IngredientFormRow[]) => void;
+    onAdoptSum: (sumCents: number) => void;
+}) {
+    const sum = ingredientSumCents(rows);
+    function updateRow(idx: number, patch: Partial<IngredientFormRow>) {
+        onChange(rows.map((r, i) => i === idx ? { ...r, ...patch } : r));
+    }
+    return (
+        <div>
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Ingrediënten (receptuur)</span>
+                <button type="button" onClick={() => onChange([...rows, emptyIngredientRow()])} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
+                    <Plus size={11} /> Ingrediënt
+                </button>
+            </div>
+            {rows.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
+                    Nog geen ingrediënten.
+                </div>
+            ) : (
+                <div className="space-y-1.5">
+                    <div className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] gap-1.5 px-0.5 text-[10px] text-muted-foreground">
+                        <span>Naam</span><span>Aantal</span><span>Eenheid</span><span>Kosten (€)</span><span></span>
+                    </div>
+                    {rows.map((r, idx) => (
+                        <div key={idx} className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] items-center gap-1.5">
+                            <input type="text" value={r.name} onChange={(e) => updateRow(idx, { name: e.target.value })} placeholder="bv. Ananas" className="rounded-md border border-border bg-background px-2 py-1.5 text-xs" />
+                            <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
+                            <input type="text" value={r.unit} onChange={(e) => updateRow(idx, { unit: e.target.value })} placeholder="g" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
+                            <input type="text" inputMode="decimal" value={r.cost_euros} onChange={(e) => updateRow(idx, { cost_euros: e.target.value })} placeholder="1,20" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
+                            <button type="button" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Verwijder ${r.name || 'ingrediënt'}`} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                                <Trash2 size={12} />
+                            </button>
+                        </div>
+                    ))}
+                    {sum > 0 && (
+                        <div className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px]">
+                            <span>Som ingrediënt-kosten: <strong className="font-mono">€{(sum / 100).toFixed(2)}</strong></span>
+                            <button type="button" onClick={() => onAdoptSum(sum)} className="text-primary hover:underline">
+                                Gebruik als kostprijs
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   ReceptuurDrawer — "Zelf bereid": nieuwe bouwsteen met volledige receptuur.
+   AI vult op verzoek alles in (component-generate); mens bevestigt en slaat op.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function ReceptuurDrawer({
+    folderId, onClose, onSaved,
+}: {
+    folderId: string | null;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const toast = useToast();
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [baseQty, setBaseQty] = useState('100');
+    const [baseUnit, setBaseUnit] = useState('g');
+    const [costEuros, setCostEuros] = useState('');
+    const [flavorTags, setFlavorTags] = useState('');
+    const [ingredients, setIngredients] = useState<IngredientFormRow[]>([emptyIngredientRow()]);
+    const [steps, setSteps] = useState<string[]>([]);
+    const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
+    /* Codes uit het AI-voorstel — blijven bij opslaan geflagd als ai_suggested. */
+    const [aiAllergens, setAiAllergens] = useState<Set<string>>(new Set());
+    const [haccpRows, setHaccpRows] = useState<HaccpRow[]>([]);
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiUsed, setAiUsed] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    function toggleAllergen(code: string) {
+        setAllergenCodes(prev => {
+            const next = new Set(prev);
+            if (next.has(code)) next.delete(code); else next.add(code);
+            return next;
+        });
+    }
+
+    /* AI suggereert de hele receptuur; alles blijft aanpasbaar en niets wordt
+       opgeslagen tot de chef op Opslaan klikt (hard rule: human confirms). */
+    async function handleAiFill() {
+        const prompt = [name.trim(), description.trim()].filter(Boolean).join(' — ');
+        if (!prompt) { toast('Geef eerst een naam of korte omschrijving, dan vult AI de rest', 'error'); return; }
+        setAiBusy(true);
+        try {
+            const res = await fetch('/api/ai/component-generate', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, type: 'prepared' }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'AI-voorstel mislukt');
+            const p = body.proposal as AiProposal;
+            if (p.name) setName(p.name);
+            if (p.description) setDescription(p.description);
+            if (Number.isFinite(p.base_quantity) && p.base_quantity > 0) setBaseQty(String(p.base_quantity));
+            if (UNITS.includes(p.base_unit)) setBaseUnit(p.base_unit);
+            if (Number.isFinite(p.base_cost_cents) && p.base_cost_cents >= 0) setCostEuros((p.base_cost_cents / 100).toFixed(2));
+            setFlavorTags((p.flavor_tags ?? []).join(', '));
+            setIngredients((p.ingredients ?? []).map(ing => ({
+                name: typeof ing.name === 'string' ? ing.name : '',
+                qty: Number.isFinite(ing.qty) ? String(ing.qty) : '',
+                unit: typeof ing.unit === 'string' ? ing.unit : 'g',
+                cost_euros: typeof ing.cost_cents === 'number' && ing.cost_cents > 0 ? (ing.cost_cents / 100).toFixed(2) : '',
+            })));
+            setSteps((p.preparation_steps ?? []).filter((s): s is string => typeof s === 'string'));
+            const aiCodes = (p.allergens ?? []).map(a => a.allergen_code);
+            setAllergenCodes(new Set(aiCodes));
+            setAiAllergens(new Set(aiCodes));
+            setHaccpRows((p.haccp_points ?? []).map(h => ({
+                type: h.type,
+                threshold_value: h.threshold_value ?? null,
+                threshold_unit: h.threshold_unit ?? null,
+                note: h.note ?? null,
+                ai_suggested: true,
+            })));
+            setAiUsed(true);
+            toast('AI-voorstel ingevuld — check en pas aan waar nodig', 'success');
+        } catch (e: any) {
+            toast(e.message || 'AI-voorstel mislukt', 'error');
+        } finally {
+            setAiBusy(false);
+        }
+    }
+
+    async function handleSave() {
+        if (!name.trim()) { toast('Naam verplicht', 'error'); return; }
+        const qty = parseDec(baseQty);
+        if (!Number.isFinite(qty) || qty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
+        const cost = parseDec(costEuros);
+        if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig — tip: gebruik de som van je ingrediënten', 'error'); return; }
+
+        setSaving(true);
+        try {
+            const res = await fetch('/api/components', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    description: description.trim() || null,
+                    type: 'prepared',
+                    category: 'food',
+                    base_quantity: qty,
+                    base_unit: baseUnit,
+                    base_cost_cents: Math.round(cost * 100),
+                    ingredients: rowsToIngredientsJson(ingredients),
+                    preparation_steps: steps.map(s => s.trim()).filter(s => s.length > 0),
+                    flavor_tags: flavorTags.split(',').map(t => t.trim()).filter(Boolean),
+                    folder_id: folderId && /^[0-9a-f-]{36}$/i.test(folderId) ? folderId : null,
+                    ai_suggested: aiUsed,
+                    /* AI-gesuggereerde allergenen blijven geflagd — hard rule: AI mag
+                       allergenen niet stilzwijgend als mens-bevestigd wegschrijven. */
+                    allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: aiAllergens.has(code) })),
+                    haccp_points: haccpRows.filter(r => r.type),
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            toast(`"${name.trim()}" toegevoegd aan de bibliotheek`, 'success');
+            if (body.warnings) toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
+            onSaved();
+        } catch (e: any) {
+            toast(e.message || 'Opslaan mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receptuur-drawer-title"
+            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
+            onClick={onClose}
+        >
+            <div
+                className="h-full w-full max-w-xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <div className="flex items-center gap-1.5 text-xs text-primary">
+                            <ChefHat size={12} /> Zelf bereid
+                        </div>
+                        <h2 id="receptuur-drawer-title" className="text-xl font-semibold">Nieuwe bouwsteen met receptuur</h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="space-y-5">
+                    <section className="space-y-3">
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Naam</span>
+                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Aardbeien bavaroise" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        </label>
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Beschrijving (optioneel)</span>
+                            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="1 zin smaak-pitch" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={handleAiFill}
+                            disabled={aiBusy || name.trim().length < 3}
+                            title={name.trim().length < 3 ? 'Typ eerst een naam (min. 3 tekens)' : undefined}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
+                        >
+                            {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                            {aiBusy ? 'AI denkt na...' : 'Vul receptuur met AI'}
+                        </button>
+                        {aiUsed && (
+                            <p className="text-[11px] text-primary">
+                                <Sparkles size={10} className="mr-0.5 inline" /> AI-voorstel — controleer en pas aan
+                            </p>
+                        )}
+                    </section>
+
+                    <section className="space-y-3">
+                        <div className="grid grid-cols-3 gap-2">
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
+                                <input type="text" inputMode="decimal" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                            </label>
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Eenheid</span>
+                                <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm">
+                                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </label>
+                            <label className="block text-xs">
+                                <span className="mb-1 block text-muted-foreground">Kostprijs (€)</span>
+                                <input type="text" inputMode="decimal" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} placeholder="1,43" className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                            </label>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                            De kostprijs geldt voor de basis-hoeveelheid (bv. €1,43 per 100 g). Gerechten rekenen hier automatisch mee.
+                        </p>
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
+                            <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, ..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        </label>
+                    </section>
+
+                    <section>
+                        <IngredientsEditor
+                            rows={ingredients}
+                            onChange={setIngredients}
+                            onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
+                        />
+                    </section>
+
+                    <section>
+                        <StepsEditor steps={steps} onChange={setSteps} />
+                    </section>
+
+                    <section>
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">Allergenen — klik om aan/uit te zetten</div>
+                        <AllergenToggles codes={allergenCodes} onToggle={toggleAllergen} />
+                    </section>
+
+                    <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
+
+                    <div className="flex justify-end gap-2 border-t border-border pt-4">
+                        <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
+                            Annuleer
+                        </button>
+                        <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            {saving ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   ScanDrawer — "Scan kant-en-klaar": één screenshot of foto → AI leest naam,
+   inhoud en prijs → rekenhulp toont de eenheidsprijs → mens bevestigt.
+   Dé route voor "ik heb een screenshot van een nieuw briochebrood".
+   ────────────────────────────────────────────────────────────────────────── */
+
+const SCAN_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+function ScanDrawer({
+    folderId, onClose, onImported,
+}: {
+    folderId: string | null;
+    onClose: () => void;
+    onImported: () => void;
+}) {
+    const toast = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [step, setStep] = useState<'upload' | 'form'>('upload');
+    const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
+    const [parsing, setParsing] = useState(false);
+    const [products, setProducts] = useState<ParsedProduct[]>([]);
+    const [chosenIdx, setChosenIdx] = useState(0);
+    const [detectedSupplier, setDetectedSupplier] = useState<string | null>(null);
+    // Form-state voor het gekozen product
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState<ComponentCategory>('food');
+    const [packPrice, setPackPrice] = useState('');
+    const [packQty, setPackQty] = useState('');
+    const [packUnit, setPackUnit] = useState<PackUnit>('stuk');
+    const [saving, setSaving] = useState(false);
+    /* Extra invoer-routes (2026-06-12): sleep, ⌘V-plak, mobiele camera, tekst. */
+    const [dragOver, setDragOver] = useState(false);
+    const [textMode, setTextMode] = useState(false);
+    const [pasted, setPasted] = useState('');
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+
+    function acceptFile(file: File) {
+        if (!SCAN_ALLOWED_TYPES.includes(file.type)) {
+            toast('Alleen afbeeldingen (JPG, PNG, WebP) of PDF', 'error');
+            return;
+        }
+        if (file.size > 6 * 1024 * 1024) {
+            toast('Bestand te groot (max 6 MB) — maak een kleinere screenshot', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            setFileDataUrl(typeof reader.result === 'string' ? reader.result : null);
+            setFileName(file.name);
+            setTextMode(false);
+        };
+        reader.onerror = () => toast('Bestand lezen mislukt', 'error');
+        reader.readAsDataURL(file);
+    }
+
+    function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (file) acceptFile(file);
+        e.target.value = '';
+    }
+
+    /* ⌘V: geplakte screenshot direct klaarzetten zolang de upload-stap open is. */
+    useEffect(() => {
+        function onPaste(e: ClipboardEvent) {
+            if (step !== 'upload' || parsing) return;
+            const file = Array.from(e.clipboardData?.items ?? []).find(it => it.type.startsWith('image/'))?.getAsFile();
+            if (file) {
+                e.preventDefault();
+                acceptFile(file);
+            }
+        }
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+        /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [step, parsing]);
+
+    function choose(idx: number, list: ParsedProduct[] = products) {
+        const p = list[idx];
+        if (!p) return;
+        setChosenIdx(idx);
+        setName(p.name);
+        setCategory(NON_FOOD_RE.test(p.name) ? 'non_food' : 'food');
+        const qty = p.package_size && p.package_size > 0 ? p.package_size : 1;
+        const unit = (p.package_unit ?? p.unit) as PackUnit;
+        setPackPrice((p.price_cents / 100).toFixed(2));
+        setPackQty(String(qty));
+        setPackUnit(PACK_UNITS.includes(unit) ? unit : 'stuk');
+    }
+
+    async function runParse(payload: { file_data_url?: string; text?: string }) {
+        setParsing(true);
+        try {
+            const res = await fetch('/api/ai/supplier-catalog-parse', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'AI kon de afbeelding niet lezen');
+            const parsed = (body.products ?? []) as ParsedProduct[];
+            if (parsed.length === 0) {
+                toast('AI vond geen product — zorg dat naam én prijs zichtbaar zijn', 'error');
+                return;
+            }
+            setProducts(parsed);
+            setDetectedSupplier(body.supplier_name ?? null);
+            choose(0, parsed);
+            setStep('form');
+        } catch (e: any) {
+            toast(e.message || 'Scan mislukt', 'error');
+        } finally {
+            setParsing(false);
+        }
+    }
+
+    function handleParse() {
+        if (!fileDataUrl) { toast('Kies eerst een screenshot of foto', 'error'); return; }
+        runParse({ file_data_url: fileDataUrl });
+    }
+
+    async function handleSave() {
+        if (!name.trim()) { toast('Naam verplicht', 'error'); return; }
+        const cents = Math.round(parseDec(packPrice) * 100);
+        const qty = parseDec(packQty);
+        if (!Number.isFinite(cents) || cents < 0 || !Number.isFinite(qty) || qty <= 0) {
+            toast('Vul prijs en inhoud in — dan rekenen wij de eenheidsprijs uit', 'error');
+            return;
+        }
+        const base = packToBase(cents, qty, packUnit);
+        if (!base) { toast('Eenheid niet herkend', 'error'); return; }
+
+        setSaving(true);
+        try {
+            const res = await fetch('/api/components', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    description: detectedSupplier ? `Gescand — ${detectedSupplier}` : null,
+                    type: 'bought_in',
+                    category,
+                    ...base,
+                    pack_price_cents: cents,
+                    pack_quantity: qty,
+                    pack_unit: packUnit,
+                    folder_id: folderId && /^[0-9a-f-]{36}$/i.test(folderId) ? folderId : null,
+                    /* Mens heeft het AI-voorstel hier al gecheckt en bevestigd. */
+                    ai_suggested: false,
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            const label = unitPriceLabel(base.base_cost_cents, base.base_quantity, base.base_unit);
+            toast(`"${name.trim()}" toegevoegd${label ? ` — ${label}` : ''}`, 'success');
+            onImported();
+        } catch (e: any) {
+            toast(e.message || 'Opslaan mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scan-drawer-title"
+            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
+            onClick={onClose}
+        >
+            <div
+                className="h-full w-full max-w-xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="mb-4 flex items-start justify-between">
+                    <div>
+                        <div className="flex items-center gap-1.5 text-xs text-primary">
+                            <Camera size={12} /> Scan kant-en-klaar
+                        </div>
+                        <h2 id="scan-drawer-title" className="text-xl font-semibold">
+                            {step === 'upload' ? 'Product toevoegen via screenshot' : 'Check en bevestig'}
+                        </h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {step === 'upload' && !textMode && (
+                    <div className="space-y-4">
+                        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+                            <Camera size={12} className="mr-1 inline text-primary" />
+                            Voor <strong className="text-foreground">één los product</strong>: een screenshot uit de webshop
+                            van je slager of Hanos/Sligro, of een foto van een etiket of schap-kaartje.
+                            AI leest naam, inhoud en prijs — jij checkt en bevestigt. Hele prijslijst?
+                            Gebruik dan <strong className="text-foreground">Importeer leverancier (bulk)</strong>.
+                        </div>
+
+                        <label
+                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                            onDragLeave={() => setDragOver(false)}
+                            onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) acceptFile(f); }}
+                            className={`block cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition ${dragOver ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-primary/5'}`}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,application/pdf"
+                                onChange={handleFile}
+                                className="sr-only"
+                            />
+                            <ImagePlus size={28} className="mx-auto mb-2 text-muted-foreground" />
+                            <div className="text-sm font-medium">Kies, sleep of plak (⌘V) een screenshot of foto</div>
+                            <div className="mt-1 text-[11px] text-muted-foreground">JPEG, PNG, WebP of PDF — max 6 MB</div>
+                        </label>
+
+                        <div className="flex items-center justify-between gap-2">
+                            <button
+                                type="button"
+                                onClick={() => cameraInputRef.current?.click()}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted"
+                            >
+                                <Camera size={12} /> Maak een foto met je camera
+                            </button>
+                            <button type="button" onClick={() => setTextMode(true)} className="text-[11px] text-primary hover:underline">
+                                Of plak tekst
+                            </button>
+                        </div>
+                        <input
+                            ref={cameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleFile}
+                            className="sr-only"
+                            aria-label="Maak een foto met je camera"
+                        />
+
+                        {fileDataUrl && fileName && (
+                            <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px]">
+                                <div className="flex items-center gap-2">
+                                    <FileText size={12} className="text-primary" />
+                                    <span className="flex-1 truncate font-medium">{fileName}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setFileDataUrl(null); setFileName(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                        aria-label="Verwijder bestand"
+                                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                        <X size={11} />
+                                    </button>
+                                </div>
+                                {fileDataUrl.startsWith('data:image/') && (
+                                    <img src={fileDataUrl} alt="Preview van de scan" className="mt-2 max-h-56 rounded border border-border" />
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
+                                Annuleer
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleParse}
+                                disabled={parsing || !fileDataUrl}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                                {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                {parsing ? 'AI leest je afbeelding… (±10 sec)' : 'Lees met AI'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'upload' && textMode && (
+                    <div className="space-y-3">
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Plak de product-tekst (bv. van een etiket of webshop)</span>
+                            <textarea
+                                value={pasted}
+                                onChange={(e) => setPasted(e.target.value)}
+                                rows={8}
+                                maxLength={30000}
+                                placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04'}
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                            />
+                        </label>
+                        <div className="flex items-center justify-between">
+                            <button type="button" onClick={() => setTextMode(false)} className="text-[11px] text-primary hover:underline">
+                                Terug naar scannen
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { if (!pasted.trim()) { toast('Plak eerst tekst', 'error'); return; } runParse({ text: pasted }); }}
+                                disabled={parsing}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                                {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                {parsing ? 'AI leest…' : 'Lees met AI'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'form' && (
+                    <div className="space-y-4">
+                        {(detectedSupplier || products.length > 1) && (
+                            <div className="rounded-lg border border-border bg-card p-3 text-xs">
+                                {detectedSupplier && <div>Gedetecteerd: <strong>{detectedSupplier}</strong></div>}
+                                {products.length > 1 && (
+                                    <div className="mt-1.5">
+                                        <div className="mb-1 text-muted-foreground">
+                                            AI vond {products.length} producten — kies welke je toevoegt (één per keer):
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {products.map((p, i) => (
+                                                <button
+                                                    key={i}
+                                                    type="button"
+                                                    onClick={() => choose(i)}
+                                                    className={`rounded-full px-2.5 py-1 text-[11px] transition ${i === chosenIdx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                                >
+                                                    {p.name.slice(0, 32)}{p.name.length > 32 ? '…' : ''}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <label className="block text-xs">
+                            <span className="mb-1 block text-muted-foreground">Naam</span>
+                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        </label>
+
+                        <PakketRekenhulp
+                            priceEuros={packPrice}
+                            qty={packQty}
+                            unit={packUnit}
+                            onApply={(price, qty, unit) => { setPackPrice(price); setPackQty(qty); setPackUnit(unit); }}
+                        />
+
+                        <CategoryToggle value={category} onChange={setCategory} />
+
+                        <div className="flex justify-end gap-2 border-t border-border pt-4">
+                            <button type="button" onClick={() => setStep('upload')} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
+                                Terug
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSave}
+                                disabled={saving}
+                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                {saving ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
                             </button>
                         </div>
                     </div>

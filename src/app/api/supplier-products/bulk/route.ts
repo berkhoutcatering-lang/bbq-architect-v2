@@ -4,6 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { packToBase, type PackUnit } from '@/lib/unitPrice';
+
+/* Zelfde heuristiek als de componenten-UI: overduidelijke verpakking/materieel
+   krijgt category=non_food zodat kostprijs-statistieken zuiver blijven. */
+const NON_FOOD_RE = /folie|vacuumzak|snijplank|braadpan|servet|beker|handschoen|krat|disposable|tape|zak/i;
 
 interface BulkProduct {
     name: string;
@@ -89,25 +94,37 @@ export async function POST(req: NextRequest) {
     const { data: inserted, error: insErr } = await supabase
         .from('supplier_products')
         .insert(rows)
-        .select('id, name, price_cents, unit');
+        .select('id, name, price_cents, unit, package_size, package_unit');
 
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
     // Optioneel: auto-create bought_in components per supplier_product
     let createdComponents = 0;
     if (v.data.create_components && inserted && inserted.length > 0) {
-        const compRows = inserted.map(sp => ({
-            organization_id: orgId,
-            name: sp.name,
-            type: 'bought_in' as const,
-            base_quantity: 1,
-            base_unit: sp.unit,
-            base_cost_cents: sp.price_cents,
-            supplier_product_id: sp.id,
-            ai_suggested: false,
-            approved_at: new Date().toISOString(),
-            approved_by: user.id,
-        }));
+        const compRows = inserted.map(sp => {
+            /* Terugrekenen van pak-prijs naar eenheidsprijs via de canon in
+               lib/unitPrice. Vóór deze fix werd package_size genegeerd:
+               "Brioche bun, 12 stuks, €5,04" werd "1 stuk = €5,04" (12× te duur)
+               en "doos 5 kg = €62,50" werd "1 kg = €62,50" (5× te duur). */
+            const packQty = sp.package_size && sp.package_size > 0 ? Number(sp.package_size) : 1;
+            const packUnit = (sp.package_unit ?? sp.unit) as PackUnit;
+            const base = packToBase(sp.price_cents, packQty, packUnit)
+                ?? { base_quantity: 1, base_unit: sp.unit, base_cost_cents: sp.price_cents };
+            return {
+                organization_id: orgId,
+                name: sp.name,
+                type: 'bought_in' as const,
+                category: NON_FOOD_RE.test(sp.name) ? 'non_food' as const : 'food' as const,
+                ...base,
+                pack_price_cents: sp.price_cents,
+                pack_quantity: packQty,
+                pack_unit: packUnit,
+                supplier_product_id: sp.id,
+                ai_suggested: false,
+                approved_at: new Date().toISOString(),
+                approved_by: user.id,
+            };
+        });
         const { error: compErr, count } = await supabase
             .from('components')
             .insert(compRows, { count: 'exact' });

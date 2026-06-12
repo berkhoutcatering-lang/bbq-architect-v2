@@ -1,6 +1,6 @@
 'use client';
 
-import { X, ChefHat, HandPlatter } from 'lucide-react';
+import { X, ChefHat, HandPlatter, CalendarPlus } from 'lucide-react';
 
 interface Props {
     /** Aantal taken in zicht — wordt door client gefilterd op modus + filters. */
@@ -13,6 +13,8 @@ interface Props {
     /** Verberg de MEP/Service-toggle. Default false. Gezet door /keuken/kookbord
      *  omdat service-modus is verhuisd naar /events/[id]/service/plattegrond. */
     hideModusToggle?: boolean;
+    /** Toont een "Plannen"-knop die de PlanTakenSheet opent (alleen kookbord). */
+    onPlanClick?: () => void;
     /** Exit terug naar normale app of (in display-mode) opnieuw inloggen. */
     onExit: () => void;
     /** True als ?display=true — toont alleen X als exit-cta. */
@@ -33,6 +35,7 @@ export default function PrepKdsTopStrip({
     modus,
     onModusChange,
     hideModusToggle,
+    onPlanClick,
     onExit,
     isDisplayMode,
 }: Props) {
@@ -72,6 +75,18 @@ export default function PrepKdsTopStrip({
                         <span>Service</span>
                     </button>
                 </div>
+            )}
+
+            {onPlanClick && (
+                <button
+                    type="button"
+                    className="kds-top-plan"
+                    onClick={onPlanClick}
+                    title="Prep-taken plannen voor komende events"
+                >
+                    <CalendarPlus size={16} />
+                    <span>Plannen</span>
+                </button>
             )}
 
             <div className="kds-top-clock">

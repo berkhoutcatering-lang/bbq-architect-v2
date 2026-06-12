@@ -24,9 +24,16 @@ interface ComponentInput {
     name: string;
     description?: string | null;
     type: 'prepared' | 'bought_in';
+    /* food = menu-bouwsteen (telt mee in statistieken); non_food = verpakking/materieel. */
+    category: 'food' | 'non_food';
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /* Pak-prijs administratie (2026-06-12): wat is er bij de groothandel betaald,
+       voor welke inhoud. base_* blijft de reken-canon; dit is de bron ervan. */
+    pack_price_cents?: number | null;
+    pack_quantity?: number | null;
+    pack_unit?: string | null;
     ingredients?: unknown;
     preparation_steps?: unknown;
     flavor_tags?: string[];
@@ -53,6 +60,24 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
     if (typeof b.base_unit !== 'string' || b.base_unit.trim().length === 0) return { ok: false, error: 'base_unit verplicht' };
     if (typeof b.base_cost_cents !== 'number' || b.base_cost_cents < 0 || !Number.isInteger(b.base_cost_cents)) {
         return { ok: false, error: 'base_cost_cents moet een niet-negatieve integer zijn (cents)' };
+    }
+
+    /* Pak-prijs trio: alle drie of geen — een halve verpakkingsadministratie
+       is erger dan geen. */
+    const PACK_UNITS = new Set(['g', 'kg', 'ml', 'liter', 'stuk', 'portie']);
+    const hasAnyPack = b.pack_price_cents != null || b.pack_quantity != null || b.pack_unit != null;
+    let pack: { pack_price_cents: number; pack_quantity: number; pack_unit: string } | null = null;
+    if (hasAnyPack) {
+        if (typeof b.pack_price_cents !== 'number' || !Number.isInteger(b.pack_price_cents) || b.pack_price_cents < 0) {
+            return { ok: false, error: 'pack_price_cents moet een niet-negatieve integer zijn (cents)' };
+        }
+        if (typeof b.pack_quantity !== 'number' || !(b.pack_quantity > 0)) {
+            return { ok: false, error: 'pack_quantity > 0 verplicht als pak-prijs is gezet' };
+        }
+        if (typeof b.pack_unit !== 'string' || !PACK_UNITS.has(b.pack_unit)) {
+            return { ok: false, error: 'pack_unit moet g/kg/ml/liter/stuk/portie zijn' };
+        }
+        pack = { pack_price_cents: b.pack_price_cents, pack_quantity: b.pack_quantity, pack_unit: b.pack_unit };
     }
 
     // Optionele allergens
@@ -94,9 +119,14 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
             name: b.name.trim(),
             description: typeof b.description === 'string' ? b.description : null,
             type: b.type,
+            /* Whitelist: alles wat geen non_food is wordt food (default). */
+            category: b.category === 'non_food' ? 'non_food' : 'food',
             base_quantity: b.base_quantity,
             base_unit: b.base_unit.trim(),
             base_cost_cents: b.base_cost_cents,
+            pack_price_cents: pack?.pack_price_cents ?? null,
+            pack_quantity: pack?.pack_quantity ?? null,
+            pack_unit: pack?.pack_unit ?? null,
             ingredients: b.ingredients ?? null,
             preparation_steps: b.preparation_steps ?? null,
             flavor_tags: Array.isArray(b.flavor_tags) ? b.flavor_tags.filter((t): t is string => typeof t === 'string') : [],
@@ -134,13 +164,17 @@ export async function POST(req: NextRequest) {
     if (v.ok === false) return NextResponse.json({ error: v.error }, { status: 400 });
 
     // Split nested writes uit (allergens + haccp gaan naar join-tables)
-    const { allergens, haccp_points, ...componentData } = v.data;
+    const { allergens, haccp_points, folder_id, ...componentData } = v.data;
     const now = new Date().toISOString();
 
     const { data, error } = await supabase
         .from('components')
         .insert({
             ...componentData,
+            /* Defensief (2026-06-12): folder_id alleen meesturen als gezet —
+               de component_folders-migration is niet op elke omgeving gerund
+               en een NULL-key op een ontbrekende kolom laat PostgREST 500'en. */
+            ...(folder_id ? { folder_id } : {}),
             organization_id: membership.organization_id,
             approved_at: componentData.ai_suggested ? null : now,
             approved_by: componentData.ai_suggested ? null : user.id,
@@ -198,15 +232,30 @@ export async function GET() {
         return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }
 
-    // RLS filtert op organization_id automatisch
-    const { data, error } = await supabase
-        .from('components')
-        .select('*')
-        .order('created_at', { ascending: false });
+    // RLS filtert op organization_id automatisch.
+    // gerecht_components erbij zodat de UI per component "in N gerechten"
+    // kan tonen — de zichtbare lijn van inkoopprijs naar gerecht.
+    const [compRes, usageRes] = await Promise.all([
+        supabase.from('components').select('*').order('created_at', { ascending: false }),
+        supabase.from('gerecht_components').select('component_id, gerecht_id'),
+    ]);
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    if (compRes.error) {
+        return NextResponse.json({ error: compRes.error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ components: data ?? [] });
+    /* Distinct gerechten per component (een gerecht kan een component
+       in theorie 2× bevatten; dat telt als 1 gerecht). */
+    const usage: Record<number, number> = {};
+    if (usageRes.data) {
+        const seen = new Set<string>();
+        for (const row of usageRes.data) {
+            const key = `${row.component_id}:${row.gerecht_id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            usage[row.component_id as number] = (usage[row.component_id as number] ?? 0) + 1;
+        }
+    }
+
+    return NextResponse.json({ components: compRes.data ?? [], usage });
 }

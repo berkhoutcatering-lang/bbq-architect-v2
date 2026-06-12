@@ -3,7 +3,7 @@
 import { User, Calendar, Filter } from 'lucide-react';
 import type { KitchenStation } from '@/types/database.types';
 
-export type DateFilter = 'today' | 'tomorrow' | 'next48h' | 'week';
+export type DateFilter = 'today' | 'tomorrow' | 'next48h' | 'week' | 'alles';
 
 interface Props {
     dateFilter: DateFilter;
@@ -24,6 +24,7 @@ const DATE_LABELS: Record<DateFilter, string> = {
     tomorrow: 'Morgen',
     next48h: 'Komende 48u',
     week: 'Deze week',
+    alles: 'Alles',
 };
 
 /**

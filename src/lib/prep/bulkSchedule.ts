@@ -119,7 +119,7 @@ export async function bulkScheduleEventPrep(
     // 1. Event check
     const { data: event, error: eventErr } = await supabase
         .from('events')
-        .select('id, organization_id, name, date, start_time, guests')
+        .select('id, organization_id, name, date, start_time, guests, offerte_id, menu')
         .eq('id', eventId)
         .maybeSingle();
     if (eventErr) {
@@ -178,7 +178,12 @@ export async function bulkScheduleEventPrep(
     }
 
     // 3. Resolve dish-ids voor dit event (uit offerte.menu_selectie of event.menu).
-    const dishIds = await resolveDishIdsForEvent(supabase, eventId, options.onlyGerechtIds ?? null);
+    const dishIds = await resolveDishIdsForEvent(
+        supabase,
+        orgId,
+        event as { id: number; offerte_id?: number | null; menu?: unknown },
+        options.onlyGerechtIds ?? null,
+    );
     if (dishIds.length === 0) {
         return emptyResult({ ok: true, reason: 'no_dishes' });
     }
@@ -358,52 +363,158 @@ function composeEventStart(date: string, time: string): string | null {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/* Productie-data kent 3 menu-shapes (gevonden 2026-06-12):
+ *  1. offerte.menu_selectie = {categorie: ["Crispy Zalm", ...]} — NAMEN, geen ids
+ *  2. events.menu = [6, 11, 13] — recepten-ids als NUMMERS (legacy)
+ *  3. events.menu = '"[]"' — dubbel-geëncodeerde JSON-string
+ * En de offerte↔event-link loopt via events.offerte_id; offertes.event_id is
+ * in de praktijk nooit gevuld. Deze resolver dekt alle shapes. */
 async function resolveDishIdsForEvent(
     supabase: SupabaseClient,
-    eventId: number,
+    orgId: string,
+    event: { id: number; offerte_id?: number | null; menu?: unknown },
     onlyGerechtIds: string[] | null,
 ): Promise<string[]> {
     if (onlyGerechtIds && onlyGerechtIds.length > 0) return onlyGerechtIds;
 
-    // Probeer eerst offerte.menu_selectie
-    const { data: offerte } = await supabase
+    const ids = new Set<string>();
+    const names = new Set<string>();
+
+    // 1. Offerte zoeken: eerst offertes.event_id, anders events.offerte_id.
+    let menuSelectie: unknown = null;
+    const { data: viaEventId } = await supabase
         .from('offertes')
         .select('id, menu_selectie')
-        .eq('event_id', eventId)
+        .eq('event_id', event.id)
         .maybeSingle();
+    if (viaEventId?.menu_selectie) {
+        menuSelectie = viaEventId.menu_selectie;
+    } else if (event.offerte_id != null) {
+        const { data: viaOfferteId } = await supabase
+            .from('offertes')
+            .select('id, menu_selectie')
+            .eq('id', event.offerte_id)
+            .maybeSingle();
+        menuSelectie = viaOfferteId?.menu_selectie ?? null;
+    }
+    collectFromMenuSelectie(menuSelectie, ids, names);
 
-    const ids = new Set<string>();
-    if (offerte?.menu_selectie) {
-        const ms = offerte.menu_selectie as
-            | Record<string, MenuSelectionItem[]>
-            | MenuSelectionItem[]
-            | string;
-        const flat: MenuSelectionItem[] = Array.isArray(ms)
-            ? ms
-            : typeof ms === 'object' && ms !== null
-                ? Object.values(ms).flat()
-                : [];
-        for (const m of flat) {
-            if (typeof m?.gerecht_id === 'string' && m.gerecht_id.length > 0) ids.add(m.gerecht_id);
-        }
+    // 2. Fallback: event.menu (recepten-nummers of uuid/naam-strings)
+    if (ids.size === 0 && names.size === 0) {
+        await collectFromEventMenu(supabase, orgId, event.menu, ids, names);
     }
 
-    // Fallback: event.menu JSONB (sommige events hebben dit direct)
-    if (ids.size === 0) {
-        const { data: ev } = await supabase
-            .from('events')
-            .select('menu')
-            .eq('id', eventId)
-            .maybeSingle();
-        const m = ev?.menu;
-        if (Array.isArray(m)) {
-            for (const v of m) {
-                if (typeof v === 'string' && v.length > 0) ids.add(v);
-            }
+    // 3. Namen → gerecht-uuid's via genormaliseerde naam-match (org-scoped)
+    if (names.size > 0) {
+        const { data: gerechten } = await supabase
+            .from('gerechten')
+            .select('id, naam')
+            .eq('organization_id', orgId);
+        for (const naam of names) {
+            const id = matchGerechtIdByName(naam, (gerechten ?? []) as Array<{ id: string; naam: string }>);
+            if (id) ids.add(id);
         }
     }
 
     return Array.from(ids);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function addIdOrName(value: string, ids: Set<string>, names: Set<string>): void {
+    const v = value.trim();
+    if (!v) return;
+    if (UUID_RE.test(v)) ids.add(v);
+    else names.add(v);
+}
+
+function collectFromMenuSelectie(raw: unknown, ids: Set<string>, names: Set<string>): void {
+    let ms = raw;
+    if (typeof ms === 'string') {
+        try { ms = JSON.parse(ms); } catch { return; }
+    }
+    if (!ms || typeof ms !== 'object') return;
+    const flat: unknown[] = Array.isArray(ms)
+        ? ms
+        : Object.values(ms as Record<string, unknown>).flatMap((v) => (Array.isArray(v) ? v : [v]));
+    for (const item of flat) {
+        if (typeof item === 'string') {
+            addIdOrName(item, ids, names);
+        } else if (item && typeof item === 'object') {
+            const it = item as MenuSelectionItem;
+            if (typeof it.gerecht_id === 'string' && it.gerecht_id.length > 0) {
+                ids.add(it.gerecht_id);
+            } else {
+                const naam = it.gerecht_naam ?? it.naam;
+                if (typeof naam === 'string' && naam.trim().length > 0) names.add(naam);
+            }
+        }
+    }
+}
+
+async function collectFromEventMenu(
+    supabase: SupabaseClient,
+    orgId: string,
+    rawMenu: unknown,
+    ids: Set<string>,
+    names: Set<string>,
+): Promise<void> {
+    let menu = rawMenu;
+    if (typeof menu === 'string') {
+        try { menu = JSON.parse(menu); } catch { return; }
+    }
+    if (!Array.isArray(menu) || menu.length === 0) return;
+
+    const receptIds: number[] = [];
+    for (const v of menu) {
+        if (typeof v === 'number' && Number.isFinite(v)) receptIds.push(v);
+        else if (typeof v === 'string' && v.length > 0) addIdOrName(v, ids, names);
+    }
+    if (receptIds.length === 0) return;
+
+    const { data: recepten } = await supabase
+        .from('recepten')
+        .select('id, naam')
+        .in('id', receptIds)
+        .eq('organization_id', orgId);
+    for (const r of (recepten ?? []) as Array<{ id: number; naam: string | null }>) {
+        if (r.naam) names.add(r.naam);
+    }
+}
+
+function normalizeNaam(s: string): string {
+    return s.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/* Exported voor unit-tests. Matcht "Bavette" op "Gerookte bavette" en
+ * "Sliders" op "Slider van de yoder Smoker." — exact eerst, dan contains
+ * (kortste = meest specifiek), met enkelvoud-variant als extra poging. */
+export function matchGerechtIdByName(
+    zoekNaam: string,
+    gerechten: Array<{ id: string; naam: string }>,
+): string | null {
+    const target = normalizeNaam(zoekNaam);
+    if (!target) return null;
+    const kandidaten = gerechten
+        .map((g) => ({ id: g.id, naam: normalizeNaam(g.naam) }))
+        .filter((g) => g.naam.length > 0);
+
+    const varianten = target.endsWith('s') && target.length > 4
+        ? [target, target.slice(0, -1)]
+        : [target];
+
+    for (const t of varianten) {
+        const exact = kandidaten.find((g) => g.naam === t);
+        if (exact) return exact.id;
+    }
+    for (const t of varianten) {
+        if (t.length < 4) continue;
+        const contains = kandidaten
+            .filter((g) => g.naam.includes(t) || (g.naam.length >= 4 && t.includes(g.naam)))
+            .sort((a, b) => a.naam.length - b.naam.length);
+        if (contains.length > 0) return contains[0].id;
+    }
+    return null;
 }
 
 function stepCarriesQty(step: RecipePhaseStep): boolean {

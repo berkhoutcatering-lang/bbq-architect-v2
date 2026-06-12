@@ -82,6 +82,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (Array.isArray(b.flavor_tags)) {
         updateData.flavor_tags = b.flavor_tags.filter((t): t is string => typeof t === 'string');
     }
+    /* food/non-food scheiding (2026-06-12) — whitelist. */
+    if (b.category === 'food' || b.category === 'non_food') updateData.category = b.category;
+    /* Pak-prijs administratie (2026-06-12): per veld updatebaar, null = wissen.
+       De UI stuurt het trio altijd samen; base_* blijft de reken-canon. */
+    if (b.pack_price_cents === null || (typeof b.pack_price_cents === 'number' && Number.isInteger(b.pack_price_cents) && b.pack_price_cents >= 0)) {
+        updateData.pack_price_cents = b.pack_price_cents;
+    }
+    if (b.pack_quantity === null || (typeof b.pack_quantity === 'number' && b.pack_quantity > 0)) {
+        updateData.pack_quantity = b.pack_quantity;
+    }
+    if (b.pack_unit === null || (typeof b.pack_unit === 'string' && ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'].includes(b.pack_unit))) {
+        updateData.pack_unit = b.pack_unit;
+    }
     if (b.ingredients !== undefined) updateData.ingredients = b.ingredients;
     if (b.preparation_steps !== undefined) updateData.preparation_steps = b.preparation_steps;
     /* GP-5 (2026-05-25): drag-drop verplaatsing tussen folders.

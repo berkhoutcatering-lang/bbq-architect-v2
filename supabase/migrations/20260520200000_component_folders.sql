@@ -82,8 +82,11 @@ CREATE POLICY "component_folders_delete" ON component_folders
     );
 
 -- Auto-update updated_at op elke change.
+-- SET search_path = '' tegen search-path hijacking (Supabase linter 0011).
 CREATE OR REPLACE FUNCTION component_folders_touch_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
