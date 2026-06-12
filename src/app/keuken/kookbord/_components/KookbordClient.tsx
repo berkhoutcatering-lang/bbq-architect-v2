@@ -18,6 +18,7 @@ import PrepBoardFilters, { type DateFilter } from '../../board/_components/PrepB
 import PrepBoardWeekRail from '../../board/_components/PrepBoardWeekRail';
 import PrepBoardColumn from '../../board/_components/PrepBoardColumn';
 import PrepTaskSheet, { type TaskRecipe } from '../../board/_components/PrepTaskSheet';
+import PlanTakenSheet from './PlanTakenSheet';
 
 /**
  * KookbordClient — hoofd container voor /keuken/kookbord (PREP-modus).
@@ -39,7 +40,7 @@ export default function KookbordClient() {
     const [onlyMine, setOnlyMine] = useState(false);
     const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
 
-    const { data: tasks } = useSupabase<PrepTask>('prep_tasks');
+    const { data: tasks, refetch: refetchTasks } = useSupabase<PrepTask>('prep_tasks');
     const { data: stations } = useSupabase<KitchenStation>('kitchen_stations');
     const { data: events } = useSupabase<DbEvent>('events');
     /* Gerechten laden voor de receptuur-weergave in de task-sheet. Sam's KDS-
@@ -215,7 +216,21 @@ export default function KookbordClient() {
 
     const [sheetOpen, setSheetOpen] = useState(false);
     const [sheetTaskId, setSheetTaskId] = useState<number | null>(null);
+    const [planOpen, setPlanOpen] = useState(false);
     const showToast = useToast();
+
+    /* Eerstvolgende event — voor de empty-state hint ("er komt wel iets aan,
+       alleen buiten dit datumvenster"). */
+    const nextEvent = useMemo(() => {
+        const t0 = startOfToday();
+        return events
+            .filter((e) => {
+                if (!e.date) return false;
+                const t = new Date(e.date).getTime();
+                return Number.isFinite(t) && t >= t0;
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] ?? null;
+    }, [events]);
 
     const sheetTask = useMemo(() => {
         if (sheetTaskId == null) return null;
@@ -390,6 +405,7 @@ export default function KookbordClient() {
                 modus="mep"
                 onModusChange={() => { /* no-op — Service is verhuisd naar event-page */ }}
                 hideModusToggle
+                onPlanClick={() => setPlanOpen(true)}
                 onExit={handleExit}
                 isDisplayMode={isDisplayMode}
             />
@@ -419,7 +435,43 @@ export default function KookbordClient() {
                         <p className="prep-board__hint">Ga naar Instellingen → Keuken om stations toe te voegen.</p>
                     </div>
                 )}
-                {stationsActive.map((station) => (
+                {stationsActive.length > 0 && visibleTasks.length === 0 && (
+                    <div className="prep-board__empty">
+                        <p>Geen taken in dit datumvenster.</p>
+                        {tasks.length > 0 ? (
+                            <p className="prep-board__hint">
+                                Er {tasks.length === 1 ? 'staat wel 1 taak' : `staan wel ${tasks.length} taken`} op
+                                het bord — buiten dit filter.
+                            </p>
+                        ) : nextEvent ? (
+                            <p className="prep-board__hint">
+                                Eerstvolgende event: {nextEvent.name} op{' '}
+                                {new Date(nextEvent.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}.
+                            </p>
+                        ) : (
+                            <p className="prep-board__hint">Geen komende events — taken plannen kan zodra er een event staat.</p>
+                        )}
+                        <div className="prep-board__empty-actions">
+                            {tasks.length > 0 && dateFilter !== 'alles' && (
+                                <button
+                                    type="button"
+                                    className="prep-board__empty-cta prep-board__empty-cta--ghost"
+                                    onClick={() => setDateFilter('alles')}
+                                >
+                                    Toon alles
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                className="prep-board__empty-cta"
+                                onClick={() => setPlanOpen(true)}
+                            >
+                                Taken plannen
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {visibleTasks.length > 0 && stationsActive.map((station) => (
                     <PrepBoardColumn
                         key={station.id}
                         station={station}
@@ -471,6 +523,14 @@ export default function KookbordClient() {
                 onReassign={handleSheetReassign}
             />
 
+            <PlanTakenSheet
+                open={planOpen}
+                onOpenChange={setPlanOpen}
+                events={events}
+                tasks={tasks}
+                onPlanned={refetchTasks}
+            />
+
             <button
                 type="button"
                 className="prep-rook-fab"
@@ -508,10 +568,9 @@ function matchesDateFilter(
     eventsById: Map<number, DbEvent>,
     filter: DateFilter,
 ): boolean {
-    const candidate = t.scheduled_at ?? (() => {
-        const ev = eventsById.get(t.event_id);
-        return ev?.date ?? null;
-    })();
+    if (filter === 'alles') return true;
+
+    const candidate = t.scheduled_at ?? effectiveDateFromDagen(t, eventsById);
     if (!candidate) return filter === 'week';
 
     const t0 = startOfToday();
@@ -528,6 +587,24 @@ function matchesDateFilter(
         case 'week':
             return taskTime >= t0 && taskTime < t0 + 7 * 86400_000;
     }
+}
+
+/* Taken zonder scheduled_at maar mét dagen-offset (oude checklist-taken,
+ * bv. dagen: -3 = D-3) horen op event-datum + offset op het bord, niet
+ * allemaal op de event-dag zelf. */
+function effectiveDateFromDagen(
+    t: PrepTask,
+    eventsById: Map<number, DbEvent>,
+): string | null {
+    const ev = eventsById.get(t.event_id);
+    if (!ev?.date) return null;
+    if (typeof t.dagen === 'number' && Number.isFinite(t.dagen) && t.dagen !== 0) {
+        const d = new Date(ev.date);
+        if (Number.isNaN(d.getTime())) return null;
+        d.setDate(d.getDate() + t.dagen);
+        return d.toISOString();
+    }
+    return ev.date;
 }
 
 function isCurrentUserAssignee(

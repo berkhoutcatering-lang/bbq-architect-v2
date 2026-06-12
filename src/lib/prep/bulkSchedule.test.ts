@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { bulkScheduleEventPrep } from './bulkSchedule';
+import { bulkScheduleEventPrep, matchGerechtIdByName } from './bulkSchedule';
 
 /**
  * Tests gebruiken een minimal mock-supabase die alleen de specifieke queries
@@ -8,12 +8,18 @@ import { bulkScheduleEventPrep } from './bulkSchedule';
  */
 
 interface MockState {
-    event: { id: number; organization_id: string; name: string; date: string | null; start_time: string | null; guests: number } | null;
+    event: {
+        id: number; organization_id: string; name: string; date: string | null;
+        start_time: string | null; guests: number;
+        offerte_id?: number | null; menu?: unknown;
+    } | null;
     existingPrepCount: number;
     dishes: Array<{ id: string; naam: string; porties?: number | null; ingredient_costs?: Array<{ naam: string; qty_pp: number; unit: string; yield?: number }> | null }>;
     stations: Array<{ id: number; type: string; sort_order: number }>;
     courses: Array<{ id: number; event_id: number; gerecht_id: string | null }>;
-    offerteMenuSelection: Record<string, Array<{ gerecht_id: string }>> | null;
+    /** menu_selectie zoals de wizard die opslaat — objects met gerecht_id, of naam-strings per categorie. */
+    offerteMenuSelection: Record<string, Array<{ gerecht_id: string } | string>> | null;
+    recepten?: Array<{ id: number; naam: string }>;
     inserted: unknown[];
     deletedCount: number;
 }
@@ -39,9 +45,16 @@ function makeMockSupabase(state: MockState) {
                     : { data: state.event, error: null };
             }
             if (table === 'gerechten') {
-                const ids = (filters['id__in'] as string[]) || [];
-                const data = state.dishes.filter((d) => ids.includes(d.id));
+                /* Met id__in: de gerechten-load van de generator. Zonder: de
+                   naam-resolutie-query (select id, naam, org-scoped). */
+                const ids = filters['id__in'] as string[] | undefined;
+                const data = ids ? state.dishes.filter((d) => ids.includes(d.id)) : state.dishes;
                 return mode === 'all' ? { data, error: null } : { data: data[0] ?? null, error: null };
+            }
+            if (table === 'recepten') {
+                const ids = (filters['id__in'] as number[]) || [];
+                const data = (state.recepten ?? []).filter((r) => ids.includes(r.id));
+                return { data, error: null };
             }
             if (table === 'kitchen_stations') {
                 return { data: state.stations, error: null };
@@ -333,6 +346,108 @@ describe('bulkScheduleEventPrep — defaultStartTime fallback', () => {
         const result = await bulkScheduleEventPrep(supabase as never, 1, 'org-1', { defaultStartTime: '14:00:00' });
         expect(result.ok).toBe(true);
         expect(result.taskCount).toBeGreaterThan(0);
+    });
+});
+
+describe('bulkScheduleEventPrep — menu-shapes uit productie (2026-06-12)', () => {
+    it('resolvet naam-strings in menu_selectie via gerechten-naam (wizard-shape)', async () => {
+        const state: MockState = {
+            event: { id: 9, organization_id: 'org-1', name: 'Mariel', date: '2026-06-20', start_time: '17:00:00', guests: 44 },
+            existingPrepCount: 0,
+            dishes: [
+                { id: 'uuid-zalm', naam: 'Crispy zalm', ingredient_costs: null },
+                { id: 'uuid-bavette', naam: 'Gerookte bavette', ingredient_costs: null },
+                { id: 'uuid-slider', naam: 'Slider van de yoder Smoker. ', ingredient_costs: null },
+            ],
+            stations: [{ id: 10, type: 'prep', sort_order: 1 }],
+            courses: [],
+            // Echte wizard-shape: namen per categorie, géén gerecht_id objects
+            offerteMenuSelection: { bites: ['Crispy Zalm', 'Bavette'], hoofdgerechten: ['Sliders'] },
+            inserted: [], deletedCount: 0,
+        };
+        const supabase = makeMockSupabase(state);
+        const result = await bulkScheduleEventPrep(supabase as never, 9, 'org-1');
+        expect(result.ok).toBe(true);
+        // 3 namen → 3 gerechten gematcht ("Bavette"→contains, "Sliders"→enkelvoud)
+        expect(result.taskCount).toBeGreaterThanOrEqual(3);
+        const gerechtIds = new Set((state.inserted as Array<{ gerecht_id: string }>).map((t) => t.gerecht_id));
+        expect(gerechtIds.has('uuid-zalm')).toBe(true);
+        expect(gerechtIds.has('uuid-bavette')).toBe(true);
+        expect(gerechtIds.has('uuid-slider')).toBe(true);
+    });
+
+    it('resolvet numerieke recepten-ids in events.menu via recepten→gerechten-naam', async () => {
+        const state: MockState = {
+            event: {
+                id: 1, organization_id: 'org-1', name: 'X', date: '2026-06-15', start_time: '16:00:00', guests: 50,
+                menu: [6, 11],
+            },
+            existingPrepCount: 0,
+            dishes: [
+                { id: 'uuid-pp', naam: 'Classic Pulled Pork', ingredient_costs: null },
+            ],
+            stations: [],
+            courses: [],
+            offerteMenuSelection: null,
+            recepten: [{ id: 6, naam: 'Classic Pulled Pork' }, { id: 11, naam: 'Onbekend Gerecht Zonder Match' }],
+            inserted: [], deletedCount: 0,
+        };
+        const supabase = makeMockSupabase(state);
+        const result = await bulkScheduleEventPrep(supabase as never, 1, 'org-1');
+        expect(result.ok).toBe(true);
+        expect(result.taskCount).toBeGreaterThan(0);
+        const gerechtIds = new Set((state.inserted as Array<{ gerecht_id: string }>).map((t) => t.gerecht_id));
+        expect(gerechtIds.has('uuid-pp')).toBe(true);
+    });
+
+    it('overleeft dubbel-geëncodeerde menu-string (\'"[]"\') zonder crash → no_dishes', async () => {
+        const state: MockState = {
+            event: {
+                id: 1, organization_id: 'org-1', name: 'X', date: '2026-06-15', start_time: '16:00:00', guests: 50,
+                menu: '[]',
+            },
+            existingPrepCount: 0,
+            dishes: [], stations: [], courses: [],
+            offerteMenuSelection: null,
+            inserted: [], deletedCount: 0,
+        };
+        const supabase = makeMockSupabase(state);
+        const result = await bulkScheduleEventPrep(supabase as never, 1, 'org-1');
+        expect(result.ok).toBe(true);
+        expect(result.reason).toBe('no_dishes');
+    });
+});
+
+describe('matchGerechtIdByName — naam-matching', () => {
+    const gerechten = [
+        { id: 'g1', naam: 'Crispy zalm' },
+        { id: 'g2', naam: 'Gerookte bavette' },
+        { id: 'g3', naam: 'Gegrilde kippendij. ' },
+        { id: 'g4', naam: 'Slider van de yoder Smoker. ' },
+        { id: 'g5', naam: 'Steak tartaar' },
+        { id: 'g6', naam: 'moink balls van de smoker' },
+        { id: 'g7', naam: 'pinsa van de barbecue ' },
+    ];
+
+    it('matcht exact, case-insensitive, met punt/spatie-ruis', () => {
+        expect(matchGerechtIdByName('Crispy Zalm', gerechten)).toBe('g1');
+        expect(matchGerechtIdByName('Steak Tartaar', gerechten)).toBe('g5');
+    });
+
+    it('matcht deelnaam ("Bavette" → "Gerookte bavette")', () => {
+        expect(matchGerechtIdByName('Bavette', gerechten)).toBe('g2');
+        expect(matchGerechtIdByName('Kippendij', gerechten)).toBe('g3');
+        expect(matchGerechtIdByName('Pinsa', gerechten)).toBe('g7');
+        expect(matchGerechtIdByName('Moink Balls', gerechten)).toBe('g6');
+    });
+
+    it('matcht meervoud → enkelvoud ("Sliders" → "Slider van de yoder Smoker.")', () => {
+        expect(matchGerechtIdByName('Sliders', gerechten)).toBe('g4');
+    });
+
+    it('returnt null voor onbekende namen (geen wilde gok)', () => {
+        expect(matchGerechtIdByName('Bavarois', gerechten)).toBeNull();
+        expect(matchGerechtIdByName('', gerechten)).toBeNull();
     });
 });
 

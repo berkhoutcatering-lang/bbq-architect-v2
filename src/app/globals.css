@@ -9405,6 +9405,136 @@ html, body { max-width: 100vw; overflow-x: hidden; }
     font-size: 12px;
 }
 
+/* Empty-state CTA's — "Toon alles" + "Taken plannen" (gloved-hand: 48pt) */
+.prep-board__empty-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+.prep-board__empty-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 48px;
+    padding: 0 22px;
+    border-radius: 12px;
+    border: none;
+    background: var(--brand, #FFBF00);
+    color: #0a0a0c;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.prep-board__empty-cta:hover { filter: brightness(1.08); }
+.prep-board__empty-cta--ghost {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: var(--text);
+}
+.prep-board__empty-cta--ghost:hover { background: rgba(255, 255, 255, 0.08); filter: none; }
+
+/* "Plannen"-knop in de KDS top-strip */
+.kds-top-plan {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.kds-top-plan:hover {
+    background: rgba(255, 191, 0, 0.12);
+    color: var(--brand, #FFBF00);
+    border-color: rgba(255, 191, 0, 0.4);
+}
+
+/* PlanTakenSheet — event-rijen met plan-acties */
+.plan-sheet__empty {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px 12px;
+}
+.plan-sheet__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.plan-sheet__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.plan-sheet__row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.plan-sheet__row-name {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.plan-sheet__row-meta {
+    font-size: 12px;
+    color: var(--muted);
+}
+.plan-sheet__row-result {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.plan-sheet__row-result.is-ok { color: var(--green, #4ade80); }
+.plan-sheet__row-result.is-error { color: var(--red, #ef4444); }
+.plan-sheet__row-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.plan-sheet__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: none;
+    background: var(--brand, #FFBF00);
+    color: #0a0a0c;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.plan-sheet__btn:disabled { opacity: 0.6; cursor: default; }
+.plan-sheet__btn--ghost {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--muted);
+}
+.plan-sheet__btn--ghost:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.plan-sheet__spin { animation: plan-sheet-spin 0.9s linear infinite; }
+@keyframes plan-sheet-spin { to { transform: rotate(360deg); } }
+
 /* Station column */
 .prep-column {
     display: flex;
