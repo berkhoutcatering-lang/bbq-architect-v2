@@ -35,6 +35,7 @@ import { useToast } from '@/components/Toast';
 import '@/components/redesign/redesign.css';
 import { getTemplate, DEFAULT_TEMPLATE_ID, type Overrides, type EventMessagePosition } from '@/lib/menukaart/registry';
 import { resolveCascade, flatten } from '@/lib/menukaart/cascade';
+import { findGerechtMatch } from '@/lib/gerechtMatch';
 import { PreviewFor } from '@/components/menukaart/templates';
 import type { MenuData } from '@/lib/menukaart/menu-data';
 import MenuMenukaartCanvas, { type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
@@ -291,9 +292,6 @@ export default function EventHubPage() {
   const menuGroups = useMemo(() => {
     if (!event) return [] as Array<{ title: string; items: Array<{ n: string; s?: string; a?: string[] }> }>;
     const menuIds = parseMenu(event.menu);
-    if (menuIds.length === 0) {
-      return [{ title: 'Menu', items: [{ n: 'Nog geen menu gekoppeld', s: 'Voeg recepten toe via de event-editor' }] }];
-    }
     // Normalize allergenen-veld (kan array of comma-string zijn afhankelijk van bron)
     function normaliseAllergens(raw: unknown): string[] {
       if (Array.isArray(raw)) return (raw as unknown[]).map(String).filter(Boolean);
@@ -309,16 +307,45 @@ export default function EventHubPage() {
       return null;
     }
     const resolved = menuIds.map(resolveMenuItem).filter(Boolean) as Array<{ naam: string; cat: string; omschrijving?: string; allergenen: string[] }>;
-    if (resolved.length === 0) {
-      return [{ title: 'Menu', items: [{ n: 'Menu niet gevonden', s: 'Recepten of gerechten zijn mogelijk verwijderd' }] }];
+    if (resolved.length > 0) {
+      const groupsByCat: Record<string, Array<{ n: string; s?: string; a?: string[] }>> = {};
+      for (const r of resolved) {
+        if (!groupsByCat[r.cat]) groupsByCat[r.cat] = [];
+        groupsByCat[r.cat].push({ n: r.naam, s: r.omschrijving, a: r.allergenen });
+      }
+      return Object.entries(groupsByCat).map(([title, its]) => ({ title, items: its }));
     }
-    const groupsByCat: Record<string, Array<{ n: string; s?: string; a?: string[] }>> = {};
-    for (const r of resolved) {
-      if (!groupsByCat[r.cat]) groupsByCat[r.cat] = [];
-      groupsByCat[r.cat].push({ n: r.naam, s: r.omschrijving, a: r.allergenen });
+
+    /* Fallback (fix 2026-06-13): geen (geldige) recepten-koppeling — lees dan
+       het offerte-menu (menu_selectie), de bron die de klant écht accepteerde.
+       Op event 9 wezen de menu-IDs naar 4 verwijderde pulled-pork-recepten
+       terwijl het echte zalm-menu in de offerte stond → "Menu niet gevonden"
+       óp de menukaart. Namen matchen we tegen de gerechten-bibliotheek voor
+       beschrijving/allergenen; ongematchte namen blijven gewoon leesbaar. */
+    let sel: unknown = offerte?.menu_selectie;
+    if (typeof sel === 'string') { try { sel = JSON.parse(sel); } catch { sel = null; } }
+    if (sel && typeof sel === 'object' && !Array.isArray(sel)) {
+      const groups = Object.entries(sel as Record<string, unknown>).map(([gang, items]) => {
+        const arr = Array.isArray(items) ? items : [];
+        const its = arr.map((it: any) => {
+          const naam = typeof it === 'string' ? it : (it?.naam || it?.gerecht_naam || '');
+          if (!naam) return null;
+          const match = findGerechtMatch(String(naam), gerechten as Array<{ naam: string }>);
+          return match
+            ? { n: match.naam, s: (match as any).beschrijving, a: normaliseAllergens((match as any).allergenen) }
+            : { n: String(naam) };
+        }).filter(Boolean) as Array<{ n: string; s?: string; a?: string[] }>;
+        const title = gang.charAt(0).toUpperCase() + gang.slice(1);
+        return { title, items: its };
+      }).filter((g) => g.items.length > 0);
+      if (groups.length > 0) return groups;
     }
-    return Object.entries(groupsByCat).map(([title, its]) => ({ title, items: its }));
-  }, [event, recepten, gerechten]);
+
+    if (menuIds.length === 0) {
+      return [{ title: 'Menu', items: [{ n: 'Nog geen menu gekoppeld', s: 'Voeg recepten toe via de event-editor' }] }];
+    }
+    return [{ title: 'Menu', items: [{ n: 'Menu niet gevonden', s: 'Recepten of gerechten zijn mogelijk verwijderd' }] }];
+  }, [event, offerte, recepten, gerechten]);
 
   /* Sprint 4 fase 2: menukaart-cascade (template + overrides per offerte/tenant).
      Wordt gebruikt door de Live-voorvertoning hieronder. menuGroups → MenuData
