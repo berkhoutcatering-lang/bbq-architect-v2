@@ -14,6 +14,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from './Toast';
 import { fmt, today, addDays, genNummer, nextNummer, calcLineTotals } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { autoCreatePrepTasks } from '@/lib/syncEngine';
 import { useAutoSave } from '@/hooks/useAutoSave';
 
@@ -34,6 +35,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const showToast = useToast();
+  const { orgId } = useOrg();
   const { settings } = useSettings();
   const { data: gerechten } = useSupabase('gerechten', []);
   const { data: gangen } = useSupabase('gangen', []);
@@ -121,11 +123,17 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
   }
 
   async function handleComplete() {
+    // RLS rejects inserts without organization_id
+    if (!orgId) {
+      showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       // 1. Create offerte
       const nummer = nextNummer(settings?.offerte_prefix || 'OFF-2026-', (offertes || []).map((o: any) => o.nummer));
       const offerteData = {
+        organization_id: orgId,
         nummer,
         status: 'concept',
         client_naam: klant.naam,
@@ -144,6 +152,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
 
       // 2. Create event
       const eventData = {
+        organization_id: orgId,
         name: details.naam || klant.naam,
         date: details.datum,
         location: details.locatie,
@@ -178,6 +187,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
         const { data: existingKlant } = await supabase!.from('klanten').select('id').eq('naam', klant.naam).limit(1);
         if (!existingKlant || existingKlant.length === 0) {
           await supabase!.from('klanten').insert({
+            organization_id: orgId,
             naam: klant.naam,
             adres: klant.adres || '',
             telefoon: klant.tel || '',

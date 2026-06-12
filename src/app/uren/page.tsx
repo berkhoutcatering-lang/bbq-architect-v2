@@ -91,7 +91,8 @@ export default function UrenPage() {
       if (msg.includes('ux_time_logs_active_per_person')) {
         showToast(p.naam + ' is al ingeklokt', 'warning');
       } else {
-        showToast('Inklokken mislukt: ' + (msg || 'onbekende fout'), 'error');
+        console.error('[uren] inklokken mislukt:', msg);
+        showToast('Inklokken is niet gelukt. Probeer het opnieuw of ververs de pagina.', 'error');
       }
     });
   }
@@ -108,7 +109,8 @@ export default function UrenPage() {
       const hrs = (dur / 3_600_000).toFixed(1);
       showToast((p?.naam || 'Crew') + ' uitgeklokt — ' + hrs + 'u', 'success');
     }).catch(function (e: unknown) {
-      showToast('Uitklokken mislukt: ' + ((e as Error)?.message || 'onbekende fout'), 'error');
+      console.error('[uren] uitklokken mislukt:', (e as Error)?.message);
+      showToast('Uitklokken is niet gelukt. Probeer het opnieuw of ververs de pagina.', 'error');
     });
   }
 

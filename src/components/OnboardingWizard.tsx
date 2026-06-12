@@ -8,11 +8,13 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from './Toast';
 import { today } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 
 export default function OnboardingWizard() {
   const { loaded, upcomingEvents } = useApp();
   const { data: gerechten } = useSupabase('gerechten', []);
   const showToast = useToast();
+  const { orgId } = useOrg();
 
   const [show, setShow] = useState(false);
   const [step, setStep] = useState(0);
@@ -39,12 +41,13 @@ export default function OnboardingWizard() {
 
   async function saveBedrijf() {
     if (!bedrijf.naam) { showToast('Vul een bedrijfsnaam in', 'error'); return; }
+    if (!orgId) { showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error'); return; }
     if (supabase) {
       const { data: existing } = await supabase.from('settings').select('id').eq('key', 'bedrijf').limit(1);
       if (existing && existing.length > 0) {
         await supabase.from('settings').update({ value: bedrijf }).eq('key', 'bedrijf');
       } else {
-        await supabase.from('settings').insert({ key: 'bedrijf', value: bedrijf });
+        await supabase.from('settings').insert({ key: 'bedrijf', value: bedrijf, organization_id: orgId });
       }
     }
     setStep(1);
@@ -52,10 +55,12 @@ export default function OnboardingWizard() {
 
   async function saveGerecht() {
     if (!gerecht.naam) { showToast('Vul een gerechtnaam in', 'error'); return; }
+    if (!orgId) { showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error'); return; }
     setSaving(true);
     try {
       if (supabase) {
         await supabase.from('gerechten').insert({
+          organization_id: orgId,
           naam: gerecht.naam,
           categorie: gerecht.categorie,
           kostprijs_pp: gerecht.kostprijs_pp,
@@ -72,10 +77,12 @@ export default function OnboardingWizard() {
 
   async function saveEvent() {
     if (!event.name || !event.date) { showToast('Vul naam en datum in', 'error'); return; }
+    if (!orgId) { showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error'); return; }
     setSaving(true);
     try {
       if (supabase) {
         await supabase.from('events').insert({
+          organization_id: orgId,
           name: event.name,
           date: event.date,
           guests: event.guests,

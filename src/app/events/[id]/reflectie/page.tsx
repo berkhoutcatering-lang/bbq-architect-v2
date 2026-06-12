@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { fmtNl } from '@/lib/utils';
 import type { DbEvent } from '@/types';
@@ -52,6 +53,7 @@ export default function ReflectiePage() {
     const params = useParams();
     const router = useRouter();
     const showToast = useToast();
+    const { orgId } = useOrg();
     const eventId = parseInt(String(params.id), 10);
 
     const [event, setEvent] = useState<DbEvent | null>(null);
@@ -143,7 +145,9 @@ export default function ReflectiePage() {
                 const { error } = await supabase.from('event_reflecties').update(payload).eq('id', existingId);
                 if (error) throw error;
             } else {
-                const { data, error } = await supabase.from('event_reflecties').insert(payload).select();
+                /* RLS: eerste save maakt de rij aan — insert zonder organization_id wordt geweigerd. */
+                if (!orgId) throw new Error('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.');
+                const { data, error } = await supabase.from('event_reflecties').insert({ ...payload, organization_id: orgId }).select();
                 if (error) throw error;
                 if (data && data[0]) setExistingId(data[0].id);
             }
@@ -152,7 +156,7 @@ export default function ReflectiePage() {
             showToast('Opslaan mislukt: ' + (e.message || ''), 'error');
         }
         setSaving(false);
-    }, [buildPayload, existingId, showToast]);
+    }, [buildPayload, existingId, showToast, orgId]);
 
     /* debounced auto-save bij elke wijziging */
     useEffect(function () {

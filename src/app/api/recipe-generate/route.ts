@@ -247,7 +247,11 @@ export async function POST(req: NextRequest) {
             /* logging is optional */
         }
 
-        const maxTokens = mode === 'menu' ? 8000 : mode === 'recipe' ? 4000 : 2500;
+        /* Menu-mode: volledig menu met receptuur per gerecht kost 7-10k output-
+           tokens (gemeten 2026-06-12: 7442 bij 6 gerechten). 8000 was te krap →
+           stop_reason=max_tokens → kapotte JSON → wizard faalde. 16000 geeft lucht;
+           structurele fix = schema afslanken voor menu-mode (zie audit-rapport). */
+        const maxTokens = mode === 'menu' ? 16000 : mode === 'recipe' ? 4000 : 2500;
         const isHaikuOrSonnet = model === MODEL_MAP.haiku || model === MODEL_MAP.sonnet;
 
         /* P0.40 — hard-cap kill-switch. Schatting per mode: menu (Sonnet, 8000 tok)
@@ -255,7 +259,7 @@ export async function POST(req: NextRequest) {
            Opus-fallback duurder maar Sam kiest dat expliciet. Skip wanneer orgId
            onbekend (anonymous test-call, gate-keepen via middleware). */
         if (orgId) {
-            const estEur = mode === 'menu' ? 0.15 : mode === 'recipe' ? 0.07 : 0.02;
+            const estEur = mode === 'menu' ? 0.25 : mode === 'recipe' ? 0.07 : 0.02;
             const capRes = await enforceAiCap(orgId, estEur);
             if (capRes) return capRes;
         }
@@ -341,7 +345,7 @@ export async function POST(req: NextRequest) {
         if (!parsed) {
             console.error(`[recipe-generate] JSON parse failed, stop=${response.stop_reason}`);
             return NextResponse.json({
-                error: response.stop_reason === 'max_tokens' ? 'AI antwoord te lang — probeer een eenvoudiger vraag' : 'AI gaf geen geldig JSON',
+                error: response.stop_reason === 'max_tokens' ? 'Het AI-antwoord paste niet in één keer. Probeer het opnieuw — lukt het weer niet, kies dan minder gangen.' : 'AI gaf geen geldig JSON',
                 raw: content.slice(0, 500),
             }, { status: 502 });
         }

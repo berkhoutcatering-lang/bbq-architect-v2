@@ -45,6 +45,17 @@ export async function upsertMaterieel(input: unknown): Promise<ActionResult<{ id
 
     const { id, ...rest } = parsed.data;
 
+    /* RLS-fix 2026-06-12: WITH CHECK op `materieel` eist organization_id —
+       zonder dit veld weigert de database elke nieuwe rij stilletjes. */
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
     if (id) {
         const { data, error } = await supabase
             .from('materieel')
@@ -59,7 +70,7 @@ export async function upsertMaterieel(input: unknown): Promise<ActionResult<{ id
 
     const { data, error } = await supabase
         .from('materieel')
-        .insert(rest)
+        .insert({ ...rest, organization_id: mem.organization_id })
         .select('id')
         .single();
     if (error) return { error: error.message };

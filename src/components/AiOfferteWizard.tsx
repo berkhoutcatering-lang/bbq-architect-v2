@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, X, Loader2, AlertTriangle, Check, ArrowRight, Users, Calendar, Euro, Minus, Plus, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import CarbonScoreCard from '@/components/CarbonScoreCard';
 import AiBadge from '@/components/ai/AiBadge';
 import { track } from '@/lib/track';
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
+    const { orgId } = useOrg();
     const [step, setStep] = useState<'input' | 'generating' | 'preview'>('input');
     const [clientName, setClientName] = useState('');
     const [clientAddress, setClientAddress] = useState('');
@@ -154,6 +156,12 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
 
     async function saveAsOfferte() {
         if (!generated || !supabase) return;
+        /* RLS-fix 2026-06-12: insert zonder organization_id werd door de
+           org_insert policy geweigerd → wizard kon nooit opslaan. */
+        if (!orgId) {
+            setError('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.');
+            return;
+        }
         setSaving(true);
         try {
             // Build menu_selectie per gang from generated gerechten
@@ -164,14 +172,24 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                 menuSelectie[gangKey].push({ naam: g.naam, gerecht_naam: g.naam, beschrijving: g.beschrijving });
             });
 
-            // Nummer: generate simple OFF-YYYY-NNN format
+            /* Nummer: hoogste bestaande volgnummer + 1. De oude count+1-aanpak
+               botste op offertes_org_nummer_unique zodra er ooit een offerte
+               is verwijderd of een duplicaat-nummer bestond (fix 2026-06-12). */
             const y = new Date().getFullYear();
-            const { count } = await supabase.from('offertes').select('id', { count: 'exact', head: true });
-            const nummer = `OFF-${y}-${String((count || 0) + 1).padStart(3, '0')}`;
+            const { data: nummerRows } = await supabase
+                .from('offertes')
+                .select('nummer')
+                .like('nummer', `OFF-${y}-%`);
+            const maxN = (nummerRows || []).reduce(function (mx: number, r: any) {
+                const m = /^OFF-\d{4}-(\d+)/.exec(r.nummer || '');
+                return m ? Math.max(mx, parseInt(m[1], 10)) : mx;
+            }, 0);
+            const nummer = `OFF-${y}-${String(maxN + 1).padStart(3, '0')}`;
 
             const notitie = `${generated.menu_naam || 'AI-gegenereerd menu'}${generated.thema ? ' — ' + generated.thema : ''}. ${(generated.gerechten || []).length} gangen samengesteld door AI op basis van jouw stijl.`;
 
             const payload: any = {
+                organization_id: orgId,
                 nummer,
                 status: 'concept',
                 client_naam: clientName,
@@ -203,6 +221,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
             const newDishes = (generated.gerechten || []).filter((g: any) => !existingGerechten.some(eg => eg.naam.toLowerCase() === g.naam.toLowerCase()));
             if (newDishes.length > 0) {
                 const rows = newDishes.map((d: any) => ({
+                    organization_id: orgId,
                     naam: d.naam,
                     gang_slug: (d.gang || 'hoofdgerecht').toLowerCase(),
                     beschrijving: d.beschrijving,

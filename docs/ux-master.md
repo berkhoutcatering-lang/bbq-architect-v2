@@ -1,6 +1,6 @@
 # BBQ Architect — UX Master Document
 
-**Laatst bijgewerkt:** 2026-06-01
+**Laatst bijgewerkt:** 2026-06-12
 **Doel:** één plek waar status, principes, KPI's, personas en open items bij elkaar staan. Lees deze als eerste bij een nieuwe sessie.
 
 ---
@@ -20,6 +20,7 @@
 | **5A — KPI-spec** | 5 metrics + targets + funnel-stappen | ✅ Af | — |
 | **5B — Tracking infra** | Migration `011_activation_events.sql` + helper `track.ts` + BEFORE-INSERT trigger auto-fillt org_id/user_id | ✅ Live sinds 2026-05-01 | 804 events totaal, 155 laatste 7d, 6 event-types actief |
 | **5C — Admin dashboard** | /admin/funnel met alle 5 KPI's (Activation-rate, AI-adoptie, first_offerte_concept/sent, ai_wizard_used) + Pro-tier baseline-uitleg | ✅ Af | 447r live; data verzamelt sinds 2026-05-01 |
+| **6 — Volledige app-test (2026-06-12)** | Hele app getest incl. Golden Flow end-to-end; **17 kapotte opslag-plekken gefixt** (RLS-klasse: insert zonder org-id — o.a. inklokken, AI-wizard, Nieuw event, onboarding, klanten, facturen); rapport [2026-06-12-test-campagne.md](audits/2026-06-12-test-campagne.md) | ✅ Af | Top-10 verbeterplan in rapport; #1 = wizard-offertes zonder items[] (€0-aanbetaling/omzet); #2 = AI-menu 108s te traag |
 
 ---
 

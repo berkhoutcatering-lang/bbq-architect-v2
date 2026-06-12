@@ -14,6 +14,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { fmt, today, addDays, genNummer, nextNummer } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { ALLERGENEN, DIEETWENSEN } from '@/lib/constants';
 import PageHint from '@/components/PageHint';
 
@@ -61,6 +62,7 @@ export default function KlantGesprek() {
   const [saving, setSaving] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const showToast = useToast();
+  const { orgId } = useOrg();
   const { settings } = useSettings();
   const { data: gerechten } = useSupabase('gerechten', []);
   const { data: gangen } = useSupabase('gangen', []);
@@ -189,6 +191,11 @@ export default function KlantGesprek() {
 
   // ── Save handlers ──
   async function saveAsConceptOfferte() {
+    /* RLS: inserts zonder organization_id worden door de org-policy geweigerd. */
+    if (!orgId) {
+      showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       // 1. Klant upsert
@@ -227,6 +234,7 @@ export default function KlantGesprek() {
       ].filter(Boolean).join('\n');
 
       const offerteData: any = {
+        organization_id: orgId,
         nummer,
         status: 'concept',
         client_naam: klant.naam,
@@ -246,6 +254,7 @@ export default function KlantGesprek() {
 
       // 3. Event aanmaken
       await supabase!.from('events').insert({
+        organization_id: orgId,
         name: event.naam || klant.naam,
         date: event.datum,
         location: event.locatie,

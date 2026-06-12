@@ -58,6 +58,18 @@ export async function upsertKlant(input: unknown): Promise<ActionResult<{ id: nu
 
     const { id, ...rest } = parsed.data;
 
+    /* RLS-fix 2026-06-12: WITH CHECK op `klanten` eist een geldig
+       organization_id — RLS vult dat niet zelf in. Zonder dit veld werd
+       elke nieuwe klant stilletjes geweigerd ("new row violates RLS"). */
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
     if (id) {
         const { data, error } = await supabase
             .from('klanten')
@@ -72,7 +84,7 @@ export async function upsertKlant(input: unknown): Promise<ActionResult<{ id: nu
 
     const { data, error } = await supabase
         .from('klanten')
-        .insert(rest)
+        .insert({ ...rest, organization_id: mem.organization_id })
         .select('id')
         .single();
     if (error) return { error: error.message };

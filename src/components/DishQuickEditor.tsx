@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { X, Plus, Save, Loader2 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ const ALLERGENEN_OPTIES = [
 
 export default function DishQuickEditor({ mode, gangSlug, gangOptions, existing, onSave, onClose }: DishQuickEditorProps) {
   const showToast = useToast();
+  const { orgId } = useOrg();
   const [naam, setNaam] = useState(existing?.naam || '');
   const [slug, setSlug] = useState(existing?.gang_slug || gangSlug || 'hoofdgerechten');
   const [beschrijving, setBeschrijving] = useState(existing?.beschrijving || '');
@@ -84,7 +86,13 @@ export default function DishQuickEditor({ mode, gangSlug, gangOptions, existing,
     if (shouldPersist && supabase) {
       try {
         if (mode === 'create') {
-          const { data, error } = await supabase.from('gerechten').insert(draft).select().single();
+          // RLS vereist organization_id op nieuwe rijen
+          if (!orgId) {
+            showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.');
+            setSaving(false);
+            return;
+          }
+          const { data, error } = await supabase.from('gerechten').insert({ ...draft, organization_id: orgId }).select().single();
           if (error) throw error;
           if (data) {
             draft.id = (data as any).id;

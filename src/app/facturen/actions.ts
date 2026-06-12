@@ -56,6 +56,17 @@ export async function upsertFactuur(input: unknown): Promise<ActionResult<{ id: 
 
     const { id, ...rest } = parsed.data;
 
+    /* RLS-fix 2026-06-12: WITH CHECK op `facturen` eist organization_id —
+       zonder dit veld weigert de database elke nieuwe factuur stilletjes. */
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
     if (id) {
         /* Detect of de status verandert — voor de UI om de inventory-cascade
            trigger te kunnen aanroepen na succes. */
@@ -75,7 +86,7 @@ export async function upsertFactuur(input: unknown): Promise<ActionResult<{ id: 
     }
 
     const { data, error } = await supabase
-        .from('facturen').insert(rest).select('id').single();
+        .from('facturen').insert({ ...rest, organization_id: mem.organization_id }).select('id').single();
     if (error) return { error: error.message };
 
     revalidatePath('/facturen');

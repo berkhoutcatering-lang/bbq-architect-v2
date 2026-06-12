@@ -5,6 +5,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { today } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useOrg } from '@/lib/OrgContext';
 import EventsListV2 from '@/components/redesign/EventsListV2';
 import PageGuideNote from '@/components/PageGuideNote';
 import { PartyPopper } from 'lucide-react';
@@ -15,11 +16,18 @@ export default function Events() {
     const { data: offertes } = useSupabase<Offerte>('offertes', []);
     const { data: prepTasks } = useSupabase<{ id: number; event_id: number; done: boolean }>('prep_tasks', []);
     const showToast = useToast();
+    const { orgId } = useOrg();
     const router = useRouter();
 
     async function newEvent() {
+        /* RLS rejects inserts without organization_id. */
+        if (!orgId) {
+            showToast('Geen organisatie gevonden — ververs de pagina en probeer opnieuw.', 'error');
+            return;
+        }
         /* Create with sensible defaults, then jump to the hub where the full editor lives. */
         const defaults = {
+            organization_id: orgId,
             name: 'Nieuw event',
             date: today(),
             guests: 50,

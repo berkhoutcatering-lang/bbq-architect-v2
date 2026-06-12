@@ -228,7 +228,9 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     async function saveGang() {
         if (!gangForm.naam || !gangForm.slug) { showToast('Vul naam en slug in', 'error'); return; }
         if (gangEditing === 'new') {
-            const { error } = await supabase.from('gangen').insert([gangForm]);
+            /* RLS WITH CHECK op gangen vereist organization_id — zelfde fix als commitSave. */
+            if (!orgId) { showToast('Geen organisatie geladen — herlaad de pagina', 'error'); return; }
+            const { error } = await supabase.from('gangen').insert([{ ...gangForm, organization_id: orgId }]);
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gang toegevoegd!');
         } else {

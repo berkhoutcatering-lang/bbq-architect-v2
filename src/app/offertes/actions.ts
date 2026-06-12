@@ -36,9 +36,20 @@ export async function upsertOfferte(input: unknown): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Niet ingelogd' };
 
+  /* RLS-fix 2026-06-12: WITH CHECK op `offertes` eist organization_id —
+     zonder dit veld weigert de database elke nieuwe offerte stilletjes. */
+  const { data: mem } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle();
+  if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
   const { data, error } = await supabase
     .from('offertes')
-    .upsert(parsed.data, { onConflict: 'id' })
+    .upsert({ ...parsed.data, organization_id: mem.organization_id }, { onConflict: 'id' })
     .select('id, status')
     .single();
 

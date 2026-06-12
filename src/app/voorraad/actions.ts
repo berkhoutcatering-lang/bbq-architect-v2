@@ -69,6 +69,17 @@ export async function upsertInventory(input: unknown): Promise<ActionResult<{ id
 
     const { id, ...rest } = parsed.data;
 
+    /* RLS-fix 2026-06-12: WITH CHECK op `inventory` eist organization_id —
+       zonder dit veld weigert de database elke nieuwe rij stilletjes. */
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
     /* Dedup-check op naam binnen tenant. RLS scope't dit automatisch
        op de eigen organization_id; client kan niet over tenant-grenzen
        kijken. Migration 028 voegde een UNIQUE-index toe als laatste
@@ -99,7 +110,7 @@ export async function upsertInventory(input: unknown): Promise<ActionResult<{ id
 
     const { data, error } = await supabase
         .from('inventory')
-        .insert(rest)
+        .insert({ ...rest, organization_id: mem.organization_id })
         .select('id')
         .single();
     if (error) {
