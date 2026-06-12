@@ -349,13 +349,16 @@ export async function bulkScheduleEventPrep(
         });
     }
 
+    /* Template-taken (bv. het volledige rook-spoor van een zalm of brisket)
+       blijven naast component-taken bestaan — componenten vullen aan.
+       Alleen de generieke fallback vervalt als componenten het gerecht dekken. */
     for (const dish of dishes as DishRow[]) {
-        if (dishesWithComponents.has(dish.id)) continue; // al gedekt door component-taken
         const template = findTemplateForDish(dish.naam);
         const courseId = courseByGerecht.get(dish.id) ?? null;
         const ingredientForDish = productionPlan.filter((p) => p.gerecht_id === dish.id);
 
         if (!template) {
+            if (dishesWithComponents.has(dish.id)) continue; // componenten dekken dit gerecht
             // Fallback: één generic prep-taak per gerecht
             fallbackCount++;
             taskRows.push({

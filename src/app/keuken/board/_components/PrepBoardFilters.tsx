@@ -1,9 +1,10 @@
 'use client';
 
-import { User, Calendar, Filter } from 'lucide-react';
+import { User, Calendar, Filter, Columns3, ListOrdered } from 'lucide-react';
 import type { KitchenStation } from '@/types/database.types';
 
 export type DateFilter = 'today' | 'tomorrow' | 'next48h' | 'week' | 'alles';
+export type BoardView = 'stations' | 'werklijst';
 
 interface Props {
     dateFilter: DateFilter;
@@ -17,6 +18,9 @@ interface Props {
     totalCount: number;
     /** Tasks after filter */
     visibleCount: number;
+    /** Weergave-schakel Stations ⇄ Werklijst (alleen kookbord geeft dit door). */
+    view?: BoardView;
+    onViewChange?: (v: BoardView) => void;
 }
 
 const DATE_LABELS: Record<DateFilter, string> = {
@@ -39,12 +43,38 @@ export default function PrepBoardFilters({
     onlyMine, onToggleMine,
     selectedStationIds, onToggleStation,
     stations, totalCount, visibleCount,
+    view, onViewChange,
 }: Props) {
     const hiddenCount = Math.max(0, totalCount - visibleCount);
 
     return (
         <div className="prep-filters">
             <div className="prep-filters__scroll">
+                {/* Weergave: Stations ⇄ Werklijst */}
+                {view && onViewChange && (
+                    <>
+                        <button
+                            className={`prep-pill ${view === 'stations' ? 'is-active' : ''}`}
+                            onClick={() => onViewChange('stations')}
+                            aria-pressed={view === 'stations'}
+                            title="Kolommen per werkplek"
+                        >
+                            <Columns3 size={14} />
+                            <span>Stations</span>
+                        </button>
+                        <button
+                            className={`prep-pill ${view === 'werklijst' ? 'is-active' : ''}`}
+                            onClick={() => onViewChange('werklijst')}
+                            aria-pressed={view === 'werklijst'}
+                            title="Beste werkvolgorde — bundels en wachttijd-vulling"
+                        >
+                            <ListOrdered size={14} />
+                            <span>Werklijst</span>
+                        </button>
+                        <span className="prep-filters__divider" aria-hidden />
+                    </>
+                )}
+
                 {/* Date filters */}
                 {(Object.keys(DATE_LABELS) as DateFilter[]).map((key) => (
                     <button

@@ -19,6 +19,7 @@ import PrepBoardWeekRail from '../../board/_components/PrepBoardWeekRail';
 import PrepBoardColumn from '../../board/_components/PrepBoardColumn';
 import PrepTaskSheet, { type TaskRecipe } from '../../board/_components/PrepTaskSheet';
 import PlanTakenSheet from './PlanTakenSheet';
+import WerklijstView from './WerklijstView';
 
 /**
  * KookbordClient — hoofd container voor /keuken/kookbord (PREP-modus).
@@ -39,6 +40,9 @@ export default function KookbordClient() {
     const [dateFilter, setDateFilter] = useState<DateFilter>('next48h');
     const [onlyMine, setOnlyMine] = useState(false);
     const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+    /* Stations = kolommen per werkplek; Werklijst = chronologische beste-route
+       met bundels en gat-vulling (kookbord v2). */
+    const [view, setView] = useState<'stations' | 'werklijst'>('stations');
 
     const { data: tasks, refetch: refetchTasks } = useSupabase<PrepTask>('prep_tasks');
     const { data: stations } = useSupabase<KitchenStation>('kitchen_stations');
@@ -424,10 +428,23 @@ export default function KookbordClient() {
                 stations={stationsActive}
                 totalCount={tasks.length}
                 visibleCount={visibleTasks.length}
+                view={view}
+                onViewChange={setView}
             />
 
             <PrepBoardWeekRail tasks={visibleTasks} eventsById={eventsLite} />
 
+            {view === 'werklijst' && (
+                <WerklijstView
+                    tasks={visibleTasks}
+                    eventsById={eventsById}
+                    onOpenTask={openSheet}
+                    onCompleteTask={async (t) => { await postPrep('complete-task', { taskId: t.id }); }}
+                    onStartTask={async (t) => { await postPrep('start-task', { taskId: t.id }); }}
+                />
+            )}
+
+            {view === 'stations' && (
             <div className="prep-board" role="region" aria-label="Kookbord">
                 {stationsActive.length === 0 && (
                     <div className="prep-board__empty">
@@ -503,6 +520,7 @@ export default function KookbordClient() {
                     />
                 )}
             </div>
+            )}
 
             <PrepTaskSheet
                 open={sheetOpen}

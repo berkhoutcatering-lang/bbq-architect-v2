@@ -20,6 +20,13 @@ interface MockState {
     /** menu_selectie zoals de wizard die opslaat — objects met gerecht_id, of naam-strings per categorie. */
     offerteMenuSelection: Record<string, Array<{ gerecht_id: string } | string>> | null;
     recepten?: Array<{ id: number; naam: string }>;
+    /** gerecht_components join-rows incl. genest components-object (kookbord v2). */
+    gerechtComponents?: Array<{
+        gerecht_id: string;
+        quantity_used: number | null;
+        unit: string | null;
+        components: { id: number; name: string; type: string | null; category: string | null; prep_minutes: number | null } | null;
+    }>;
     inserted: unknown[];
     deletedCount: number;
 }
@@ -54,6 +61,11 @@ function makeMockSupabase(state: MockState) {
             if (table === 'recepten') {
                 const ids = (filters['id__in'] as number[]) || [];
                 const data = (state.recepten ?? []).filter((r) => ids.includes(r.id));
+                return { data, error: null };
+            }
+            if (table === 'gerecht_components') {
+                const ids = (filters['gerecht_id__in'] as string[]) || [];
+                const data = (state.gerechtComponents ?? []).filter((r) => ids.includes(r.gerecht_id));
                 return { data, error: null };
             }
             if (table === 'kitchen_stations') {
@@ -415,6 +427,61 @@ describe('bulkScheduleEventPrep — menu-shapes uit productie (2026-06-12)', () 
         const result = await bulkScheduleEventPrep(supabase as never, 1, 'org-1');
         expect(result.ok).toBe(true);
         expect(result.reason).toBe('no_dishes');
+    });
+});
+
+describe('bulkScheduleEventPrep — component-taken (kookbord v2)', () => {
+    it('genereert per component één gebundelde taak met opgetelde, geschaalde hoeveelheid', async () => {
+        const state: MockState = {
+            // 50 gasten, gerechten met porties 10 → factor 5
+            event: { id: 1, organization_id: 'org-1', name: 'X', date: '2026-06-20', start_time: '16:00:00', guests: 50 },
+            existingPrepCount: 0,
+            dishes: [
+                { id: 'dish-slider', naam: 'Sliders', porties: 10, ingredient_costs: null },
+                { id: 'dish-taco', naam: 'Soft shell taco', porties: 10, ingredient_costs: null },
+            ],
+            stations: [
+                { id: 1, type: 'koud', sort_order: 1 },
+                { id: 4, type: 'sauzen', sort_order: 4 },
+            ],
+            courses: [],
+            offerteMenuSelection: { hoofdgerechten: [{ gerecht_id: 'dish-slider' }, { gerecht_id: 'dish-taco' }] },
+            gerechtComponents: [
+                // zelfde mayo in twee gerechten → één bundeltaak van 0.2×5 + 0.1×5 = 1.5
+                { gerecht_id: 'dish-slider', quantity_used: 0.2, unit: 'l', components: { id: 50, name: 'Mayonaise basis', type: 'house_made', category: 'food', prep_minutes: 25 } },
+                { gerecht_id: 'dish-taco', quantity_used: 0.1, unit: 'l', components: { id: 50, name: 'Mayonaise basis', type: 'house_made', category: 'food', prep_minutes: 25 } },
+                // bought_in → klaarzet-taak
+                { gerecht_id: 'dish-slider', quantity_used: 1, unit: 'kg', components: { id: 51, name: 'MC Hamburgers Rund', type: 'bought_in', category: 'food', prep_minutes: null } },
+                // non_food wordt geskipt
+                { gerecht_id: 'dish-slider', quantity_used: 1, unit: 'stuk', components: { id: 52, name: 'Aluminiumfolie', type: 'bought_in', category: 'non_food', prep_minutes: null } },
+            ],
+            inserted: [], deletedCount: 0,
+        };
+        const supabase = makeMockSupabase(state);
+        const result = await bulkScheduleEventPrep(supabase as never, 1, 'org-1');
+        expect(result.ok).toBe(true);
+        expect(result.componentCount).toBe(2); // mayo-bundel + hamburgers; folie geskipt
+
+        const rows = state.inserted as Array<{
+            text: string; component_id: number | null; target_qty: number | null;
+            target_unit: string | null; batch_key: string | null; duration_min: number | null;
+            station_id: number | null;
+        }>;
+        const mayo = rows.find((r) => r.component_id === 50)!;
+        expect(mayo.text).toContain('Mayonaise basis');
+        expect(mayo.target_qty).toBe(1.5);
+        expect(mayo.target_unit).toBe('l');
+        expect(mayo.batch_key).toBe('comp:50:2026-06-20');
+        expect(mayo.duration_min).toBe(25);
+        expect(mayo.station_id).toBe(4); // "mayo" → sauzen-station
+
+        const burgers = rows.find((r) => r.component_id === 51)!;
+        expect(burgers.text).toContain('Klaarzetten');
+        expect(burgers.duration_min).toBe(10);
+
+        expect(rows.some((r) => r.text.includes('Aluminiumfolie'))).toBe(false);
+        // gerechten met componenten krijgen GEEN extra fallback-taak
+        expect(rows.some((r) => r.text.startsWith('Voorbereiden:'))).toBe(false);
     });
 });
 
