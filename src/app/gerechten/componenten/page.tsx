@@ -780,12 +780,14 @@ export default function ComponentenPage() {
                 />
             )}
 
-                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground" style={{ marginTop: 18 }}>
-                    <Sparkles size={14} className="mr-1 inline text-primary" />
-                    AI suggereert, jij bevestigt. Bij <strong>Zelf bereid</strong> vult AI op verzoek de hele
-                    receptuur (ingrediënten, stappen, allergenen, HACCP) — alles blijft aanpasbaar. Bij{' '}
-                    <strong>Scan kant-en-klaar</strong> leest AI je foto of screenshot. Niets wordt opgeslagen
-                    tot jij bevestigt.
+                <div className="kf-banner" style={{ marginTop: 18 }}>
+                    <Sparkles size={14} />
+                    <span>
+                        AI suggereert, jij bevestigt. Bij <strong>Zelf bereid</strong> vult AI op verzoek de hele
+                        receptuur (ingrediënten, stappen, allergenen, HACCP) — alles blijft aanpasbaar. Bij{' '}
+                        <strong>Scan kant-en-klaar</strong> leest AI je foto of screenshot. Niets wordt opgeslagen
+                        tot jij bevestigt.
+                    </span>
                 </div>
             </div>
 
@@ -1016,129 +1018,110 @@ function ComponentEditDrawer({
     }
 
     return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="comp-drawer-title"
-            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
-            onClick={onClose}
-        >
-            <div
-                className="h-full w-full max-w-lg overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="text-xs text-muted-foreground">Component bewerken</div>
-                        <h2 id="comp-drawer-title" className="text-xl font-semibold">{comp?.name ?? 'Laden...'}</h2>
+        <>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="comp-drawer-title">
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow">
+                            {comp?.type === 'prepared' ? <><ChefHat size={12} /> Zelf bereid · bewerken</> : <><ShoppingBag size={12} /> Inkoop · bewerken</>}
+                        </span>
+                        <h2 id="comp-drawer-title" className="kdrawer-title">{comp?.name ?? 'Laden…'}</h2>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="kf-icon-x"><X size={17} /></button>
                 </div>
 
                 {loading ? (
-                    <div className="flex items-center justify-center py-12 text-muted-foreground">
-                        <Loader2 size={16} className="mr-2 animate-spin" /> Laden...
+                    <div className="flex flex-1 items-center justify-center gap-2" style={{ color: 'var(--muted)', padding: 24 }}>
+                        <Loader2 size={18} className="animate-spin" /> Laden…
                     </div>
                 ) : (
-                    <div className="space-y-5">
-                        {/* Basis-info */}
-                        <section className="space-y-3">
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Naam</span>
-                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
-                            </label>
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Beschrijving</span>
-                                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
-                            </label>
-                            {/* Inkoop-items: pak-prijs is de bron, base-velden het berekende
-                                resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
-                            {comp?.type === 'bought_in' && (
-                                <PakketRekenhulp
-                                    priceEuros={packPrice}
-                                    qty={packQty}
-                                    unit={packUnit}
-                                    onApply={applyPack}
-                                />
-                            )}
-                            <div className="grid grid-cols-3 gap-2">
-                                <label className="block text-xs">
-                                    <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
-                                    <input type="number" step="0.001" min="0.001" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                    <>
+                        <div className="kf-body">
+                            {/* Basis-info */}
+                            <section className="kf-section">
+                                <label className="kf-field">
+                                    <span className="kf-label">Naam</span>
+                                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="kf-input" />
                                 </label>
-                                <label className="block text-xs">
-                                    <span className="mb-1 block text-muted-foreground">Eenheid</span>
-                                    <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm">
-                                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
+                                <label className="kf-field">
+                                    <span className="kf-label">Beschrijving</span>
+                                    <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="kf-input" />
                                 </label>
-                                <label className="block text-xs">
-                                    <span className="mb-1 block text-muted-foreground">Kostprijs (€)</span>
-                                    <input type="number" step="0.01" min="0" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                                {/* Inkoop-items: pak-prijs is de bron, base-velden het berekende
+                                    resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
+                                {comp?.type === 'bought_in' && (
+                                    <PakketRekenhulp priceEuros={packPrice} qty={packQty} unit={packUnit} onApply={applyPack} />
+                                )}
+                                <div className="kf-grid-3">
+                                    <label className="kf-field">
+                                        <span className="kf-label">Basis-hoeveelheid</span>
+                                        <input type="number" step="0.001" min="0.001" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="kf-input" />
+                                    </label>
+                                    <label className="kf-field">
+                                        <span className="kf-label">Eenheid</span>
+                                        <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="kf-input">
+                                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </label>
+                                    <label className="kf-field">
+                                        <span className="kf-label">Kostprijs (€)</span>
+                                        <input type="number" step="0.01" min="0" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} className="kf-input" />
+                                    </label>
+                                </div>
+                                {comp?.type === 'bought_in' && packPrice.trim() !== '' && (
+                                    <p className="kf-help">↑ Automatisch berekend uit de pak-prijs. Pas de rekenhulp aan, dan rekenen deze velden mee.</p>
+                                )}
+                                <label className="kf-field">
+                                    <span className="kf-label">Smaakprofiel-tags (komma-gescheiden)</span>
+                                    <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, …" className="kf-input" />
                                 </label>
-                            </div>
-                            {comp?.type === 'bought_in' && packPrice.trim() !== '' && (
-                                <p className="text-[10px] text-muted-foreground">
-                                    ↑ Automatisch berekend uit de pak-prijs. Pas de rekenhulp aan, dan rekenen deze velden mee.
-                                </p>
-                            )}
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
-                                <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, ..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
-                            </label>
-                            <CategoryToggle value={category} onChange={setCategory} />
-                        </section>
+                                <CategoryToggle value={category} onChange={setCategory} />
+                            </section>
 
-                        {/* Receptuur — alleen voor zelf-bereide componenten */}
-                        {comp?.type === 'prepared' && (
-                            <>
-                                <section>
+                            {/* Receptuur — alleen voor zelf-bereide componenten */}
+                            {comp?.type === 'prepared' && (
+                                <>
                                     <IngredientsEditor
                                         rows={ingredients}
                                         onChange={setIngredients}
                                         onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
                                     />
-                                </section>
-                                <section>
                                     <StepsEditor steps={steps} onChange={setSteps} />
-                                </section>
-                            </>
-                        )}
+                                </>
+                            )}
 
-                        {/* Allergenen */}
-                        <section>
-                            <div className="mb-2 text-xs font-medium text-muted-foreground">Allergenen — klik om aan/uit te zetten</div>
-                            <AllergenToggles codes={allergenCodes} onToggle={toggleAllergen} />
-                        </section>
+                            {/* Allergenen */}
+                            <section className="kf-section">
+                                <span className="kf-section-title">Allergenen <span style={{ color: 'var(--muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· klik om aan/uit te zetten</span></span>
+                                <AllergenToggles codes={allergenCodes} onToggle={toggleAllergen} />
+                            </section>
 
-                        {/* HACCP-punten */}
-                        <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
+                            {/* HACCP-punten */}
+                            <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
+                        </div>
 
-                        <div className="flex justify-end gap-2 border-t border-border pt-4">
-                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
-                                Annuleer
-                            </button>
-                            <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
+                        <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
+                            <button type="button" onClick={handleSave} disabled={saving} className="kf-primary">
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                {saving ? 'Opslaan...' : 'Opslaan'}
+                                {saving ? 'Opslaan…' : 'Opslaan'}
                             </button>
                         </div>
-                    </div>
+                    </>
                 )}
-            </div>
 
-            {/* GP-4: foodcost-impact modal — verschijnt vóór commit als
-                base_cost_cents wijzigt en er getroffen gerechten zijn. */}
-            <FoodcostImpactModal
-                open={showImpactModal}
-                payload={impactPayload}
-                onClose={() => { if (!committingImpact) { setShowImpactModal(false); setImpactPayload(null); } }}
-                onConfirm={handleImpactConfirm}
-                committing={committingImpact}
-            />
-        </div>
+                {/* GP-4: foodcost-impact modal — verschijnt vóór commit als
+                    base_cost_cents wijzigt en er getroffen gerechten zijn. */}
+                <FoodcostImpactModal
+                    open={showImpactModal}
+                    payload={impactPayload}
+                    onClose={() => { if (!committingImpact) { setShowImpactModal(false); setImpactPayload(null); } }}
+                    onConfirm={handleImpactConfirm}
+                    committing={committingImpact}
+                />
+            </div>
+        </>
     );
 }
 
@@ -1223,8 +1206,8 @@ function SupplierImportDrawer({
             .catch(() => { /* niet kritisch */ });
     }, []);
 
-    async function handleParse(e: React.FormEvent) {
-        e.preventDefault();
+    async function handleParse(e?: React.FormEvent) {
+        e?.preventDefault();
         if (inputMode === 'text' && !pasted.trim()) { toast('Plak eerst een lijst', 'error'); return; }
         if (inputMode === 'image' && !fileDataUrl) { toast('Kies eerst een foto of PDF', 'error'); return; }
 
@@ -1317,233 +1300,156 @@ function SupplierImportDrawer({
     const totalCents = products.reduce((sum, p, i) => sum + (keepFlags[i] ? p.price_cents : 0), 0);
 
     return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
-            onClick={onClose}
-        >
-            <div
-                className="h-full w-full max-w-2xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="flex items-center gap-1.5 text-xs text-primary">
-                            <Upload size={12} /> Leverancier-lijst importeren
-                        </div>
-                        <h2 className="text-xl font-semibold">
+        <>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" style={{ width: 640 }}>
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow"><Upload size={12} /> Leverancier-lijst importeren</span>
+                        <h2 className="kdrawer-title">
                             {step === 'input' ? 'Plak je product-lijst' : `Preview: ${keepCount} van ${products.length} producten`}
                         </h2>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="kf-icon-x"><X size={17} /></button>
                 </div>
 
                 {step === 'input' && (
-                    <form onSubmit={handleParse} className="space-y-4">
-                        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-                            <FileText size={12} className="mr-1 inline text-primary" />
-                            Voor je <strong className="text-foreground">vaste assortiment</strong>: een favorietenlijst uit
-                            Hanos Shop / Sligro Marktplaats, een prijslijst van je leverancier, of een foto van een productrek.
-                            AI extraheert naam, prijs, eenheid en SKU per product en voegt ze toe als{' '}
-                            <strong className="text-foreground">bought_in components</strong>.
-                        </div>
-
-                        <div className="rounded-lg border border-amber-300/40 bg-amber-50/40 p-2.5 text-[11px] text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
-                            Heb je een <strong>losse factuur</strong> van een eenmalige bestelling? Die hoort thuis in{' '}
-                            <Link href="/inkoop" className="underline">Inkoop</Link> — daar wordt 'm
-                            voor boekhouding + BTW verwerkt. Hier bouw je je structurele product-bibliotheek op.
-                        </div>
-
-                        {/* Mode-toggle */}
-                        <div className="inline-flex rounded-md border border-border bg-muted p-0.5 text-xs">
-                            <button
-                                type="button"
-                                onClick={() => setInputMode('text')}
-                                className={`rounded px-3 py-1 transition ${inputMode === 'text' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
-                            >
-                                <FileText size={11} className="mr-1 inline" /> Tekst plakken
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setInputMode('image')}
-                                className={`rounded px-3 py-1 transition ${inputMode === 'image' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
-                            >
-                                <Upload size={11} className="mr-1 inline" /> Foto / PDF
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Leverancier (optioneel)</span>
-                                <select
-                                    value={supplierId}
-                                    onChange={(e) => setSupplierId(e.target.value)}
-                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                                >
-                                    <option value="">— niet koppelen —</option>
-                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.naam}</option>)}
-                                </select>
-                            </label>
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Hint voor AI (optioneel)</span>
-                                <input
-                                    type="text"
-                                    value={supplierHint}
-                                    onChange={(e) => setSupplierHint(e.target.value)}
-                                    placeholder="bv. 'Hanos' of 'Sligro'"
-                                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                                />
-                            </label>
-                        </div>
-
-                        {inputMode === 'text' ? (
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Tekst, CSV-paste of bestellijst</span>
-                                <textarea
-                                    value={pasted}
-                                    onChange={(e) => setPasted(e.target.value)}
-                                    rows={10}
-                                    maxLength={30000}
-                                    placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04, Hanos 12345\nBBQ saus original, 1L, €6.80, Sligro 67890\n...'}
-                                    className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                                />
-                                <span className="mt-1 block text-[10px] text-muted-foreground">{pasted.length} / 30000 tekens</span>
-                            </label>
-                        ) : (
-                            <div className="space-y-2">
-                                <label className="block">
-                                    <span className="mb-1 block text-xs text-muted-foreground">Foto (JPEG/PNG) of PDF — max 6 MB</span>
-                                    <input
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                                        onChange={handleFile}
-                                        className="block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary-foreground hover:file:opacity-90"
-                                    />
-                                </label>
-                                {fileDataUrl && fileName && (
-                                    <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px]">
-                                        <div className="flex items-center gap-2">
-                                            <FileText size={12} className="text-primary" />
-                                            <span className="flex-1 truncate font-medium">{fileName}</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => { setFileDataUrl(null); setFileName(null); }}
-                                                aria-label="Verwijder bestand"
-                                                className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                            >
-                                                <X size={11} />
-                                            </button>
-                                        </div>
-                                        {fileDataUrl.startsWith('data:image/') && (
-                                            <img src={fileDataUrl} alt="Preview" className="mt-2 max-h-48 rounded border border-border" />
-                                        )}
-                                    </div>
-                                )}
-                                <div className="text-[10px] text-muted-foreground">
-                                    Tip: screenshot van je Hanos-bestellijst of foto van een factuur werkt prima.
-                                    PDF&apos;s worden ook ondersteund.
-                                </div>
+                    <>
+                        <div className="kf-body">
+                            <div className="kf-banner">
+                                <FileText size={14} />
+                                <span>Voor je <strong>vaste assortiment</strong>: een favorietenlijst uit Hanos Shop / Sligro Marktplaats, een prijslijst van je leverancier, of een foto van een productrek. AI extraheert naam, prijs, eenheid en SKU per product en voegt ze toe als <strong>bought_in components</strong>.</span>
                             </div>
-                        )}
 
-                        <div className="flex justify-end gap-2">
-                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
-                                Annuleer
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={parsing}
-                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            >
+                            <div className="kf-banner kf-banner-warn">
+                                <FileText size={14} />
+                                <span>Heb je een <strong>losse factuur</strong> van een eenmalige bestelling? Die hoort thuis in <Link href="/inkoop" className="underline">Inkoop</Link> — daar wordt 'm voor boekhouding + BTW verwerkt. Hier bouw je je structurele product-bibliotheek op.</span>
+                            </div>
+
+                            <div className="kf-seg">
+                                <button type="button" onClick={() => setInputMode('text')} className={`kf-seg-btn ${inputMode === 'text' ? 'is-on' : ''}`}>
+                                    <FileText size={11} style={{ marginRight: 5 }} /> Tekst plakken
+                                </button>
+                                <button type="button" onClick={() => setInputMode('image')} className={`kf-seg-btn ${inputMode === 'image' ? 'is-on' : ''}`}>
+                                    <Upload size={11} style={{ marginRight: 5 }} /> Foto / PDF
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="kf-field">
+                                    <span className="kf-label">Leverancier (optioneel)</span>
+                                    <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="kf-input">
+                                        <option value="">— niet koppelen —</option>
+                                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.naam}</option>)}
+                                    </select>
+                                </label>
+                                <label className="kf-field">
+                                    <span className="kf-label">Hint voor AI (optioneel)</span>
+                                    <input type="text" value={supplierHint} onChange={(e) => setSupplierHint(e.target.value)} placeholder="bv. 'Hanos' of 'Sligro'" className="kf-input" />
+                                </label>
+                            </div>
+
+                            {inputMode === 'text' ? (
+                                <label className="kf-field">
+                                    <span className="kf-label">Tekst, CSV-paste of bestellijst</span>
+                                    <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={10} maxLength={30000} placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04, Hanos 12345\nBBQ saus original, 1L, €6.80, Sligro 67890\n…'} className="kf-input" />
+                                    <span className="kf-help">{pasted.length} / 30000 tekens</span>
+                                </label>
+                            ) : (
+                                <div className="kf-field">
+                                    <span className="kf-label">Foto (JPEG/PNG) of PDF — max 6 MB</span>
+                                    <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={handleFile} className="block w-full" style={{ fontSize: 12, color: 'var(--muted)' }} />
+                                    {fileDataUrl && fileName && (
+                                        <div className="kf-card" style={{ marginTop: 2 }}>
+                                            <div className="flex items-center gap-2">
+                                                <FileText size={13} style={{ color: 'var(--brand)' }} />
+                                                <span className="flex-1 truncate" style={{ fontSize: 12, fontWeight: 500 }}>{fileName}</span>
+                                                <button type="button" onClick={() => { setFileDataUrl(null); setFileName(null); }} aria-label="Verwijder bestand" className="kf-trash"><X size={13} /></button>
+                                            </div>
+                                            {fileDataUrl.startsWith('data:image/') && (
+                                                <img src={fileDataUrl} alt="Preview" className="mt-2 rounded" style={{ maxHeight: 190, border: '1px solid var(--border)' }} />
+                                            )}
+                                        </div>
+                                    )}
+                                    <span className="kf-help">Tip: screenshot van je Hanos-bestellijst of foto van een factuur werkt prima. PDF&apos;s worden ook ondersteund.</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
+                            <button type="button" onClick={() => handleParse()} disabled={parsing} className="kf-primary">
                                 {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                                {parsing ? (inputMode === 'image' ? 'AI leest de foto/PDF...' : 'AI parseert...') : 'Parse met AI'}
+                                {parsing ? (inputMode === 'image' ? 'AI leest de foto/PDF…' : 'AI parseert…') : 'Parse met AI'}
                             </button>
                         </div>
-                    </form>
+                    </>
                 )}
 
                 {step === 'preview' && (
-                    <div className="space-y-4">
-                        <div className="rounded-lg border border-border bg-card p-3 text-xs">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    {detectedSupplierName && <span>Gedetecteerd: <strong>{detectedSupplierName}</strong> · </span>}
-                                    <span>{products.length} producten geparsed</span>
-                                    {droppedCount > 0 && <span className="ml-1 text-muted-foreground">({droppedCount} overgeslagen wegens onvolledige data)</span>}
+                    <>
+                        <div className="kf-body">
+                            <div className="kf-card">
+                                <div className="flex items-center justify-between">
+                                    <div style={{ fontSize: 12 }}>
+                                        {detectedSupplierName && <span>Gedetecteerd: <strong>{detectedSupplierName}</strong> · </span>}
+                                        <span>{products.length} producten geparsed</span>
+                                        {droppedCount > 0 && <span style={{ color: 'var(--muted)', marginLeft: 4 }}>({droppedCount} overgeslagen wegens onvolledige data)</span>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={() => toggleAll(true)} className="kf-add" style={{ padding: '3px 9px' }}>Alles aan</button>
+                                        <button type="button" onClick={() => toggleAll(false)} className="kf-add" style={{ padding: '3px 9px' }}>Alles uit</button>
+                                    </div>
                                 </div>
-                                <div className="flex gap-1.5">
-                                    <button type="button" onClick={() => toggleAll(true)} className="text-[11px] text-primary hover:underline">Alles aan</button>
-                                    <span className="text-muted-foreground">·</span>
-                                    <button type="button" onClick={() => toggleAll(false)} className="text-[11px] text-primary hover:underline">Alles uit</button>
-                                </div>
+                                <div className="kf-help" style={{ marginTop: 6 }}>Selectie: {keepCount} × · Totale prijs: €{(totalCents / 100).toFixed(2)}</div>
                             </div>
-                            <div className="mt-2 text-muted-foreground">
-                                Selectie: {keepCount} × · Totale prijs: €{(totalCents / 100).toFixed(2)}
-                            </div>
-                        </div>
 
-                        <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-border">
-                            <table className="w-full text-xs">
-                                <thead className="sticky top-0 bg-muted">
-                                    <tr>
-                                        <th className="px-2 py-1.5 text-left">✓</th>
-                                        <th className="px-2 py-1.5 text-left">Naam</th>
-                                        <th className="px-2 py-1.5 text-left">SKU</th>
-                                        <th className="px-2 py-1.5 text-right">Prijs</th>
-                                        <th className="px-2 py-1.5 text-left">Eenheid</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {products.map((p, i) => (
-                                        <tr key={i} className={`border-t border-border ${!keepFlags[i] ? 'opacity-40' : ''}`}>
-                                            <td className="px-2 py-1.5">
-                                                <input type="checkbox" checked={keepFlags[i]} onChange={() => toggleKeep(i)} />
-                                            </td>
-                                            <td className="px-2 py-1.5">{p.name}</td>
-                                            <td className="px-2 py-1.5 text-muted-foreground">{p.supplier_sku ?? '—'}</td>
-                                            <td className="px-2 py-1.5 text-right">€{(p.price_cents / 100).toFixed(2)}</td>
-                                            <td className="px-2 py-1.5 text-muted-foreground">
-                                                {p.unit}{p.package_size ? ` (${p.package_size} ${p.package_unit ?? ''})` : ''}
-                                            </td>
+                            <div style={{ maxHeight: '46vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg,12px)' }}>
+                                <table className="w-full" style={{ fontSize: 12 }}>
+                                    <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-elevated,var(--bg))', zIndex: 1 }}>
+                                        <tr>
+                                            <th className="mr-table-th">✓</th>
+                                            <th className="mr-table-th" style={{ textAlign: 'left' }}>Naam</th>
+                                            <th className="mr-table-th" style={{ textAlign: 'left' }}>SKU</th>
+                                            <th className="mr-table-th" style={{ textAlign: 'right' }}>Prijs</th>
+                                            <th className="mr-table-th" style={{ textAlign: 'left' }}>Eenheid</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {products.map((p, i) => (
+                                            <tr key={i} style={{ opacity: keepFlags[i] ? 1 : .4 }}>
+                                                <td className="mr-table-td"><input type="checkbox" checked={keepFlags[i]} onChange={() => toggleKeep(i)} /></td>
+                                                <td className="mr-table-td">{p.name}</td>
+                                                <td className="mr-table-td" style={{ color: 'var(--muted)' }}>{p.supplier_sku ?? '—'}</td>
+                                                <td className="mr-table-td" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>€{(p.price_cents / 100).toFixed(2)}</td>
+                                                <td className="mr-table-td" style={{ color: 'var(--muted)' }}>
+                                                    {p.unit}{p.package_size ? ` (${p.package_size} ${p.package_unit ?? ''})` : ''}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <label className="kf-card flex items-center gap-2.5" style={{ cursor: 'pointer' }}>
+                                <input type="checkbox" checked={createComponents} onChange={(e) => setCreateComponents(e.target.checked)} />
+                                <span style={{ fontSize: 12, lineHeight: 1.5 }}>
+                                    <strong>Maak meteen bought_in components</strong> per product (linked aan supplier-product). Anders zitten ze alleen in de catalogus en moet je later handmatig koppelen.
+                                </span>
+                            </label>
                         </div>
 
-                        <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs">
-                            <input
-                                type="checkbox"
-                                checked={createComponents}
-                                onChange={(e) => setCreateComponents(e.target.checked)}
-                            />
-                            <span>
-                                <strong>Maak meteen bought_in components</strong> per product (linked aan supplier-product).
-                                Anders zitten ze alleen in de catalogus en moet je later handmatig koppelen.
-                            </span>
-                        </label>
-
-                        <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => setStep('input')} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
-                                Terug
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={saving || keepCount === 0}
-                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            >
+                        <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={() => setStep('input')} className="kf-ghost">Terug</button>
+                            <button type="button" onClick={handleSave} disabled={saving || keepCount === 0} className="kf-primary">
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                {saving ? 'Opslaan...' : `Importeer ${keepCount}`}
+                                {saving ? 'Opslaan…' : `Importeer ${keepCount}`}
                             </button>
                         </div>
-                    </div>
+                    </>
                 )}
             </div>
-        </div>
+        </>
     );
 }
 
@@ -1570,61 +1476,42 @@ function PakketRekenhulp({
     const example = base ? exampleUseCost(base) : null;
 
     return (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium">
-                <Calculator size={13} className="text-primary" />
+        <div className="kf-card kf-card-accent">
+            <div className="mb-2.5 flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                <Calculator size={13} style={{ color: 'var(--brand)' }} />
                 Rekenhulp: van groothandel naar eenheidsprijs
             </div>
-            <div className="grid grid-cols-3 gap-2">
-                <label className="block text-xs">
-                    <span className="mb-1 block text-muted-foreground">Wat betaal je? (€)</span>
-                    <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="62,50"
-                        value={priceEuros}
-                        onChange={(e) => onApply(e.target.value, qty, unit)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                    />
+            <div className="kf-grid-3">
+                <label className="kf-field">
+                    <span className="kf-label">Wat betaal je? (€)</span>
+                    <input type="text" inputMode="decimal" placeholder="62,50" value={priceEuros} onChange={(e) => onApply(e.target.value, qty, unit)} className="kf-input" />
                 </label>
-                <label className="block text-xs">
-                    <span className="mb-1 block text-muted-foreground">Voor hoeveel?</span>
-                    <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="5"
-                        value={qty}
-                        onChange={(e) => onApply(priceEuros, e.target.value, unit)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                    />
+                <label className="kf-field">
+                    <span className="kf-label">Voor hoeveel?</span>
+                    <input type="text" inputMode="decimal" placeholder="5" value={qty} onChange={(e) => onApply(priceEuros, e.target.value, unit)} className="kf-input" />
                 </label>
-                <label className="block text-xs">
-                    <span className="mb-1 block text-muted-foreground">Eenheid</span>
-                    <select
-                        value={unit}
-                        onChange={(e) => onApply(priceEuros, qty, e.target.value as PackUnit)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                    >
+                <label className="kf-field">
+                    <span className="kf-label">Eenheid</span>
+                    <select value={unit} onChange={(e) => onApply(priceEuros, qty, e.target.value as PackUnit)} className="kf-input">
                         {PACK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                 </label>
             </div>
             {base ? (
-                <div className="mt-2 rounded-md bg-background/60 px-2.5 py-2 text-xs">
-                    <div className="font-mono font-semibold">
+                <div className="mt-3" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                    <div className="font-mono" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--brand)' }}>
                         = €{(base.base_cost_cents / 100).toFixed(2)} per {base.base_quantity === 1 ? '' : base.base_quantity}{base.base_unit}
-                        {label ? <span className="ml-1 font-sans font-normal text-muted-foreground">({label})</span> : null}
+                        {label ? <span className="font-sans" style={{ marginLeft: 6, fontWeight: 400, color: 'var(--muted)' }}>({label})</span> : null}
                     </div>
                     {example && (
-                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        <div style={{ marginTop: 3, fontSize: 11, color: 'var(--muted)' }}>
                             Voorbeeld: {example.qty} {example.unit} in een gerecht kost €{(example.cents / 100).toFixed(2)}
                         </div>
                     )}
                 </div>
             ) : (
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                    Vul in wat de verpakking kost en hoeveel erin zit — de prijs per eenheid rekenen wij uit.
-                    Komma of punt mag allebei.
+                <div className="kf-help" style={{ marginTop: 10 }}>
+                    Vul in wat de verpakking kost en hoeveel erin zit — de prijs per eenheid rekenen wij uit. Komma of punt mag allebei.
                 </div>
             )}
         </div>
@@ -1638,25 +1525,13 @@ function PakketRekenhulp({
 
 function CategoryToggle({ value, onChange }: { value: ComponentCategory; onChange: (v: ComponentCategory) => void }) {
     return (
-        <div className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Categorie</span>
-            <div className="inline-flex rounded-md border border-border bg-muted p-0.5">
-                <button
-                    type="button"
-                    onClick={() => onChange('food')}
-                    className={`rounded px-3 py-1 transition ${value === 'food' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
-                >
-                    Food
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onChange('non_food')}
-                    className={`rounded px-3 py-1 transition ${value === 'non_food' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
-                >
-                    Non-food
-                </button>
+        <div className="kf-field">
+            <span className="kf-label">Categorie</span>
+            <div className="kf-seg">
+                <button type="button" onClick={() => onChange('food')} className={`kf-seg-btn ${value === 'food' ? 'is-on' : ''}`}>Food</button>
+                <button type="button" onClick={() => onChange('non_food')} className={`kf-seg-btn ${value === 'non_food' ? 'is-on' : ''}`}>Non-food</button>
             </div>
-            <span className="mt-1 block text-[10px] text-muted-foreground">
+            <span className="kf-help">
                 {value === 'food'
                     ? 'Menu-bouwsteen — telt mee in gerecht-kostprijzen en statistieken.'
                     : 'Verpakking/materieel — telt niet mee in kostprijs-statistieken.'}
@@ -1675,7 +1550,7 @@ function AllergenToggles({ codes, onToggle }: { codes: Set<string>; onToggle: (c
                         key={code}
                         type="button"
                         onClick={() => onToggle(code)}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                        className={`kf-chip ${on ? 'is-on' : ''}`}
                         title={ALLERGEN_LABELS[code]}
                     >
                         {on && <Check size={11} />}
@@ -1698,39 +1573,36 @@ function HaccpEditor({ rows, onChange }: { rows: HaccpRow[]; onChange: (rows: Ha
         onChange(rows.filter((_, i) => i !== idx));
     }
     return (
-        <section>
-            <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">HACCP-punten</span>
-                <button type="button" onClick={addRow} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
-                    <Plus size={11} /> Toevoegen
-                </button>
+        <section className="kf-section">
+            <div className="kf-section-head">
+                <span className="kf-section-title"><ThermometerSun size={13} /> HACCP-punten</span>
+                <button type="button" onClick={addRow} className="kf-add"><Plus size={11} /> Toevoegen</button>
             </div>
             {rows.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
-                    Nog geen HACCP-punten.
+                <div className="kf-empty">
+                    <div className="kf-empty-icon"><ThermometerSun size={17} /></div>
+                    <p>Nog geen HACCP-punten. Voeg kerntemperaturen of koel-eisen toe voor je voedselveiligheid-log.</p>
                 </div>
             ) : (
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                     {rows.map((h, idx) => (
-                        <div key={idx} className="rounded-md border border-border bg-card p-2 text-xs">
-                            <div className="flex items-start gap-2">
-                                <ThermometerSun size={14} className="mt-1 shrink-0 text-muted-foreground" />
-                                <div className="flex-1 space-y-1">
+                        <div key={idx} className="kf-card">
+                            <div className="flex items-start gap-2.5">
+                                <ThermometerSun size={15} className="mt-1 shrink-0" style={{ color: 'var(--brand)' }} />
+                                <div className="flex-1 flex flex-col gap-1.5">
                                     <select value={h.type} onChange={(e) => {
                                         const t = HACCP_TYPES.find(x => x.value === e.target.value);
                                         updateRow(idx, { type: e.target.value, threshold_unit: t?.defaultUnit || h.threshold_unit });
-                                    }} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs">
+                                    }} className="kf-input">
                                         {HACCP_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
-                                    <div className="grid grid-cols-2 gap-1">
-                                        <input type="number" placeholder="waarde" value={h.threshold_value ?? ''} onChange={(e) => updateRow(idx, { threshold_value: e.target.value === '' ? null : Number(e.target.value) })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
-                                        <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateRow(idx, { threshold_unit: e.target.value || null })} className="rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        <input type="number" placeholder="waarde" value={h.threshold_value ?? ''} onChange={(e) => updateRow(idx, { threshold_value: e.target.value === '' ? null : Number(e.target.value) })} className="kf-input" />
+                                        <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateRow(idx, { threshold_unit: e.target.value || null })} className="kf-input" />
                                     </div>
-                                    <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateRow(idx, { note: e.target.value || null })} className="w-full rounded border border-border bg-background px-1.5 py-1 text-xs" />
+                                    <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateRow(idx, { note: e.target.value || null })} className="kf-input" />
                                 </div>
-                                <button type="button" onClick={() => removeRow(idx)} aria-label="Verwijder HACCP-rij" className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                                    <Trash2 size={12} />
-                                </button>
+                                <button type="button" onClick={() => removeRow(idx)} aria-label="Verwijder HACCP-rij" className="kf-trash"><Trash2 size={13} /></button>
                             </div>
                         </div>
                     ))}
@@ -1742,37 +1614,34 @@ function HaccpEditor({ rows, onChange }: { rows: HaccpRow[]; onChange: (rows: Ha
 
 function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (steps: string[]) => void }) {
     return (
-        <div>
-            <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Bereidingsstappen</span>
-                <button type="button" onClick={() => onChange([...steps, ''])} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
-                    <Plus size={11} /> Stap toevoegen
-                </button>
+        <section className="kf-section">
+            <div className="kf-section-head">
+                <span className="kf-section-title"><FileText size={13} /> Bereidingsstappen</span>
+                <button type="button" onClick={() => onChange([...steps, ''])} className="kf-add"><Plus size={11} /> Stap toevoegen</button>
             </div>
             {steps.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
-                    Nog geen stappen — voeg toe of laat AI de receptuur vullen.
+                <div className="kf-empty">
+                    <div className="kf-empty-icon"><FileText size={17} /></div>
+                    <p>Nog geen stappen — voeg ze met de hand toe of laat AI de hele receptuur vullen.</p>
                 </div>
             ) : (
-                <div className="space-y-1.5">
+                <div className="flex flex-col gap-1.5">
                     {steps.map((s, idx) => (
                         <div key={idx} className="flex items-center gap-2">
-                            <span className="w-5 shrink-0 text-right font-mono text-[11px] text-muted-foreground">{idx + 1}.</span>
+                            <span className="kf-step-num">{idx + 1}</span>
                             <input
                                 type="text"
                                 value={s}
                                 onChange={(e) => onChange(steps.map((x, i) => i === idx ? e.target.value : x))}
                                 placeholder="bv. Ananas grillen tot karamellisatie"
-                                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                                className="kf-input flex-1"
                             />
-                            <button type="button" onClick={() => onChange(steps.filter((_, i) => i !== idx))} aria-label={`Verwijder stap ${idx + 1}`} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                                <Trash2 size={12} />
-                            </button>
+                            <button type="button" onClick={() => onChange(steps.filter((_, i) => i !== idx))} aria-label={`Verwijder stap ${idx + 1}`} className="kf-trash"><Trash2 size={13} /></button>
                         </div>
                     ))}
                 </div>
             )}
-        </div>
+        </section>
     );
 }
 
@@ -1788,44 +1657,39 @@ function IngredientsEditor({
         onChange(rows.map((r, i) => i === idx ? { ...r, ...patch } : r));
     }
     return (
-        <div>
-            <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Ingrediënten (receptuur)</span>
-                <button type="button" onClick={() => onChange([...rows, emptyIngredientRow()])} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] hover:bg-muted/80">
-                    <Plus size={11} /> Ingrediënt
-                </button>
+        <section className="kf-section">
+            <div className="kf-section-head">
+                <span className="kf-section-title"><Boxes size={13} /> Ingrediënten</span>
+                <button type="button" onClick={() => onChange([...rows, emptyIngredientRow()])} className="kf-add"><Plus size={11} /> Ingrediënt</button>
             </div>
             {rows.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border bg-muted/10 p-3 text-center text-[11px] text-muted-foreground">
-                    Nog geen ingrediënten.
+                <div className="kf-empty">
+                    <div className="kf-empty-icon"><Boxes size={17} /></div>
+                    <p>Nog geen ingrediënten. Voeg ze toe om de kostprijs op te bouwen.</p>
                 </div>
             ) : (
-                <div className="space-y-1.5">
-                    <div className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] gap-1.5 px-0.5 text-[10px] text-muted-foreground">
-                        <span>Naam</span><span>Aantal</span><span>Eenheid</span><span>Kosten (€)</span><span></span>
+                <div className="flex flex-col gap-1.5">
+                    <div className="grid items-center gap-1.5 px-0.5" style={{ gridTemplateColumns: '1fr 3.5rem 3.5rem 4.5rem 1.75rem', fontSize: 10, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                        <span>Naam</span><span>Aantal</span><span>Eenheid</span><span>Kosten €</span><span></span>
                     </div>
                     {rows.map((r, idx) => (
-                        <div key={idx} className="grid grid-cols-[1fr_3.5rem_3.5rem_4.5rem_1.5rem] items-center gap-1.5">
-                            <input type="text" value={r.name} onChange={(e) => updateRow(idx, { name: e.target.value })} placeholder="bv. Ananas" className="rounded-md border border-border bg-background px-2 py-1.5 text-xs" />
-                            <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
-                            <input type="text" value={r.unit} onChange={(e) => updateRow(idx, { unit: e.target.value })} placeholder="g" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
-                            <input type="text" inputMode="decimal" value={r.cost_euros} onChange={(e) => updateRow(idx, { cost_euros: e.target.value })} placeholder="1,20" className="rounded-md border border-border bg-background px-1.5 py-1.5 text-xs" />
-                            <button type="button" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Verwijder ${r.name || 'ingrediënt'}`} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                                <Trash2 size={12} />
-                            </button>
+                        <div key={idx} className="grid items-center gap-1.5" style={{ gridTemplateColumns: '1fr 3.5rem 3.5rem 4.5rem 1.75rem' }}>
+                            <input type="text" value={r.name} onChange={(e) => updateRow(idx, { name: e.target.value })} placeholder="bv. Ananas" className="kf-input" />
+                            <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="kf-input" />
+                            <input type="text" value={r.unit} onChange={(e) => updateRow(idx, { unit: e.target.value })} placeholder="g" className="kf-input" />
+                            <input type="text" inputMode="decimal" value={r.cost_euros} onChange={(e) => updateRow(idx, { cost_euros: e.target.value })} placeholder="1,20" className="kf-input" />
+                            <button type="button" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Verwijder ${r.name || 'ingrediënt'}`} className="kf-trash"><Trash2 size={13} /></button>
                         </div>
                     ))}
                     {sum > 0 && (
-                        <div className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5 text-[11px]">
-                            <span>Som ingrediënt-kosten: <strong className="font-mono">€{(sum / 100).toFixed(2)}</strong></span>
-                            <button type="button" onClick={() => onAdoptSum(sum)} className="text-primary hover:underline">
-                                Gebruik als kostprijs
-                            </button>
+                        <div className="kf-card kf-card-accent flex items-center justify-between" style={{ padding: '8px 12px' }}>
+                            <span style={{ fontSize: 12 }}>Som ingrediënt-kosten: <strong className="font-mono" style={{ color: 'var(--brand)' }}>€{(sum / 100).toFixed(2)}</strong></span>
+                            <button type="button" onClick={() => onAdoptSum(sum)} className="kf-add">Gebruik als kostprijs</button>
                         </div>
                     )}
                 </div>
             )}
-        </div>
+        </section>
     );
 }
 
@@ -1959,113 +1823,93 @@ function ReceptuurDrawer({
     }
 
     return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="receptuur-drawer-title"
-            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
-            onClick={onClose}
-        >
-            <div
-                className="h-full w-full max-w-xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="flex items-center gap-1.5 text-xs text-primary">
-                            <ChefHat size={12} /> Zelf bereid
-                        </div>
-                        <h2 id="receptuur-drawer-title" className="text-xl font-semibold">Nieuwe bouwsteen met receptuur</h2>
+        <>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="receptuur-drawer-title">
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow"><ChefHat size={12} /> Zelf bereid</span>
+                        <h2 id="receptuur-drawer-title" className="kdrawer-title">Nieuwe bouwsteen met receptuur</h2>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="kf-icon-x"><X size={17} /></button>
                 </div>
 
-                <div className="space-y-5">
-                    <section className="space-y-3">
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Naam</span>
-                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Aardbeien bavaroise" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                <div className="kf-body">
+                    <section className="kf-section">
+                        <label className="kf-field">
+                            <span className="kf-label">Naam</span>
+                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Aardbeien bavaroise" className="kf-input" />
                         </label>
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Beschrijving (optioneel)</span>
-                            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="1 zin smaak-pitch" className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        <label className="kf-field">
+                            <span className="kf-label">Beschrijving (optioneel)</span>
+                            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="1 zin smaak-pitch" className="kf-input" />
                         </label>
-                        <button
-                            type="button"
-                            onClick={handleAiFill}
-                            disabled={aiBusy || name.trim().length < 3}
-                            title={name.trim().length < 3 ? 'Typ eerst een naam (min. 3 tekens)' : undefined}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
-                        >
-                            {aiBusy ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                            {aiBusy ? 'AI denkt na...' : 'Vul receptuur met AI'}
-                        </button>
-                        {aiUsed && (
-                            <p className="text-[11px] text-primary">
-                                <Sparkles size={10} className="mr-0.5 inline" /> AI-voorstel — controleer en pas aan
-                            </p>
-                        )}
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <button
+                                type="button"
+                                onClick={handleAiFill}
+                                disabled={aiBusy || name.trim().length < 3}
+                                title={name.trim().length < 3 ? 'Typ eerst een naam (min. 3 tekens)' : undefined}
+                                className="kf-ai"
+                            >
+                                {aiBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                                {aiBusy ? 'AI denkt na…' : 'Vul receptuur met AI'}
+                            </button>
+                            {aiUsed && (
+                                <span className="kf-ai-hint"><Sparkles size={11} /> AI-voorstel — controleer en pas aan</span>
+                            )}
+                        </div>
                     </section>
 
-                    <section className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2">
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Basis-hoeveelheid</span>
-                                <input type="text" inputMode="decimal" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                    <section className="kf-section">
+                        <div className="kf-grid-3">
+                            <label className="kf-field">
+                                <span className="kf-label">Basis-hoeveelheid</span>
+                                <input type="text" inputMode="decimal" value={baseQty} onChange={(e) => setBaseQty(e.target.value)} className="kf-input" />
                             </label>
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Eenheid</span>
-                                <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm">
+                            <label className="kf-field">
+                                <span className="kf-label">Eenheid</span>
+                                <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className="kf-input">
                                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
                             </label>
-                            <label className="block text-xs">
-                                <span className="mb-1 block text-muted-foreground">Kostprijs (€)</span>
-                                <input type="text" inputMode="decimal" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} placeholder="1,43" className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+                            <label className="kf-field">
+                                <span className="kf-label">Kostprijs (€)</span>
+                                <input type="text" inputMode="decimal" value={costEuros} onChange={(e) => setCostEuros(e.target.value)} placeholder="1,43" className="kf-input" />
                             </label>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">
-                            De kostprijs geldt voor de basis-hoeveelheid (bv. €1,43 per 100 g). Gerechten rekenen hier automatisch mee.
-                        </p>
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Smaakprofiel-tags (komma-gescheiden)</span>
-                            <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, ..." className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                        <p className="kf-help">De kostprijs geldt voor de basis-hoeveelheid (bv. €1,43 per 100 g). Gerechten rekenen hier automatisch mee.</p>
+                        <label className="kf-field">
+                            <span className="kf-label">Smaakprofiel-tags (komma-gescheiden)</span>
+                            <input type="text" value={flavorTags} onChange={(e) => setFlavorTags(e.target.value)} placeholder="zoet, rokerig, …" className="kf-input" />
                         </label>
                     </section>
 
-                    <section>
-                        <IngredientsEditor
-                            rows={ingredients}
-                            onChange={setIngredients}
-                            onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
-                        />
-                    </section>
+                    <IngredientsEditor
+                        rows={ingredients}
+                        onChange={setIngredients}
+                        onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
+                    />
 
-                    <section>
-                        <StepsEditor steps={steps} onChange={setSteps} />
-                    </section>
+                    <StepsEditor steps={steps} onChange={setSteps} />
 
-                    <section>
-                        <div className="mb-2 text-xs font-medium text-muted-foreground">Allergenen — klik om aan/uit te zetten</div>
+                    <section className="kf-section">
+                        <span className="kf-section-title">Allergenen <span style={{ color: 'var(--muted)', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· klik om aan/uit te zetten</span></span>
                         <AllergenToggles codes={allergenCodes} onToggle={toggleAllergen} />
                     </section>
 
                     <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
+                </div>
 
-                    <div className="flex justify-end gap-2 border-t border-border pt-4">
-                        <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
-                            Annuleer
-                        </button>
-                        <button type="button" onClick={handleSave} disabled={saving} className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
-                            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                            {saving ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
-                        </button>
-                    </div>
+                <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
+                    <button type="button" onClick={handleSave} disabled={saving} className="kf-primary">
+                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        {saving ? 'Opslaan…' : 'Voeg toe aan bibliotheek'}
+                    </button>
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
@@ -2235,206 +2079,134 @@ function ScanDrawer({
     }
 
     return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="scan-drawer-title"
-            className="fixed inset-0 z-40 flex items-end justify-end bg-black/40 sm:items-stretch"
-            onClick={onClose}
-        >
-            <div
-                className="h-full w-full max-w-xl overflow-y-auto bg-background p-6 shadow-2xl sm:border-l sm:border-border"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <div className="flex items-center gap-1.5 text-xs text-primary">
-                            <Camera size={12} /> Scan kant-en-klaar
-                        </div>
-                        <h2 id="scan-drawer-title" className="text-xl font-semibold">
+        <>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="scan-drawer-title">
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow"><Camera size={12} /> Scan kant-en-klaar</span>
+                        <h2 id="scan-drawer-title" className="kdrawer-title">
                             {step === 'upload' ? 'Product toevoegen via screenshot' : 'Check en bevestig'}
                         </h2>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Sluit" className="rounded p-1 hover:bg-muted">
-                        <X size={18} />
-                    </button>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="kf-icon-x"><X size={17} /></button>
                 </div>
 
-                {step === 'upload' && !textMode && (
-                    <div className="space-y-4">
-                        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-                            <Camera size={12} className="mr-1 inline text-primary" />
-                            Voor <strong className="text-foreground">één los product</strong>: een screenshot uit de webshop
-                            van je slager of Hanos/Sligro, of een foto van een etiket of schap-kaartje.
-                            AI leest naam, inhoud en prijs — jij checkt en bevestigt. Hele prijslijst?
-                            Gebruik dan <strong className="text-foreground">Importeer leverancier (bulk)</strong>.
-                        </div>
-
-                        <label
-                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                            onDragLeave={() => setDragOver(false)}
-                            onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) acceptFile(f); }}
-                            className={`block cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition ${dragOver ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-primary/5'}`}
-                        >
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,application/pdf"
-                                onChange={handleFile}
-                                className="sr-only"
-                            />
-                            <ImagePlus size={28} className="mx-auto mb-2 text-muted-foreground" />
-                            <div className="text-sm font-medium">Kies, sleep of plak (⌘V) een screenshot of foto</div>
-                            <div className="mt-1 text-[11px] text-muted-foreground">JPEG, PNG, WebP of PDF — max 6 MB</div>
-                        </label>
-
-                        <div className="flex items-center justify-between gap-2">
-                            <button
-                                type="button"
-                                onClick={() => cameraInputRef.current?.click()}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted"
-                            >
-                                <Camera size={12} /> Maak een foto met je camera
-                            </button>
-                            <button type="button" onClick={() => setTextMode(true)} className="text-[11px] text-primary hover:underline">
-                                Of plak tekst
-                            </button>
-                        </div>
-                        <input
-                            ref={cameraInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleFile}
-                            className="sr-only"
-                            aria-label="Maak een foto met je camera"
-                        />
-
-                        {fileDataUrl && fileName && (
-                            <div className="rounded-md border border-border bg-muted/30 p-2 text-[11px]">
-                                <div className="flex items-center gap-2">
-                                    <FileText size={12} className="text-primary" />
-                                    <span className="flex-1 truncate font-medium">{fileName}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => { setFileDataUrl(null); setFileName(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                        aria-label="Verwijder bestand"
-                                        className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                    >
-                                        <X size={11} />
-                                    </button>
-                                </div>
-                                {fileDataUrl.startsWith('data:image/') && (
-                                    <img src={fileDataUrl} alt="Preview van de scan" className="mt-2 max-h-56 rounded border border-border" />
-                                )}
+                <div className="kf-body">
+                    {step === 'upload' && !textMode && (
+                        <>
+                            <div className="kf-banner">
+                                <Camera size={14} />
+                                <span>Voor <strong>één los product</strong>: een screenshot uit de webshop van je slager of Hanos/Sligro, of een foto van een etiket of schap-kaartje. AI leest naam, inhoud en prijs — jij checkt en bevestigt. Hele prijslijst? Gebruik dan <strong>Importeer leverancier (bulk)</strong>.</span>
                             </div>
-                        )}
 
-                        <div className="flex justify-end gap-2">
-                            <button type="button" onClick={onClose} className="rounded-md border border-border bg-background px-4 py-2 text-sm">
-                                Annuleer
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleParse}
-                                disabled={parsing || !fileDataUrl}
-                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            <label
+                                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                                onDragLeave={() => setDragOver(false)}
+                                onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) acceptFile(f); }}
+                                className={`kf-drop ${dragOver ? 'is-over' : ''}`}
                             >
+                                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={handleFile} className="sr-only" />
+                                <div className="kf-empty-icon" style={{ margin: '0 auto 10px', width: 42, height: 42 }}><ImagePlus size={21} /></div>
+                                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>Kies, sleep of plak (⌘V) een screenshot of foto</div>
+                                <div className="kf-help" style={{ marginTop: 4 }}>JPEG, PNG, WebP of PDF — max 6 MB</div>
+                            </label>
+
+                            <div className="flex items-center justify-between gap-2">
+                                <button type="button" onClick={() => cameraInputRef.current?.click()} className="kf-ghost"><Camera size={13} /> Maak een foto met je camera</button>
+                                <button type="button" onClick={() => setTextMode(true)} className="kf-add">Of plak tekst</button>
+                            </div>
+                            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="sr-only" aria-label="Maak een foto met je camera" />
+
+                            {fileDataUrl && fileName && (
+                                <div className="kf-card">
+                                    <div className="flex items-center gap-2">
+                                        <FileText size={13} style={{ color: 'var(--brand)' }} />
+                                        <span className="flex-1 truncate" style={{ fontSize: 12, fontWeight: 500 }}>{fileName}</span>
+                                        <button type="button" onClick={() => { setFileDataUrl(null); setFileName(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} aria-label="Verwijder bestand" className="kf-trash"><X size={13} /></button>
+                                    </div>
+                                    {fileDataUrl.startsWith('data:image/') && (
+                                        <img src={fileDataUrl} alt="Preview van de scan" className="mt-2 rounded" style={{ maxHeight: 220, border: '1px solid var(--border)' }} />
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {step === 'upload' && textMode && (
+                        <label className="kf-field">
+                            <span className="kf-label">Plak de product-tekst (bv. van een etiket of webshop)</span>
+                            <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={8} maxLength={30000} placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04'} className="kf-input" />
+                        </label>
+                    )}
+
+                    {step === 'form' && (
+                        <>
+                            {(detectedSupplier || products.length > 1) && (
+                                <div className="kf-card">
+                                    {detectedSupplier && <div style={{ fontSize: 12 }}>Gedetecteerd: <strong>{detectedSupplier}</strong></div>}
+                                    {products.length > 1 && (
+                                        <div className="mt-1.5">
+                                            <div className="kf-help" style={{ marginBottom: 6 }}>AI vond {products.length} producten — kies welke je toevoegt (één per keer):</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {products.map((p, i) => (
+                                                    <button key={i} type="button" onClick={() => choose(i)} className={`kf-chip ${i === chosenIdx ? 'is-on' : ''}`}>
+                                                        {p.name.slice(0, 32)}{p.name.length > 32 ? '…' : ''}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <label className="kf-field">
+                                <span className="kf-label">Naam</span>
+                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="kf-input" />
+                            </label>
+
+                            <PakketRekenhulp
+                                priceEuros={packPrice}
+                                qty={packQty}
+                                unit={packUnit}
+                                onApply={(price, qty, unit) => { setPackPrice(price); setPackQty(qty); setPackUnit(unit); }}
+                            />
+
+                            <CategoryToggle value={category} onChange={setCategory} />
+                        </>
+                    )}
+                </div>
+
+                <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
+                    {step === 'upload' && !textMode && (
+                        <>
+                            <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
+                            <button type="button" onClick={() => handleParse()} disabled={parsing || !fileDataUrl} className="kf-primary">
                                 {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                                 {parsing ? 'AI leest je afbeelding… (±10 sec)' : 'Lees met AI'}
                             </button>
-                        </div>
-                    </div>
-                )}
-
-                {step === 'upload' && textMode && (
-                    <div className="space-y-3">
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Plak de product-tekst (bv. van een etiket of webshop)</span>
-                            <textarea
-                                value={pasted}
-                                onChange={(e) => setPasted(e.target.value)}
-                                rows={8}
-                                maxLength={30000}
-                                placeholder={'bv.\nBrioche bun klein, 12 stuks, €5.04'}
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                            />
-                        </label>
-                        <div className="flex items-center justify-between">
-                            <button type="button" onClick={() => setTextMode(false)} className="text-[11px] text-primary hover:underline">
-                                Terug naar scannen
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { if (!pasted.trim()) { toast('Plak eerst tekst', 'error'); return; } runParse({ text: pasted }); }}
-                                disabled={parsing}
-                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            >
+                        </>
+                    )}
+                    {step === 'upload' && textMode && (
+                        <>
+                            <button type="button" onClick={() => setTextMode(false)} className="kf-ghost">Terug naar scannen</button>
+                            <button type="button" onClick={() => { if (!pasted.trim()) { toast('Plak eerst tekst', 'error'); return; } runParse({ text: pasted }); }} disabled={parsing} className="kf-primary">
                                 {parsing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                                 {parsing ? 'AI leest…' : 'Lees met AI'}
                             </button>
-                        </div>
-                    </div>
-                )}
-
-                {step === 'form' && (
-                    <div className="space-y-4">
-                        {(detectedSupplier || products.length > 1) && (
-                            <div className="rounded-lg border border-border bg-card p-3 text-xs">
-                                {detectedSupplier && <div>Gedetecteerd: <strong>{detectedSupplier}</strong></div>}
-                                {products.length > 1 && (
-                                    <div className="mt-1.5">
-                                        <div className="mb-1 text-muted-foreground">
-                                            AI vond {products.length} producten — kies welke je toevoegt (één per keer):
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {products.map((p, i) => (
-                                                <button
-                                                    key={i}
-                                                    type="button"
-                                                    onClick={() => choose(i)}
-                                                    className={`rounded-full px-2.5 py-1 text-[11px] transition ${i === chosenIdx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-                                                >
-                                                    {p.name.slice(0, 32)}{p.name.length > 32 ? '…' : ''}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        <label className="block text-xs">
-                            <span className="mb-1 block text-muted-foreground">Naam</span>
-                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
-                        </label>
-
-                        <PakketRekenhulp
-                            priceEuros={packPrice}
-                            qty={packQty}
-                            unit={packUnit}
-                            onApply={(price, qty, unit) => { setPackPrice(price); setPackQty(qty); setPackUnit(unit); }}
-                        />
-
-                        <CategoryToggle value={category} onChange={setCategory} />
-
-                        <div className="flex justify-end gap-2 border-t border-border pt-4">
-                            <button type="button" onClick={() => setStep('upload')} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
-                                Terug
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSave}
-                                disabled={saving}
-                                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            >
+                        </>
+                    )}
+                    {step === 'form' && (
+                        <>
+                            <button type="button" onClick={() => setStep('upload')} className="kf-ghost">Terug</button>
+                            <button type="button" onClick={handleSave} disabled={saving} className="kf-primary">
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                {saving ? 'Opslaan...' : 'Voeg toe aan bibliotheek'}
+                                {saving ? 'Opslaan…' : 'Voeg toe aan bibliotheek'}
                             </button>
-                        </div>
-                    </div>
-                )}
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }
